@@ -13,18 +13,18 @@ class AgentService:
         self.s3_client = get_s3_client()
         self.bucket_name = self.settings.s3_bucket_name
 
-    async def save_agent(
-        self, agent_id: str, agent_file: UploadFile, module_spec: ModuleSpec
+    async def save_module(
+        self, module_id: str, module_file: UploadFile, module_spec: ModuleSpec
     ) -> ModuleResponse:
-        # Save agent file
-        agent_content = await agent_file.read()
-        agent_key = f"agents/{agent_id}/{agent_file.filename}"
+        # Save module file
+        module_content = await module_file.read()
+        module_key = f"modules/{module_id}/{module_file.filename}"
         self.s3_client.put_object(
-            Bucket=self.bucket_name, Key=agent_key, Body=agent_content
+            Bucket=self.bucket_name, Key=module_key, Body=module_content
         )
 
         # Save metadata
-        metadata_key = f"metadata/{agent_id}.json"
+        metadata_key = f"metadata/{module_id}.json"
         self.s3_client.put_object(
             Bucket=self.bucket_name,
             Key=metadata_key,
@@ -33,13 +33,13 @@ class AgentService:
         )
 
         return ModuleResponse(
-            id=agent_id,
+            id=module_id,
             metadata=module_spec,
-            file_path=f"s3://{self.bucket_name}/{agent_key}",
+            file_path=f"s3://{self.bucket_name}/{module_key}",
         )
 
-    async def list_agents(self) -> List[ModuleResponse]:
-        agents = []
+    async def list_modules(self) -> List[ModuleResponse]:
+        modules = []
         # List all metadata files
         paginator = self.s3_client.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=self.bucket_name, Prefix="metadata/"):
@@ -47,7 +47,7 @@ class AgentService:
                 if not obj["Key"].endswith(".json"):
                     continue
 
-                agent_id = obj["Key"].split("/")[-1].replace(".json", "")
+                module_id = obj["Key"].split("/")[-1].replace(".json", "")
 
                 # Get metadata
                 metadata_obj = self.s3_client.get_object(
@@ -57,26 +57,26 @@ class AgentService:
                     metadata_obj["Body"].read().decode("utf-8")
                 )
 
-                # Get agent file path
-                agent_prefix = f"agents/{agent_id}/"
+                # Get module file path
+                module_prefix = f"modules/{module_id}/"
                 response = self.s3_client.list_objects_v2(
-                    Bucket=self.bucket_name, Prefix=agent_prefix, MaxKeys=1
+                    Bucket=self.bucket_name, Prefix=module_prefix, MaxKeys=1
                 )
                 if "Contents" in response and response["Contents"]:
-                    agent_key = response["Contents"][0]["Key"]
-                    agents.append(
+                    module_key = response["Contents"][0]["Key"]
+                    modules.append(
                         ModuleResponse(
-                            id=agent_id,
+                            id=module_id,
                             metadata=metadata,
-                            file_path=f"s3://{self.bucket_name}/{agent_key}",
+                            file_path=f"s3://{self.bucket_name}/{module_key}",
                         )
                     )
-        return agents
+        return modules
 
-    async def get_agent(self, agent_id: str) -> Optional[ModuleResponse]:
+    async def get_module(self, module_id: str) -> Optional[ModuleResponse]:
         try:
             # Get metadata
-            metadata_key = f"metadata/{agent_id}.json"
+            metadata_key = f"metadata/{module_id}.json"
             metadata_obj = self.s3_client.get_object(
                 Bucket=self.bucket_name, Key=metadata_key
             )
@@ -84,19 +84,19 @@ class AgentService:
                 metadata_obj["Body"].read().decode("utf-8")
             )
 
-            # Get agent file path
-            agent_prefix = f"agents/{agent_id}/"
+            # Get module file path
+            module_prefix = f"modules/{module_id}/"
             response = self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name, Prefix=agent_prefix, MaxKeys=1
+                Bucket=self.bucket_name, Prefix=module_prefix, MaxKeys=1
             )
             if "Contents" not in response or not response["Contents"]:
                 return None
 
-            agent_key = response["Contents"][0]["Key"]
+            module_key = response["Contents"][0]["Key"]
             return ModuleResponse(
-                id=agent_id,
+                id=module_id,
                 metadata=metadata,
-                file_path=f"s3://{self.bucket_name}/{agent_key}",
+                file_path=f"s3://{self.bucket_name}/{module_key}",
             )
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":

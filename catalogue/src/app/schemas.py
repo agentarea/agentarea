@@ -13,8 +13,8 @@ class ModuleSpec(BaseModel):
     description: str = Field(
         ..., description="Detailed description of the agent's purpose and capabilities"
     )
-    input_format: str = Field(..., description="Expected input data format")
-    output_format: str = Field(..., description="Output data format")
+    input_format: Dict = Field(..., description="Expected input data format")
+    output_format: Dict = Field(..., description="Output data format")
     purpose: str = Field(..., description="Main purpose/use case of the agent")
     author: str = Field(..., description="Author of the agent")
     requirements: List[str] = Field(
