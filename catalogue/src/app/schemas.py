@@ -17,9 +17,7 @@ class ModuleSpec(BaseModel):
     output_format: Dict = Field(..., description="Output data format")
     purpose: str = Field(..., description="Main purpose/use case of the agent")
     author: str = Field(..., description="Author of the agent")
-    requirements: List[str] = Field(
-        default_factory=list, description="Required dependencies"
-    )
+    image: str = Field(..., description="Image of the agent")
     tags: List[str] = Field(
         default_factory=list, description="Tags for categorizing the agent"
     )
@@ -38,4 +36,3 @@ class ModuleSpec(BaseModel):
 class ModuleResponse(BaseModel):
     id: str
     metadata: ModuleSpec
-    file_path: str

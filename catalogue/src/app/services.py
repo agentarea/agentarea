@@ -1,104 +1,119 @@
 import json
 from typing import List, Optional
-from botocore.exceptions import ClientError
-from fastapi import UploadFile
+from sqlalchemy.orm import Session
 
 from .schemas import ModuleSpec, ModuleResponse
+from .models import ModuleSpecModel
 from .config import get_settings, get_s3_client
 
 
-class AgentService:
-    def __init__(self):
+class ModuleService:
+    def __init__(self, db: Session):
         self.settings = get_settings()
         self.s3_client = get_s3_client()
         self.bucket_name = self.settings.s3_bucket_name
+        self.db = db
 
     async def save_module(
-        self, module_id: str, module_file: UploadFile, module_spec: ModuleSpec
+        self, module_id: str, module_spec: ModuleSpec
     ) -> ModuleResponse:
-        # Save module file
-        module_content = await module_file.read()
-        module_key = f"modules/{module_id}/{module_file.filename}"
-        self.s3_client.put_object(
-            Bucket=self.bucket_name, Key=module_key, Body=module_content
+
+        # Save metadata to database
+        db_spec = ModuleSpecModel(
+            module_id=module_id,
+            name=module_spec.name,
+            version=module_spec.version,
+            description=module_spec.description,
+            input_format=module_spec.input_format,
+            output_format=module_spec.output_format,
+            purpose=module_spec.purpose,
+            author=module_spec.author,
+            image=module_spec.image,
+            tags=module_spec.tags,
+            environment=module_spec.environment,
+            license=module_spec.license,
+            model_framework=module_spec.model_framework,
+            memory_requirements=(
+                module_spec.system_requirements.memory_requirements
+                if module_spec.system_requirements
+                else None
+            ),
+            gpu_requirements=(
+                module_spec.system_requirements.gpu_requirements
+                if module_spec.system_requirements
+                else None
+            ),
         )
 
-        # Save metadata
-        metadata_key = f"metadata/{module_id}.json"
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=metadata_key,
-            Body=module_spec.model_dump_json(),
-            ContentType="application/json",
-        )
+        self.db.add(db_spec)
+        self.db.commit()
+        self.db.refresh(db_spec)
 
-        return ModuleResponse(
-            id=module_id,
-            metadata=module_spec,
-            file_path=f"s3://{self.bucket_name}/{module_key}",
-        )
+        return ModuleResponse(id=module_id, metadata=module_spec)
 
     async def list_modules(self) -> List[ModuleResponse]:
-        modules = []
-        # List all metadata files
-        paginator = self.s3_client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self.bucket_name, Prefix="metadata/"):
-            for obj in page.get("Contents", []):
-                if not obj["Key"].endswith(".json"):
-                    continue
-
-                module_id = obj["Key"].split("/")[-1].replace(".json", "")
-
-                # Get metadata
-                metadata_obj = self.s3_client.get_object(
-                    Bucket=self.bucket_name, Key=obj["Key"]
-                )
-                metadata = ModuleSpec.model_validate_json(
-                    metadata_obj["Body"].read().decode("utf-8")
-                )
-
-                # Get module file path
-                module_prefix = f"modules/{module_id}/"
-                response = self.s3_client.list_objects_v2(
-                    Bucket=self.bucket_name, Prefix=module_prefix, MaxKeys=1
-                )
-                if "Contents" in response and response["Contents"]:
-                    module_key = response["Contents"][0]["Key"]
-                    modules.append(
-                        ModuleResponse(
-                            id=module_id,
-                            metadata=metadata,
-                            file_path=f"s3://{self.bucket_name}/{module_key}",
-                        )
-                    )
-        return modules
+        db_specs = self.db.query(ModuleSpecModel).all()
+        return [
+            ModuleResponse(
+                id=spec.module_id,
+                metadata=ModuleSpec(
+                    name=spec.name,
+                    version=spec.version,
+                    description=spec.description,
+                    input_format=spec.input_format,
+                    output_format=spec.output_format,
+                    purpose=spec.purpose,
+                    author=spec.author,
+                    image=spec.image,
+                    tags=spec.tags,
+                    environment=spec.environment,
+                    license=spec.license,
+                    model_framework=spec.model_framework,
+                    system_requirements=(
+                        {
+                            "memory_requirements": spec.memory_requirements,
+                            "gpu_requirements": spec.gpu_requirements,
+                        }
+                        if spec.memory_requirements or spec.gpu_requirements
+                        else None
+                    ),
+                ),
+            )
+            for spec in db_specs
+        ]
 
     async def get_module(self, module_id: str) -> Optional[ModuleResponse]:
-        try:
-            # Get metadata
-            metadata_key = f"metadata/{module_id}.json"
-            metadata_obj = self.s3_client.get_object(
-                Bucket=self.bucket_name, Key=metadata_key
-            )
-            metadata = ModuleSpec.model_validate_json(
-                metadata_obj["Body"].read().decode("utf-8")
-            )
+        db_spec = (
+            self.db.query(ModuleSpecModel)
+            .filter(ModuleSpecModel.module_id == module_id)
+            .first()
+        )
 
-            # Get module file path
-            module_prefix = f"modules/{module_id}/"
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name, Prefix=module_prefix, MaxKeys=1
-            )
-            if "Contents" not in response or not response["Contents"]:
-                return None
+        if not db_spec:
+            return None
 
-            module_key = response["Contents"][0]["Key"]
-            return ModuleResponse(
-                id=module_id,
-                metadata=metadata,
-                file_path=f"s3://{self.bucket_name}/{module_key}",
-            )
-        except ClientError as e:
-            if e.response["Error"]["Code"] == "NoSuchKey":
-                return None
-            raise
+        return ModuleResponse(
+            id=db_spec.module_id,
+            metadata=ModuleSpec(
+                name=db_spec.name,
+                version=db_spec.version,
+                description=db_spec.description,
+                input_format=db_spec.input_format,
+                output_format=db_spec.output_format,
+                purpose=db_spec.purpose,
+                author=db_spec.author,
+                tags=db_spec.tags,
+                image=db_spec.image,
+                environment=db_spec.environment,
+                license=db_spec.license,
+                model_framework=db_spec.model_framework,
+                system_requirements=(
+                    {
+                        "memory_requirements": db_spec.memory_requirements,
+                        "gpu_requirements": db_spec.gpu_requirements,
+                    }
+                    if db_spec.memory_requirements or db_spec.gpu_requirements
+                    else None
+                ),
+            ),
+        )

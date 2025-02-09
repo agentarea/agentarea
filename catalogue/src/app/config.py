@@ -1,6 +1,8 @@
 import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
 class Settings(BaseSettings):
@@ -10,6 +12,11 @@ class Settings(BaseSettings):
     aws_region: str = os.getenv("AWS_REGION", "us-east-1")
     s3_bucket_name: str = os.getenv("S3_BUCKET_NAME")
     aws_endpoint_url: str = os.getenv("AWS_ENDPOINT_URL")
+
+    # Database Settings
+    database_url: str = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@db:5432/aiagents"
+    )
 
     # App Settings
     app_name: str = "AI Agent Service"
@@ -35,3 +42,17 @@ def get_s3_client():
         region_name=settings.aws_region,
         endpoint_url=settings.aws_endpoint_url,
     )
+
+
+# Database setup
+settings = get_settings()
+engine = create_engine(settings.database_url)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

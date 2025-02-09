@@ -1,21 +1,23 @@
-from fastapi import APIRouter, UploadFile, HTTPException
+from fastapi import APIRouter, UploadFile, HTTPException, Depends
 import json
 import yaml
 import uuid
 from typing import List
+from sqlalchemy.orm import Session
+
+from ..config import get_db
 
 from ..schemas import ModuleSpec, ModuleResponse
-from ..services import AgentService
+from ..services import ModuleService
 
-router = APIRouter(prefix="/agents", tags=["agents"])
-agent_service = AgentService()
+router = APIRouter(prefix="/modules", tags=["modules"])
 
 
 @router.post("/", response_model=ModuleResponse)
-async def upload_module(
-    module_file: UploadFile,
-    spec_file: UploadFile,
-):
+async def upload_module(spec_file: UploadFile, db: Session = Depends(get_db)):
+    # Create service instance with db session
+    module_service = ModuleService(db=db)
+
     # Verify metadata file
     if not spec_file.filename.endswith(".yaml") and not spec_file.filename.endswith(
         ".yml"
@@ -32,20 +34,22 @@ async def upload_module(
     # Process the agent upload
     try:
         module_id = str(uuid.uuid4())
-        response = await agent_service.save_module(module_id, module_file, metadata)
+        response = await module_service.save_module(module_id, metadata)
         return response
     except Exception as e:
-        raise HTTPException(500, f"Error uploading agent: {str(e)}")
+        raise HTTPException(500, f"Error uploading module: {str(e)}")
 
 
 @router.get("/", response_model=List[ModuleResponse])
-async def list_modules():
-    return await agent_service.list_modules()
+async def list_modules(db: Session = Depends(get_db)):
+    module_service = ModuleService(db=db)
+    return await module_service.list_modules()
 
 
 @router.get("/{module_id}", response_model=ModuleResponse)
-async def get_module(module_id: str):
-    module = await agent_service.get_module(module_id)
+async def get_module(module_id: str, db: Session = Depends(get_db)):
+    module_service = ModuleService(db=db)
+    module = await module_service.get_module(module_id)
     if not module:
         raise HTTPException(404, "Module not found")
     return module
