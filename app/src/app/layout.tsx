@@ -1,22 +1,7 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+"use client";
+
 import "./globals.css";
 import SidebarWithState from "@/components/SidebarWithState";
-
-export const metadata: Metadata = {
-  title: "AgentMesh",
-  description: "Your AI Agent Platform",
-};
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export default function RootLayout({
   children,
@@ -25,10 +10,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen`}>
-        <div className="h-full">
+      <body>
+        <div className="flex h-screen overflow-hidden">
           <SidebarWithState />
-          <main className="md:pl-[300px] p-4">
+          <main className="flex-1 overflow-y-auto">
             {children}
           </main>
         </div>
