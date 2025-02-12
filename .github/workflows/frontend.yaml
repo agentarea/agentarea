@@ -9,9 +9,10 @@ on:
 
 env:
     CONTAINER_NAME: apriv-app
+
 defaults:
   run:
-    working-directory: ./app/
+    working-directory: ./app
 
 jobs:
   build:
