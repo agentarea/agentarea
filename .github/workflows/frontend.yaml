@@ -2,13 +2,13 @@ name: Frontend CI workflow
 on:
   push:
     paths:
-      - 'app/**'
-      - '.github/**'
+      - "app/**"
+      - ".github/**"
     branches:
       - main
 
 env:
-    CONTAINER_NAME: apriv-app
+  CONTAINER_NAME: apriv-app
 
 defaults:
   run:
@@ -35,6 +35,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           cache: "pnpm"
+          cache-dependency-path: "./app/pnpm-lock.yaml"
           node-version: 20.x
 
       - run: pnpm install --frozen-lockfile

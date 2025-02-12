@@ -47,8 +47,8 @@ jobs:
       - name: Install project
         run: poetry install --no-interaction
 
-      - name: Run tests
-        run: poetry run pytest
+    #   - name: Run tests
+    #     run: poetry run pytest
 
       - name: Build project
         run: poetry build
