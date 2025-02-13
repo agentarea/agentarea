@@ -6,7 +6,6 @@ import {
   Bot,
   Database,
   Users,
-  Clock,
   Calendar,
   Download,
   ChevronDown,
@@ -137,7 +136,7 @@ export default function UsagePage() {
         <div>
           <h1 className="text-4xl font-bold">Usage & Limits</h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Monitor your organization's resource usage and limits
+            Monitor your organization&apos;s resource usage and limits
           </p>
         </div>
         <div className="flex gap-4">

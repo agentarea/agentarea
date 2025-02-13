@@ -68,7 +68,7 @@ export default function MembersPage() {
         <div>
           <h1 className="text-4xl font-bold">Team Members</h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Manage your organization's members and their roles
+            Manage your organization&apos;s members and their roles
           </p>
         </div>
         <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg flex items-center gap-2">

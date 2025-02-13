@@ -4,9 +4,6 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import {
   Bot,
-  Star,
-  Users,
-  BarChart2,
   Settings,
   ExternalLink,
   AlertTriangle,

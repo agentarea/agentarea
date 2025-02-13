@@ -1,7 +1,7 @@
 import "./globals.css";
-import SidebarWithState from "@/components/SidebarWithState";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+
 import { ThemeProvider } from "@/components/providers/theme-provider"
+import MainLayout from "@/components/MainLayout";
 
 export default function RootLayout({
   children,
@@ -12,13 +12,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <div className="flex h-screen overflow-hidden">
-            <SidebarWithState />
-            <main className="flex-1 overflow-y-auto">
-              {children}
-            </main>
-          </div>
-          <ThemeToggle className="absolute bottom-2 right-2"/>
+          <MainLayout>
+            {children}
+          </MainLayout>
         </ThemeProvider>
       </body>
     </html>

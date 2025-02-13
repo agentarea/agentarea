@@ -11,7 +11,6 @@ import {
   Star,
   Users,
   BarChart2,
-  DollarSign,
   ChevronRight
 } from "lucide-react";
 

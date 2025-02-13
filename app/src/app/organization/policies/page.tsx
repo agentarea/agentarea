@@ -6,7 +6,6 @@ import {
   Shield,
   Lock,
   Users,
-  Bot,
   Database,
   Globe,
   Clock,

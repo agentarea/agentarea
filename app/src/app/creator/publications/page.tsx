@@ -4,7 +4,6 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import {
   Bot,
-  TrendingUp,
   Users,
   DollarSign,
   Star,
@@ -110,7 +109,7 @@ export default function PublicationsPage() {
         <div>
           <h1 className="text-4xl font-bold">Publications</h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Monitor your published agents' performance
+            Monitor your published agents performance
           </p>
         </div>
         <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">

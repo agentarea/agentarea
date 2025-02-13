@@ -3,10 +3,6 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import {
-  Users,
-  DollarSign,
-  Star,
-  BarChart2,
   TrendingUp,
   Clock,
   AlertTriangle,
@@ -136,7 +132,7 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="text-4xl font-bold">Analytics</h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Monitor your agents' performance and insights
+            Monitor your agents performance and insights
           </p>
         </div>
         <div className="flex gap-4">

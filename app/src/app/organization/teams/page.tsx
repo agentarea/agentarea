@@ -62,7 +62,7 @@ export default function TeamsPage() {
         <div>
           <h1 className="text-4xl font-bold">Teams</h1>
           <p className="text-lg text-muted-foreground mt-2">
-            Manage your organization's teams and their resources
+            Manage your organization&apos;s teams and their resources
           </p>
         </div>
         <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg flex items-center gap-2">
