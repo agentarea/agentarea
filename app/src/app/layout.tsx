@@ -1,22 +1,7 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import SidebarWithState from "@/components/SidebarWithState";
 
-export const metadata: Metadata = {
-  title: "AgentMesh",
-  description: "Your AI Agent Platform",
-};
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { ThemeProvider } from "@/components/providers/theme-provider"
+import MainLayout from "@/components/MainLayout";
 
 export default function RootLayout({
   children,
@@ -24,14 +9,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen`}>
-        <div className="h-full">
-          <SidebarWithState />
-          <main className="md:pl-[300px] p-4">
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <MainLayout>
             {children}
-          </main>
-        </div>
+          </MainLayout>
+        </ThemeProvider>
       </body>
     </html>
   );
