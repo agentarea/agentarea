@@ -1,18 +1,30 @@
 import json
 from typing import List, Optional
 from sqlalchemy.orm import Session
+import boto3
 
 from .schemas import ModuleSpec, ModuleResponse
 from .models import ModuleSpecModel
-from .config import get_settings, get_s3_client
+from .config import get_aws_settings, get_app_settings, AWSSettings, AppSettings
 
 
 class ModuleService:
-    def __init__(self, db: Session):
-        self.settings = get_settings()
-        self.s3_client = get_s3_client()
-        self.bucket_name = self.settings.s3_bucket_name
+    def __init__(
+        self,
+        db: Session,
+        aws_settings: AWSSettings = None,
+        app_settings: AppSettings = None
+    ):
         self.db = db
+        self.aws_settings = aws_settings or get_aws_settings()
+        self.app_settings = app_settings or get_app_settings()
+        self.s3_client = boto3.client(
+            "s3",
+            aws_access_key_id=self.aws_settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=self.aws_settings.AWS_SECRET_ACCESS_KEY,
+            region_name=self.aws_settings.AWS_REGION,
+            endpoint_url=self.aws_settings.AWS_ENDPOINT_URL,
+        )
 
     async def save_module(
         self, module_id: str, module_spec: ModuleSpec

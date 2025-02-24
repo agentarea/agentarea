@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from src.app.models import Base
-from src.app.config import get_settings
+from src.app.config import get_db_settings
 
 config = context.config
 
@@ -17,7 +17,7 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    settings = get_settings()
+    settings = get_db_settings()
     return settings.database_url
 
 

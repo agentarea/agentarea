@@ -1,5 +1,7 @@
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
+from datetime import datetime
+from enum import Enum
 
 
 class SystemRequirements(BaseModel):
@@ -36,3 +38,44 @@ class ModuleSpec(BaseModel):
 class ModuleResponse(BaseModel):
     id: str
     metadata: ModuleSpec
+
+
+class SourceType(str, Enum):
+    DATABASE = "database"
+    API = "api"
+    FILE = "file"
+    STREAM = "stream"
+
+
+class SourceStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    ERROR = "error"
+
+
+class SourceBase(BaseModel):
+    name: str = Field(..., description="Name of the source")
+    type: SourceType = Field(..., description="Type of the source")
+    description: str = Field(..., description="Description of the source")
+    configuration: Dict = Field(..., description="Source configuration details")
+    metadata: Dict = Field(default_factory=dict, description="Additional metadata")
+    owner: str = Field(..., description="Owner of the source")
+
+
+class SourceCreate(SourceBase):
+    pass
+
+
+class SourceUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    configuration: Optional[Dict] = None
+    metadata: Optional[Dict] = None
+    status: Optional[SourceStatus] = None
+
+
+class SourceResponse(SourceBase):
+    source_id: str
+    created_at: str
+    updated_at: str
+    status: SourceStatus
