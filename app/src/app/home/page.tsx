@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { Bot, Database, Code2, Activity } from "lucide-react";
+import { Bot, Database, Code2, Activity, MessageSquare } from "lucide-react";
+import Link from "next/link";
 
 interface StatCardProps {
   title: string;
@@ -79,6 +80,15 @@ export default function HomePage() {
               <span className="font-medium">Create Workflow</span>
               <p className="text-sm text-muted-foreground">Build a new automation workflow</p>
             </button>
+            <Link href="/home/chat" className="block">
+              <div className="w-full text-left px-4 py-3 rounded-lg hover:bg-secondary transition-colors">
+                <div className="flex items-center">
+                  <MessageSquare className="h-5 w-5 text-primary mr-2" />
+                  <span className="font-medium">Open Agent Chat</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Interact with agents through our advanced chat interface</p>
+              </div>
+            </Link>
           </div>
         </Card>
 

@@ -6,7 +6,6 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 import uvicorn
 from sqlalchemy import text
-from src.app.main import app
 from src.app.config import Database, get_db_settings
 import os
 
@@ -78,17 +77,30 @@ def migrate():
 
 
 @cli.command()
-def serve():
+@click.option('--host', default="0.0.0.0", help="Host to bind the server to")
+@click.option('--port', default=lambda: int(os.getenv("PORT", 8000)), help="Port to bind the server to")
+@click.option('--reload/--no-reload', default=False, help="Enable/disable auto-reload on code changes")
+@click.option('--log-level', default="info", type=click.Choice(['critical', 'error', 'warning', 'info', 'debug', 'trace']), help="Logging level")
+@click.option('--access-log/--no-access-log', default=True, help="Enable/disable access logs")
+@click.option('--workers', default=1, help="Number of worker processes")
+def serve(host, port, reload, log_level, access_log, workers):
     """Start the main application server"""
     check_migrations_status()
-    uvicorn.run(
-        app, 
-        host="0.0.0.0", 
-        port=int(os.getenv("PORT", 8000)), 
-        # reload=True,
-        log_level="info",  # Ensure we see startup messages
-        access_log=True    # Log HTTP requests
-    )
+        
+    print(f"Starting server on {host}:{port} (reload={reload}, log_level={log_level}, workers={workers})")
+    
+    # Configure uvicorn
+    uvicorn_config = {
+        "app": "src.app.main:app",
+        "host": host,
+        "port": int(port),  # Ensure port is an integer
+        "reload": reload,
+        "workers": workers,
+        "access_log": access_log,
+        "log_level": log_level,
+    }
+    
+    uvicorn.run(**uvicorn_config)
 
 
 if __name__ == "__main__":

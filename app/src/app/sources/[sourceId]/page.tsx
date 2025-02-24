@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -107,24 +107,26 @@ const PermissionNode = ({ permission, depth = 0 }: { permission: Permission; dep
 };
 
 interface Props {
-  params: {
+  params: Promise<{
     sourceId: string;
-  };
+  }>;
 }
 
 export default function SourceDetails({ params }: Props) {
   const router = useRouter();
+  const unwrappedParams = React.use(params) as { sourceId: string };
+  const sourceId = unwrappedParams.sourceId;
   const [source, setSource] = useState<SourceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSource();
-  }, [params.sourceId]);
+  }, [sourceId]);
 
   async function loadSource() {
     try {
-      const data = await sourcesApi.getSource(params.sourceId);
+      const data = await sourcesApi.getSource(sourceId);
       setSource(data);
     } catch (err) {
       setError('Failed to load source');
@@ -289,15 +291,19 @@ export default function SourceDetails({ params }: Props) {
                   Available Resources
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {source.resourceTypes.map((type) => (
-                    <Badge 
-                      key={type} 
-                      variant="secondary" 
-                      className="rounded-full px-3 py-1 bg-secondary/50 hover:bg-secondary/70 transition-colors cursor-default"
-                    >
-                      {type}
-                    </Badge>
-                  ))}
+                  {source.resourceTypes && source.resourceTypes.length > 0 ? (
+                    source.resourceTypes.map((type) => (
+                      <Badge 
+                        key={type} 
+                        variant="secondary" 
+                        className="rounded-full px-3 py-1 bg-secondary/50 hover:bg-secondary/70 transition-colors cursor-default"
+                      >
+                        {type}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">No resources available</p>
+                  )}
                 </div>
               </div>
             </Card>

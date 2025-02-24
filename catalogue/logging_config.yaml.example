@@ -1,0 +1,71 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  json:
+    format: '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "name": "%(name)s", "message": "%(message)s"}'
+  access:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(client_addr)s - "%(request_line)s" %(status_code)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+  
+  console_json:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: json
+    stream: ext://sys.stdout
+  
+  console_error:
+    class: logging.StreamHandler
+    level: ERROR
+    formatter: standard
+    stream: ext://sys.stderr
+  
+  console_access:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: access
+    stream: ext://sys.stdout
+
+loggers:
+  uvicorn:
+    level: INFO
+    handlers: [console]
+    propagate: no
+  
+  uvicorn.error:
+    level: INFO
+    handlers: [console_error]
+    propagate: no
+  
+  uvicorn.access:
+    level: INFO
+    handlers: [console_access]
+    propagate: no
+  
+  sqlalchemy:
+    level: WARNING
+    handlers: [console]
+    propagate: no
+  
+  alembic:
+    level: INFO
+    handlers: [console]
+    propagate: no
+  
+  src:
+    level: INFO
+    handlers: [console]
+    propagate: no
+
+root:
+  level: INFO
+  handlers: [console]
+  propagate: no 

@@ -16,6 +16,11 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
+      # Server settings
+      - PORT=${PORT:-8000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RELOAD=${RELOAD:-true}
+      - WORKERS=${WORKERS:-1}
     volumes:
       - ./src:/app/src
     depends_on:
@@ -27,7 +32,7 @@ services:
         condition: service_completed_successfully
       createbuckets:
         condition: service_completed_successfully
-    command: ["python", "-m", "src.cli", "serve"]
+    command: ["python", "-m", "src.cli", "serve", "--reload", "--log-level=${LOG_LEVEL:-info}", "--workers=${WORKERS:-1}"]
 
   app_migrations:
     build: .

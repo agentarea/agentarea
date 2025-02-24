@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import module, source
+from .routers import module, source, source_specification
 
 app = FastAPI(title="AI Agent Service")
 
@@ -15,3 +15,4 @@ app.add_middleware(
 
 app.include_router(module.router)
 app.include_router(source.router)
+app.include_router(source_specification.router)

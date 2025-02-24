@@ -25,6 +25,7 @@ class AWSSettings(BaseSettings):
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: str
     AWS_ENDPOINT_URL: Optional[str] = None
+    PUBLIC_S3_ENDPOINT: Optional[str] = None  # Public endpoint for frontend access
 
     class Config:
         env_file = ".env"
