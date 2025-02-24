@@ -11,11 +11,11 @@ class LLMScope(str, Enum):
 
 class LLMReferenceSpec(BaseModel):
     api_key: Optional[str] = Field(
-        None, description="API ключ для доступа к LLM сервису"
+        None, description="API key for accessing the LLM service"
     )
-    api_url: Optional[str] = Field(None, description="URL эндпоинта LLM сервиса")
-    model_path: Optional[str] = Field(None, description="Путь к локальной модели")
-    parameters: dict = Field(default={}, description="Дополнительные параметры для LLM")
+    api_url: Optional[str] = Field(None, description="LLM service endpoint URL")
+    model_path: Optional[str] = Field(None, description="Path to local model")
+    parameters: dict = Field(default={}, description="Additional parameters for LLM")
 
     class Config:
         schema_extra = {
@@ -29,12 +29,12 @@ class LLMReferenceSpec(BaseModel):
 
 
 class LLMReference(BaseModel):
-    id: uuid.UUID = Field(..., description="Уникальный идентификатор референса")
-    instance_id: uuid.UUID = Field(..., description="ID инстанса LLM")
-    name: str = Field(..., description="Имя референса")
-    settings: LLMReferenceSpec = Field(..., description="Настройки подключения к LLM")
-    scope: LLMScope = Field(..., description="Область видимости (PRIVATE/PUBLIC)")
-    status: str = Field(..., description="Текущий статус референса")
+    id: uuid.UUID = Field(..., description="Unique reference identifier")
+    instance_id: uuid.UUID = Field(..., description="LLM instance ID")
+    name: str = Field(..., description="Reference name")
+    settings: LLMReferenceSpec = Field(..., description="LLM connection settings")
+    scope: LLMScope = Field(..., description="Visibility scope (PRIVATE/PUBLIC)")
+    status: str = Field(..., description="Current reference status")
 
     class Config:
         schema_extra = {
@@ -55,10 +55,10 @@ class LLMReference(BaseModel):
 
 
 class CreateLLMInstance(BaseModel):
-    name: str = Field(..., description="Название модели")
-    description: str = Field(..., description="Описание модели")
-    version: str = Field(..., description="Версия модели")
-    provider: str = Field(..., description="Провайдер модели")
+    name: str = Field(..., description="Model name")
+    description: str = Field(..., description="Model description")
+    version: str = Field(..., description="Model version")
+    provider: str = Field(..., description="Model provider")
 
     class Config:
         schema_extra = {
@@ -73,11 +73,11 @@ class CreateLLMInstance(BaseModel):
 
 
 class LLMInstance(BaseModel):
-    id: uuid.UUID = Field(..., description="Уникальный идентификатор инстанса")
-    name: str = Field(..., description="Название модели")
-    description: str = Field(..., description="Описание модели")
-    version: str = Field(..., description="Версия модели")
-    provider: str = Field(..., description="Провайдер модели")
+    id: uuid.UUID = Field(..., description="Unique instance identifier")
+    name: str = Field(..., description="Model name")
+    description: str = Field(..., description="Model description")
+    version: str = Field(..., description="Model version")
+    provider: str = Field(..., description="Model provider")
 
     class Config:
         schema_extra = {
@@ -93,12 +93,10 @@ class LLMInstance(BaseModel):
 
 
 class ConnectionStatus(BaseModel):
-    status: str = Field(..., description="Статус подключения (success/error)")
-    message: str = Field(..., description="Описание статуса")
-    latency: Optional[float] = Field(None, description="Задержка в секундах")
-    additional_info: Optional[dict] = Field(
-        None, description="Дополнительная информация"
-    )
+    status: str = Field(..., description="Connection status (success/error)")
+    message: str = Field(..., description="Status description")
+    latency: Optional[float] = Field(None, description="Latency in seconds")
+    additional_info: Optional[dict] = Field(None, description="Additional information")
 
     class Config:
         schema_extra = {
@@ -113,10 +111,10 @@ class ConnectionStatus(BaseModel):
 
 
 class CreateLLMReferenceRequest(BaseModel):
-    instance_id: uuid.UUID = Field(..., description="ID инстанса LLM")
-    settings: LLMReferenceSpec = Field(..., description="Настройки подключения")
-    name: str = Field(..., description="Имя референса")
-    scope: LLMScope = Field(..., description="Область видимости")
+    instance_id: uuid.UUID = Field(..., description="LLM instance ID")
+    settings: LLMReferenceSpec = Field(..., description="Connection settings")
+    name: str = Field(..., description="Reference name")
+    scope: LLMScope = Field(..., description="Visibility scope")
 
     class Config:
         schema_extra = {

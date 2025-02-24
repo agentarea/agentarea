@@ -1,6 +1,7 @@
 import uuid
 from fastapi import APIRouter, HTTPException, Depends, Path, Query
 from typing import List, Optional
+from sqlalchemy.orm import Session
 
 from ..schemas.llm import (
     ConnectionStatus,
@@ -10,7 +11,6 @@ from ..schemas.llm import (
     LLMReference,
     LLMScope,
 )
-
 
 from ..services.llm_service import LLMService
 from ..models.llm import LLMInstance as DBLLMInstance, LLMReference as DBLLMReference
@@ -23,15 +23,15 @@ router = APIRouter(tags=["llm"])
 @router.get(
     "/",
     response_model=List[LLMInstance],
-    summary="Получить список LLM",
-    description="Возвращает список всех доступных LLM в системе",
+    summary="Get LLM list",
+    description="Returns a list of all available LLMs in the system",
 )
 async def get_llm_instances(
     # inject service
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """
-    Получить список всех доступных типов LLM в системе
+    Get a list of all available LLM types in the system
     """
     # TODO: Implement catalog retrieval from database
     return await llm_service.get_instances()
@@ -40,15 +40,15 @@ async def get_llm_instances(
 @router.post(
     "/",
     response_model=LLMInstance,
-    summary="Добавить новую LLM",
-    description="Добавляет новую LLM в систему",
+    summary="Add new LLM",
+    description="Adds a new LLM to the system",
 )
 async def add_llm_instance(
     llm: CreateLLMInstance,
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """
-    Добавить новую LLM в систему
+    Add a new LLM to the system
     """
 
     return await llm_service.add_instance(DBLLMInstance(**llm.model_dump()))
@@ -57,15 +57,15 @@ async def add_llm_instance(
 @router.get(
     "/references",
     response_model=List[LLMReference],
-    summary="Получить список референсов",
-    description="Возвращает список всех референсов с возможностью фильтрации по типу и области видимости",
+    summary="Get references list",
+    description="Returns a list of all references with optional filtering by type and scope",
 )
 async def get_llm_references(
-    scope: Optional[LLMScope] = Query(None, description="Фильтр по области видимости"),
+    scope: Optional[LLMScope] = Query(None, description="Filter by scope"),
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """
-    Получить список всех настроенных экземпляров LLM с возможностью фильтрации
+    Get a list of all configured LLM instances with filtering options
     """
     # TODO: Implement instances retrieval with filtering
     return await llm_service.get_references(scope)
@@ -74,15 +74,15 @@ async def get_llm_references(
 @router.post(
     "/references",
     response_model=LLMReference,
-    summary="Создать новый референс",
-    description="Создает новый референс на основе существующего инстанса LLM",
+    summary="Create new reference",
+    description="Creates a new reference based on existing LLM instance",
 )
 async def create_llm_reference(
     reference_data: CreateLLMReferenceRequest,
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """
-    Создать новый экземпляр LLM на основе каталога с указанными настройками
+    Create a new LLM instance based on catalog with specified settings
     """
     reference = await llm_service.create_reference(
         instance_id=reference_data.instance_id,
@@ -96,15 +96,15 @@ async def create_llm_reference(
 @router.get(
     "/references/{reference_id}",
     response_model=LLMReference,
-    summary="Получить референс",
-    description="Возвращает информацию о конкретном референсе по его ID",
+    summary="Get reference",
+    description="Returns information about specific reference by its ID",
 )
 async def get_llm_reference(
-    reference_id: str = Path(..., description="ID референса для получения"),
+    reference_id: str = Path(..., description="Reference ID to get"),
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """
-    Получить информацию о конкретном экземпляре LLM
+    Get information about specific LLM instance
     """
     reference = await llm_service.get_reference(reference_id)
     return reference
@@ -112,15 +112,15 @@ async def get_llm_reference(
 
 @router.delete(
     "/references/{reference_id}",
-    summary="Удалить референс",
-    description="Удаляет указанный референс из системы",
+    summary="Delete reference",
+    description="Deletes specified reference from the system",
 )
 async def delete_llm_reference(
-    reference_id: str = Path(..., description="ID референса для удаления"),
+    reference_id: str = Path(..., description="Reference ID to delete"),
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """
-    Удалить экземпляр LLM
+    Delete LLM instance
     """
     return await llm_service.delete_reference(reference_id)
 
@@ -128,16 +128,16 @@ async def delete_llm_reference(
 @router.post(
     "/references/{reference_id}/check-connection",
     response_model=ConnectionStatus,
-    summary="Проверить соединение",
-    description="Проверяет соединение с LLM и возвращает статус подключения",
+    summary="Check connection",
+    description="Checks connection to LLM and returns connection status",
 )
 async def check_llm_connection(
-    reference_id: str = Path(..., description="ID референса для проверки"),
+    reference_id: str = Path(..., description="Reference ID to check"),
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """
-    Проверить соединение с LLM и её работоспособность.
-    Возвращает статус соединения, сообщение, задержку и дополнительную информацию.
+    Check LLM connection and its functionality.
+    Returns connection status, message, latency and additional information.
     """
     return await llm_service.check_connection(reference_id)
     # TODO: Implement connection check logic:
