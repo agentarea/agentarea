@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
-class Settings(BaseSettings):
+class ApplicationConfig(BaseSettings):
     # AWS Settings
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -27,12 +27,12 @@ class Settings(BaseSettings):
 
 
 @lru_cache()
-def get_settings() -> Settings:
-    return Settings()
+def get_application_config() -> ApplicationConfig:
+    return ApplicationConfig()
 
 
 def get_s3_client():
-    settings = get_settings()
+    settings = get_application_config()
     import boto3
 
     return boto3.client(
@@ -45,7 +45,7 @@ def get_s3_client():
 
 
 # Database setup
-settings = get_settings()
+settings = get_application_config()
 engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

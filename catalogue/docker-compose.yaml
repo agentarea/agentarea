@@ -15,8 +15,27 @@ services:
     volumes:
       - ./src:/app/src
     depends_on:
-      - localstack
-      - db
+      migrations:
+        condition: service_completed_successfully
+      localstack:
+        condition: service_started
+      db:
+        condition: service_started
+
+  migrations:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/aiagents
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    depends_on:
+      db:
+        condition: service_healthy
 
   localstack:
     image: localstack/localstack:latest
@@ -42,6 +61,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data: 

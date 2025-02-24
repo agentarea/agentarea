@@ -2,14 +2,14 @@ import json
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from .schemas import ModuleSpec, ModuleResponse
-from .models import ModuleSpecModel
-from .config import get_settings, get_s3_client
+from ..schemas.module import ModuleSpec, ModuleResponse
+from ..models.modules import ModuleSpecModel
+from ..config import get_application_config, get_s3_client
 
 
 class ModuleService:
     def __init__(self, db: Session):
-        self.settings = get_settings()
+        self.settings = get_application_config()
         self.s3_client = get_s3_client()
         self.bucket_name = self.settings.s3_bucket_name
         self.db = db

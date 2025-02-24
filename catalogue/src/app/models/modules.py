@@ -1,7 +1,6 @@
 from sqlalchemy import Boolean, Column, String, JSON, Integer
-from sqlalchemy.ext.declarative import declarative_base
 
-Base = declarative_base()
+from ..database import Base
 
 
 class ModuleSpecModel(Base):

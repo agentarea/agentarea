@@ -27,8 +27,12 @@ ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.s
 RUN chmod +x /wait-for-it.sh
 
 # Create entrypoint script
+# RUN echo '#!/bin/bash\n\
+#     /wait-for-it.sh db:5432 -- poetry run alembic upgrade head\n\
+#     poetry run uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --reload\n'\
+#     > /entrypoint.sh && chmod +x /entrypoint.sh
+
 RUN echo '#!/bin/bash\n\
-    /wait-for-it.sh db:5432 -- poetry run alembic upgrade head\n\
     poetry run uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --reload\n'\
     > /entrypoint.sh && chmod +x /entrypoint.sh
 

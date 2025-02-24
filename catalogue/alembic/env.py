@@ -1,12 +1,13 @@
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
 
-from src.app.models import Base
-from src.app.config import get_settings
+from src.app.database import Base
+
 
 config = context.config
 
@@ -17,8 +18,7 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    settings = get_settings()
-    return settings.database_url
+    return os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/aiagents")
 
 
 def run_migrations_offline() -> None:
