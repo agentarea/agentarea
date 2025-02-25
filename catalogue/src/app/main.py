@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import module, source, source_specification
+from .routers import v1_router
 
 app = FastAPI(title="AI Agent Service")
 
@@ -13,6 +13,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(module.router)
-app.include_router(source.router)
-app.include_router(source_specification.router)
+app.include_router(v1_router())

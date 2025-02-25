@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator, Optional
 
+
 class DatabaseSettings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
@@ -19,6 +20,7 @@ class DatabaseSettings(BaseSettings):
     class Config:
         env_file = ".env"
 
+
 class AWSSettings(BaseSettings):
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
@@ -30,6 +32,7 @@ class AWSSettings(BaseSettings):
     class Config:
         env_file = ".env"
 
+
 class AppSettings(BaseSettings):
     APP_NAME: str = "AI Agent Service"
     DEBUG: bool = False
@@ -37,17 +40,21 @@ class AppSettings(BaseSettings):
     class Config:
         env_file = ".env"
 
+
 @lru_cache()
 def get_db_settings() -> DatabaseSettings:
     return DatabaseSettings()
+
 
 @lru_cache()
 def get_aws_settings() -> AWSSettings:
     return AWSSettings()
 
+
 @lru_cache()
 def get_app_settings() -> AppSettings:
     return AppSettings()
+
 
 class Database:
     def __init__(self, db_settings: DatabaseSettings = None):
@@ -60,7 +67,9 @@ class Database:
             max_overflow=10,
             pool_size=5,
         )
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.SessionLocal = sessionmaker(
+            autocommit=False, autoflush=False, bind=self.engine
+        )
 
     def get_db(self) -> Generator[Session, None, None]:
         db = self.SessionLocal()
@@ -68,6 +77,7 @@ class Database:
             yield db
         finally:
             db.close()
+
 
 def get_s3_client():
     aws_settings = get_aws_settings()
@@ -80,6 +90,7 @@ def get_s3_client():
         region_name=aws_settings.AWS_REGION,
         endpoint_url=aws_settings.AWS_ENDPOINT_URL,
     )
+
 
 # Create global instances
 db = Database()

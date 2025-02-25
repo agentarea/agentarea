@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from ..config import get_db
 
-from ..schemas import ModuleSpec, ModuleResponse
-from ..services import ModuleService
+from ..schemas.module import ModuleSpec, ModuleResponse
+from ..services.module_service import ModuleService
 
-router = APIRouter(prefix="/modules", tags=["modules"])
+# Изменяем префикс, убирая /modules, так как он будет добавлен в основном роутере
+router = APIRouter(tags=["modules"])
 
 
 @router.post("/", response_model=ModuleResponse)
