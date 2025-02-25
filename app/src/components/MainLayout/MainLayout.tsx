@@ -72,18 +72,6 @@ export const navContent: NavSection[] = [
         ]
     },
     {
-        id: "creator",
-        section: "Creator Hub",
-        icon: <Code className="h-4 w-4" />,
-        items: [
-          { label: "My Agents", href: "/creator/agents", icon: <Bot className="h-4 w-4" /> },
-          { label: "Development", href: "/creator/development", icon: <Code className="h-4 w-4" /> },
-          { label: "Publications", href: "/creator/publications", icon: <BookOpen className="h-4 w-4" /> },
-          { label: "Analytics", href: "/creator/analytics", icon: <BarChart2 className="h-4 w-4" /> },
-          { label: "Documentation", href: "/creator/docs", icon: <FileText className="h-4 w-4" /> },
-        ]
-    },    
-    {
       id: "catalog",
       section: "Catalog",
       icon: <ShoppingBag className="h-4 w-4" />,
@@ -104,6 +92,18 @@ export const navContent: NavSection[] = [
         { label: "Audit Log", href: "/organization/audit", icon: <ClipboardList className="h-4 w-4" /> },
       ]
     },
+    {
+        id: "creator",
+        section: "Creator Hub",
+        icon: <Code className="h-4 w-4" />,
+        items: [
+          { label: "My Agents", href: "/creator/agents", icon: <Bot className="h-4 w-4" /> },
+          { label: "Development", href: "/creator/development", icon: <Code className="h-4 w-4" /> },
+          { label: "Publications", href: "/creator/publications", icon: <BookOpen className="h-4 w-4" /> },
+          { label: "Analytics", href: "/creator/analytics", icon: <BarChart2 className="h-4 w-4" /> },
+          { label: "Documentation", href: "/creator/docs", icon: <FileText className="h-4 w-4" /> },
+        ]
+    },    
   ];
 
     const bottomNavContent: BottomNavContent = {

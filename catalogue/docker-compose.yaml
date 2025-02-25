@@ -6,66 +6,101 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - AWS_REGION=us-east-1
-      - S3_BUCKET_NAME=ai-agents-bucket
-      - AWS_ENDPOINT_URL=http://localstack:4566
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/aiagents
+      # S3 settings
+      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
+      - AWS_REGION=${MINIO_REGION}
+      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
+      - AWS_ENDPOINT_URL=http://minio:9000
+      # Database settings
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      # Server settings
+      - PORT=${PORT:-8000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RELOAD=${RELOAD:-true}
+      - WORKERS=${WORKERS:-1}
     volumes:
       - ./src:/app/src
-    depends_on:
-      migrations:
-        condition: service_completed_successfully
-      localstack:
-        condition: service_started
-      db:
-        condition: service_started
-
-  migrations:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    command: ["alembic", "upgrade", "head"]
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/aiagents
-    volumes:
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+      app_migrations:
+        condition: service_completed_successfully
+      createbuckets:
+        condition: service_completed_successfully
+    command: ["python", "-m", "src.cli", "serve", "--reload", "--log-level=${LOG_LEVEL:-info}", "--workers=${WORKERS:-1}"]
 
-  localstack:
-    image: localstack/localstack:latest
-    ports:
-      - "4566:4566"
+  app_migrations:
+    build: .
     environment:
-      - SERVICES=s3
-      - DEFAULT_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - DOCKER_HOST=unix:///var/run/docker.sock
+      # Only database settings
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-m", "src.cli", "migrate"]
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     volumes:
-      - ./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
-      - "/var/run/docker.sock:/var/run/docker.sock"
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    environment:
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - DOCUMENTS_BUCKET=${DOCUMENTS_BUCKET}
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+      if mc ls myminio/${DOCUMENTS_BUCKET} > /dev/null 2>&1; then
+          echo 'Bucket ${DOCUMENTS_BUCKET} already exists.';
+      else
+          mc mb myminio/${DOCUMENTS_BUCKET};
+          mc policy set public myminio/${DOCUMENTS_BUCKET};
+          echo 'Bucket ${DOCUMENTS_BUCKET} was successfully created and set to public.';
+      fi;
+      exit 0;
+      "
 
   db:
     image: postgres:15
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=aiagents
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  postgres_data: 
+  postgres_data:
+  minio_data: 

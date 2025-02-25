@@ -1,6 +1,7 @@
 """create llm tables
 
 Revision ID: create_llm_tables
+Revises: add_sources_table
 Create Date: 2024-03-XX
 """
 
@@ -10,7 +11,7 @@ from sqlalchemy.dialects.postgresql import JSON, UUID
 
 # revision identifiers, used by Alembic.
 revision = "create_llm_tables"
-down_revision = "initial_migration"
+down_revision = "add_sources_table"
 branch_labels = None
 depends_on = None
 

@@ -7,7 +7,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from src.app.database import Base
-
+from src.app.config import get_db_settings
 
 config = context.config
 
@@ -18,7 +18,8 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    return os.getenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/aiagents")
+    settings = get_db_settings()
+    return settings.database_url
 
 
 def run_migrations_offline() -> None:
