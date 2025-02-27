@@ -7,11 +7,11 @@ from .source_specification import router as source_specification_router
 
 
 def v1_router():
-    router = APIRouter(prefix="/v1/catalog")
+    router = APIRouter(prefix="")
     router.include_router(
         llm_router, prefix="/llms", dependencies=[Depends(get_llm_service)]
     )
     router.include_router(module_router, prefix="/modules")
-    router.include_router(source_router, prefix="/sources")
-    router.include_router(source_specification_router, prefix="/source_specifications")
+    router.include_router(source_router)
+    router.include_router(source_specification_router)
     return router

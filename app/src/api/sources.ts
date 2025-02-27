@@ -73,7 +73,7 @@ const fixPresignedUrl = (url: string): string => {
 
 export const sourcesApi = {
   async createSource(source: SourceCreate): Promise<SourceResponse> {
-    const response = await fetch(`${API_BASE_URL}/sources/`, {
+    const response = await fetch(`${API_BASE_URL}/sources`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
