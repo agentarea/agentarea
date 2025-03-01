@@ -1,11 +1,11 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from ..services.llm_service import LLMService
+from ..services.model_service import ModelService
 from ..config import get_db
 
 
-def get_llm_service(
+def get_model_service(
     db: Session = Depends(get_db),
-) -> LLMService:
-    return LLMService(db)
+) -> ModelService:
+    return ModelService(db)

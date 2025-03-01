@@ -4,23 +4,23 @@ import uuid
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from ..models.llm import LLMInstance as DBLLMInstance, LLMScope
-from ..models.llm import LLMReference as DBLLMReference
-from ..schemas.llm import ConnectionStatus, LLMInstance, LLMReference
+from ..models.model import ModelInstance as DBModelInstance, ModelScope
+from ..models.model import ModelReference as DBModelReference
+from ..schemas.model import ConnectionStatus, ModelInstance, ModelReference
 
 
-class LLMService:
+class ModelService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_instances(self) -> List[DBLLMInstance]:
-        """Получить список всех LLM инстансов"""
-        instances = self.db.query(DBLLMInstance).all()
-        return [LLMInstance.from_orm(instance) for instance in instances]
+    async def get_instances(self) -> List[DBModelInstance]:
+        """Получить список всех Model инстансов"""
+        instances = self.db.query(DBModelInstance).all()
+        return [ModelInstance.from_orm(instance) for instance in instances]
 
-    async def add_instance(self, instance: DBLLMInstance) -> LLMInstance:
-        """Добавить новый LLM инстанс"""
-        db_instance = DBLLMInstance(
+    async def add_instance(self, instance: DBModelInstance) -> ModelInstance:
+        """Добавить новый Model инстанс"""
+        db_instance = DBModelInstance(
             id=instance.id,
             name=instance.name,
             description=instance.description,
@@ -31,39 +31,39 @@ class LLMService:
         try:
             self.db.commit()
             self.db.refresh(db_instance)
-            return LLMInstance.from_orm(db_instance)
+            return ModelInstance.from_orm(db_instance)
         except Exception as e:
             self.db.rollback()
             raise HTTPException(status_code=400, detail=str(e))
 
     async def get_references(
-        self, scope: Optional[LLMScope] = None
-    ) -> List[LLMReference]:
-        """Получить список всех LLM референсов с фильтрацией"""
+        self, scope: Optional[ModelScope] = None
+    ) -> List[ModelReference]:
+        """Получить список всех Model референсов с фильтрацией"""
         # join with
-        query = self.db.query(DBLLMReference)
+        query = self.db.query(DBModelReference)
         if scope:
-            query = query.filter(DBLLMReference.scope == scope)
+            query = query.filter(DBModelReference.scope == scope)
         references = query.all()
         for ref in references:
             print(ref.settings)
-        return [LLMReference.from_orm(ref) for ref in references]
+        return [ModelReference.from_orm(ref) for ref in references]
 
     async def create_reference(
-        self, instance_id: uuid.UUID, name: str, settings: Dict, scope: LLMScope
-    ) -> LLMReference:
-        """Создать новый LLM референс"""
+        self, instance_id: uuid.UUID, name: str, settings: Dict, scope: ModelScope
+    ) -> ModelReference:
+        """Создать новый Model референс"""
         # Проверяем существование инстанса
         instance = (
-            self.db.query(DBLLMInstance)
-            .filter(DBLLMInstance.id == instance_id)
+            self.db.query(DBModelInstance)
+            .filter(DBModelInstance.id == instance_id)
             .one_or_none()
         )
         if not instance:
-            raise HTTPException(status_code=404, detail="LLM instance not found")
+            raise HTTPException(status_code=404, detail="Model instance not found")
 
-        db_reference = DBLLMReference(
-            llm_instance=instance,
+        db_reference = DBModelReference(
+            model_instance=instance,
             name=name,
             settings=settings,
             scope=scope,
@@ -73,27 +73,27 @@ class LLMService:
         try:
             self.db.commit()
             self.db.refresh(db_reference)
-            return LLMReference.from_orm(db_reference)
+            return ModelReference.from_orm(db_reference)
         except Exception as e:
             self.db.rollback()
             raise HTTPException(status_code=400, detail=str(e))
 
-    async def get_reference(self, reference_id: str) -> Optional[LLMReference]:
-        """Получить LLM референс по ID"""
+    async def get_reference(self, reference_id: str) -> Optional[ModelReference]:
+        """Получить Model референс по ID"""
         reference = (
-            self.db.query(DBLLMReference)
-            .filter(DBLLMReference.id == reference_id)
+            self.db.query(DBModelReference)
+            .filter(DBModelReference.id == reference_id)
             .first()
         )
         if not reference:
             return None
-        return LLMReference.from_orm(reference)
+        return ModelReference.from_orm(reference)
 
     async def delete_reference(self, reference_id: str) -> bool:
-        """Удалить LLM референс"""
+        """Удалить Model референс"""
         reference = (
-            self.db.query(DBLLMReference)
-            .filter(DBLLMReference.id == reference_id)
+            self.db.query(DBModelReference)
+            .filter(DBModelReference.id == reference_id)
             .first()
         )
         if not reference:
@@ -107,10 +107,10 @@ class LLMService:
             raise HTTPException(status_code=400, detail=str(e))
 
     async def check_connection(self, reference_id: str) -> ConnectionStatus:
-        """Проверить соединение с LLM"""
+        """Проверить соединение с Model"""
         reference = await self.get_reference(reference_id)
         if not reference:
-            raise HTTPException(status_code=404, detail="LLM reference not found")
+            raise HTTPException(status_code=404, detail="Model reference not found")
 
         # TODO: Implement actual connection check logic
         return ConnectionStatus(

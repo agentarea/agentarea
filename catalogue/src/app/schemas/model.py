@@ -4,18 +4,18 @@ from pydantic import BaseModel, HttpUrl, Field
 from enum import Enum
 
 
-class LLMScope(str, Enum):
+class ModelScope(str, Enum):
     PRIVATE = "PRIVATE"
     PUBLIC = "PUBLIC"
 
 
-class LLMReferenceSpec(BaseModel):
+class ModelReferenceSpec(BaseModel):
     api_key: Optional[str] = Field(
-        None, description="API key for accessing the LLM service"
+        None, description="API key for accessing the Model service"
     )
-    api_url: Optional[str] = Field(None, description="LLM service endpoint URL")
+    api_url: Optional[str] = Field(None, description="Model service endpoint URL")
     model_path: Optional[str] = Field(None, description="Path to local model")
-    parameters: dict = Field(default={}, description="Additional parameters for LLM")
+    parameters: dict = Field(default={}, description="Additional parameters for Model")
 
     class Config:
         schema_extra = {
@@ -28,12 +28,12 @@ class LLMReferenceSpec(BaseModel):
         from_attributes = True
 
 
-class LLMReference(BaseModel):
+class ModelReference(BaseModel):
     id: uuid.UUID = Field(..., description="Unique reference identifier")
-    instance_id: uuid.UUID = Field(..., description="LLM instance ID")
+    instance_id: uuid.UUID = Field(..., description="Model instance ID")
     name: str = Field(..., description="Reference name")
-    settings: LLMReferenceSpec = Field(..., description="LLM connection settings")
-    scope: LLMScope = Field(..., description="Visibility scope (PRIVATE/PUBLIC)")
+    settings: ModelReferenceSpec = Field(..., description="Model connection settings")
+    scope: ModelScope = Field(..., description="Visibility scope (PRIVATE/PUBLIC)")
     status: str = Field(..., description="Current reference status")
 
     class Config:
@@ -54,7 +54,7 @@ class LLMReference(BaseModel):
         from_attributes = True
 
 
-class CreateLLMInstance(BaseModel):
+class CreateModelInstance(BaseModel):
     name: str = Field(..., description="Model name")
     description: str = Field(..., description="Model description")
     version: str = Field(..., description="Model version")
@@ -72,7 +72,7 @@ class CreateLLMInstance(BaseModel):
         from_attributes = True
 
 
-class LLMInstance(BaseModel):
+class ModelInstance(BaseModel):
     id: uuid.UUID = Field(..., description="Unique instance identifier")
     name: str = Field(..., description="Model name")
     description: str = Field(..., description="Model description")
@@ -110,18 +110,18 @@ class ConnectionStatus(BaseModel):
         from_attributes = True
 
 
-class CreateLLMReferenceRequest(BaseModel):
-    instance_id: uuid.UUID = Field(..., description="LLM instance ID")
-    settings: LLMReferenceSpec = Field(..., description="Connection settings")
+class CreateModelReferenceRequest(BaseModel):
+    instance_id: uuid.UUID = Field(..., description="Model instance ID")
+    settings: ModelReferenceSpec = Field(..., description="Connection settings")
     name: str = Field(..., description="Reference name")
-    scope: LLMScope = Field(..., description="Visibility scope")
+    scope: ModelScope = Field(..., description="Visibility scope")
 
     class Config:
         schema_extra = {
             "example": {
                 "instance_id": "123e4567-e89b-12d3-a456-426614174000",
                 "settings": {"api_key": "sk-1234567890abcdef"},
-                "name": "My Custom LLM",
+                "name": "My Custom Model",
                 "scope": "private",
             }
         }
