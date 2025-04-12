@@ -1,13 +1,10 @@
 from logging.config import fileConfig
-import os
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
+from agentarea.config import get_db_settings
+from agentarea.database import Base
 from alembic import context
-
-from src.app.database import Base
-from src.app.config import get_db_settings
 
 config = context.config
 
@@ -19,7 +16,7 @@ target_metadata = Base.metadata
 
 def get_url():
     settings = get_db_settings()
-    return settings.database_url
+    return settings.sync_url
 
 
 def run_migrations_offline() -> None:

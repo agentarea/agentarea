@@ -1,7 +1,7 @@
-import requests
 import os
-import json
 from urllib.parse import urlparse
+
+import requests
 
 # Configuration
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
@@ -19,8 +19,8 @@ presigned_response = requests.post(
     json={
         "filename": "test_file.txt",
         "file_type": "txt",
-        "content_type": "text/plain"
-    }
+        "content_type": "text/plain",
+    },
 )
 
 if not presigned_response.ok:
@@ -42,16 +42,16 @@ hostname = parsed_url.netloc
 
 print(f"Hostname in presigned URL: {hostname}")
 if "minio" in hostname or "localhost" not in hostname:
-    print("WARNING: The presigned URL contains an internal hostname that might not be accessible from the frontend.")
+    print(
+        "WARNING: The presigned URL contains an internal hostname that might not be accessible from the frontend."
+    )
 
 # Step 2: Upload the file using the presigned URL
 print("\nUploading file...")
 with open(TEST_FILE_PATH, "rb") as f:
     file_content = f.read()
     upload_response = requests.put(
-        presigned_url,
-        data=file_content,
-        headers={"Content-Type": "text/plain"}
+        presigned_url, data=file_content, headers={"Content-Type": "text/plain"}
     )
 
 if not upload_response.ok:
@@ -72,8 +72,8 @@ source_response = requests.post(
         "content_type": "text/plain",
         "file_size": len(file_content),
         "description": "Test file uploaded via presigned URL",
-        "owner": "test_script"
-    }
+        "owner": "test_script",
+    },
 )
 
 if not source_response.ok:
@@ -86,4 +86,4 @@ print(f"Source ID: {source_data['source_id']}")
 print(f"Source Name: {source_data['name']}")
 print(f"Source Type: {source_data['type']}")
 
-print("\nTest completed successfully!") 
+print("\nTest completed successfully!")
