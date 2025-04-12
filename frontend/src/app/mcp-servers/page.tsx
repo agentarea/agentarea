@@ -262,9 +262,9 @@ export default function MCPServersPage() {
           ) : (
             <>
               {viewMode === "card" ? (
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredPublishedServers.map((server) => (
-                    <Card key={server.id} className="overflow-hidden">
+                    <Card key={server.id} className="flex flex-col">
                       <CardHeader className="pb-2">
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-2">
@@ -285,7 +285,7 @@ export default function MCPServersPage() {
                         </div>
                         <CardDescription>{server.description}</CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="flex-grow">
                         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                           <div className="flex items-center gap-1">
                             <Download className="h-4 w-4 text-muted-foreground" />

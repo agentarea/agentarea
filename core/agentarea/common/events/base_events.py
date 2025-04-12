@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any, Dict
 from uuid import UUID
 
+
 @dataclass
 class DomainEvent:
     event_id: UUID

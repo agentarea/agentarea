@@ -1,8 +1,9 @@
 from typing import List, Optional
 from uuid import UUID
 
-from ....common.base.service import BaseService
-from ....common.events.broker import EventBroker
+from agentarea.common.base.service import BaseService
+from agentarea.common.events.broker import EventBroker
+
 from ..domain.events import AgentCreated, AgentDeleted, AgentUpdated
 from ..domain.models import Agent
 from ..infrastructure.repository import AgentRepository
