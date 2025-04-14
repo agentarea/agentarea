@@ -102,6 +102,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   command: serve
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/health"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
   # echo-mcp:
   #   image: agentarea/echo-mcp
   #   build:

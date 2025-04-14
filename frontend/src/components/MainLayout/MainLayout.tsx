@@ -65,7 +65,7 @@ export const navContent: NavSection[] = [
     items: [
       {
         label: "Browse",
-        href: "/marketplace/llms/browse",
+        href: "/llms/browse",
         icon: <Cpu className="h-4 w-4" />,
       },
       // {

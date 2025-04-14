@@ -5,13 +5,12 @@ from agentarea.common.base.service import BaseService
 from agentarea.common.events.broker import EventBroker
 
 from ..domain.events import (
-    MCPServerCreated,
-    MCPServerDeleted,
-    MCPServerUpdated,
-    MCPServerDeployed
+    MCPServerCreated, MCPServerDeleted, MCPServerDeployed, MCPServerUpdated,
+    MCPServerInstanceCreated, MCPServerInstanceDeleted, MCPServerInstanceStarted,
+    MCPServerInstanceStopped, MCPServerInstanceUpdated
 )
-from ..domain.models import MCPServer
-from ..infrastructure.repository import MCPServerRepository
+from ..domain.models import MCPServer, MCPServerInstance
+from ..infrastructure.repository import MCPServerRepository, MCPServerInstanceRepository
 
 
 class MCPServerService(BaseService[MCPServer]):
@@ -127,4 +126,136 @@ class MCPServerService(BaseService[MCPServer]):
         is_public: Optional[bool] = None,
         tag: Optional[str] = None
     ) -> List[MCPServer]:
-        return await self.repository.list(status=status, is_public=is_public, tag=tag) 
+        return await self.repository.list(status=status, is_public=is_public, tag=tag)
+
+
+class MCPServerInstanceService(BaseService[MCPServerInstance]):
+    def __init__(self, repository: MCPServerInstanceRepository, event_broker: EventBroker, 
+                 mcp_server_repository: MCPServerRepository):
+        super().__init__(repository)
+        self.event_broker = event_broker
+        self.mcp_server_repository = mcp_server_repository
+
+    async def create_instance(
+        self,
+        server_id: UUID,
+        name: str,
+        endpoint_url: str,
+        config: dict = None,
+    ) -> Optional[MCPServerInstance]:
+        # Check if the server exists
+        server = await self.mcp_server_repository.get(server_id)
+        if not server:
+            return None
+            
+        instance = MCPServerInstance(
+            server_id=server_id,
+            name=name,
+            endpoint_url=endpoint_url,
+            config=config or {},
+        )
+        instance = await self.create(instance)
+
+        await self.event_broker.publish(
+            MCPServerInstanceCreated(
+                instance_id=instance.id,
+                server_id=instance.server_id,
+                name=instance.name
+            )
+        )
+
+        return instance
+
+    async def update_instance(
+        self,
+        id: UUID,
+        name: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
+        config: Optional[dict] = None,
+        status: Optional[str] = None
+    ) -> Optional[MCPServerInstance]:
+        instance = await self.get(id)
+        if not instance:
+            return None
+
+        if name is not None:
+            instance.name = name
+        if endpoint_url is not None:
+            instance.endpoint_url = endpoint_url
+        if config is not None:
+            instance.config = config
+        if status is not None:
+            instance.status = status
+
+        instance = await self.update(instance)
+
+        await self.event_broker.publish(
+            MCPServerInstanceUpdated(
+                instance_id=instance.id,
+                server_id=instance.server_id,
+                name=instance.name,
+                status=instance.status
+            )
+        )
+
+        return instance
+
+    async def delete_instance(self, id: UUID) -> bool:
+        instance = await self.get(id)
+        if not instance:
+            return False
+            
+        success = await self.delete(id)
+        if success:
+            await self.event_broker.publish(
+                MCPServerInstanceDeleted(
+                    instance_id=id,
+                    server_id=instance.server_id
+                )
+            )
+        return success
+
+    async def start_instance(self, id: UUID) -> bool:
+        instance = await self.get(id)
+        if not instance:
+            return False
+
+        # TODO: Implement instance startup logic
+        instance.status = "running"
+        await self.update(instance)
+
+        await self.event_broker.publish(
+            MCPServerInstanceStarted(
+                instance_id=instance.id,
+                server_id=instance.server_id,
+                name=instance.name
+            )
+        )
+
+        return True
+
+    async def stop_instance(self, id: UUID) -> bool:
+        instance = await self.get(id)
+        if not instance:
+            return False
+
+        # TODO: Implement instance stop logic
+        instance.status = "stopped"
+        await self.update(instance)
+
+        await self.event_broker.publish(
+            MCPServerInstanceStopped(
+                instance_id=instance.id,
+                server_id=instance.server_id,
+                name=instance.name
+            )
+        )
+
+        return True
+
+    async def list(
+        self,
+        server_id: Optional[UUID] = None,
+        status: Optional[str] = None
+    ) -> List[MCPServerInstance]:
+        return await self.repository.list(server_id=server_id, status=status) 

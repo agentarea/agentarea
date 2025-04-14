@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, HttpUrl
 
-from ...modules.llm.application.service import LLMModelService
-from ...modules.llm.domain.models import LLMModel
-from ..deps.services import get_llm_model_service
+from agentarea.modules.llm.application.service import LLMModelService
+from agentarea.modules.llm.domain.models import LLMModel
+from agentarea.api.deps.services import get_llm_model_service
 
 router = APIRouter(prefix="/llm-models", tags=["llm-models"])
 
@@ -43,7 +43,7 @@ class LLMModelResponse(BaseModel):
     context_window: str
     status: str
     is_public: bool
-    last_updated: str
+    updated_at: str
 
     @classmethod
     def from_domain(cls, model: LLMModel) -> "LLMModelResponse":
@@ -57,7 +57,7 @@ class LLMModelResponse(BaseModel):
             context_window=model.context_window,
             status=model.status,
             is_public=model.is_public,
-            last_updated=model.last_updated,
+            updated_at=model.updated_at,
         )
 
 

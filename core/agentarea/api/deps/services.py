@@ -9,13 +9,8 @@ from agentarea.modules.agents.application.service import AgentService
 from agentarea.modules.agents.infrastructure.repository import AgentRepository
 from agentarea.modules.llm.application.service import LLMModelService, LLMModelInstanceService
 from agentarea.modules.llm.infrastructure.repository import LLMModelRepository, LLMModelInstanceRepository
-# from ...modules.mcp.application.service import MCPServerService
-# from ...modules.mcp.infrastructure.repository import MCPServerRepository
-
-# from ...modules.mcp.application.service import MCPServerService
-# from ...modules.mcp.infrastructure.repository import MCPServerRepository
-# from ...modules.llm.application.service import LLMModelService, LLMModelInstanceService
-# from ...modules.llm.infrastructure.repository import LLMModelRepository, LLMModelInstanceRepository
+from agentarea.modules.mcp.application.service import MCPServerService, MCPServerInstanceService
+from agentarea.modules.mcp.infrastructure.repository import MCPServerRepository, MCPServerInstanceRepository
 
 
 async def get_agent_service(
@@ -26,11 +21,24 @@ async def get_agent_service(
     return AgentService(repository, event_broker)
 
 
-# async def get_mcp_server_service(
-#     session: AsyncSession = Depends(get_db_session),
-#     event_broker: EventBroker = Depends(get_event_broker),
-# ) -> MCPServerService:
-#     return MCPServerService(MCPServerRepository(session), event_broker)
+async def get_mcp_server_service(
+    session: AsyncSession = Depends(get_db_session),
+    event_broker: EventBroker = Depends(get_event_broker),
+) -> MCPServerService:
+    return MCPServerService(MCPServerRepository(session), event_broker)
+
+
+async def get_mcp_server_instance_service(
+    session: AsyncSession = Depends(get_db_session),
+    event_broker: EventBroker = Depends(get_event_broker),
+    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
+) -> MCPServerInstanceService:
+    mcp_server_repository = MCPServerRepository(session)
+    return MCPServerInstanceService(
+        MCPServerInstanceRepository(session), 
+        event_broker,
+        mcp_server_repository
+    )
 
 
 async def get_llm_model_service(

@@ -32,8 +32,21 @@ def upgrade() -> None:
         sa.Column('tags', sa.ARRAY(sa.String()), nullable=False),
         sa.Column('status', sa.String(), nullable=False, default='inactive'),
         sa.Column('is_public', sa.Boolean(), nullable=False, default=False),
-        sa.Column('last_updated', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+    )
+    
+    # Create MCP server instances table
+    op.create_table(
+        'mcp_server_instances',
+        sa.Column('id', UUID(), primary_key=True),
+        sa.Column('server_id', UUID(), sa.ForeignKey('mcp_servers.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('endpoint_url', sa.String(), nullable=False),
+        sa.Column('status', sa.String(), nullable=False, default='starting'),
+        sa.Column('config', sa.JSON(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )
     
     # Create LLM models table
@@ -48,7 +61,7 @@ def upgrade() -> None:
         sa.Column('context_window', sa.String(), nullable=False),
         sa.Column('status', sa.String(), nullable=False, default='inactive'),
         sa.Column('is_public', sa.Boolean(), nullable=False, default=False),
-        sa.Column('last_updated', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )
     
@@ -62,13 +75,26 @@ def upgrade() -> None:
         sa.Column('api_key', sa.String(), nullable=False),
         sa.Column('status', sa.String(), nullable=False, default='inactive'),
         sa.Column('is_public', sa.Boolean(), nullable=False, default=False),
-        sa.Column('last_updated', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+    )
+    
+    # Create Agents table
+    op.create_table(
+        'agents',
+        sa.Column('id', UUID(), primary_key=True),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('capabilities', sa.JSON(), nullable=False),
+        sa.Column('status', sa.String(), nullable=False, default='active'),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_table('agents')
     op.drop_table('llm_model_instances')
     op.drop_table('llm_models')
+    op.drop_table('mcp_server_instances')
     op.drop_table('mcp_servers')

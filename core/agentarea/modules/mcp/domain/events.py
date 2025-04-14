@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from agentarea.common.events.base import DomainEvent
+from agentarea.common.events.base_events import DomainEvent
 
 
 class MCPServerCreated(DomainEvent):
@@ -30,4 +30,44 @@ class MCPServerDeployed(DomainEvent):
         super().__init__()
         self.server_id = server_id
         self.name = name
-        self.version = version 
+        self.version = version
+
+
+class MCPServerInstanceCreated(DomainEvent):
+    def __init__(self, instance_id: UUID, server_id: UUID, name: str):
+        super().__init__()
+        self.instance_id = instance_id
+        self.server_id = server_id
+        self.name = name
+
+
+class MCPServerInstanceUpdated(DomainEvent):
+    def __init__(self, instance_id: UUID, server_id: UUID, name: str, status: str):
+        super().__init__()
+        self.instance_id = instance_id
+        self.server_id = server_id
+        self.name = name
+        self.status = status
+
+
+class MCPServerInstanceDeleted(DomainEvent):
+    def __init__(self, instance_id: UUID, server_id: UUID):
+        super().__init__()
+        self.instance_id = instance_id
+        self.server_id = server_id
+
+
+class MCPServerInstanceStarted(DomainEvent):
+    def __init__(self, instance_id: UUID, server_id: UUID, name: str):
+        super().__init__()
+        self.instance_id = instance_id
+        self.server_id = server_id
+        self.name = name
+
+
+class MCPServerInstanceStopped(DomainEvent):
+    def __init__(self, instance_id: UUID, server_id: UUID, name: str):
+        super().__init__()
+        self.instance_id = instance_id
+        self.server_id = server_id
+        self.name = name 

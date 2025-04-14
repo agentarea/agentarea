@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ...modules.llm.application.service import LLMModelInstanceService
-from ...modules.llm.domain.models import LLMModelInstance
-from ..deps.services import get_llm_model_instance_service
+from agentarea.modules.llm.application.service import LLMModelInstanceService
+from agentarea.modules.llm.domain.models import LLMModelInstance
+from agentarea.api.deps.services import get_llm_model_instance_service
 
 router = APIRouter(prefix="/llm-models/instances", tags=["llm-model-instances"])
 

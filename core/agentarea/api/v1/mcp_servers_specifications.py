@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, HttpUrl
 
-from ...modules.mcp.application.service import MCPServerService
-from ...modules.mcp.domain.models import MCPServer
-from ..deps.services import get_mcp_server_service
+from agentarea.modules.mcp.application.service import MCPServerService
+from agentarea.modules.mcp.domain.models import MCPServer
+from agentarea.api.deps.services import get_mcp_server_service
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 

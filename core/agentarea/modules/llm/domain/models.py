@@ -1,11 +1,13 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, String, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PgUUID, JSON
+from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import relationship
 
 from ....common.base.models import BaseModel
+
 
 class LLMModel(BaseModel):
     __tablename__ = "llm_models"
@@ -19,9 +21,7 @@ class LLMModel(BaseModel):
     context_window = Column(String, nullable=False)
     status = Column(String, nullable=False, default="active")
     is_public = Column(JSON, nullable=False, default=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     instances = relationship("LLMModelInstance", back_populates="model")
     
     def __repr__(self):
@@ -41,6 +41,3 @@ class LLMModelInstance(BaseModel):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     model = relationship("LLMModel", back_populates="instances")
-    
-    def __repr__(self):
-        return f"<LLMModelInstance {self.name} ({self.id})>" 

@@ -1,9 +1,11 @@
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
+
 from sqlalchemy import Column, DateTime
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase
+
 
 class BaseModel(DeclarativeBase):
     """Base model for all database models"""
