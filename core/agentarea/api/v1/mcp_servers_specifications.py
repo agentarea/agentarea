@@ -14,9 +14,9 @@ router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 class MCPServerCreate(BaseModel):
     name: str
     description: str
-    docker_image_url: HttpUrl
+    docker_image_url: str
     version: str
-    tags: List[str] = []
+    tags: list[str] = []
     is_public: bool = False
 
 
@@ -25,7 +25,7 @@ class MCPServerUpdate(BaseModel):
     description: str | None = None
     docker_image_url: HttpUrl | None = None
     version: str | None = None
-    tags: List[str] | None = None
+    tags: list[str] | None = None
     is_public: bool | None = None
     status: str | None = None
 
