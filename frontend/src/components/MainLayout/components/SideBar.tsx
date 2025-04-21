@@ -2,7 +2,7 @@ import { NavSection, BottomNavContent } from "../MainLayout";
 import NavLink from "./NavLink";
 import SectionTitle from "./SectionTitle";
 import UserBlock from "./UserBlock";   
-
+import LogoIcon from "./LogoIcon";
 type SideBarProps = {
     menuContent: NavSection[];
     bottomMenuContent: BottomNavContent;
@@ -13,14 +13,12 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
         <div 
             className="
                 h-screen w-[250px]
-                px-[16px] py-[18px] 
+                px-[18px] py-[20px] 
                 hidden flex-shrink-0 md:flex md:flex-col 
-                bg-neutral-100 dark:bg-neutral-800 
+                bg-[#F4F4F6] dark:bg-neutral-800 
             "
         >
-            <div className="w-full h-[30px]">
-                <img src="/logo-line.svg" alt="Logo" className="h-full" />
-            </div>
+            <div className="w-full h-[30px] mb-[18px]"><LogoIcon/></div>
             <nav className="overflow-y-auto overflow-x-hidden flex flex-col justify-between h-full gap-[10px]">
                 <div>
                     {menuContent.map((sectionContent, index) => (

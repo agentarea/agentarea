@@ -16,7 +16,7 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
     return (
         <header 
             className="
-                h-[45px] w-full
+                h-[50px] w-full
                 px-[16px]
                 flex flex-row items-center justify-between md:hidden
                 bg-neutral-100 dark:bg-neutral-800 

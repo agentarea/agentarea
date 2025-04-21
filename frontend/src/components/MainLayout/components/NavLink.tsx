@@ -24,21 +24,17 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
                 className={cn(
                     disabled && "opacity-30 pointer-events-none",
                     isActive 
-                        ? "pointer-events-none text-primary dark:text-primary-foreground bg-gradient-to-r from-primary/20 to-[#7f2fee4f] dark:from-primary dark:to-[#8f2fee]" 
+                        ? "pointer-events-none text-accent dark:text-primary-foreground bg-primary/20 dark:bg-white/70 dark:text-neutral-800" 
                         : "text-foreground hover:bg-neutral-200/60 hover:dark:bg-white/10",
-                    "relative text-[12px] leading-[14px] flex flex-row gap-[8px] items-center",
-                    "py-[7px] px-[10px] rounded-[8px]",
-                    "group"
+                    "relative text-[14px] leading-[14px] flex flex-row gap-[8px] items-center",
+                    "py-[10px] px-[10px] rounded-[8px]",
+                    "group transition-colors duration-300"
                 )}
                 {...props}
             >
-                <div className={cn(
-                    isActive ? "text-primary dark:text-primary-foreground" : ""
-                )}>
-                    {icon}
-                </div>
+                {icon}
                 
-                <span className="transition-colors duration-200">
+                <span className="">
                     {text}
                 </span>
             </Link>

@@ -14,10 +14,10 @@ export default function UserBlock({ user }: { user: BottomNavContent["user"] }) 
                     </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col">
-                    <span className="text-[12px] font-medium tex">
+                    <span className="text-[14px] font-medium tex">
                         {user.name}
                     </span>
-                    <span className="text-[10px] text-neutral-400">
+                    <span className="text-[12px] text-neutral-400">
                         {user.email}
                     </span>
                 </div>
