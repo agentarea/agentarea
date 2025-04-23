@@ -19,7 +19,7 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
                 h-[50px] w-full
                 px-[16px]
                 flex flex-row items-center justify-between md:hidden
-                bg-neutral-100 dark:bg-neutral-800 
+                bg-zinc-100 dark:bg-zinc-800 
             "
         >
             <Sheet>
@@ -36,7 +36,7 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
                     <nav className="overflow-y-auto overflow-x-hidden flex flex-col h-full gap-[10px]">
                         <div className="flex flex-col gap-[4px]">
                             <UserBlock user={bottomMenuContent.user} />
-                            <div className="h-[1px]  w-full bg-neutral-200/50 dark:bg-neutral-700" />
+                            <div className="h-[1px]  w-full bg-zinc-200/50 dark:bg-zinc-700" />
                         </div>
                         <div>
                             {[...menuContent, bottomMenuContent].map((sectionContent, index) => (

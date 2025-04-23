@@ -34,10 +34,10 @@ export default function SideBarWithCollapsed({ menuContent }: SideBarWithCollaps
     return (
         <div 
             className="
-                h-screen w-[250px]
+                h-screen w-[225px]
                 px-[16px] py-[18px] 
                 hidden flex-shrink-0 md:flex md:flex-col 
-                bg-neutral-100 dark:bg-neutral-800 
+                bg-zinc-100 dark:bg-zinc-800 
             "
         >
             <div className="w-full h-[30px]"><LogoIcon/></div>

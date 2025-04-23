@@ -17,7 +17,7 @@ export default function UserBlock({ user }: { user: BottomNavContent["user"] }) 
                     <span className="text-[14px] font-medium tex">
                         {user.name}
                     </span>
-                    <span className="text-[12px] text-neutral-400">
+                    <span className="text-[12px] text-zinc-400">
                         {user.email}
                     </span>
                 </div>

@@ -172,7 +172,11 @@ export default function MainLayout({
           bottomMenuContent={bottomNavContent}
         />
         <Header menuContent={navContent} bottomMenuContent={bottomNavContent} />
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-hidden bg-sidebar dark:bg-zinc-800 py-[10px] pr-[10px] max-md:px-[10px]">
+          <div className=" bg-white dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto">
+            {children}
+          </div>
+        </main>
       </div>
       <ThemeToggle className="absolute bottom-2 right-2" />
     </>

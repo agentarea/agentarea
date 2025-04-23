@@ -24,8 +24,8 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
                 className={cn(
                     disabled && "opacity-30 pointer-events-none",
                     isActive 
-                        ? "pointer-events-none text-accent dark:text-primary-foreground bg-primary/20 dark:bg-white/70 dark:text-neutral-800" 
-                        : "text-foreground hover:bg-neutral-200/60 hover:dark:bg-white/10",
+                        ? "pointer-events-none text-accent dark:text-primary-foreground bg-primary/20 dark:bg-white/70 dark:text-zinc-800" 
+                        : "text-foreground hover:bg-zinc-200/60 hover:dark:bg-white/10",
                     "relative text-[14px] leading-[14px] flex flex-row gap-[8px] items-center",
                     "py-[10px] px-[10px] rounded-[8px]",
                     "group transition-colors duration-300"
