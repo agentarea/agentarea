@@ -119,6 +119,9 @@ body {
     @apply p-[16px] md:p-[20px] lg:p-[24px] cursor-pointer;
     @apply border border-zinc-200 dark:border-zinc-700;
     @apply hover:shadow-md transition-all duration-300;
-    /* box-shadow: 0 2px 10px rgba(0,0,0,0.04); */
+  }
+
+  .card-shadow {
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04);
   }
 }
