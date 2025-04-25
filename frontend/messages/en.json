@@ -1,4 +1,10 @@
 {
+  "Common": {
+    "search": "Search",
+    "grid": "Grid",
+    "table": "Table"
+  },
+
   "Sidebar": {
     "workplace": "Workplace",
     "agents": "Agents",
@@ -10,5 +16,14 @@
     "mcpServers": "Servers",
     "settings": "Settings",
     "logout": "Logout"
+  },
+
+  "LanguageSelect": {
+    "switchLanguage": "Switch language",
+    "currentLanguage": "Current language"
+  },
+
+  "LlmBrowsePage": {
+    "title": "LLM Models"
   }
 }

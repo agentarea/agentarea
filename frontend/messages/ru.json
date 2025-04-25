@@ -1,4 +1,10 @@
 {
+  "Common": {
+    "search": "Поиск",
+    "grid": "Сетка",
+    "table": "Таблица"
+  },
+  
   "Sidebar": {
     "workplace": "Рабочее место",
     "agents": "Агенты",
@@ -10,5 +16,12 @@
     "mcpServers": "Серверы",
     "settings": "Настройки",
     "logout": "Выйти"
+  },
+  "LanguageSelect": {
+    "switchLanguage": "Сменить язык",
+    "currentLanguage": "Текущий язык"
+  },
+  "LlmBrowsePage": {
+    "title": "Модели LLM"
   }
 }

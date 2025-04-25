@@ -46,7 +46,6 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
                         </div>
                     ))}
                 </div>
-                <LanguageSelect />
                 <div className="flex flex-col gap-[4px]">
                     {
                         bottomMenuContent.items.map((item, index) => (
@@ -58,6 +57,9 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
                             />
                         ))
                     }
+
+                    {/* TODO: remove to settings */}
+                    <LanguageSelect />
                     <div className="h-[1px] mt-[12px] w-full bg-zinc-200/50 dark:bg-zinc-700" />
                     <UserBlock user={bottomMenuContent.user} />
                 </div>

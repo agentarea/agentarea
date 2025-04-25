@@ -9,9 +9,13 @@ import { list } from "./data";
 import TableView from "./components/TableView";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 // Client component that handles the tab rendering
 export default function AddLLMModelPage() {
+    const t = useTranslations('LlmBrowsePage');
+    const commonT = useTranslations('Common');
+
     const router = useRouter();
     const searchParams = useSearchParams();
     
@@ -59,7 +63,7 @@ export default function AddLLMModelPage() {
         <div className="content">
             <div className="content-header">
                 <h1>
-                    LLM Models
+                    {t('title')}
                 </h1>
             </div>
 
@@ -76,7 +80,7 @@ export default function AddLLMModelPage() {
                                 <SearchIcon className="h-4 w-4" />
                             </div>
                             <Input 
-                                placeholder="Search"
+                                placeholder={commonT('search')}
                                 className="pl-9 w-full" 
                             />
                     </div>
@@ -86,8 +90,8 @@ export default function AddLLMModelPage() {
                     // className="md:flex-1 text-right"
                 >
                     <TabsList>
-                        <TabsTrigger value="grid" className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"><LayoutDashboardIcon className="w-5 h-5" /> <span className="hidden sm:block">Grid</span></TabsTrigger>
-                        <TabsTrigger value="table" className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"><TablePropertiesIcon className="w-5 h-5" /> <span className="hidden sm:block">Table</span></TabsTrigger>
+                        <TabsTrigger value="grid" className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"><LayoutDashboardIcon className="w-5 h-5" /> <span className="hidden sm:block">{commonT('grid')}</span></TabsTrigger>
+                        <TabsTrigger value="table" className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]"><TablePropertiesIcon className="w-5 h-5" /> <span className="hidden sm:block">{commonT('table')}</span></TabsTrigger>
                     </TabsList>
                 </div>
                 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useTranslations } from "next-intl";
+import LanguageSelect from "./LanguageSelect";
 
 type HeaderProps = {
     menuContent: NavSection[];
@@ -61,6 +62,8 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
                                     }
                                 </div>
                             ))}
+                            {/* TODO: remove to settings */}
+                            <LanguageSelect />
                         </div>
                     </nav>
                 </SheetContent>
