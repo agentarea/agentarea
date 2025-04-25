@@ -1,0 +1,14 @@
+{
+  "Sidebar": {
+    "workplace": "Рабочее место",
+    "agents": "Агенты",
+    "browse": "Обзор",
+    "workflows": "Процессы",
+    "llms": "Модели LLM",
+    "llmBrowse": "Обзор",
+    "mcp": "Серверы MCP",
+    "mcpServers": "Серверы",
+    "settings": "Настройки",
+    "logout": "Выйти"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "Sidebar": {
+    "workplace": "Workplace",
+    "agents": "Agents",
+    "browse": "Browse",
+    "workflows": "Workflows",
+    "llms": "LLM Models",
+    "llmBrowse": "Browse",
+    "mcp": "MCP Servers",
+    "mcpServers": "Servers",
+    "settings": "Settings",
+    "logout": "Logout"
+  }
+}

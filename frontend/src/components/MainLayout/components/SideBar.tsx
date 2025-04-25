@@ -3,12 +3,17 @@ import NavLink from "./NavLink";
 import SectionTitle from "./SectionTitle";
 import UserBlock from "./UserBlock";   
 import LogoIcon from "./LogoIcon";
+import {useTranslations} from 'next-intl';
+import LanguageSelect from "./LanguageSelect";
+
 type SideBarProps = {
     menuContent: NavSection[];
     bottomMenuContent: BottomNavContent;
 }
 
 export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps) {
+    const t = useTranslations('Sidebar');
+
     return (
         <div 
             className="
@@ -25,7 +30,7 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
                         <div key={`section-${index}`} className="flex flex-col gap-[2px] pt-[14px]">
                             {
                                 sectionContent.section && (
-                                    <SectionTitle key={`section-title-${index}`}>{sectionContent.section}</SectionTitle>
+                                    <SectionTitle key={`section-title-${index}`}>{sectionContent.labelKey ? t(sectionContent.labelKey) : sectionContent.section}</SectionTitle>
                                 )
                             }
                             {
@@ -33,7 +38,7 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
                                     <NavLink 
                                         key={`menu-item-${index}`} 
                                         link={item.href} 
-                                        text={item.label} 
+                                        text={item.labelKey ? t(item.labelKey) : item.label} 
                                         icon={item.icon} 
                                     />
                                 ))
@@ -41,13 +46,14 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
                         </div>
                     ))}
                 </div>
+                <LanguageSelect />
                 <div className="flex flex-col gap-[4px]">
                     {
                         bottomMenuContent.items.map((item, index) => (
                             <NavLink 
                                 key={`menu-item-${index}`} 
                                 link={item.href} 
-                                text={item.label} 
+                                text={item.labelKey ? t(item.labelKey) : item.label} 
                                 icon={item.icon} 
                             />
                         ))

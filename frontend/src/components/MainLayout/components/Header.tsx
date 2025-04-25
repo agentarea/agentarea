@@ -6,6 +6,7 @@ import UserBlock from "./UserBlock";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useTranslations } from "next-intl";
 
 type HeaderProps = {
     menuContent: NavSection[];
@@ -13,6 +14,7 @@ type HeaderProps = {
 }
 
 export default function Header({ menuContent, bottomMenuContent }: HeaderProps) {
+    const t = useTranslations('Sidebar');
     return (
         <header 
             className="
@@ -43,7 +45,7 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
                                 <div key={`section-${index}`} className="flex flex-col gap-[2px] pt-[14px]">
                                     {
                                         sectionContent.section && (
-                                            <SectionTitle key={`section-title-${index}`}>{sectionContent.section}</SectionTitle>
+                                            <SectionTitle key={`section-title-${index}`}>{sectionContent.labelKey ? t(sectionContent.labelKey) : sectionContent.section}</SectionTitle>
                                         )
                                     }
                                     {
@@ -51,7 +53,7 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
                                             <SheetClose key={`menu-item-${index}`} asChild>
                                                 <NavLink 
                                                     link={item.href} 
-                                                    text={item.label} 
+                                                    text={item.labelKey ? t(item.labelKey) : item.label} 
                                                     icon={item.icon} 
                                                 />
                                             </SheetClose>

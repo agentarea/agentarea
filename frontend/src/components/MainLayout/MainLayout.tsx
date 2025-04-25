@@ -14,9 +14,11 @@ import SideBar from "./components/SideBar";
 export type NavSection = {
   id: string;
   section?: string;
+  labelKey?: string;
   icon?: React.ReactElement;
   items: {
     label: string;
+    labelKey?: string;
     href: string;
     icon?: React.ReactElement;
   }[];
@@ -36,6 +38,7 @@ export const navContent: NavSection[] = [
     items: [
       {
         label: "Workplace",
+        labelKey: "workplace",
         href: "/workplace",
         icon: <Home className="h-5 w-5" />,
       },
@@ -43,16 +46,19 @@ export const navContent: NavSection[] = [
   },
   {
     id: "agents",
+    labelKey: "agents",
     section: "Agents",
     icon: <Bot className="h-5 w-5" />,
     items: [
       {
         label: "Browse",
+        labelKey: "browse",
         href: "/agents/browse",
         icon: <Bot className="h-5 w-5" />,
       },
       {
         label: "Workflows",
+        labelKey: "workflows",
         href: "/agents/workflows",
         icon: <ClipboardList className="h-5 w-5" />,
       },
@@ -60,11 +66,13 @@ export const navContent: NavSection[] = [
   },
   {
     id: "llms",
+    labelKey: "llms",
     section: "LLM Models",
     icon: <Cpu className="h-5 w-5" />,
     items: [
       {
         label: "Browse",
+        labelKey: "llmBrowse",
         href: "/llms/browse",
         icon: <Cpu className="h-5 w-5" />,
       },
@@ -77,11 +85,13 @@ export const navContent: NavSection[] = [
   },
   {
     id: "mcp",
+    labelKey: "mcp",
     section: "MCP Servers",
     icon: <Server className="h-5 w-5" />,
     items: [
       {
         label: "Servers",
+        labelKey: "mcpServers",
         href: "/mcp-servers",
         icon: <Server className="h-5 w-5" />,
       },
@@ -148,6 +158,7 @@ const bottomNavContent: BottomNavContent = {
   items: [
     {
       label: "Settings",
+      labelKey: "settings",
       href: "/settings",
       icon: <Settings className="h-5 w-5" />,
     },
