@@ -1,0 +1,45 @@
+version: "3.8"
+services:
+  # dind:
+  #   image: docker:dind
+  #   privileged: true
+  #   hostname: dind
+  #   environment:
+  #     - DOCKER_TLS_CERTDIR=/certs
+  #   volumes:
+  #     - docker-certs-ca:/certs/ca
+  #     - docker-certs-client:/certs/client
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "docker version"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  
+  mcp-host:
+    image: nginx:latest
+    ports:
+      - "8080:80"
+    volumes:
+      - ./servers:/etc/nginx/mcp-servers
+      - ./templates:/etc/nginx/templates
+
+  mcp-everything:
+    image: mcp/everything
+    restart: unless-stopped
+    command: node dist/sse.js
+
+  mcp-hub:
+    image: samanhappy/mcphub
+    restart: unless-stopped
+    environment:
+      - APP_BASE_PATH=/mcp-hub
+    volumes:
+      - ./mcp-hub-settings.json:/app/mcp_settings.json
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  minio_data:
+  docker-certs-ca:
+  docker-certs-client:

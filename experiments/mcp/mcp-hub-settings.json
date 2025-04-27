@@ -1,0 +1,43 @@
+{
+    "mcpServers": {
+      "amap": {
+        "command": "npx",
+        "args": ["-y", "@amap/amap-maps-mcp-server"],
+        "env": {
+          "AMAP_MAPS_API_KEY": "your-api-key"
+        }
+      },
+      "playwright": {
+        "command": "npx",
+        "args": ["@playwright/mcp@latest", "--headless"]
+      },
+      "fetch": {
+        "command": "uvx",
+        "args": ["mcp-server-fetch"]
+      },
+      "slack": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-slack"],
+        "env": {
+          "SLACK_BOT_TOKEN": "your-bot-token",
+          "SLACK_TEAM_ID": "your-team-id"
+        }
+      },
+      "trello": {
+        "command": "npx",
+        "args": ["-y", "@delorenj/mcp-server-trello"],
+        "env": {
+          "TRELLO_API_KEY": "your-trello-api-key",
+          "TRELLO_BOARD_ID": "your-trello-board-id",
+          "TRELLO_TOKEN": "your-trello-token"
+        }
+      }
+    },
+    "users": [
+      {
+        "username": "admin",
+        "password": "$2b$10$Vt7krIvjNgyN67LXqly0uOcTpN0LI55cYRbcKC71pUDAP0nJ7RPa.",
+        "isAdmin": true
+      }
+    ]
+  }
