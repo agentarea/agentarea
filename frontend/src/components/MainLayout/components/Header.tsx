@@ -26,7 +26,7 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
             "
         >
             <Sheet>
-                <div className="w-full h-[30px]"><LogoIcon/></div>
+                <div className="w-full h-[27px]"><LogoIcon/></div>
                 <SheetTrigger asChild>
                     <Button size="icon" variant="ghost" className="h-[25px] w-[25px]">
                         <Menu className="h-[20px] w-[20px]"/>
