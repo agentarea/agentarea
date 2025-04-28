@@ -1,6 +1,6 @@
 import createClient from "openapi-fetch";
-
-const client = createClient({
+import type { paths } from "../api/schema";
+const client = createClient<paths>({
   baseUrl: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
 });
 

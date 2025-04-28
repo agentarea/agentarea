@@ -63,7 +63,7 @@ class MCPServerInstance(BaseModel):
         status: str = "starting",
         id: UUID = None,
         created_at: datetime = None,
-        last_updated: datetime = None,
+        updated_at: datetime = None,
     ):
         self.id = id or uuid4()
         self.server_id = server_id
@@ -72,4 +72,4 @@ class MCPServerInstance(BaseModel):
         self.config = config or {}
         self.status = status
         self.created_at = created_at or datetime.utcnow()
-        self.last_updated = last_updated or datetime.utcnow()
+        self.updated_at = updated_at or datetime.utcnow()

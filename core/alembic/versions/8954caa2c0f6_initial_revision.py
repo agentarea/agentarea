@@ -29,7 +29,8 @@ def upgrade() -> None:
         sa.Column('description', sa.Text(), nullable=False),
         sa.Column('docker_image_url', sa.String(), nullable=False),
         sa.Column('version', sa.String(), nullable=False),
-        sa.Column('tags', sa.ARRAY(sa.String()), nullable=False),
+        # FIXME: CHECK THE TYPE BEFORE RELEASE
+        sa.Column('tags', sa.JSON(), nullable=False),
         sa.Column('status', sa.String(), nullable=False, default='inactive'),
         sa.Column('is_public', sa.Boolean(), nullable=False, default=False),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),

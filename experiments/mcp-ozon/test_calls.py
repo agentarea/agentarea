@@ -74,8 +74,8 @@ async def main():
         name='task_assistant',
         instruction='You are a helpful assistant that manages tasks using the available tools. Use the appropriate tools to help users manage their tasks.',
         tools=combined_tools,
-        after_model_callback=log_callback,
         before_agent_callback=log_callback,
+        after_model_callback=log_callback,
         before_tool_callback=log_callback,
         after_tool_callback=log_callback,
     )
@@ -106,7 +106,7 @@ async def main():
     # Test all the task management flows
     test_queries = [
         # Complex task management flow
-        "Add a task called 'Write documentation', then mark it as completed, and show me all tasks",
+        # "Add a task called 'Write documentation', then mark it as completed, and show me all tasks",
         
         # Multiple operations in one query
         "Add two tasks: 'Prepare presentation' and 'Schedule meeting', then delete the 'Prepare presentation' task, and show me the final list",

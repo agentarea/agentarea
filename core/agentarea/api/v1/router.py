@@ -1,6 +1,12 @@
 from fastapi import APIRouter
 
-from . import agents, llm_models_specifications, llm_model_instances, mcp_server_instances, mcp_servers_specifications
+from . import (
+    agents,
+    llm_model_instances,
+    llm_models_specifications,
+    mcp_server_instances,
+    mcp_servers_specifications,
+)
 
 v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(agents.router)

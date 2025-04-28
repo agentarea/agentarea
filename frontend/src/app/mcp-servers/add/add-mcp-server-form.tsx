@@ -23,7 +23,7 @@ const MCPServerSchema = z.object({
     .min(1, 'Docker Image URL is required')
     .url('Invalid URL format'),
   tags: z.string().optional(),
-  isPublic: z.boolean().default(true), // Default value for the switch
+  isPublic: z.boolean().default(true),
 });
 
 type FormData = z.infer<typeof MCPServerSchema>;
@@ -56,52 +56,55 @@ export function AddMCPServerForm() {
     register,
     control,
     formState: { errors },
-    reset,
-    setValue, // Use setValue to update isPublic based on server state
+    setValue,
   } = useForm<FormData>({
     resolver: zodResolver(MCPServerSchema),
-    defaultValues: initialState.fieldValues, // Use initial/previous values
+    defaultValues: initialState.fieldValues,
   });
 
   // Update form with values returned from server action (e.g., on validation error)
   useEffect(() => {
     if (state.fieldValues) {
-       Object.entries(state.fieldValues).forEach(([key, value]) => {
-           // Ensure the key exists in FormData type before setting value
-           if (key in MCPServerSchema.shape) {
-               setValue(key as keyof FormData, value);
-           }
-       });
+      Object.entries(state.fieldValues).forEach(([key, value]) => {
+        if (key in MCPServerSchema.shape) {
+          setValue(key as keyof FormData, value as string | boolean);
+        }
+      });
     }
-    // Optional: Reset form on successful submission if not redirecting immediately
-    // if (state.message === 'Success' && !state.errors) { reset(); }
   }, [state, setValue]);
 
   // Combine react-hook-form errors and server action errors
   const combinedErrors = {
-      ...errors, // Zod validation errors from react-hook-form
-      ...state.errors // Errors returned from server action
+    ...errors,
+    ...state.errors,
+  };
+
+  const getErrorMessage = (error: string | string[] | { message?: string } | undefined) => {
+    if (typeof error === 'string') return error;
+    if (Array.isArray(error)) return error[0];
+    return error?.message;
   };
 
   return (
     <form action={formAction}>
       <CardContent className="space-y-4">
-         {/* Display general form errors */}
-         {state.errors?._form && (
-            <div className="text-red-500 text-sm">
-                {state.errors._form.join(', ')}
-            </div>
-         )}
+        {/* Display general form errors */}
+        {state.errors?._form && (
+          <div className="text-red-500 text-sm">
+            {state.errors._form.join(', ')}
+          </div>
+        )}
+        
         <div className="space-y-2">
           <Label htmlFor="name">Server Name</Label>
           <Input
             id="name"
             {...register('name')}
             placeholder="e.g. File System MCP"
-            aria-invalid={combinedErrors.name ? "true" : "false"}
+            aria-invalid={!!combinedErrors.name}
           />
           {combinedErrors.name && (
-            <p className="text-sm text-red-500">{combinedErrors.name.message || combinedErrors.name[0]}</p>
+            <p className="text-sm text-red-500">{getErrorMessage(combinedErrors.name)}</p>
           )}
         </div>
 
@@ -112,10 +115,10 @@ export function AddMCPServerForm() {
             {...register('description')}
             placeholder="Describe what this MCP server does"
             rows={3}
-             aria-invalid={combinedErrors.description ? "true" : "false"}
+            aria-invalid={!!combinedErrors.description}
           />
-           {combinedErrors.description && (
-            <p className="text-sm text-red-500">{combinedErrors.description.message || combinedErrors.description[0]}</p>
+          {combinedErrors.description && (
+            <p className="text-sm text-red-500">{getErrorMessage(combinedErrors.description)}</p>
           )}
         </div>
 
@@ -125,10 +128,10 @@ export function AddMCPServerForm() {
             id="dockerImageUrl"
             {...register('dockerImageUrl')}
             placeholder="e.g. ghcr.io/anthropic/mcp-file-server:latest"
-             aria-invalid={combinedErrors.dockerImageUrl ? "true" : "false"}
+            aria-invalid={!!combinedErrors.dockerImageUrl}
           />
-           {combinedErrors.dockerImageUrl && (
-            <p className="text-sm text-red-500">{combinedErrors.dockerImageUrl.message || combinedErrors.dockerImageUrl[0]}</p>
+          {combinedErrors.dockerImageUrl && (
+            <p className="text-sm text-red-500">{getErrorMessage(combinedErrors.dockerImageUrl)}</p>
           )}
           <p className="text-sm text-muted-foreground">
             Enter the full URL to a Docker image that implements the Model
@@ -143,10 +146,8 @@ export function AddMCPServerForm() {
             {...register('tags')}
             placeholder="e.g. files, database, web"
           />
-           {/* No specific validation error shown for optional tags unless added */}
         </div>
 
-        {/* Need Controller for Shadcn Switch with react-hook-form */}
         <Controller
           control={control}
           name="isPublic"
@@ -161,23 +162,20 @@ export function AddMCPServerForm() {
               <Switch
                 id="public-switch"
                 checked={field.value}
-                onCheckedChange={field.onChange} // Use field.onChange provided by Controller
-                aria-invalid={combinedErrors.isPublic ? "true" : "false"}
+                onCheckedChange={field.onChange}
+                aria-invalid={!!combinedErrors.isPublic}
               />
-               {/* Hidden input to ensure 'isPublic' is included in FormData */}
-               <input type="hidden" {...register('isPublic')} value={field.value.toString()} />
+              <input type="hidden" {...register('isPublic')} value={field.value.toString()} />
             </div>
           )}
         />
         {combinedErrors.isPublic && (
-            <p className="text-sm text-red-500">{combinedErrors.isPublic.message || combinedErrors.isPublic[0]}</p>
+          <p className="text-sm text-red-500">{getErrorMessage(combinedErrors.isPublic)}</p>
         )}
 
-
-         {/* Display success/failure message */}
-         {state.message && !state.errors && <p className="text-green-600">{state.message}</p>}
-         {state.message && state.errors && <p className="text-red-600">{state.message}</p>}
-
+        {/* Display success/failure message */}
+        {state.message && !state.errors && <p className="text-green-600">{state.message}</p>}
+        {state.message && state.errors && <p className="text-red-600">{state.message}</p>}
       </CardContent>
       <CardFooter>
         <SubmitButton />
