@@ -1,4 +1,4 @@
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from ..base.repository import BaseRepository
@@ -10,11 +10,11 @@ class BaseService(Generic[T]):
     def __init__(self, repository: BaseRepository[T]):
         self.repository = repository
 
-    async def get(self, id: UUID) -> Optional[T]:
+    async def get(self, id: UUID) -> T | None:
         """Get an entity by ID"""
         return await self.repository.get(id)
 
-    async def list(self) -> List[T]:
+    async def list(self) -> list[T]:
         """List all entities"""
         return await self.repository.list()
 

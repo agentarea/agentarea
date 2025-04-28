@@ -1,12 +1,13 @@
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
+from agentarea.api.deps.services import get_mcp_server_service
 from agentarea.modules.mcp.application.service import MCPServerService
 from agentarea.modules.mcp.domain.models import MCPServer
-from agentarea.api.deps.services import get_mcp_server_service
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 
@@ -23,7 +24,7 @@ class MCPServerCreate(BaseModel):
 class MCPServerUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
-    docker_image_url: HttpUrl | None = None
+    docker_image_url: str | None = None
     version: str | None = None
     tags: list[str] | None = None
     is_public: bool | None = None
@@ -34,12 +35,12 @@ class MCPServerResponse(BaseModel):
     id: UUID
     name: str
     description: str
-    docker_image_url: HttpUrl
+    docker_image_url: str
     version: str
     tags: List[str]
     status: str
     is_public: bool
-    last_updated: str
+    updated_at: datetime
 
     @classmethod
     def from_domain(cls, server: MCPServer) -> "MCPServerResponse":
@@ -52,7 +53,7 @@ class MCPServerResponse(BaseModel):
             tags=server.tags,
             status=server.status,
             is_public=server.is_public,
-            last_updated=server.last_updated,
+            updated_at=server.updated_at,
         )
 
 

@@ -72,13 +72,18 @@ export async function addMCPServer(
     // Using //@ts-ignore as a temporary workaround if necessary.
     // Assuming '/mcp-servers' is the correct path defined in your OpenAPI spec.
     // Also, ensure the request body format matches the expected schema (e.g., json: validatedFields.data)
-    // @ts-ignore TODO: Fix openapi-fetch client type mismatch
-    response = await createMCPServer(validatedFields.data);
+    response = await createMCPServer({
+      name: validatedFields.data.name,
+      description: validatedFields.data.description,
+      docker_image_url: validatedFields.data.dockerImageUrl,
+      version: "1.0.0",
+      tags: validatedFields.data.tags ? [validatedFields.data.tags] : [],
+      is_public: validatedFields.data.isPublic,
+    });
 
     // Assuming response structure based on common patterns or previous code
     // Adjust based on actual client library behavior
-    // @ts-ignore TODO: Fix openapi-fetch client type mismatch
-    if (response.response?.ok) {
+    if (response.data) {
         console.log("MCP server added successfully:", response.data);
       // Invalidate cache for the list page, if it exists
       revalidatePath('/mcp-servers');
@@ -109,8 +114,7 @@ export async function addMCPServer(
   // Redirect only on *successful* creation outside the try block
   // Check if the response indicates success before redirecting
   // The exact check depends on the client library structure
-  // @ts-ignore
-  if (response.response?.ok) {
+  if (response.data) {
      redirect('/mcp-servers'); // Redirect to the list page after successful addition
   } else {
       // This case should theoretically be caught by the error handling inside try/catch,

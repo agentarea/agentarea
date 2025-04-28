@@ -1,16 +1,21 @@
-from typing import List, Optional
 from uuid import UUID
 
 from agentarea.common.base.service import BaseService
 from agentarea.common.events.broker import EventBroker
 
 from ..domain.events import (
-    MCPServerCreated, MCPServerDeleted, MCPServerDeployed, MCPServerUpdated,
-    MCPServerInstanceCreated, MCPServerInstanceDeleted, MCPServerInstanceStarted,
-    MCPServerInstanceStopped, MCPServerInstanceUpdated
+    MCPServerCreated,
+    MCPServerDeleted,
+    MCPServerDeployed,
+    MCPServerInstanceCreated,
+    MCPServerInstanceDeleted,
+    MCPServerInstanceStarted,
+    MCPServerInstanceStopped,
+    MCPServerInstanceUpdated,
+    MCPServerUpdated,
 )
 from ..domain.models import MCPServer, MCPServerInstance
-from ..infrastructure.repository import MCPServerRepository, MCPServerInstanceRepository
+from ..infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
 
 
 class MCPServerService(BaseService[MCPServer]):
@@ -24,7 +29,7 @@ class MCPServerService(BaseService[MCPServer]):
         description: str,
         docker_image_url: str,
         version: str,
-        tags: List[str] = None,
+        tags: list[str] | None = None,
         is_public: bool = False
     ) -> MCPServer:
         server = MCPServer(
@@ -50,14 +55,14 @@ class MCPServerService(BaseService[MCPServer]):
     async def update_mcp_server(
         self,
         id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        docker_image_url: Optional[str] = None,
-        version: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        is_public: Optional[bool] = None,
-        status: Optional[str] = None
-    ) -> Optional[MCPServer]:
+        name: str | None = None,
+        description: str | None = None,
+        docker_image_url: str | None = None,
+        version: str | None = None,
+        tags: list[str] | None = None,
+        is_public: bool | None = None,
+        status: str | None = None
+    ) -> MCPServer | None:
         server = await self.get(id)
         if not server:
             return None
@@ -106,7 +111,7 @@ class MCPServerService(BaseService[MCPServer]):
         # 2. Starting the container
         # 3. Configuring networking
         # 4. Updating status
-        
+
         server.status = "deployed"
         await self.update(server)
 
@@ -122,15 +127,15 @@ class MCPServerService(BaseService[MCPServer]):
 
     async def list(
         self,
-        status: Optional[str] = None,
-        is_public: Optional[bool] = None,
-        tag: Optional[str] = None
-    ) -> List[MCPServer]:
+        status: str | None = None,
+        is_public: bool | None = None,
+        tag: str | None = None
+    ) -> list[MCPServer]:
         return await self.repository.list(status=status, is_public=is_public, tag=tag)
 
 
 class MCPServerInstanceService(BaseService[MCPServerInstance]):
-    def __init__(self, repository: MCPServerInstanceRepository, event_broker: EventBroker, 
+    def __init__(self, repository: MCPServerInstanceRepository, event_broker: EventBroker,
                  mcp_server_repository: MCPServerRepository):
         super().__init__(repository)
         self.event_broker = event_broker
@@ -142,12 +147,12 @@ class MCPServerInstanceService(BaseService[MCPServerInstance]):
         name: str,
         endpoint_url: str,
         config: dict = None,
-    ) -> Optional[MCPServerInstance]:
+    ) -> MCPServerInstance | None:
         # Check if the server exists
         server = await self.mcp_server_repository.get(server_id)
         if not server:
             return None
-            
+
         instance = MCPServerInstance(
             server_id=server_id,
             name=name,
@@ -169,11 +174,11 @@ class MCPServerInstanceService(BaseService[MCPServerInstance]):
     async def update_instance(
         self,
         id: UUID,
-        name: Optional[str] = None,
-        endpoint_url: Optional[str] = None,
-        config: Optional[dict] = None,
-        status: Optional[str] = None
-    ) -> Optional[MCPServerInstance]:
+        name: str | None = None,
+        endpoint_url: str | None = None,
+        config: dict | None = None,
+        status: str | None = None
+    ) -> MCPServerInstance | None:
         instance = await self.get(id)
         if not instance:
             return None
@@ -204,7 +209,7 @@ class MCPServerInstanceService(BaseService[MCPServerInstance]):
         instance = await self.get(id)
         if not instance:
             return False
-            
+
         success = await self.delete(id)
         if success:
             await self.event_broker.publish(
@@ -255,7 +260,7 @@ class MCPServerInstanceService(BaseService[MCPServerInstance]):
 
     async def list(
         self,
-        server_id: Optional[UUID] = None,
-        status: Optional[str] = None
-    ) -> List[MCPServerInstance]:
-        return await self.repository.list(server_id=server_id, status=status) 
+        server_id: UUID | None = None,
+        status: str | None = None
+    ) -> list[MCPServerInstance]:
+        return await self.repository.list(server_id=server_id, status=status)

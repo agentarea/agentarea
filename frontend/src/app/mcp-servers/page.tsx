@@ -1,16 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -19,9 +9,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { listMCPServers } from "@/lib/api";
 import { Download, Edit, Plus, Server, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { deleteMCPServer, listMCPServers, updateMCPServer } from "@/lib/api";
 
 // Define a basic type for MCPServer if not available from API import
 interface MCPServer {
@@ -42,6 +32,8 @@ interface MCPServer {
 export default async function MCPServersPage() {
   const mcpServers = await listMCPServers();
 
+  const mcpList = mcpServers.data;
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -54,7 +46,7 @@ export default async function MCPServersPage() {
         </Button>
       </div>
 
-      {mcpServers && mcpServers.length > 0 ? (
+      {mcpList?.length > 0 ? (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -68,7 +60,7 @@ export default async function MCPServersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mcpServers.map((server: MCPServer) => (
+              {mcpList?.map((server) => (
                 <TableRow key={server.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
@@ -90,11 +82,10 @@ export default async function MCPServersPage() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Download className="h-4 w-4 text-muted-foreground" />
-                      {server.downloads}
                     </div>
                   </TableCell>
-                  <TableCell>{server.isPublic ? "Public" : "Private"}</TableCell>
-                  <TableCell>{new Date(server.lastUpdated).toLocaleDateString()}</TableCell> 
+                  <TableCell>{server.is_public ? "Public" : "Private"}</TableCell>
+                  <TableCell>{new Date(server.last_updated).toLocaleDateString()}</TableCell> 
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       {/* Add Analytics button if needed */}
