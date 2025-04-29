@@ -17,11 +17,32 @@
     "settings": "Настройки",
     "logout": "Выйти"
   },
-  "LanguageSelect": {
-    "switchLanguage": "Сменить язык",
-    "currentLanguage": "Текущий язык"
-  },
+  
   "LlmBrowsePage": {
     "title": "Модели LLM"
+  },
+
+  "SettingsPage": {
+    "title": "Настройки",
+    "profile": {
+      "title": "Профиль",
+      "description": "Обновите свои персональные данные",
+      "name": "Полное имя",
+      "email": "Email",
+      "save": "Сохранить изменения"
+    },
+    "preferences": {
+      "title": "Предпочтения",
+      "description": "Настройте свои предпочтения",
+      "language": "Язык",
+      "languageDescription": "Выберите свой предпочитаемый язык",
+      "switchLanguage": "Сменить язык",
+      "theme": "Тема",
+      "themeDescription": "Измените тему приложения" 
+    },
+    "subscription": {
+      "title": "Подписка",
+      "description": "Управление подпиской и счетами"
+    } 
   }
 }

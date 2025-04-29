@@ -1,4 +1,4 @@
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+// import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   Bot,
   Home,
@@ -189,7 +189,7 @@ export default function MainLayout({
           </div>
         </main>
       </div>
-      <ThemeToggle className="absolute bottom-2 right-2" />
+      {/* <ThemeToggle className="absolute bottom-2 right-2" /> */}
     </>
   );
 }

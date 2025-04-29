@@ -4,7 +4,6 @@ import SectionTitle from "./SectionTitle";
 import UserBlock from "./UserBlock";   
 import LogoIcon from "./LogoIcon";
 import {useTranslations} from 'next-intl';
-import LanguageSelect from "./LanguageSelect";
 
 type SideBarProps = {
     menuContent: NavSection[];
@@ -58,8 +57,6 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
                         ))
                     }
 
-                    {/* TODO: remove to settings */}
-                    <LanguageSelect />
                     <div className="h-[1px] mt-[12px] w-full bg-zinc-200/50 dark:bg-zinc-700" />
                     <UserBlock user={bottomMenuContent.user} />
                 </div>

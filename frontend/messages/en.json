@@ -18,12 +18,31 @@
     "logout": "Logout"
   },
 
-  "LanguageSelect": {
-    "switchLanguage": "Switch language",
-    "currentLanguage": "Current language"
-  },
-
   "LlmBrowsePage": {
     "title": "LLM Models"
+  },
+
+  "SettingsPage": {
+    "title": "Settings",
+    "profile": {
+      "title": "Profile",
+      "description": "Update your personal information",
+      "name": "Full Name",
+      "email": "Email Address",
+      "save": "Save Changes"
+    },
+    "preferences": {
+      "title": "Preferences",
+      "description": "Customize your experience",
+      "language": "Language",
+      "languageDescription": "Select your preferred language",
+      "switchLanguage": "Switch Language",
+      "theme": "Theme",
+      "themeDescription": "Change the theme of the application"
+    },
+    "subscription": {
+      "title": "Subscription",
+      "description": "Manage your subscription and billing"
+    }
   }
 }
