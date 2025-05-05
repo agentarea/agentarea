@@ -6,6 +6,7 @@ import {
   Server,
   Cpu,
   Package,
+  Plug,
   ClipboardList,
 } from "lucide-react";
 import Header from "./components/Header";
@@ -65,35 +66,30 @@ export const navContent: NavSection[] = [
     ],
   },
   {
-    id: "llms",
-    labelKey: "llms",
-    section: "LLM Models",
-    icon: <Cpu className="h-5 w-5" />,
-    items: [
-      {
-        label: "Browse",
-        labelKey: "llmBrowse",
-        href: "/llms/browse",
-        icon: <Cpu className="h-5 w-5" />,
-      },
-      // {
-      //   label: "Add Model",
-      //   href: "/marketplace/llms/create",
-      //   icon: <Package className="h-5 w-5" />,
-      // },
-    ],
-  },
-  {
     id: "mcp",
     labelKey: "mcp",
     section: "MCP Servers",
     icon: <Server className="h-5 w-5" />,
     items: [
       {
-        label: "Servers",
-        labelKey: "mcpServers",
+        label: "Connections",
+        labelKey: "connections",
         href: "/mcp-servers",
-        icon: <Server className="h-5 w-5" />,
+        icon: <Plug className="h-5 w-5" />,
+      },
+    ],
+  },
+  {
+    id: "admin",
+    labelKey: "admin",
+    section: "Admin",
+    icon: <Settings className="h-5 w-5" />,
+    items: [
+      {
+        label: "LLM Models",
+        labelKey: "llms",
+        href: "/admin/llms",
+        icon: <Cpu className="h-5 w-5" />,
       },
     ],
   },

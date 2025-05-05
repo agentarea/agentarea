@@ -144,6 +144,10 @@ export const listLLMModels = async (params?: {
   return { data, error };
 };
 
+export type LLMModel = components["schemas"]["LLMModelResponse"];
+export type MCPServer = components["schemas"]["MCPServerResponse"];
+export type Agent = components["schemas"]["AgentResponse"];
+
 export const createLLMModel = async (model: components["schemas"]["LLMModelCreate"]) => {
   const { data, error } = await client.POST("/v1/llm-models/", { body: model });
   return { data, error };

@@ -5,7 +5,7 @@ import click
 import uvicorn
 from sqlalchemy import text
 
-from agentarea.config import Database, get_db_settings, get_sync_db
+from agentarea.config import Database, get_db_settings
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext

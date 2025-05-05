@@ -1,30 +1,22 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { 
   Bot, 
-  Database, 
-  ClipboardList, 
   MessageSquare, 
   Send, 
   Bell, 
   CheckCircle2, 
   Clock,
   AlertCircle,
-  Filter,
-  X,
   Plus,
   ChevronRight,
   Building2,
-  Wrench,
-  Server
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -58,22 +50,7 @@ interface Task {
   priority: "low" | "medium" | "high";
   assignedAgent: string;
   createdAt: string;
-}
-
-interface WorkplaceResource {
-  id: string;
-  name: string;
-  type: "agent" | "source" | "tool" | "mcp";
-  description: string;
-  status: "active" | "inactive";
-}
-
-interface Mention {
-  id: string;
-  name: string;
-  type: "agent" | "source" | "tool" | "mcp";
-  icon: React.ReactNode;
-  color: string;
+  hasUpdates?: boolean;
 }
 
 export default function WorkplacePage() {
@@ -86,31 +63,8 @@ export default function WorkplacePage() {
     },
   ]);
   const [inputValue, setInputValue] = useState("");
-  const [taskFilter, setTaskFilter] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<string>("chat");
   const [selectedWorkplace, setSelectedWorkplace] = useState<string>("personal");
-  const [showMentionSelector, setShowMentionSelector] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState("");
-  const [cursorPosition, setCursorPosition] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  
-  const getResourceIcon = (type: WorkplaceResource["type"]) => {
-    switch(type) {
-      case "agent": return <Bot className="h-4 w-4" />;
-      case "source": return <Database className="h-4 w-4" />;
-      case "tool": return <Wrench className="h-4 w-4" />;
-      case "mcp": return <Server className="h-4 w-4" />;
-    }
-  };
-
-  const getResourceColor = (type: WorkplaceResource["type"]) => {
-    switch(type) {
-      case "agent": return "text-blue-500";
-      case "source": return "text-green-500";
-      case "tool": return "text-purple-500";
-      case "mcp": return "text-orange-500";
-    }
-  };
   
   // Sample workplaces data
   const workplaces = [
@@ -121,7 +75,7 @@ export default function WorkplacePage() {
   ];
   
   // Sample data for tasks and notifications
-  const [tasks, setTasks] = useState<Task[]>([
+  const [tasks] = useState<Task[]>([
     {
       id: "task-1",
       title: "Analyze Q1 Sales Data",
@@ -129,7 +83,8 @@ export default function WorkplacePage() {
       status: "in_progress",
       priority: "high",
       assignedAgent: "Data Analytics Agent",
-      createdAt: "2 hours ago"
+      createdAt: "2 hours ago",
+      hasUpdates: true
     },
     {
       id: "task-2",
@@ -156,7 +111,8 @@ export default function WorkplacePage() {
       status: "completed",
       priority: "high",
       assignedAgent: "Reporting Agent",
-      createdAt: "2 days ago"
+      createdAt: "2 days ago",
+      hasUpdates: true
     }
   ]);
   
@@ -187,144 +143,8 @@ export default function WorkplacePage() {
     }
   ]);
 
-  // Sample workplace resources data
-  const workplaceResources: Record<string, WorkplaceResource[]> = {
-    personal: [
-      {
-        id: "agent-1",
-        name: "Personal Assistant",
-        type: "agent",
-        description: "Your personal AI assistant",
-        status: "active"
-      },
-      {
-        id: "source-1",
-        name: "Personal Calendar",
-        type: "source",
-        description: "Your calendar data",
-        status: "active"
-      }
-    ],
-    team1: [
-      {
-        id: "agent-2",
-        name: "Marketing Analytics Agent",
-        type: "agent",
-        description: "Analyzes marketing data and trends",
-        status: "active"
-      },
-      {
-        id: "tool-1",
-        name: "Social Media Manager",
-        type: "tool",
-        description: "Manages social media posts and engagement",
-        status: "active"
-      },
-      {
-        id: "mcp-1",
-        name: "Marketing MCP",
-        type: "mcp",
-        description: "Marketing team's MCP server",
-        status: "active"
-      }
-    ],
-    team2: [
-      {
-        id: "agent-3",
-        name: "Code Review Agent",
-        type: "agent",
-        description: "Reviews and analyzes code changes",
-        status: "active"
-      },
-      {
-        id: "tool-2",
-        name: "GitHub Integration",
-        type: "tool",
-        description: "GitHub repository management",
-        status: "active"
-      }
-    ],
-    team3: [
-      {
-        id: "agent-4",
-        name: "Sales Analytics Agent",
-        type: "agent",
-        description: "Analyzes sales data and forecasts",
-        status: "active"
-      },
-      {
-        id: "source-2",
-        name: "CRM Database",
-        type: "source",
-        description: "Customer relationship management data",
-        status: "active"
-      }
-    ]
-  };
-
-  // Get all resources for current workplace
-  const currentResources = workplaceResources[selectedWorkplace] || [];
-  
-  // Convert resources to mentions format
-  const mentions: Mention[] = currentResources.map(resource => ({
-    id: resource.id,
-    name: resource.name,
-    type: resource.type,
-    icon: getResourceIcon(resource.type),
-    color: getResourceColor(resource.type)
-  }));
-
-  // Filter mentions based on query
-  const filteredMentions = mentions.filter(mention => 
-    mention.name.toLowerCase().includes(mentionQuery.toLowerCase())
-  );
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const position = e.target.selectionStart || 0;
-    
-    setInputValue(value);
-    setCursorPosition(position);
-
-    // Check if we should show mention selector
-    const lastAtSymbol = value.lastIndexOf('@', position);
-    if (lastAtSymbol !== -1) {
-      const query = value.slice(lastAtSymbol + 1, position);
-      setMentionQuery(query);
-      setShowMentionSelector(true);
-    } else {
-      setShowMentionSelector(false);
-    }
-  };
-
-  const handleMentionSelect = (mention: Mention) => {
-    const beforeMention = inputValue.slice(0, cursorPosition);
-    const afterMention = inputValue.slice(cursorPosition);
-    const lastAtSymbol = beforeMention.lastIndexOf('@');
-    
-    const newValue = beforeMention.slice(0, lastAtSymbol) + 
-      `@${mention.name} ` + 
-      afterMention;
-    
-    setInputValue(newValue);
-    setShowMentionSelector(false);
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showMentionSelector) return;
-
-    if (e.key === 'Escape') {
-      setShowMentionSelector(false);
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      // Handle arrow navigation in mention selector
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (filteredMentions.length > 0) {
-        handleMentionSelect(filteredMentions[0]);
-      }
-    }
+    setInputValue(e.target.value);
   };
 
   const handleSendMessage = () => {
@@ -361,36 +181,40 @@ export default function WorkplacePage() {
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
   
-  const filteredTasks = taskFilter === "all" 
-    ? tasks 
-    : tasks.filter(task => task.status === taskFilter);
+  // Get tasks that need input
+  const tasksNeedingInput = tasks.filter(task => task.status === "needs_input");
+  
+  // Get tasks with updates
+  const tasksWithUpdates = tasks.filter(task => task.hasUpdates);
 
-  const getPriorityColor = (priority: string) => {
-    switch(priority) {
-      case 'high': return 'text-red-500';
-      case 'medium': return 'text-amber-500';
-      case 'low': return 'text-green-500';
-      default: return 'text-blue-500';
+  const getStatusTagClasses = (status: string) => {
+    switch(status) {
+      case 'in_progress': return 'bg-blue-100 text-blue-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+    <div className="min-h-screen bg-white">
       <div className="p-8 max-w-7xl mx-auto">
-        <div className="mb-12">
+        <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              <h1 className="text-4xl font-bold tracking-tight text-indigo-500">
                 Workplace
               </h1>
-              <p className="text-lg text-muted-foreground mt-2">
-                Your command center for managing agents, tasks, and notifications
+              <p className="text-lg text-gray-500 mt-2">
+                Your command center for managing agents and tasks
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Select value={selectedWorkplace} onValueChange={setSelectedWorkplace}>
-                <SelectTrigger className="w-[200px] h-9 text-sm bg-background">
-                  <SelectValue placeholder="Select workplace" />
+                <SelectTrigger className="w-[200px] h-9 text-sm bg-white border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    <SelectValue placeholder="Select workplace" />
+                  </div>
                 </SelectTrigger>
                 <SelectContent>
                   {workplaces.map((workplace) => (
@@ -403,344 +227,246 @@ export default function WorkplacePage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button size="icon" variant="outline" className="h-9 w-9">
+              <Button size="icon" variant="outline" className="h-9 w-9 border-gray-200">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8">
-            <Tabs 
-              defaultValue="chat" 
-              className="w-full"
-              value={activeTab}
-              onValueChange={setActiveTab}
-            >
-              <div className="flex justify-between items-center mb-6">
-                <TabsList className="grid w-full max-w-md grid-cols-3 bg-muted/50 p-1">
-                  <TabsTrigger value="chat" className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      <span>Chat</span>
-                    </div>
-                  </TabsTrigger>
-                  <TabsTrigger value="tasks" className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4" />
-                      <span>Tasks</span>
-                    </div>
-                  </TabsTrigger>
-                  <TabsTrigger value="notifications" className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <Bell className="h-4 w-4" />
-                      <span>Notifications</span>
-                      {unreadCount > 0 && (
-                        <Badge variant="destructive" className="ml-1">{unreadCount}</Badge>
-                      )}
-                    </div>
-                  </TabsTrigger>
-                </TabsList>
-                
-                {activeTab === "tasks" && (
-                  <div className="flex items-center gap-2">
-                    <Select value={taskFilter} onValueChange={setTaskFilter}>
-                      <SelectTrigger className="w-[180px] h-9 text-sm bg-background">
-                        <SelectValue placeholder="Filter by status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Tasks</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="needs_input">Needs Input</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Task creation and chat section */}
+          <div className="lg:col-span-2">
+            <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-indigo-500" />
+                  <h2 className="text-lg font-semibold">New Task</h2>
+                </div>
+                <Badge variant="outline" className="flex gap-1 items-center border-gray-200">
+                  <Bot className="h-3 w-3" />
+                  <span>Agents Ready</span>
+                </Badge>
               </div>
               
-              <TabsContent value="chat" className="mt-0">
-                <Card className="p-6 border-none shadow-lg bg-gradient-to-b from-background to-muted/20">
-                  <ScrollArea className="h-[450px] pr-4 mb-4">
-                    <div className="space-y-4">
-                      {messages.map((message) => (
-                        <div 
-                          key={message.id} 
-                          className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div 
-                            className={`max-w-[80%] p-4 rounded-2xl ${
-                              message.sender === 'user' 
-                                ? 'bg-primary text-primary-foreground shadow-sm' 
-                                : 'bg-muted shadow-sm'
-                            }`}
-                          >
-                            <p>{message.content}</p>
-                            <p className="text-xs opacity-70 mt-2">
-                              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        ref={inputRef}
-                        placeholder="Describe a task or ask a question..."
-                        value={inputValue}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        className="flex-1 bg-background"
-                      />
-                      {showMentionSelector && filteredMentions.length > 0 && (
-                        <div className="absolute bottom-full left-0 right-0 mb-2 bg-background border rounded-lg shadow-lg max-h-[200px] overflow-y-auto z-50">
-                          {filteredMentions.map((mention) => (
-                            <button
-                              key={mention.id}
-                              className="w-full px-3 py-2 text-left hover:bg-muted/50 flex items-center gap-2"
-                              onClick={() => handleMentionSelect(mention)}
-                            >
-                              <div className={mention.color}>
-                                {mention.icon}
-                              </div>
-                              <span>{mention.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <Button onClick={handleSendMessage} size="icon" className="shrink-0">
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </Card>
-              </TabsContent>
+              <div className="mb-4">
+                <div className="relative">
+                  <Input
+                    ref={inputRef}
+                    placeholder="Describe a task for agents to perform..."
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    className="bg-white border-gray-200 pr-24 py-6 pl-4 rounded-lg"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  />
+                  <Button 
+                    onClick={handleSendMessage} 
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 px-4 bg-indigo-500 hover:bg-indigo-600"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    <span>Send</span>
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Describe what you want agents to do, or ask a question.
+                </p>
+              </div>
               
-              <TabsContent value="tasks" className="mt-0 space-y-4">
-                <Card className="p-6 border-none shadow-lg bg-gradient-to-b from-background to-muted/20">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-semibold">Your Tasks</h2>
-                    <Button size="sm" className="gap-1">
-                      <Plus className="h-4 w-4" />
-                      New Task
-                    </Button>
-                  </div>
-                  
-                  {filteredTasks.length === 0 ? (
-                    <div className="py-12 text-center">
-                      <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                        <ClipboardList className="h-8 w-8 text-primary" />
-                      </div>
-                      <h3 className="text-lg font-medium">No tasks found</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {taskFilter === "all" 
-                          ? "You don&apos;t have any tasks yet." 
-                          : `You don&apos;t have any ${taskFilter.replace('_', ' ')} tasks.`}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {filteredTasks.map((task) => (
-                        <div key={task.id} className="p-4 border rounded-xl hover:border-primary/50 transition-colors bg-background/50">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex items-start gap-3">
-                              {task.status === 'completed' ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-500 mt-1 shrink-0" />
-                              ) : task.status === 'needs_input' ? (
-                                <AlertCircle className="h-5 w-5 text-red-500 mt-1 shrink-0" />
-                              ) : task.status === 'in_progress' ? (
-                                <Clock className="h-5 w-5 text-blue-500 mt-1 shrink-0" />
-                              ) : (
-                                <ClipboardList className="h-5 w-5 text-gray-500 mt-1 shrink-0" />
-                              )}
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-medium">{task.title}</h3>
-                                  <span className={`text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                                    {task.priority.toUpperCase()}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
-                              </div>
-                            </div>
-                            
-                            <Badge 
-                              variant={
-                                task.status === 'needs_input' ? 'destructive' : 
-                                task.status === 'in_progress' ? 'default' : 
-                                task.status === 'completed' ? 'outline' : 'secondary'
-                              }
-                              className="ml-2"
-                            >
-                              {task.status.replace('_', ' ')}
-                            </Badge>
-                          </div>
-                          
-                          <div className="flex justify-between items-center text-sm">
-                            <div className="flex items-center gap-8">
-                              <div>
-                                <span className="text-muted-foreground">Agent: </span>
-                                <span className="font-medium">{task.assignedAgent}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Created: </span>
-                                <span>{task.createdAt}</span>
-                              </div>
-                            </div>
-                            
-                            <div className="flex gap-2">
-                              {task.status === 'needs_input' && (
-                                <Button size="sm" variant="default" className="h-8">Provide Input</Button>
-                              )}
-                              <Button size="sm" variant="outline" className="h-8 gap-1">
-                                Details
-                                <ChevronRight className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="notifications" className="mt-0">
-                <Card className="p-6 border-none shadow-lg bg-gradient-to-b from-background to-muted/20">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-semibold">Notifications</h2>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setNotifications(notifications.map(n => ({...n, isRead: true})))}
-                      disabled={!unreadCount}
+              <ScrollArea className="h-[280px] pr-4">
+                <div className="space-y-4">
+                  {messages.map((message) => (
+                    <div 
+                      key={message.id} 
+                      className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      Mark all as read
-                    </Button>
-                  </div>
-                  
-                  <ScrollArea className="h-[450px]">
-                    {notifications.length === 0 ? (
-                      <div className="py-12 text-center">
-                        <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                          <Bell className="h-8 w-8 text-primary" />
-                        </div>
-                        <h3 className="text-lg font-medium">No notifications</h3>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          You&apos;re all caught up!
+                      <div 
+                        className={`max-w-[80%] p-4 rounded-xl ${
+                          message.sender === 'user' 
+                            ? 'bg-indigo-500 text-white' 
+                            : 'bg-gray-100 text-gray-900'
+                        }`}
+                      >
+                        <p>{message.content}</p>
+                        <p className="text-xs opacity-70 mt-2">
+                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {notifications.map((notification) => (
-                          <div 
-                            key={notification.id} 
-                            className={`p-4 border rounded-xl cursor-pointer hover:border-primary/50 transition-colors ${
-                              notification.isRead ? 'bg-background/50' : 'bg-primary/5'
-                            }`}
-                            onClick={() => markNotificationAsRead(notification.id)}
-                          >
-                            <div className="flex items-start gap-3">
-                              {notification.type === 'info' && <Bell className="h-5 w-5 text-primary mt-0.5" />}
-                              {notification.type === 'warning' && <Clock className="h-5 w-5 text-yellow-500 mt-0.5" />}
-                              {notification.type === 'error' && <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />}
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <h3 className="font-medium">{notification.title}</h3>
-                                  <p className="text-xs text-muted-foreground">{notification.time}</p>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
-                              </div>
-                              {!notification.isRead && (
-                                <div className="h-2 w-2 bg-primary rounded-full shrink-0 mt-2" />
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-                </Card>
-              </TabsContent>
-            </Tabs>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </Card>
           </div>
-
-          <div className="lg:col-span-4 space-y-6">
-            <Card className="p-6 border-none shadow-lg bg-gradient-to-b from-background to-muted/20">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold">Workplace Resources</h2>
-                <Button variant="ghost" size="sm" className="text-xs h-7">View All</Button>
+          
+          {/* Notifications section */}
+          <div>
+            <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-indigo-500" />
+                  <h2 className="text-lg font-semibold">Notifications</h2>
+                  {unreadCount > 0 && (
+                    <Badge variant="destructive" className="ml-1 bg-red-100 text-red-800 hover:bg-red-100">{unreadCount}</Badge>
+                  )}
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setNotifications(notifications.map(n => ({...n, isRead: true})))}
+                  disabled={!unreadCount}
+                  className="text-xs h-7 text-gray-500 hover:text-gray-700"
+                >
+                  Clear all
+                </Button>
               </div>
               
-              <div className="space-y-4">
-                {currentResources.map((resource) => (
-                  <div 
-                    key={resource.id} 
-                    className="flex items-start p-3 rounded-xl hover:bg-muted/50 transition-colors"
-                  >
-                    <div className={`mr-3 mt-0.5 ${getResourceColor(resource.type)}`}>
-                      {getResourceIcon(resource.type)}
+              <ScrollArea className="max-h-[350px]">
+                <div className="space-y-3">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-sm text-gray-500">No new notifications</p>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{resource.name}</p>
-                        <Badge 
-                          variant={resource.status === "active" ? "default" : "secondary"}
-                          className="text-xs"
-                        >
-                          {resource.status}
-                        </Badge>
+                  ) : (
+                    notifications.map((notification) => (
+                      <div 
+                        key={notification.id} 
+                        className={`p-3 border rounded-lg cursor-pointer hover:border-indigo-200 transition-colors ${
+                          notification.isRead ? 'bg-white' : 'bg-indigo-50'
+                        }`}
+                        onClick={() => markNotificationAsRead(notification.id)}
+                      >
+                        <div className="flex items-start gap-2">
+                          {notification.type === 'info' && <Bell className="h-4 w-4 text-indigo-500 mt-0.5" />}
+                          {notification.type === 'warning' && <Clock className="h-4 w-4 text-amber-500 mt-0.5" />}
+                          {notification.type === 'error' && <AlertCircle className="h-4 w-4 text-red-500 mt-0.5" />}
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-sm font-medium">{notification.title}</h3>
+                              <p className="text-xs text-gray-500">{notification.time}</p>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{notification.message}</p>
+                          </div>
+                          {!notification.isRead && (
+                            <div className="h-2 w-2 bg-indigo-500 rounded-full shrink-0 mt-1" />
+                          )}
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">{resource.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            
-            <Card className="p-6 border-none shadow-lg bg-gradient-to-b from-background to-muted/20">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold">Recent Activity</h2>
-                <Button variant="ghost" size="sm" className="text-xs h-7">View All</Button>
-              </div>
-              <div className="space-y-4">
-                {[
-                  {
-                    title: "Inventory Monitor Agent",
-                    description: "Alert: Low stock detected for SKU-123",
-                    time: "10 minutes ago",
-                    icon: <AlertCircle className="h-4 w-4 text-red-500" />
-                  },
-                  {
-                    title: "Customer Support Agent",
-                    description: "Processed 25 support tickets",
-                    time: "1 hour ago",
-                    icon: <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  },
-                  {
-                    title: "Analytics Workflow",
-                    description: "Generated daily marketing report",
-                    time: "2 hours ago",
-                    icon: <ClipboardList className="h-4 w-4 text-blue-500" />
-                  }
-                ].map((activity, index) => (
-                  <div key={index} className="flex items-start p-3 rounded-xl hover:bg-muted/50 transition-colors">
-                    <div className="mr-3 mt-0.5">{activity.icon}</div>
-                    <div className="flex-1">
-                      <p className="font-medium">{activity.title}</p>
-                      <p className="text-sm text-muted-foreground">{activity.description}</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{activity.time}</span>
-                  </div>
-                ))}
-              </div>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
             </Card>
           </div>
+        </div>
+        
+        {/* Tasks sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          {/* Tasks needing input */}
+          <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <h2 className="text-lg font-semibold">Tasks Needing Your Input</h2>
+              </div>
+              <Badge variant="outline" className="border-gray-200">{tasksNeedingInput.length}</Badge>
+            </div>
+            
+            <ScrollArea className="max-h-[320px]">
+              <div className="space-y-3">
+                {tasksNeedingInput.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-gray-500">No tasks need your input right now</p>
+                  </div>
+                ) : (
+                  tasksNeedingInput.map((task) => (
+                    <div key={task.id} className="p-4 border border-gray-200 rounded-lg hover:border-indigo-200 transition-colors bg-white">
+                      <div className="flex items-start gap-3 mb-3">
+                        <AlertCircle className="h-4 w-4 text-red-500 mt-1 shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-medium">{task.title}</h3>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                              task.priority === 'high' ? 'bg-red-100 text-red-800' : 
+                              task.priority === 'medium' ? 'bg-amber-100 text-amber-800' : 
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {task.priority.toUpperCase()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{task.description}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-xs mt-3">
+                        <div className="text-gray-500">
+                          <span>Agent: </span>
+                          <span className="font-medium text-gray-700">{task.assignedAgent}</span>
+                        </div>
+                        
+                        <Button size="sm" className="h-7 text-xs bg-indigo-500 hover:bg-indigo-600">
+                          Provide Input
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </Card>
+          
+          {/* Recent updates */}
+          <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-blue-500" />
+                <h2 className="text-lg font-semibold">Recent Updates</h2>
+              </div>
+              <Button variant="ghost" size="sm" className="text-xs h-7 text-gray-500 hover:text-gray-700">View All</Button>
+            </div>
+            
+            <ScrollArea className="max-h-[320px]">
+              <div className="space-y-3">
+                {tasksWithUpdates.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-gray-500">No recent updates</p>
+                  </div>
+                ) : (
+                  tasksWithUpdates.map((task) => (
+                    <div key={task.id} className="p-4 border border-gray-200 rounded-lg hover:border-indigo-200 transition-colors bg-white">
+                      <div className="flex items-start gap-3 mb-3">
+                        {task.status === 'completed' ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-500 mt-1 shrink-0" />
+                        ) : (
+                          <Clock className="h-4 w-4 text-blue-500 mt-1 shrink-0" />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-medium">{task.title}</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusTagClasses(task.status)}`}>
+                              {task.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{task.description}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-xs mt-3">
+                        <div className="text-gray-500">
+                          <span>Updated: </span>
+                          <span>{task.createdAt}</span>
+                        </div>
+                        
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-50">
+                          View Details
+                          <ChevronRight className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </Card>
         </div>
       </div>
     </div>

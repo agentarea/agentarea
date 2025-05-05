@@ -4,8 +4,11 @@
     "grid": "Grid",
     "table": "Table"
   },
-
+  "admin": {
+    "llms": "LLM Models"
+  },
   "Sidebar": {
+    "admin": "Admin",
     "workplace": "Workplace",
     "agents": "Agents",
     "browse": "Browse",
@@ -13,7 +16,7 @@
     "llms": "LLM Models",
     "llmBrowse": "Browse",
     "mcp": "MCP Servers",
-    "mcpServers": "Servers",
+    "connections": "Connections",
     "settings": "Settings",
     "logout": "Logout"
   },

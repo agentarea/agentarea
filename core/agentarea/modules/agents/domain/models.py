@@ -12,10 +12,13 @@ class Agent(BaseModel):
 
     id = Column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
     name = Column(String, nullable=False)
-    capabilities = Column(JSON, nullable=False, default=list)
     status = Column(String, nullable=False, default="active")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    def __repr__(self):
-        return f"<Agent {self.name} ({self.id})>" 
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    description = Column(String, nullable=True)
+    model_id = Column(String, nullable=True)
+    tools_config = Column(JSON, nullable=True)
+    events_config = Column(JSON, nullable=True)
+    planning = Column(String, nullable=True)

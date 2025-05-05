@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from agentarea.api.deps.services import get_llm_model_instance_service
 from agentarea.modules.llm.application.service import LLMModelInstanceService
 from agentarea.modules.llm.domain.models import LLMModelInstance
-from agentarea.api.deps.services import get_llm_model_instance_service
 
 router = APIRouter(prefix="/llm-models/instances", tags=["llm-model-instances"])
 
@@ -125,4 +125,4 @@ async def delete_llm_model_instance(
     success = await llm_model_instance_service.delete_llm_model_instance(instance_id)
     if not success:
         raise HTTPException(status_code=404, detail="LLM Model Instance not found")
-    return {"status": "success"} 
+    return {"status": "success"}

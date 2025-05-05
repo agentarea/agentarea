@@ -1,124 +1,150 @@
-"use client";
-
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Bot, Search, Filter, ArrowUpDown } from "lucide-react";
+import { Bot, Search, Filter, ArrowUpDown, Zap } from "lucide-react";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { listAgents } from "@/lib/api";
 
-interface AgentCard {
-  name: string;
-  description: string;
-  category: string;
-  status: "available" | "running" | "stopped";
-  lastUsed: string;
+const categories = ["All"];
+
+interface AgentsBrowsePageProps {
+  searchParams?: { search?: string; category?: string };
 }
 
-const agents: AgentCard[] = [
-  {
-    name: "Inventory Monitor",
-    description: "Monitors inventory levels and alerts when stock falls below threshold",
-    category: "E-commerce",
-    status: "running",
-    lastUsed: "Active now"
-  },
-  {
-    name: "Customer Support Assistant",
-    description: "Automatically tags and routes support tickets based on content",
-    category: "Support",
-    status: "available",
-    lastUsed: "2 hours ago"
-  },
-  {
-    name: "Marketing Analytics",
-    description: "Generates daily reports from marketing data sources",
-    category: "Analytics",
-    status: "running",
-    lastUsed: "Active now"
-  },
-  {
-    name: "Document Scanner",
-    description: "Scans documents for compliance violations and flags issues",
-    category: "Compliance",
-    status: "stopped",
-    lastUsed: "1 day ago"
-  }
-];
+export default async function AgentsBrowsePage({ searchParams: searchParamsPromise }: AgentsBrowsePageProps) {
+  // Fetch agents server-side
+  const { data: agents = [], error } = await listAgents();
 
-const categories = ["All", "E-commerce", "Support", "Analytics", "Compliance", "Integration"];
+  const searchParams = await searchParamsPromise;
 
-export default function AgentsBrowsePage() {
+  // Get search query and category from searchParams (URL)
+  const searchQuery = searchParams?.search || "";
+  const selectedCategory = searchParams?.category || "All";
+
+  // Filter by search query
+  const filteredAgents = agents.filter(agent =>
+    agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    agent.capabilities.some(cap => cap.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="container mx-auto py-8 px-4 max-w-7xl">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
         <div>
-          <h1 className="text-4xl font-bold">Browse Agents</h1>
-          <p className="text-lg text-muted-foreground mt-2">
-            Discover and deploy automation agents for your needs
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Browse Agents</h1>
+          <p className="text-muted-foreground mt-2 max-w-xl">
+            Discover and deploy automation agents for your workflow needs
           </p>
         </div>
-        <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg flex items-center gap-2">
-          <Bot className="h-5 w-5" />
-          Deploy New Agent
-        </button>
+        <Link href="/agents/create">
+          <Button size="lg" className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
+            <Bot className="h-5 w-5" />
+            Deploy New Agent
+          </Button>
+        </Link>
       </div>
 
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Search agents..."
-            className="pl-10"
-          />
-        </div>
-        <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
-          <Filter className="h-4 w-4" />
-          Filter
-        </button>
-        <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
-          <ArrowUpDown className="h-4 w-4" />
-          Sort
-        </button>
-      </div>
-
-      <div className="flex gap-4 mb-8 overflow-x-auto pb-2">
-        {categories.map((category) => (
-          <button
-            key={category}
-            className="px-4 py-2 rounded-full bg-secondary hover:bg-secondary/80 whitespace-nowrap"
-          >
-            {category}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {agents.map((agent, index) => (
-          <Card key={index} className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <Bot className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">{agent.name}</h3>
-                  <span className="text-sm text-muted-foreground">{agent.category}</span>
-                </div>
+      <div>
+        {/* Main content area */}
+        <div className="w-full">
+          <div className="space-y-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr,auto,auto] gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <form action="" method="get">
+                  <Input
+                    name="search"
+                    placeholder="Search agents by name or capability..."
+                    className="pl-10 h-11"
+                    defaultValue={searchQuery}
+                  />
+                </form>
               </div>
-              <span className={`text-sm px-2 py-1 rounded-full ${
-                agent.status === "running" ? "bg-green-100 text-green-700" :
-                agent.status === "stopped" ? "bg-red-100 text-red-700" :
-                "bg-secondary text-secondary-foreground"
-              }`}>
-                {agent.status}
-              </span>
+              <Button variant="outline" className="h-11 gap-2" aria-label="Filter agents">
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filter</span>
+              </Button>
+              <Button variant="outline" className="h-11 gap-2" aria-label="Sort agents">
+                <ArrowUpDown className="h-4 w-4" />
+                <span className="hidden sm:inline">Sort</span>
+              </Button>
             </div>
-            <p className="text-sm text-muted-foreground mb-4">{agent.description}</p>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Last used: {agent.lastUsed}</span>
-              <button className="text-primary hover:underline">View Details</button>
+
+            <Tabs defaultValue="All" className="w-full">
+              <TabsList className="flex w-full h-auto flex-wrap gap-2 bg-transparent">
+                {categories.map((category) => (
+                  <TabsTrigger
+                    key={category}
+                    value={category}
+                    className={`rounded-full px-4 py-2 transition-all ${
+                      selectedCategory === category 
+                      ? "bg-primary text-primary-foreground" 
+                      : "bg-secondary hover:bg-secondary/80"
+                    }`}
+                  >
+                    {category}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {error ? (
+            <div className="text-center py-10 text-destructive">Failed to load agents</div>
+          ) : filteredAgents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+              <span className="text-5xl">🤖</span>
+              <div className="text-lg font-medium">No agents yet</div>
+              <div className="text-muted-foreground mb-2">Get started by adding your first agent.</div>
+              <Link href="/agents/create">
+                <Button size="lg" className="gap-2">
+                  <Bot className="h-5 w-5" />
+                  Add your first agent
+                </Button>
+              </Link>
             </div>
-          </Card>
-        ))}
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredAgents.map((agent) => (
+                <Card 
+                  key={agent.id} 
+                  className="p-6 hover:shadow-md transition-all border border-border/40 hover:border-border group"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                        <Bot className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-lg group-hover:text-primary transition-colors">{agent.name}</h3>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {agent.capabilities.map((cap, i) => (
+                            <Badge key={i} variant="secondary" className="font-normal">{cap}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge variant={
+                      agent.status === "running" ? "default" :
+                      agent.status === "stopped" ? "destructive" : "outline"
+                    }>
+                      {agent.status === "running" && <Zap className="h-3 w-3 mr-1" />}
+                      {agent.status}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-end items-center mt-auto">
+                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary font-normal">
+                      View Details
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

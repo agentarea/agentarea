@@ -248,8 +248,14 @@ export interface components {
         AgentCreate: {
             /** Name */
             name: string;
-            /** Capabilities */
-            capabilities: string[];
+            /** Description */
+            description: string;
+            /** Model Id */
+            model_id: string;
+            tools_config?: components["schemas"]["ToolsConfig"] | null;
+            events_config?: components["schemas"]["EventsConfig"] | null;
+            /** Planning */
+            planning?: boolean | null;
         };
         /** AgentResponse */
         AgentResponse: {
@@ -260,10 +266,22 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Capabilities */
-            capabilities: string[];
             /** Status */
             status: string;
+            /** Description */
+            description?: string | null;
+            /** Model Id */
+            model_id?: string | null;
+            /** Tools Config */
+            tools_config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Events Config */
+            events_config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Planning */
+            planning?: boolean | null;
         };
         /** AgentUpdate */
         AgentUpdate: {
@@ -271,6 +289,22 @@ export interface components {
             name?: string | null;
             /** Capabilities */
             capabilities?: string[] | null;
+            /** Description */
+            description?: string | null;
+            /** Model Id */
+            model_id?: string | null;
+            tools_config?: components["schemas"]["ToolsConfig"] | null;
+            events_config?: components["schemas"]["EventsConfig"] | null;
+            /** Planning */
+            planning?: boolean | null;
+        };
+        /** EventsConfig */
+        EventsConfig: {
+            /** Events */
+            events?: { 
+                event_type: string; 
+                config?: Record<string, unknown> | null;
+            }[] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -381,8 +415,8 @@ export interface components {
             status: string;
             /** Is Public */
             is_public: boolean;
-            /** Last Updated */
-            last_updated: string;
+            /** Updated At */
+            updated_at: string;
         };
         /** LLMModelUpdate */
         LLMModelUpdate: {
@@ -403,16 +437,24 @@ export interface components {
             /** Status */
             status?: string | null;
         };
+        /** MCPConfig */
+        MCPConfig: {
+            /** Mcp Server Id */
+            mcp_server_id: string;
+            /** Requires User Confirmation */
+            requires_user_confirmation?: boolean | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** MCPServerCreate */
         MCPServerCreate: {
             /** Name */
             name: string;
             /** Description */
             description: string;
-            /**
-             * Docker Image Url
-             * Format: uri
-             */
+            /** Docker Image Url */
             docker_image_url: string;
             /** Version */
             version: string;
@@ -497,10 +539,7 @@ export interface components {
             name: string;
             /** Description */
             description: string;
-            /**
-             * Docker Image Url
-             * Format: uri
-             */
+            /** Docker Image Url */
             docker_image_url: string;
             /** Version */
             version: string;
@@ -510,8 +549,11 @@ export interface components {
             status: string;
             /** Is Public */
             is_public: boolean;
-            /** Last Updated */
-            last_updated: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** MCPServerUpdate */
         MCPServerUpdate: {
@@ -529,6 +571,13 @@ export interface components {
             is_public?: boolean | null;
             /** Status */
             status?: string | null;
+        };
+        /** ToolsConfig */
+        ToolsConfig: {
+            /** Mcp Server Configs */
+            mcp_server_configs?: components["schemas"]["MCPConfig"][] | null;
+            /** Planning */
+            planning?: boolean | null;
         };
         /** ValidationError */
         ValidationError: {

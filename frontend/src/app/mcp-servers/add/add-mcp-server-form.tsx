@@ -35,7 +35,7 @@ const initialState: AddMCPServerFormState = {
     name: '',
     description: '',
     dockerImageUrl: '',
-    tags: '',
+    tags: [],
     isPublic: true,
   },
 };

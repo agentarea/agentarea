@@ -1,8 +1,8 @@
 from typing import List, Optional
 from uuid import UUID
 
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 
 from agentarea.common.base.repository import BaseRepository
 
@@ -28,7 +28,7 @@ class MCPServerRepository(BaseRepository[MCPServer]):
     ) -> List[MCPServer]:
         async with self.session.begin():
             query = select(MCPServer)
-            
+
             conditions = []
             if status is not None:
                 conditions.append(MCPServer.status == status)
@@ -36,10 +36,10 @@ class MCPServerRepository(BaseRepository[MCPServer]):
                 conditions.append(MCPServer.is_public == is_public)
             if tag is not None:
                 conditions.append(MCPServer.tags.contains([tag]))
-                
+
             if conditions:
                 query = query.where(and_(*conditions))
-                
+
             result = await self.session.execute(query)
             return list(result.scalars().all())
 
@@ -86,16 +86,16 @@ class MCPServerInstanceRepository(BaseRepository[MCPServerInstance]):
     ) -> List[MCPServerInstance]:
         async with self.session.begin():
             query = select(MCPServerInstance)
-            
+
             conditions = []
             if server_id is not None:
                 conditions.append(MCPServerInstance.server_id == server_id)
             if status is not None:
                 conditions.append(MCPServerInstance.status == status)
-                
+
             if conditions:
                 query = query.where(and_(*conditions))
-                
+
             result = await self.session.execute(query)
             return list(result.scalars().all())
 
