@@ -2,6 +2,7 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Settings } from "lucide-react";
 import { Controller, FieldErrors, Control } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../types";
@@ -12,8 +13,10 @@ type AdvancedSettingsProps = {
 };
 
 const AdvancedSettings = ({ control, errors }: AdvancedSettingsProps) => (
-  <Card className="p-8 shadow-xl border-0 bg-white/90 hover:shadow-2xl transition-shadow">
-     <h2 className="text-2xl font-bold mb-6">Advanced Settings</h2>
+  <Card className="">
+     <h2 className="mb-6 flex items-center gap-2">
+       <Settings className="h-5 w-5 text-accent" /> Advanced Settings
+     </h2>
        <div className="flex items-center gap-2">
          <Controller
           name="planning"

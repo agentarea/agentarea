@@ -2,8 +2,6 @@
 
 import React, { useEffect, useActionState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { useForm, useFieldArray } from 'react-hook-form';
 import { addAgent } from './actions';
 import { initialState as agentInitialState } from './state';
@@ -72,16 +70,8 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
 
   return (
     <form action={formAction}>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-12 px-4 sm:px-8">
-        <div className="mb-8 max-w-6xl mx-auto">
-          <Link href="/agents/browse" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Browse Agents
-          </Link>
-        </div>
-
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-          <div className="space-y-8">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-[12px] items-start">
+          <div className="">
             <BasicInformation 
               register={register} 
               control={control} 
@@ -89,7 +79,7 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
             />
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-[12px]">
             <AgentTriggers 
               control={control} 
               errors={errors} 
@@ -131,7 +121,6 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
             Create Agent
           </Button>
         </div>
-      </div>
     </form>
   );
 }

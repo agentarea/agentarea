@@ -47,5 +47,12 @@
       "title": "Subscription",
       "description": "Manage your subscription and billing"
     }
+  },
+
+  "AgentsPage": {
+    "create": {
+      "title": "Create Agent",
+      "back": "Back to Browse Agents"
+    }
   }
 }

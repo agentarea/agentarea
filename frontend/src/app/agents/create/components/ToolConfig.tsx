@@ -23,9 +23,9 @@ type ToolConfigProps = {
 };
 
 const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpServers }: ToolConfigProps) => (
-  <Card className="p-8 shadow-xl border-0 bg-white/90 hover:shadow-2xl transition-shadow">
-    <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-      <Cpu className="h-5 w-5 text-blue-500" /> Tools (MCP Servers)
+  <Card className="">
+    <h2 className="mb-6 flex items-center gap-2">
+      <Cpu className="h-5 w-5 text-accent" /> Tools (MCP Servers)
     </h2>
     <div className="space-y-6">
       {toolFields.map((item, index) => (

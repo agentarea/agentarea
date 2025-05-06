@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, HelpCircle, Calendar, MessageSquare, Wand2 } from "lucide-react";
+import { Plus, Trash2, HelpCircle, Calendar, MessageSquare, Wand2, Zap } from "lucide-react";
 import { Controller, FieldErrors, UseFieldArrayReturn, Control } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -45,10 +45,24 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
     }
   }, []);
 
+  const searchUsers = async (query?: string) => {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  if (!query) return eventOptions;
+
+  return eventOptions.filter(item => 
+    item.label.toLowerCase().includes(query.toLowerCase()) ||
+    item.description.toLowerCase().includes(query.toLowerCase())
+  );
+};
+
   return (
-    <Card className="p-6 shadow-xl border-0 bg-white/90 hover:shadow-2xl transition-shadow">
+    <Card className="">
       <div className="flex items-center mb-4">
-        <h2 className="text-2xl font-bold">Agent Triggers</h2>
+        <h2 className="flex items-center gap-2">
+          <Zap className="h-5 w-5 text-accent" /> Agent Triggers
+        </h2>
         <TooltipProvider>
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
@@ -70,7 +84,7 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
       <div className="space-y-4">
         <div className="space-y-3">
           {eventFields.map((item, index) => (
-            <div key={item.id} className="flex items-center gap-2 p-3 border rounded-md bg-slate-50 shadow-sm hover:shadow-md transition-shadow">
+            <div key={item.id} className="flex items-center gap-2 p-3 border rounded-md bg-primary/10 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex-1">
                 <Controller
                   name={`events_config.events.${index}.event_type`}

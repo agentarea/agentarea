@@ -173,13 +173,15 @@ export default function MainLayout({
 }) {
   return (
     <>
-      <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden">
+      <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-zinc-100 dark:bg-zinc-800"
+      // style={{ backgroundImage: "url('/bg.png')", backgroundSize: "cover", backgroundPosition: "right" }}
+      >
         <SideBar
           menuContent={navContent}
           bottomMenuContent={bottomNavContent}
         />
         <Header menuContent={navContent} bottomMenuContent={bottomNavContent} />
-        <main className="flex-1 overflow-hidden bg-sidebar dark:bg-zinc-800 py-[10px] pr-[10px] max-md:px-[10px]">
+        <main className="flex-1 overflow-hidden py-[10px] pr-[10px] max-md:px-[10px] max-h-screen">
           <div className=" bg-white dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto">
             {children}
           </div>

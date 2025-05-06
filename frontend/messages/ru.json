@@ -15,9 +15,11 @@
     "mcp": "Серверы MCP",
     "mcpServers": "Серверы",
     "settings": "Настройки",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "admin": "Админ",
+    "connections": "Соединения"
   },
-  
+
   "LlmBrowsePage": {
     "title": "Модели LLM"
   },
@@ -44,5 +46,12 @@
       "title": "Подписка",
       "description": "Управление подпиской и счетами"
     } 
+  },
+
+  "AgentsPage": {
+    "create": {
+      "title": "Создать агента",
+      "back": "Вернуться к обзору агентов"
+    }
   }
 }

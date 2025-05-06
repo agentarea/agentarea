@@ -18,8 +18,7 @@ export default function SideBar({ menuContent, bottomMenuContent }: SideBarProps
             className="
                 h-screen w-[225px]
                 px-[18px] py-[20px] 
-                hidden flex-shrink-0 md:flex md:flex-col 
-                bg-zinc-100 dark:bg-zinc-800 
+                hidden flex-shrink-0 md:flex md:flex-col        
             "
         >
             <div className="w-full h-[30px] mb-[15px] mt-[15px]"><LogoIcon/></div>

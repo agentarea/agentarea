@@ -1,5 +1,7 @@
 import { listMCPServers, MCPServer } from "@/lib/api";
 import CreateAgentClient from "./CreateAgentClient";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 export default async function CreateAgentPage() {
   // Fetch MCP servers on the server
@@ -21,5 +23,20 @@ export default async function CreateAgentPage() {
     }
   );
 
-  return <CreateAgentClient mcpServers={mcpServers} />;
+  // return <CreateAgentClient mcpServers={[mcpServers]} />;
+
+  return (
+    <div className="content">
+      <div className="content-header">
+        <div className="flex flex-col gap-2">
+          <h1>Create Agent</h1>
+          <Link href="/agents/browse" className="flex items-center gap-2 text-xs text-zinc-400 hover:text-accent transition-colors duration-300">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Browse Agents
+          </Link>
+        </div>
+      </div>
+      <CreateAgentClient mcpServers={mcpServers} />
+    </div>
+  );
 }

@@ -22,9 +22,9 @@ type BasicInformationProps = {
 };
 
 const BasicInformation = ({ register, control, errors }: BasicInformationProps) => (
-  <Card className="p-8 shadow-xl border-0 bg-white/90 hover:shadow-2xl transition-shadow">
-    <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-      <Sparkles className="h-5 w-5 text-purple-500" /> Basic Information
+  <Card className="">
+    <h2 className="mb-6 flex items-center gap-2">
+      <Sparkles className="h-5 w-5 text-accent" /> Basic Information
     </h2>
     <div className="grid grid-cols-1 gap-6">
       <div>
@@ -33,18 +33,19 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
           id="name"
           {...register('name', { required: "Agent name is required" })}
           placeholder="Enter agent name"
-          className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors"
+          // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors"
           aria-invalid={!!getNestedErrorMessage(errors, 'name')}
         />
         {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
       </div>
       <div>
-        <Label htmlFor="description" className="text-base font-medium">Description / Goal <span className="text-sm text-slate-500">(Optional)</span></Label>
+        <Label htmlFor="description" className="text-base font-medium">Description / Goal <span className="text-sm text-zinc-400">(Optional)</span></Label>
         <Textarea
           id="description"
           {...register('description')}
           placeholder="Describe the agent's purpose, personality, and main goal..."
-          className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
+          className="resize-none"
+          // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
           aria-invalid={!!getNestedErrorMessage(errors, 'description')}
         />
         {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
@@ -55,7 +56,8 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
           id="instruction"
           {...register('instruction', { required: "Instruction is required" })}
           placeholder="Provide specific instructions for this agent..."
-          className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
+          className="resize-none"
+          // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
           aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
         />
         {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}

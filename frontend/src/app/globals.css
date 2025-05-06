@@ -97,11 +97,15 @@ body {
     @apply border-border ;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground max-h-screen overflow-y-hidden;
   }
 
   h1 {
     @apply font-montserrat font-bold text-xl md:text-2xl;
+  }
+
+  h2 {
+    @apply font-montserrat font-semibold text-lg md:text-xl;
   }
 
   .content {
