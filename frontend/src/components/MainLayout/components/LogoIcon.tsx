@@ -3,7 +3,7 @@ import Link from "next/link";
 const LogoIcon = () => {
   return (
     <Link href="/" className="relative text-[#2E3037] dark:text-white">
-        <AgentAreaLogo className="h-[27px] w-max "/>      
+        <AgentAreaLogo className="h-full w-max "/>      
     </Link>
     );
   };
