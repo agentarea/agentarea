@@ -21,6 +21,8 @@ class LLMModel(BaseModel):
     context_window = Column(String, nullable=False)
     status = Column(String, nullable=False, default="active")
     is_public = Column(JSON, nullable=False, default=False)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
 
     instances = relationship("LLMModelInstance", back_populates="model")
     

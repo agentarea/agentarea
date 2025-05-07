@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from agentarea.api.deps.services import get_agent_service
-from agentarea.modules.agents.application.service import AgentService
+from agentarea.modules.agents.application.agent_service import AgentService
 from agentarea.modules.agents.domain.models import Agent
 
 router = APIRouter(prefix="/agents", tags=["agents"])

@@ -1,22 +1,23 @@
 from typing import List, Optional
 from uuid import UUID
 
-from agentarea.common.base.service import BaseService
+from agentarea.common.base.service import BaseCrudService
 from agentarea.common.events.broker import EventBroker
+from ..infrastructure.llm_model_instance_repository import LLMModelInstanceRepository
 
 from ..domain.events import (
     LLMModelCreated,
     LLMModelDeleted,
-    LLMModelUpdated,
     LLMModelInstanceCreated,
     LLMModelInstanceDeleted,
-    LLMModelInstanceUpdated
+    LLMModelInstanceUpdated,
+    LLMModelUpdated,
 )
 from ..domain.models import LLMModel, LLMModelInstance
-from ..infrastructure.repository import LLMModelRepository, LLMModelInstanceRepository
+from ..infrastructure.llm_model_repository import LLMModelRepository
 
 
-class LLMModelService(BaseService[LLMModel]):
+class LLMModelService(BaseCrudService[LLMModel]):
     def __init__(self, repository: LLMModelRepository, event_broker: EventBroker):
         super().__init__(repository)
         self.event_broker = event_broker
@@ -29,7 +30,7 @@ class LLMModelService(BaseService[LLMModel]):
         model_type: str,
         endpoint_url: str,
         context_window: str,
-        is_public: bool = False
+        is_public: bool = False,
     ) -> LLMModel:
         model = LLMModel(
             name=name,
@@ -38,7 +39,7 @@ class LLMModelService(BaseService[LLMModel]):
             model_type=model_type,
             endpoint_url=endpoint_url,
             context_window=context_window,
-            is_public=is_public
+            is_public=is_public,
         )
         model = await self.create(model)
 
@@ -47,7 +48,7 @@ class LLMModelService(BaseService[LLMModel]):
                 model_id=model.id,
                 name=model.name,
                 provider=model.provider,
-                model_type=model.model_type
+                model_type=model.model_type,
             )
         )
 
@@ -63,7 +64,7 @@ class LLMModelService(BaseService[LLMModel]):
         endpoint_url: Optional[str] = None,
         context_window: Optional[str] = None,
         is_public: Optional[bool] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
     ) -> Optional[LLMModel]:
         model = await self.get(id)
         if not model:
@@ -93,7 +94,7 @@ class LLMModelService(BaseService[LLMModel]):
                 model_id=model.id,
                 name=model.name,
                 provider=model.provider,
-                model_type=model.model_type
+                model_type=model.model_type,
             )
         )
 
@@ -109,13 +110,17 @@ class LLMModelService(BaseService[LLMModel]):
         self,
         status: Optional[str] = None,
         is_public: Optional[bool] = None,
-        provider: Optional[str] = None
+        provider: Optional[str] = None,
     ) -> List[LLMModel]:
-        return await self.repository.list(status=status, is_public=is_public, provider=provider)
+        return await self.repository.list(
+            status=status, is_public=is_public, provider=provider
+        )
 
 
-class LLMModelInstanceService(BaseService[LLMModelInstance]):
-    def __init__(self, repository: LLMModelInstanceRepository, event_broker: EventBroker):
+class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
+    def __init__(
+        self, repository: LLMModelInstanceRepository, event_broker: EventBroker
+    ):
         super().__init__(repository)
         self.event_broker = event_broker
 
@@ -125,22 +130,20 @@ class LLMModelInstanceService(BaseService[LLMModelInstance]):
         api_key: str,
         name: str,
         description: str,
-        is_public: bool = False
+        is_public: bool = False,
     ) -> LLMModelInstance:
         instance = LLMModelInstance(
             model_id=model_id,
             api_key=api_key,
             name=name,
             description=description,
-            is_public=is_public
+            is_public=is_public,
         )
         instance = await self.create(instance)
 
         await self.event_broker.publish(
             LLMModelInstanceCreated(
-                instance_id=instance.id,
-                model_id=instance.model_id,
-                name=instance.name
+                instance_id=instance.id, model_id=instance.model_id, name=instance.name
             )
         )
 
@@ -153,7 +156,7 @@ class LLMModelInstanceService(BaseService[LLMModelInstance]):
         description: Optional[str] = None,
         api_key: Optional[str] = None,
         is_public: Optional[bool] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
     ) -> Optional[LLMModelInstance]:
         instance = await self.get(id)
         if not instance:
@@ -174,9 +177,7 @@ class LLMModelInstanceService(BaseService[LLMModelInstance]):
 
         await self.event_broker.publish(
             LLMModelInstanceUpdated(
-                instance_id=instance.id,
-                model_id=instance.model_id,
-                name=instance.name
+                instance_id=instance.id, model_id=instance.model_id, name=instance.name
             )
         )
 
@@ -192,10 +193,8 @@ class LLMModelInstanceService(BaseService[LLMModelInstance]):
         self,
         model_id: Optional[UUID] = None,
         status: Optional[str] = None,
-        is_public: Optional[bool] = None
+        is_public: Optional[bool] = None,
     ) -> List[LLMModelInstance]:
         return await self.repository.list(
-            model_id=model_id,
-            status=status,
-            is_public=is_public
-        ) 
+            model_id=model_id, status=status, is_public=is_public
+        )

@@ -1,5 +1,7 @@
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddMCPServerForm } from "./add-mcp-server-form";
+import { AddExternalMCPServerForm } from "./add-external-mcp-server-form";
 
 export default function AddMCPServerPage() {
   return (
@@ -8,10 +10,21 @@ export default function AddMCPServerPage() {
         <CardHeader>
           <CardTitle>Add MCP Server</CardTitle>
           <CardDescription>
-            Connect a Docker-based MCP server to your workspace
+            Connect an MCP server to your workspace
           </CardDescription>
         </CardHeader>
-        <AddMCPServerForm />
+        <Tabs defaultValue="docker" className="px-6">
+          <TabsList className="grid grid-cols-2 mb-6">
+            <TabsTrigger value="docker">Docker-based</TabsTrigger>
+            <TabsTrigger value="external">External</TabsTrigger>
+          </TabsList>
+          <TabsContent value="docker">
+            <AddMCPServerForm />
+          </TabsContent>
+          <TabsContent value="external">
+            <AddExternalMCPServerForm />
+          </TabsContent>
+        </Tabs>
       </Card>
     </div>
   );

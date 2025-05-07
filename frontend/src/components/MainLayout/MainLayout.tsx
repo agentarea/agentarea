@@ -91,6 +91,12 @@ export const navContent: NavSection[] = [
         href: "/admin/llms",
         icon: <Cpu className="h-5 w-5" />,
       },
+      // {
+      //   label: "LLM Providers",
+      //   labelKey: "llmProviders",
+      //   href: "/llm-providers",
+      //   icon: <Brain className="h-5 w-5" />,
+      // },
     ],
   },
   // Commented out sections
