@@ -6,7 +6,7 @@ from ..base.repository import BaseRepository
 T = TypeVar("T")
 
 
-class BaseService(Generic[T]):
+class BaseCrudService(Generic[T]):
     def __init__(self, repository: BaseRepository[T]):
         self.repository = repository
 

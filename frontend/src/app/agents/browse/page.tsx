@@ -26,8 +26,7 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
 
   // Filter by search query
   const filteredAgents = agents.filter(agent =>
-    agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    agent.capabilities.some(cap => cap.toLowerCase().includes(searchQuery.toLowerCase()))
+    agent.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (

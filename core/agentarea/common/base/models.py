@@ -11,8 +11,8 @@ class BaseModel(DeclarativeBase):
     """Base model for all database models"""
     
     id = Column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
     
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.id}>"

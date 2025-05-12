@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -17,7 +18,7 @@ class LLMModelCreate(BaseModel):
     description: str
     provider: str
     model_type: str
-    endpoint_url: HttpUrl
+    endpoint_url: str
     context_window: str
     is_public: bool = False
 
@@ -27,7 +28,7 @@ class LLMModelUpdate(BaseModel):
     description: str | None = None
     provider: str | None = None
     model_type: str | None = None
-    endpoint_url: HttpUrl | None = None
+    endpoint_url: str | None = None
     context_window: str | None = None
     is_public: bool | None = None
     status: str | None = None
@@ -39,11 +40,11 @@ class LLMModelResponse(BaseModel):
     description: str
     provider: str
     model_type: str
-    endpoint_url: HttpUrl
+    endpoint_url: str
     context_window: str
     status: str
     is_public: bool
-    updated_at: str
+    updated_at: datetime
 
     @classmethod
     def from_domain(cls, model: LLMModel) -> "LLMModelResponse":

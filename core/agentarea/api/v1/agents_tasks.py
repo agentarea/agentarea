@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from agentarea.api.deps.services import get_agent_service, get_task_service
-from agentarea.modules.agents.application.service import AgentService
-from agentarea.modules.tasks.application.service import TaskService
+from agentarea.modules.agents.application.agent_service import AgentService
+from agentarea.modules.tasks.application.task_service import TaskService
 from agentarea.modules.tasks.domain.models import Task
 
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
@@ -48,14 +48,12 @@ async def create_task_for_agent(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     # Create task for the agent
     task = await task_service.create_task(
-        agent_id=agent_id,
-        description=data.description,
-        parameters=data.parameters
+        agent_id=agent_id, description=data.description, parameters=data.parameters
     )
-    
+
     return TaskResponse.from_domain(task)
 
 
@@ -69,7 +67,7 @@ async def list_agent_tasks(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     # Get all tasks for the agent
     tasks = await task_service.list_by_agent(agent_id)
     return [TaskResponse.from_domain(task) for task in tasks]
@@ -86,10 +84,10 @@ async def get_agent_task(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     # Get the specific task
     task = await task_service.get(task_id)
     if not task or task.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Task not found for this agent")
-    
+
     return TaskResponse.from_domain(task)

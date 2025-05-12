@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { listLLMModels } from "@/lib/api";
+import { listLLMModels, listLLMModelInstances } from "@/lib/api";
 import { LayoutDashboardIcon, SearchIcon, TablePropertiesIcon } from "lucide-react";
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
@@ -29,6 +29,7 @@ export default async function AddLLMModelPage({
     }
 
     const llmModels = (await listLLMModels()).data || [];
+    const llmModelInstances = (await listLLMModelInstances()).data || [];
 
     return (
         <div className="content">
