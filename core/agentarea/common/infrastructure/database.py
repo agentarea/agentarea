@@ -1,11 +1,10 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
+from typing import Optional
 
-from pydantic_settings import BaseSettings
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from agentarea.config import get_db_settings, DatabaseSettings
+from agentarea.config import DatabaseSettings, get_db_settings
 
 
 class Database:
@@ -13,7 +12,7 @@ class Database:
 
     _instance: Optional["Database"] = None
 
-    def __new__(cls, settings: Optional[DatabaseSettings] = None) -> "Database":
+    def __new__(cls, settings: DatabaseSettings | None = None) -> "Database":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.settings = settings or get_db_settings()

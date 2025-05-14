@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, HttpUrl
 
 from agentarea.modules.mcp.application.service import MCPServerInstanceService
-from agentarea.modules.mcp.domain.models import MCPServerInstance
+from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea.api.deps.services import get_mcp_server_instance_service
 
 router = APIRouter(prefix="/mcp-server-instances", tags=["mcp-server-instances"])

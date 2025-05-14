@@ -7,7 +7,7 @@ from agentarea.config import get_settings
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="AgentMesh",
+        title="AgentArea",
         description="Agent management and orchestration platform",
         version="1.0.0",
     )

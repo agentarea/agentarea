@@ -12,7 +12,7 @@ env:
 
 defaults:
   run:
-    working-directory: ./catalogue/
+    working-directory: ./core/
 
 jobs:
   build:

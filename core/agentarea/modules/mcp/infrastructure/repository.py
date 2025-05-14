@@ -5,8 +5,9 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea.common.base.repository import BaseRepository
+from ..domain.mpc_server_instance_model import MCPServerInstance
 
-from ..domain.models import MCPServer, MCPServerInstance
+from ..domain.models import MCPServer
 
 
 class MCPServerRepository(BaseRepository[MCPServer]):

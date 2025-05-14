@@ -1,24 +1,25 @@
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Column, DateTime, String
+from sqlalchemy import JSON, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.orm import Mapped, mapped_column
 
-from ....common.base.models import BaseModel
+from agentarea.common.base.models import BaseModel
 
 
 class Agent(BaseModel):
     __tablename__ = "agents"
 
-    id = Column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
-    name = Column(String, nullable=False)
-    status = Column(String, nullable=False, default="active")
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-    description = Column(String, nullable=True)
-    model_id = Column(String, nullable=True)
-    tools_config = Column(JSON, nullable=True)
-    events_config = Column(JSON, nullable=True)
-    planning = Column(String, nullable=True)
+    description: Mapped[str] = mapped_column(String, nullable=True)
+    model_id: Mapped[str] = mapped_column(String, nullable=True)
+    tools_config: Mapped[dict] = mapped_column(JSON, nullable=True)
+    events_config: Mapped[dict] = mapped_column(JSON, nullable=True)
+    planning: Mapped[str] = mapped_column(String, nullable=True)

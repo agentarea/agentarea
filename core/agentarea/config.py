@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Annotated, Optional
+from typing import Optional
 
 from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine
@@ -22,7 +22,7 @@ class DatabaseSettings(BaseSettings):
     @property
     def url(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-    
+
     @property
     def sync_url(self) -> str:
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -51,10 +51,21 @@ class AppSettings(BaseSettings):
         env_file = ".env"
 
 
+class SecretManagerSettings(BaseSettings):
+    SECRET_MANAGER_TYPE: str = "local"
+    SECRET_MANAGER_ENDPOINT: str | None = None
+    SECRET_MANAGER_ACCESS_KEY: str | None = None
+    SECRET_MANAGER_SECRET_KEY: str | None = None
+
+    class Config:
+        env_file = ".env"
+
+
 class Settings(BaseSettings):
     database: DatabaseSettings
     aws: AWSSettings
     app: AppSettings
+    secret_manager: SecretManagerSettings
 
     class Config:
         env_file = ".env"
@@ -65,30 +76,37 @@ def get_settings() -> Settings:
     return Settings(
         database=DatabaseSettings(),
         aws=AWSSettings(),
-        app=AppSettings()
+        app=AppSettings(),
+        secret_manager=SecretManagerSettings(),
     )
 
 
 @lru_cache
 def get_db_settings() -> DatabaseSettings:
-    return DatabaseSettings()
+    return get_settings().database
 
 
 @lru_cache
 def get_aws_settings() -> AWSSettings:
-    return AWSSettings()
+    return get_settings().aws
 
 
 @lru_cache
 def get_app_settings() -> AppSettings:
-    return AppSettings()
+    return get_settings().app
+
+
+@lru_cache
+def get_secret_manager_settings() -> SecretManagerSettings:
+    return get_settings().secret_manager
 
 
 class Database:
-    """Database connection manager"""
-    _instance: Optional['Database'] = None
+    """Database connection manager."""
 
-    def __new__(cls, settings: Optional[DatabaseSettings] = None) -> 'Database':
+    _instance: Optional["Database"] = None
+
+    def __new__(cls, settings: DatabaseSettings | None = None) -> "Database":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.settings = settings or get_db_settings()
@@ -126,7 +144,7 @@ class Database:
             raise
         finally:
             await session.close()
-            
+
     @contextmanager
     def get_sync_db(self) -> Generator[Session, None, None]:
         """Get a synchronous database session - used for migrations"""

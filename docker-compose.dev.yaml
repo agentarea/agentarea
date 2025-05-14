@@ -1,6 +1,7 @@
 version: "3.8"
 services:
   app:
+    container_name: agentarea-backend
     build:
       context: core
     ports:
@@ -25,6 +26,7 @@ services:
     volumes:
       - ./core/agentarea:/app/agentarea
       - ./core/alembic:/app/alembic
+      - ${INFISICAL_TOKEN_VOLUME}:/app/bootstrap
     depends_on:
       db:
         condition: service_healthy
@@ -34,12 +36,36 @@ services:
         condition: service_completed_successfully
       createbuckets:
         condition: service_completed_successfully
+      agentarea-bootstrap:
+        condition: service_completed_successfully
     command: ["python", "-m", "cli", "serve", "--reload", "--log-level=${LOG_LEVEL:-info}", "--workers=${WORKERS:-1}"]
+
+  agentarea-bootstrap:
+    image: busybox:latest
+    restart: on-failure
+    build:
+      context: core
+    environment:
+      - INFISICAL_URL=http://infisical:8080
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-your-secure-password}
+      - ORGANIZATION_NAME=${ORGANIZATION_NAME:-your-org-name}
+    volumes:
+      - ${INFISICAL_TOKEN_VOLUME}:/app/bootstrap
+      - ./scripts/bootstrap.sh:/app/bootstrap.sh
+    command: ["sh", "-c", "/app/bootstrap.sh"]
 
   app_migrations:
     build:
       context: core
     environment:
+    ## Have to add it for now
+          # S3 settings
+      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
+      - AWS_REGION=${MINIO_REGION}
+      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
+      - AWS_ENDPOINT_URL=http://minio:9000
       # Only database settings
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -106,26 +132,40 @@ services:
       timeout: 5s
       retries: 5
 
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   command: serve
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/health"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [gpu]
+  infisical:
+    container_name: infisical-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    image: infisical/infisical:latest-postgres
+    pull_policy: always
+    env_file: .env
+    ports:
+      - 3333:8080
+    environment:
+      - NODE_ENV=production
+
+  redis:
+    image: redis
+    container_name: infisical-dev-redis
+    env_file: .env
+    restart: always
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - 6379:6379
+    volumes:
+      - redis_data:/data
 
 volumes:
   postgres_data:
   minio_data: 
+  redis_data:
+  infisical_bootstrap:
+
+networks:
+  infisical:
+    driver: bridge
