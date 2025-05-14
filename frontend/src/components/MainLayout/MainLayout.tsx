@@ -9,6 +9,7 @@ import {
   Plug,
   ClipboardList,
 } from "lucide-react";
+import { LucideProps } from "lucide-react";
 import Header from "./components/Header";
 import SideBarWrapper from "./components/SideBarWrapper";
 
@@ -16,12 +17,12 @@ export type NavSection = {
   id: string;
   section?: string;
   labelKey?: string;
-  icon?: React.ReactElement;
+  icon?: React.ReactElement<LucideProps>;
   items: {
     label: string;
     labelKey?: string;
     href: string;
-    icon?: React.ReactElement;
+    icon?: React.ReactElement<LucideProps>;
   }[];
 };
 
@@ -41,31 +42,31 @@ export const navContent: NavSection[] = [
         label: "Workplace",
         labelKey: "workplace",
         href: "/workplace",
-        icon: <Home className="h-5 w-5" />,
+        icon: <Home />,
       },
       {
         label: "Browse",
         labelKey: "browse",
         href: "/agents/browse",
-        icon: <Bot className="h-5 w-5" />,
+        icon: <Bot />,
       },
       {
         label: "Workflows",
         labelKey: "workflows",
         href: "/agents/workflows",
-        icon: <ClipboardList className="h-5 w-5" />,
+        icon: <ClipboardList />,
       },
       {
         label: "Connections",
         labelKey: "connections",
         href: "/mcp-servers",
-        icon: <Plug className="h-5 w-5" />,
+        icon: <Plug />,
       },
       {
         label: "LLM Models",
         labelKey: "llms",
         href: "/admin/llms",
-        icon: <Cpu className="h-5 w-5" />,
+        icon: <Cpu />,
       }
     ],
   },
@@ -79,7 +80,7 @@ export const navContent: NavSection[] = [
 //         label: "Workplace",
 //         labelKey: "workplace",
 //         href: "/workplace",
-//         icon: <Home className="h-5 w-5" />,
+//         icon: <Home />,
 //       },
 //     ],
 //   },
@@ -87,19 +88,19 @@ export const navContent: NavSection[] = [
 //     id: "agents",
 //     labelKey: "agents",
 //     section: "Agents",
-//     icon: <Bot className="h-5 w-5" />,
+//     icon: <Bot />,
 //     items: [
 //       {
 //         label: "Browse",
 //         labelKey: "browse",
 //         href: "/agents/browse",
-//         icon: <Bot className="h-5 w-5" />,
+//         icon: <Bot />,
 //       },
 //       {
 //         label: "Workflows",
 //         labelKey: "workflows",
 //         href: "/agents/workflows",
-//         icon: <ClipboardList className="h-5 w-5" />,
+//         icon: <ClipboardList />,
 //       },
 //     ],
 //   },
@@ -107,13 +108,13 @@ export const navContent: NavSection[] = [
 //     id: "mcp",
 //     labelKey: "mcp",
 //     section: "MCP Servers",
-//     icon: <Server className="h-5 w-5" />,
+//     icon: <Server />,
 //     items: [
 //       {
 //         label: "Connections",
 //         labelKey: "connections",
 //         href: "/mcp-servers",
-//         icon: <Plug className="h-5 w-5" />,
+//         icon: <Plug />,
 //       },
 //     ],
 //   },
@@ -121,13 +122,13 @@ export const navContent: NavSection[] = [
 //     id: "admin",
 //     labelKey: "admin",
 //     section: "Admin",
-//     icon: <Settings className="h-5 w-5" />,
+//     icon: <Settings />,
 //     items: [
 //       {
 //         label: "LLM Models",
 //         labelKey: "llms",
 //         href: "/admin/llms",
-//         icon: <Cpu className="h-5 w-5" />,
+//         icon: <Cpu />,
 //       },
 //     ],
 //   },
@@ -136,51 +137,51 @@ export const navContent: NavSection[] = [
 //   {
 //     id: "scopes",
 //     section: "Scopes",
-//     icon: <Building2 className="h-5 w-5" />,
+//     icon: <Building2 />,
 //     items: [
 //       {
 //         label: "All Scopes",
 //         href: "/scopes",
-//         icon: <Building2 className="h-5 w-5" />,
+//         icon: <Building2 />,
 //       },
 //       {
 //         label: "Projects",
 //         href: "/scopes?type=project",
-//         icon: <Globe className="h-5 w-5" />,
+//         icon: <Globe />,
 //       },
 //       {
 //         label: "Teams",
 //         href: "/scopes?type=team",
-//         icon: <Users className="h-5 w-5" />,
+//         icon: <Users />,
 //       },
 //       {
 //         label: "Departments",
 //         href: "/scopes?type=department",
-//         icon: <Building2 className="h-5 w-5" />,
+//         icon: <Building2 />,
 //       },
 //     ],
 //   },
 //   {
 //     id: "sources",
 //     section: "Sources",
-//     icon: <Database className="h-5 w-5" />,
+//     icon: <Database />,
 //     items: [
 //       {
 //         label: "Browse",
 //         href: "/sources/browse",
-//         icon: <Database className="h-5 w-5" />,
+//         icon: <Database />,
 //       },
 //     ],
 //   },
 //   {
 //     id: "catalog",
 //     section: "Catalog",
-//     icon: <ShoppingBag className="h-5 w-5" />,
+//     icon: <ShoppingBag />,
 //     items: [
 //       {
 //         label: "Browse",
 //         href: "/marketplace/browse",
-//         icon: <ShoppingBag className="h-5 w-5" />,
+//         icon: <ShoppingBag />,
 //       },
 //     ],
 //   },
@@ -194,7 +195,7 @@ const bottomNavContent: BottomNavContent = {
       label: "Settings",
       labelKey: "settings",
       href: "/settings",
-      icon: <Settings className="h-5 w-5" />,
+      icon: <Settings />,
     },
   ],
   user: {
