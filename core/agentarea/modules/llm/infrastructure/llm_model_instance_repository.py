@@ -1,17 +1,17 @@
-from typing import List, Optional
 from uuid import UUID
+
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea.common.base.repository import BaseRepository
 from agentarea.modules.llm.domain.models import LLMModelInstance
-from sqlalchemy import and_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class LLMModelInstanceRepository(BaseRepository[LLMModelInstance]):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get(self, id: UUID) -> Optional[LLMModelInstance]:
+    async def get(self, id: UUID) -> LLMModelInstance | None:
         async with self.session.begin():
             result = await self.session.execute(
                 select(LLMModelInstance).where(LLMModelInstance.id == id)
@@ -20,10 +20,10 @@ class LLMModelInstanceRepository(BaseRepository[LLMModelInstance]):
 
     async def list(
         self,
-        model_id: Optional[UUID] = None,
-        status: Optional[str] = None,
-        is_public: Optional[bool] = None
-    ) -> List[LLMModelInstance]:
+        model_id: UUID | None = None,
+        status: str | None = None,
+        is_public: bool | None = None
+    ) -> list[LLMModelInstance]:
         async with self.session.begin():
             query = select(LLMModelInstance)
 

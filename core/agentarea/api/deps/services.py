@@ -5,19 +5,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea.common.events.broker import EventBroker, get_event_broker
 from agentarea.common.infrastructure.database import get_db_session
+from agentarea.common.infrastructure.secret_manager import BaseSecretManager
+from agentarea.config import SecretManagerSettings, get_settings
 from agentarea.modules.agents.application.agent_service import AgentService
 from agentarea.modules.agents.infrastructure.repository import AgentRepository
-from agentarea.modules.llm.application.service import LLMModelInstanceService, LLMModelService
-from agentarea.modules.llm.infrastructure.llm_model_instance_repository import LLMModelInstanceRepository
-from agentarea.modules.llm.infrastructure.yaml_repository import YAMLLLMModelRepository
-from agentarea.modules.llm.infrastructure.llm_model_repository import (
-    LLMModelRepository,
+from agentarea.modules.llm.application.llm_model_service import LLMModelService
+from agentarea.modules.llm.application.service import (
+    LLMModelInstanceService,
 )
-from agentarea.modules.mcp.application.service import MCPServerInstanceService, MCPServerService
+from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
+    LLMModelInstanceRepository,
+)
+from agentarea.modules.llm.infrastructure.yaml_repository import YAMLLLMModelRepository
+from agentarea.modules.mcp.application.service import (
+    MCPServerInstanceService,
+    MCPServerService,
+)
 from agentarea.modules.mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea.modules.secrets import InfisicalSecretManager
 
 
 async def get_agent_service(
@@ -42,15 +50,17 @@ async def get_mcp_server_instance_service(
 ) -> MCPServerInstanceService:
     mcp_server_repository = MCPServerRepository(session)
     return MCPServerInstanceService(
-        MCPServerInstanceRepository(session), 
-        event_broker,
-        mcp_server_repository
+        MCPServerInstanceRepository(session), event_broker, mcp_server_repository
     )
 
+async def get_secret_manager(
+    secret_manager_settings: SecretManagerSettings = Depends(get_settings),
+) -> BaseSecretManager:
+    return InfisicalSecretManager(secret_manager_settings)
 
 async def get_llm_model_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)]
+    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
 ) -> LLMModelService:
     repository = YAMLLLMModelRepository(session)
     return LLMModelService(repository, event_broker)
@@ -58,7 +68,8 @@ async def get_llm_model_service(
 
 async def get_llm_model_instance_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)]
+    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
+    secret_manager: Annotated[BaseSecretManager, Depends(get_secret_manager)],
 ) -> LLMModelInstanceService:
     repository = LLMModelInstanceRepository(session)
-    return LLMModelInstanceService(repository, event_broker)
+    return LLMModelInstanceService(repository, event_broker, secret_manager)

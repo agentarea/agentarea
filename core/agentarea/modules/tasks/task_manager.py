@@ -10,7 +10,6 @@ from agentarea.common.utils.types import (
     GetTaskPushNotificationResponse,
     GetTaskRequest,
     GetTaskResponse,
-    JSONRPCError,
     JSONRPCResponse,
     SendTaskRequest,
     SendTaskResponse,

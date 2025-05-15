@@ -14,7 +14,8 @@ from ..domain.events import (
     MCPServerInstanceUpdated,
     MCPServerUpdated,
 )
-from ..domain.models import MCPServer, MCPServerInstance
+from ..domain.models import MCPServer
+from ..domain.mpc_server_instance_model import MCPServerInstance
 from ..infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
 
 

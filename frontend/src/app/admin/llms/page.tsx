@@ -1,9 +1,11 @@
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { listLLMModels, listLLMModelInstances } from "@/lib/api";
-import { LayoutDashboardIcon, SearchIcon, TablePropertiesIcon } from "lucide-react";
+import { listLLMModelInstances } from "@/lib/api";
+import { LayoutDashboardIcon, SearchIcon, TablePropertiesIcon, PlusCircleIcon } from "lucide-react";
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 import GridView from "./_components/GridView";
 import TableView from "./_components/TableView";
@@ -28,7 +30,7 @@ export default async function AddLLMModelPage({
         redirect('/admin/llms?tab=grid');
     }
 
-    const llmModels = (await listLLMModels()).data || [];
+    // const llmModels = (await listLLMModels()).data || [];
     const llmModelInstances = (await listLLMModelInstances()).data || [];
 
     return (
@@ -45,7 +47,7 @@ export default async function AddLLMModelPage({
                 defaultValue="grid"
             >
                 <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
-                   <div className="flex flex-row items-center gap-[5px] flex-1">
+                   <div className="flex flex-row items-center gap-[10px] flex-1">
                         <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
                             <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
                                 <SearchIcon className="h-4 w-4" />
@@ -55,6 +57,14 @@ export default async function AddLLMModelPage({
                                 className="pl-9 w-full" 
                             />
                         </div>
+                        <Link href="/admin/llms/create" passHref legacyBehavior>
+                            <Button asChild variant="outline">
+                                <span>
+                                    <PlusCircleIcon className="mr-2 h-4 w-4" />
+                                    {t('addNewLlm')}
+                                </span>
+                            </Button>
+                        </Link>
                     </div>
 
                     <div>
@@ -72,10 +82,10 @@ export default async function AddLLMModelPage({
                 </div>
 
                 <TabsContent value="grid">
-                    <GridView list={llmModels} />
+                    <GridView instances={llmModelInstances} />
                 </TabsContent>
                 <TabsContent value="table">
-                    <TableView list={llmModels}/>
+                    <TableView instances={llmModelInstances} />
                 </TabsContent>
             </Tabs>
         </div>

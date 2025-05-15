@@ -17,4 +17,6 @@ dependencies = [
     "mcp[cli]",
     "litellm==1.63",
     "dotenv>=0.9.9",
+    "agentops>=0.4.9",
+    "langfuse>=2.60.3",
 ]
