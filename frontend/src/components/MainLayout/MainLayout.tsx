@@ -17,6 +17,7 @@ export type NavSection = {
   id: string;
   section?: string;
   labelKey?: string;
+  isCollapsed?: boolean;
   icon?: React.ReactElement<LucideProps>;
   items: {
     label: string;
@@ -62,12 +63,21 @@ export const navContent: NavSection[] = [
         href: "/mcp-servers",
         icon: <Plug />,
       },
+    ],
+  },
+  {
+    id: "admin",
+    labelKey: "admin",
+    section: "Admin",
+    icon: <Settings />,
+    isCollapsed: true,
+    items: [
       {
         label: "LLM Models",
         labelKey: "llms",
         href: "/admin/llms",
         icon: <Cpu />,
-      }
+      },
     ],
   },
 ];

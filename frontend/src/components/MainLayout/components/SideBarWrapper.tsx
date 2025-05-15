@@ -11,12 +11,15 @@ export default async function SideBarWrapper({ menuContent, bottomMenuContent }:
     const cookieStore = await cookies();
     const sidebarCollapsed = cookieStore.get('sidebarCollapsed');
     const initialCollapsed = sidebarCollapsed?.value === 'true';
+    const expandedSections = cookieStore.get('expandedSections');
+    const initialExpanded = expandedSections ? JSON.parse(expandedSections.value) : [];
 
     return (
         <SideBar 
             menuContent={menuContent}
             bottomMenuContent={bottomMenuContent}
             initialCollapsed={initialCollapsed}
+            initialExpanded={initialExpanded}
         />
     );
 } 

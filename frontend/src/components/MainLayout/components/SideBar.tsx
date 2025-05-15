@@ -10,21 +10,41 @@ import { useState } from 'react';
 import { setCookie } from '@/utils/cookies';
 import SidebarToggle from './SidebarToggle';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect } from 'react';
 
 type SideBarProps = {
     menuContent: NavSection[];
     bottomMenuContent: BottomNavContent;
     initialCollapsed?: boolean;
+    initialExpanded?: string[];
 }
 
-export default function SideBar({ menuContent, bottomMenuContent, initialCollapsed = false }: SideBarProps) {
+export default function SideBar({ menuContent, bottomMenuContent, initialCollapsed = false, initialExpanded = [] }: SideBarProps) {
     const t = useTranslations('Sidebar');
     const [isCollapsed, setIsCollapsed] = useState(initialCollapsed);
+    const [expandedItems, setExpandedItems] = useState<string[]>(initialExpanded ?? []);
+    const [isFirstRender, setIsFirstRender] = useState(true);
+
+    useEffect(() => {
+        setIsFirstRender(false);
+    }, []);
 
     const handleToggle = () => {
         const newState = !isCollapsed;
         setIsCollapsed(newState);
         setCookie('sidebarCollapsed', newState.toString());
+    };
+
+    const handleExpandSection = (sectionName: string) => {
+        let newExpandedItems;
+        if (expandedItems.includes(sectionName)) {
+            newExpandedItems = expandedItems.filter(item => item !== sectionName);
+        } else {
+            newExpandedItems = [...expandedItems, sectionName];
+        }
+        setExpandedItems(newExpandedItems);
+        setCookie('expandedSections', JSON.stringify(newExpandedItems));
     };
 
     return (
@@ -52,22 +72,69 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
                         <div key={`section-${index}`} className="flex flex-col gap-[2px] pt-[14px]">
                             {
                                 sectionContent.section && !isCollapsed && (
-                                    <SectionTitle key={`section-title-${index}`}>
+                                    <SectionTitle 
+                                        expanded={expandedItems.includes(sectionContent.section ?? '')}
+                                        key={`section-title-${index}`} 
+                                        isCollapsed={sectionContent.isCollapsed} 
+                                        onClick={() => {
+                                            const sectionName = sectionContent.section;
+                                            if (sectionName) {
+                                                handleExpandSection(sectionName);
+                                            }
+                                        }}
+                                    >
                                         {sectionContent.labelKey ? t(sectionContent.labelKey) : sectionContent.section}
                                     </SectionTitle>
                                 )
                             }
                             {
-                                sectionContent.items.map((item, index) => (
-                                    <NavLink 
-                                        key={`menu-item-${index}`} 
-                                        link={item.href} 
-                                        text={item.labelKey ? t(item.labelKey) : item.label}
-                                        icon={item.icon} 
-                                        isCollapsed={isCollapsed}
-                                    />
-                                ))
+                                sectionContent.isCollapsed ? (
+                                    <AnimatePresence>
+                                        { expandedItems.includes(sectionContent.section ?? '') && (
+                                            <motion.div
+                                                initial={isFirstRender ? false : { opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: "auto" }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                transition={{ duration: 0.3 }}
+                                                className="overflow-hidden flex flex-col gap-[2px]"
+                                            >
+                                                {
+                                                    sectionContent.items.map((item, itemIndex) => (
+                                                        <NavLink 
+                                                            key={`menu-item-${sectionContent.id}-${itemIndex}`} 
+                                                            link={item.href} 
+                                                            text={item.labelKey ? t(item.labelKey) : item.label}
+                                                            icon={item.icon} 
+                                                            isCollapsed={isCollapsed}
+                                                        />
+                                                    ))
+                                                }
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                )
+                                : (
+                                    sectionContent.items.map((item, itemIndex) => (
+                                        <NavLink 
+                                            key={`menu-item-${sectionContent.id}-${itemIndex}`} 
+                                            link={item.href} 
+                                            text={item.labelKey ? t(item.labelKey) : item.label}
+                                            icon={item.icon} 
+                                            isCollapsed={isCollapsed}
+                                        />
+                                    ))
+                                )
                             }
+                            <div 
+                                className={cn(
+                                    "overflow-hidden transition-all duration-500 ease-in-out",
+                                    (!sectionContent.isCollapsed || expandedItems.includes(sectionContent.section ?? '')) 
+                                        ? "max-h-screen"
+                                        : "max-h-0"
+                                )}
+                            >
+                                
+                            </div>
                         </div>
                     ))}
                 </div>
