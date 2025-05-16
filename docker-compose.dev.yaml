@@ -51,7 +51,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-your-secure-password}
       - ORGANIZATION_NAME=${ORGANIZATION_NAME:-your-org-name}
     volumes:
-      - ${INFISICAL_TOKEN_VOLUME}:/app/bootstrap
+      - ${INFISICAL_TOKEN_VOLUME}:/app/data
       - ./scripts/bootstrap.sh:/app/bootstrap.sh
     command: ["sh", "-c", "/app/bootstrap.sh"]
 
@@ -131,12 +131,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  infisical_db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data_infisical:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   infisical:
     container_name: infisical-backend
     restart: unless-stopped
     depends_on:
-      db:
+      infisical_db:
         condition: service_healthy
       redis:
         condition: service_started
@@ -147,7 +160,7 @@ services:
       - 3333:8080
     environment:
       - NODE_ENV=production
-
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@infisical_db:5432/${POSTGRES_DB}
   redis:
     image: redis
     container_name: infisical-dev-redis
@@ -162,6 +175,7 @@ services:
 
 volumes:
   postgres_data:
+  postgres_data_infisical:
   minio_data: 
   redis_data:
   infisical_bootstrap:
