@@ -33,11 +33,11 @@ export default {
   				DEFAULT: 'hsl(var(--muted))',
   				foreground: 'hsl(var(--muted-foreground))'
   			},
-			accent: {
-				DEFAULT: 'hsl(var(--accent))',
-				foreground: 'hsl(var(--accent-foreground))',
-				hover: 'hsl(var(--accent-hover))'
-			},
+  			accent: {
+  				DEFAULT: 'hsl(var(--accent))',
+  				foreground: 'hsl(var(--accent-foreground))',
+  				hover: 'hsl(var(--accent-hover))'
+  			},
   			destructive: {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
@@ -52,11 +52,13 @@ export default {
   				'3': 'hsl(var(--chart-3))',
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
-  			},
+  			}
   		},
-		fontFamily: {
-			montserrat: ['var(--font-montserrat)'],
-		},
+  		fontFamily: {
+  			montserrat: [
+  				'var(--font-montserrat)'
+  			]
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
@@ -84,9 +86,9 @@ export default {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
-		boxShadow: {
-			card: '0 2px 10px rgba(0,0,0,0.04)'
-		}
+  		boxShadow: {
+  			card: '0 2px 10px rgba(0,0,0,0.04)'
+  		}
   	}
   },
   plugins: [require("tailwindcss-animate")],

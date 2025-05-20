@@ -23,12 +23,12 @@ type BasicInformationProps = {
 
 const BasicInformation = ({ register, control, errors }: BasicInformationProps) => (
   <Card className="">
-    <h2 className="mb-6 flex items-center gap-2">
+    {/* <h2 className="mb-6 flex items-center gap-2">
       <Sparkles className="h-5 w-5 text-accent" /> Basic Information
-    </h2>
+    </h2> */}
     <div className="grid grid-cols-1 gap-6">
-      <div>
-        <Label htmlFor="name" className="text-base font-medium">Agent Name</Label>
+      <div className="space-y-1">
+        <Label htmlFor="name" className="text-sm font-medium">Agent Name</Label>
         <Input
           id="name"
           {...register('name', { required: "Agent name is required" })}
@@ -38,32 +38,32 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
         />
         {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
       </div>
-      <div>
-        <Label htmlFor="description" className="text-base font-medium">Description / Goal <span className="text-sm text-zinc-400">(Optional)</span></Label>
+      <div className="space-y-1">
+        <Label htmlFor="description" className="text-sm font-medium">Description / Goal <span className="text-sm text-zinc-400">(Optional)</span></Label>
         <Textarea
           id="description"
           {...register('description')}
           placeholder="Describe the agent's purpose, personality, and main goal..."
-          className="resize-none"
+          className="resize-none h-[100px]"
           // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
           aria-invalid={!!getNestedErrorMessage(errors, 'description')}
         />
         {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
       </div>
-      <div>
-        <Label htmlFor="instruction" className="text-base font-medium">Instruction <span className="text-sm text-red-500">*</span></Label>
+      <div className="space-y-1">
+        <Label htmlFor="instruction" className="text-sm font-medium">Instruction <span className="text-sm text-red-500">*</span></Label>
         <Textarea
           id="instruction"
           {...register('instruction', { required: "Instruction is required" })}
           placeholder="Provide specific instructions for this agent..."
-          className="resize-none"
+          className="resize-none h-[100px]"
           // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
           aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
         />
         {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
       </div>
-      <div>
-        <Label htmlFor="model_id" className="text-base font-medium">LLM Model</Label>
+      <div className="space-y-1">
+        <Label htmlFor="model_id" className="text-sm font-medium">LLM Model</Label>
          <Controller
             name="model_id"
             control={control}

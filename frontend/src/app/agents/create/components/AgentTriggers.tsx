@@ -1,11 +1,11 @@
-import React, { useEffect } from "react";
-import { Card } from "@/components/ui/card";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, HelpCircle, Calendar, MessageSquare, Wand2, Zap } from "lucide-react";
+import { Trash2, Calendar, MessageSquare, Wand2, Zap } from "lucide-react";
 import { Controller, FieldErrors, UseFieldArrayReturn, Control } from 'react-hook-form';
+import AccordionControl from "./AccordionControl";
 import { getNestedErrorMessage } from "../utils/formUtils";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { AgentFormValues, EventConfig } from "../types";
 
 // Define event trigger types
 const eventOptions = [
@@ -13,19 +13,6 @@ const eventOptions = [
   { id: 'agent_call', label: 'Agent Call', description: 'Agent is triggered when called by another agent', icon: <Wand2 className="h-4 w-4 mr-2" /> },
   { id: 'cron', label: 'Scheduled (Cron)', description: 'Agent runs on a regular schedule', icon: <Calendar className="h-4 w-4 mr-2" /> },
 ];
-
-// Define simplified event config type
-export interface EventConfig {
-  event_type: string;
-}
-
-// Define form values type if not already defined in types.ts
-export interface AgentFormValues {
-  events_config: {
-    events: EventConfig[];
-  };
-  // Other form fields would go here
-}
 
 type AgentTriggersProps = {
   control: Control<AgentFormValues>;
@@ -36,6 +23,8 @@ type AgentTriggersProps = {
 };
 
 const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent }: AgentTriggersProps) => {
+  const [accordionValue, setAccordionValue] = useState<string>("triggers");
+
   // Add default events if none exist
   useEffect(() => {
     if (eventFields.length === 0) {
@@ -46,45 +35,49 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
   }, []);
 
   const searchUsers = async (query?: string) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500));
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-  if (!query) return eventOptions;
+    if (!query) return eventOptions;
 
-  return eventOptions.filter(item => 
-    item.label.toLowerCase().includes(query.toLowerCase()) ||
-    item.description.toLowerCase().includes(query.toLowerCase())
+    return eventOptions.filter(item => 
+      item.label.toLowerCase().includes(query.toLowerCase()) ||
+      item.description.toLowerCase().includes(query.toLowerCase())
+    );
+  };
+
+  const note = (
+    <>
+      <p>Triggers determine when your agent is activated to perform its tasks.</p>
+      <p>Select when you want your agent to be activated. You can add multiple triggers.</p>
+    </>
   );
-};
+
+  const title = (
+    <div className="flex items-center gap-2">
+      <Zap className="h-5 w-5 text-accent" /> Agent Triggers
+    </div>
+  );
 
   return (
-    <Card className="">
-      <div className="flex items-center mb-4">
-        <h2 className="flex items-center gap-2">
-          <Zap className="h-5 w-5 text-accent" /> Agent Triggers
-        </h2>
-        <TooltipProvider>
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="ml-2 h-6 w-6 text-muted-foreground hover:text-primary">
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
-              <p>Triggers determine when your agent is activated to perform its tasks.</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-      
-      <div className="text-sm text-muted-foreground mb-4">
-        Select when you want your agent to be activated. You can add multiple triggers.
-      </div>
-
-      <div className="space-y-4">
-        <div className="space-y-3">
-          {eventFields.map((item, index) => (
-            <div key={item.id} className="flex items-center gap-2 p-3 border rounded-md bg-primary/10 shadow-sm hover:shadow-md transition-shadow">
+    <>
+        <AccordionControl 
+          id="triggers" 
+          accordionValue={accordionValue} 
+          setAccordionValue={setAccordionValue} 
+          eventFields={eventFields} 
+          removeEvent={removeEvent} 
+          onAdd={() => {
+            appendEvent({ event_type: 'text_input' });
+            setAccordionValue("triggers");
+          }}
+          title={title}
+          note={note}
+          addText="Trigger"
+        >
+          <div className="space-y-3">
+          {eventFields.length > 0 ? eventFields.map((item, index) => (
+            <div key={item.id} className="mt-2 flex items-center gap-2 p-3 border rounded-md bg-primary/10 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex-1">
                 <Controller
                   name={`events_config.events.${index}.event_type`}
@@ -124,22 +117,20 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-          ))}
+          )) : (
+            <div className="mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
+              {note}
+            </div>
+          )}
         </div>
-        
-        <Button 
-          type="button" 
-          variant="outline" 
-          onClick={() => appendEvent({ event_type: 'text_input' })}
-          className="group w-full border-dashed border-gray-300 hover:border-primary hover:bg-primary/5"
-        >
-          <Plus className="h-4 w-4 mr-2 group-hover:text-primary" /> Add Another Trigger
-        </Button>
-        
-        {getNestedErrorMessage(errors, 'events_config.events') && 
-        <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'events_config.events')}</p>}
-      </div>
-    </Card>
+
+        </AccordionControl>
+
+        {
+          getNestedErrorMessage(errors, 'events_config.events') && 
+          <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'events_config.events')}</p>
+        }
+    </>
   );
 };
 

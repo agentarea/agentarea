@@ -6,6 +6,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { addAgent } from './actions';
 import { initialState as agentInitialState } from './state';
 import type { components } from '@/api/schema';
+import { Card } from "@/components/ui/card";
 import { 
   BasicInformation, 
   AgentTriggers, 
@@ -70,7 +71,7 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
 
   return (
     <form action={formAction}>
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-[12px] items-start">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 lg:gap-x-[12px] gap-[12px] items-start">
           <div className="">
             <BasicInformation 
               register={register} 
@@ -78,8 +79,32 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
               errors={errors} 
             />
           </div>
-
           <div className="space-y-[12px]">
+            <Card className="px-0">
+              <div className="px-6">
+                <AgentTriggers 
+                  control={control} 
+                  errors={errors} 
+                  eventFields={eventFields} 
+                  removeEvent={removeEvent} 
+                  appendEvent={appendEvent} 
+                />
+              </div>
+              <div className="my-6 w-full h-[1px] bg-slate-200" />
+              <div className="px-6">
+                <ToolConfig 
+                  control={control} 
+                  errors={errors} 
+                  toolFields={toolFields} 
+                  removeTool={removeTool} 
+                  appendTool={appendTool} 
+                  mcpServers={mcpServers} 
+                />
+              </div>
+            </Card>
+          </div>
+
+          {/* <div className="space-y-[12px]">
             <AgentTriggers 
               control={control} 
               errors={errors} 
@@ -103,10 +128,10 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
             />
 
             <InstructionInfo />
-          </div>
+          </div> */}
         </div>
 
-        <div className="max-w-6xl mx-auto flex flex-col items-end sticky bottom-0 z-10 bg-gradient-to-t from-white/90 via-white/60 to-transparent pt-6 pb-2 -mx-4 px-4">
+        <div className="max-w-6xl mx-auto flex flex-row items-end justify-end gap-4 sticky bottom-0 z-10 bg-gradient-to-t from-white/90 via-white/60 to-transparent pt-6 pb-2 -mx-4 px-4">
           {state?.errors?._form && (
             <p className="text-red-500 mb-2 font-medium">{state.errors._form.join(', ')}</p>
           )}
@@ -115,12 +140,13 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
           )}
           <Button
             size="lg"
-            className="px-10 py-4 text-lg font-bold bg-gradient-to-r from-indigo-500 to-pink-500 text-white shadow-lg hover:scale-105 hover:shadow-2xl transition-transform"
+            className=""
             type="submit"
           >
             Create Agent
           </Button>
         </div>
+
     </form>
   );
 }
