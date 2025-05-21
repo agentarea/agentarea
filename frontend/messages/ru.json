@@ -25,7 +25,10 @@
   },
 
   "LlmBrowsePage": {
-    "title": "Модели LLM"
+    "title": "Модели LLM",
+    "addNewLlm": "Создать LLM",
+    "noLlmInstances": "Модели LLM не найдены",
+    "setUpNewLlm": "Настройте новую модель LLM для начала работы."
   },
 
   "SettingsPage": {

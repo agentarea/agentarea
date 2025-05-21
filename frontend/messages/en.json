@@ -28,7 +28,10 @@
   },
 
   "LlmBrowsePage": {
-    "title": "LLM Models"
+    "title": "LLM Models",
+    "addNewLlm": "Add New LLM",
+    "noLlmInstances": "No LLM instances found",
+    "setUpNewLlm": "Set up a new LLM to get started."
   },
 
   "SettingsPage": {

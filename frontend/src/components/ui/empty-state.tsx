@@ -6,11 +6,15 @@ import { LucideIcon } from "lucide-react"
 interface EmptyStateProps {
   title: string
   description: string
-  icons?: LucideIcon[]
-  action?: {
-    label: string
-    onClick: () => void
-  }
+    icons?: LucideIcon[]
+    action?: {
+      label: string
+      onClick: () => void
+    }
+    additionAction?: {
+      label: string
+      onClick: () => void
+    }
   className?: string
 }
 
@@ -19,7 +23,8 @@ export function EmptyState({
   description,
   icons = [],
   action,
-  className
+  className,
+  additionAction
 }: EmptyStateProps) {
   return (
     <div className={cn(
@@ -57,18 +62,30 @@ export function EmptyState({
       </div>
       <h2 className="text-foreground font-medium mt-6">{title}</h2>
       <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{description}</p>
-      {action && (
-        <Button
-          onClick={action.onClick}
-          // variant="outline"
-          className={cn(
-            "mt-4",
-            "shadow-sm active:shadow-none"
-          )}
-        >
-          {action.label}
-        </Button>
-      )}
+      <div className="flex justify-center gap-2 mt-4 flex-col sm:flex-row">
+        {action && (
+          <Button
+            onClick={action.onClick}
+            className={cn(
+              "shadow-sm active:shadow-none"
+            )}
+          >
+            {action.label}
+          </Button>
+        )}      
+        
+        {additionAction && (
+          <Button
+            onClick={additionAction.onClick}
+            variant="outline"
+            className={cn(
+              "shadow-sm active:shadow-none"
+            )}
+          >
+            {additionAction.label}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

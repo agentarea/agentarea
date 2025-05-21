@@ -9,6 +9,7 @@ import Link from "next/link";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import GridView from "./_components/GridView";
 import TableView from "./_components/TableView";
+import EmptyState from "@/components/EmptyState/EmptyState";
 
 // Server component that handles the tab rendering
 export default async function AddLLMModelPage({
@@ -79,12 +80,27 @@ export default async function AddLLMModelPage({
                     </div>
                 </div>
 
-                <TabsContent value="grid">
-                    <GridView instances={llmModelInstances} />
-                </TabsContent>
-                <TabsContent value="table">
-                    <TableView instances={llmModelInstances} />
-                </TabsContent>
+                {!llmModelInstances.length ? (
+                    <EmptyState
+                        title={t('noLlmInstances')}
+                        description={t('setUpNewLlm')}
+                        iconsType="llm"
+                        action={{
+                            label: t('addNewLlm'),
+                            href: "/admin/llms/create"
+                        }}
+                    />
+                    ) : (
+                        <>
+                            <TabsContent value="grid">
+                                <GridView instances={llmModelInstances} />
+                            </TabsContent>
+                            <TabsContent value="table">
+                                <TableView instances={llmModelInstances} />
+                            </TabsContent>
+                        </>
+                    )
+                }
             </Tabs>
         </ContentBlock>
     )

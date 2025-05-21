@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 interface FormData {
   name: string;
   description: string;
@@ -52,13 +52,16 @@ export default function AddLLMModelPage() {
   };
 
   return (
-    <div className="container py-10 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Add LLM Model</h1>
-        <p className="text-muted-foreground">
-          Connect an LLM to use in your agents and workflows
-        </p>
-      </div>
+    <ContentBlock
+      header={{
+        title: "Add LLM Model",
+        backLink: {
+          label: "Back to LLM Models",
+          href: "/admin/llms"
+        }
+      }}
+    >
+    <div className="max-w-2xl mx-auto">
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-1.5">
@@ -198,5 +201,6 @@ export default function AddLLMModelPage() {
         </div>
       </form>
     </div>
+    </ContentBlock>
   );
 } 

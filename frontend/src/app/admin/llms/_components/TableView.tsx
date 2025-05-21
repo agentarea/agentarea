@@ -3,15 +3,6 @@ import type { components } from "@/api/schema";
 type LLMModelInstance = components["schemas"]["LLMModelInstanceResponse"];
 
 export default function TableView({ instances }: { instances: LLMModelInstance[] }) {
-  if (!instances.length) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="text-2xl font-semibold mb-2">No LLM instances found</div>
-        <div className="text-muted-foreground mb-4">Set up a new LLM to get started.</div>
-      </div>
-    );
-  }
-
   const columns = [
     {
       header: "Name",

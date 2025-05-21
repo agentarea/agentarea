@@ -1,28 +1,37 @@
 "use client"
 
 import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
-import { Zap, BotOff, Ban, Unplug, Bot, Cpu, Blocks, ChevronsLeftRightEllipsis } from "lucide-react";
+import { Zap, BotOff, Ban, Unplug, Bot, Cpu, Blocks, Server, Network, Link, Shield, ChevronsLeftRightEllipsis, Brain, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 type EmptyStateProps = {
     title: string;
     description?: string;
-    iconsType?: "404" | "agent";
+    iconsType?: "404" | "agent" | "llm" | "mcp";
     action?: {
+      label: string
+      href?: string
+      onClick?: () => void
+    }
+    additionAction?: {
       label: string
       href?: string
       onClick?: () => void
     }
 }
 
-export default function EmptyState({description, title, action, iconsType}: EmptyStateProps) {
+export default function EmptyState({description, title, action, additionAction, iconsType}: EmptyStateProps) {
     const router = useRouter();
     const icons = iconsType 
       ? iconsType === "404" 
         ? [Ban, Unplug, BotOff] 
         : iconsType === "agent" 
-          ? [Bot, Zap, Cpu] 
-          : [Bot, Blocks, ChevronsLeftRightEllipsis] 
+          ? [Bot, Zap, Shield] 
+          : iconsType === "llm" 
+            ? [Sparkles, Cpu, Brain] 
+            : iconsType === "mcp"
+              ? [Server, Network, Link]
+              : [Bot, Blocks, ChevronsLeftRightEllipsis] 
       : [Bot, Blocks, ChevronsLeftRightEllipsis];
 
     return (
@@ -40,6 +49,10 @@ export default function EmptyState({description, title, action, iconsType}: Empt
           action={ action ? {
             label: action.label,
             onClick: () => action.onClick ? action.onClick() : action.href ? router.push(action.href) : undefined
+          } : undefined}
+          additionAction={ additionAction ? {
+            label: additionAction.label,
+            onClick: () => additionAction.onClick ? additionAction.onClick() : additionAction.href ? router.push(additionAction.href) : undefined
           } : undefined}
         />
       </motion.div>
