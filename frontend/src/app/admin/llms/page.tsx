@@ -6,7 +6,7 @@ import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import GridView from "./_components/GridView";
 import TableView from "./_components/TableView";
 
@@ -34,13 +34,11 @@ export default async function AddLLMModelPage({
     const llmModelInstances = (await listLLMModelInstances()).data || [];
 
     return (
-        <div className="content">
-            <div className="content-header">
-                <h1>
-                    {t('title')}
-                </h1>
-            </div>
-
+        <ContentBlock 
+            header={{
+                title: t('title')
+            }}
+        >
             <Tabs 
                 value={activeTab} 
                 className="w-full" 
@@ -88,6 +86,6 @@ export default async function AddLLMModelPage({
                     <TableView instances={llmModelInstances} />
                 </TabsContent>
             </Tabs>
-        </div>
+        </ContentBlock>
     )
 }

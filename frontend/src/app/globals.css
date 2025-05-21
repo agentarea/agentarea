@@ -108,16 +108,6 @@ body {
     @apply font-montserrat font-semibold text-lg md:text-xl;
   }
 
-  .content {
-    @apply px-[20px] py-[20px];
-    @apply md:px-[28px] md:py-[20px];
-    @apply lg:px-[40px] lg:py-[25px];
-  }
-
-  .content-header {
-    @apply flex flex-row justify-between items-center mb-[10px] md:mb-[20px] lg:mb-[30px];
-  }
-
   .card {
     @apply bg-white dark:bg-zinc-800 rounded-[16px];
     @apply p-[16px] md:p-[20px] lg:p-[24px] cursor-pointer;

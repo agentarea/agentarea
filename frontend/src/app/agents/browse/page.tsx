@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { listAgents } from "@/lib/api";
 import EmptyState from "@/components/EmptyState/EmptyState";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 
 const categories = ["All"];
 
@@ -31,23 +32,20 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
   );
 
   return (
-    <div className="content">
-      <div className="content-header">
-        <div className="flex flex-col gap-1">
-          <h1>Browse Agents</h1>
-          <p className="text-xs text-zinc-400">
-            Discover and deploy automation agents for your workflow needs
-          </p>
-        </div>
-        <Link href="/agents/create">
-          <Button size="lg" className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
-            <Bot className="h-5 w-5" />
-            Deploy New Agent
-          </Button>
-        </Link>
-      </div>
+    <ContentBlock 
+      header={{
+        title: "Browse Agents",
+        description: "Discover and deploy automation agents for your workflow needs",
+        controls: (
+          <Link href="/agents/create">
+            <Button size="lg" className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
+              <Bot className="h-5 w-5" />
+              Deploy New Agent
+            </Button>
+          </Link>
+        )
+    }}>
 
-      <div>
         {/* Main content area */}
         <div className="w-full">
           <div className="space-y-6 mb-8">
@@ -143,7 +141,6 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </ContentBlock>
   );
 } 

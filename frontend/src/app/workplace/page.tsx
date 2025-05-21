@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { 
   Bot, 
   MessageSquare, 
@@ -196,19 +197,12 @@ export default function WorkplacePage() {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight text-indigo-500">
-                Workplace
-              </h1>
-              <p className="text-lg text-gray-500 mt-2">
-                Your command center for managing agents and tasks
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+    <ContentBlock
+      header={{
+        title: "Workplace",
+        description: "Your command center for managing agents and tasks",
+        controls: (
+          <div className="flex items-center gap-2">
               <Select value={selectedWorkplace} onValueChange={setSelectedWorkplace}>
                 <SelectTrigger className="w-[200px] h-9 text-sm bg-white border-gray-200">
                   <div className="flex items-center gap-2">
@@ -231,9 +225,9 @@ export default function WorkplacePage() {
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-        </div>
-
+        )
+      }}
+    >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Task creation and chat section */}
           <div className="lg:col-span-2">
@@ -468,7 +462,6 @@ export default function WorkplacePage() {
             </ScrollArea>
           </Card>
         </div>
-      </div>
-    </div>
+    </ContentBlock>
   );
 } 
