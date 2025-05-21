@@ -28,7 +28,7 @@ export default async function CreateAgentPage() {
   return (
     <div className="content">
       <div className="content-header">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           <h1>Create Agent</h1>
           <Link href="/agents/browse" className="flex items-center gap-2 text-xs text-zinc-400 hover:text-accent transition-colors duration-300">
             <ArrowLeft className="h-4 w-4" />

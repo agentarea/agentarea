@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { listAgents } from "@/lib/api";
+import EmptyState from "@/components/EmptyState/EmptyState";
 
 const categories = ["All"];
 
@@ -30,11 +31,11 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
   );
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Browse Agents</h1>
-          <p className="text-muted-foreground mt-2 max-w-xl">
+    <div className="content">
+      <div className="content-header">
+        <div className="flex flex-col gap-1">
+          <h1>Browse Agents</h1>
+          <p className="text-xs text-zinc-400">
             Discover and deploy automation agents for your workflow needs
           </p>
         </div>
@@ -94,17 +95,15 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
           {error ? (
             <div className="text-center py-10 text-destructive">Failed to load agents</div>
           ) : filteredAgents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
-              <span className="text-5xl">🤖</span>
-              <div className="text-lg font-medium">No agents yet</div>
-              <div className="text-muted-foreground mb-2">Get started by adding your first agent.</div>
-              <Link href="/agents/create">
-                <Button size="lg" className="gap-2">
-                  <Bot className="h-5 w-5" />
-                  Add your first agent
-                </Button>
-              </Link>
-            </div>
+            <EmptyState
+              iconsType="agent"
+              title="No agents yet"
+              description="Get started by adding your first agent."
+              action={{
+                label: "Add your first agent",
+                href: "/agents/create",
+              }}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredAgents.map((agent) => (

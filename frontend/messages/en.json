@@ -4,6 +4,12 @@
     "grid": "Grid",
     "table": "Table"
   },
+  "404": {
+    "title": "Error 404",
+    "404": "404",
+    "description": "The page you are looking for does not exist.",
+    "goHome": "Go to home"
+  },
   "admin": {
     "llms": "LLM Models"
   },
