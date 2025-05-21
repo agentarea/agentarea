@@ -20,8 +20,8 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
             className="
                 h-[50px] w-full
                 px-[16px]
+                border-b border-zinc-200 dark:border-zinc-700
                 flex flex-row items-center justify-between md:hidden
-                bg-zinc-100 dark:bg-zinc-800 
             "
         >
             <Sheet>

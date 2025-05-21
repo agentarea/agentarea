@@ -27,6 +27,7 @@
 
   "SettingsPage": {
     "title": "Settings",
+    "logout": "Logout",
     "profile": {
       "title": "Profile",
       "description": "Update your personal information",

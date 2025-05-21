@@ -20,7 +20,7 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
         const isActive = pathname === link;
 
         const iconToRender =  React.isValidElement(icon) ? cloneElement(icon, {
-                className: cn(icon.props.className, "w-5 h-5"),
+                className: cn(icon.props.className, "w-4 h-4"),
                 strokeWidth: 1.5,
             }) : null;
 
@@ -31,11 +31,11 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
                 className={cn(
                     disabled && "opacity-30 pointer-events-none",
                     isActive 
-                        ? "pointer-events-none text-accent dark:text-primary-foreground bg-primary/20 dark:bg-white/70 dark:text-zinc-800" 
-                        : "text-foreground hover:bg-zinc-200/60 hover:dark:bg-white/10",
-                    "relative text-[14px] leading-[14px] flex flex-row items-center",
-                    "py-[10px] px-[10px] rounded-[8px]",
-                    "group transition-all duration-300 gap-[8px] font-light"
+                        ? "pointer-events-none bg-gradient-to-r from-zinc-200/90 to-zinc-300/90 dark:text-primary-foreground dark:bg-white/70 dark:text-zinc-800" 
+                        : "text-foreground hover:bg-zinc-200/50 hover:dark:bg-white/10",
+                    "relative text-[13px] leading-[14px] flex flex-row items-center",
+                    "py-[8px] px-[10px] rounded-[8px]",
+                    "group transition-all duration-500 gap-[10px] font-light"
                 )}
                 tabIndex={0}
                 aria-label={text}
@@ -48,7 +48,7 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
                 )}
                 <span
                     className={cn(
-                        "transition-all duration-300 whitespace-nowrap",
+                        " whitespace-nowrap",
                         isCollapsed ? "w-0 opacity-0" : "opacity-100"
                     )}
                 >

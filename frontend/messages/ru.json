@@ -26,6 +26,7 @@
 
   "SettingsPage": {
     "title": "Настройки",
+    "logout": "Выйти",
     "profile": {
       "title": "Профиль",
       "description": "Обновите свои персональные данные",

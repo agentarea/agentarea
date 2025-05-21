@@ -131,7 +131,7 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
           </div> */}
         </div>
 
-        <div className="max-w-6xl mx-auto flex flex-row items-end justify-end gap-4 sticky bottom-0 z-10 bg-gradient-to-t from-white/90 via-white/60 to-transparent pt-6 pb-2 -mx-4 px-4">
+        <div className="max-w-6xl mx-auto flex flex-row items-end justify-end gap-4 sticky bottom-0 z-10 pt-6 pb-2 -mx-4 px-4">
           {state?.errors?._form && (
             <p className="text-red-500 mb-2 font-medium">{state.errors._form.join(', ')}</p>
           )}

@@ -196,7 +196,7 @@ export default function WorkplacePage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen">
       <div className="p-8 max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between">

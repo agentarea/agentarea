@@ -51,17 +51,18 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
         <div 
             className={`
                 h-screen
-                px-[18px] py-[20px] 
+                px-[12px] py-[20px] 
                 hidden flex-shrink-0 md:flex md:flex-col
                 relative
                 transition-all duration-300 ease-in-out
-                ${isCollapsed ? 'w-[75px]' : 'w-[225px]'}
+                border-r border-zinc-200 dark:border-zinc-700
+                ${isCollapsed ? 'w-[60px]' : 'w-[200px]'}
             `}
         >
-            <div className="h-[70px] pt-[15px]">
+            <div className="h-[45px] pt-[6px]">
                 <div className={cn(
                     "w-full transition-all duration-500 overflow-hidden",
-                    isCollapsed ? 'h-[38px]' : 'h-[30px]'
+                    isCollapsed ? 'h-[35px]' : 'h-[30px]'
                 )}>
                     <LogoIcon />
                 </div>
@@ -69,9 +70,9 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
             <nav className="overflow-y-auto overflow-x-hidden flex flex-col justify-between h-full gap-[10px]">
                 <div>
                     {menuContent.map((sectionContent, index) => (
-                        <div key={`section-${index}`} className="flex flex-col gap-[2px] pt-[14px]">
+                        <div key={`section-${index}`} className="flex flex-col gap-[2px] pt-[10px]">
                             {
-                                sectionContent.section && !isCollapsed && (
+                                sectionContent.section && (
                                     <SectionTitle 
                                         expanded={expandedItems.includes(sectionContent.section ?? '')}
                                         key={`section-title-${index}`} 

@@ -1,10 +1,11 @@
 import { useTranslations } from 'next-intl';
-import { User, Globe } from 'lucide-react';
+import { User, Globe, LogOut } from 'lucide-react';
 import SettingsCard from './components/SettingsCard';
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import LanguageSelect from './components/LanguageSelect';
 import ProfileForm from './components/ProfileForm';
 import RowControl from './components/RowControl';
+import { Button } from '@/components/ui/button';
 
 export default function SettingsPage() {
     const t = useTranslations('SettingsPage');
@@ -18,8 +19,9 @@ export default function SettingsPage() {
 
     return (
         <div className="content">
-            <div className="flex items-center gap-4 mb-8">
+            <div className="flex items-center justify-between gap-4 mb-8">
                 <h1>{t('title')}</h1>
+                <Button><LogOut className="w-4 h-4" />{t('logout')}</Button>
             </div>
 
             <div className="mx-auto space-y-5 max-w-4xl">
