@@ -23,6 +23,7 @@ class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
         super().__init__(repository)
         self.event_broker = event_broker
         self.secret_manager = secret_manager
+
     async def create_llm_model_instance(
         self,
         model_id: UUID,
@@ -40,6 +41,7 @@ class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
         )
         secret_name = f"llm_model_instance_{instance.id}"
         await self.secret_manager.set_secret(secret_name, api_key)
+
         instance = await self.create(instance)
 
         await self.event_broker.publish(
@@ -96,6 +98,4 @@ class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
         status: str | None = None,
         is_public: bool | None = None,
     ) -> list[LLMModelInstance]:
-        return await self.repository.list(
-            model_id=model_id, status=status, is_public=is_public
-        )
+        return await self.repository.list(model_id=model_id, status=status, is_public=is_public)

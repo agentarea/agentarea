@@ -1,0 +1,75 @@
+name: Backend CI workflow
+on:
+  push:
+    paths:
+      - "core/**"
+      - ".github/**"
+    branches:
+      - main
+
+env:
+  CONTAINER_NAME: agentarea-core
+
+defaults:
+  run:
+    working-directory: ./core/
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.6.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v3
+        id: cache
+        with:
+          path: ./core/.venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root
+
+      - name: Install project
+        run: poetry install --no-interaction
+
+    #   - name: Run tests
+    #     run: poetry run pytest
+
+      - name: Build project
+        run: poetry build
+
+  build-container:
+    if: github.ref == 'refs/heads/main'
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Login to Yandex Cloud Container Registry
+        id: login-cr
+        uses: yc-actions/yc-cr-login@v2
+        with:
+          yc-sa-json-credentials: ${{ secrets.YANDEX_SA_KEY }}
+      - run: |
+          echo "Packaging docker image ..."
+          tag="${DOCKER_REGISTRY}/${CONTAINER_NAME}"
+          docker build -t $tag:latest -t $tag:${{ github.sha }} .
+          docker push $tag --all-tags
+        env:
+          DOCKER_REGISTRY: cr.yandex/${{ secrets.YANDEX_CONTAINER_REGISTRY_ID }}

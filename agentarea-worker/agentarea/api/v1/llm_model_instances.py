@@ -1,0 +1,128 @@
+from typing import List, Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from agentarea.modules.llm.application.service import LLMModelInstanceService
+from agentarea.modules.llm.domain.models import LLMModelInstance
+from agentarea.api.deps.services import get_llm_model_instance_service
+
+router = APIRouter(prefix="/llm-models/instances", tags=["llm-model-instances"])
+
+
+class LLMModelInstanceCreate(BaseModel):
+    model_id: UUID
+    api_key: str
+    name: str
+    description: str
+    is_public: bool = False
+
+
+class LLMModelInstanceUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    api_key: str | None = None
+    is_public: bool | None = None
+    status: str | None = None
+
+
+class LLMModelInstanceResponse(BaseModel):
+    id: UUID
+    model_id: UUID
+    name: str
+    description: str
+    status: str
+    is_public: bool
+    last_updated: str
+
+    @classmethod
+    def from_domain(cls, instance: LLMModelInstance) -> "LLMModelInstanceResponse":
+        return cls(
+            id=instance.id,
+            model_id=instance.model_id,
+            name=instance.name,
+            description=instance.description,
+            status=instance.status,
+            is_public=instance.is_public,
+            last_updated=instance.last_updated,
+        )
+
+
+@router.post("/", response_model=LLMModelInstanceResponse)
+async def create_llm_model_instance(
+    data: LLMModelInstanceCreate,
+    llm_model_instance_service: LLMModelInstanceService = Depends(
+        get_llm_model_instance_service
+    ),
+):
+    instance = await llm_model_instance_service.create_llm_model_instance(
+        model_id=data.model_id,
+        api_key=data.api_key,
+        name=data.name,
+        description=data.description,
+        is_public=data.is_public,
+    )
+    return LLMModelInstanceResponse.from_domain(instance)
+
+
+@router.get("/{instance_id}", response_model=LLMModelInstanceResponse)
+async def get_llm_model_instance(
+    instance_id: UUID,
+    llm_model_instance_service: LLMModelInstanceService = Depends(
+        get_llm_model_instance_service
+    ),
+):
+    instance = await llm_model_instance_service.get(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="LLM Model Instance not found")
+    return LLMModelInstanceResponse.from_domain(instance)
+
+
+@router.get("/", response_model=List[LLMModelInstanceResponse])
+async def list_llm_model_instances(
+    model_id: Optional[UUID] = None,
+    status: Optional[str] = None,
+    is_public: Optional[bool] = None,
+    llm_model_instance_service: LLMModelInstanceService = Depends(
+        get_llm_model_instance_service
+    ),
+):
+    instances = await llm_model_instance_service.list(
+        model_id=model_id, status=status, is_public=is_public
+    )
+    return [LLMModelInstanceResponse.from_domain(instance) for instance in instances]
+
+
+@router.patch("/{instance_id}", response_model=LLMModelInstanceResponse)
+async def update_llm_model_instance(
+    instance_id: UUID,
+    data: LLMModelInstanceUpdate,
+    llm_model_instance_service: LLMModelInstanceService = Depends(
+        get_llm_model_instance_service
+    ),
+):
+    instance = await llm_model_instance_service.update_llm_model_instance(
+        id=instance_id,
+        name=data.name,
+        description=data.description,
+        api_key=data.api_key,
+        is_public=data.is_public,
+        status=data.status,
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="LLM Model Instance not found")
+    return LLMModelInstanceResponse.from_domain(instance)
+
+
+@router.delete("/{instance_id}")
+async def delete_llm_model_instance(
+    instance_id: UUID,
+    llm_model_instance_service: LLMModelInstanceService = Depends(
+        get_llm_model_instance_service
+    ),
+):
+    success = await llm_model_instance_service.delete_llm_model_instance(instance_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="LLM Model Instance not found")
+    return {"status": "success"} 

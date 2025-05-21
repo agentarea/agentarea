@@ -52,9 +52,9 @@ export const navContent: NavSection[] = [
         icon: <Bot />,
       },
       {
-        label: "Workflows",
-        labelKey: "workflows",
-        href: "/agents/workflows",
+        label: "Tasks",
+        labelKey: "tasks",
+        href: "/agents/tasks",
         icon: <ClipboardList />,
       },
       {
@@ -107,9 +107,9 @@ export const navContent: NavSection[] = [
 //         icon: <Bot />,
 //       },
 //       {
-//         label: "Workflows",
-//         labelKey: "workflows",
-//         href: "/agents/workflows",
+//         label: "Tasks",
+//         labelKey: "tasks",
+//         href: "/agents/tasks",
 //         icon: <ClipboardList />,
 //       },
 //     ],

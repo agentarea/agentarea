@@ -25,7 +25,7 @@ from agentarea.modules.mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea.modules.secrets import InfisicalSecretManager
+from agentarea.modules.secrets.db_secret_manager import DBSecretManager
 
 
 async def get_agent_service(
@@ -56,7 +56,13 @@ async def get_mcp_server_instance_service(
 async def get_secret_manager(
     secret_manager_settings: SecretManagerSettings = Depends(get_settings),
 ) -> BaseSecretManager:
-    return InfisicalSecretManager(secret_manager_settings)
+    # infisical_client = InfisicalSDKClient(
+    #     host=secret_manager_settings.SECRET_MANAGER_ENDPOINT,
+    #     token=secret_manager_settings.SECRET_MANAGER_ACCESS_KEY,
+    # )
+
+    db_secret_manager = DBSecretManager()
+    return db_secret_manager
 
 async def get_llm_model_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
