@@ -75,3 +75,5 @@ node_modules/
 .history
 
 infisical-local-data
+
+.cursor/
