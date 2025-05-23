@@ -3,15 +3,6 @@ import type { components } from "@/api/schema";
 type LLMModelInstance = components["schemas"]["LLMModelInstanceResponse"];
 
 export default function GridView({ instances }: { instances: LLMModelInstance[] }) {
-  if (!instances.length) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="text-2xl font-semibold mb-2">No LLM instances found</div>
-        <div className="text-muted-foreground mb-4">Set up a new LLM to get started.</div>
-        {/* The add button is in the parent, so no button here */}
-      </div>
-    );
-  }
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]">
       {instances.map((item) => (

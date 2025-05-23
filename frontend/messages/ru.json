@@ -4,7 +4,11 @@
     "grid": "Сетка",
     "table": "Таблица"
   },
-  
+  "404": {
+    "title": "404",
+    "description": "Страница, которую вы ищете, не существует.",
+    "goHome": "Вернуться на главную"
+  },
   "Sidebar": {
     "workplace": "Рабочее место",
     "agents": "Агенты",
@@ -21,11 +25,15 @@
   },
 
   "LlmBrowsePage": {
-    "title": "Модели LLM"
+    "title": "Модели LLM",
+    "addNewLlm": "Создать LLM",
+    "noLlmInstances": "Модели LLM не найдены",
+    "setUpNewLlm": "Настройте новую модель LLM для начала работы."
   },
 
   "SettingsPage": {
     "title": "Настройки",
+    "logout": "Выйти",
     "profile": {
       "title": "Профиль",
       "description": "Обновите свои персональные данные",

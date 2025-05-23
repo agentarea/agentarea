@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import {
   Bot,
   Calendar,
@@ -159,41 +160,40 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-4xl font-bold">Agent Tasks</h1>
-          <p className="text-lg text-muted-foreground mt-2">
-            Monitor, manage, and review your agent tasks
-          </p>
-        </div>
-        <div className="flex gap-4">
-          {activeTab === "active" ? (
-            <>
-              <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
-                <RefreshCw className="h-4 w-4" />
-                Refresh
-              </button>
-              <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg flex items-center gap-2">
-                <Bot className="h-5 w-5" />
-                Deploy New Agent
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
-                <Calendar className="h-4 w-4" />
-                Date Range
-              </button>
-              <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
-                <Download className="h-4 w-4" />
-                Export
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
+    <ContentBlock
+      header={{
+        title: "Agent Workflows",
+        description: "Monitor, manage, and review your agent workflows",
+        controls: (
+          <div className="flex gap-4">
+            {activeTab === "active" ? (
+              <>
+                <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh
+                </button>
+                <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg flex items-center gap-2">
+                  <Bot className="h-5 w-5" />
+                  Deploy New Agent
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
+                  <Calendar className="h-4 w-4" />
+                  Date Range
+                </button>
+                <button className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-secondary">
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
+              </>
+            )}
+          </div>
+        )
+      }}
+    >
+      <>
       <Tabs defaultValue="active" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="active">Active Tasks</TabsTrigger>
@@ -322,6 +322,7 @@ export default function TasksPage() {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+    </>
+    </ContentBlock>
   );
 } 

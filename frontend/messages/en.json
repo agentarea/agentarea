@@ -4,6 +4,12 @@
     "grid": "Grid",
     "table": "Table"
   },
+  "404": {
+    "title": "Error 404",
+    "404": "404",
+    "description": "The page you are looking for does not exist.",
+    "goHome": "Go to home"
+  },
   "admin": {
     "llms": "LLM Models"
   },
@@ -22,11 +28,15 @@
   },
 
   "LlmBrowsePage": {
-    "title": "LLM Models"
+    "title": "LLM Models",
+    "addNewLlm": "Add New LLM",
+    "noLlmInstances": "No LLM instances found",
+    "setUpNewLlm": "Set up a new LLM to get started."
   },
 
   "SettingsPage": {
     "title": "Settings",
+    "logout": "Logout",
     "profile": {
       "title": "Profile",
       "description": "Update your personal information",

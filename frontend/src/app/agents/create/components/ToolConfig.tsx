@@ -1,16 +1,16 @@
 import React from "react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Cpu, Plus, Trash2 } from "lucide-react";
+import { Cpu, Trash2, Zap} from "lucide-react";
 import { Controller, FieldErrors, UseFieldArrayReturn } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../types";
 import type { components } from '@/api/schema';
-
+import AccordionControl from "./AccordionControl";
+import { useState } from "react";
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
 type ToolConfigProps = {
@@ -22,14 +22,44 @@ type ToolConfigProps = {
   mcpServers: MCPServer[];
 };
 
-const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpServers }: ToolConfigProps) => (
-  <Card className="">
-    <h2 className="mb-6 flex items-center gap-2">
+const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpServers }: ToolConfigProps) => {
+  const [accordionValue, setAccordionValue] = useState<string>("tools");
+  const title = (
+    <div className="flex items-center gap-2">
       <Cpu className="h-5 w-5 text-accent" /> Tools (MCP Servers)
-    </h2>
-    <div className="space-y-6">
-      {toolFields.map((item, index) => (
-        <div key={item.id} className="p-4 border rounded-md space-y-3 relative bg-slate-50/80 shadow-sm">
+    </div>
+  );
+  const note = (
+    <p>
+      Add MCP Servers to your agent to enable tool use.
+    </p>
+  );
+
+  const mcpServerTEST = [
+    {id: 'mcp_server_id', name: 'MCP Server1', icon: <Cpu className="h-4 w-4" />},
+    {id: 'mcp_server_id1', name: 'MCP Server2', icon: <Zap className="h-4 w-4" />},
+    {id: 'mcp_server_id2', name: 'MCP Server3', icon: <Trash2 className="h-4 w-4" />},
+  ];
+
+  return (
+  <>
+    <AccordionControl
+      id="tools"
+      accordionValue={accordionValue}
+      setAccordionValue={setAccordionValue}
+      title={title}
+      note={note}
+      addText="Tool"
+      onAdd={(id: string) => appendTool({ mcp_server_id: id, api_key: '', config: {} })}
+      dropdownItems={mcpServerTEST.map((server) => ({
+        id: server.id,
+        label: server.name,
+        icon: server.icon
+      }))}
+    >
+          <div className="space-y-6">
+      {toolFields.length > 0 ? toolFields.map((item, index) => (
+        <div key={item.id} className="mt-2 p-4 border rounded-md space-y-3 relative bg-slate-50/80 shadow-sm">
           <Button
             type="button"
             variant="ghost"
@@ -108,16 +138,26 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
                <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, `tools_config.mcp_server_configs.${index}.config`)}</p>}
             </div>
         </div>
-      ))}
-      <Button type="button" variant="outline" onClick={() => appendTool({ mcp_server_id: '', api_key: '', config: {} })}>
-        <Plus className="h-4 w-4 mr-2" /> Add Tool
-      </Button>
+      )) : (
+        <div className="mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
+          {note}
+        </div>
+      )}
     </div>
+    </AccordionControl>
+
+      
+      {/* <h2 className="mb-6 flex items-center gap-2">
+      <Cpu className="h-5 w-5 text-accent" /> Tools (MCP Servers)
+    </h2> */}
+
      {getNestedErrorMessage(errors, 'tools_config.mcp_server_configs') && 
       <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'tools_config.mcp_server_configs')}</p>}
      {getNestedErrorMessage(errors, 'tools_config') && 
       <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'tools_config')}</p>}
-  </Card>
+  </>
 );
+
+}
 
 export default ToolConfig; 

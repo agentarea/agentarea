@@ -1,6 +1,7 @@
 import { listMCPServerInstances, listMCPServers } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { components } from '@/api/schema';
+import ContentBlock from '@/components/ContentBlock/ContentBlock';
 
 import MCPInstanceForm from './MCPInstanceForm';
 
@@ -17,7 +18,16 @@ export default async function MCPSetupPage() {
   const instances: MCPServerInstance[] = instancesRes.data || [];
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <ContentBlock
+      header={{
+        title: "Setup MCP Server Instance",
+        backLink: {
+          label: "Back to MCP Servers",
+          href: "/mcp-servers"
+        }
+      }}
+    >
+    <div className="max-w-3xl mx-auto">
       <Card className="mb-8">
         <CardHeader>
           <CardTitle>Setup MCP Server Instance</CardTitle>
@@ -46,5 +56,6 @@ export default async function MCPSetupPage() {
         </CardContent>
       </Card>
     </div>
+    </ContentBlock>
   );
 } 

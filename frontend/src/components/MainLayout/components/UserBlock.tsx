@@ -18,7 +18,7 @@ export default function UserBlock({ user, isCollapsed }: UserBlockProps) {
                 "flex items-center gap-[8px]",
                 isCollapsed && "flex-col"
             )}>
-                <Avatar className="h-[38px] w-[38px]">
+                <Avatar className="h-[35px] w-[35px]">
                     <AvatarImage src={user.avatar} />
                     <AvatarFallback>
                         {user.name.charAt(0)}
@@ -26,10 +26,10 @@ export default function UserBlock({ user, isCollapsed }: UserBlockProps) {
                 </Avatar>
                 {!isCollapsed && (
                     <div className="flex flex-col">
-                        <span className="text-[14px] font-medium">
+                        <span className="text-[13px] font-medium overflow-hidden text-ellipsis whitespace-nowrap md:max-w-[102px]">
                             {user.name}
                         </span>
-                        <span className="text-[12px] text-zinc-400">
+                        <span className="text-[12px] text-zinc-400 overflow-hidden text-ellipsis whitespace-nowrap md:max-w-[102px]">
                             {user.email}
                         </span>
                     </div>
@@ -37,7 +37,7 @@ export default function UserBlock({ user, isCollapsed }: UserBlockProps) {
             </div>
             {!isCollapsed && (
                 <div>
-                    <Button size="icon" variant="ghost">
+                    <Button size="icon" variant="ghost" className="w-7 h-7">
                         <LogOut className="h-4 w-4" />
                     </Button>
                 </div>

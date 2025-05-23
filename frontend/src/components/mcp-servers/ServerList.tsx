@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import EmptyState from "@/components/EmptyState/EmptyState";
 import {
   Table,
   TableBody,
@@ -153,25 +154,20 @@ export function ServerList({ mcpList }: ServerListProps) {
           </Table>
         </div>
       ) : (
-        <div className="p-8 text-center">
-          <p className="text-muted-foreground mb-4">
-            You haven&apos;t added any MCP servers yet.
-          </p>
-          <div className="flex justify-center space-x-4">
-            <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md transition-all duration-200">
-              <Link href="/mcp-servers/add?type=self-hosted" className="flex items-center gap-1">
-                <Server className="h-4 w-4" />
-                Add Self-Hosted Server
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950">
-              <Link href="/mcp-servers/add?type=external" className="flex items-center gap-1">
-                <Globe className="h-4 w-4" />
-                Add External Server
-              </Link>
-            </Button>
-          </div>
-        </div>
+
+        <EmptyState
+          title="No MCP servers found"
+          description="Add a new MCP server to get started"
+          iconsType="mcp"
+          action={{
+            label: "Add Self-Hosted Server",
+            href: "/mcp-servers/add?type=self-hosted"
+          }}
+          additionAction={{
+            label: "Add External Server",
+            href: "/mcp-servers/add?type=external"
+          }}
+        />
       )}
     </>
   );
