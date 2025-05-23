@@ -18,7 +18,7 @@ export default function UserBlock({ user, isCollapsed }: UserBlockProps) {
                 "flex items-center gap-[8px]",
                 isCollapsed && "flex-col"
             )}>
-                <Avatar className="h-[38px] w-[38px]">
+                <Avatar className="h-[35px] w-[35px]">
                     <AvatarImage src={user.avatar} />
                     <AvatarFallback>
                         {user.name.charAt(0)}

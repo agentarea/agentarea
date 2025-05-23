@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Cpu, Trash2 } from "lucide-react";
+import { Cpu, Trash2, Zap} from "lucide-react";
 import { Controller, FieldErrors, UseFieldArrayReturn } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../types";
@@ -35,18 +35,27 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
     </p>
   );
 
+  const mcpServerTEST = [
+    {id: 'mcp_server_id', name: 'MCP Server1', icon: <Cpu className="h-4 w-4" />},
+    {id: 'mcp_server_id1', name: 'MCP Server2', icon: <Zap className="h-4 w-4" />},
+    {id: 'mcp_server_id2', name: 'MCP Server3', icon: <Trash2 className="h-4 w-4" />},
+  ];
+
   return (
   <>
     <AccordionControl
       id="tools"
-      eventFields={toolFields}
-      removeEvent={removeTool}
       accordionValue={accordionValue}
       setAccordionValue={setAccordionValue}
       title={title}
       note={note}
       addText="Tool"
-      onAdd={() => appendTool({ mcp_server_id: '', api_key: '', config: {} })}
+      onAdd={(id: string) => appendTool({ mcp_server_id: id, api_key: '', config: {} })}
+      dropdownItems={mcpServerTEST.map((server) => ({
+        id: server.id,
+        label: server.name,
+        icon: server.icon
+      }))}
     >
           <div className="space-y-6">
       {toolFields.length > 0 ? toolFields.map((item, index) => (

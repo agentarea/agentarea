@@ -2,21 +2,25 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Button } from "@/components/ui/button";
 import { HelpCircle, Plus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type AccordionControlProps = {
   id: string;
   accordionValue: string;
   setAccordionValue: (value: string) => void;
-  eventFields: any[];
-  removeEvent: (index: number) => void;
   title: React.ReactNode;
   children: React.ReactNode;
   note?: string | React.ReactNode;
   addText?: string;
-  onAdd?: () => void;
+  onAdd: (id: string) => void;
+  dropdownItems: {
+    id: string;
+    label: string;
+    icon: React.ReactNode;
+  }[];
 };
 
-export default function AccordionControl({id, accordionValue, setAccordionValue, eventFields, removeEvent, onAdd, title, children, note, addText}: AccordionControlProps) {
+export default function AccordionControl({id, accordionValue, setAccordionValue, onAdd, title, children, note, addText, dropdownItems}: AccordionControlProps) {
   return (
     <div className="flex flex-row gap-2">
         <Accordion 
@@ -43,14 +47,38 @@ export default function AccordionControl({id, accordionValue, setAccordionValue,
                             </TooltipProvider>
                             )}
 
-                            <Button 
+                            {/* <Button 
                                 type="button" 
                                 size="xs"
                                 onClick={onAdd}
                             >
                                 <Plus />
                                 {addText ? addText : "Add"}
-                            </Button>
+                            </Button> */}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button 
+                                        className="focus-visible:ring-0"
+                                        type="button" 
+                                        size="xs"
+                                    >
+                                        <Plus />
+                                        {addText ? addText : "Add"}
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    {/* <DropdownMenuLabel>My Account</DropdownMenuLabel> */}
+                                    {/* <DropdownMenuSeparator /> */}
+                                    {
+                                        dropdownItems?.map((item) => (
+                                            <DropdownMenuItem key={item.id} onClick={() => onAdd(item.id)}>
+                                                {item.icon}
+                                                {item.label}
+                                            </DropdownMenuItem>
+                                        ))
+                                    }
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     }
                 >

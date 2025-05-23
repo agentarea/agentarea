@@ -6,6 +6,7 @@ import { Controller, FieldErrors, UseFieldArrayReturn, Control } from 'react-hoo
 import AccordionControl from "./AccordionControl";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues, EventConfig } from "../types";
+import { Badge } from "@/components/ui/badge";
 
 // Define event trigger types
 const eventOptions = [
@@ -65,43 +66,49 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
           id="triggers" 
           accordionValue={accordionValue} 
           setAccordionValue={setAccordionValue} 
-          eventFields={eventFields} 
-          removeEvent={removeEvent} 
-          onAdd={() => {
-            appendEvent({ event_type: 'text_input' });
+          onAdd={(id: string) => {
+            appendEvent({ event_type: id });
             setAccordionValue("triggers");
           }}
+          dropdownItems={eventOptions}
           title={title}
           note={note}
           addText="Trigger"
         >
           <div className="space-y-3">
           {eventFields.length > 0 ? eventFields.map((item, index) => (
-            <div key={item.id} className="mt-2 flex items-center gap-2 p-3 border rounded-md bg-primary/10 shadow-sm hover:shadow-md transition-shadow">
+            <div 
+                key={item.id} 
+                className="mt-2 flex items-center gap-2"
+                // className="mt-2 flex items-center gap-2 p-3 border rounded-md bg-primary/10 shadow-sm hover:shadow-md transition-shadow"
+            >
               <div className="flex-1">
                 <Controller
                   name={`events_config.events.${index}.event_type`}
                   control={control}
                   rules={{ required: "Event type is required" }}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a trigger type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {eventOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id} className="flex items-center">
-                            <div className="flex items-center">
-                              {option.icon}
-                              <div>
-                                <div>{option.label}</div>
-                                <div className="text-xs text-muted-foreground">{option.description}</div>
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    // <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    //   <SelectTrigger>
+                    //     <SelectValue placeholder="Select a trigger type" />
+                    //   </SelectTrigger>
+                    //   <SelectContent>
+                    //     {eventOptions.map((option) => (
+                    //       <SelectItem key={option.id} value={option.id} className="flex items-center">
+                    //         <div className="flex items-center">
+                    //           {option.icon}
+                    //           <div>
+                    //             <div>{option.label}</div>
+                    //             <div className="text-xs text-muted-foreground">{option.description}</div>
+                    //           </div>
+                    //         </div>
+                    //       </SelectItem>
+                    //     ))}
+                    //   </SelectContent>
+                    // </Select>
+                    <Badge className="flex items-center gap-2">
+                      {item.event_type}
+                    </Badge>
                   )}
                 />
               </div>
