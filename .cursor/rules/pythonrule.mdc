@@ -1,6 +1,0 @@
----
-description: 
-globs: *.py
-alwaysApply: false
----
-Prefer uv over pip
