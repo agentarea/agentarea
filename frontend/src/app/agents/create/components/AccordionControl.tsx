@@ -38,23 +38,14 @@ export default function AccordionControl({id, accordionValue, setAccordionValue,
                                 <TooltipProvider>
                                     <Tooltip delayDuration={300}>
                                         <TooltipTrigger asChild>
-                                        <HelpCircle className="h-6 min-w-4 w-4 hover:text-primary text-muted-foreground transition-colors duration-300" />
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">
-                                        {note}
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                                            <HelpCircle className="h-6 min-w-4 w-4 hover:text-primary text-muted-foreground transition-colors duration-300" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                            {note}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                             )}
-
-                            {/* <Button 
-                                type="button" 
-                                size="xs"
-                                onClick={onAdd}
-                            >
-                                <Plus />
-                                {addText ? addText : "Add"}
-                            </Button> */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button 
@@ -67,13 +58,15 @@ export default function AccordionControl({id, accordionValue, setAccordionValue,
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent>
-                                    {/* <DropdownMenuLabel>My Account</DropdownMenuLabel> */}
-                                    {/* <DropdownMenuSeparator /> */}
                                     {
                                         dropdownItems?.map((item) => (
-                                            <DropdownMenuItem key={item.id} onClick={() => onAdd(item.id)}>
-                                                {item.icon}
-                                                {item.label}
+                                            <DropdownMenuItem 
+                                                key={item.id} 
+                                                onClick={() => onAdd(item.id)}
+                                                className="flex flex-row items-center gap-2 cursor-pointer"
+                                            >
+                                                <div className="w-4 h-4 min-w-4">{item.icon}</div>
+                                                <div className="text-sm font-light">{item.label}</div>
                                             </DropdownMenuItem>
                                         ))
                                     }

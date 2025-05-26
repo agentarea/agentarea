@@ -6,7 +6,7 @@ import { Open_Sans, Montserrat } from "next/font/google";
 import {NextIntlClientProvider} from 'next-intl';
 import {getLocale} from 'next-intl/server';
 
-const openSans = Open_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
+const openSans = Open_Sans({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
 const montserrat = Montserrat({subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-montserrat"});
 
 

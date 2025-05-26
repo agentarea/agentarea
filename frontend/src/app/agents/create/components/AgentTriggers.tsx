@@ -1,18 +1,26 @@
-import React, { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Calendar, MessageSquare, Wand2, Zap } from "lucide-react";
-import { Controller, FieldErrors, UseFieldArrayReturn, Control } from 'react-hook-form';
+import React, { useState } from "react";
+import { Wand2, Zap, Clock } from "lucide-react";
+import { FieldErrors, UseFieldArrayReturn, Control } from 'react-hook-form';
 import AccordionControl from "./AccordionControl";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues, EventConfig } from "../types";
-import { Badge } from "@/components/ui/badge";
+import { TriggerControl } from "./TriggerControl";
+import { Accordion } from "@/components/ui/accordion";
 
 // Define event trigger types
 const eventOptions = [
-  { id: 'text_input', label: 'Text Input', description: 'Agent responds when a user sends a text message', icon: <MessageSquare className="h-4 w-4 mr-2" /> },
-  { id: 'agent_call', label: 'Agent Call', description: 'Agent is triggered when called by another agent', icon: <Wand2 className="h-4 w-4 mr-2" /> },
-  { id: 'cron', label: 'Scheduled (Cron)', description: 'Agent runs on a regular schedule', icon: <Calendar className="h-4 w-4 mr-2" /> },
+  { id: 'telegram', label: 'Telegram', description: '', icon: (
+    <svg viewBox="0 0 240.1 240.1">
+      <linearGradient id="Oval_1_" gradientUnits="userSpaceOnUse" x1="-838.041" y1="660.581" x2="-838.041" y2="660.3427" gradientTransform="matrix(1000 0 0 -1000 838161 660581)">
+        <stop offset="0" stopColor="#2AABEE"/>
+        <stop offset="1" stopColor="#229ED9"/>
+      </linearGradient>
+      <circle fillRule="evenodd" clipRule="evenodd" fill="url(#Oval_1_)" cx="120.1" cy="120.1" r="120.1"/>
+      <path fillRule="evenodd" clipRule="evenodd" fill="#FFFFFF" d="M54.3,118.8c35-15.2,58.3-25.3,70-30.2 c33.3-13.9,40.3-16.3,44.8-16.4c1,0,3.2,0.2,4.7,1.4c1.2,1,1.5,2.3,1.7,3.3s0.4,3.1,0.2,4.7c-1.8,19-9.6,65.1-13.6,86.3 c-1.7,9-5,12-8.2,12.3c-7,0.6-12.3-4.6-19-9c-10.6-6.9-16.5-11.2-26.8-18c-11.9-7.8-4.2-12.1,2.6-19.1c1.8-1.8,32.5-29.8,33.1-32.3 c0.1-0.3,0.1-1.5-0.6-2.1c-0.7-0.6-1.7-0.4-2.5-0.2c-1.1,0.2-17.9,11.4-50.6,33.5c-4.8,3.3-9.1,4.9-13,4.8 c-4.3-0.1-12.5-2.4-18.7-4.4c-7.5-2.4-13.5-3.7-13-7.9C45.7,123.3,48.7,121.1,54.3,118.8z"/>
+    </svg>
+  ) },
+  { id: 'agent_call', label: 'Agent Call', description: '', icon: <Wand2 className="h-4 w-4 mr-2" /> },
+  { id: 'scheduled', label: 'Scheduled', description: '', icon: <Clock className="h-4 w-4 mr-2" /> },
 ];
 
 type AgentTriggersProps = {
@@ -26,26 +34,26 @@ type AgentTriggersProps = {
 const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent }: AgentTriggersProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("triggers");
 
-  // Add default events if none exist
-  useEffect(() => {
-    if (eventFields.length === 0) {
-      // Add the two default event types
-      appendEvent({ event_type: 'text_input' });
-      appendEvent({ event_type: 'agent_call' });
-    }
-  }, []);
+  // // Add default events if none exist
+  // useEffect(() => {
+  //   if (eventFields.length === 0) {
+  //     // Add the two default event types
+  //     appendEvent({ event_type: 'text_input' });
+  //     appendEvent({ event_type: 'agent_call' });
+  //   }
+  // }, []);
 
-  const searchUsers = async (query?: string) => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+  // const searchUsers = async (query?: string) => {
+  //   // Simulate API delay
+  //   await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (!query) return eventOptions;
+  //   if (!query) return eventOptions;
 
-    return eventOptions.filter(item => 
-      item.label.toLowerCase().includes(query.toLowerCase()) ||
-      item.description.toLowerCase().includes(query.toLowerCase())
-    );
-  };
+  //   return eventOptions.filter(item => 
+  //     item.label.toLowerCase().includes(query.toLowerCase()) ||
+  //     item.description.toLowerCase().includes(query.toLowerCase())
+  //   );
+  // };
 
   const note = (
     <>
@@ -75,56 +83,24 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
           note={note}
           addText="Trigger"
         >
-          <div className="space-y-3">
-          {eventFields.length > 0 ? eventFields.map((item, index) => (
-            <div 
-                key={item.id} 
-                className="mt-2 flex items-center gap-2"
-                // className="mt-2 flex items-center gap-2 p-3 border rounded-md bg-primary/10 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <div className="flex-1">
-                <Controller
-                  name={`events_config.events.${index}.event_type`}
-                  control={control}
-                  rules={{ required: "Event type is required" }}
-                  render={({ field }) => (
-                    // <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                    //   <SelectTrigger>
-                    //     <SelectValue placeholder="Select a trigger type" />
-                    //   </SelectTrigger>
-                    //   <SelectContent>
-                    //     {eventOptions.map((option) => (
-                    //       <SelectItem key={option.id} value={option.id} className="flex items-center">
-                    //         <div className="flex items-center">
-                    //           {option.icon}
-                    //           <div>
-                    //             <div>{option.label}</div>
-                    //             <div className="text-xs text-muted-foreground">{option.description}</div>
-                    //           </div>
-                    //         </div>
-                    //       </SelectItem>
-                    //     ))}
-                    //   </SelectContent>
-                    // </Select>
-                    <Badge className="flex items-center gap-2">
-                      {item.event_type}
-                    </Badge>
-                  )}
-                />
-              </div>
-              
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => removeEvent(index)}
-                className="text-muted-foreground hover:text-red-500 h-9 w-9 flex-shrink-0"
-                aria-label="Remove Event"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          )) : (
+          {/*  */}
+          <div className="space-y-1">
+          {eventFields.length > 0 ? (
+              <Accordion type="multiple" id="triggers-items">
+                {
+                  eventFields.map((item, index) => (
+                    <TriggerControl 
+                      key={`trigger-${index}`}
+                      trigger={eventOptions.find(option => option.id === item.event_type) || undefined} 
+                      index={index} 
+                      control={control} 
+                      removeEvent={removeEvent}
+                      name={`events_config.events.${index}.event_type`}
+                    />
+                  ))
+                }
+              </Accordion>
+            ) : (
             <div className="mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
               {note}
             </div>
