@@ -33,7 +33,7 @@ class MCPServerInstanceResponse(BaseModel):
     status: str
     config: Dict[str, Any]
     created_at: str
-    last_updated: str
+    updated_at: str
 
     @classmethod
     def from_domain(cls, instance: MCPServerInstance) -> "MCPServerInstanceResponse":
@@ -45,7 +45,7 @@ class MCPServerInstanceResponse(BaseModel):
             status=instance.status,
             config=instance.config,
             created_at=instance.created_at.isoformat(),
-            last_updated=instance.last_updated.isoformat(),
+            updated_at=instance.updated_at.isoformat(),
         )
 
 

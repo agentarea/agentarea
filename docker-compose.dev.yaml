@@ -58,20 +58,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      bootstrap:
-        condition: service_completed_successfully
     command: ["python", "-m", "cli", "migrate"]
 
   bootstrap:
     build:
       context: bootstrap
       dockerfile: Dockerfile
-    working_dir: /app/bootstrap/code
     volumes:
-      - ./bootstrap/code:/app/bootstrap/code
-      - ./bootstrap/scripts/providers.yaml:/app/bootstrap/code/providers.yaml
-      - ./core/agentarea:/app/agentarea
-      - ${INFISICAL_TOKEN_VOLUME}:/app/data
+      - ./data/providers.yaml:/app/providers.yaml
+      - ${INFISICAL_TOKEN_VOLUME}./bootstrap/data}:/app/data
     environment:
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
       - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
@@ -81,11 +76,20 @@ services:
       - ORGANIZATION_NAME=${ORGANIZATION_NAME:-your-org-name}
       - INFISICAL_URL=http://infisical:8080
       - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - LLM_PROVIDERS_YAML=/app/providers.yaml
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
     depends_on:
       db:
         condition: service_healthy
       minio:
         condition: service_healthy
+      app_migrations:
+        condition: service_completed_successfully
+      infisical:
+        condition: service_started
 
   minio:
     image: minio/minio
@@ -119,25 +123,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  infisical_db:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-    volumes:
-      - postgres_data_infisical:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   infisical:
     container_name: infisical-backend
     restart: unless-stopped
     depends_on:
-      infisical_db:
+      db:
         condition: service_healthy
       redis:
         condition: service_started
@@ -148,7 +138,7 @@ services:
       - 3333:8080
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@infisical_db:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/infisical
   redis:
     image: redis
     container_name: infisical-dev-redis
@@ -163,7 +153,6 @@ services:
 
 volumes:
   postgres_data:
-  postgres_data_infisical:
   minio_data: 
   redis_data:
   infisical_bootstrap:

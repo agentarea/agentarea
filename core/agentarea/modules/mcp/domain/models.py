@@ -32,7 +32,7 @@ class MCPServer(BaseModel):
         status: str = "draft",
         is_public: bool = False,
         id: UUID = None,
-        last_updated: datetime = None,
+        updated_at: datetime = None,
     ):
         self.id = id or uuid4()
         self.name = name
@@ -42,5 +42,5 @@ class MCPServer(BaseModel):
         self.tags = tags or []
         self.status = status
         self.is_public = is_public
-        self.last_updated = last_updated or datetime.utcnow()
+        self.updated_at = updated_at or datetime.utcnow()
 

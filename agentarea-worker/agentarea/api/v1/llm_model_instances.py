@@ -34,7 +34,7 @@ class LLMModelInstanceResponse(BaseModel):
     description: str
     status: str
     is_public: bool
-    last_updated: str
+    updated_at: str
 
     @classmethod
     def from_domain(cls, instance: LLMModelInstance) -> "LLMModelInstanceResponse":
@@ -45,7 +45,7 @@ class LLMModelInstanceResponse(BaseModel):
             description=instance.description,
             status=instance.status,
             is_public=instance.is_public,
-            last_updated=instance.last_updated,
+            updated_at=instance.updated_at,
         )
 
 

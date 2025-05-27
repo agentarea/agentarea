@@ -374,7 +374,7 @@ export interface components {
             /** Is Public */
             is_public: boolean;
             /** Last Updated */
-            last_updated: string;
+            updated_at: string;
         };
         /** LLMModelInstanceUpdate */
         LLMModelInstanceUpdate: {
@@ -513,7 +513,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Last Updated */
-            last_updated: string;
+            updated_at: string;
         };
         /** MCPServerInstanceUpdate */
         MCPServerInstanceUpdate: {

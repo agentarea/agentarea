@@ -4,10 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from agentarea.api.deps.services import get_agent_service, get_task_service
+from agentarea.api.deps.services import get_agent_service
 from agentarea.modules.agents.application.agent_service import AgentService
-from agentarea.modules.tasks.application.task_service import TaskService
-from agentarea.modules.tasks.domain.models import Task
+
+
 
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
 
@@ -42,7 +42,7 @@ async def create_task_for_agent(
     agent_id: UUID,
     data: TaskCreate,
     agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    
 ):
     # Verify agent exists
     agent = await agent_service.get(agent_id)
@@ -61,7 +61,7 @@ async def create_task_for_agent(
 async def list_agent_tasks(
     agent_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    
 ):
     # Verify agent exists
     agent = await agent_service.get(agent_id)
@@ -78,7 +78,7 @@ async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    task_service: TaskService = Depends(get_task_service),
+    
 ):
     # Verify agent exists
     agent = await agent_service.get(agent_id)

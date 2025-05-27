@@ -1,17 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useFormState, useFormStatus } from 'react-dom';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { listLLMModels, createLLMModelInstance, LLMModel } from "@/lib/api";
+import { LLMModel } from "@/lib/api";
+import { addLLMModelInstance } from './actions';
+import { initialState } from './state';
 
 interface LLMProvider {
   id: string;
   name: string;
-  description?: string;
 }
 
 interface FormData {
@@ -24,258 +27,305 @@ interface FormData {
   isPublic: boolean;
 }
 
-export default function LLMModelForm() {
-  const [providers, setProviders] = useState<LLMProvider[]>([]);
-  const [models, setModels] = useState<LLMModel[]>([]);
-  const [filteredModels, setFilteredModels] = useState<LLMModel[]>([]);
-  const [formData, setFormData] = useState<FormData>({
-    providerId: "",
-    modelId: "",
-    name: "",
-    description: "",
-    apiKey: "",
-    isDefault: false,
-    isPublic: true,
+interface LLMModelFormProps {
+  llms: LLMModel[];
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "Adding..." : "Add Model"}
+    </Button>
+  );
+}
+
+export default function LLMModelForm({ llms }: LLMModelFormProps) {
+  const [state, formAction] = useFormState(addLLMModelInstance, initialState);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setValue,
+    watch,
+    reset,
+  } = useForm<FormData>({
+    defaultValues: {
+      providerId: '',
+      modelId: '',
+      name: '',
+      description: '',
+      apiKey: '',
+      isDefault: false,
+      isPublic: true,
+    },
   });
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
-  // Fetch providers and models from backend
-  useEffect(() => {
-    async function fetchProvidersAndModels() {
-      // Fetch providers from backend
-      const providersRes = await fetch("/api/llm-providers");
-      const providersData = await providersRes.json();
-      setProviders(providersData);
-      // Fetch all models from backend
-      const { data } = await listLLMModels();
-      if (data) {
-        setModels(data);
+  // Watch form values for dependent logic
+  const watchedProviderId = watch('providerId');
+  const watchedModelId = watch('modelId');
+
+  // Extract unique providers from models
+  const providers = useMemo(() => {
+    const uniqueProviders = new Map<string, LLMProvider>();
+    
+    llms.forEach((model) => {
+      const providerId = 'provider_id' in model ? (model as LLMModel & { provider_id: string }).provider_id : model.provider;
+      const providerName = model.provider;
+      
+      if (!uniqueProviders.has(providerId)) {
+        uniqueProviders.set(providerId, {
+          id: providerId,
+          name: providerName,
+        });
       }
-    }
-    fetchProvidersAndModels();
-  }, []);
+    });
+    
+    return Array.from(uniqueProviders.values());
+  }, [llms]);
 
-  // Filter models by providerId
+  // Filter models by selected provider
+  const filteredModels = useMemo(() => {
+    if (!watchedProviderId) return [];
+    
+    return llms.filter((model) => {
+      const modelProviderId = 'provider_id' in model ? (model as LLMModel & { provider_id: string }).provider_id : model.provider;
+      return modelProviderId === watchedProviderId;
+    });
+  }, [llms, watchedProviderId]);
+
+  // Update form with values returned from server action (e.g., on validation error)
   useEffect(() => {
-    if (formData.providerId) {
-      setFilteredModels(models.filter((m) => {
-        return ('provider_id' in m ? (m as { provider_id: string }).provider_id : (m as { provider: string }).provider) === formData.providerId;
-      }));
-    } else {
-      setFilteredModels([]);
+    if (state.fieldValues) {
+      Object.entries(state.fieldValues).forEach(([key, value]) => {
+        setValue(key as keyof FormData, value as string | boolean);
+      });
     }
-    // Reset model selection if provider changes
-    setFormData((prev) => ({ ...prev, modelId: "", name: "", description: "" }));
-  }, [formData.providerId, models]);
+  }, [state, setValue]);
 
-  // When model changes, prefill name/description
+  // Reset form on successful submission
   useEffect(() => {
-    if (formData.modelId) {
-      const model = models.find((m) => m.id === formData.modelId);
-      if (model) {
-        setFormData((prev) => ({
-          ...prev,
-          name: model.name,
-          description: model.description,
-        }));
-      }
+    if (state.message && state.message.includes('successfully') && !state.errors) {
+      reset();
     }
-  }, [formData.modelId, models]);
+  }, [state.message, state.errors, reset]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  // Combine react-hook-form errors and server action errors
+  const combinedErrors = {
+    ...errors,
+    ...state.errors,
+  };
+
+  const getErrorMessage = (error: string | string[] | { message?: string } | undefined) => {
+    if (typeof error === 'string') return error;
+    if (Array.isArray(error)) return error[0];
+    return error?.message;
   };
 
   const handleProviderChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, providerId: value }));
-    setErrors({});
+    setValue('providerId', value);
+    setValue('modelId', ''); // Reset model when provider changes
+    setValue('name', '');
+    setValue('description', '');
   };
 
   const handleModelChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, modelId: value }));
-    setErrors({});
+    const model = llms.find((m) => m.id === value);
+    setValue('modelId', value);
+    setValue('name', model?.name || '');
+    setValue('description', model?.description || '');
   };
 
-  const handleSwitchChange = (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, isDefault: checked }));
-  };
-
-  const handlePublicSwitchChange = (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, isPublic: checked }));
-  };
-
-  const validate = () => {
-    const newErrors: { [key: string]: string } = {};
-    if (!formData.providerId) newErrors.providerId = "Provider is required.";
-    if (!formData.modelId) newErrors.modelId = "Model is required.";
-    if (!formData.name) newErrors.name = "Model name is required.";
-    if (!formData.apiKey) newErrors.apiKey = "API key is required.";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!validate()) return;
-    setLoading(true);
-    setSuccess(false);
-    // Find selected model for model_id and description
-    const model = models.find((m) => m.id === formData.modelId);
-    if (!model) {
-      setErrors({ modelId: "Selected model not found." });
-      setLoading(false);
-      return;
-    }
-    const payload = {
-      model_id: model.id,
-      api_key: formData.apiKey,
-      name: formData.name,
-      description: formData.description,
-      is_public: formData.isPublic,
-    };
-    const { error } = await createLLMModelInstance(payload);
-    setLoading(false);
-    if (!error) {
-      setSuccess(true);
-      setFormData({
-        providerId: "",
-        modelId: "",
-        name: "",
-        description: "",
-        apiKey: "",
-        isDefault: false,
-        isPublic: true,
-      });
-    } else {
-      setErrors({ apiKey: typeof error === "string" ? error : "Failed to add model instance." });
-    }
+  // Handle form submission with react-hook-form validation
+  const onSubmit: SubmitHandler<FormData> = async (data) => {
+    // Create FormData for server action
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      formData.append(key, value.toString());
+    });
+    
+    // Call server action
+    formAction(formData);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-1.5">
-        <Label htmlFor="provider">Provider</Label>
-        <Select value={formData.providerId} onValueChange={handleProviderChange}>
-          <SelectTrigger id="provider" className="w-full">
-            <SelectValue placeholder="Select provider" />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((provider) => (
-              <SelectItem key={provider.id} value={provider.id}>
-                <span className="flex items-center gap-2">
-                  <Avatar className="h-5 w-5">
-                    <AvatarFallback>{provider.name[0]?.toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  {provider.name}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {errors.providerId && <p className="text-sm text-red-500 mt-1">{errors.providerId}</p>}
-      </div>
-
-      {formData.providerId && (
-        <>
-          <div className="space-y-1.5">
-            <Label htmlFor="model">Model</Label>
-            <Select value={formData.modelId} onValueChange={handleModelChange}>
-              <SelectTrigger id="model" className="w-full">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredModels.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.modelId && <p className="text-sm text-red-500 mt-1">{errors.modelId}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Model Name</Label>
-            <Input
-              id="name"
-              name="name"
-              placeholder="e.g. Claude 3.5 Sonnet"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full"
-            />
-            {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="description">Description</Label>
-            <Input
-              id="description"
-              name="description"
-              placeholder="Model description"
-              value={formData.description}
-              onChange={handleChange}
-              className="w-full"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="apiKey">API Key</Label>
-            <Input
-              id="apiKey"
-              name="apiKey"
-              type="password"
-              placeholder="Enter your API key"
-              value={formData.apiKey}
-              onChange={handleChange}
-              required
-              className="w-full"
-            />
-            {errors.apiKey && <p className="text-sm text-red-500 mt-1">{errors.apiKey}</p>}
-          </div>
-
-          <div className="flex items-center space-x-2 pt-2">
-            <Switch
-              id="default-switch"
-              checked={formData.isDefault}
-              onCheckedChange={handleSwitchChange}
-            />
-            <div className="grid gap-1.5 leading-none">
-              <Label htmlFor="default-switch" className="cursor-pointer">
-                Set as default LLM
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                This model will be used as the default for new agents and workflows.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2 pt-2">
-            <Switch
-              id="public-switch"
-              checked={formData.isPublic}
-              onCheckedChange={handlePublicSwitchChange}
-            />
-            <div className="grid gap-1.5 leading-none">
-              <Label htmlFor="public-switch" className="cursor-pointer">
-                Public
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Make this model instance available to all users.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-4 border-t">
-            <Button type="submit" disabled={loading}>{loading ? "Adding..." : "Add Model"}</Button>
-          </div>
-          {success && <p className="text-green-600 pt-2">LLM model instance added successfully!</p>}
-        </>
+    <div>
+      {/* Display general form errors */}
+      {state.errors?._form && (
+        <div className="text-red-500 text-sm mb-4" role="alert">
+          {state.errors._form.join(', ')}
+        </div>
       )}
-    </form>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <div className="space-y-1.5">
+          <Label htmlFor="provider">Provider</Label>
+          <Select 
+            value={watchedProviderId} 
+            onValueChange={handleProviderChange}
+          >
+            <SelectTrigger id="provider" className="w-full">
+              <SelectValue placeholder="Select provider" />
+            </SelectTrigger>
+            <SelectContent>
+              {providers.map((provider) => (
+                <SelectItem key={provider.id} value={provider.id}>
+                  <span className="flex items-center gap-2">
+                    <Avatar className="h-5 w-5">
+                      <AvatarFallback>{provider.name[0]?.toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    {provider.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <input 
+            type="hidden" 
+            {...register('providerId', { required: 'Provider is required' })} 
+          />
+          {combinedErrors.providerId && (
+            <span className="text-sm text-red-500" role="alert">
+              {getErrorMessage(combinedErrors.providerId)}
+            </span>
+          )}
+        </div>
+
+        {watchedProviderId && (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="model">Model</Label>
+              <Select 
+                value={watchedModelId} 
+                onValueChange={handleModelChange}
+              >
+                <SelectTrigger id="model" className="w-full">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredModels.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input 
+                type="hidden" 
+                {...register('modelId', { required: 'Model is required' })} 
+              />
+              {combinedErrors.modelId && (
+                <span className="text-sm text-red-500" role="alert">
+                  {getErrorMessage(combinedErrors.modelId)}
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Model Name</Label>
+              <Input
+                id="name"
+                {...register('name', { required: 'Model name is required' })}
+                placeholder="e.g. Claude 3.5 Sonnet"
+                className="w-full"
+                aria-invalid={!!combinedErrors.name}
+              />
+              {combinedErrors.name && (
+                <span className="text-sm text-red-500" role="alert">
+                  {getErrorMessage(combinedErrors.name)}
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                {...register('description')}
+                placeholder="Model description"
+                className="w-full"
+                aria-invalid={!!combinedErrors.description}
+              />
+              {combinedErrors.description && (
+                <span className="text-sm text-red-500" role="alert">
+                  {getErrorMessage(combinedErrors.description)}
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="apiKey">API Key</Label>
+              <Input
+                id="apiKey"
+                {...register('apiKey', { required: 'API key is required' })}
+                type="password"
+                placeholder="Enter your API key"
+                className="w-full"
+                aria-invalid={!!combinedErrors.apiKey}
+              />
+              {combinedErrors.apiKey && (
+                <span className="text-sm text-red-500" role="alert">
+                  {getErrorMessage(combinedErrors.apiKey)}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch
+                id="default-switch"
+                checked={watch('isDefault')}
+                onCheckedChange={(checked) => setValue('isDefault', checked)}
+              />
+              <input 
+                type="hidden" 
+                {...register('isDefault')} 
+              />
+              <div className="grid gap-1.5 leading-none">
+                <Label htmlFor="default-switch" className="cursor-pointer">
+                  Set as default LLM
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  This model will be used as the default for new agents and workflows.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch
+                id="public-switch"
+                checked={watch('isPublic')}
+                onCheckedChange={(checked) => setValue('isPublic', checked)}
+              />
+              <input 
+                type="hidden" 
+                {...register('isPublic')} 
+              />
+              <div className="grid gap-1.5 leading-none">
+                <Label htmlFor="public-switch" className="cursor-pointer">
+                  Public
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Make this model instance available to all users.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t">
+              <SubmitButton />
+            </div>
+
+            {/* Display success/failure message */}
+            {state.message && !state.errors && (
+              <p className="text-green-600 pt-2" role="alert">{state.message}</p>
+            )}
+            {state.message && state.errors && (
+              <p className="text-red-600 pt-2" role="alert">{state.message}</p>
+            )}
+          </>
+        )}
+      </form>
+    </div>
   );
 } 

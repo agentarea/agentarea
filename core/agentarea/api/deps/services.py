@@ -16,7 +16,7 @@ from agentarea.modules.llm.application.service import (
 from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
 )
-from agentarea.modules.llm.infrastructure.yaml_repository import YAMLLLMModelRepository
+from agentarea.modules.llm.infrastructure.llm_model_repository import LLMModelRepository
 from agentarea.modules.mcp.application.service import (
     MCPServerInstanceService,
     MCPServerService,
@@ -46,7 +46,6 @@ async def get_mcp_server_service(
 async def get_mcp_server_instance_service(
     session: AsyncSession = Depends(get_db_session),
     event_broker: EventBroker = Depends(get_event_broker),
-    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ) -> MCPServerInstanceService:
     mcp_server_repository = MCPServerRepository(session)
     return MCPServerInstanceService(
@@ -68,7 +67,7 @@ async def get_llm_model_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
 ) -> LLMModelService:
-    repository = YAMLLLMModelRepository(session)
+    repository = LLMModelRepository(session)
     return LLMModelService(repository, event_broker)
 
 

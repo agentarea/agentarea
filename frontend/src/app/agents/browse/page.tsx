@@ -117,9 +117,9 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
                       <div>
                         <h3 className="font-medium text-lg group-hover:text-primary transition-colors">{agent.name}</h3>
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {agent.capabilities.map((cap, i) => (
+                          {/* {agent.capabilities.map((cap, i) => (
                             <Badge key={i} variant="secondary" className="font-normal">{cap}</Badge>
-                          ))}
+                          ))} */}
                         </div>
                       </div>
                     </div>
