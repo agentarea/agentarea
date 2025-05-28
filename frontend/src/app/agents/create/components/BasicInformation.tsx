@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Bot, FileText, MessageSquare, Cpu } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
@@ -27,8 +27,10 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
       <Sparkles className="h-5 w-5 text-accent" /> Basic Information
     </h2> */}
     <div className="grid grid-cols-1 gap-6">
-      <div className="space-y-1">
-        <Label htmlFor="name" className="text-sm font-medium">Agent Name</Label>
+      <div className="space-y-2">
+        <Label htmlFor="name" className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} />Agent Name
+        </Label>
         <Input
           id="name"
           {...register('name', { required: "Agent name is required" })}
@@ -38,8 +40,10 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
         />
         {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="description" className="text-sm font-medium">Description / Goal <span className="text-sm text-zinc-400">(Optional)</span></Label>
+      <div className="space-y-2">
+        <Label htmlFor="description" className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> Description / Goal <span className="text-xs font-light text-zinc-400">(Optional)</span>
+        </Label>
         <Textarea
           id="description"
           {...register('description')}
@@ -50,8 +54,10 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
         />
         {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="instruction" className="text-sm font-medium">Instruction <span className="text-sm text-red-500">*</span></Label>
+      <div className="space-y-2">
+        <Label htmlFor="instruction" className="flex items-center gap-2">
+          <MessageSquare className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> Instruction <span className="text-sm text-red-500">*</span>
+        </Label>
         <Textarea
           id="instruction"
           {...register('instruction', { required: "Instruction is required" })}
@@ -62,15 +68,17 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
         />
         {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="model_id" className="text-sm font-medium">LLM Model</Label>
+      <div className="space-y-2">
+        <Label htmlFor="model_id" className="flex items-center gap-2">
+          <Cpu className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> LLM Model
+        </Label>
          <Controller
             name="model_id"
             control={control}
             rules={{ required: "Model is required" }}
             render={({ field }) => (
               <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                <SelectTrigger className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors">
+                <SelectTrigger className="bg-white h-10 w-full rounded-md border border-input px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-300 dark:bg-zinc-900 focus-visible:dark:border-zinc-700">
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
                 <SelectContent>

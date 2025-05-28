@@ -42,7 +42,7 @@ export default function EmptyState({description, title, action, additionAction, 
         transition={{ duration: 0.5 }}
       >
         <EmptyStateComponent
-          className="w-full max-w-auto hover:bg-white hover:border-accent/20 "
+          className="w-full max-w-auto hover:bg-white hover:border-accent/20 dark:bg-zinc-800 dark:hover:bg-zinc-800 dark:hover:border-white/30 "
           title={title}
           description={description || ""}
           icons={icons}

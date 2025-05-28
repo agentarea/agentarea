@@ -64,7 +64,7 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
 
   const title = (
     <div className="flex items-center gap-2">
-      <Zap className="h-5 w-5 text-accent" /> Agent Triggers
+      <Zap className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> Agent Triggers
     </div>
   );
 

@@ -56,13 +56,13 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
                 relative
                 transition-all duration-300 ease-in-out
                 border-r border-zinc-200 dark:border-zinc-700
-                ${isCollapsed ? 'w-[60px]' : 'w-[200px]'}
+                ${isCollapsed ? 'w-[65px]' : 'w-[230px]'}
             `}
         >
             <div className="h-[45px] pt-[6px]">
                 <div className={cn(
                     "w-full transition-all duration-500 overflow-hidden",
-                    isCollapsed ? 'h-[35px]' : 'h-[30px]'
+                    isCollapsed ? 'h-[37px]' : 'h-[30px]'
                 )}>
                     <LogoIcon />
                 </div>
