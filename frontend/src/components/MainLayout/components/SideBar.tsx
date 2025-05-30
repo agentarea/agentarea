@@ -70,7 +70,7 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
             <nav className="overflow-y-auto overflow-x-hidden flex flex-col justify-between h-full gap-[10px]">
                 <div>
                     {menuContent.map((sectionContent, index) => (
-                        <div key={`section-${index}`} className="flex flex-col gap-[2px] pt-[10px]">
+                        <div key={`section-${index}`} className="flex flex-col gap-[3px] pt-[10px]">
                             {
                                 sectionContent.section && (
                                     <SectionTitle 
@@ -97,7 +97,7 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
                                                 animate={{ opacity: 1, height: "auto" }}
                                                 exit={{ opacity: 0, height: 0 }}
                                                 transition={{ duration: 0.3 }}
-                                                className="overflow-hidden flex flex-col gap-[2px]"
+                                                className="overflow-hidden flex flex-col gap-[3px]"
                                             >
                                                 {
                                                     sectionContent.items.map((item, itemIndex) => (

@@ -31,11 +31,11 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
                 className={cn(
                     disabled && "opacity-30 pointer-events-none",
                     isActive 
-                        ? "pointer-events-none bg-gradient-to-r from-zinc-200/90 to-zinc-300/90 dark:text-primary-foreground dark:bg-white/70 dark:text-zinc-800" 
-                        : "text-foreground hover:bg-zinc-200/50 hover:dark:bg-white/10",
-                    "relative text-[14px] leading-[14px] flex flex-row items-center",
+                        ? "pointer-events-none bg-zinc-200/90 dark:text-primary-foreground dark:bg-white/70 dark:text-zinc-800 text-text" 
+                        : "hover:bg-zinc-200/40 hover:dark:bg-white/10 text-text/60 hover:text-text/90",
+                    "relative text-[14px] leading-[14px] flex flex-row items-center font-normal",
                     "py-[8px] px-[10px] rounded-[8px]",
-                    "group transition-all duration-500 gap-[10px] font-light"
+                    "group transition-all duration-500 gap-[10px]"
                 )}
                 tabIndex={0}
                 aria-label={text}

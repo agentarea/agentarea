@@ -29,7 +29,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
     <div className="grid grid-cols-1 gap-6">
       <div className="space-y-2">
         <Label htmlFor="name" className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} />Agent Name
+            <Bot className="label-icon" style={{ strokeWidth: 1.5 }} />Agent Name
         </Label>
         <Input
           id="name"
@@ -42,7 +42,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
       </div>
       <div className="space-y-2">
         <Label htmlFor="description" className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> Description / Goal <span className="text-xs font-light text-zinc-400">(Optional)</span>
+          <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description / Goal <span className="text-xs font-light text-zinc-400">(Optional)</span>
         </Label>
         <Textarea
           id="description"
@@ -56,7 +56,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
       </div>
       <div className="space-y-2">
         <Label htmlFor="instruction" className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> Instruction <span className="text-sm text-red-500">*</span>
+          <MessageSquare className="label-icon" style={{ strokeWidth: 1.5 }} /> Instruction <span className="text-sm text-red-500">*</span>
         </Label>
         <Textarea
           id="instruction"
@@ -70,7 +70,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
       </div>
       <div className="space-y-2">
         <Label htmlFor="model_id" className="flex items-center gap-2">
-          <Cpu className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> LLM Model
+          <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> LLM Model
         </Label>
          <Controller
             name="model_id"

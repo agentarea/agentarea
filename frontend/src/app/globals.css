@@ -15,6 +15,7 @@ body {
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
     --sidebar: 240 10% 96%;
+    --text: 220 9% 19%;
 
     /* --primary: 0 0% 9%;
     --primary-foreground: 0 0% 98%; */
@@ -59,6 +60,7 @@ body {
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
+    --text: 0 0% 100%;
     /* --primary: 0 0% 98%;
     --primary-foreground: 0 0% 9%; */
 
@@ -117,5 +119,10 @@ body {
 
   .card-shadow {
     box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  }
+
+  .label-icon {
+    stroke-width: 1.5;
+    @apply h-5 w-5 text-primary dark:text-[#a2b0d7];
   }
 }

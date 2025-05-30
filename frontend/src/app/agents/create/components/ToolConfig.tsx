@@ -25,7 +25,7 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const title = (
     <div className="flex items-center gap-2">
-      <Cpu className="h-5 w-5 text-primary" style={{ strokeWidth: 1.5 }} /> Tools (MCP Servers)
+      <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> Tools (MCP Servers)
     </div>
   );
   const note = (
