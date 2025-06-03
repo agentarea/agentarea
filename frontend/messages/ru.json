@@ -28,7 +28,33 @@
     "title": "Модели LLM",
     "addNewLlm": "Создать LLM",
     "noLlmInstances": "Модели LLM не найдены",
-    "setUpNewLlm": "Настройте новую модель LLM для начала работы."
+    "setUpNewLlm": "Настройте новую модель LLM для начала работы.",
+    "create": {
+      "addNewLlm": "Создать LLM",
+      "addNewLlmButton": "Создать LLM",
+      "backToLlmModels": "Вернуться к моделям LLM",
+      "modelName": "Имя модели",
+      "description": "Описание",    
+      "provider": "Поставщик",
+      "modelType": "Тип модели",
+      "endpointUrl": "URL-адрес конечной точки",
+      "apiKey": "API-ключ",
+      "contextWindow": "Контекстное окно",
+      "public": "Общедоступный",
+      "publicDescription": "Сделайте эту модель доступной для других членов",
+      "addModel": "Добавить модель",
+      "apiKeyDescription": "Ваш API-ключ хранится в безопасности и используется только для подключения к модели.",
+      "addModelButton": "Добавить модель",
+      "addModelSuccess": "Модель LLM успешно добавлена",
+      "addModelError": "Не удалось добавить модель LLM",
+      "modelNamePlaceholder": "e.g. Claude 3.5 Sonnet",
+      "descriptionPlaceholder": "Опишите возможности и использование этой модели",
+      "endpointUrlPlaceholder": "e.g. https://api.anthropic.com/v1/messages",
+      "apiKeyPlaceholder": "Введите ваш API-ключ",
+      "selectProvider": "Выберите поставщика",
+      "selectType": "Выберите тип",
+      "selectContextSize": "Выберите размер контекста"
+    }
   },
 
   "SettingsPage": {

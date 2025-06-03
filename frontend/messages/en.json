@@ -31,7 +31,33 @@
     "title": "LLM Models",
     "addNewLlm": "Add New LLM",
     "noLlmInstances": "No LLM instances found",
-    "setUpNewLlm": "Set up a new LLM to get started."
+    "setUpNewLlm": "Set up a new LLM to get started.",
+    "create": {
+      "addNewLlm": "Add New LLM",
+      "addNewLlmButton": "Add New LLM",
+      "backToLlmModels": "Back to LLM Models",
+      "modelName": "Model Name",
+      "description": "Description",
+      "provider": "Provider",
+      "modelType": "Model Type",
+      "endpointUrl": "Endpoint URL",
+      "apiKey": "API Key",
+      "contextWindow": "Context Window",
+      "public": "Public",
+      "publicDescription": "Make this model available to other members",
+      "addModel": "Add Model",
+      "apiKeyDescription": "Your API key is stored securely and used only for connecting to the model.",
+      "addModelButton": "Add Model",
+      "addModelSuccess": "LLM model added successfully",
+      "addModelError": "Failed to add LLM model",
+      "modelNamePlaceholder": "e.g. Claude 3.5 Sonnet",
+      "descriptionPlaceholder": "Describe this model's capabilities and use cases",
+      "endpointUrlPlaceholder": "e.g. https://api.anthropic.com/v1/messages",
+      "apiKeyPlaceholder": "Enter your API key",
+      "selectProvider": "Select provider",
+      "selectType": "Select type",
+      "selectContextSize": "Select context size"
+    }
   },
 
   "SettingsPage": {

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { useTranslations } from "next-intl";
 import { 
   Bot, 
   FileText, 
@@ -59,15 +60,80 @@ export default function AddLLMModelPage() {
     e.preventDefault();
     console.log("Form data submitted:", formData);
     // Here you would send the data to your API
-    alert("LLM model added successfully! (Demo only)");
+    alert(t('addModelSuccess'));
   };
+
+  const t = useTranslations('LlmBrowsePage.create');
+  const providersList = [
+    {
+      name: "OpenAI",
+      value: "openai"
+    },
+    {
+      name: "Anthropic",
+      value: "anthropic"
+    },
+    {
+      name: "Meta AI",  
+      value: "meta"
+    },
+    {
+      name: "Mistral AI",
+      value: "mistral"
+    },
+    {
+      name: "Custom Provider",
+      value: "custom"
+    }
+  ];
+
+  const modelTypesList = [
+    {
+      name: "Text-only",
+      value: "text"
+    },
+    {
+      name: "Multi-modal",
+      value: "multimodal"
+    },
+    {
+      name: "Embedding",
+      value: "embedding"
+    },
+    {
+      name: "Specialized",
+      value: "specialized"
+    }
+  ];  
+
+  const contextWindowList = [
+    {
+      name: "4K tokens",
+      value: "4K"
+    }, {
+      name: "8K tokens",
+      value: "8K"
+    }, {
+      name: "16K tokens",
+      value: "16K"
+    }, {
+      name: "32K tokens",
+      value: "32K"
+    }, {
+      name: "100K+ tokens",
+      value: "100K"
+    }, {
+      name: "Custom size",
+      value: "custom"
+    },
+  ];
 
   return (
     <ContentBlock
       header={{
-        title: "Add LLM Model",
+        title: t('addNewLlm'),
         backLink: {
-          label: "Back to LLM Models",
+          label: t('backToLlmModels'),
           href: "/admin/llms"
         }
       }}
@@ -77,12 +143,12 @@ export default function AddLLMModelPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-1.5">
           <Label htmlFor="name" className="label">
-            <Bot className="label-icon" style={{ strokeWidth: 1.5 }} /> Model Name
+            <Bot className="label-icon" style={{ strokeWidth: 1.5 }} /> {t('modelName')}
           </Label>
           <Input
             id="name"
             name="name"
-            placeholder="e.g. Claude 3.5 Sonnet"
+            placeholder={t('modelNamePlaceholder')}
             value={formData.name}
             onChange={handleChange}
             required
@@ -92,12 +158,12 @@ export default function AddLLMModelPage() {
         
         <div className="space-y-1.5">
           <Label htmlFor="description" className="label">
-            <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description
+            <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> {t('description')}
           </Label>
           <Textarea
             id="description"
             name="description"
-            placeholder="Describe this model's capabilities and use cases"
+            placeholder={t('descriptionPlaceholder')}
             value={formData.description}
             onChange={handleChange}
             required
@@ -109,41 +175,46 @@ export default function AddLLMModelPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
             <Label htmlFor="provider" className="label">
-              <Server className="label-icon" style={{ strokeWidth: 1.5 }} /> Provider
+              <Server className="label-icon" style={{ strokeWidth: 1.5 }} /> {t('provider')}
             </Label>
             <Select 
               value={formData.provider}
               onValueChange={(value) => handleSelectChange("provider", value)}
             >
               <SelectTrigger id="provider" className="w-full">
-                <SelectValue placeholder="Select provider" />
+                <SelectValue placeholder={t('selectProvider')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="anthropic">Anthropic</SelectItem>
-                <SelectItem value="meta">Meta AI</SelectItem>
-                <SelectItem value="mistral">Mistral AI</SelectItem>
-                <SelectItem value="custom">Custom Provider</SelectItem>
+                  {
+                    providersList.map((provider) => (
+                      <SelectItem key={provider.value} value={provider.value}>
+                        {provider.name}
+                      </SelectItem>
+                    ))
+                  }
               </SelectContent>
             </Select>
           </div>
           
           <div className="space-y-1.5">
             <Label htmlFor="modelType" className="label">
-              <Layers className="label-icon" style={{ strokeWidth: 1.5 }} /> Model Type
+              <Layers className="label-icon" style={{ strokeWidth: 1.5 }} /> {t('modelType')}
             </Label>
             <Select 
               value={formData.modelType}
               onValueChange={(value) => handleSelectChange("modelType", value)}
             >
               <SelectTrigger id="modelType" className="w-full">
-                <SelectValue placeholder="Select type" />
+                <SelectValue placeholder={t('selectType')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="text">Text-only</SelectItem>
-                <SelectItem value="multimodal">Multi-modal</SelectItem>
-                <SelectItem value="embedding">Embedding</SelectItem>
-                <SelectItem value="specialized">Specialized</SelectItem>
+                {
+                  modelTypesList.map((modelType) => (
+                    <SelectItem key={modelType.value} value={modelType.value}>
+                      {modelType.name}
+                    </SelectItem>
+                  ))
+                }
               </SelectContent>
             </Select>
           </div>
@@ -151,12 +222,12 @@ export default function AddLLMModelPage() {
         
         <div className="space-y-1.5">
           <Label htmlFor="endpointUrl" className="label">
-            <Link className="label-icon" style={{ strokeWidth: 1.5 }} /> Endpoint URL
+            <Link className="label-icon" style={{ strokeWidth: 1.5 }} /> {t('endpointUrl')}
           </Label>
           <Input
             id="endpointUrl"
             name="endpointUrl"
-            placeholder="e.g. https://api.anthropic.com/v1/messages"
+            placeholder={t('endpointUrlPlaceholder')}
             value={formData.endpointUrl}
             onChange={handleChange}
             required
@@ -166,41 +237,40 @@ export default function AddLLMModelPage() {
         
         <div className="space-y-1.5">
           <Label htmlFor="apiKey" className="label">
-            <Key className="label-icon" style={{ strokeWidth: 1.5 }} /> API Key
+            <Key className="label-icon" style={{ strokeWidth: 1.5 }} /> {t('apiKey')}
           </Label>
           <Input
             id="apiKey"
             name="apiKey"
             type="password"
-            placeholder="Enter your API key"
+            placeholder={t('apiKeyPlaceholder')}
             value={formData.apiKey}
             onChange={handleChange}
             required
             className="w-full"
           />
           <p className="note mt-1">
-            Your API key is stored securely and used only for connecting to the model.
+            {t('apiKeyDescription')}
           </p>
         </div>
         
         <div className="space-y-1.5">
           <Label htmlFor="contextWindow" className="label">
-            <Maximize2 className="label-icon" style={{ strokeWidth: 1.5 }} /> Context Window
+            <Maximize2 className="label-icon" style={{ strokeWidth: 1.5 }} /> {t('contextWindow')}
           </Label>
           <Select 
             value={formData.contextWindow}
             onValueChange={(value) => handleSelectChange("contextWindow", value)}
           >
             <SelectTrigger id="contextWindow" className="w-full">
-              <SelectValue placeholder="Select context size" />
+              <SelectValue placeholder={t('selectContextSize')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="4K">4K tokens</SelectItem>
-              <SelectItem value="8K">8K tokens</SelectItem>
-              <SelectItem value="16K">16K tokens</SelectItem>
-              <SelectItem value="32K">32K tokens</SelectItem>
-              <SelectItem value="100K">100K+ tokens</SelectItem>
-              <SelectItem value="custom">Custom size</SelectItem>
+              {contextWindowList.map((contextWindow) => (
+                <SelectItem key={contextWindow.value} value={contextWindow.value}>
+                  {contextWindow.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -213,16 +283,16 @@ export default function AddLLMModelPage() {
           />
           <div className="grid gap-1.5 leading-none">
             <Label htmlFor="public-switch" className="cursor-pointer label">
-              Share with Organization
+              {t('public')}
             </Label>
             <p className="note">
-              Make this model available to other members
+              {t('publicDescription')}
             </p>
           </div>
         </div>
         
         <div className="flex justify-end pt-4">
-          <Button type="submit">Add Model</Button>
+          <Button type="submit">{t('addModel')}</Button>
         </div>
       </form>
     </Card>
