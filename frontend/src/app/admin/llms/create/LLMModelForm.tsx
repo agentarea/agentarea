@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ProviderIcon } from "@/components/ui/provider-icon";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 import { LLMModel } from "@/lib/api";
 import { addLLMModelInstance } from './actions';
 import { initialState } from './state';
@@ -173,9 +174,11 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
               {providers.map((provider) => (
                 <SelectItem key={provider.id} value={provider.id}>
                   <span className="flex items-center gap-2">
-                    <Avatar className="h-5 w-5">
-                      <AvatarFallback>{provider.name[0]?.toUpperCase()}</AvatarFallback>
-                    </Avatar>
+                    <ProviderIcon 
+                      iconUrl={getProviderIconUrl(provider.name)}
+                      name={provider.name}
+                      size="sm"
+                    />
                     {provider.name}
                   </span>
                 </SelectItem>

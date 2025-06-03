@@ -64,7 +64,7 @@ class AgentResponse(BaseModel):
             name=agent.name,
             status=agent.status,
             description=agent.description,
-            
+            instruction=agent.instruction,
             model_id=agent.model_id,
             tools_config=agent.tools_config,
             events_config=agent.events_config,
@@ -77,10 +77,9 @@ async def create_agent(
     data: AgentCreate, agent_service: AgentService = Depends(get_agent_service)
 ):
     agent = await agent_service.create_agent(
-        
         name=data.name,
-        
         description=data.description,
+        instruction=data.instruction,
         model_id=data.model_id,
         tools_config=data.tools_config.dict() if data.tools_config else None,
         events_config=data.events_config.dict() if data.events_config else None,

@@ -1,44 +1,49 @@
-from dataclasses import dataclass
 from uuid import UUID
 
 from agentarea.common.events.base_events import DomainEvent
 
 
-@dataclass
 class LLMModelCreated(DomainEvent):
-    model_id: UUID
-    name: str
-    provider: str
-    model_type: str
+    def __init__(self, model_id: UUID, name: str, provider: str, model_type: str) -> None:
+        super().__init__()
+        self.model_id = model_id
+        self.name = name
+        self.provider = provider
+        self.model_type = model_type
 
 
-@dataclass
 class LLMModelUpdated(DomainEvent):
-    model_id: UUID
-    name: str
-    provider: str
-    model_type: str
+    def __init__(self, model_id: UUID, name: str, provider: str, model_type: str) -> None:
+        super().__init__()
+        self.model_id = model_id
+        self.name = name
+        self.provider = provider
+        self.model_type = model_type
 
 
-@dataclass
 class LLMModelDeleted(DomainEvent):
-    model_id: UUID
+    def __init__(self, model_id: UUID) -> None:
+        super().__init__()
+        self.model_id = model_id
 
 
-@dataclass
 class LLMModelInstanceCreated(DomainEvent):
-    instance_id: UUID
-    model_id: UUID
-    name: str
+    def __init__(self, instance_id: UUID, model_id: UUID, name: str) -> None:
+        super().__init__()
+        self.instance_id = instance_id
+        self.model_id = model_id
+        self.name = name
 
 
-@dataclass
 class LLMModelInstanceUpdated(DomainEvent):
-    instance_id: UUID
-    model_id: UUID
-    name: str
+    def __init__(self, instance_id: UUID, model_id: UUID, name: str) -> None:
+        super().__init__()
+        self.instance_id = instance_id
+        self.model_id = model_id
+        self.name = name
 
 
-@dataclass
 class LLMModelInstanceDeleted(DomainEvent):
-    instance_id: UUID 
+    def __init__(self, instance_id: UUID) -> None:
+        super().__init__()
+        self.instance_id = instance_id 

@@ -1,7 +1,9 @@
 from uuid import UUID
+from typing import Optional
 
 from agentarea.common.base.service import BaseCrudService
 from agentarea.common.events.broker import EventBroker
+from agentarea.config import get_database
 
 from ..domain.events import (
     MCPServerCreated,
@@ -136,11 +138,16 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
 
 class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
-    def __init__(self, repository: MCPServerInstanceRepository, event_broker: EventBroker,
-                 mcp_server_repository: MCPServerRepository):
-        super().__init__(repository)
+    def __init__(
+        self,
+        repository: MCPServerInstanceRepository,
+        event_broker: EventBroker,
+        mcp_server_repository: MCPServerRepository,
+    ):
+        self.repository = repository
         self.event_broker = event_broker
         self.mcp_server_repository = mcp_server_repository
+        self.db = get_database()  # Add database access
 
     async def create_instance(
         self,
@@ -265,3 +272,9 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         status: str | None = None
     ) -> list[MCPServerInstance]:
         return await self.repository.list(server_id=server_id, status=status)
+
+    async def get(self, id: UUID) -> Optional[MCPServerInstance]:
+        """Get MCP server instance with separate session to avoid transaction conflicts."""
+        async with self.db.get_db() as session:
+            repo = MCPServerInstanceRepository(session)
+            return await repo.get(id)

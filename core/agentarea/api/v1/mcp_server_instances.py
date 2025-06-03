@@ -1,12 +1,12 @@
-from typing import List, Optional, Dict, Any
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
+from agentarea.api.deps.services import get_mcp_server_instance_service
 from agentarea.modules.mcp.application.service import MCPServerInstanceService
 from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
-from agentarea.api.deps.services import get_mcp_server_instance_service
 
 router = APIRouter(prefix="/mcp-server-instances", tags=["mcp-server-instances"])
 
@@ -15,14 +15,14 @@ class MCPServerInstanceCreate(BaseModel):
     server_id: UUID
     name: str
     endpoint_url: str
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
 
 
 class MCPServerInstanceUpdate(BaseModel):
-    name: Optional[str] = None
-    endpoint_url: Optional[str] = None
-    config: Optional[Dict[str, Any]] = None
-    status: Optional[str] = None
+    name: str | None = None
+    endpoint_url: str | None = None
+    config: dict[str, Any] | None = None
+    status: str | None = None
 
 
 class MCPServerInstanceResponse(BaseModel):
@@ -31,7 +31,7 @@ class MCPServerInstanceResponse(BaseModel):
     name: str
     endpoint_url: str
     status: str
-    config: Dict[str, Any]
+    config: dict[str, Any]
     created_at: str
     updated_at: str
 
@@ -60,10 +60,10 @@ async def create_mcp_server_instance(
         endpoint_url=data.endpoint_url,
         config=data.config,
     )
-    
+
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server not found")
-        
+
     return MCPServerInstanceResponse.from_domain(instance)
 
 
@@ -78,10 +78,10 @@ async def get_mcp_server_instance(
     return MCPServerInstanceResponse.from_domain(instance)
 
 
-@router.get("/", response_model=List[MCPServerInstanceResponse])
+@router.get("/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
-    server_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    server_id: UUID | None = None,
+    status: str | None = None,
     mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
     instances = await mcp_server_instance_service.list(server_id=server_id, status=status)
@@ -136,4 +136,4 @@ async def stop_mcp_server_instance(
     success = await mcp_server_instance_service.stop_instance(instance_id)
     if not success:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
-    return {"status": "success", "message": "Instance stopped successfully"} 
+    return {"status": "success", "message": "Instance stopped successfully"}

@@ -16,17 +16,17 @@ class AgentService(BaseCrudService[Agent]):
     async def create_agent(
         self,
         name: str,
-        
         description: str,
+        instruction: str,
         model_id: str,
         tools_config: dict = None,
         events_config: dict = None,
-        planning: str = None,
+        planning: bool = None,
     ) -> Agent:
         agent = Agent(
             name=name,
-            
             description=description,
+            instruction=instruction,
             model_id=model_id,
             tools_config=tools_config,
             events_config=events_config,
@@ -38,7 +38,6 @@ class AgentService(BaseCrudService[Agent]):
             AgentCreated(
                 agent_id=agent.id,
                 name=agent.name,
-                
                 description=agent.description,
                 model_id=agent.model_id,
                 tools_config=agent.tools_config,
