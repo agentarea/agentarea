@@ -129,4 +129,8 @@ body {
     stroke-width: 1.5;
     @apply h-5 w-5 text-primary dark:text-accent-foreground;
   }
+
+  .note {
+    @apply text-xs text-zinc-400;
+  }
 }

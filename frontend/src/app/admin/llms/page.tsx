@@ -10,6 +10,7 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import GridView from "./_components/GridView";
 import TableView from "./_components/TableView";
 import EmptyState from "@/components/EmptyState/EmptyState";
+import { TabsWithNavigation } from "./_components/TabsWithNavigation";
 
 // Server component that handles the tab rendering
 export default async function AddLLMModelPage({

@@ -31,7 +31,7 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
                         <h1>{header.title}</h1>
                         {
                             header.description && (
-                                <p className="text-xs text-zinc-400">
+                                <p className="note">
                                     {header.description}
                                 </p>
                             )
@@ -39,7 +39,7 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
 
                         {
                             header.backLink && (
-                                <Link href={header.backLink.href} className="flex items-center gap-2 text-xs text-zinc-400 hover:text-accent transition-colors duration-300">
+                                <Link href={header.backLink.href} className="flex items-center gap-2 note hover:text-accent transition-colors duration-300">
                                     <ArrowLeft className="h-4 w-4" />
                                     {header.backLink.label || "Back"}
                                 </Link>

@@ -178,7 +178,7 @@ export default function AddLLMModelPage() {
             required
             className="w-full"
           />
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="note mt-1">
             Your API key is stored securely and used only for connecting to the model.
           </p>
         </div>
@@ -215,13 +215,13 @@ export default function AddLLMModelPage() {
             <Label htmlFor="public-switch" className="cursor-pointer label">
               Share with Organization
             </Label>
-            <p className="text-sm text-muted-foreground">
+            <p className="note">
               Make this model available to other members
             </p>
           </div>
         </div>
         
-        <div className="flex justify-end pt-4 border-t">
+        <div className="flex justify-end pt-4">
           <Button type="submit">Add Model</Button>
         </div>
       </form>
