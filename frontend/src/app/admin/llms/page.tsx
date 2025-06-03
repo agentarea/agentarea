@@ -49,11 +49,7 @@ export default async function AddLLMModelPage({
             }}
             
         >
-            <Tabs 
-                value={activeTab} 
-                className="w-full" 
-                defaultValue="grid"
-            >
+            <TabsWithNavigation activeTab={activeTab}>
                 <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
                    <div className="flex flex-row items-center gap-[10px] flex-1">
                         <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
@@ -102,7 +98,7 @@ export default async function AddLLMModelPage({
                         </>
                     )
                 }
-            </Tabs>
+            </TabsWithNavigation>
         </ContentBlock>
     )
 }

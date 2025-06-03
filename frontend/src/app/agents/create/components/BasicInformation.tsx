@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Bot, FileText, MessageSquare, Cpu } from "lucide-react";
+import { Bot, FileText, MessageSquare, Cpu } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
@@ -78,7 +78,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
             rules={{ required: "Model is required" }}
             render={({ field }) => (
               <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                <SelectTrigger className="bg-white h-10 w-full rounded-md border border-input px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-300 dark:bg-zinc-900 focus-visible:dark:border-zinc-700">
+                <SelectTrigger>
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
                 <SelectContent>
