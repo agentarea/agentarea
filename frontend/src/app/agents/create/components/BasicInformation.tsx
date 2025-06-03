@@ -23,12 +23,12 @@ type BasicInformationProps = {
 
 const BasicInformation = ({ register, control, errors }: BasicInformationProps) => (
   <Card className="">
-    {/* <h2 className="mb-6 flex items-center gap-2">
+    {/* <h2 className="mb-6 label">
       <Sparkles className="h-5 w-5 text-accent" /> Basic Information
     </h2> */}
     <div className="grid grid-cols-1 gap-6">
       <div className="space-y-2">
-        <Label htmlFor="name" className="flex items-center gap-2">
+        <Label htmlFor="name" className="label">
             <Bot className="label-icon" style={{ strokeWidth: 1.5 }} />Agent Name
         </Label>
         <Input
@@ -41,7 +41,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
         {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="description" className="flex items-center gap-2">
+        <Label htmlFor="description" className="label">
           <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description / Goal <span className="text-xs font-light text-zinc-400">(Optional)</span>
         </Label>
         <Textarea
@@ -55,7 +55,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
         {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="instruction" className="flex items-center gap-2">
+        <Label htmlFor="instruction" className="label">
           <MessageSquare className="label-icon" style={{ strokeWidth: 1.5 }} /> Instruction <span className="text-sm text-red-500">*</span>
         </Label>
         <Textarea
@@ -69,7 +69,7 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
         {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="model_id" className="flex items-center gap-2">
+        <Label htmlFor="model_id" className="label">
           <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> LLM Model
         </Label>
          <Controller

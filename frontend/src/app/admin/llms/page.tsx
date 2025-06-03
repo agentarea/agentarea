@@ -37,8 +37,17 @@ export default async function AddLLMModelPage({
     return (
         <ContentBlock 
             header={{
-                title: t('title')
+                title: t('title'),
+                controls: (
+                    <Link href="/admin/llms/create" passHref legacyBehavior>
+                        <Button className="shrink-0 gap-2 shadow-sm" data-test="new-llm-button">
+                            <PlusCircleIcon className="mr-2 h-4 w-4" />
+                            {t('addNewLlm')}
+                        </Button>
+                    </Link>
+                )
             }}
+            
         >
             <Tabs 
                 value={activeTab} 
@@ -56,14 +65,6 @@ export default async function AddLLMModelPage({
                                 className="pl-9 w-full" 
                             />
                         </div>
-                        <Link href="/admin/llms/create" passHref legacyBehavior>
-                            <Button asChild variant="outline">
-                                <span>
-                                    <PlusCircleIcon className="mr-2 h-4 w-4" />
-                                    {t('addNewLlm')}
-                                </span>
-                            </Button>
-                        </Link>
                     </div>
 
                     <div>

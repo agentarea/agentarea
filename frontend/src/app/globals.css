@@ -121,6 +121,10 @@ body {
     box-shadow: 0 2px 10px rgba(0,0,0,0.04);
   }
 
+  .label {
+    @apply flex items-center gap-2;
+  }
+
   .label-icon {
     stroke-width: 1.5;
     @apply h-5 w-5 text-primary dark:text-[#a2b0d7];

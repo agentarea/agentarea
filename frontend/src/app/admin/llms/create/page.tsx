@@ -7,7 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Card } from "@/components/ui/card";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { 
+  Bot, 
+  FileText, 
+  Server,
+  Layers, 
+  Link, 
+  Key, 
+  Maximize2, 
+  Users 
+} from "lucide-react";
+
 interface FormData {
   name: string;
   description: string;
@@ -61,11 +73,13 @@ export default function AddLLMModelPage() {
         }
       }}
     >
-    <div className="max-w-2xl mx-auto">
+    <Card className="max-w-2xl mx-auto">
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-1.5">
-          <Label htmlFor="name">Model Name</Label>
+          <Label htmlFor="name" className="label">
+            <Bot className="label-icon" style={{ strokeWidth: 1.5 }} /> Model Name
+          </Label>
           <Input
             id="name"
             name="name"
@@ -78,7 +92,9 @@ export default function AddLLMModelPage() {
         </div>
         
         <div className="space-y-1.5">
-          <Label htmlFor="description">Description</Label>
+          <Label htmlFor="description" className="label">
+            <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description
+          </Label>
           <Textarea
             id="description"
             name="description"
@@ -93,7 +109,9 @@ export default function AddLLMModelPage() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
-            <Label htmlFor="provider">Provider</Label>
+            <Label htmlFor="provider" className="label">
+              <Server className="label-icon" style={{ strokeWidth: 1.5 }} /> Provider
+            </Label>
             <Select 
               value={formData.provider}
               onValueChange={(value) => handleSelectChange("provider", value)}
@@ -112,7 +130,9 @@ export default function AddLLMModelPage() {
           </div>
           
           <div className="space-y-1.5">
-            <Label htmlFor="modelType">Model Type</Label>
+            <Label htmlFor="modelType" className="label">
+              <Layers className="label-icon" style={{ strokeWidth: 1.5 }} /> Model Type
+            </Label>
             <Select 
               value={formData.modelType}
               onValueChange={(value) => handleSelectChange("modelType", value)}
@@ -131,7 +151,9 @@ export default function AddLLMModelPage() {
         </div>
         
         <div className="space-y-1.5">
-          <Label htmlFor="endpointUrl">Endpoint URL</Label>
+          <Label htmlFor="endpointUrl" className="label">
+            <Link className="label-icon" style={{ strokeWidth: 1.5 }} /> Endpoint URL
+          </Label>
           <Input
             id="endpointUrl"
             name="endpointUrl"
@@ -144,7 +166,9 @@ export default function AddLLMModelPage() {
         </div>
         
         <div className="space-y-1.5">
-          <Label htmlFor="apiKey">API Key</Label>
+          <Label htmlFor="apiKey" className="label">
+            <Key className="label-icon" style={{ strokeWidth: 1.5 }} /> API Key
+          </Label>
           <Input
             id="apiKey"
             name="apiKey"
@@ -161,7 +185,9 @@ export default function AddLLMModelPage() {
         </div>
         
         <div className="space-y-1.5">
-          <Label htmlFor="contextWindow">Context Window</Label>
+          <Label htmlFor="contextWindow" className="label">
+            <Maximize2 className="label-icon" style={{ strokeWidth: 1.5 }} /> Context Window
+          </Label>
           <Select 
             value={formData.contextWindow}
             onValueChange={(value) => handleSelectChange("contextWindow", value)}
@@ -187,7 +213,7 @@ export default function AddLLMModelPage() {
             onCheckedChange={handleSwitchChange}
           />
           <div className="grid gap-1.5 leading-none">
-            <Label htmlFor="public-switch" className="cursor-pointer">
+            <Label htmlFor="public-switch" className="cursor-pointer label">
               Share with Organization
             </Label>
             <p className="text-sm text-muted-foreground">
@@ -200,7 +226,7 @@ export default function AddLLMModelPage() {
           <Button type="submit">Add Model</Button>
         </div>
       </form>
-    </div>
+    </Card>
     </ContentBlock>
   );
 } 
