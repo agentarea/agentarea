@@ -1,11 +1,13 @@
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import LLMModelForm from "./LLMModelForm";
 import { listLLMModels } from "@/lib/api";
+import { getTranslations } from "next-intl/server";
 
 export default async function AddLLMModelPage() {
   // TODO: Fetch default LLMs or other server data here if needed
   // For now, just render the form
   const llms = await listLLMModels();
+  const t = await getTranslations('admin');
 
   return (
     <ContentBlock
