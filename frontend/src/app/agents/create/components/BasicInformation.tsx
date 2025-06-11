@@ -8,20 +8,18 @@ import { Sparkles } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
+import type { components } from '@/api/schema';
 
-const availableLLMs = [
-  { id: "gpt-4", name: "GPT-4" },
-  { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
-  { id: "claude-3", name: "Claude 3" },
-];
+type LLMModelInstance = components["schemas"]["LLMModelInstanceResponse"];
 
 type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
   control: any;
   errors: FieldErrors<AgentFormValues>;
+  llmModelInstances: LLMModelInstance[];
 };
 
-const BasicInformation = ({ register, control, errors }: BasicInformationProps) => (
+const BasicInformation = ({ register, control, errors, llmModelInstances }: BasicInformationProps) => (
   <Card className="">
     {/* <h2 className="mb-6 flex items-center gap-2">
       <Sparkles className="h-5 w-5 text-accent" /> Basic Information
@@ -74,9 +72,17 @@ const BasicInformation = ({ register, control, errors }: BasicInformationProps) 
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableLLMs.map((llm) => (
-                    <SelectItem key={llm.id} value={llm.id}>{llm.name}</SelectItem>
-                  ))}
+                  {llmModelInstances.length > 0 ? (
+                    llmModelInstances.map((instance) => (
+                      <SelectItem key={instance.id} value={instance.id}>
+                        {instance.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      No LLM models configured. Please add models in Admin → LLMs
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             )}

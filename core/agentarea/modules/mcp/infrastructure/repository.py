@@ -77,14 +77,14 @@ class MCPServerInstanceRepository(BaseRepository[MCPServerInstance]):
 
     async def list(
         self,
-        server_id: Optional[UUID] = None,
+        server_spec_id: Optional[str] = None,
         status: Optional[str] = None,
     ) -> List[MCPServerInstance]:
         query = select(MCPServerInstance)
 
         conditions = []
-        if server_id is not None:
-            conditions.append(MCPServerInstance.server_id == server_id)
+        if server_spec_id is not None:
+            conditions.append(MCPServerInstance.server_spec_id == server_spec_id)
         if status is not None:
             conditions.append(MCPServerInstance.status == status)
 

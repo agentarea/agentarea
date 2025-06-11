@@ -3,11 +3,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from agentarea.api.v1.router import v1_router
-from agentarea.api.events.events_router import router as events_router
-from agentarea.common.events.router import create_event_broker_from_router
-from agentarea.common.events.broker import EventBroker
-from agentarea.common.di.container import register_singleton
+from .api.v1.router import v1_router
+from .api.events.events_router import router as events_router
+from .common.events.router import create_event_broker_from_router
+from .common.events.broker import EventBroker
+from .common.di.container import register_singleton
 
 
 # Application state for managing singletons
@@ -28,9 +28,9 @@ async def lifespan(app: FastAPI):
         app_state.event_broker = event_broker
     except ValueError:
         # Fallback to Redis EventBroker (concrete implementation)
-        from agentarea.common.events.redis_event_broker import RedisEventBroker
+        from .common.events.redis_event_broker import RedisEventBroker
         from faststream.redis import RedisBroker
-        from agentarea.config import get_settings, RedisSettings
+        from .config import get_settings, RedisSettings
         
         # Create a RedisBroker instance for the fallback
         broker_settings = get_settings().broker

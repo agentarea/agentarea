@@ -17,8 +17,15 @@ import {
 import type { AgentFormValues, EventConfig } from './types';
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
+type LLMModelInstance = components["schemas"]["LLMModelInstanceResponse"];
 
-export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServer[] }) {
+export default function CreateAgentClient({ 
+  mcpServers, 
+  llmModelInstances 
+}: { 
+  mcpServers: MCPServer[];
+  llmModelInstances: LLMModelInstance[];
+}) {
   const [state, formAction] = useActionState(addAgent, agentInitialState);
 
   const { register, control, setValue, formState: { errors } } = useForm<AgentFormValues>({
@@ -76,7 +83,8 @@ export default function CreateAgentClient({ mcpServers }: { mcpServers: MCPServe
             <BasicInformation 
               register={register} 
               control={control} 
-              errors={errors} 
+              errors={errors}
+              llmModelInstances={llmModelInstances}
             />
           </div>
           <div className="space-y-[12px]">

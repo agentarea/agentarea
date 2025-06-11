@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager, contextmanager
 from functools import lru_cache
 from typing import Any, Literal, Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import (
@@ -130,6 +131,36 @@ class SecretManagerSettings(BaseAppSettings):
 
 
 # ============================================================================
+# MCP Settings
+# ============================================================================
+
+
+class MCPSettings(BaseAppSettings):
+    """MCP (Model Context Protocol) configuration."""
+
+    MCP_MANAGER_URL: str = "http://mcp-manager:8000"
+    MCP_CLIENT_TIMEOUT: int = 30
+    REDIS_URL: str = "redis://redis:6379"
+
+
+# ============================================================================
+# MCP Manager Settings
+# ============================================================================
+
+
+class MCPManagerSettings(BaseSettings):
+    """MCP Manager service configuration."""
+    
+    base_url: str = "http://localhost:8001"
+    api_key: Optional[str] = None
+    timeout: int = 30
+    max_retries: int = 3
+    
+    class Config:
+        env_prefix = "MCP_MANAGER_"
+
+
+# ============================================================================
 # Main Settings
 # ============================================================================
 
@@ -142,6 +173,8 @@ class Settings(BaseSettings):
     app: AppSettings
     secret_manager: SecretManagerSettings
     broker: RedisSettings | KafkaSettings
+    mcp: MCPSettings
+    mcp_manager: MCPManagerSettings = Field(default_factory=MCPManagerSettings)
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -163,6 +196,7 @@ def get_settings() -> Settings:
         app=AppSettings(),
         secret_manager=SecretManagerSettings(),
         broker=broker,
+        mcp=MCPSettings(),
     )
 
 

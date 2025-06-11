@@ -1,41 +1,43 @@
+from sqlalchemy import Column, String, DateTime, Text, JSON
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
-from uuid import UUID, uuid4
+from typing import Optional, Dict, Any, List
+import uuid
 
-from sqlalchemy import JSON, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
-from sqlalchemy.orm import Mapped, mapped_column
+Base = declarative_base()
 
-from agentarea.common.base.models import BaseModel
-
-
-class MCPServerInstance(BaseModel):
+class MCPServerInstance(Base):
     __tablename__ = "mcp_server_instances"
-
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
-    server_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("mcp_servers.id"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    endpoint_url: Mapped[str] = mapped_column(String, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False, default="starting")
-    config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    server_spec_id = Column(String(255), nullable=True)  # Nullable for external providers
+    json_spec = Column(JSON, nullable=False)  # Unified configuration storage
+    status = Column(String(50), default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
     def __init__(
         self,
-        server_id: UUID,
         name: str,
-        endpoint_url: str,
-        config: dict = None,
-        status: str = "starting",
-        id: UUID = None,
-        created_at: datetime = None,
-        updated_at: datetime = None,
+        description: Optional[str] = None,
+        server_spec_id: Optional[str] = None,
+        json_spec: Optional[Dict[str, Any]] = None,
+        status: str = "pending"
     ):
-        self.id = id or uuid4()
-        self.server_id = server_id
         self.name = name
-        self.endpoint_url = endpoint_url
-        self.config = config or {}
+        self.description = description
+        self.server_spec_id = server_spec_id
+        self.json_spec = json_spec or {}
         self.status = status
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+
+    def get_configured_env_vars(self) -> List[str]:
+        """
+        Get list of environment variable names configured for this instance.
+        
+        Returns:
+            List of environment variable names (actual values stored in secret manager)
+        """
+        return self.json_spec.get("env_vars", [])

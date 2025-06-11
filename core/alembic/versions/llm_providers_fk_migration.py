@@ -11,7 +11,7 @@ import uuid
 
 # revision identifiers, used by Alembic.
 revision = 'add_llm_providers_fk'
-down_revision = 'b5ce5d3145b5'
+down_revision = 'add_env_schema_mcp'
 branch_labels = None
 depends_on = None
 

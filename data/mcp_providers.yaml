@@ -1,0 +1,397 @@
+providers:
+  filesystem:
+    id: "a1b2c3d4-e5f6-789a-bcde-123456789abc"
+    name: "Filesystem"
+    description: "Secure file operations with configurable access controls"
+    icon: "filesystem"
+    docker_image: "mcp/filesystem"
+    env_vars:
+      - name: "FILESYSTEM_ROOT"
+        description: "Root directory for file operations"
+        required: true
+        default: "/workspace"
+    capabilities:
+      - "file_read"
+      - "file_write"
+      - "directory_list"
+      - "file_search"
+
+  memory:
+    id: "b2c3d4e5-f6a7-890b-cdef-234567890bcd"
+    name: "Memory"
+    description: "Knowledge graph-based persistent memory system"
+    icon: "memory"
+    docker_image: "mcp/memory"
+    env_vars:
+      - name: "MEMORY_BACKEND"
+        description: "Memory storage backend (sqlite/redis)"
+        required: false
+        default: "sqlite"
+    capabilities:
+      - "knowledge_storage"
+      - "semantic_search"
+      - "context_retrieval"
+
+  fetch:
+    id: "c3d4e5f6-a789-01bc-def2-3456789abcde"
+    name: "Fetch"
+    description: "Web content fetching and conversion optimized for LLM usage"
+    icon: "fetch"
+    docker_image: "mcp/fetch"
+    env_vars:
+      - name: "USER_AGENT"
+        description: "Custom user agent for web requests"
+        required: false
+        default: "MCP-Fetch/1.0"
+      - name: "TIMEOUT"
+        description: "Request timeout in seconds"
+        required: false
+        default: "30"
+    capabilities:
+      - "web_scraping"
+      - "content_extraction"
+      - "html_to_markdown"
+
+  puppeteer:
+    id: "d4e5f6a7-8901-bcde-f234-56789abcdef0"
+    name: "Puppeteer"
+    description: "Browser automation and web scraping capabilities"
+    icon: "puppeteer"
+    docker_image: "mcp/puppeteer"
+    env_vars:
+      - name: "DOCKER_CONTAINER"
+        description: "Flag to indicate running in Docker container"
+        required: true
+        default: "true"
+      - name: "HEADLESS"
+        description: "Run browser in headless mode"
+        required: false
+        default: "true"
+    capabilities:
+      - "browser_automation"
+      - "screenshot_capture"
+      - "web_interaction"
+      - "pdf_generation"
+
+  github:
+    id: "e5f6a789-0123-cdef-4567-89abcdef0123"
+    name: "GitHub"
+    description: "Repository management, file operations, and GitHub API integration"
+    icon: "github"
+    docker_image: "mcp/github"
+    env_vars:
+      - name: "GITHUB_PERSONAL_ACCESS_TOKEN"
+        description: "GitHub personal access token for API authentication"
+        required: true
+      - name: "GITHUB_API_URL"
+        description: "GitHub API base URL"
+        required: false
+        default: "https://api.github.com"
+    capabilities:
+      - "repository_management"
+      - "issue_tracking"
+      - "pull_requests"
+      - "file_operations"
+
+  sqlite:
+    id: "f6a78901-2345-def6-789a-bcdef0123456"
+    name: "SQLite"
+    description: "Database interaction and business intelligence capabilities"
+    icon: "sqlite"
+    docker_image: "mcp/sqlite"
+    env_vars:
+      - name: "SQLITE_DB_PATH"
+        description: "Path to SQLite database file"
+        required: true
+        default: "/data/database.db"
+      - name: "READ_ONLY"
+        description: "Enable read-only mode"
+        required: false
+        default: "false"
+    capabilities:
+      - "database_query"
+      - "schema_inspection"
+      - "data_analysis"
+
+  postgres:
+    id: "a789b012-3456-789a-bcde-f0123456789a"
+    name: "PostgreSQL"
+    description: "Read-only database access with schema inspection capabilities"
+    icon: "postgresql"
+    docker_image: "mcp/postgres"
+    env_vars:
+      - name: "POSTGRES_CONNECTION_STRING"
+        description: "PostgreSQL connection string"
+        required: true
+      - name: "POSTGRES_SCHEMA"
+        description: "Default schema to use"
+        required: false
+        default: "public"
+    capabilities:
+      - "database_query"
+      - "schema_inspection"
+      - "table_analysis"
+
+  git:
+    id: "b012c345-6789-abcd-ef01-23456789abcd"
+    name: "Git"
+    description: "Tools to read, search, and manipulate Git repositories"
+    icon: "git"
+    docker_image: "mcp/git"
+    env_vars:
+      - name: "GIT_REPOSITORY_PATH"
+        description: "Path to Git repository"
+        required: true
+        default: "/workspace"
+      - name: "GIT_USER_NAME"
+        description: "Git user name for commits"
+        required: false
+      - name: "GIT_USER_EMAIL"
+        description: "Git user email for commits"
+        required: false
+    capabilities:
+      - "repository_inspection"
+      - "commit_history"
+      - "file_tracking"
+      - "branch_management"
+
+  slack:
+    id: "c345d678-9abc-def0-1234-56789abcdef0"
+    name: "Slack"
+    description: "Channel management and messaging capabilities"
+    icon: "slack"
+    docker_image: "mcp/slack"
+    env_vars:
+      - name: "SLACK_BOT_TOKEN"
+        description: "Slack Bot User OAuth Token"
+        required: true
+      - name: "SLACK_APP_TOKEN"
+        description: "Slack App-Level Token"
+        required: false
+    capabilities:
+      - "channel_management"
+      - "message_sending"
+      - "user_management"
+      - "file_sharing"
+
+  brave_search:
+    id: "d678e901-abcd-ef23-4567-89abcdef0123"
+    name: "Brave Search"
+    description: "Web and local search using Brave's Search API"
+    icon: "brave"
+    docker_image: "mcp/brave-search"
+    env_vars:
+      - name: "BRAVE_API_KEY"
+        description: "Brave Search API key"
+        required: true
+      - name: "SEARCH_RESULTS_COUNT"
+        description: "Number of search results to return"
+        required: false
+        default: "10"
+    capabilities:
+      - "web_search"
+      - "news_search"
+      - "image_search"
+
+  gmail:
+    id: "e901f234-cdef-0123-789a-bcdef0123456"
+    name: "Gmail"
+    description: "Gmail integration with auto authentication support"
+    icon: "gmail"
+    docker_image: "mcp/gmail"
+    env_vars:
+      - name: "GOOGLE_CLIENT_ID"
+        description: "Google OAuth client ID"
+        required: true
+      - name: "GOOGLE_CLIENT_SECRET"
+        description: "Google OAuth client secret"
+        required: true
+      - name: "GOOGLE_REFRESH_TOKEN"
+        description: "Google OAuth refresh token"
+        required: false
+    capabilities:
+      - "email_read"
+      - "email_send"
+      - "email_search"
+      - "label_management"
+
+  docker:
+    id: "f234a567-0123-4567-89ab-cdef01234567"
+    name: "Docker"
+    description: "Integrate with Docker to manage containers, images, volumes, and networks"
+    icon: "docker"
+    docker_image: "mcp/docker"
+    env_vars:
+      - name: "DOCKER_HOST"
+        description: "Docker daemon socket"
+        required: false
+        default: "unix:///var/run/docker.sock"
+      - name: "DOCKER_API_VERSION"
+        description: "Docker API version"
+        required: false
+        default: "auto"
+    capabilities:
+      - "container_management"
+      - "image_management"
+      - "volume_management"
+      - "network_management"
+
+  kubernetes:
+    id: "a567b890-1234-5678-9abc-def012345678"
+    name: "Kubernetes"
+    description: "Connect to Kubernetes cluster and manage pods, deployments, and services"
+    icon: "kubernetes"
+    docker_image: "mcp/kubernetes"
+    env_vars:
+      - name: "KUBECONFIG"
+        description: "Path to kubeconfig file"
+        required: false
+        default: "/root/.kube/config"
+      - name: "K8S_NAMESPACE"
+        description: "Default Kubernetes namespace"
+        required: false
+        default: "default"
+    capabilities:
+      - "pod_management"
+      - "deployment_management"
+      - "service_management"
+      - "cluster_monitoring"
+
+  redis:
+    id: "b890c123-4567-890a-bcde-f012345678ab"
+    name: "Redis"
+    description: "Interact with Redis key-value stores"
+    icon: "redis"
+    docker_image: "mcp/redis"
+    env_vars:
+      - name: "REDIS_URL"
+        description: "Redis connection URL"
+        required: true
+        default: "redis://localhost:6379"
+      - name: "REDIS_PASSWORD"
+        description: "Redis authentication password"
+        required: false
+    capabilities:
+      - "key_value_operations"
+      - "cache_management"
+      - "pub_sub_messaging"
+      - "data_structures"
+
+  mongodb:
+    id: "c123d456-789a-bcde-f012-3456789abcde"
+    name: "MongoDB"
+    description: "A Model Context Protocol Server for MongoDB"
+    icon: "mongodb"
+    docker_image: "mcp/mongodb"
+    env_vars:
+      - name: "MONGODB_URI"
+        description: "MongoDB connection URI"
+        required: true
+        default: "mongodb://localhost:27017"
+      - name: "MONGODB_DATABASE"
+        description: "Default database name"
+        required: false
+    capabilities:
+      - "document_operations"
+      - "collection_management"
+      - "aggregation_pipelines"
+      - "index_management"
+
+  mysql:
+    id: "d456e789-abcd-ef01-2345-6789abcdef01"
+    name: "MySQL"
+    description: "MySQL database integration with configurable access controls"
+    icon: "mysql"
+    docker_image: "mcp/mysql"
+    env_vars:
+      - name: "MYSQL_HOST"
+        description: "MySQL server host"
+        required: true
+        default: "localhost"
+      - name: "MYSQL_PORT"
+        description: "MySQL server port"
+        required: false
+        default: "3306"
+      - name: "MYSQL_USER"
+        description: "MySQL username"
+        required: true
+      - name: "MYSQL_PASSWORD"
+        description: "MySQL password"
+        required: true
+      - name: "MYSQL_DATABASE"
+        description: "MySQL database name"
+        required: true
+    capabilities:
+      - "database_query"
+      - "schema_inspection"
+      - "stored_procedures"
+      - "transaction_management"
+
+  elasticsearch:
+    id: "e789f012-cdef-0123-4567-89abcdef0123"
+    name: "Elasticsearch"
+    description: "MCP server implementation that provides Elasticsearch interaction"
+    icon: "elasticsearch"
+    docker_image: "mcp/elasticsearch"
+    env_vars:
+      - name: "ELASTICSEARCH_URL"
+        description: "Elasticsearch cluster URL"
+        required: true
+        default: "http://localhost:9200"
+      - name: "ELASTICSEARCH_USERNAME"
+        description: "Elasticsearch username"
+        required: false
+      - name: "ELASTICSEARCH_PASSWORD"
+        description: "Elasticsearch password"
+        required: false
+    capabilities:
+      - "document_search"
+      - "index_management"
+      - "aggregations"
+      - "mapping_management"
+
+  prometheus:
+    id: "f012a345-0123-4567-89ab-cdef01234567"
+    name: "Prometheus"
+    description: "Query and analyze Prometheus - open-source monitoring system"
+    icon: "prometheus"
+    docker_image: "mcp/prometheus"
+    env_vars:
+      - name: "PROMETHEUS_URL"
+        description: "Prometheus server URL"
+        required: true
+        default: "http://localhost:9090"
+      - name: "PROMETHEUS_TIMEOUT"
+        description: "Query timeout in seconds"
+        required: false
+        default: "30"
+    capabilities:
+      - "metrics_query"
+      - "time_series_analysis"
+      - "alert_management"
+      - "label_discovery"
+
+  jira:
+    id: "a345b678-1234-5678-9abc-def012345678"
+    name: "Jira"
+    description: "Integrate with Atlassian Jira for issue and project management"
+    icon: "jira"
+    docker_image: "mcp/jira"
+    env_vars:
+      - name: "JIRA_URL"
+        description: "Jira instance URL"
+        required: true
+      - name: "JIRA_USERNAME"
+        description: "Jira username"
+        required: true
+      - name: "JIRA_API_TOKEN"
+        description: "Jira API token"
+        required: true
+      - name: "JIRA_PROJECT"
+        description: "Default Jira project key"
+        required: false
+    capabilities:
+      - "issue_management"
+      - "project_management"
+      - "workflow_operations"
+      - "reporting" 

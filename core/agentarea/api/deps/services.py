@@ -24,8 +24,21 @@ from agentarea.modules.mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+# Domain events import removed - not needed in dependency injection
 from agentarea.modules.secrets.db_secret_manager import DBSecretManager
 from .events import EventBrokerDep
+
+
+async def get_secret_manager(
+    secret_manager_settings: SecretManagerSettings = Depends(get_settings),
+) -> BaseSecretManager:
+    # infisical_client = InfisicalSDKClient(
+    #     host=secret_manager_settings.SECRET_MANAGER_ENDPOINT,
+    #     token=secret_manager_settings.SECRET_MANAGER_ACCESS_KEY,
+    # )
+
+    db_secret_manager = DBSecretManager()
+    return db_secret_manager
 
 
 async def get_agent_service(
@@ -46,22 +59,16 @@ async def get_mcp_server_service(
 async def get_mcp_server_instance_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     event_broker: EventBrokerDep,
+    secret_manager: Annotated[BaseSecretManager, Depends(get_secret_manager)],
 ) -> MCPServerInstanceService:
     mcp_server_repository = MCPServerRepository(session)
     return MCPServerInstanceService(
-        MCPServerInstanceRepository(session), event_broker, mcp_server_repository
+        MCPServerInstanceRepository(session), 
+        event_broker, 
+        mcp_server_repository,
+        secret_manager
     )
 
-async def get_secret_manager(
-    secret_manager_settings: SecretManagerSettings = Depends(get_settings),
-) -> BaseSecretManager:
-    # infisical_client = InfisicalSDKClient(
-    #     host=secret_manager_settings.SECRET_MANAGER_ENDPOINT,
-    #     token=secret_manager_settings.SECRET_MANAGER_ACCESS_KEY,
-    # )
-
-    db_secret_manager = DBSecretManager()
-    return db_secret_manager
 
 async def get_llm_model_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],

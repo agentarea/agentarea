@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from code.populate_llm_providers import main as populate_llm_providers_main
+from code.populate_mcp_providers import main as populate_mcp_providers_main
 from code.minio_setup import minio_setup
 from code.infisical_setup import infisical_setup
 
@@ -27,6 +28,10 @@ def main():
         print("\n3. Populating LLM providers and models...")
         populate_llm_providers_main()
         print("✓ LLM providers populated")
+        
+        print("\n4. Populating MCP server specifications...")
+        populate_mcp_providers_main()
+        print("✓ MCP server specifications populated")
         
         print("\n" + "=" * 50)
         print("Bootstrap process completed successfully!")
