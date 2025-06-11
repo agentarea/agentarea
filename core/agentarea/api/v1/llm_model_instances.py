@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from datetime import datetime
 
 from agentarea.api.deps.services import get_llm_model_instance_service
 from agentarea.modules.llm.application.service import LLMModelInstanceService
@@ -34,7 +35,7 @@ class LLMModelInstanceResponse(BaseModel):
     description: str
     status: str
     is_public: bool
-    last_updated: str
+    updated_at: datetime
 
     @classmethod
     def from_domain(cls, instance: LLMModelInstance) -> "LLMModelInstanceResponse":
@@ -45,7 +46,7 @@ class LLMModelInstanceResponse(BaseModel):
             description=instance.description,
             status=instance.status,
             is_public=instance.is_public,
-            last_updated=instance.last_updated,
+            updated_at=instance.updated_at,
         )
 
 

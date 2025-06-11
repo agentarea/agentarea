@@ -78,8 +78,8 @@ async def create_agent(
 ):
     agent = await agent_service.create_agent(
         name=data.name,
-        capabilities=data.capabilities,
         description=data.description,
+        instruction=data.instruction,
         model_id=data.model_id,
         tools_config=data.tools_config.dict() if data.tools_config else None,
         events_config=data.events_config.dict() if data.events_config else None,
@@ -113,7 +113,7 @@ async def update_agent(
     agent = await agent_service.update_agent(
         id=agent_id,
         name=data.name,
-        capabilities=data.capabilities,
+        
         description=data.description,
         model_id=data.model_id,
         tools_config=data.tools_config.dict() if data.tools_config else None,

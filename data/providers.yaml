@@ -1,0 +1,559 @@
+providers:
+  openai:
+    id: 932f3839-af2a-455e-80c6-c58fa97e312c
+    name: OpenAI
+    description: OpenAI's language models including GPT-4 and GPT-3.5
+    icon: openai
+    models:
+    - name: gpt-4
+      description: Most capable OpenAI model, optimized for chat
+      context_window: 8192
+    - name: gpt-4-turbo
+      description: Latest GPT-4 model with improved capabilities
+      context_window: 128000
+    - name: gpt-3.5-turbo
+      description: Fast and efficient model for most tasks
+      context_window: 16385
+  anthropic:
+    id: f363ff3a-58f8-4414-b2ff-bc4b9fe60d27
+    name: Anthropic
+    description: Anthropic's Claude models
+    icon: anthropic
+    models:
+    - name: claude-3-opus
+      description: Most capable Claude model
+      context_window: 200000
+    - name: claude-3-sonnet
+      description: Balanced Claude model
+      context_window: 200000
+    - name: claude-3-haiku
+      description: Fast and efficient Claude model
+      context_window: 200000
+  mistral:
+    id: cd6394ac-ad0b-4512-bca8-c1ae0cd5ad6f
+    name: Mistral AI
+    description: Mistral AI's open source models
+    icon: mistral
+    models:
+    - name: mistral-large
+      description: Most capable Mistral model
+      context_window: 32768
+    - name: mistral-medium
+      description: Balanced Mistral model
+      context_window: 32768
+    - name: mistral-small
+      description: Fast and efficient Mistral model
+      context_window: 32768
+  ollama:
+    id: 183a5efc-2525-4a1e-aded-1a5d5e9ff13b
+    name: Ollama
+    description: Local and open source models through Ollama
+    models:
+    - name: qwen2.5
+      description: Meta's Llama 3.1 model
+      context_window: 4096
+    - name: llama2
+      description: Meta's Llama 2 model
+      context_window: 4096
+    - name: mistral
+      description: Mistral's open source model
+      context_window: 8192
+    - name: codellama
+      description: Code-optimized Llama model
+      context_window: 4096
+    icon: ollama
+  azure_openai:
+    id: 97e6f0ca-568d-493c-a329-82c9446d4608
+    name: Azure OpenAI
+    description: OpenAI models hosted on Microsoft Azure
+    models:
+    - name: gpt-4
+      description: GPT-4 on Azure
+      context_window: 8192
+    - name: gpt-35-turbo
+      description: GPT-3.5 Turbo on Azure
+      context_window: 16385
+    icon: azure_openai
+  azure_ai_studio:
+    id: 2100cd97-5e63-4159-a7ac-1fd356386199
+    name: Azure AI Studio
+    description: All models available on Azure AI Studio
+    models:
+    - name: phi-3
+      description: Microsoft Phi-3 model
+      context_window: 4096
+    icon: azure_ai_studio
+  vertex_ai:
+    id: 3a992a5c-bbfe-4713-a262-032792ec1b8a
+    name: Google VertexAI
+    description: Google's VertexAI including Anthropic, Gemini, and Model Garden
+    models:
+    - name: gemini-pro
+      description: Google's Gemini Pro model
+      context_window: 32768
+    - name: gemini-1.5-pro
+      description: Google's Gemini 1.5 Pro model
+      context_window: 1000000
+    icon: vertex_ai
+  google_ai_studio:
+    id: 16466243-1d16-439e-bc38-801f31aaa6ac
+    name: Google AI Studio
+    description: Google AI Studio models
+    models:
+    - name: gemini-pro
+      description: Gemini Pro via AI Studio
+      context_window: 32768
+    icon: google_ai_studio
+  aws_sagemaker:
+    id: 11a11abb-8590-432f-afaf-5385d66986ec
+    name: AWS Sagemaker
+    description: All Sagemaker Hugging Face Jumpstart Models
+    models:
+    - name: jumpstart-model
+      description: Sagemaker Jumpstart model
+      context_window: 4096
+    icon: aws_sagemaker
+  aws_bedrock:
+    id: 36075660-7212-439e-905b-fcf40f35dde5
+    name: AWS Bedrock
+    description: Amazon Bedrock foundation models
+    models:
+    - name: anthropic.claude-v2
+      description: Claude v2 on Bedrock
+      context_window: 100000
+    - name: amazon.titan-text-express-v1
+      description: Amazon Titan model
+      context_window: 8000
+    icon: aws_bedrock
+  meta_llama:
+    id: 3a0e2ade-acc2-4781-8243-d45be996d59b
+    name: Meta Llama
+    description: Meta's Llama models
+    models:
+    - name: llama-2-70b
+      description: Llama 2 70B model
+      context_window: 4096
+    - name: llama-3-8b
+      description: Llama 3 8B model
+      context_window: 8192
+    icon: meta_llama
+  codestral:
+    id: a2242b13-a9aa-42ab-8407-c8f539c6db2b
+    name: Codestral API
+    description: Mistral AI's code-specialized model
+    models:
+    - name: codestral-latest
+      description: Latest Codestral model
+      context_window: 32768
+    icon: codestral
+  cohere:
+    id: 88159fbf-0412-4e8b-aa70-66238578f461
+    name: Cohere
+    description: Cohere's language models
+    models:
+    - name: command
+      description: Cohere Command model
+      context_window: 4096
+    - name: command-r
+      description: Cohere Command-R model
+      context_window: 128000
+    icon: cohere
+  anyscale:
+    id: 295640a9-35eb-4702-8dd1-39949dd9f743
+    name: Anyscale
+    description: Anyscale's hosted models
+    models:
+    - name: meta-llama/Llama-2-70b-chat-hf
+      description: Llama 2 70B Chat on Anyscale
+      context_window: 4096
+    icon: anyscale
+  huggingface:
+    id: f6f88609-fe12-49ce-91c4-e2ee5862e65f
+    name: Hugging Face
+    description: Models hosted on Hugging Face Hub
+    models:
+    - name: microsoft/DialoGPT-medium
+      description: DialoGPT medium model
+      context_window: 1024
+    icon: huggingface
+  databricks:
+    id: 748d5071-c212-413f-bf30-c4f19319e2fb
+    name: Databricks
+    description: All models on Databricks
+    models:
+    - name: databricks-dbrx-instruct
+      description: Databricks DBRX Instruct model
+      context_window: 32768
+    icon: databricks
+  deepgram:
+    id: a2ce1bff-1893-4769-93da-62ac5f5aa84c
+    name: Deepgram
+    description: Deepgram's speech-to-text and language models
+    models:
+    - name: nova-2
+      description: Deepgram Nova 2 model
+      context_window: 4096
+    icon: deepgram
+  ibm_watsonx:
+    id: 329efe0e-fab9-4f06-8ac7-28599a769fbe
+    name: IBM watsonx.ai
+    description: IBM watsonx.ai foundational models and embeddings
+    models:
+    - name: ibm/granite-13b-chat-v2
+      description: IBM Granite 13B Chat model
+      context_window: 8192
+    icon: ibm_watsonx
+  predibase:
+    id: b1ed491a-a55c-4ee9-95fa-4f4884b70aeb
+    name: Predibase
+    description: All models on Predibase
+    models:
+    - name: mistral-7b
+      description: Mistral 7B on Predibase
+      context_window: 8192
+    icon: predibase
+  nvidia_nim:
+    id: f0dd395b-3777-48d1-a2e8-e8a5c3de8a80
+    name: Nvidia NIM
+    description: Nvidia NIM inference microservices
+    models:
+    - name: meta/llama3-70b-instruct
+      description: Llama 3 70B Instruct via NIM
+      context_window: 8192
+    icon: nvidia_nim
+  nscale:
+    id: adc4cd28-4ed6-4b88-bdab-76b4fe80743c
+    name: Nscale
+    description: EU Sovereign cloud AI inference
+    models:
+    - name: llama-3-8b-instruct
+      description: Llama 3 8B Instruct on Nscale
+      context_window: 8192
+    icon: nscale
+  xai:
+    id: 72c874b7-76af-4027-8183-9165b4e40abe
+    name: xAI
+    description: xAI's Grok models
+    models:
+    - name: grok-beta
+      description: Grok beta model
+      context_window: 131072
+    icon: xai
+  lm_studio:
+    id: d25ae1c0-b966-4cf3-a843-90c0010f6aef
+    name: LM Studio
+    description: Local models via LM Studio
+    models:
+    - name: local-model
+      description: Local model via LM Studio
+      context_window: 4096
+    icon: lm_studio
+  cerebras:
+    id: 54ab1567-223b-432f-8cea-3efc4c5fbe4b
+    name: Cerebras
+    description: Cerebras inference platform
+    models:
+    - name: llama3.1-8b
+      description: Llama 3.1 8B on Cerebras
+      context_window: 8192
+    icon: cerebras
+  volcengine:
+    id: 5f8fb20a-e616-442c-8378-794f0f310dbb
+    name: Volcano Engine
+    description: Volcengine AI inference platform
+    models:
+    - name: skylark-lite-public
+      description: Skylark Lite model
+      context_window: 4096
+    icon: volcengine
+  triton:
+    id: df4decb7-815b-4bd4-af29-173730ebfe67
+    name: Triton Inference Server
+    description: Embedding models on Triton Inference Server
+    models:
+    - name: embedding-model
+      description: Embedding model on Triton
+      context_window: 512
+    icon: triton
+  perplexity:
+    id: c3f88ffe-ce29-49ef-a672-4f6245c87e9b
+    name: Perplexity AI
+    description: Perplexity AI models
+    models:
+    - name: llama-3.1-sonar-small-128k-online
+      description: Perplexity Sonar model with web search
+      context_window: 127072
+    icon: perplexity
+  friendliai:
+    id: 1b3f1f5e-0ac8-4871-b018-8510a724786b
+    name: FriendliAI
+    description: All FriendliAI models
+    models:
+    - name: meta-llama-3-8b-instruct
+      description: Llama 3 8B Instruct on FriendliAI
+      context_window: 8192
+    icon: friendliai
+  galadriel:
+    id: 600bd7bc-4fba-401d-a86a-7479f2ec364d
+    name: Galadriel
+    description: Galadriel AI models
+    models:
+    - name: llama3-70b-instruct
+      description: Llama 3 70B Instruct on Galadriel
+      context_window: 8192
+    icon: galadriel
+  topaz:
+    id: 4f3f32c4-89ee-41c1-9e43-be759c7c7a5f
+    name: Topaz
+    description: Topaz AI models
+    models:
+    - name: topaz-1
+      description: Topaz model
+      context_window: 4096
+    icon: topaz
+  groq:
+    id: 54033047-52da-4d6a-a22c-2a940cb8fbbd
+    name: Groq
+    description: Groq's fast inference platform
+    models:
+    - name: llama3-70b-8192
+      description: Llama 3 70B on Groq
+      context_window: 8192
+    - name: mixtral-8x7b-32768
+      description: Mixtral 8x7B on Groq
+      context_window: 32768
+    icon: groq
+  github:
+    id: d3c8630f-3449-4729-9dad-a5d502c5d76a
+    name: GitHub
+    description: GitHub Copilot models
+    models:
+    - name: gpt-4o
+      description: GPT-4o via GitHub
+      context_window: 128000
+    icon: github
+  deepseek:
+    id: 59097912-53ee-4e05-a271-833b0d10b702
+    name: DeepSeek
+    description: DeepSeek AI models
+    models:
+    - name: deepseek-chat
+      description: DeepSeek Chat model
+      context_window: 32768
+    - name: deepseek-coder
+      description: DeepSeek Coder model
+      context_window: 16384
+    icon: deepseek
+  fireworks:
+    id: a706c280-5acc-46b1-80d8-db78f53ed831
+    name: Fireworks AI
+    description: All Fireworks AI models
+    models:
+    - name: accounts/fireworks/models/llama-v3-70b-instruct
+      description: Llama 3 70B Instruct on Fireworks
+      context_window: 8192
+    icon: fireworks
+  clarifai:
+    id: d76f3394-613d-48cc-9b6d-87409e32effb
+    name: Clarifai
+    description: Anthropic, OpenAI, Mistral, Llama and Gemini LLMs on Clarifai
+    models:
+    - name: GPT-4
+      description: GPT-4 via Clarifai
+      context_window: 8192
+    icon: clarifai
+  vllm:
+    id: 7e27be52-f6f9-4498-8176-75de020ed010
+    name: VLLM
+    description: All models on VLLM
+    models:
+    - name: meta-llama/Meta-Llama-3-8B-Instruct
+      description: Llama 3 8B Instruct on VLLM
+      context_window: 8192
+    icon: vllm
+  llamafile:
+    id: 34747b00-8922-45a6-a5de-e44272201253
+    name: Llamafile
+    description: All models on Llamafile
+    models:
+    - name: LLaMA_CPP
+      description: Model via Llamafile
+      context_window: 2048
+    icon: llamafile
+  infinity:
+    id: 697e9611-6647-4c74-aa47-4c675c8a8562
+    name: Infinity
+    description: Infinity embedding server
+    models:
+    - name: BAAI/bge-small-en-v1.5
+      description: BGE embedding model
+      context_window: 512
+    icon: infinity
+  xinference:
+    id: b75de57d-4e47-4762-9c50-f3557e2aa8ad
+    name: Xinference
+    description: Xorbits Inference platform
+    models:
+    - name: llama-2-chat
+      description: Llama 2 Chat on Xinference
+      context_window: 4096
+    icon: xinference
+  cloudflare:
+    id: 35924960-a67a-49e2-9235-ba186623a681
+    name: Cloudflare Workers AI
+    description: Cloudflare Workers AI platform
+    models:
+    - name: '@cf/meta/llama-2-7b-chat-int8'
+      description: Llama 2 7B Chat on Cloudflare
+      context_window: 4096
+    icon: cloudflare
+  deepinfra:
+    id: f6d253ca-c42f-4d30-9eb8-355241923349
+    name: DeepInfra
+    description: DeepInfra hosted models
+    models:
+    - name: meta-llama/Llama-2-70b-chat-hf
+      description: Llama 2 70B Chat on DeepInfra
+      context_window: 4096
+    icon: deepinfra
+  ai21:
+    id: 8c7e4a18-f577-44eb-9d40-2e7d54a054b9
+    name: AI21
+    description: AI21 Studios models
+    models:
+    - name: j2-ultra
+      description: AI21 Jurassic-2 Ultra
+      context_window: 8192
+    - name: j2-mid
+      description: AI21 Jurassic-2 Mid
+      context_window: 8192
+    icon: ai21
+  nlp_cloud:
+    id: 1363538e-f9db-4719-8598-e5bdb7e2af8d
+    name: NLP Cloud
+    description: All LLMs on NLP Cloud
+    models:
+    - name: dolphin
+      description: Dolphin model on NLP Cloud
+      context_window: 4096
+    icon: nlp_cloud
+  replicate:
+    id: 8252b33f-b504-4d4b-8520-978e1d615ee9
+    name: Replicate
+    description: All models on Replicate
+    models:
+    - name: meta/llama-2-70b-chat
+      description: Llama 2 70B Chat on Replicate
+      context_window: 4096
+    icon: replicate
+  together:
+    id: b02d1296-a7ce-4ac5-99e3-e1684b53230d
+    name: Together AI
+    description: All models on Together AI
+    models:
+    - name: meta-llama/Llama-2-70B-chat-hf
+      description: Llama 2 70B Chat on Together
+      context_window: 4096
+    icon: together
+  novita:
+    id: 3f15d599-dda8-477f-8b0d-6c7cf821e77a
+    name: Novita AI
+    description: Novita AI models
+    models:
+    - name: meta-llama/llama-2-7b-chat
+      description: Llama 2 7B Chat on Novita
+      context_window: 4096
+    icon: novita
+  voyage:
+    id: 25a1f09b-444f-4dbc-8b10-3f7889a177f3
+    name: Voyage AI
+    description: Voyage AI embedding models
+    models:
+    - name: voyage-large-2
+      description: Voyage Large 2 embedding model
+      context_window: 16000
+    icon: voyage
+  jina:
+    id: 7ed952a4-19ea-45bc-bac3-e054dada7e8b
+    name: Jina AI
+    description: Jina AI embedding models
+    models:
+    - name: jina-embeddings-v2-base-en
+      description: Jina embeddings v2 base
+      context_window: 8192
+    icon: jina
+  aleph_alpha:
+    id: ac48d3fd-a466-4e7b-8855-d26ba8ab7b96
+    name: Aleph Alpha
+    description: All models from Aleph Alpha
+    models:
+    - name: luminous-supreme
+      description: Luminous Supreme model
+      context_window: 2048
+    icon: aleph_alpha
+  baseten:
+    id: 99d0f452-d451-4ed1-8f50-eed2fa0b7ed3
+    name: Baseten
+    description: Text-Gen-Interface models on Baseten
+    models:
+    - name: qvv0xeq
+      description: Model on Baseten
+      context_window: 4096
+    icon: baseten
+  openrouter:
+    id: 2531cc11-f35b-43a4-91ba-6bc405dde305
+    name: OpenRouter
+    description: All text/chat/vision models from OpenRouter
+    models:
+    - name: anthropic/claude-3-opus
+      description: Claude 3 Opus via OpenRouter
+      context_window: 200000
+    - name: openai/gpt-4-turbo
+      description: GPT-4 Turbo via OpenRouter
+      context_window: 128000
+    icon: openrouter
+  sambanova:
+    id: 493a8be8-2281-41d5-a70f-998da88cd5ac
+    name: SambaNova
+    description: SambaNova AI models
+    models:
+    - name: Meta-Llama-3.1-8B-Instruct
+      description: Llama 3.1 8B Instruct on SambaNova
+      context_window: 8192
+    icon: sambanova
+  petals:
+    id: 06878991-5924-4cc9-8281-be60f3cf3275
+    name: Petals
+    description: Distributed inference via Petals
+    models:
+    - name: bigscience/bloom-petals
+      description: BLOOM model via Petals
+      context_window: 2048
+    icon: petals
+  snowflake:
+    id: 18c17b6d-2199-4b64-a6ee-aaf93a296bda
+    name: Snowflake
+    description: Snowflake AI models
+    models:
+    - name: snowflake-arctic
+      description: Snowflake Arctic model
+      context_window: 4096
+    icon: snowflake
+  featherless:
+    id: 9b9e1163-4032-4102-8c27-d3410e7f4a47
+    name: Featherless AI
+    description: Featherless AI models
+    models:
+    - name: meta-llama/Meta-Llama-3.1-8B-Instruct
+      description: Llama 3.1 8B Instruct on Featherless
+      context_window: 8192
+    icon: featherless
+  nebius:
+    id: 471c188f-3567-43dd-a7c6-508c46fb4c3d
+    name: Nebius AI Studio
+    description: Nebius AI Studio models
+    models:
+    - name: meta-llama/Meta-Llama-3.1-70B-Instruct
+      description: Llama 3.1 70B Instruct on Nebius
+      context_window: 8192
+    icon: nebius

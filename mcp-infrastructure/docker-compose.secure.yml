@@ -1,0 +1,125 @@
+name: mcp-infrastructure
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: mcp-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:2019:2019"  # Caddy API - localhost only
+      - "127.0.0.1:8000:8000"  # API access - localhost only
+    volumes:
+      - mcp_caddy_data:/data
+      - mcp_caddy_config:/config
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - mcp-network
+    # Security: Run as non-root user
+    user: "1000:1000"
+    # Security: Read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    # Security: Drop all capabilities except what's needed
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:2019/config/"] 
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+
+  mcp-manager:
+    build:
+      context: ./go-mcp-manager
+      dockerfile: Dockerfile
+    container_name: mcp-manager
+    restart: unless-stopped
+    # Security: Replace privileged with minimal required capabilities
+    # privileged: true  # REMOVED
+    cap_add:
+      - SYS_ADMIN       # For fuse-overlayfs and user namespaces
+      - SETUID          # For user namespace mapping
+      - SETGID          # For user namespace mapping
+    cap_drop:
+      - ALL
+    # Security: Enable user namespace remapping
+    userns_mode: "host"
+    # Security: AppArmor/SELinux profile (if available)
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:unconfined  # Only if needed for Podman
+    # Security: Limit device access
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+    expose:
+      - "8000"
+    tmpfs:
+      - /tmp:noexec,nosuid,size=1g
+      - /run:noexec,nosuid,size=100m
+      - /sys/fs/cgroup:noexec,nosuid,size=100m  # Secure cgroup access
+    volumes:
+      - mcp_containers:/var/lib/containers/storage
+      - ./docker/templates:/app/templates:ro
+    networks:
+      - mcp-network
+    environment:
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - CADDY_API_URL=http://caddy:2019
+      - CADDY_HOST=caddy
+      - CONTAINERS_STORAGE_DRIVER=overlay
+      - CONTAINERS_STORAGE_RUNROOT=/tmp/containers
+      - CONTAINERS_STORAGE_GRAPHROOT=/var/lib/containers/storage
+      - TEMPLATES_DIR=/app/templates
+      # Security: Disable unnecessary features
+      - DISABLE_DOCKER_COMPAT=true
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+    depends_on:
+      caddy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  mcp-network:
+    driver: bridge
+    # Security: Disable inter-container communication by default
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+    # Security: Custom subnet to avoid conflicts
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+  mcp_containers:
+    driver: local
+    # Security: Local driver with options
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=10g,uid=1000,gid=1000"
+  mcp_caddy_data:
+    driver: local
+  mcp_caddy_config:
+    driver: local 

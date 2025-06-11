@@ -16,7 +16,7 @@ export default async function MCPServersPage() {
   return (
     <ContentBlock
       header={{
-        title: "My MCP Servers",
+        title: "MCP Connections",
         controls: (
           <div className="flex space-x-2">
             <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md transition-all duration-200">

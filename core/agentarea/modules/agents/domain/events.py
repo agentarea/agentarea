@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, Any
 from uuid import UUID
 from ....common.events.base_events import DomainEvent
 
@@ -6,28 +6,38 @@ from ....common.events.base_events import DomainEvent
 class AgentCreated(DomainEvent):
     """Event emitted when a new agent is created"""
 
-    agent_id: UUID
-    name: str
-    description: str
-    model_id: str
-    tools_config: dict | None = None
-    events_config: dict | None = None
-    planning: str | None = None
+    def __init__(self, agent_id: UUID, name: str, description: str, model_id: str,
+                 tools_config: Dict[str, Any] | None = None, events_config: Dict[str, Any] | None = None,
+                 planning: bool | None = None) -> None:
+        super().__init__()
+        self.agent_id = agent_id
+        self.name = name
+        self.description = description
+        self.model_id = model_id
+        self.tools_config = tools_config
+        self.events_config = events_config
+        self.planning = planning
 
 
 class AgentUpdated(DomainEvent):
     """Event emitted when an agent is updated"""
 
-    agent_id: UUID
-    name: str
-    description: str | None = None
-    model_id: str | None = None
-    tools_config: dict | None = None
-    events_config: dict | None = None
-    planning: str | None = None
+    def __init__(self, agent_id: UUID, name: str, description: str | None = None,
+                 model_id: str | None = None, tools_config: Dict[str, Any] | None = None,
+                 events_config: Dict[str, Any] | None = None, planning: bool | None = None) -> None:
+        super().__init__()
+        self.agent_id = agent_id
+        self.name = name
+        self.description = description
+        self.model_id = model_id
+        self.tools_config = tools_config
+        self.events_config = events_config
+        self.planning = planning
 
 
 class AgentDeleted(DomainEvent):
     """Event emitted when an agent is deleted"""
 
-    agent_id: UUID
+    def __init__(self, agent_id: UUID) -> None:
+        super().__init__()
+        self.agent_id = agent_id
