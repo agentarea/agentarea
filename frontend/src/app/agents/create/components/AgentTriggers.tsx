@@ -101,7 +101,7 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
                 }
               </Accordion>
             ) : (
-            <div className="mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
+            <div className="mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center cursor-default">
               {note}
             </div>
           )}

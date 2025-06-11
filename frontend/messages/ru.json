@@ -30,8 +30,8 @@
     "noLlmInstances": "Модели LLM не найдены",
     "setUpNewLlm": "Настройте новую модель LLM для начала работы.",
     "create": {
-      "addNewLlm": "Создать LLM",
-      "addNewLlmButton": "Создать LLM",
+      "addNewLlm": "Создать модель LLM",
+      "addNewLlmButton": "Создать модель",
       "backToLlmModels": "Вернуться к моделям LLM",
       "modelName": "Имя модели",
       "description": "Описание",    

@@ -87,7 +87,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="null" disabled>
                       No LLM models configured. Please add models in Admin → LLMs
                     </SelectItem>
                   )}

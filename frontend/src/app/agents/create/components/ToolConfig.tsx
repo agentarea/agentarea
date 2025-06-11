@@ -73,7 +73,7 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
           }
         </Accordion>
       ) : (
-        <div className="mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
+        <div className="cursor-default mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
           {note}
         </div>
       )}
