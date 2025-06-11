@@ -3,7 +3,11 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from agentarea.config import get_db_settings
-from agentarea.database import Base
+
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
 from alembic import context
 
 config = context.config

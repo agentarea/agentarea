@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime, String
+from sqlalchemy import JSON, DateTime, String, Boolean
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,7 +19,8 @@ class Agent(BaseModel):
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
     description: Mapped[str] = mapped_column(String, nullable=True)
+    instruction: Mapped[str] = mapped_column(String, nullable=True)
     model_id: Mapped[str] = mapped_column(String, nullable=True)
     tools_config: Mapped[dict] = mapped_column(JSON, nullable=True)
     events_config: Mapped[dict] = mapped_column(JSON, nullable=True)
-    planning: Mapped[str] = mapped_column(String, nullable=True)
+    planning: Mapped[bool] = mapped_column(Boolean, nullable=True)

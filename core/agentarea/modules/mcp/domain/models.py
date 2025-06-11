@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, Boolean, String
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -18,9 +19,11 @@ class MCPServer(BaseModel):
     description: Mapped[str] = mapped_column(String, nullable=False)
     docker_image_url: Mapped[str] = mapped_column(String, nullable=False)
     version: Mapped[str] = mapped_column(String, nullable=False)
-    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    tags: Mapped[List[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String, nullable=False, default="draft")
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Environment variable schema - defines what env vars this server needs
+    env_schema: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
 
     def __init__(
         self,
@@ -28,11 +31,12 @@ class MCPServer(BaseModel):
         description: str,
         docker_image_url: str,
         version: str,
-        tags: list[str] = None,
+        tags: Optional[List[str]] = None,
         status: str = "draft",
         is_public: bool = False,
-        id: UUID = None,
-        last_updated: datetime = None,
+        env_schema: Optional[List[Dict[str, Any]]] = None,
+        id: Optional[UUID] = None,
+        updated_at: Optional[datetime] = None,
     ):
         self.id = id or uuid4()
         self.name = name
@@ -42,5 +46,6 @@ class MCPServer(BaseModel):
         self.tags = tags or []
         self.status = status
         self.is_public = is_public
-        self.last_updated = last_updated or datetime.utcnow()
+        self.env_schema = env_schema or []
+        self.updated_at = updated_at or datetime.now(timezone.utc)
 

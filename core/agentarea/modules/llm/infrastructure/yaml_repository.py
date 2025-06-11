@@ -1,7 +1,6 @@
 import os
-from typing import Dict, List, Optional
-from uuid import UUID, uuid4
 from datetime import datetime
+from uuid import UUID, uuid4
 
 import yaml
 
@@ -10,19 +9,17 @@ from agentarea.modules.llm.domain.models import LLMModel
 
 
 class YAMLLLMModelRepository(BaseRepository[LLMModel]):
-    """
-    A repository implementation that reads LLM models from a YAML file.
+    """A repository implementation that reads LLM models from a YAML file.
+
     This is a temporary solution until the database implementation is ready.
     """
 
-    def __init__(self, yaml_path: str = None):
-        """
-        Initialize the repository with the path to the YAML file.
+    def __init__(self, yaml_path: str | None = None):
+        """Initialize the repository with the path to the YAML file.
 
         Args:
             yaml_path: Path to the YAML file. If None, uses the default path.
         """
-
         if yaml_path is None:
             # Default path is relative to the current file
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -34,16 +31,15 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
         self._providers_data = None
         self._load_yaml()
 
-    def _load_yaml(self) -> Dict:
+    def _load_yaml(self) -> dict:
         """Load the YAML file and cache the data."""
         if self._providers_data is None:
-            with open(self.yaml_path, "r") as f:
+            with open(self.yaml_path) as f:
                 self._providers_data = yaml.safe_load(f)
         return self._providers_data
 
-    async def get(self, id: UUID) -> Optional[LLMModel]:
-        """
-        Get a model by ID.
+    async def get(self, id: UUID) -> LLMModel | None:
+        """Get a model by ID.
 
         Note: This implementation doesn't support getting by ID since the YAML
         file doesn't have IDs. It will always return None.
@@ -53,13 +49,12 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
 
     async def list(
         self,
-        model_id: Optional[UUID] = None,
-        status: Optional[str] = None,
-        is_public: Optional[bool] = None,
-        provider: Optional[str] = None,
-    ) -> List[LLMModel]:
-        """
-        List models from the YAML file.
+        model_id: UUID | None = None,
+        status: str | None = None,
+        is_public: bool | None = None,
+        provider: str | None = None,
+    ) -> list[LLMModel]:
+        """List models from the YAML file.
 
         Args:
             status: Filter by status (not implemented)
@@ -99,8 +94,7 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
         return models
 
     async def create(self, model: LLMModel) -> LLMModel:
-        """
-        Create a model.
+        """Create a model.
 
         Note: This implementation doesn't support creating models.
         """
@@ -108,8 +102,7 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
         raise NotImplementedError("Creating models is not supported in YAML repository")
 
     async def update(self, model: LLMModel) -> LLMModel:
-        """
-        Update a model.
+        """Update a model.
 
         Note: This implementation doesn't support updating models.
         """
@@ -117,8 +110,7 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
         raise NotImplementedError("Updating models is not supported in YAML repository")
 
     async def delete(self, id: UUID) -> bool:
-        """
-        Delete a model.
+        """Delete a model.
 
         Note: This implementation doesn't support deleting models.
         """

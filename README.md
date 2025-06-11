@@ -21,7 +21,7 @@ docker-compose up
 
 ## 📖 Usage
 
-
+### Basic Setup
 ```bash
 # To run database migrations (if needed manually)
 # docker-compose exec core python cli.py migrate
@@ -29,6 +29,27 @@ docker-compose up
 # To run the core server directly (usually handled by docker-compose)
 # docker-compose exec core python cli.py serve --host 0.0.0.0 --port 8000
 ```
+
+### 🧪 Testing MCP Integration
+
+Test your MCP servers with AgentArea using our integrated testing framework:
+
+```bash
+# Run preset tests
+python scripts/run_mcp_tests.py --preset weather
+python scripts/run_mcp_tests.py --preset filesystem
+
+# Test custom MCP server
+python scripts/run_mcp_tests.py \
+  --image myorg/mcp-server:latest \
+  --url http://mcp-server:3000 \
+  --tools tools.json
+
+# Using pytest
+pytest tests/integration/test_mcp_real_integration.py -v
+```
+
+See `tests/integration/README_MCP.md` for detailed testing documentation.
 
 ## 📚 Documentation
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <circle cx="32" cy="32" r="30" fill="#1877F2"/>
+  <ellipse cx="32" cy="28" rx="12" ry="14" fill="#ffffff"/>
+  <circle cx="28" cy="24" r="2" fill="#1877F2"/>
+  <circle cx="36" cy="24" r="2" fill="#1877F2"/>
+  <path d="M32 30L24 38 40 38z" fill="#1877F2"/>
+  <text x="32" y="52" text-anchor="middle" font-family="Arial" font-size="8" fill="#ffffff">Meta</text>
+</svg> 

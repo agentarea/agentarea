@@ -97,10 +97,10 @@ export default function HomePage() {
           description="Connected data sources and integrations"
         />
         <StatCard
-          title="Workflows"
+          title="Tasks"
           value="5"
           icon={<Code2 className="h-6 w-6 text-primary" />}
-          description="Active automation workflows"
+          description="Active automation tasks"
         />
         <StatCard
           title="Tasks Today"

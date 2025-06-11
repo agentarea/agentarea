@@ -17,7 +17,7 @@ type MCPInstance = {
   status: string;
   server_id: string;
   created_at: string;
-  last_updated: string;
+  updated_at: string;
   endpoint_url: string;
   config: { [key: string]: unknown };
   ip_address?: string;
