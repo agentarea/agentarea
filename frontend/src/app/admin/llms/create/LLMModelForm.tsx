@@ -1,5 +1,6 @@
 "use client";
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { getProviderIconUrl } from "@/lib/provider-icons";
 import { LLMModel } from "@/lib/api";
 import { addLLMModelInstance } from './actions';
 import { initialState } from './state';
+import { Server, Cpu, FileText, Key, Star, Globe, Tag } from "lucide-react";
 
 interface LLMProvider {
   id: string;
@@ -43,7 +45,7 @@ function SubmitButton() {
 }
 
 export default function LLMModelForm({ llms }: LLMModelFormProps) {
-  const [state, formAction] = useFormState(addLLMModelInstance, initialState);
+  const [state, formAction] = useActionState(addLLMModelInstance, initialState);
 
   const {
     register,
@@ -162,7 +164,9 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-1.5">
-          <Label htmlFor="provider">Provider</Label>
+          <Label htmlFor="provider" className="flex items-center gap-2">
+            <Server className="label-icon" style={{ strokeWidth: 1.5 }} /> Provider
+          </Label>
           <Select 
             value={watchedProviderId} 
             onValueChange={handleProviderChange}
@@ -199,7 +203,9 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
         {watchedProviderId && (
           <>
             <div className="space-y-1.5">
-              <Label htmlFor="model">Model</Label>
+              <Label htmlFor="model" className="flex items-center gap-2">
+                <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> Model
+              </Label>
               <Select 
                 value={watchedModelId} 
                 onValueChange={handleModelChange}
@@ -227,7 +233,9 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="name">Model Name</Label>
+              <Label htmlFor="name" className="flex items-center gap-2">
+                <Tag className="label-icon" style={{ strokeWidth: 1.5 }} /> Model Name
+              </Label>
               <Input
                 id="name"
                 {...register('name', { required: 'Model name is required' })}
@@ -243,7 +251,9 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description" className="flex items-center gap-2">
+                <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description
+              </Label>
               <Input
                 id="description"
                 {...register('description')}
@@ -259,7 +269,9 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="apiKey">API Key</Label>
+              <Label htmlFor="apiKey" className="flex items-center gap-2">
+                <Key className="label-icon" style={{ strokeWidth: 1.5 }} /> API Key
+              </Label>
               <Input
                 id="apiKey"
                 {...register('apiKey', { required: 'API key is required' })}
@@ -286,10 +298,10 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
                 {...register('isDefault')} 
               />
               <div className="grid gap-1.5 leading-none">
-                <Label htmlFor="default-switch" className="cursor-pointer">
+                <Label htmlFor="default-switch" className="flex items-center gap-2 cursor-pointer">
                   Set as default LLM
                 </Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="note">
                   This model will be used as the default for new agents and workflows.
                 </p>
               </div>
@@ -306,10 +318,10 @@ export default function LLMModelForm({ llms }: LLMModelFormProps) {
                 {...register('isPublic')} 
               />
               <div className="grid gap-1.5 leading-none">
-                <Label htmlFor="public-switch" className="cursor-pointer">
+                <Label htmlFor="public-switch" className="flex items-center gap-2 cursor-pointer">
                   Public
                 </Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="note">
                   Make this model instance available to all users.
                 </p>
               </div>

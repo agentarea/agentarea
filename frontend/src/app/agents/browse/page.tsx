@@ -38,7 +38,7 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
         description: "Discover and deploy automation agents for your workflow needs",
         controls: (
           <Link href="/agents/create">
-            <Button size="lg" className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
+            <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
               <Bot className="h-5 w-5" />
               Deploy New Agent
             </Button>

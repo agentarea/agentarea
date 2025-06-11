@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles } from "lucide-react";
+import { Bot, FileText, MessageSquare, Cpu } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
@@ -21,12 +21,14 @@ type BasicInformationProps = {
 
 const BasicInformation = ({ register, control, errors, llmModelInstances }: BasicInformationProps) => (
   <Card className="">
-    {/* <h2 className="mb-6 flex items-center gap-2">
+    {/* <h2 className="mb-6 label">
       <Sparkles className="h-5 w-5 text-accent" /> Basic Information
     </h2> */}
     <div className="grid grid-cols-1 gap-6">
-      <div className="space-y-1">
-        <Label htmlFor="name" className="text-sm font-medium">Agent Name</Label>
+      <div className="space-y-2">
+        <Label htmlFor="name" className="label">
+            <Bot className="label-icon" style={{ strokeWidth: 1.5 }} />Agent Name
+        </Label>
         <Input
           id="name"
           {...register('name', { required: "Agent name is required" })}
@@ -36,8 +38,10 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
         />
         {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="description" className="text-sm font-medium">Description / Goal <span className="text-sm text-zinc-400">(Optional)</span></Label>
+      <div className="space-y-2">
+        <Label htmlFor="description" className="label">
+          <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description / Goal <span className="text-xs font-light text-zinc-400">(Optional)</span>
+        </Label>
         <Textarea
           id="description"
           {...register('description')}
@@ -48,8 +52,10 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
         />
         {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="instruction" className="text-sm font-medium">Instruction <span className="text-sm text-red-500">*</span></Label>
+      <div className="space-y-2">
+        <Label htmlFor="instruction" className="label">
+          <MessageSquare className="label-icon" style={{ strokeWidth: 1.5 }} /> Instruction <span className="text-sm text-red-500">*</span>
+        </Label>
         <Textarea
           id="instruction"
           {...register('instruction', { required: "Instruction is required" })}
@@ -60,15 +66,17 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
         />
         {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="model_id" className="text-sm font-medium">LLM Model</Label>
+      <div className="space-y-2">
+        <Label htmlFor="model_id" className="label">
+          <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> LLM Model
+        </Label>
          <Controller
             name="model_id"
             control={control}
             rules={{ required: "Model is required" }}
             render={({ field }) => (
               <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                <SelectTrigger className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors">
+                <SelectTrigger>
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -79,7 +87,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="null" disabled>
                       No LLM models configured. Please add models in Admin → LLMs
                     </SelectItem>
                   )}

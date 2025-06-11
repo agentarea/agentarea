@@ -10,6 +10,7 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import GridView from "./_components/GridView";
 import TableView from "./_components/TableView";
 import EmptyState from "@/components/EmptyState/EmptyState";
+import { TabsWithNavigation } from "./_components/TabsWithNavigation";
 
 // Server component that handles the tab rendering
 export default async function AddLLMModelPage({
@@ -37,14 +38,19 @@ export default async function AddLLMModelPage({
     return (
         <ContentBlock 
             header={{
-                title: t('title')
+                title: t('title'),
+                controls: (
+                    <Link href="/admin/llms/create" passHref legacyBehavior>
+                        <Button className="shrink-0 gap-2 shadow-sm" data-test="new-llm-button">
+                            <PlusCircleIcon className="mr-2 h-4 w-4" />
+                            {t('addNewLlm')}
+                        </Button>
+                    </Link>
+                )
             }}
+            
         >
-            <Tabs 
-                value={activeTab} 
-                className="w-full" 
-                defaultValue="grid"
-            >
+            <TabsWithNavigation activeTab={activeTab}>
                 <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
                    <div className="flex flex-row items-center gap-[10px] flex-1">
                         <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
@@ -56,14 +62,6 @@ export default async function AddLLMModelPage({
                                 className="pl-9 w-full" 
                             />
                         </div>
-                        <Link href="/admin/llms/create" passHref legacyBehavior>
-                            <Button asChild variant="outline">
-                                <span>
-                                    <PlusCircleIcon className="mr-2 h-4 w-4" />
-                                    {t('addNewLlm')}
-                                </span>
-                            </Button>
-                        </Link>
                     </div>
 
                     <div>
@@ -101,7 +99,7 @@ export default async function AddLLMModelPage({
                         </>
                     )
                 }
-            </Tabs>
+            </TabsWithNavigation>
         </ContentBlock>
     )
 }

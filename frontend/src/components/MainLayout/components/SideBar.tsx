@@ -56,13 +56,13 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
                 relative
                 transition-all duration-300 ease-in-out
                 border-r border-zinc-200 dark:border-zinc-700
-                ${isCollapsed ? 'w-[60px]' : 'w-[200px]'}
+                ${isCollapsed ? 'w-[65px]' : 'w-[230px]'}
             `}
         >
             <div className="h-[45px] pt-[6px]">
                 <div className={cn(
                     "w-full transition-all duration-500 overflow-hidden",
-                    isCollapsed ? 'h-[35px]' : 'h-[30px]'
+                    isCollapsed ? 'h-[37px]' : 'h-[30px]'
                 )}>
                     <LogoIcon />
                 </div>
@@ -70,7 +70,7 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
             <nav className="overflow-y-auto overflow-x-hidden flex flex-col justify-between h-full gap-[10px]">
                 <div>
                     {menuContent.map((sectionContent, index) => (
-                        <div key={`section-${index}`} className="flex flex-col gap-[2px] pt-[10px]">
+                        <div key={`section-${index}`} className="flex flex-col gap-[3px] pt-[10px]">
                             {
                                 sectionContent.section && (
                                     <SectionTitle 
@@ -97,7 +97,7 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
                                                 animate={{ opacity: 1, height: "auto" }}
                                                 exit={{ opacity: 0, height: 0 }}
                                                 transition={{ duration: 0.3 }}
-                                                className="overflow-hidden flex flex-col gap-[2px]"
+                                                className="overflow-hidden flex flex-col gap-[3px]"
                                             >
                                                 {
                                                     sectionContent.items.map((item, itemIndex) => (
