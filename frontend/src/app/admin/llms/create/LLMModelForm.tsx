@@ -1,5 +1,6 @@
 "use client";
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ function SubmitButton() {
 }
 
 export default function LLMModelForm({ llms }: LLMModelFormProps) {
-  const [state, formAction] = useFormState(addLLMModelInstance, initialState);
+  const [state, formAction] = useActionState(addLLMModelInstance, initialState);
 
   const {
     register,
