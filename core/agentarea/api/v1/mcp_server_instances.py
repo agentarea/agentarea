@@ -163,3 +163,7 @@ async def stop_mcp_server_instance(
     if not success:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
     return {"status": "success", "message": "Instance stopped successfully"}
+
+
+# REMOVED: Insecure endpoint that exposed secrets via HTTP
+# Secrets are now resolved directly in the Go service using Infisical SDK

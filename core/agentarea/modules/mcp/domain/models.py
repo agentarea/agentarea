@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID, uuid4
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +24,8 @@ class MCPServer(BaseModel):
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Environment variable schema - defines what env vars this server needs
     env_schema: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    # Custom command to override container CMD - useful for switching between stdio and HTTP modes
+    cmd: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True, default=None)
 
     def __init__(
         self,
@@ -35,6 +37,7 @@ class MCPServer(BaseModel):
         status: str = "draft",
         is_public: bool = False,
         env_schema: Optional[List[Dict[str, Any]]] = None,
+        cmd: Optional[List[str]] = None,
         id: Optional[UUID] = None,
         updated_at: Optional[datetime] = None,
     ):
@@ -47,5 +50,6 @@ class MCPServer(BaseModel):
         self.status = status
         self.is_public = is_public
         self.env_schema = env_schema or []
-        self.updated_at = updated_at or datetime.now(timezone.utc)
+        self.cmd = cmd
+        self.updated_at = updated_at or datetime.now()
 

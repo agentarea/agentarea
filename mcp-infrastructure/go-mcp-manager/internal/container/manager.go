@@ -2,12 +2,15 @@ package container
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -18,20 +21,22 @@ import (
 
 // Manager manages container lifecycle using Podman
 type Manager struct {
-	config     *config.Config
-	containers map[string]*models.Container
-	templates  map[string]*models.Template
-	mutex      sync.RWMutex
-	logger     *slog.Logger
+	config         *config.Config
+	containers     map[string]*models.Container
+	templates      map[string]*models.Template
+	mutex          sync.RWMutex
+	logger         *slog.Logger
+	traefikManager *TraefikManager
 }
 
 // NewManager creates a new container manager
 func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	return &Manager{
-		config:     cfg,
-		containers: make(map[string]*models.Container),
-		templates:  make(map[string]*models.Template),
-		logger:     logger,
+		config:         cfg,
+		containers:     make(map[string]*models.Container),
+		templates:      make(map[string]*models.Template),
+		logger:         logger,
+		traefikManager: NewTraefikManager(logger),
 	}
 }
 
@@ -65,34 +70,28 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		return nil, fmt.Errorf("container %s already exists", containerName)
 	}
 
-	// Get template
-	template, exists := m.templates[req.Template]
-	if !exists {
-		return nil, fmt.Errorf("template %s not found", req.Template)
-	}
-
 	// Check container limit
 	if len(m.containers) >= m.config.Container.MaxContainers {
 		return nil, fmt.Errorf("maximum container limit reached (%d)", m.config.Container.MaxContainers)
 	}
 
-	// Create container
+	// Create container directly from request
 	container := &models.Container{
 		Name:        containerName,
 		ServiceName: req.ServiceName,
-		Image:       template.Image,
+		Image:       req.Image,
 		Status:      models.StatusStarting,
-		Port:        template.Port,
-		URL:         m.config.GetServiceURL(req.ServiceName, template.Port),
+		Port:        req.Port,
+		URL:         m.config.GetServiceURL(req.ServiceName, req.Port),
 		Host:        m.config.GetServiceHost(req.ServiceName),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-		Labels:      mergeLabels(template.Labels, req.Labels),
-		Environment: mergeEnvironment(template.Environment, req.Environment),
+		Labels:      req.Labels,
+		Environment: req.Environment,
 	}
 
 	// Build podman run command
-	args := m.buildPodmanRunArgs(container, template)
+	args := m.buildPodmanRunArgs(container)
 
 	// Execute podman run
 	cmd := exec.CommandContext(ctx, "podman", args...)
@@ -115,13 +114,32 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		return nil, fmt.Errorf("container failed to start: %w", err)
 	}
 
+	// Get container IP for Traefik routing
+	containerIP, err := m.getContainerIP(ctx, container.ID)
+	if err != nil {
+		m.logger.Error("Failed to get container IP",
+			slog.String("container", containerName),
+			slog.String("error", err.Error()))
+		// Continue without IP - container is still created
+		containerIP = "127.0.0.1" // fallback
+	}
+
+	// Add Traefik route for the container
+	if err := m.traefikManager.AddMCPService(ctx, req.ServiceName, containerIP, req.Port); err != nil {
+		m.logger.Error("Failed to add Traefik route",
+			slog.String("service", req.ServiceName),
+			slog.String("error", err.Error()))
+		// Continue - container is created but routing may not work
+	}
+
 	container.Status = models.StatusRunning
 	m.containers[containerName] = container
 
 	m.logger.Info("Container created successfully",
 		slog.String("container", containerName),
 		slog.String("id", container.ID),
-		slog.String("service", req.ServiceName))
+		slog.String("service", req.ServiceName),
+		slog.String("container_ip", containerIP))
 
 	return container, nil
 }
@@ -185,6 +203,17 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 		return fmt.Errorf("failed to remove container: %w", err)
 	}
 
+	// Remove Traefik route for the container using the slug
+	if container.Slug != "" {
+		if err := m.traefikManager.RemoveMCPService(ctx, container.Slug); err != nil {
+			m.logger.Error("Failed to remove Traefik route",
+				slog.String("slug", container.Slug),
+				slog.String("service", serviceName),
+				slog.String("error", err.Error()))
+			// Continue - container is removed but route may remain
+		}
+	}
+
 	delete(m.containers, containerName)
 
 	m.logger.Info("Container deleted successfully",
@@ -223,7 +252,7 @@ func (m *Manager) ListTemplates() []models.Template {
 
 // loadTemplates loads container templates from the templates directory
 func (m *Manager) loadTemplates() error {
-	templatesDir := m.config.Container.TemplatesDir
+	templatesDir := "./templates" // Default templates directory
 	if _, err := os.Stat(templatesDir); os.IsNotExist(err) {
 		m.logger.Warn("Templates directory does not exist", slog.String("dir", templatesDir))
 		return nil
@@ -293,7 +322,7 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 		return fmt.Errorf("failed to parse container list: %w", err)
 	}
 
-	prefix := m.config.Container.Prefix
+	prefix := m.config.Container.NamePrefix
 	for _, pc := range podmanContainers {
 		names, ok := pc["Names"].([]interface{})
 		if !ok || len(names) == 0 {
@@ -319,61 +348,54 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 		}
 
 		m.containers[containerName] = container
+
+		m.logger.Info("Discovered existing container",
+			slog.String("name", containerName),
+			slog.String("service", serviceName),
+			slog.String("status", string(container.Status)))
 	}
 
 	return nil
 }
 
 // buildPodmanRunArgs builds the arguments for podman run command
-func (m *Manager) buildPodmanRunArgs(container *models.Container, template *models.Template) []string {
+func (m *Manager) buildPodmanRunArgs(container *models.Container) []string {
 	args := []string{"run", "-d"}
 
 	// Add name
 	args = append(args, "--name", container.Name)
 
-	// Add port mapping
-	if template.Port > 0 {
-		args = append(args, "-p", fmt.Sprintf("%d:%d", template.Port, template.Port))
-	}
+	// Add network (important for Traefik discovery)
+	args = append(args, "--network", m.config.Traefik.Network)
+
+	// No port mapping needed - Traefik will handle routing via path-based routing
+	// The container will expose its internal port and Traefik will proxy to it
 
 	// Add environment variables
 	for key, value := range container.Environment {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Add labels
+	// Add labels for automatic service discovery
 	for key, value := range container.Labels {
 		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Add resource limits
-	if template.MemoryLimit != "" {
-		args = append(args, "--memory", template.MemoryLimit)
-	} else if m.config.Container.DefaultMemoryLimit != "" {
+	// Add default resource limits
+	if m.config.Container.DefaultMemoryLimit != "" {
 		args = append(args, "--memory", m.config.Container.DefaultMemoryLimit)
 	}
 
-	if template.CPULimit != "" {
-		args = append(args, "--cpus", template.CPULimit)
-	} else if m.config.Container.DefaultCPULimit != "" {
+	if m.config.Container.DefaultCPULimit != "" {
 		args = append(args, "--cpus", m.config.Container.DefaultCPULimit)
 	}
 
-	// Add volumes
-	for _, volume := range template.Volumes {
-		volumeArg := fmt.Sprintf("%s:%s", volume.Source, volume.Destination)
-		if volume.ReadOnly {
-			volumeArg += ":ro"
-		}
-		args = append(args, "-v", volumeArg)
-	}
-
 	// Add image
-	args = append(args, template.Image)
+	args = append(args, container.Image)
 
-	// Add command
-	if len(template.Command) > 0 {
-		args = append(args, template.Command...)
+	// Add custom command if specified (this overrides the container's default CMD)
+	if len(container.Command) > 0 {
+		args = append(args, container.Command...)
 	}
 
 	return args
@@ -446,4 +468,241 @@ func mergeEnvironment(template, request map[string]string) map[string]string {
 		result[k] = v
 	}
 	return result
+}
+
+// getContainerIP retrieves the IP address of a container in the mcp-network
+func (m *Manager) getContainerIP(ctx context.Context, containerID string) (string, error) {
+	// Use a simpler approach to get container IP
+	cmd := exec.CommandContext(ctx, "podman", "inspect", containerID)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Parse JSON to extract IP
+	var inspectData []map[string]interface{}
+	if err := json.Unmarshal(output, &inspectData); err != nil {
+		return "", fmt.Errorf("failed to parse inspect output: %w", err)
+	}
+
+	if len(inspectData) == 0 {
+		return "", fmt.Errorf("no container data found")
+	}
+
+	// Navigate to the IP address
+	networkSettings, ok := inspectData[0]["NetworkSettings"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("NetworkSettings not found")
+	}
+
+	networks, ok := networkSettings["Networks"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("Networks not found")
+	}
+
+	mcpNetwork, ok := networks[m.config.Traefik.Network].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("network %s not found", m.config.Traefik.Network)
+	}
+
+	ipAddress, ok := mcpNetwork["IPAddress"].(string)
+	if !ok || ipAddress == "" {
+		return "", fmt.Errorf("IPAddress not found or empty")
+	}
+
+	return ipAddress, nil
+}
+
+// HandleMCPInstanceCreated handles the creation of an MCP server instance from domain events
+func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name string, jsonSpec map[string]interface{}) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	// Check if container already exists
+	containerName := m.config.GetContainerName(name)
+	if _, exists := m.containers[containerName]; exists {
+		return fmt.Errorf("container %s already exists", containerName)
+	}
+
+	// Extract image (required)
+	image, ok := jsonSpec["image"].(string)
+	if !ok || image == "" {
+		return fmt.Errorf("image is required in json_spec")
+	}
+
+	// Extract container port (for internal use)
+	containerPort := 8000 // Default MCP port
+	if p, ok := jsonSpec["port"].(float64); ok {
+		containerPort = int(p)
+	} else if p, ok := jsonSpec["port"].(int); ok {
+		containerPort = p
+	}
+
+	// Extract environment variables
+	environment := make(map[string]string)
+	if env, ok := jsonSpec["environment"].(map[string]interface{}); ok {
+		for k, v := range env {
+			if str, ok := v.(string); ok {
+				environment[k] = str
+			}
+		}
+	}
+
+	// Extract custom command (optional)
+	var command []string
+	if cmdInterface, ok := jsonSpec["cmd"]; ok {
+		if cmdSlice, ok := cmdInterface.([]interface{}); ok {
+			for _, cmdItem := range cmdSlice {
+				if cmdStr, ok := cmdItem.(string); ok {
+					command = append(command, cmdStr)
+				}
+			}
+		}
+	}
+
+	// Add MCP-specific environment variables
+	environment["MCP_INSTANCE_ID"] = instanceID
+	environment["MCP_SERVICE_NAME"] = name
+	environment["MCP_CONTAINER_PORT"] = fmt.Sprintf("%d", containerPort)
+
+	// Check container limit
+	if len(m.containers) >= m.config.Container.MaxContainers {
+		return fmt.Errorf("maximum container limit reached (%d)", m.config.Container.MaxContainers)
+	}
+
+	// Generate a unique slug for routing
+	slug := generateSlug(name)
+
+	// Create container
+	container := &models.Container{
+		Name:        containerName,
+		ServiceName: name,
+		Slug:        slug,
+		Image:       image,
+		Status:      models.StatusStarting,
+		Port:        containerPort,
+		URL:         fmt.Sprintf("http://localhost:81/mcp/%s", slug), // Use slug-based routing
+		Host:        fmt.Sprintf("localhost:81"),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		Labels:      make(map[string]string), // No labels needed for Traefik
+		Environment: environment,
+		Command:     command,
+	}
+
+	// Build podman run command
+	args := m.buildPodmanRunArgs(container)
+
+	// Execute podman run
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		container.Status = models.StatusError
+		m.logger.Error("Failed to create container",
+			slog.String("container", containerName),
+			slog.String("error", err.Error()),
+			slog.String("output", string(output)))
+		return fmt.Errorf("failed to create container: %w", err)
+	}
+
+	// Get container ID from output
+	container.ID = strings.TrimSpace(string(output))
+
+	// Wait for container to be running
+	if err := m.waitForContainer(ctx, container.ID); err != nil {
+		container.Status = models.StatusError
+		return fmt.Errorf("container failed to start: %w", err)
+	}
+
+	// Get container IP for Traefik routing
+	containerIP, err := m.getContainerIP(ctx, container.ID)
+	if err != nil {
+		m.logger.Error("Failed to get container IP",
+			slog.String("container", containerName),
+			slog.String("error", err.Error()))
+		// Continue without IP - container is still created
+		containerIP = "127.0.0.1" // fallback
+	}
+
+	// Add Traefik route for the container using the slug
+	if err := m.traefikManager.AddMCPService(ctx, slug, containerIP, containerPort); err != nil {
+		m.logger.Error("Failed to add Traefik route",
+			slog.String("slug", slug),
+			slog.String("service", name),
+			slog.String("error", err.Error()))
+		// Continue - container is created but routing may not work
+	}
+
+	container.Status = models.StatusRunning
+	m.containers[containerName] = container
+
+	m.logger.Info("Container created successfully with Traefik routing",
+		slog.String("container", containerName),
+		slog.String("id", container.ID),
+		slog.String("instance_id", instanceID),
+		slog.String("url", container.URL),
+		slog.String("container_ip", containerIP),
+		slog.Int("container_port", containerPort),
+		slog.Any("command", command))
+
+	return nil
+}
+
+// HandleMCPInstanceDeleted handles the deletion of an MCP server instance from domain events
+func (m *Manager) HandleMCPInstanceDeleted(ctx context.Context, instanceID string) error {
+	m.logger.Info("Handling MCP instance deletion",
+		slog.String("instance_id", instanceID))
+
+	// Find container by MCP instance ID
+	containers := m.ListContainers()
+	var targetContainer *models.Container
+
+	for _, container := range containers {
+		if container.Environment["MCP_INSTANCE_ID"] == instanceID {
+			targetContainer = &container
+			break
+		}
+	}
+
+	if targetContainer == nil {
+		m.logger.Warn("No container found for MCP instance",
+			slog.String("instance_id", instanceID))
+		return nil // Not an error - container might have been manually deleted
+	}
+
+	// Delete the container using existing functionality (includes Traefik route cleanup)
+	err := m.DeleteContainer(ctx, targetContainer.ServiceName)
+	if err != nil {
+		m.logger.Error("Failed to delete MCP container",
+			slog.String("instance_id", instanceID),
+			slog.String("service_name", targetContainer.ServiceName),
+			slog.String("error", err.Error()))
+		return err
+	}
+
+	m.logger.Info("Successfully deleted MCP container",
+		slog.String("instance_id", instanceID),
+		slog.String("service_name", targetContainer.ServiceName))
+
+	return nil
+}
+
+// generateSlug generates a URL-friendly slug from a name with a random suffix
+func generateSlug(name string) string {
+	// Convert to lowercase and replace spaces/special chars with hyphens
+	slug := strings.ToLower(name)
+
+	// Replace any non-alphanumeric characters with hyphens
+	reg := regexp.MustCompile(`[^a-z0-9]+`)
+	slug = reg.ReplaceAllString(slug, "-")
+
+	// Remove leading/trailing hyphens
+	slug = strings.Trim(slug, "-")
+
+	// Add random suffix to ensure uniqueness
+	randomBytes := make([]byte, 4)
+	rand.Read(randomBytes)
+	randomSuffix := hex.EncodeToString(randomBytes)
+
+	return fmt.Sprintf("%s-%s", slug, randomSuffix)
 }

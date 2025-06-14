@@ -6,7 +6,7 @@ from agentarea.common.events.broker import EventBroker
 from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 from agentarea.config import get_database
 
-from ..domain.events import (
+from agentarea.modules.mcp.domain.events import (
     MCPServerCreated,
     MCPServerDeleted,
     MCPServerDeployed,
@@ -17,14 +17,16 @@ from ..domain.events import (
     MCPServerInstanceUpdated,
     MCPServerUpdated,
 )
-from ..domain.models import MCPServer
-from ..domain.mpc_server_instance_model import MCPServerInstance
-from ..infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
+from agentarea.modules.mcp.domain.models import MCPServer
+from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea.modules.mcp.infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
+# McpManagerClient removed - using event-driven architecture instead
+from agentarea.modules.mcp.schemas import MCPServerStatus
 from .mcp_env_service import MCPEnvironmentService
 
 
 class MCPServerService(BaseCrudService[MCPServer]):
-    def __init__(self, repository: MCPServerRepository, event_broker: EventBroker):
+    def __init__(self, repository: MCPServerRepository, event_broker: Optional[EventBroker] = None):
         super().__init__(repository)
         self.event_broker = event_broker
 
@@ -36,7 +38,9 @@ class MCPServerService(BaseCrudService[MCPServer]):
         version: str,
         tags: Optional[List[str]] = None,
         is_public: bool = False,
-        env_schema: Optional[List[Dict[str, Any]]] = None
+        env_schema: Optional[List[Dict[str, Any]]] = None,
+        cmd: Optional[List[str]] = None,
+        json_spec: Optional[Dict[str, Any]] = None
     ) -> MCPServer:
         server = MCPServer(
             name=name,
@@ -45,17 +49,19 @@ class MCPServerService(BaseCrudService[MCPServer]):
             version=version,
             tags=tags or [],
             is_public=is_public,
-            env_schema=env_schema or []
+            env_schema=env_schema or [],
+            cmd=cmd
         )
         server = await self.create(server)
 
-        await self.event_broker.publish(
-            MCPServerCreated(
-                server_id=server.id,
-                name=server.name,
-                version=server.version
+        if self.event_broker:
+            await self.event_broker.publish(
+                MCPServerCreated(
+                    server_id=server.id,
+                    name=server.name,
+                    version=server.version
+                )
             )
-        )
 
         return server
 
@@ -69,7 +75,9 @@ class MCPServerService(BaseCrudService[MCPServer]):
         tags: Optional[List[str]] = None,
         is_public: Optional[bool] = None,
         status: Optional[str] = None,
-        env_schema: Optional[List[Dict[str, Any]]] = None
+        env_schema: Optional[List[Dict[str, Any]]] = None,
+        cmd: Optional[List[str]] = None,
+        json_spec: Optional[Dict[str, Any]] = None
     ) -> Optional[MCPServer]:
         server = await self.get(id)
         if not server:
@@ -91,22 +99,26 @@ class MCPServerService(BaseCrudService[MCPServer]):
             server.status = status
         if env_schema is not None:
             server.env_schema = env_schema
+        if cmd is not None:
+            server.cmd = cmd
+
 
         server = await self.update(server)
 
-        await self.event_broker.publish(
-            MCPServerUpdated(
-                server_id=server.id,
-                name=server.name,
-                version=server.version
+        if self.event_broker:
+            await self.event_broker.publish(
+                MCPServerUpdated(
+                    server_id=server.id,
+                    name=server.name,
+                    version=server.version
+                )
             )
-        )
 
         return server
 
     async def delete_mcp_server(self, id: UUID) -> bool:
         success = await self.delete(id)
-        if success:
+        if success and self.event_broker:
             await self.event_broker.publish(MCPServerDeleted(server_id=id))
         return success
 
@@ -125,13 +137,14 @@ class MCPServerService(BaseCrudService[MCPServer]):
         server.status = "deployed"
         await self.update(server)
 
-        await self.event_broker.publish(
-            MCPServerDeployed(
-                server_id=server.id,
-                name=server.name,
-                version=server.version
+        if self.event_broker:
+            await self.event_broker.publish(
+                MCPServerDeployed(
+                    server_id=server.id,
+                    name=server.name,
+                    version=server.version
+                )
             )
-        )
 
         return True
 
@@ -143,6 +156,9 @@ class MCPServerService(BaseCrudService[MCPServer]):
     ) -> List[MCPServer]:
         # Use repository directly since we need custom filtering
         return await self.repository.list(status=status, is_public=is_public, tag=tag)
+
+    async def get(self, id: UUID) -> Optional[MCPServer]:
+        return await self.repository.get(id)
 
 
 class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
@@ -158,7 +174,45 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         self.mcp_server_repository = mcp_server_repository
         self.secret_manager = secret_manager
         self.env_service = MCPEnvironmentService(secret_manager)
-        self.db = get_database()  # Add database access
+        self.db = get_database()
+
+    async def create_instance_from_spec(
+        self,
+        name: str,
+        json_spec: Dict[str, Any],
+        server_spec_id: UUID,
+        description: Optional[str] = None,
+    ) -> MCPServerInstance:
+        instance = MCPServerInstance(
+            name=name,
+            description=description,
+            server_spec_id=str(server_spec_id),
+            json_spec=json_spec,
+            status=MCPServerStatus.REQUESTED.value,
+        )
+        instance = await self.repository.create(instance)
+
+        # Publish event for Go MCP Manager to handle container creation
+        await self.event_broker.publish(
+            MCPServerInstanceCreated(
+                instance_id=str(instance.id),
+                name=instance.name,
+                json_spec=json_spec
+            )
+        )
+        return instance
+
+    async def create_instance_from_template(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        server_spec_id: Optional[str] = None,
+        json_spec: Optional[Dict[str, Any]] = None,
+    ) -> Optional[MCPServerInstance]:
+        # Implementation of create_instance_from_template method
+        # This method should be implemented based on the original implementation
+        # It should return an instance of MCPServerInstance or None if the creation fails
+        pass
 
     async def create_instance(
         self,
@@ -256,15 +310,16 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         if not instance:
             return False
 
-        # Clean up environment variables from secret manager
-        env_var_names = instance.get_configured_env_vars()
-        if env_var_names:
-            await self.env_service.delete_instance_environment(id, env_var_names)
+        # Publish event for Go MCP Manager to handle container deletion
+        await self.event_broker.publish(
+            MCPServerInstanceDeleted(
+                instance_id=str(instance.id),
+                name=instance.name
+            )
+        )
 
-        success = await self.repository.delete(id)
-        if success:
-            await self.event_broker.publish(MCPServerInstanceDeleted(instance_id=id))
-        return success
+        # Delete the instance from the database
+        return await super().delete(id)
 
     async def start_instance(self, id: UUID) -> bool:
         instance = await self.get(id)
@@ -313,18 +368,8 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
 
         return True
 
-    async def list(
-        self,
-        server_spec_id: Optional[str] = None,
-        status: Optional[str] = None
-    ) -> List[MCPServerInstance]:
+    async def list(self, server_spec_id: Optional[str] = None, status: Optional[str] = None) -> List[MCPServerInstance]:
         return await self.repository.list(server_spec_id=server_spec_id, status=status)
-
-    async def get(self, id: UUID) -> Optional[MCPServerInstance]:
-        """Get MCP server instance with separate session to avoid transaction conflicts."""
-        async with self.db.get_db() as session:
-            repo = MCPServerInstanceRepository(session)
-            return await repo.get(id)
 
     async def _validate_env_vars(
         self, 

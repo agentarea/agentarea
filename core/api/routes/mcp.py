@@ -1,290 +1,253 @@
 """
-MCP API routes for server management.
+MCP API routes for server instance management.
 """
 import logging
-from typing import List
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel, Field
 
-from agentarea.modules.mcp.schemas import (
-    MCPServerCreateRequest,
-    MCPServerResponse,
-    MCPServerListResponse,
-    MCPServerDeployment,
+from agentarea.common.infrastructure.database import get_db_session
+from agentarea.api.deps.events import EventBrokerDep, get_event_broker
+
+from agentarea.modules.mcp.application.service import MCPServerInstanceService, MCPServerService
+from agentarea.modules.mcp.infrastructure.repository import (
+    MCPServerInstanceRepository,
+    MCPServerRepository,
 )
+from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# --- Pydantic Schemas for this router ---
 
-# TODO: Add authentication dependency
-async def get_current_user():
-    """Get current authenticated user."""
-    # Placeholder - implement actual authentication
-    from uuid import uuid4
-    return {"id": uuid4(), "email": "user@example.com"}
+class MCPServerInstanceCreate(BaseModel):
+    """Schema for creating a new MCP server instance."""
+    server_spec_id: Optional[UUID] = Field(None, description="ID of the MCPServer specification to use.")
+    name: str = Field(..., description="A unique name for the instance.")
+    description: Optional[str] = Field(None, description="Optional description for the instance.")
+    json_spec: Dict[str, Any] = Field(..., description="Container specification as JSON.")
 
 
-@router.post("/mcp/servers", response_model=MCPServerResponse)
-async def create_mcp_server(
-    request: MCPServerCreateRequest,
-    current_user=Depends(get_current_user)
-):
-    """
-    Create a new MCP server.
+class MCPServerInstanceResponse(BaseModel):
+    """Schema for MCP server instance response."""
+    id: str
+    name: str
+    description: Optional[str]
+    server_spec_id: Optional[str]
+    json_spec: Dict[str, Any]
+    status: str
+    created_at: str
+    updated_at: str
+
+
+# --- Dependencies ---
+
+async def get_mcp_server_instance_service(
+    db_session: AsyncSession = Depends(get_db_session),
+    event_broker: EventBrokerDep = Depends(get_event_broker),
+) -> MCPServerInstanceService:
+    """Get MCP server instance service with dependencies."""
+    instance_repo = MCPServerInstanceRepository(db_session)
+    server_repo = MCPServerRepository(db_session)
     
-    This endpoint:
-    1. Validates the request
-    2. Publishes creation event
-    3. Makes HTTP call to MCP Manager
-    4. Returns immediate response
-    """
-    try:
-        # TODO: Import MCP client when dependencies are fixed
-        # mcp_client = get_mcp_client()
-        # 
-        # response = await mcp_client.create_server(
-        #     request=request,
-        #     user_id=current_user["id"]
-        # )
-        # 
-        # if response.success:
-        #     return response
-        # else:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_400_BAD_REQUEST,
-        #         detail=response.message
-        #     )
-        
-        # Placeholder response
-        return MCPServerResponse(
-            success=True,
-            message="MCP server creation request accepted",
-            config_id=None,
-            deployment_id=None,
-            server=None
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to create MCP server: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create MCP server"
-        )
+    # Create a minimal service for database operations only
+    # The actual container management is handled by the Go MCP infrastructure
+    class MinimalMCPService:
+        def __init__(self, instance_repo, server_repo, event_broker):
+            self.repository = instance_repo
+            self.server_repository = server_repo
+            self.event_broker = event_broker
+    
+    return MinimalMCPService(instance_repo, server_repo, event_broker)
 
 
-@router.get("/mcp/servers", response_model=MCPServerListResponse)
-async def list_mcp_servers(
-    agent_id: UUID = None,
-    current_user=Depends(get_current_user)
+async def get_mcp_server_service(
+    db_session: AsyncSession = Depends(get_db_session),
+    event_broker: EventBrokerDep = Depends(get_event_broker),
+) -> MCPServerService:
+    """Get MCP server service with dependencies."""
+    server_repo = MCPServerRepository(db_session)
+    return MCPServerService(repository=server_repo, event_broker=event_broker)
+
+
+# --- API Routes ---
+
+@router.get("/v1/mcp-server-instances/", response_model=List[MCPServerInstanceResponse])
+async def list_mcp_server_instances(
+    service = Depends(get_mcp_server_instance_service),
 ):
-    """
-    List MCP servers, optionally filtered by agent ID.
-    """
+    """List all MCP server instances."""
     try:
-        # TODO: Implement server listing from database
-        # servers = await mcp_service.list_servers(
-        #     user_id=current_user["id"],
-        #     agent_id=agent_id
-        # )
-        
-        # Placeholder response
-        servers: List[MCPServerDeployment] = []
-        
-        return MCPServerListResponse(
-            servers=servers,
-            total=len(servers)
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to list MCP servers: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list MCP servers"
-        )
-
-
-@router.get("/mcp/servers/{config_id}", response_model=MCPServerDeployment)
-async def get_mcp_server(
-    config_id: UUID,
-    current_user=Depends(get_current_user)
-):
-    """
-    Get specific MCP server by configuration ID.
-    """
-    try:
-        # TODO: Implement server retrieval from database
-        # server = await mcp_service.get_server(
-        #     config_id=config_id,
-        #     user_id=current_user["id"]
-        # )
-        # 
-        # if not server:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_404_NOT_FOUND,
-        #         detail="MCP server not found"
-        #     )
-        # 
-        # return server
-        
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="MCP server not found"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get MCP server {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get MCP server"
-        )
-
-
-@router.delete("/mcp/servers/{config_id}", response_model=MCPServerResponse)
-async def delete_mcp_server(
-    config_id: UUID,
-    current_user=Depends(get_current_user)
-):
-    """
-    Delete an MCP server.
-    """
-    try:
-        # TODO: Implement server deletion
-        # mcp_client = get_mcp_client()
-        # 
-        # response = await mcp_client.delete_server(config_id=config_id)
-        # 
-        # if response.success:
-        #     return response
-        # else:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_400_BAD_REQUEST,
-        #         detail=response.message
-        #     )
-        
-        # Placeholder response
-        return MCPServerResponse(
-            success=True,
-            message="MCP server deletion initiated",
-            config_id=config_id,
-            deployment_id=None,
-            server=None
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to delete MCP server {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete MCP server"
-        )
-
-
-@router.get("/mcp/servers/{config_id}/status")
-async def get_mcp_server_status(
-    config_id: UUID,
-    current_user=Depends(get_current_user)
-):
-    """
-    Get real-time status of an MCP server from the MCP Manager.
-    """
-    try:
-        # TODO: Implement real-time status check
-        # mcp_client = get_mcp_client()
-        # 
-        # status_data = await mcp_client.get_server_status(config_id)
-        # 
-        # if not status_data:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_404_NOT_FOUND,
-        #         detail="MCP server not found in runtime"
-        #     )
-        # 
-        # return status_data
-        
-        return {
-            "config_id": str(config_id),
-            "status": "ready",
-            "runtime_id": "placeholder-container-id",
-            "endpoint": "http://placeholder.localhost",
-            "health": "healthy"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get MCP server status {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get MCP server status"
-        )
-
-
-@router.get("/mcp/templates")
-async def list_mcp_templates():
-    """
-    List available MCP server templates.
-    """
-    try:
-        # TODO: Get templates from MCP Manager
-        # mcp_client = get_mcp_client()
-        # templates = await mcp_client.list_templates()
-        
-        # Placeholder templates
-        templates = [
-            {
-                "name": "fastapi",
-                "description": "FastAPI MCP server template",
-                "image": "mcp/fastapi:latest",
-                "ports": [8000],
-                "environment_vars": ["DATABASE_URL", "API_KEY"]
-            },
-            {
-                "name": "nodejs",
-                "description": "Node.js MCP server template",
-                "image": "mcp/nodejs:latest",
-                "ports": [3000],
-                "environment_vars": ["NODE_ENV", "PORT"]
-            }
+        instances = await service.repository.list()
+        return [
+            MCPServerInstanceResponse(
+                id=str(instance.id),
+                name=instance.name,
+                description=instance.description,
+                server_spec_id=instance.server_spec_id,
+                json_spec=instance.json_spec,
+                status=instance.status,
+                created_at=instance.created_at.isoformat(),
+                updated_at=instance.updated_at.isoformat(),
+            )
+            for instance in instances
         ]
-        
-        return {"templates": templates}
-        
     except Exception as e:
-        logger.error(f"Failed to list MCP templates: {e}")
+        logger.error(f"Error listing MCP server instances: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list MCP templates"
+            detail="Failed to list MCP server instances"
         )
 
 
-@router.get("/mcp/health")
-async def check_mcp_health():
-    """
-    Check MCP Manager health status.
-    """
+@router.post("/v1/mcp-server-instances/", response_model=MCPServerInstanceResponse)
+async def create_mcp_server_instance(
+    data: MCPServerInstanceCreate,
+    service = Depends(get_mcp_server_instance_service),
+    server_service: MCPServerService = Depends(get_mcp_server_service),
+):
+    """Create a new MCP server instance and publish event for Go infrastructure."""
     try:
-        # TODO: Check MCP Manager health
-        # mcp_client = get_mcp_client()
-        # is_healthy = await mcp_client.health_check()
+        # Build the json_spec based on the architecture pattern
+        json_spec = data.json_spec.copy()
         
-        is_healthy = True  # Placeholder
+        # If server_spec_id is provided, merge with server's env_schema
+        if data.server_spec_id:
+            server = await server_service.get(data.server_spec_id)
+            if not server:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"MCP server with ID {data.server_spec_id} not found"
+                )
+            
+            # For managed MCP providers, add container info from server
+            json_spec.update({
+                "image": server.docker_image_url,
+                "version": server.version,
+                "port": json_spec.get("port", 8000),  # Default MCP port
+            })
+            
+            # Add cmd from server specification if available
+            if server.cmd:
+                json_spec["cmd"] = server.cmd
+            
+            # Add env_vars from server's env_schema if provided
+            if server.env_schema and "environment" not in json_spec:
+                json_spec["environment"] = {
+                    var["name"]: var.get("default", "")
+                    for var in server.env_schema
+                }
         
-        if is_healthy:
-            return {"status": "healthy", "message": "MCP Manager is operational"}
-        else:
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"status": "unhealthy", "message": "MCP Manager is not responding"}
+        # Create the instance in database
+        instance = MCPServerInstance(
+            name=data.name,
+            description=data.description,
+            server_spec_id=str(data.server_spec_id) if data.server_spec_id else None,
+            json_spec=json_spec,
+            status="requested"
+        )
+        
+        # Save to database
+        created_instance = await service.repository.create(instance)
+        
+        # Publish domain event - Go MCP Infrastructure will listen and create the actual container
+        if service.event_broker:
+            from agentarea.modules.mcp.domain.events import MCPServerInstanceCreated
+            await service.event_broker.publish(
+                MCPServerInstanceCreated(
+                    instance_id=str(created_instance.id),
+                    server_spec_id=created_instance.server_spec_id,
+                    name=created_instance.name,
+                    json_spec=created_instance.json_spec
+                )
+            )
+
+        return MCPServerInstanceResponse(
+            id=str(created_instance.id),
+            name=created_instance.name,
+            description=created_instance.description,
+            server_spec_id=created_instance.server_spec_id,
+            json_spec=created_instance.json_spec,
+            status=created_instance.status,
+            created_at=created_instance.created_at.isoformat(),
+            updated_at=created_instance.updated_at.isoformat(),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating MCP server instance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create MCP server instance"
+        )
+
+
+@router.get("/v1/mcp-server-instances/{instance_id}", response_model=MCPServerInstanceResponse)
+async def get_mcp_server_instance(
+    instance_id: UUID,
+    service = Depends(get_mcp_server_instance_service),
+):
+    """Get a specific MCP server instance."""
+    try:
+        instance = await service.repository.get(instance_id)
+        if not instance:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"MCP server instance with ID {instance_id} not found"
+            )
+
+        return MCPServerInstanceResponse(
+            id=str(instance.id),
+            name=instance.name,
+            description=instance.description,
+            server_spec_id=instance.server_spec_id,
+            json_spec=instance.json_spec,
+            status=instance.status,
+            created_at=instance.created_at.isoformat(),
+            updated_at=instance.updated_at.isoformat(),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting MCP server instance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get MCP server instance"
+        )
+
+
+@router.delete("/v1/mcp-server-instances/{instance_id}")
+async def delete_mcp_server_instance(
+    instance_id: UUID,
+    service = Depends(get_mcp_server_instance_service),
+):
+    """Delete an MCP server instance and publish event for Go infrastructure."""
+    try:
+        success = await service.repository.delete(instance_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"MCP server instance with ID {instance_id} not found"
+            )
+        
+        # Publish domain event for deletion - Go infrastructure will handle container cleanup
+        if service.event_broker:
+            from agentarea.modules.mcp.domain.events import MCPServerInstanceDeleted
+            await service.event_broker.publish(
+                MCPServerInstanceDeleted(instance_id=instance_id)
             )
             
+        return {"message": "MCP server instance deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to check MCP health: {e}")
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "error", "message": "Failed to check MCP Manager health"}
+        logger.error(f"Error deleting MCP server instance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete MCP server instance"
         ) 

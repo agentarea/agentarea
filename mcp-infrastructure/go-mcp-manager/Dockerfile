@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/mcp-manager .
 # Runtime stage
 FROM alpine:3.20
 
-# Install runtime dependencies including Podman
+# Install runtime dependencies including Podman and iptables
 RUN apk add --no-cache \
     ca-certificates \
     curl \
@@ -32,6 +32,7 @@ RUN apk add --no-cache \
     fuse-overlayfs \
     shadow \
     dumb-init \
+    iptables \
     && rm -rf /var/cache/apk/*
 
 # Configure Podman
