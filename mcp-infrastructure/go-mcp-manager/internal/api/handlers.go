@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/agentarea/mcp-manager/internal/caddy"
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/models"
 )
@@ -14,16 +13,14 @@ import (
 // Handler holds the HTTP handlers and dependencies
 type Handler struct {
 	containerManager *container.Manager
-	caddyClient      *caddy.Client
 	startTime        time.Time
 	version          string
 }
 
 // NewHandler creates a new API handler
-func NewHandler(containerManager *container.Manager, caddyClient *caddy.Client, version string) *Handler {
+func NewHandler(containerManager *container.Manager, version string) *Handler {
 	return &Handler{
 		containerManager: containerManager,
-		caddyClient:      caddyClient,
 		startTime:        time.Now(),
 		version:          version,
 	}
@@ -42,9 +39,6 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 
 	// Template management
 	router.GET("/templates", h.listTemplates)
-
-	// Caddy management
-	router.GET("/caddy/status", h.getCaddyStatus)
 }
 
 // healthCheck returns the health status of the service
@@ -87,7 +81,7 @@ func (h *Handler) createContainer(c *gin.Context) {
 		return
 	}
 
-	// Create container
+	// Create container (Traefik routing is handled automatically via labels)
 	container, err := h.containerManager.CreateContainer(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
@@ -96,13 +90,6 @@ func (h *Handler) createContainer(c *gin.Context) {
 			Message: err.Error(),
 		})
 		return
-	}
-
-	// Add route to Caddy
-	if err := h.caddyClient.AddService(req.ServiceName, container.Port); err != nil {
-		// Log error but don't fail the request
-		// Container is created successfully, route addition is best effort
-		c.Header("X-Warning", "Failed to add route to Caddy: "+err.Error())
 	}
 
 	c.JSON(http.StatusCreated, container)
@@ -129,13 +116,7 @@ func (h *Handler) getContainer(c *gin.Context) {
 func (h *Handler) deleteContainer(c *gin.Context) {
 	serviceName := c.Param("service")
 
-	// Remove route from Caddy first
-	if err := h.caddyClient.RemoveService(serviceName); err != nil {
-		// Log error but continue with container deletion
-		c.Header("X-Warning", "Failed to remove route from Caddy: "+err.Error())
-	}
-
-	// Delete container
+	// Delete container (Traefik routes are automatically removed when container stops)
 	if err := h.containerManager.DeleteContainer(c.Request.Context(), serviceName); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "container_deletion_failed",
@@ -161,10 +142,4 @@ func (h *Handler) listTemplates(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-// getCaddyStatus returns the status of Caddy
-func (h *Handler) getCaddyStatus(c *gin.Context) {
-	status := h.caddyClient.GetStatus()
-	c.JSON(http.StatusOK, status)
 }

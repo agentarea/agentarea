@@ -279,7 +279,7 @@ class MCPEnvironmentService:
 - **AgentArea**: Python/FastAPI in container
 - **MCP Infrastructure**: Go microservice with Podman for container management
 - **MCP Servers**: Dynamic containers managed by MCP Infrastructure
-- **Reverse Proxy**: Caddy for routing and SSL termination
+- **Reverse Proxy**: Traefik for routing and SSL termination
 
 ### **Scaling Patterns**
 - **Horizontal Scaling**: Multiple AgentArea backend instances

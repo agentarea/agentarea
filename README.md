@@ -53,6 +53,16 @@ See `tests/integration/README_MCP.md` for detailed testing documentation.
 
 ## 📚 Documentation
 
+### Architecture & Design
+- [Architecture Decisions (ADR)](docs/architecture-decisions.md) - Key architectural decisions and rationale
+- [Quick Reference Guide](docs/quick-reference.md) - Commands, URLs, and troubleshooting
+- [MCP Architecture Overview](docs/mcp_architecture.md) - System architecture and components
+- [Architecture Insights](docs/architecture_insights.md) - Design patterns and insights
+
+### Development
+- [E2E Testing](test_mcp_flow.py) - Comprehensive end-to-end test suite
+- [MCP Integration Testing](tests/integration/README_MCP.md) - MCP server testing framework
+
 For more detailed information, please refer to the [full documentation](docs/index.md).
 
 ## 🤝 Contributing

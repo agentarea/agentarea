@@ -4,10 +4,11 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import yaml
 
 from agentarea.api.deps.services import get_mcp_server_service
+from agentarea.common.infrastructure.database import get_db_session
 from agentarea.modules.mcp.application.service import MCPServerService
 from agentarea.modules.mcp.domain.models import MCPServer
 
@@ -15,23 +16,26 @@ router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 
 
 class MCPServerCreate(BaseModel):
-    name: str
-    description: str
-    docker_image_url: str
-    version: str
-    tags: List[str] = []
-    is_public: bool = False
-    env_schema: Optional[List[Dict[str, Any]]] = []
+    name: str = Field(..., description="Name of the MCP server")
+    description: str = Field(..., description="Description of the MCP server")
+    docker_image_url: str = Field(..., description="Docker image URL")
+    version: str = Field(default="1.0.0", description="Version of the MCP server")
+    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    is_public: bool = Field(default=False, description="Whether the server is public")
+    env_schema: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Environment variable schema")
+    cmd: Optional[List[str]] = Field(default=None, description="Custom command to override container CMD (useful for switching between stdio and HTTP modes)")
 
 
 class MCPServerUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    docker_image_url: str | None = None
-    version: str | None = None
-    tags: list[str] | None = None
-    is_public: bool | None = None
-    status: str | None = None
+    name: Optional[str] = Field(None, description="Name of the MCP server")
+    description: Optional[str] = Field(None, description="Description of the MCP server")
+    docker_image_url: Optional[str] = Field(None, description="Docker image URL")
+    version: Optional[str] = Field(None, description="Version of the MCP server")
+    tags: Optional[List[str]] = Field(None, description="Tags for categorization")
+    is_public: Optional[bool] = Field(None, description="Whether the server is public")
+    status: Optional[str] = Field(None, description="Status of the MCP server")
+    cmd: Optional[List[str]] = Field(None, description="Custom command to override container CMD")
+
 
 
 class MCPServerResponse(BaseModel):
@@ -43,6 +47,7 @@ class MCPServerResponse(BaseModel):
     tags: List[str]
     is_public: bool
     env_schema: List[Dict[str, Any]]
+    cmd: Optional[List[str]]
     status: str
     created_at: datetime
     updated_at: datetime
@@ -58,6 +63,7 @@ class MCPServerResponse(BaseModel):
             tags=server.tags,
             is_public=server.is_public,
             env_schema=server.env_schema or [],
+            cmd=server.cmd,
             status=server.status,
             created_at=server.created_at,
             updated_at=server.updated_at,
@@ -77,6 +83,7 @@ async def create_mcp_server(
         tags=data.tags,
         is_public=data.is_public,
         env_schema=data.env_schema,
+        cmd=data.cmd,
     )
     return MCPServerResponse.from_domain(server)
 
@@ -259,7 +266,8 @@ async def create_mcp_server_from_template(
             version=version,
             tags=[template_key],
             is_public=True,
-            env_schema=provider_data.get("env_vars", [])
+            env_schema=provider_data.get("env_vars", []),
+            json_spec=provider_data.get("json_spec", {}),
         )
         return MCPServerResponse.from_domain(server)
     except HTTPException:

@@ -20,6 +20,7 @@ type Container struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	ServiceName string            `json:"service_name"`
+	Slug        string            `json:"slug"`
 	Image       string            `json:"image"`
 	Status      ContainerStatus   `json:"status"`
 	Port        int               `json:"port"`
@@ -29,6 +30,7 @@ type Container struct {
 	UpdatedAt   time.Time         `json:"updated_at"`
 	Labels      map[string]string `json:"labels,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
+	Command     []string          `json:"command,omitempty"`
 }
 
 // Template represents a container template
@@ -55,9 +57,14 @@ type VolumeMount struct {
 // CreateContainerRequest represents a request to create a new container
 type CreateContainerRequest struct {
 	ServiceName string            `json:"service_name" binding:"required"`
-	Template    string            `json:"template" binding:"required"`
+	Image       string            `json:"image" binding:"required"`
+	Port        int               `json:"port" binding:"required"`
 	Environment map[string]string `json:"environment,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
+	Command     []string          `json:"command,omitempty"`
+	Volumes     []VolumeMount     `json:"volumes,omitempty"`
+	MemoryLimit string            `json:"memory_limit,omitempty"`
+	CPULimit    string            `json:"cpu_limit,omitempty"`
 }
 
 // HealthResponse represents the health check response
@@ -88,34 +95,21 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
-// CaddyStatusResponse represents Caddy status
-type CaddyStatusResponse struct {
-	Status      string   `json:"status"`
-	RoutesCount int      `json:"routes_count"`
-	Services    []string `json:"services"`
-	APIURL      string   `json:"api_url"`
-	CaddyHost   string   `json:"caddy_host"`
+// MCPServerInstance represents an MCP server instance from events
+type MCPServerInstance struct {
+	InstanceID   string                 `json:"instance_id"`
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description,omitempty"`
+	ServerSpecID string                 `json:"server_spec_id,omitempty"`
+	JSONSpec     map[string]interface{} `json:"json_spec"`
+	Status       string                 `json:"status"`
 }
 
-// CaddyRoute represents a Caddy route configuration
-type CaddyRoute struct {
-	Match  []CaddyMatch  `json:"match"`
-	Handle []CaddyHandle `json:"handle"`
-}
-
-// CaddyMatch represents a Caddy route match condition
-type CaddyMatch struct {
-	Host []string `json:"host,omitempty"`
-	Path []string `json:"path,omitempty"`
-}
-
-// CaddyHandle represents a Caddy route handler
-type CaddyHandle struct {
-	Handler   string          `json:"handler"`
-	Upstreams []CaddyUpstream `json:"upstreams,omitempty"`
-}
-
-// CaddyUpstream represents a Caddy upstream
-type CaddyUpstream struct {
-	Dial string `json:"dial"`
+// MCPEventData represents the data structure from Redis events
+type MCPEventData struct {
+	InstanceID   string                 `json:"instance_id"`
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description,omitempty"`
+	ServerSpecID string                 `json:"server_spec_id,omitempty"`
+	JSONSpec     map[string]interface{} `json:"json_spec"`
 }
