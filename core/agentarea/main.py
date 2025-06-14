@@ -8,6 +8,8 @@ from .api.events.events_router import router as events_router
 from .common.events.router import create_event_broker_from_router
 from .common.events.broker import EventBroker
 from .common.di.container import register_singleton
+# Import application startup configuration
+from .startup import setup_app
 
 
 # Application state for managing singletons
@@ -77,6 +79,9 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(v1_router)
     app.include_router(events_router)
+
+    # Run additional startup configuration (service registration, etc.)
+    setup_app(app)
     
     return app
 

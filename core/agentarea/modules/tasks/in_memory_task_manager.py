@@ -175,7 +175,43 @@ class InMemoryTaskManager(BaseTaskManager):
             else:
                 task.history.append(task_send_params.message)
 
+            # -----------------------------------------------------------------
+            # Persist optional user / agent information into task.metadata
+            # -----------------------------------------------------------------
+            if task_send_params.metadata:
+                # Ensure metadata dict exists
+                if task.metadata is None:
+                    task.metadata = {}
+                # Merge (new keys override old)
+                task.metadata.update(task_send_params.metadata)
+
             return task
+
+    # ---------------------------------------------------------------------
+    # Extended querying capabilities required by BaseTaskManager
+    # ---------------------------------------------------------------------
+
+    async def on_get_tasks_by_user(self, user_id: str) -> list[Task]:
+        """
+        Return all tasks that have `metadata['user_id'] == user_id`.
+        """
+        async with self.lock:
+            return [
+                task
+                for task in self.tasks.values()
+                if task.metadata and task.metadata.get("user_id") == user_id
+            ]
+
+    async def on_get_tasks_by_agent(self, agent_id: str) -> list[Task]:
+        """
+        Return all tasks that have `metadata['agent_id'] == agent_id`.
+        """
+        async with self.lock:
+            return [
+                task
+                for task in self.tasks.values()
+                if task.metadata and task.metadata.get("agent_id") == agent_id
+            ]
 
     async def on_resubscribe_to_task(
         self, request: TaskResubscriptionRequest

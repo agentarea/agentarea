@@ -11,6 +11,7 @@ from agentarea.modules.mcp.application.service import MCPServerInstanceService
 from ..infrastructure.repository import AgentRepository
 from .agent_builder_service import AgentBuilderService
 from .agent_runner_service import AgentRunnerService
+from .agent_communication_service import AgentCommunicationService
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,14 @@ class TaskExecutionService:
         llm_model_instance_service: LLMModelInstanceService | None,
         mcp_server_instance_service: MCPServerInstanceService | None = None,
         session_service: Any | None = None,
+        agent_communication_service: AgentCommunicationService | None = None,
     ):
         self.agent_repository = agent_repository
         self.event_broker = event_broker
         self.llm_model_instance_service = llm_model_instance_service
         self.mcp_server_instance_service = mcp_server_instance_service
         self.session_service = session_service
+        self.agent_communication_service = agent_communication_service
         
         # Initialize agent builder service only if required dependencies are available
         self.agent_builder_service = None
@@ -50,7 +53,8 @@ class TaskExecutionService:
                 event_broker=event_broker,
                 llm_model_instance_service=llm_model_instance_service,
                 session_service=session_service,
-                agent_builder_service=self.agent_builder_service
+                agent_builder_service=self.agent_builder_service,
+                agent_communication_service=agent_communication_service,
             )
 
     async def execute_task(
@@ -83,13 +87,19 @@ class TaskExecutionService:
             
             logger.info(f"Starting task execution: {task_id} for agent {agent_id}")
             
+            # Check if we have an override for agent-to-agent communication
+            enable_comm: bool | None = None
+            if metadata is not None and "enable_agent_communication" in metadata:
+                enable_comm = bool(metadata.get("enable_agent_communication"))
+            
             # Execute the task and handle events
             async for event in self.agent_runner_service.run_agent_task(
                 agent_id=agent_id,
                 task_id=task_id,
                 user_id=effective_user_id,
                 query=query,
-                task_parameters=task_parameters or {}
+                task_parameters=task_parameters or {},
+                enable_agent_communication=enable_comm,
             ):
                 # Log the event
                 logger.info(f"Task event: {event.get('event_type', 'Unknown')} for task {task_id}")

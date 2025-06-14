@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 from uuid import UUID
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -20,6 +20,7 @@ from agentarea.common.utils.types import TaskState
 
 from ..infrastructure.repository import AgentRepository
 from .agent_builder_service import AgentBuilderService
+from .agent_communication_service import AgentCommunicationService
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +33,14 @@ class AgentRunnerService:
         llm_model_instance_service: LLMModelInstanceService,
         session_service: BaseSessionService,
         agent_builder_service: AgentBuilderService,
+        agent_communication_service: Optional[AgentCommunicationService] = None,
     ):
         self.repository = repository
         self.event_broker = event_broker
         self.llm_model_instance_service = llm_model_instance_service
         self.session_service = session_service
         self.agent_builder_service = agent_builder_service
+        self.agent_communication_service = agent_communication_service
 
     def _create_litellm_model_from_instance(self, model_instance) -> str:
         """Create LiteLLM model string from database model instance.
@@ -68,7 +71,8 @@ class AgentRunnerService:
         task_id: str,
         user_id: str, 
         query: str,
-        task_parameters: Dict[str, Any] | None = None
+        task_parameters: Dict[str, Any] | None = None,
+        enable_agent_communication: bool | None = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Run an agent to execute a specific task.
         
@@ -78,6 +82,7 @@ class AgentRunnerService:
             user_id: User running the task
             query: Query/instruction for the task
             task_parameters: Additional task parameters
+            enable_agent_communication: Override flag to enable/disable A2A communication for this run
             
         Yields:
             Task execution events
@@ -189,6 +194,14 @@ class AgentRunnerService:
                 instruction=agent_config["instruction"],
                 tools=tools,
             )
+
+            # -------------------------------------------------------------
+            # Integrate Agent-to-Agent communication tool (optional)
+            # -------------------------------------------------------------
+            if self.agent_communication_service:
+                llm_agent = self.agent_communication_service.configure_agent_with_communication(
+                    llm_agent, enable_communication=enable_agent_communication
+                )
 
             # Create runner
             runner = Runner(
