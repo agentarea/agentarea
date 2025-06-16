@@ -1,16 +1,13 @@
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { listLLMModelInstances } from "@/lib/api";
-import { LayoutDashboardIcon, SearchIcon, TablePropertiesIcon, PlusCircleIcon } from "lucide-react";
+import { SearchIcon, PlusCircleIcon } from "lucide-react";
 import { getTranslations } from 'next-intl/server';
-import { redirect } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import GridView from "./_components/GridView";
-import TableView from "./_components/TableView";
 import EmptyState from "@/components/EmptyState/EmptyState";
-import { TabsWithNavigation } from "./_components/TabsWithNavigation";
+import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
+
 
 // Server component that handles the tab rendering
 export default async function AddLLMModelPage({
@@ -21,19 +18,33 @@ export default async function AddLLMModelPage({
     const t = await getTranslations('LlmBrowsePage');
     const commonT = await getTranslations('Common');
 
-    // Get tab from URL query params
-    const tab = ( await searchParams).tab;
-    const activeTab = (typeof tab === 'string' && (tab === 'grid' || tab === 'table')) 
-        ? tab 
-        : 'grid';
-
-    // If no valid tab in URL, redirect to default
-    if (!tab || (typeof tab === 'string' && !['grid', 'table'].includes(tab))) {
-        redirect('/admin/llms?tab=grid');
-    }
-
     // const llmModels = (await listLLMModels()).data || [];
     const llmModelInstances = (await listLLMModelInstances()).data || [];
+
+    const columns = [
+        {
+          header: "Name",
+          accessor: "name",
+          render: (value: string) => (
+            <div className="font-semibold font-montserrat text-[14px] md:text-[16px] flex flex-col md:flex-row md:items-center gap-[10px] md:gap-[15px]">
+              {value}
+            </div>
+          ),
+        },
+        {
+          header: "Description",
+          accessor: "description",
+          cellClassName: "text-[12px] md:text-[14px]",
+          render: (value: string) => (
+            <div className="line-clamp-3 md:line-clamp-none">{value}</div>
+          ),
+        },
+        {
+          header: "Status",
+          accessor: "status",
+          render: (value: string) => <div className="text-xs text-muted-foreground">{value}</div>,
+        },
+      ];
 
     return (
         <ContentBlock 
@@ -48,37 +59,12 @@ export default async function AddLLMModelPage({
                     </Link>
                 )
             }}
-            
         >
-            <TabsWithNavigation activeTab={activeTab}>
-                <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
-                   <div className="flex flex-row items-center gap-[10px] flex-1">
-                        <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
-                            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-                                <SearchIcon className="h-4 w-4" />
-                            </div>
-                            <Input 
-                                placeholder={commonT('search')}
-                                className="pl-9 w-full" 
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <TabsList>
-                            <TabsTrigger value="grid" className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]">
-                                <LayoutDashboardIcon className="w-5 h-5" /> 
-                                <span className="hidden sm:block">{commonT('grid')}</span>
-                            </TabsTrigger>
-                            <TabsTrigger value="table" className="flex flex-row items-center gap-[8px] px-[10px] sm:px-[20px]">
-                                <TablePropertiesIcon className="w-5 h-5" /> 
-                                <span className="hidden sm:block">{commonT('table')}</span>
-                            </TabsTrigger>
-                        </TabsList>
-                    </div>
-                </div>
-
-                {!llmModelInstances.length ? (
+            <GridAndTableViews 
+                searchParams={searchParams}
+                data={llmModelInstances}
+                columns={columns}
+                emptyState={
                     <EmptyState
                         title={t('noLlmInstances')}
                         description={t('setUpNewLlm')}
@@ -88,18 +74,27 @@ export default async function AddLLMModelPage({
                             href: "/admin/llms/create"
                         }}
                     />
-                    ) : (
-                        <>
-                            <TabsContent value="grid">
-                                <GridView instances={llmModelInstances} />
-                            </TabsContent>
-                            <TabsContent value="table">
-                                <TableView instances={llmModelInstances} />
-                            </TabsContent>
-                        </>
-                    )
                 }
-            </TabsWithNavigation>
+                routeChange="/admin/llms" 
+                cardContent={(item: any) => (
+                    <div className="flex flex-col gap-2">
+                        <div className="font-[500] text-[16px] font-montserrat">{item.name}</div>
+                        <div className="text-[14px] opacity-50 line-clamp-2 pt-[10px]">{item.description}</div>
+                        <div className="text-xs text-muted-foreground">Status: {item.status}</div>
+                    </div>
+                )}
+                leftComponent={
+                    <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                            <SearchIcon className="h-4 w-4" />
+                        </div>
+                        <Input 
+                            placeholder={commonT('search')}
+                            className="pl-9 w-full" 
+                        />
+                    </div>
+                }
+            />
         </ContentBlock>
     )
 }

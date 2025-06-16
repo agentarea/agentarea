@@ -38,7 +38,7 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
       )}
 
       {mcpInstanceList && mcpInstanceList.length > 0 ? (
-        <div className="rounded-md border">
+        <div className="">
           <Table>
             <TableHeader>
               <TableRow>
