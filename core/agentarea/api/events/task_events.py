@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from faststream.redis.fastapi import RedisRouter
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea.api.events.event_types import EventType
 
@@ -55,83 +56,117 @@ def register_task_event_handlers(router: RedisRouter) -> None:
 
             logger.info(f"Starting agent execution for task {task_id} with agent {agent_id}")
 
-            # Create task execution service with dependencies for this event
-            task_execution_service = await _create_task_execution_service()
+            # Execute the task with proper session management
+            await _execute_agent_task_with_session(
+                agent_id=agent_id,
+                task_id=task_id,
+                description=description,
+                parameters=parameters,
+                metadata=metadata
+            )
 
-            if not task_execution_service:
-                logger.error("Could not create task execution service for event processing")
-                return
-
-            await task_execution_service.execute_task(
-                    task_id=task_id,
-                    agent_id=agent_id,
-                    description=description,
-                    user_id=metadata.get("user_id"),  # Extract user_id from metadata if available
-                    task_parameters=parameters,
-                    metadata=metadata
-                )
-
-            logger.info(f"Agent execution task created for task {task_id}")
+            logger.info(f"Agent execution completed for task {task_id}")
 
         except Exception as e:
             logger.error(f"Error handling TaskCreated event: {e}", exc_info=True)
 
 
-async def _create_task_execution_service():
-    """Create task execution service with all available dependencies."""
+async def _execute_agent_task_with_session(
+    agent_id: UUID,
+    task_id: str,
+    description: str,
+    parameters: dict[str, Any],
+    metadata: dict[str, Any]
+):
+    """Execute agent task with proper session management."""
+    from agentarea.common.infrastructure.database import db
+    
+    # Use the database session context manager for proper lifecycle management
+    async with db.session() as db_session:
+        # Create agent runner service with this session
+        agent_runner_service = await _create_agent_runner_service_with_session(db_session)
+        
+        if not agent_runner_service:
+            logger.error("Could not create agent runner service for event processing")
+            return
+
+        # Execute the task directly using AgentRunnerService
+        user_id = metadata.get("user_id", "system")
+        query = description or "Execute the assigned task"
+        
+        # Execute the task and consume all events
+        async for event in agent_runner_service.run_agent_task(
+            agent_id=agent_id,
+            task_id=task_id,
+            user_id=user_id,
+            query=query,
+            task_parameters=parameters,
+            enable_agent_communication=True,
+        ):
+            # Log the event for debugging
+            logger.debug(f"Task {task_id} event: {event.get('event_type', 'Unknown')}")
+
+
+async def _create_agent_runner_service_with_session(db_session: AsyncSession):
+    """Create agent runner service with a provided database session."""
     try:
         # Import dependencies
         from agentarea.api.deps.events import get_event_broker
         from agentarea.api.deps.session import get_session_service
-        from agentarea.modules.agents.application.task_execution_service import TaskExecutionService
-
-        # Get dependencies
-        session_service = await get_session_service()
+        from agentarea.api.deps.services import get_secret_manager
+        from agentarea.modules.agents.infrastructure.repository import AgentRepository
+        from agentarea.modules.agents.application.agent_builder_service import AgentBuilderService
+        from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
+        from agentarea.modules.llm.application.service import LLMModelInstanceService
+        from agentarea.modules.llm.infrastructure.llm_model_instance_repository import LLMModelInstanceRepository
+        from agentarea.modules.mcp.application.service import MCPServerInstanceService
+        from agentarea.modules.mcp.infrastructure.repository import MCPServerRepository, MCPServerInstanceRepository
+        
+        # Get basic dependencies
         event_broker = await get_event_broker()
-
-        # Try to get database dependencies if available
-        agent_repository = None
-        llm_service = None
-        mcp_service = None
-
-        try:
-            from agentarea.api.deps.services import (
-                get_llm_model_instance_service,
-                get_mcp_server_instance_service,
-                get_secret_manager,
-            )
-            from agentarea.common.infrastructure.database import get_db_session
-            from agentarea.modules.agents.infrastructure.repository import AgentRepository
-
-            # Try to get database session
-            async for db_session in get_db_session():
-                agent_repository = AgentRepository(db_session)
-                secret_manager = await get_secret_manager()
-                llm_service = await get_llm_model_instance_service(
-                    session=db_session,
-                    event_broker=event_broker,
-                    secret_manager=secret_manager
-                )
-                mcp_service = await get_mcp_server_instance_service(
-                    session=db_session,
-                    event_broker=event_broker
-                )
-                logger.debug("Created task execution service with full dependencies")
-                break
-        except Exception as db_error:
-            logger.debug(f"Database dependencies not available, using minimal setup: {db_error}")
-
-        # Create task execution service (with or without database dependencies)
-        task_execution_service = TaskExecutionService(
-            agent_repository=agent_repository,
+        session_service = await get_session_service()
+        secret_manager = await get_secret_manager()
+        
+        # Create repositories with the provided session
+        agent_repository = AgentRepository(db_session)
+        llm_model_instance_repository = LLMModelInstanceRepository(db_session)
+        mcp_server_repository = MCPServerRepository(db_session)
+        mcp_server_instance_repository = MCPServerInstanceRepository(db_session)
+        
+        # Create services
+        llm_model_instance_service = LLMModelInstanceService(
+            repository=llm_model_instance_repository,
             event_broker=event_broker,
-            llm_model_instance_service=llm_service,
-            mcp_server_instance_service=mcp_service,
-            session_service=session_service
+            secret_manager=secret_manager
         )
-
-        return task_execution_service
-
+        
+        mcp_server_instance_service = MCPServerInstanceService(
+            repository=mcp_server_instance_repository,
+            event_broker=event_broker,
+            mcp_server_repository=mcp_server_repository,
+            secret_manager=secret_manager
+        )
+        
+        # Create agent builder service
+        agent_builder_service = AgentBuilderService(
+            repository=agent_repository,
+            event_broker=event_broker,
+            llm_model_instance_service=llm_model_instance_service,
+            mcp_server_instance_service=mcp_server_instance_service
+        )
+        
+        # Create agent runner service (without agent communication to avoid circular dependency)
+        agent_runner_service = AgentRunnerService(
+            repository=agent_repository,
+            event_broker=event_broker,
+            llm_model_instance_service=llm_model_instance_service,
+            session_service=session_service,
+            agent_builder_service=agent_builder_service,
+            agent_communication_service=None,  # No A2A communication in event handlers to avoid complexity
+        )
+        
+        return agent_runner_service
+        
     except Exception as e:
-        logger.error(f"Failed to create task execution service: {e}", exc_info=True)
+        logger.error(f"Error creating agent runner service: {e}", exc_info=True)
         return None

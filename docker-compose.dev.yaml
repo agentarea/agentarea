@@ -25,8 +25,11 @@ services:
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
       - RELOAD=${RELOAD:-true}
       - WORKERS=${WORKERS:-1}
+      # Ollama settings
+      - OLLAMA_BASE_URL=http://ollama:11434
     volumes:
       - ./core/agentarea:/app/agentarea
       - ./core/alembic:/app/alembic
@@ -47,6 +50,7 @@ services:
     networks:
       - default
       - mcp-network
+      - temporal-network
     command: ["python", "-m", "cli", "serve", "--reload", "--log-level=${LOG_LEVEL:-info}", "--workers=${WORKERS:-1}"]
 
   app_migrations:
@@ -135,6 +139,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - default
+      - temporal-network
+
   infisical:
     container_name: infisical-backend
     restart: always
@@ -150,6 +158,7 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/infisical
+
   redis:
     image: redis
     container_name: infisical-dev-redis
@@ -161,6 +170,9 @@ services:
       - 6379:6379
     volumes:
       - redis_data:/data
+    networks:
+      - default
+      - temporal-network
 
   # MCP Infrastructure Services
   mcp-manager:
@@ -223,6 +235,140 @@ services:
       retries: 3
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 
+  # Temporal Infrastructure Services
+  temporal:
+    container_name: temporal
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=db
+      - DBNAME=temporal
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    image: temporalio/auto-setup:1.27
+    networks:
+      - temporal-network
+    ports:
+      - 7233:7233
+    labels:
+      kompose.volume.type: configMap
+    volumes:
+      - ./core/temporal-config:/etc/temporal/config/dynamicconfig
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:7233/"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 60s
+  temporal-admin-tools:
+    image: temporalio/admin-tools:1.27
+    container_name: temporal-admin-tools
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    networks:
+      - temporal-network
+    stdin_open: true
+    tty: true
+
+  temporal-ui:
+    container_name: temporal-ui
+    # depends_on:
+    #   temporal:
+    #     condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    image: temporalio/ui:2.21.3
+    networks:
+      - temporal-network
+    ports:
+      - 8081:8080
+
+  # Ollama Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # AgentArea Worker Service
+  # agentarea-worker:
+  #   build:
+  #     context: core
+  #     dockerfile: Dockerfile
+  #   container_name: agentarea-worker
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #   environment:
+  #     # Database
+  #     - POSTGRES_HOST=db
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_DB=${POSTGRES_DB}
+      
+  #     # Redis
+  #     - REDIS_URL=redis://redis:6379/1
+      
+  #     # Workflow settings
+  #     - WORKFLOW__USE_WORKFLOW_EXECUTION=true
+  #     - WORKFLOW__WORKFLOW_ENGINE=temporal
+  #     - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
+  #     - WORKFLOW__TEMPORAL_NAMESPACE=default
+  #     - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
+  #     - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
+  #     - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
+      
+  #     # Task execution
+  #     - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
+      
+  #     # Development
+  #     - DEBUG=true
+  #     - ENVIRONMENT=development
+  #   networks:
+  #     - temporal-network
+  #     - default
+  #   volumes:
+  #     - ./core:/app
+  #   working_dir: /app
+  #   command: >
+  #     sh -c "
+  #       echo 'Waiting for Temporal to be ready...' &&
+  #       sleep 15 &&
+  #       echo 'Starting Temporal worker...' &&
+  #       python agentarea/workflows/temporal_worker.py
+  #     "
+
+
+
 volumes:
   postgres_data:
   minio_data: 
@@ -239,5 +385,7 @@ networks:
   infisical:
     driver: bridge
   mcp-network:
+    driver: bridge
+  temporal-network:
     driver: bridge
 

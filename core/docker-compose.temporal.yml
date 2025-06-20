@@ -1,0 +1,193 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for Temporal
+  temporal-postgresql:
+    container_name: temporal-postgresql
+    environment:
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_DB: temporal
+    image: postgres:13
+    networks:
+      - temporal-network
+    ports:
+      - 5434:5432
+    volumes:
+      - temporal-postgres-data:/var/lib/postgresql/data
+
+  # Temporal server
+  temporal:
+    container_name: temporal
+    depends_on:
+      - temporal-postgresql
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal-postgresql
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    image: temporalio/auto-setup:1.20.0
+    networks:
+      - temporal-network
+    ports:
+      - 7233:7233
+    labels:
+      kompose.volume.type: configMap
+    volumes:
+      - ./temporal-config:/etc/temporal/config/dynamicconfig
+
+  # Temporal Web UI
+  temporal-ui:
+    container_name: temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    image: temporalio/ui:2.17.0
+    networks:
+      - temporal-network
+    ports:
+      - 8080:8080
+
+  # Redis for AgentArea
+  redis:
+    container_name: agentarea-redis
+    image: redis:7-alpine
+    networks:
+      - temporal-network
+    ports:
+      - 6380:6379
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+  # PostgreSQL for AgentArea
+  agentarea-db:
+    container_name: agentarea-db
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: aiagents
+    image: postgres:15
+    networks:
+      - temporal-network
+    ports:
+      - 5435:5432
+    volumes:
+      - agentarea-postgres-data:/var/lib/postgresql/data
+
+  # AgentArea Core Service
+  agentarea-core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentarea-core
+    depends_on:
+      - temporal
+      - agentarea-db
+      - redis
+    environment:
+      # Database
+      - POSTGRES_HOST=agentarea-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=aiagents
+      
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Workflow settings
+      - WORKFLOW__USE_WORKFLOW_EXECUTION=true
+      - WORKFLOW__WORKFLOW_ENGINE=temporal
+      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
+      - WORKFLOW__TEMPORAL_NAMESPACE=default
+      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
+      - WORKFLOW__TEMPORAL_MAX_WORKFLOW_DURATION_DAYS=7
+      
+      # Task execution
+      - TASK__USE_LEGACY_TASK_EXECUTION=false
+      - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
+      - TASK__DEFAULT_TASK_TIMEOUT_HOURS=24
+      
+      # Development
+      - DEBUG=true
+      - ENVIRONMENT=development
+    networks:
+      - temporal-network
+    ports:
+      - 8000:8000
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Waiting for services to be ready...' &&
+        sleep 10 &&
+        echo 'Running database migrations...' &&
+        alembic upgrade head &&
+        echo 'Starting AgentArea core service...' &&
+        uvicorn agentarea.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  # Temporal Worker for AgentArea
+  agentarea-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentarea-worker
+    depends_on:
+      - temporal
+      - agentarea-db
+      - redis
+    environment:
+      # Database
+      - POSTGRES_HOST=agentarea-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=aiagents
+      
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Workflow settings
+      - WORKFLOW__USE_WORKFLOW_EXECUTION=true
+      - WORKFLOW__WORKFLOW_ENGINE=temporal
+      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
+      - WORKFLOW__TEMPORAL_NAMESPACE=default
+      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
+      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
+      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
+      
+      # Task execution
+      - TASK__USE_LEGACY_TASK_EXECUTION=false
+      - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
+      
+      # Development
+      - DEBUG=true
+      - ENVIRONMENT=development
+    networks:
+      - temporal-network
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Waiting for Temporal to be ready...' &&
+        sleep 15 &&
+        echo 'Starting Temporal worker...' &&
+        python agentarea/workflows/temporal_worker.py
+      "
+
+networks:
+  temporal-network:
+    driver: bridge
+
+volumes:
+  temporal-postgres-data:
+  agentarea-postgres-data:
+  redis-data: 

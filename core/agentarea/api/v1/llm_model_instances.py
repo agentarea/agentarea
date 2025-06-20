@@ -127,3 +127,6 @@ async def delete_llm_model_instance(
     if not success:
         raise HTTPException(status_code=404, detail="LLM Model Instance not found")
     return {"status": "success"}
+
+
+# Validation removed - LLM instances are validated when used by agent_runner_service

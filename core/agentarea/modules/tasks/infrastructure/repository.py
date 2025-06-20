@@ -65,11 +65,26 @@ class TaskRepositoryInterface(ABC):
         pass
 
 
-class SQLAlchemyTaskRepository(BaseRepository, TaskRepositoryInterface):
+class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
     """SQLAlchemy implementation of the task repository."""
     
     def __init__(self, session: AsyncSession):
-        super().__init__(session)
+        self.session = session
+    
+    # Implementation of BaseRepository abstract methods
+    async def get(self, task_id: UUID) -> Optional[Task]:
+        """Get a task by its UUID ID (implementing BaseRepository interface)."""
+        return await self.get_by_id(str(task_id))
+    
+    async def list(self) -> List[Task]:
+        """List all tasks (implementing BaseRepository interface)."""
+        try:
+            stmt = select(Task).order_by(Task.id.desc())
+            result = await self.session.execute(stmt)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"Error listing all tasks: {e}")
+            return []
     
     async def get_by_id(self, task_id: str) -> Optional[Task]:
         """Get a task by its ID."""

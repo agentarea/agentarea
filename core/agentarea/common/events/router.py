@@ -1,6 +1,6 @@
 from faststream.redis.fastapi import RedisRouter
 
-from agentarea.config import RedisSettings, KafkaSettings
+from agentarea.config import KafkaSettings, RedisSettings
 
 from .redis_event_broker import RedisEventBroker
 

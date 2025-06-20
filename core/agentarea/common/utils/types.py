@@ -2,6 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, Self
 from uuid import uuid4
+import re
 
 from pydantic import (
     BaseModel,
@@ -235,15 +236,98 @@ class TaskResubscriptionRequest(JSONRPCRequest):
     params: TaskIdParams
 
 
+# A2A Message endpoints
+class MessageSendParams(BaseModel):
+    message: Message
+    contextId: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class MessageSendRequest(JSONRPCRequest):
+    method: Literal['message/send'] = 'message/send'
+    params: MessageSendParams
+
+
+class MessageSendResponse(JSONRPCResponse):
+    result: Task | None = None
+
+
+class MessageStreamRequest(JSONRPCRequest):
+    method: Literal['message/stream'] = 'message/stream'
+    params: MessageSendParams
+
+
+class MessageStreamResponse(JSONRPCResponse):
+    result: TaskStatusUpdateEvent | TaskArtifactUpdateEvent | None = None
+
+
+# A2A Agent Card types (must be defined before usage)
+class AgentProvider(BaseModel):
+    organization: str
+    url: str | None = None
+
+
+class AgentCapabilities(BaseModel):
+    streaming: bool = False
+    pushNotifications: bool = False
+    stateTransitionHistory: bool = False
+
+
+class AgentAuthentication(BaseModel):
+    schemes: list[str]
+    credentials: str | None = None
+
+
+class AgentSkill(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    tags: list[str] | None = None
+    examples: list[str] | None = None
+    inputModes: list[str] | None = None
+    outputModes: list[str] | None = None
+
+
+class AgentCard(BaseModel):
+    name: str
+    description: str | None = None
+    url: str
+    provider: AgentProvider | None = None
+    version: str
+    documentationUrl: str | None = None
+    capabilities: AgentCapabilities
+    authentication: AgentAuthentication | None = None
+    defaultInputModes: list[str] = ['text']
+    defaultOutputModes: list[str] = ['text']
+    skills: list[AgentSkill]
+
+
+# A2A Agent Card endpoints
+class AuthenticatedExtendedCardParams(BaseModel):
+    metadata: dict[str, Any] | None = None
+
+
+class AuthenticatedExtendedCardRequest(JSONRPCRequest):
+    method: Literal['agent/authenticatedExtendedCard'] = 'agent/authenticatedExtendedCard'
+    params: AuthenticatedExtendedCardParams
+
+
+class AuthenticatedExtendedCardResponse(JSONRPCResponse):
+    result: AgentCard | None = None
+
+
 A2ARequest = TypeAdapter(
     Annotated[
-        SendTaskRequest
+        MessageSendRequest
+        | MessageStreamRequest
+        | SendTaskRequest
         | GetTaskRequest
         | CancelTaskRequest
         | SetTaskPushNotificationRequest
         | GetTaskPushNotificationRequest
         | TaskResubscriptionRequest
-        | SendTaskStreamingRequest,
+        | SendTaskStreamingRequest
+        | AuthenticatedExtendedCardRequest,
         Field(discriminator='method'),
     ]
 )
@@ -311,45 +395,7 @@ class ContentTypeNotSupportedError(JSONRPCError):
     data: None = None
 
 
-class AgentProvider(BaseModel):
-    organization: str
-    url: str | None = None
-
-
-class AgentCapabilities(BaseModel):
-    streaming: bool = False
-    pushNotifications: bool = False
-    stateTransitionHistory: bool = False
-
-
-class AgentAuthentication(BaseModel):
-    schemes: list[str]
-    credentials: str | None = None
-
-
-class AgentSkill(BaseModel):
-    id: str
-    name: str
-    description: str | None = None
-    tags: list[str] | None = None
-    examples: list[str] | None = None
-    inputModes: list[str] | None = None
-    outputModes: list[str] | None = None
-
-
-class AgentCard(BaseModel):
-    name: str
-    description: str | None = None
-    url: str
-    provider: AgentProvider | None = None
-    version: str
-    documentationUrl: str | None = None
-    capabilities: AgentCapabilities
-    authentication: AgentAuthentication | None = None
-    defaultInputModes: list[str] = ['text']
-    defaultOutputModes: list[str] = ['text']
-    skills: list[AgentSkill]
-
+# Duplicate agent card types removed - already defined above
 
 class A2AClientError(Exception):
     pass
@@ -370,3 +416,51 @@ class A2AClientJSONError(A2AClientError):
 
 class MissingAPIKeyError(Exception):
     """Exception for missing API key."""
+
+
+def sanitize_agent_name(name: str) -> str:
+    """Sanitize agent name to be a valid Python identifier for Google ADK.
+    
+    Google ADK requires agent names to be valid Python identifiers:
+    - Must start with a letter (a-z, A-Z) or underscore (_)
+    - Can only contain letters, digits (0-9), and underscores
+    
+    Args:
+        name: The original agent name
+        
+    Returns:
+        Sanitized agent name that is a valid Python identifier
+        
+    Examples:
+        >>> sanitize_agent_name("test-agent-123")
+        'test_agent_123'
+        >>> sanitize_agent_name("123-agent")
+        'agent_123'
+        >>> sanitize_agent_name("my-cool-agent!")
+        'my_cool_agent_'
+    """
+    if not name:
+        return "agent"
+    
+    # Replace hyphens and other invalid characters with underscores
+    sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    
+    # Ensure it starts with a letter or underscore
+    if sanitized and sanitized[0].isdigit():
+        sanitized = f"agent_{sanitized}"
+    
+    # Ensure it's not empty
+    if not sanitized:
+        return "agent"
+    
+    # Remove consecutive underscores
+    sanitized = re.sub(r'_+', '_', sanitized)
+    
+    # Remove trailing underscores (but keep leading ones)
+    sanitized = sanitized.rstrip('_')
+    
+    # Ensure it's not empty after cleanup
+    if not sanitized:
+        return "agent"
+    
+    return sanitized

@@ -1,90 +1,93 @@
+"""Main FastAPI application for AgentArea
+"""
+# from agentarea.api.events.mcp_events import register_mcp_event_handlers
+# from agentarea.config import get_settings
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.cors import CORSMiddleware
 
-from .api.v1.router import v1_router
-from .api.events.events_router import router as events_router
-from .common.events.router import create_event_broker_from_router
-from .common.events.broker import EventBroker
-from .common.di.container import register_singleton
-# Import application startup configuration
-from .startup import setup_app
+from agentarea.api.deps.services import get_event_broker, get_secret_manager
+from agentarea.api.v1.router import v1_router
 
+# Dependency injection container setup
+from agentarea.common.di.container import DIContainer, register_singleton
+from agentarea.common.events.broker import EventBroker
 
-# Application state for managing singletons
-class AppState:
-    event_broker: EventBroker | None = None
+# from agentarea.common.events.base_events import DomainEvent  # Removed - not used
+from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 
+container = DIContainer()
 
-app_state = AppState()
+# Use real service implementations instead of test mocks
+async def initialize_services():
+    """Initialize real services instead of test mocks."""
+    try:
+        # Get real event broker (Redis-based with fallback)
+        event_broker = await get_event_broker()
+        register_singleton(EventBroker, event_broker)
 
+        # Get real secret manager (Infisical-based with fallback)
+        secret_manager = await get_secret_manager()
+        register_singleton(BaseSecretManager, secret_manager)
+
+        print(f"Real services initialized successfully - Event Broker: {type(event_broker).__name__}, Secret Manager: {type(secret_manager).__name__}")
+    except Exception as e:
+        print(f"Warning: Service initialization failed: {e}")
+        # Fallback to test implementations
+        from agentarea.common.testing.mocks import TestEventBroker, TestSecretManager
+        register_singleton(EventBroker, TestEventBroker())
+        register_singleton(BaseSecretManager, TestSecretManager())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan - startup and shutdown events."""
     # Startup
-    try:
-        # Try to create EventBroker from the router's broker (for Redis/Kafka)
-        event_broker = create_event_broker_from_router(events_router)
-        app_state.event_broker = event_broker
-    except ValueError:
-        # Fallback to Redis EventBroker (concrete implementation)
-        from .common.events.redis_event_broker import RedisEventBroker
-        from faststream.redis import RedisBroker
-        from .config import get_settings, RedisSettings
-        
-        # Create a RedisBroker instance for the fallback
-        broker_settings = get_settings().broker
-        if isinstance(broker_settings, RedisSettings):
-            redis_broker = RedisBroker(broker_settings.REDIS_URL)
-        else:
-            # Default fallback to localhost Redis
-            redis_broker = RedisBroker("redis://localhost:6379")
-        event_broker = RedisEventBroker(redis_broker)
-        app_state.event_broker = event_broker
-    
-    # Register with DI container as well (alternative pattern)
-    register_singleton(EventBroker, event_broker)
-    
-    # Log successful startup
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info("Application started successfully with event broker configured")
-    
+    await initialize_services()
+
+    # Start the FastStream events router
+    from agentarea.api.events.events_router import start_events_router
+    await start_events_router()
+
+    print("Application started successfully")
     yield
-    
-    # Shutdown - cleanup if needed
-    app_state.event_broker = None
+    # Shutdown
+    print("Application shutting down")
 
+    # Stop the FastStream events router
+    from agentarea.api.events.events_router import stop_events_router
+    await stop_events_router()
 
-def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
-    app = FastAPI(
-        lifespan=lifespan, 
-        title="AgentArea API", 
-        description="Agent management and orchestration platform",
-        version="1.0.0"
-    )
-    
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    
-    # Include routers
-    app.include_router(v1_router)
-    app.include_router(events_router)
+app = FastAPI(
+    title="AgentArea API",
+    description="Modular and extensible framework for building AI agents.",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
-    # Run additional startup configuration (service registration, etc.)
-    setup_app(app)
-    
-    return app
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# Mount static files
+# app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Create the app instance
-app = create_app()
+# API routers
+app.include_router(v1_router)
+
+# Include events router to handle task events
+from agentarea.api.events import events_router
+
+app.include_router(events_router)
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "AgentArea API is running."
+    }
