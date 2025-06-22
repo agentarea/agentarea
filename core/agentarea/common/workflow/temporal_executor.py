@@ -34,7 +34,12 @@ def _extract_a2a_message_from_workflow_result(result: Dict[str, Any]) -> Dict[st
     if not result or not isinstance(result, dict):
         return {}
     
-    events = result.get("events", [])
+    # Navigate to the nested result structure: result.result.events
+    nested_result = result.get("result", {})
+    if not nested_result:
+        return {}
+    
+    events = nested_result.get("events", [])
     if not events:
         return {}
     
@@ -207,11 +212,24 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     logger.warning(f"Unexpected execution_time type: {type(description.execution_time)}")
                     execution_time_seconds = None
 
+            # Get result if workflow is completed
+            result = None
+            if description.status.name.lower() in ["completed"]:
+                try:
+                    result = await handle.result()
+                    if not isinstance(result, dict):
+                        result = {"result": result}
+                except Exception as e:
+                    logger.warning(f"Failed to get workflow result for {workflow_id}: {e}")
+                    result = None
+
             return WorkflowResult(
                 workflow_id=workflow_id,
                 status=self._temporal_status_to_workflow_status(description.status.name),
                 start_time=description.start_time.isoformat() if description.start_time else None,
+                end_time=description.close_time.isoformat() if description.close_time else None,
                 execution_time=execution_time_seconds,
+                result=result
             )
 
         except TemporalError as e:
@@ -393,6 +411,9 @@ class TemporalTaskExecutor(TaskExecutorInterface):
         """Get task status from workflow."""
         result = await self.workflow_executor.get_workflow_status(execution_id)
 
+        # Extract A2A-compatible message and artifacts from workflow result
+        a2a_data = _extract_a2a_message_from_workflow_result(result.result) if result.result else {}
+
         return {
             "execution_id": execution_id,
             "status": result.status.value,
@@ -400,7 +421,12 @@ class TemporalTaskExecutor(TaskExecutorInterface):
             "end_time": result.end_time,
             "execution_time": result.execution_time,
             "error": result.error,
-            "result": result.result
+            "result": result.result,
+            # A2A-compatible fields for frontend
+            "message": a2a_data.get("message"),
+            "artifacts": a2a_data.get("artifacts"),
+            "session_id": a2a_data.get("session_id"),
+            "usage_metadata": a2a_data.get("usage_metadata")
         }
 
     async def cancel_task(self, execution_id: str) -> bool:

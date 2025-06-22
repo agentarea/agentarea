@@ -210,7 +210,12 @@ async def get_agent_task_status(
             "end_time": status.get("end_time"),
             "execution_time": status.get("execution_time"),
             "error": status.get("error"),
-            "result": status.get("result")
+            "result": status.get("result"),
+            # A2A-compatible fields for frontend
+            "message": status.get("message"),
+            "artifacts": status.get("artifacts"),
+            "session_id": status.get("session_id"),
+            "usage_metadata": status.get("usage_metadata")
         }
 
     except Exception as e:
