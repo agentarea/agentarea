@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from abc import abstractmethod
 from collections.abc import AsyncIterable
 
 from agentarea.common.utils.types import (
@@ -253,9 +252,7 @@ class InMemoryTaskManager(BaseTaskManager):
     # ---------------------------------------------------------------------
 
     async def on_get_tasks_by_user(self, user_id: str) -> list[Task]:
-        """
-        Return all tasks that have `metadata['user_id'] == user_id`.
-        """
+        """Return all tasks that have `metadata['user_id'] == user_id`."""
         async with self.lock:
             return [
                 task
@@ -264,9 +261,7 @@ class InMemoryTaskManager(BaseTaskManager):
             ]
 
     async def on_get_tasks_by_agent(self, agent_id: str) -> list[Task]:
-        """
-        Return all tasks that have `metadata['agent_id'] == agent_id`.
-        """
+        """Return all tasks that have `metadata['agent_id'] == agent_id`."""
         async with self.lock:
             return [
                 task

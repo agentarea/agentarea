@@ -1,5 +1,4 @@
-"""
-Chat-Focused API Endpoints
+"""Chat-Focused API Endpoints.
 
 This module provides chat-specific functionality including:
 - Conversational message sending (POST /chat/messages)
@@ -14,16 +13,16 @@ For A2A JSON-RPC protocol, use /v1/protocol/rpc endpoint.
 
 import json
 import logging
-from typing import List, Optional, Dict, Any
-from uuid import uuid4, UUID
+from typing import Any
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from agentarea.modules.chat.unified_chat_service import UnifiedTaskService
 from agentarea.api.deps.services import get_agent_service
 from agentarea.modules.agents.application.agent_service import AgentService
+from agentarea.modules.chat.unified_chat_service import UnifiedTaskService
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +35,9 @@ class ChatMessageRequest(BaseModel):
 
     content: str = Field(..., description="Message content")
     agent_id: str = Field(..., description="Target agent ID")
-    user_id: Optional[str] = Field(None, description="User sending the message")
-    session_id: Optional[str] = Field(None, description="Session/conversation ID")
-    context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
+    user_id: str | None = Field(None, description="User sending the message")
+    session_id: str | None = Field(None, description="Session/conversation ID")
+    context: dict[str, Any] | None = Field(None, description="Additional context")
 
 
 class ChatResponse(BaseModel):
@@ -57,8 +56,8 @@ class ConversationResponse(BaseModel):
     """Response model for conversation history."""
 
     session_id: str = Field(..., description="Session/conversation ID")
-    messages: List[Dict[str, Any]] = Field(..., description="List of messages")
-    agent_id: Optional[str] = Field(None, description="Primary agent ID")
+    messages: list[dict[str, Any]] = Field(..., description="List of messages")
+    agent_id: str | None = Field(None, description="Primary agent ID")
     message_count: int = Field(..., description="Number of messages")
 
 
@@ -67,7 +66,7 @@ class AgentResponse(BaseModel):
 
     id: str = Field(..., description="Agent ID")
     name: str = Field(..., description="Agent name")
-    description: Optional[str] = Field(None, description="Agent description")
+    description: str | None = Field(None, description="Agent description")
     status: str = Field(..., description="Agent status")
 
 
@@ -83,8 +82,7 @@ async def send_message(
     request: ChatMessageRequest,
     chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
 ):
-    """
-    Send a chat message to an agent.
+    """Send a chat message to an agent.
 
     Unified endpoint that handles both A2A protocol and REST API.
     """
@@ -124,8 +122,7 @@ async def stream_message(
     request: ChatMessageRequest,
     chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
 ):
-    """
-    Stream a chat message response from an agent.
+    """Stream a chat message response from an agent.
 
     Returns Server-Sent Events (SSE) compatible with A2A protocol.
     """
@@ -192,7 +189,7 @@ async def get_conversation_history(
 
 @router.get("/conversations")
 async def list_conversations(
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
     chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
 ):
     """List all conversations for a user."""
@@ -206,7 +203,7 @@ async def list_conversations(
 
 
 # Agent Management
-@router.get("/agents", response_model=List[AgentResponse])
+@router.get("/agents", response_model=list[AgentResponse])
 async def get_available_agents(
     chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
 ):

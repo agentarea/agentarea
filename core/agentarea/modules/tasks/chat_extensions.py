@@ -1,26 +1,23 @@
-"""
-A2A-Native Chat Extensions
+"""A2A-Native Chat Extensions.
 
 This module provides chat functionality using pure A2A Task protocol.
 No custom session management - everything uses A2A Tasks with contextId for conversations.
 """
 
 import logging
-from typing import List, Optional, AsyncIterable, Dict, Any
-from uuid import UUID, uuid4
-from datetime import datetime, UTC
+from collections.abc import AsyncIterable
+from datetime import UTC, datetime
+from uuid import uuid4
 
 from agentarea.common.utils.types import (
-    Task,
-    TaskState,
-    TaskStatus,
     Message,
-    TextPart,
     SendTaskRequest,
-    SendTaskResponse,
-    TaskSendParams,
     SendTaskStreamingRequest,
     SendTaskStreamingResponse,
+    Task,
+    TaskSendParams,
+    TaskState,
+    TextPart,
 )
 from agentarea.modules.agents.application.agent_service import AgentService
 from agentarea.modules.tasks.task_manager import BaseTaskManager
@@ -29,8 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class A2AChatService:
-    """
-    A2A-compliant chat service using pure Task protocol.
+    """A2A-compliant chat service using pure Task protocol.
 
     Uses A2A concepts:
     - Task.id: Unique identifier for each message/response cycle
@@ -46,10 +42,9 @@ class A2AChatService:
         self.agent_service = agent_service
 
     async def send_chat_message(
-        self, agent_id: str, user_id: str, message_text: str, context_id: Optional[str] = None
+        self, agent_id: str, user_id: str, message_text: str, context_id: str | None = None
     ) -> Task:
-        """
-        Send a chat message to an agent using A2A protocol.
+        """Send a chat message to an agent using A2A protocol.
 
         Args:
             agent_id: Target agent ID
@@ -104,10 +99,9 @@ class A2AChatService:
             raise
 
     async def get_conversation_history(
-        self, context_id: str, limit: Optional[int] = None
-    ) -> List[Task]:
-        """
-        Get conversation history for a context using A2A protocol.
+        self, context_id: str, limit: int | None = None
+    ) -> list[Task]:
+        """Get conversation history for a context using A2A protocol.
 
         Args:
             context_id: The conversation context ID (sessionId in A2A)
@@ -119,7 +113,6 @@ class A2AChatService:
         try:
             # Use existing task manager methods to get tasks by session/context
             # This assumes the task manager can filter by sessionId/contextId
-            all_tasks = []
 
             # Get all tasks and filter by contextId/sessionId
             # Note: This is a simplified approach - in production you'd want
@@ -151,9 +144,8 @@ class A2AChatService:
             logger.error(f"Failed to get conversation history: {e}", exc_info=True)
             raise
 
-    async def get_user_conversations(self, user_id: str) -> List[str]:
-        """
-        Get list of conversation context IDs for a user.
+    async def get_user_conversations(self, user_id: str) -> list[str]:
+        """Get list of conversation context IDs for a user.
 
         Args:
             user_id: The user ID
@@ -186,8 +178,7 @@ class A2AChatService:
             raise
 
     async def stream_chat_response(self, task_id: str) -> AsyncIterable[SendTaskStreamingResponse]:
-        """
-        Stream real-time updates for a chat task using A2A SSE protocol.
+        """Stream real-time updates for a chat task using A2A SSE protocol.
 
         Args:
             task_id: The task ID to stream updates for
@@ -218,9 +209,8 @@ class A2AChatService:
             logger.error(f"Failed to stream chat response: {e}", exc_info=True)
             raise
 
-    async def get_active_chat_tasks(self, agent_id: str) -> List[Task]:
-        """
-        Get currently active (non-terminal) chat tasks for an agent.
+    async def get_active_chat_tasks(self, agent_id: str) -> list[Task]:
+        """Get currently active (non-terminal) chat tasks for an agent.
 
         Args:
             agent_id: The agent ID
@@ -250,8 +240,7 @@ class A2AChatService:
             raise
 
     async def cancel_chat_task(self, task_id: str) -> Task:
-        """
-        Cancel a chat task using A2A protocol.
+        """Cancel a chat task using A2A protocol.
 
         Args:
             task_id: The task ID to cancel
@@ -274,15 +263,14 @@ class A2AChatService:
 
 
 class A2AChatTaskManager:
-    """
-    Extension to BaseTaskManager specifically for chat functionality.
+    """Extension to BaseTaskManager specifically for chat functionality.
     Provides chat-specific convenience methods while maintaining A2A compliance.
     """
 
     def __init__(self, base_task_manager: BaseTaskManager):
         self.base_manager = base_task_manager
 
-    async def get_tasks_by_context(self, context_id: str) -> List[Task]:
+    async def get_tasks_by_context(self, context_id: str) -> list[Task]:
         """Get all tasks for a specific conversation context."""
         # This would ideally be implemented in the base task manager
         # For now, we'll filter from all tasks (inefficient but functional)
@@ -290,7 +278,7 @@ class A2AChatTaskManager:
         # Implementation depends on available methods in base_task_manager
         return [task for task in all_tasks if getattr(task, "sessionId", None) == context_id]
 
-    async def get_chat_contexts_for_user(self, user_id: str) -> List[str]:
+    async def get_chat_contexts_for_user(self, user_id: str) -> list[str]:
         """Get all conversation contexts for a user."""
         user_tasks = await self.base_manager.on_get_tasks_by_user(user_id)
         contexts = set()

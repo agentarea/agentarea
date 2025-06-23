@@ -1,30 +1,30 @@
-"""
-ACP (Agent Communication Protocol) Adapter
+"""ACP (Agent Communication Protocol) Adapter.
 
 This adapter enables communication with ACP-compliant agents from the BeeAI ecosystem
 by translating between our internal chat format and the ACP protocol.
 """
 
-import httpx
 import uuid
-from typing import Dict, Any, Optional, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
-from .base import AgentAdapter, ChatMessage, ChatResponse, AgentTask, AgentTaskResponse
+import httpx
+
+from .base import AgentAdapter, AgentTask, AgentTaskResponse, ChatMessage, ChatResponse
 
 
 class ACPAdapter(AgentAdapter):
-    """Adapter for ACP protocol agents (BeeAI)"""
+    """Adapter for ACP protocol agents (BeeAI)."""
 
-    def __init__(self, agent_config: Dict[str, Any]):
+    def __init__(self, agent_config: dict[str, Any]):
         super().__init__(agent_config)
         self.base_url = agent_config.get("endpoint")
         self.timeout = agent_config.get("timeout", 30)
 
     async def send_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AgentTaskResponse:
-        """Send task via ACP protocol"""
-
+        """Send task via ACP protocol."""
         # Convert task to chat message for backward compatibility
         chat_message = ChatMessage(content=task.content, metadata=task.metadata)
         chat_response = await self.send_message(chat_message, session_id)
@@ -37,18 +37,16 @@ class ACPAdapter(AgentAdapter):
         )
 
     def stream_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream task response via ACP protocol"""
-
+        """Stream task response via ACP protocol."""
         chat_message = ChatMessage(content=task.content, metadata=task.metadata)
         return self.stream_message(chat_message, session_id)
 
     async def send_message(
-        self, message: ChatMessage, context_id: Optional[str] = None
+        self, message: ChatMessage, context_id: str | None = None
     ) -> ChatResponse:
-        """Send message via ACP protocol"""
-
+        """Send message via ACP protocol."""
         # ACP message format
         acp_payload = {
             "message": message.content,
@@ -75,17 +73,15 @@ class ACPAdapter(AgentAdapter):
             )
 
     def stream_message(
-        self, message: ChatMessage, context_id: Optional[str] = None
+        self, message: ChatMessage, context_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream response from ACP agent"""
-
+        """Stream response from ACP agent."""
         return self._stream_message_impl(message, context_id)
 
     async def _stream_message_impl(
-        self, message: ChatMessage, context_id: Optional[str] = None
+        self, message: ChatMessage, context_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Implementation of stream message"""
-
+        """Implementation of stream message."""
         acp_payload = {
             "message": message.content,
             "context": {
@@ -105,9 +101,8 @@ class ACPAdapter(AgentAdapter):
                     if chunk.strip():
                         yield chunk
 
-    async def get_capabilities(self) -> Dict[str, Any]:
-        """Get ACP agent capabilities"""
-
+    async def get_capabilities(self) -> dict[str, Any]:
+        """Get ACP agent capabilities."""
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.get(f"{self.base_url}/acp/capabilities")
@@ -121,8 +116,7 @@ class ACPAdapter(AgentAdapter):
                 }
 
     async def health_check(self) -> bool:
-        """Check if ACP agent is available"""
-
+        """Check if ACP agent is available."""
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 response = await client.get(f"{self.base_url}/acp/health")
@@ -130,9 +124,8 @@ class ACPAdapter(AgentAdapter):
         except:
             return False
 
-    async def create_agent(self, agent_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new agent on ACP platform (not typically supported)"""
-
+    async def create_agent(self, agent_spec: dict[str, Any]) -> dict[str, Any]:
+        """Create a new agent on ACP platform (not typically supported)."""
         # ACP platforms typically don't support agent creation via API
         # This is a placeholder implementation
         raise NotImplementedError("ACP platforms don't typically support dynamic agent creation")

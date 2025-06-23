@@ -1,5 +1,4 @@
-"""
-Infisical Secret Manager Factory
+"""Infisical Secret Manager Factory.
 
 This module provides a factory function to create properly configured
 Infisical secret manager instances based on environment configuration.
@@ -7,17 +6,15 @@ Infisical secret manager instances based on environment configuration.
 
 import logging
 import os
-from typing import Optional
 
-from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 from agentarea.common.infrastructure.local_secret_manager import LocalSecretManager
+from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 
 logger = logging.getLogger(__name__)
 
 
 def create_infisical_secret_manager() -> BaseSecretManager:
-    """
-    Create an Infisical secret manager instance based on configuration.
+    """Create an Infisical secret manager instance based on configuration.
 
     Returns:
         BaseSecretManager: Configured secret manager instance
@@ -25,6 +22,7 @@ def create_infisical_secret_manager() -> BaseSecretManager:
     try:
         # Check if Infisical SDK is available
         from infisical_sdk.client import InfisicalSDKClient
+
         from agentarea.modules.secrets.infisical_secret_manager import InfisicalSecretManager
 
         # Get Infisical configuration from environment
@@ -59,8 +57,7 @@ def create_infisical_secret_manager() -> BaseSecretManager:
 
 
 def get_real_secret_manager() -> BaseSecretManager:
-    """
-    Get a real secret manager implementation (non-test).
+    """Get a real secret manager implementation (non-test).
 
     Returns:
         BaseSecretManager: Real secret manager instance

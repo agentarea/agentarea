@@ -1,28 +1,24 @@
-"""
-A2A Server Implementation
+"""A2A Server Implementation.
 
 This module implements an A2A server using the official Google A2A SDK,
 allowing our agents to be discoverable and callable by other A2A-compliant systems.
 """
 
-import asyncio
 import logging
-from typing import Dict, Any, Optional, List
 from uuid import UUID
 
 # A2A SDK imports
 from a2a.sdk import A2AServer, AgentCard, Capability, TaskRequest, TaskResponse
-from a2a.sdk.types import Message, TextPart, Artifact
+from a2a.sdk.types import Artifact, TextPart
 
-from agentarea.modules.agents.application.agent_service import AgentService
 from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
+from agentarea.modules.agents.application.agent_service import AgentService
 
 logger = logging.getLogger(__name__)
 
 
 class AgentAreaA2AServer:
-    """
-    A2A Server implementation for AgentArea agents.
+    """A2A Server implementation for AgentArea agents.
 
     This allows external A2A systems to discover and interact with our agents
     following the official A2A protocol specification.
@@ -39,7 +35,7 @@ class AgentAreaA2AServer:
         self.agent_runner_service = agent_runner_service
         self.server_host = server_host
         self.server_port = server_port
-        self.a2a_server: Optional[A2AServer] = None
+        self.a2a_server: A2AServer | None = None
 
     async def start_server(self):
         """Start the A2A server."""
@@ -66,8 +62,7 @@ class AgentAreaA2AServer:
             logger.info("A2A server stopped")
 
     async def _handle_task(self, task_request: TaskRequest) -> TaskResponse:
-        """
-        Handle incoming A2A task requests.
+        """Handle incoming A2A task requests.
 
         Args:
             task_request: A2A task request from external system
@@ -167,9 +162,8 @@ class AgentAreaA2AServer:
                 task_id=task_request.id, status="failed", error=f"Internal error: {str(e)}"
             )
 
-    async def _get_agent_card(self, agent_id: Optional[str] = None) -> AgentCard:
-        """
-        Provide agent card for A2A discovery.
+    async def _get_agent_card(self, agent_id: str | None = None) -> AgentCard:
+        """Provide agent card for A2A discovery.
 
         Args:
             agent_id: Optional specific agent ID
@@ -256,7 +250,7 @@ class A2AServerManager:
     """Manager for A2A server lifecycle."""
 
     def __init__(self):
-        self.server: Optional[AgentAreaA2AServer] = None
+        self.server: AgentAreaA2AServer | None = None
         self._running = False
 
     async def start(

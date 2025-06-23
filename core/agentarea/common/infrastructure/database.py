@@ -3,17 +3,17 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
-    AsyncEngine,
 )
 
 from agentarea.config import DatabaseSettings, get_db_settings
 
 
 class Database:
-    """Database connection manager"""
+    """Database connection manager."""
 
     _instance: Optional["Database"] = None
     _initialized: bool = False
@@ -41,7 +41,7 @@ class Database:
 
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
-        """Get a database session"""
+        """Get a database session."""
         session = self.session_factory()
         try:
             yield session
@@ -53,7 +53,7 @@ class Database:
             await session.close()
 
     async def get_db(self) -> AsyncGenerator[AsyncSession, None]:
-        """Dependency for FastAPI"""
+        """Dependency for FastAPI."""
         async with self.session() as session:
             yield session
 

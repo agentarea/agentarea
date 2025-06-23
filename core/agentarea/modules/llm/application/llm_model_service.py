@@ -1,11 +1,10 @@
+from uuid import UUID
+
 from agentarea.common.base.service import BaseCrudService
 from agentarea.common.events.broker import EventBroker
 from agentarea.modules.llm.domain.events import LLMModelCreated, LLMModelDeleted, LLMModelUpdated
 from agentarea.modules.llm.domain.models import LLMModel
 from agentarea.modules.llm.infrastructure.llm_model_repository import LLMModelRepository
-
-
-from uuid import UUID
 
 
 class LLMModelService(BaseCrudService[LLMModel]):

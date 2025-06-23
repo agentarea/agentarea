@@ -1,14 +1,16 @@
-"""Add llm_providers table and provider_id foreign key to llm_models
+"""Add llm_providers table and provider_id foreign key to llm_models.
 
 Revision ID: add_llm_providers_fk
 Revises: b5ce5d3145b5
 Create Date: 2025-05-17 00:00:00.000000
 """
 
-from alembic import op
+import uuid
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-import uuid
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_llm_providers_fk"

@@ -1,16 +1,17 @@
-"""
-Enhanced A2A (Agent-to-Agent) Protocol Adapter
+"""Enhanced A2A (Agent-to-Agent) Protocol Adapter.
 
 This adapter combines our current A2A implementation with the official A2A SDK
 for better protocol compliance and enhanced agent communication capabilities.
 """
 
 import asyncio
-import httpx
-import uuid
 import logging
-from typing import Dict, Any, Optional, AsyncGenerator
-from datetime import datetime, timezone
+import uuid
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from typing import Any
+
+import httpx
 
 from .base import AgentAdapter, AgentTask, AgentTaskResponse
 
@@ -18,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class EnhancedA2AAdapter(AgentAdapter):
-    """Enhanced A2A protocol adapter with official SDK integration"""
+    """Enhanced A2A protocol adapter with official SDK integration."""
 
-    def __init__(self, agent_config: Dict[str, Any]):
+    def __init__(self, agent_config: dict[str, Any]):
         super().__init__(agent_config)
         self.base_url = agent_config.get("endpoint")
         self.timeout = agent_config.get("timeout", 30)
@@ -33,7 +34,7 @@ class EnhancedA2AAdapter(AgentAdapter):
             self._init_a2a_client()
 
     def _init_a2a_client(self):
-        """Initialize the official A2A SDK client"""
+        """Initialize the official A2A SDK client."""
         try:
             # Note: This will be implemented when a2a-sdk is installed
             # from a2a.sdk import A2AClient
@@ -47,19 +48,18 @@ class EnhancedA2AAdapter(AgentAdapter):
             self.use_official_sdk = False
 
     async def send_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AgentTaskResponse:
-        """Send task to remote A2A agent"""
-
+        """Send task to remote A2A agent."""
         if self.use_official_sdk and self.a2a_client:
             return await self._send_task_via_sdk(task, session_id)
         else:
             return await self._send_task_via_http(task, session_id)
 
     async def _send_task_via_sdk(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AgentTaskResponse:
-        """Send task using the official A2A SDK"""
+        """Send task using the official A2A SDK."""
         try:
             # This will be implemented when SDK is available
             # task_request = TaskRequest(
@@ -107,10 +107,9 @@ class EnhancedA2AAdapter(AgentAdapter):
             return await self._send_task_via_http(task, session_id)
 
     async def _send_task_via_http(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AgentTaskResponse:
-        """Send task using HTTP (our current implementation)"""
-
+        """Send task using HTTP (our current implementation)."""
         # Enhanced A2A Task payload with better compliance
         task_payload = {
             "jsonrpc": "2.0",
@@ -121,7 +120,7 @@ class EnhancedA2AAdapter(AgentAdapter):
                 "contextId": session_id or str(uuid.uuid4()),
                 "metadata": {
                     **(task.metadata or {}),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "source": "agentarea",
                     "task_type": task.task_type,
                     "protocol_version": "1.0",
@@ -204,9 +203,8 @@ class EnhancedA2AAdapter(AgentAdapter):
                 status=task_result.get("status", "completed"),
             )
 
-    async def get_capabilities(self) -> Dict[str, Any]:
-        """Get remote A2A agent capabilities with enhanced discovery"""
-
+    async def get_capabilities(self) -> dict[str, Any]:
+        """Get remote A2A agent capabilities with enhanced discovery."""
         headers = {"User-Agent": "AgentArea/1.0 (A2A-compliant)"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -274,8 +272,7 @@ class EnhancedA2AAdapter(AgentAdapter):
             }
 
     async def health_check(self) -> bool:
-        """Enhanced health check with A2A compliance verification"""
-
+        """Enhanced health check with A2A compliance verification."""
         try:
             headers = {"User-Agent": "AgentArea/1.0 (A2A-compliant)"}
             if self.api_key:
@@ -305,12 +302,11 @@ class EnhancedA2AAdapter(AgentAdapter):
         self,
         client: httpx.AsyncClient,
         task_id: str,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         max_attempts: int = 30,
-    ) -> Dict[str, Any]:
-        """Poll task completion with enhanced A2A methods"""
-
-        for attempt in range(max_attempts):
+    ) -> dict[str, Any]:
+        """Poll task completion with enhanced A2A methods."""
+        for _attempt in range(max_attempts):
             try:
                 # Try JSON-RPC task status first
                 rpc_payload = {
@@ -354,16 +350,15 @@ class EnhancedA2AAdapter(AgentAdapter):
         return {"status": "timeout", "id": task_id}
 
     def stream_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream task response from remote A2A agent"""
+        """Stream task response from remote A2A agent."""
         return self._stream_task_impl(task, session_id)
 
     async def _stream_task_impl(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Implementation of stream task with enhanced A2A support"""
-
+        """Implementation of stream task with enhanced A2A support."""
         # Enhanced streaming payload
         stream_payload = {
             "jsonrpc": "2.0",
@@ -374,7 +369,7 @@ class EnhancedA2AAdapter(AgentAdapter):
                 "contextId": session_id or str(uuid.uuid4()),
                 "metadata": {
                     **(task.metadata or {}),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "source": "agentarea",
                     "task_type": task.task_type,
                     "stream": True,
@@ -421,9 +416,8 @@ class EnhancedA2AAdapter(AgentAdapter):
                         if chunk.strip():
                             yield chunk
 
-    async def create_agent(self, agent_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new agent on remote A2A platform with enhanced capabilities"""
-
+    async def create_agent(self, agent_spec: dict[str, Any]) -> dict[str, Any]:
+        """Create a new agent on remote A2A platform with enhanced capabilities."""
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "AgentArea/1.0 (A2A-compliant)",
@@ -446,7 +440,7 @@ class EnhancedA2AAdapter(AgentAdapter):
                     **(agent_spec.get("metadata", {})),
                     "created_by": "agentarea",
                     "protocol_version": "1.0",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             },
         }
@@ -487,9 +481,8 @@ class EnhancedA2AAdapter(AgentAdapter):
 
 
 # Factory function for creating the right adapter
-def create_a2a_adapter(agent_config: Dict[str, Any]) -> AgentAdapter:
-    """Create the appropriate A2A adapter based on configuration"""
-
+def create_a2a_adapter(agent_config: dict[str, Any]) -> AgentAdapter:
+    """Create the appropriate A2A adapter based on configuration."""
     if agent_config.get("enhanced_a2a", True):
         return EnhancedA2AAdapter(agent_config)
     else:

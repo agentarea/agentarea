@@ -2,8 +2,6 @@ from fastapi import FastAPI
 from faststream.redis import RedisBroker
 from faststream.redis.fastapi import RedisRouter
 
-from agentarea_domain.worker.faststream_app import start_faststream, stop_faststream
-
 app = FastAPI(title="AgentArea Worker")
 broker = RedisBroker("redis://localhost:6379")
 router = RedisRouter(broker)

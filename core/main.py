@@ -1,11 +1,9 @@
-"""
-Main FastAPI application with static file serving
-"""
+"""Main FastAPI application with static file serving."""
 
+from core.api.routes.mcp import router as mcp_router
+from core.api.routes.providers import router as providers_router
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from core.api.routes.providers import router as providers_router
-from core.api.routes.mcp import router as mcp_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -24,7 +22,7 @@ app.include_router(mcp_router, prefix="/api/v1", tags=["mcp"])
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint."""
     return {
         "message": "AgentArea API",
         "version": "1.0.0",

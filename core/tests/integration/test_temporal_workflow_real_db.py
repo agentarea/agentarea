@@ -13,36 +13,36 @@ These tests require:
 - Temporal server to be running
 """
 
+import uuid
+from collections.abc import AsyncGenerator
+from datetime import timedelta
+from typing import Any
+
 import pytest
 import pytest_asyncio
-import uuid
-from datetime import timedelta
-from typing import Any, AsyncGenerator
-
 from sqlalchemy import text
 from temporalio.client import Client
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from agentarea.workflows.agent_task_workflow import (
-    AgentTaskWorkflow,
-    validate_agent_activity,
-    execute_agent_activity,
-    execute_dynamic_activity,
-    execute_mcp_tool_activity,
-    execute_custom_tool_activity,
-    execute_agent_communication_activity,
-)
-
 # Import database and models for test setup
 from agentarea.api.deps.database import get_db_session
 from agentarea.modules.agents.domain.models import Agent
-from agentarea.modules.llm.domain.models import LLMModel, LLMModelInstance
 from agentarea.modules.agents.infrastructure.repository import AgentRepository
+from agentarea.modules.llm.domain.models import LLMModel, LLMModelInstance
 from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
 )
 from agentarea.modules.llm.infrastructure.llm_model_repository import LLMModelRepository
+from agentarea.workflows.agent_task_workflow import (
+    AgentTaskWorkflow,
+    execute_agent_activity,
+    execute_agent_communication_activity,
+    execute_custom_tool_activity,
+    execute_dynamic_activity,
+    execute_mcp_tool_activity,
+    validate_agent_activity,
+)
 
 # Configure pytest for async tests
 pytestmark = pytest.mark.asyncio

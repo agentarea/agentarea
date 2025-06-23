@@ -1,10 +1,11 @@
-from typing import Dict, Any
+from typing import Any
 from uuid import UUID
+
 from ....common.events.base_events import DomainEvent
 
 
 class AgentCreated(DomainEvent):
-    """Event emitted when a new agent is created"""
+    """Event emitted when a new agent is created."""
 
     def __init__(
         self,
@@ -12,8 +13,8 @@ class AgentCreated(DomainEvent):
         name: str,
         description: str,
         model_id: str,
-        tools_config: Dict[str, Any] | None = None,
-        events_config: Dict[str, Any] | None = None,
+        tools_config: dict[str, Any] | None = None,
+        events_config: dict[str, Any] | None = None,
         planning: bool | None = None,
     ) -> None:
         super().__init__()
@@ -27,7 +28,7 @@ class AgentCreated(DomainEvent):
 
 
 class AgentUpdated(DomainEvent):
-    """Event emitted when an agent is updated"""
+    """Event emitted when an agent is updated."""
 
     def __init__(
         self,
@@ -35,8 +36,8 @@ class AgentUpdated(DomainEvent):
         name: str,
         description: str | None = None,
         model_id: str | None = None,
-        tools_config: Dict[str, Any] | None = None,
-        events_config: Dict[str, Any] | None = None,
+        tools_config: dict[str, Any] | None = None,
+        events_config: dict[str, Any] | None = None,
         planning: bool | None = None,
     ) -> None:
         super().__init__()
@@ -50,7 +51,7 @@ class AgentUpdated(DomainEvent):
 
 
 class AgentDeleted(DomainEvent):
-    """Event emitted when an agent is deleted"""
+    """Event emitted when an agent is deleted."""
 
     def __init__(self, agent_id: UUID) -> None:
         super().__init__()

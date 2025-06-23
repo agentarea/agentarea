@@ -1,12 +1,12 @@
+import asyncio
+import json
 import os
 import sys
-import json
-import asyncio
-from typing import Optional, Dict, Any
+from typing import Any
 
 import click
-import uvicorn
 import httpx
+import uvicorn
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -18,14 +18,14 @@ from alembic.script import ScriptDirectory
 
 
 def get_engine():
-    """Get database engine with retry logic"""
+    """Get database engine with retry logic."""
     db = Database(get_db_settings())
     # Use the synchronous engine for migration operations
     return db.sync_engine
 
 
 def check_database_connection():
-    """Check database connection using SQLAlchemy's built-in retry logic"""
+    """Check database connection using SQLAlchemy's built-in retry logic."""
     engine = get_engine()
     try:
         with engine.connect() as connection:
@@ -36,7 +36,7 @@ def check_database_connection():
         raise
 
 
-def get_current_revision(engine: Engine) -> Optional[str]:
+def get_current_revision(engine: Engine) -> str | None:
     try:
         with engine.connect() as connection:
             context = MigrationContext.configure(connection)
@@ -46,14 +46,14 @@ def get_current_revision(engine: Engine) -> Optional[str]:
         return None
 
 
-def get_head_revision() -> Optional[str]:
+def get_head_revision() -> str | None:
     config = Config("alembic.ini")
     script = ScriptDirectory.from_config(config)
     return script.get_current_head()
 
 
 def check_migrations_status():
-    """Check if all migrations are up to date"""
+    """Check if all migrations are up to date."""
     engine = get_engine()
     current = get_current_revision(engine)
     head = get_head_revision()
@@ -68,10 +68,10 @@ def check_migrations_status():
 async def make_api_request(
     method: str,
     endpoint: str,
-    data: Optional[Dict[str, Any]] = None,
+    data: dict[str, Any] | None = None,
     base_url: str = "http://localhost:8000",
-) -> Dict[str, Any]:
-    """Make HTTP request to the API"""
+) -> dict[str, Any]:
+    """Make HTTP request to the API."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         url = f"{base_url}{endpoint}"
         try:
@@ -101,7 +101,7 @@ async def make_api_request(
 
 
 def safe_get_field(item: Any, field: str, default: str = "Unknown") -> str:
-    """Safely get a field from an item, handling various data types"""
+    """Safely get a field from an item, handling various data types."""
     if item is None:
         return default
     if isinstance(item, dict):
@@ -113,13 +113,13 @@ def safe_get_field(item: Any, field: str, default: str = "Unknown") -> str:
 
 @click.group()
 def cli():
-    """AgentArea CLI - Manage LLMs, MCPs, Agents, and Tasks"""
+    """AgentArea CLI - Manage LLMs, MCPs, Agents, and Tasks."""
     pass
 
 
 @cli.command()
 def migrate():
-    """Run database migrations"""
+    """Run database migrations."""
     try:
         check_database_connection()
         alembic_cfg = Config("alembic.ini")
@@ -177,13 +177,13 @@ def serve(host: str, port: int, reload: bool, log_level: str, access_log: bool, 
 
 @cli.group()
 def llm():
-    """LLM model and instance management commands"""
+    """LLM model and instance management commands."""
     pass
 
 
 @llm.command()
 def models():
-    """List available LLM models"""
+    """List available LLM models."""
 
     async def _list_models():
         try:
@@ -205,7 +205,7 @@ def models():
 
 @llm.command()
 def instances():
-    """List LLM model instances"""
+    """List LLM model instances."""
 
     async def _list_instances():
         try:
@@ -243,7 +243,7 @@ def create_model(
     context_window: str,
     is_public: bool,
 ):
-    """Create a new LLM model"""
+    """Create a new LLM model."""
 
     async def _create_model():
         data = {
@@ -275,7 +275,7 @@ def create_model(
 @click.option("--api-key", required=True, help="API key for the model")
 @click.option("--is-public/--no-public", default=False, help="Make instance public")
 def create_instance(model_id: str, name: str, description: str, api_key: str, is_public: bool):
-    """Create a new LLM model instance"""
+    """Create a new LLM model instance."""
 
     async def _create_instance():
         data = {
@@ -305,13 +305,13 @@ def create_instance(model_id: str, name: str, description: str, api_key: str, is
 
 @cli.group()
 def mcp():
-    """MCP server management commands"""
+    """MCP server management commands."""
     pass
 
 
 @mcp.command()
 def servers():
-    """List available MCP servers"""
+    """List available MCP servers."""
 
     async def _list_servers():
         try:
@@ -334,7 +334,7 @@ def servers():
 
 @mcp.command()
 def instances():
-    """List MCP server instances"""
+    """List MCP server instances."""
 
     async def _list_instances():
         try:
@@ -368,10 +368,10 @@ def create_server(
     description: str,
     docker_image: str,
     version: str,
-    tags: Optional[str],
+    tags: str | None,
     is_public: bool,
 ):
-    """Create a new MCP server"""
+    """Create a new MCP server."""
 
     async def _create_server():
         data = {
@@ -400,8 +400,8 @@ def create_server(
 @click.option("--name", required=True, help="Instance name")
 @click.option("--endpoint-url", required=True, help="MCP endpoint URL")
 @click.option("--config", help="JSON configuration string")
-def create_instance(server_id: str, name: str, endpoint_url: str, config: Optional[str]):
-    """Create a new MCP server instance"""
+def create_instance(server_id: str, name: str, endpoint_url: str, config: str | None):
+    """Create a new MCP server instance."""
 
     async def _create_instance():
         config_data = {}
@@ -438,13 +438,13 @@ def create_instance(server_id: str, name: str, endpoint_url: str, config: Option
 
 @cli.group()
 def agent():
-    """Agent management commands"""
+    """Agent management commands."""
     pass
 
 
 @agent.command()
 def list():
-    """List available agents"""
+    """List available agents."""
 
     async def _list_agents():
         try:
@@ -474,7 +474,7 @@ def list():
 @click.option("--model-id", required=True, help="LLM model instance ID")
 @click.option("--planning/--no-planning", default=False, help="Enable planning capabilities")
 def create(name: str, description: str, instruction: str, model_id: str, planning: bool):
-    """Create a new agent"""
+    """Create a new agent."""
 
     async def _create_agent():
         data = {
@@ -506,7 +506,7 @@ def create(name: str, description: str, instruction: str, model_id: str, plannin
 
 @cli.group()
 def chat():
-    """Chat and task communication commands"""
+    """Chat and task communication commands."""
     pass
 
 
@@ -515,8 +515,8 @@ def chat():
 @click.option("--message", required=True, help="Message to send")
 @click.option("--session-id", help="Session ID for conversation context")
 @click.option("--user-id", help="User ID")
-def send(agent_id: str, message: str, session_id: Optional[str], user_id: Optional[str]):
-    """Send a chat message to an agent"""
+def send(agent_id: str, message: str, session_id: str | None, user_id: str | None):
+    """Send a chat message to an agent."""
 
     async def _send_message():
         data = {
@@ -531,7 +531,7 @@ def send(agent_id: str, message: str, session_id: Optional[str], user_id: Option
             result = await make_api_request("POST", "/v1/chat/messages", data)
             content = safe_get_field(result, "content", "No response")
             session_id_result = safe_get_field(result, "session_id")
-            click.echo(f"Agent Response:")
+            click.echo("Agent Response:")
             click.echo(f"  {content}")
             if session_id_result != "Unknown":
                 click.echo(f"Session ID: {session_id_result}")
@@ -544,8 +544,8 @@ def send(agent_id: str, message: str, session_id: Optional[str], user_id: Option
 @chat.command()
 @click.option("--agent-id", required=True, help="Agent ID to chat with")
 @click.option("--session-id", help="Session ID for conversation context")
-def interactive(agent_id: str, session_id: Optional[str]):
-    """Start an interactive chat session with an agent"""
+def interactive(agent_id: str, session_id: str | None):
+    """Start an interactive chat session with an agent."""
     import uuid
 
     if not session_id:
@@ -588,7 +588,7 @@ def interactive(agent_id: str, session_id: Optional[str]):
 @chat.command()
 @click.option("--session-id", required=True, help="Session ID")
 def history(session_id: str):
-    """Get chat history for a session"""
+    """Get chat history for a session."""
 
     async def _get_history():
         try:

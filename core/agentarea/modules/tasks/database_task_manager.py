@@ -1,5 +1,4 @@
-"""
-Database Task Manager
+"""Database Task Manager.
 
 Real implementation of TaskManager that persists tasks in the database
 instead of using in-memory storage.
@@ -7,37 +6,36 @@ instead of using in-memory storage.
 
 import logging
 from collections.abc import AsyncIterable
-from typing import Dict, Any, Optional, List
 from uuid import uuid4
-from datetime import datetime, timezone
 
+from agentarea.common.events.broker import EventBroker
 from agentarea.common.utils.types import (
+    CancelTaskRequest,
+    CancelTaskResponse,
+    GetTaskPushNotificationRequest,
+    GetTaskPushNotificationResponse,
+    GetTaskRequest,
+    GetTaskResponse,
+    JSONRPCError,
+    JSONRPCResponse,
+    Message,
     SendTaskRequest,
     SendTaskResponse,
     SendTaskStreamingRequest,
     SendTaskStreamingResponse,
-    GetTaskRequest,
-    GetTaskResponse,
-    CancelTaskRequest,
-    CancelTaskResponse,
     SetTaskPushNotificationRequest,
     SetTaskPushNotificationResponse,
-    GetTaskPushNotificationRequest,
-    GetTaskPushNotificationResponse,
-    TaskResubscriptionRequest,
     Task,
-    TaskStatus,
+    TaskResubscriptionRequest,
     TaskState,
-    Message,
+    TaskStatus,
     TextPart,
-    JSONRPCError,
-    JSONRPCResponse,
 )
-from agentarea.modules.tasks.task_manager import BaseTaskManager
+from agentarea.modules.tasks.domain.events import TaskCreated, TaskStatusChanged
+from agentarea.modules.tasks.domain.models import Task as DomainTask
+from agentarea.modules.tasks.domain.models import TaskPriority, TaskType
 from agentarea.modules.tasks.infrastructure.repository import TaskRepositoryInterface
-from agentarea.modules.tasks.domain.models import Task as DomainTask, TaskType, TaskPriority
-from agentarea.common.events.broker import EventBroker
-from agentarea.modules.tasks.domain.events import TaskCreated, TaskStatusChanged, TaskCompleted
+from agentarea.modules.tasks.task_manager import BaseTaskManager
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,7 @@ class DatabaseTaskManager(BaseTaskManager):
     def __init__(self, task_repository: TaskRepositoryInterface, event_broker: EventBroker):
         self.task_repository = task_repository
         self.event_broker = event_broker
-        self.active_tasks: Dict[str, Task] = {}
+        self.active_tasks: dict[str, Task] = {}
 
     async def on_send_task(self, request: SendTaskRequest) -> SendTaskResponse:
         """Handle task sending with database persistence."""
@@ -274,7 +272,7 @@ class DatabaseTaskManager(BaseTaskManager):
             )
 
     # Extended querying capabilities
-    async def on_get_tasks_by_user(self, user_id: str) -> List[Task]:
+    async def on_get_tasks_by_user(self, user_id: str) -> list[Task]:
         """Get all tasks for a user."""
         try:
             # Get from database
@@ -293,7 +291,7 @@ class DatabaseTaskManager(BaseTaskManager):
             logger.error(f"Error getting tasks for user {user_id}: {e}", exc_info=True)
             return []
 
-    async def on_get_tasks_by_agent(self, agent_id: str) -> List[Task]:
+    async def on_get_tasks_by_agent(self, agent_id: str) -> list[Task]:
         """Get all tasks for an agent."""
         try:
             # Get from database
@@ -312,7 +310,7 @@ class DatabaseTaskManager(BaseTaskManager):
             logger.error(f"Error getting tasks for agent {agent_id}: {e}", exc_info=True)
             return []
 
-    def _extract_message_text(self, message: Optional[Message]) -> str:
+    def _extract_message_text(self, message: Message | None) -> str:
         """Extract text content from message."""
         if not message or not message.parts:
             return "No message content"

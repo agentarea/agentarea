@@ -1,9 +1,10 @@
-from sqlalchemy import Column, String, DateTime, Text, JSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
-from typing import Optional, Dict, Any, List
 import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import JSON, Column, DateTime, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
@@ -23,9 +24,9 @@ class MCPServerInstance(Base):
     def __init__(
         self,
         name: str,
-        description: Optional[str] = None,
-        server_spec_id: Optional[str] = None,
-        json_spec: Optional[Dict[str, Any]] = None,
+        description: str | None = None,
+        server_spec_id: str | None = None,
+        json_spec: dict[str, Any] | None = None,
         status: str = "pending",
     ):
         self.name = name
@@ -34,9 +35,8 @@ class MCPServerInstance(Base):
         self.json_spec = json_spec or {}
         self.status = status
 
-    def get_configured_env_vars(self) -> List[str]:
-        """
-        Get list of environment variable names configured for this instance.
+    def get_configured_env_vars(self) -> list[str]:
+        """Get list of environment variable names configured for this instance.
 
         Returns:
             List of environment variable names from the environment section of json_spec

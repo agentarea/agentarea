@@ -14,7 +14,7 @@ Uses only existing API endpoints - no mocking or invented endpoints.
 
 import asyncio
 import uuid
-from typing import Any, Dict, List, Union
+from typing import Any
 
 import httpx
 import pytest
@@ -345,7 +345,7 @@ class TestE2EMainFlow:
             # Wait before next check
             await asyncio.sleep(check_interval)
 
-    async def _verify_task_results(self, task_id: str, agent_id: str, final_status: Dict[str, Any]):
+    async def _verify_task_results(self, task_id: str, agent_id: str, final_status: dict[str, Any]):
         """Verify task results in database and API response."""
         print("🔍 Verifying task results...")
 
@@ -374,7 +374,7 @@ class TestE2EMainFlow:
 
                     # If there's a nested result, check it too
                     if "result" in result and isinstance(result["result"], dict):
-                        nested_result: Dict[str, Any] = result["result"]
+                        nested_result: dict[str, Any] = result["result"]
                         print(f"  📋 Nested result fields: {list(nested_result.keys())}")
 
                         # Look for events or activities that indicate actual execution
@@ -397,7 +397,7 @@ class TestE2EMainFlow:
                 print("  ✓ Found A2A message field")
 
                 # Verify message structure
-                message_dict: Dict[str, Any] = message
+                message_dict: dict[str, Any] = message
                 assert message_dict.get("role") == "agent", (
                     f"Expected role 'agent', got {message_dict.get('role')}"
                 )
@@ -449,7 +449,7 @@ class TestE2EMainFlow:
 
                 first_artifact = artifacts[0]
                 if isinstance(first_artifact, dict):
-                    artifact_dict: Dict[str, Any] = first_artifact
+                    artifact_dict: dict[str, Any] = first_artifact
                     assert artifact_dict.get("name") == "agent_response", (
                         f"Expected artifact name 'agent_response', got {artifact_dict.get('name')}"
                     )
@@ -490,9 +490,9 @@ class TestE2EMainFlow:
             # Check usage_metadata
             usage_metadata = final_status.get("usage_metadata")
             if usage_metadata and isinstance(usage_metadata, dict):
-                usage_dict: Dict[str, Any] = usage_metadata
+                usage_dict: dict[str, Any] = usage_metadata
                 total_tokens = usage_dict.get("total_token_count", 0)
-                if isinstance(total_tokens, (int, float)):
+                if isinstance(total_tokens, int | float):
                     assert total_tokens > 0, "Should have used some tokens"
                     print(f"  ✓ Token usage: {total_tokens} tokens")
             else:

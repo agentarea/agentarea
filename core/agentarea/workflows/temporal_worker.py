@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Temporal Worker for AgentArea
+"""Temporal Worker for AgentArea.
 
 This script starts a Temporal worker that can execute our agent task workflows
 and activities. It registers all necessary workflows and activities with Temporal.

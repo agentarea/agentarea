@@ -1,19 +1,16 @@
-"""
-MCP Environment Variables Service
+"""MCP Environment Variables Service.
 
 Handles environment variables for MCP server instances using the secret manager.
 Instance configs only store references to secrets, never actual values.
 """
 
-from typing import Dict, List
 from uuid import UUID
 
 from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 
 
 class MCPEnvironmentService:
-    """
-    Service for managing MCP server instance environment variables.
+    """Service for managing MCP server instance environment variables.
 
     Security principle: Instance configs never store actual values,
     only references to secrets stored in the secret manager.
@@ -27,10 +24,9 @@ class MCPEnvironmentService:
         return f"mcp_instance_{instance_id}_{env_name}"
 
     async def set_instance_environment(
-        self, instance_id: UUID, env_vars: Dict[str, str]
-    ) -> List[str]:
-        """
-        Store environment variables for an MCP instance using the secret manager.
+        self, instance_id: UUID, env_vars: dict[str, str]
+    ) -> list[str]:
+        """Store environment variables for an MCP instance using the secret manager.
 
         Args:
             instance_id: The MCP server instance ID
@@ -39,7 +35,7 @@ class MCPEnvironmentService:
         Returns:
             List of environment variable names that were stored
         """
-        stored_env_names: List[str] = []
+        stored_env_names: list[str] = []
 
         for env_name, env_value in env_vars.items():
             secret_key = self._get_secret_key(instance_id, env_name)
@@ -49,10 +45,9 @@ class MCPEnvironmentService:
         return stored_env_names
 
     async def get_instance_environment(
-        self, instance_id: UUID, env_names: List[str]
-    ) -> Dict[str, str]:
-        """
-        Retrieve environment variables for an MCP instance from the secret manager.
+        self, instance_id: UUID, env_names: list[str]
+    ) -> dict[str, str]:
+        """Retrieve environment variables for an MCP instance from the secret manager.
 
         Args:
             instance_id: The MCP server instance ID
@@ -61,7 +56,7 @@ class MCPEnvironmentService:
         Returns:
             Dictionary of environment variable names and values
         """
-        env_vars: Dict[str, str] = {}
+        env_vars: dict[str, str] = {}
 
         for env_name in env_names:
             secret_key = self._get_secret_key(instance_id, env_name)
@@ -72,10 +67,9 @@ class MCPEnvironmentService:
         return env_vars
 
     async def update_instance_environment(
-        self, instance_id: UUID, env_updates: Dict[str, str]
-    ) -> List[str]:
-        """
-        Update specific environment variables for an MCP instance.
+        self, instance_id: UUID, env_updates: dict[str, str]
+    ) -> list[str]:
+        """Update specific environment variables for an MCP instance.
 
         Args:
             instance_id: The MCP server instance ID
@@ -87,10 +81,9 @@ class MCPEnvironmentService:
         return await self.set_instance_environment(instance_id, env_updates)
 
     async def delete_instance_environment(
-        self, instance_id: UUID, env_names: List[str]
-    ) -> List[str]:
-        """
-        Delete environment variables for an MCP instance.
+        self, instance_id: UUID, env_names: list[str]
+    ) -> list[str]:
+        """Delete environment variables for an MCP instance.
 
         Args:
             instance_id: The MCP server instance ID
@@ -99,7 +92,7 @@ class MCPEnvironmentService:
         Returns:
             List of environment variable names that were deleted
         """
-        deleted_env_names: List[str] = []
+        deleted_env_names: list[str] = []
 
         for env_name in env_names:
             secret_key = self._get_secret_key(instance_id, env_name)
@@ -110,10 +103,9 @@ class MCPEnvironmentService:
         return deleted_env_names
 
     async def get_configured_env_names(
-        self, instance_id: UUID, expected_env_names: List[str]
-    ) -> List[str]:
-        """
-        Get list of environment variables that are actually configured for an instance.
+        self, instance_id: UUID, expected_env_names: list[str]
+    ) -> list[str]:
+        """Get list of environment variables that are actually configured for an instance.
 
         Args:
             instance_id: The MCP server instance ID
@@ -122,7 +114,7 @@ class MCPEnvironmentService:
         Returns:
             List of environment variable names that have values in secret manager
         """
-        configured_env_names: List[str] = []
+        configured_env_names: list[str] = []
 
         for env_name in expected_env_names:
             secret_key = self._get_secret_key(instance_id, env_name)

@@ -1,25 +1,24 @@
-"""
-Task factory for creating and managing tasks in AgentArea.
+"""Task factory for creating and managing tasks in AgentArea.
 
 This factory provides convenient methods for creating common task types
 and ensures proper integration with the event system for agent execution.
 """
 
-from datetime import datetime, UTC
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
-from agentarea.modules.tasks.domain.models import (
-    Task,
-    TaskType,
-    TaskPriority,
-    TaskComplexity,
-    AgentCapability,
-    TaskTemplate,
-    MCPToolReference,
-    TaskResource,
-)
 from agentarea.common.utils.types import TaskState, TaskStatus
+from agentarea.modules.tasks.domain.models import (
+    AgentCapability,
+    MCPToolReference,
+    Task,
+    TaskComplexity,
+    TaskPriority,
+    TaskResource,
+    TaskTemplate,
+    TaskType,
+)
 
 
 class TaskFactory:
@@ -29,14 +28,13 @@ class TaskFactory:
     def create_simple_task(
         title: str,
         description: str,
-        agent_id: Optional[UUID] = None,
+        agent_id: UUID | None = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
         task_type: TaskType = TaskType.ANALYSIS,
-        parameters: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Task:
         """Create a simple task ready for agent execution."""
-
         task = Task(
             title=title,
             description=description,
@@ -59,12 +57,11 @@ class TaskFactory:
         description: str,
         mcp_server_id: str,
         tool_name: str,
-        agent_id: Optional[UUID] = None,
-        tool_configuration: Optional[Dict[str, Any]] = None,
+        agent_id: UUID | None = None,
+        tool_configuration: dict[str, Any] | None = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
     ) -> Task:
         """Create a task for MCP tool integration."""
-
         mcp_tool = MCPToolReference(
             server_id=mcp_server_id, tool_name=tool_name, configuration=tool_configuration or {}
         )
@@ -93,7 +90,6 @@ class TaskFactory:
     @staticmethod
     def create_test_task(agent_id: UUID) -> Task:
         """Create a simple test task for agent execution testing."""
-
         task = Task(
             title="Тест агента",
             description="Простая задача для тестирования работы агента. Агент должен ответить 'Задача выполнена успешно!'",
@@ -118,11 +114,10 @@ class TaskFactory:
         title: str,
         description: str,
         primary_agent_id: UUID,
-        collaborating_agents: List[UUID],
+        collaborating_agents: list[UUID],
         priority: TaskPriority = TaskPriority.HIGH,
     ) -> Task:
         """Create a task that requires multiple agents to collaborate."""
-
         task = Task(
             title=title,
             description=description,
@@ -153,12 +148,11 @@ class TaskFactory:
     def create_workflow_task(
         title: str,
         description: str,
-        steps: List[Dict[str, Any]],
-        agent_id: Optional[UUID] = None,
+        steps: list[dict[str, Any]],
+        agent_id: UUID | None = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
     ) -> Task:
         """Create a workflow task with multiple steps."""
-
         task = Task(
             title=title,
             description=description,

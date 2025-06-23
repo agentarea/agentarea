@@ -1,17 +1,17 @@
-"""
-Task domain models for AgentArea platform.
+"""Task domain models for AgentArea platform.
 
 These models represent the core task entities that enable AI agents to collaborate,
 execute workflows, and integrate with MCP (Model Context Protocol) tools.
 """
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
+
 from pydantic import BaseModel, Field
 
-from agentarea.common.utils.types import TaskState, TaskStatus, Message, TextPart
+from agentarea.common.utils.types import Message, TaskState, TaskStatus, TextPart
 
 
 class TaskPriority(str, Enum):
@@ -81,8 +81,8 @@ class MCPToolReference(BaseModel):
 
     server_id: str
     tool_name: str
-    version: Optional[str] = None
-    configuration: Dict[str, Any] = Field(default_factory=dict)
+    version: str | None = None
+    configuration: dict[str, Any] = Field(default_factory=dict)
 
 
 class TaskDependency(BaseModel):
@@ -90,36 +90,36 @@ class TaskDependency(BaseModel):
 
     task_id: str
     dependency_type: str  # "prerequisite", "parallel", "conditional"
-    condition: Optional[Dict[str, Any]] = None
+    condition: dict[str, Any] | None = None
 
 
 class TaskResource(BaseModel):
     """Resources required or allocated for task execution."""
 
-    cpu_limit: Optional[float] = None
-    memory_limit: Optional[int] = None  # MB
-    timeout: Optional[int] = None  # seconds
-    max_retries: Optional[int] = 3
-    mcp_tools: List[MCPToolReference] = Field(default_factory=list)
+    cpu_limit: float | None = None
+    memory_limit: int | None = None  # MB
+    timeout: int | None = None  # seconds
+    max_retries: int | None = 3
+    mcp_tools: list[MCPToolReference] = Field(default_factory=list)
 
 
 class TaskMetrics(BaseModel):
     """Performance metrics for task execution."""
 
-    execution_time: Optional[float] = None  # seconds
-    cpu_usage: Optional[float] = None
-    memory_usage: Optional[int] = None  # MB
-    tool_calls: Optional[int] = None
-    agent_switches: Optional[int] = None
-    error_count: Optional[int] = None
+    execution_time: float | None = None  # seconds
+    cpu_usage: float | None = None
+    memory_usage: int | None = None  # MB
+    tool_calls: int | None = None
+    agent_switches: int | None = None
+    error_count: int | None = None
 
 
 class TaskCollaboration(BaseModel):
     """Information about agent collaboration on this task."""
 
     primary_agent_id: UUID
-    collaborating_agents: List[UUID] = Field(default_factory=list)
-    handoff_history: List[Dict[str, Any]] = Field(default_factory=list)
+    collaborating_agents: list[UUID] = Field(default_factory=list)
+    handoff_history: list[dict[str, Any]] = Field(default_factory=list)
     collaboration_type: str = "sequential"  # "sequential", "parallel", "hierarchical"
 
 
@@ -128,11 +128,11 @@ class TaskInput(BaseModel):
 
     input_type: str
     prompt: str
-    input_schema: Dict[str, Any] = Field(default_factory=dict)
-    timeout: Optional[int] = None
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    timeout: int | None = None
     required: bool = True
-    provided_value: Optional[Any] = None
-    provided_at: Optional[datetime] = None
+    provided_value: Any | None = None
+    provided_at: datetime | None = None
 
 
 class TaskArtifact(BaseModel):
@@ -142,16 +142,15 @@ class TaskArtifact(BaseModel):
     type: str
     name: str
     content: Any
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    created_by: Optional[UUID] = None  # Agent ID
-    size: Optional[int] = None  # bytes
-    mime_type: Optional[str] = None
+    created_by: UUID | None = None  # Agent ID
+    size: int | None = None  # bytes
+    mime_type: str | None = None
 
 
 class Task(BaseModel):
-    """
-    Core task entity for the AgentArea platform.
+    """Core task entity for the AgentArea platform.
 
     Represents a unit of work that can be executed by AI agents,
     supporting MCP tool integration and agent-to-agent collaboration.
@@ -159,8 +158,8 @@ class Task(BaseModel):
 
     # Core identification
     id: str = Field(default_factory=lambda: str(uuid4()))
-    session_id: Optional[str] = None
-    parent_task_id: Optional[str] = None
+    session_id: str | None = None
+    parent_task_id: str | None = None
 
     # Task definition
     title: str
@@ -170,44 +169,44 @@ class Task(BaseModel):
     complexity: TaskComplexity = TaskComplexity.MODERATE
 
     # Agent assignment
-    assigned_agent_id: Optional[UUID] = None
-    required_capabilities: List[AgentCapability] = Field(default_factory=list)
-    collaboration: Optional[TaskCollaboration] = None
+    assigned_agent_id: UUID | None = None
+    required_capabilities: list[AgentCapability] = Field(default_factory=list)
+    collaboration: TaskCollaboration | None = None
 
     # Execution state
     status: TaskStatus
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    result: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
-    error_code: Optional[str] = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error_message: str | None = None
+    error_code: str | None = None
 
     # Task relationships
-    dependencies: List[TaskDependency] = Field(default_factory=list)
-    subtasks: List[str] = Field(default_factory=list)  # Task IDs
+    dependencies: list[TaskDependency] = Field(default_factory=list)
+    subtasks: list[str] = Field(default_factory=list)  # Task IDs
 
     # Resources and execution
     resources: TaskResource = Field(default_factory=TaskResource)
-    metrics: Optional[TaskMetrics] = None
+    metrics: TaskMetrics | None = None
 
     # Input/Output
-    inputs: List[TaskInput] = Field(default_factory=list)
-    artifacts: List[TaskArtifact] = Field(default_factory=list)
-    history: List[Message] = Field(default_factory=list)
+    inputs: list[TaskInput] = Field(default_factory=list)
+    artifacts: list[TaskArtifact] = Field(default_factory=list)
+    history: list[Message] = Field(default_factory=list)
 
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     # Metadata
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    tags: List[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
 
     # Business context
-    created_by: Optional[str] = None  # User ID
-    organization_id: Optional[str] = None
-    workspace_id: Optional[str] = None
+    created_by: str | None = None  # User ID
+    organization_id: str | None = None
+    workspace_id: str | None = None
 
     def is_pending(self) -> bool:
         """Check if task is pending execution."""
@@ -257,11 +256,11 @@ class Task(BaseModel):
                 return True
         return False
 
-    def get_pending_inputs(self) -> List[TaskInput]:
+    def get_pending_inputs(self) -> list[TaskInput]:
         """Get list of pending input requirements."""
         return [inp for inp in self.inputs if inp.required and inp.provided_value is None]
 
-    def assign_to_agent(self, agent_id: UUID, assigned_by: Optional[str] = None) -> None:
+    def assign_to_agent(self, agent_id: UUID, assigned_by: str | None = None) -> None:
         """Assign task to an agent."""
         self.assigned_agent_id = agent_id
         self.updated_at = datetime.now(UTC)
@@ -274,7 +273,7 @@ class Task(BaseModel):
             {"assigned_at": datetime.now(UTC).isoformat(), "assigned_by": assigned_by}
         )
 
-    def add_collaborating_agent(self, agent_id: UUID, handoff_reason: Optional[str] = None) -> None:
+    def add_collaborating_agent(self, agent_id: UUID, handoff_reason: str | None = None) -> None:
         """Add a collaborating agent to the task."""
         if self.collaboration is None:
             if self.assigned_agent_id:
@@ -294,7 +293,7 @@ class Task(BaseModel):
             self.collaboration.handoff_history.append(handoff_record)
             self.updated_at = datetime.now(UTC)
 
-    def update_status(self, new_state: TaskState, message: Optional[str] = None) -> None:
+    def update_status(self, new_state: TaskState, message: str | None = None) -> None:
         """Update task status."""
         self.status = TaskStatus(
             state=new_state,
@@ -319,7 +318,7 @@ class Task(BaseModel):
         self.resources.mcp_tools.append(tool_ref)
         self.updated_at = datetime.now(UTC)
 
-    def get_execution_summary(self) -> Dict[str, Any]:
+    def get_execution_summary(self) -> dict[str, Any]:
         """Get a summary of task execution."""
         return {
             "id": self.id,
@@ -339,8 +338,7 @@ class Task(BaseModel):
 
 
 class TaskWorkflow(BaseModel):
-    """
-    Represents a workflow composed of multiple tasks.
+    """Represents a workflow composed of multiple tasks.
 
     Enables complex business process automation across multiple agents and systems.
     """
@@ -351,8 +349,8 @@ class TaskWorkflow(BaseModel):
     version: str = "1.0.0"
 
     # Workflow definition
-    tasks: List[str] = Field(default_factory=list)  # Task IDs in execution order
-    task_definitions: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    tasks: list[str] = Field(default_factory=list)  # Task IDs in execution order
+    task_definitions: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     # Execution state
     status: str = "draft"  # draft, active, paused, completed, failed
@@ -366,10 +364,10 @@ class TaskWorkflow(BaseModel):
     # Metadata
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    created_by: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_by: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    def add_task(self, task_definition: Dict[str, Any]) -> str:
+    def add_task(self, task_definition: dict[str, Any]) -> str:
         """Add a task to the workflow."""
         task_id = str(uuid4())
         self.tasks.append(task_id)
@@ -377,7 +375,7 @@ class TaskWorkflow(BaseModel):
         self.updated_at = datetime.now(UTC)
         return task_id
 
-    def get_next_task(self) -> Optional[str]:
+    def get_next_task(self) -> str | None:
         """Get the next task to execute."""
         if self.current_task_index < len(self.tasks):
             return self.tasks[self.current_task_index]
@@ -393,8 +391,7 @@ class TaskWorkflow(BaseModel):
 
 
 class TaskTemplate(BaseModel):
-    """
-    Template for creating standardized tasks.
+    """Template for creating standardized tasks.
 
     Enables reusable task patterns for common AgentArea workflows.
     """
@@ -408,21 +405,21 @@ class TaskTemplate(BaseModel):
     task_type: TaskType
     priority: TaskPriority = TaskPriority.MEDIUM
     complexity: TaskComplexity = TaskComplexity.MODERATE
-    required_capabilities: List[AgentCapability] = Field(default_factory=list)
+    required_capabilities: list[AgentCapability] = Field(default_factory=list)
 
     # Default configuration
-    default_parameters: Dict[str, Any] = Field(default_factory=dict)
-    parameter_schema: Dict[str, Any] = Field(default_factory=dict)
+    default_parameters: dict[str, Any] = Field(default_factory=dict)
+    parameter_schema: dict[str, Any] = Field(default_factory=dict)
     default_resources: TaskResource = Field(default_factory=TaskResource)
 
     # Template metadata
     version: str = "1.0.0"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    created_by: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
+    created_by: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
     def create_task(
-        self, title: str, description: str, parameters: Optional[Dict[str, Any]] = None
+        self, title: str, description: str, parameters: dict[str, Any] | None = None
     ) -> Task:
         """Create a task instance from this template."""
         task_params = self.default_parameters.copy()

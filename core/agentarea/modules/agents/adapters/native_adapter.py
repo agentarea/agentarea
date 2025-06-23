@@ -1,27 +1,26 @@
-"""
-Native Adapter
+"""Native Adapter.
 
 This adapter handles internal agents that use our native chat format
 without requiring protocol translation.
 """
 
-from typing import Dict, Any, Optional, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
-from .base import AgentAdapter, ChatMessage, ChatResponse, AgentTask, AgentTaskResponse
+from .base import AgentAdapter, AgentTask, AgentTaskResponse, ChatMessage, ChatResponse
 
 
 class NativeAdapter(AgentAdapter):
-    """Adapter for native internal agents"""
+    """Adapter for native internal agents."""
 
-    def __init__(self, agent_config: Dict[str, Any]):
+    def __init__(self, agent_config: dict[str, Any]):
         super().__init__(agent_config)
         self.agent_instance = agent_config.get("instance")
 
     async def send_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AgentTaskResponse:
-        """Send task to native agent"""
-
+        """Send task to native agent."""
         # Convert task to chat message for backward compatibility
         chat_message = ChatMessage(content=task.content, metadata=task.metadata)
         chat_response = await self.send_message(chat_message, session_id)
@@ -34,18 +33,16 @@ class NativeAdapter(AgentAdapter):
         )
 
     def stream_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream task response from native agent"""
-
+        """Stream task response from native agent."""
         chat_message = ChatMessage(content=task.content, metadata=task.metadata)
         return self.stream_message(chat_message, session_id)
 
     async def send_message(
-        self, message: ChatMessage, context_id: Optional[str] = None
+        self, message: ChatMessage, context_id: str | None = None
     ) -> ChatResponse:
-        """Send message to native agent"""
-
+        """Send message to native agent."""
         if not self.agent_instance:
             raise ValueError("Native agent instance not provided")
 
@@ -65,17 +62,15 @@ class NativeAdapter(AgentAdapter):
         )
 
     def stream_message(
-        self, message: ChatMessage, context_id: Optional[str] = None
+        self, message: ChatMessage, context_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream response from native agent"""
-
+        """Stream response from native agent."""
         return self._stream_message_impl(message, context_id)
 
     async def _stream_message_impl(
-        self, message: ChatMessage, context_id: Optional[str] = None
+        self, message: ChatMessage, context_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Implementation of stream message"""
-
+        """Implementation of stream message."""
         if not self.agent_instance:
             raise ValueError("Native agent instance not provided")
 
@@ -85,9 +80,8 @@ class NativeAdapter(AgentAdapter):
         ):
             yield chunk
 
-    async def get_capabilities(self) -> Dict[str, Any]:
-        """Get native agent capabilities"""
-
+    async def get_capabilities(self) -> dict[str, Any]:
+        """Get native agent capabilities."""
         if self.agent_instance and hasattr(self.agent_instance, "get_capabilities"):
             return await self.agent_instance.get_capabilities()
 
@@ -98,13 +92,11 @@ class NativeAdapter(AgentAdapter):
         }
 
     async def health_check(self) -> bool:
-        """Check if native agent is available"""
-
+        """Check if native agent is available."""
         return self.agent_instance is not None
 
-    async def create_agent(self, agent_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new native agent instance"""
-
+    async def create_agent(self, agent_spec: dict[str, Any]) -> dict[str, Any]:
+        """Create a new native agent instance."""
         # For native agents, we would typically instantiate a new agent class
         # This is a placeholder implementation
         raise NotImplementedError("Native agent creation not implemented")

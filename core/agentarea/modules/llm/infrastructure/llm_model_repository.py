@@ -1,4 +1,3 @@
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, select
@@ -13,7 +12,7 @@ class LLMModelRepository(BaseRepository[LLMModel]):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get(self, id: UUID) -> Optional[LLMModel]:
+    async def get(self, id: UUID) -> LLMModel | None:
         result = await self.session.execute(
             select(LLMModel).options(selectinload(LLMModel.provider)).where(LLMModel.id == id)
         )
@@ -21,10 +20,10 @@ class LLMModelRepository(BaseRepository[LLMModel]):
 
     async def list(
         self,
-        status: Optional[str] = None,
-        is_public: Optional[bool] = None,
-        provider: Optional[str] = None,
-    ) -> List[LLMModel]:
+        status: str | None = None,
+        is_public: bool | None = None,
+        provider: str | None = None,
+    ) -> list[LLMModel]:
         query = select(LLMModel).options(selectinload(LLMModel.provider))
 
         conditions = []

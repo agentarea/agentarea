@@ -1,5 +1,4 @@
 from uuid import UUID
-from typing import Optional
 
 from agentarea.common.base.service import BaseCrudService
 from agentarea.common.events.broker import EventBroker
@@ -103,7 +102,7 @@ class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
     ) -> list[LLMModelInstance]:
         return await self.repository.list(model_id=model_id, status=status, is_public=is_public)
 
-    async def get(self, id: UUID) -> Optional[LLMModelInstance]:
+    async def get(self, id: UUID) -> LLMModelInstance | None:
         """Get LLM model instance with separate session to avoid transaction conflicts."""
         async with self.db.get_db() as session:
             repo = LLMModelInstanceRepository(session)

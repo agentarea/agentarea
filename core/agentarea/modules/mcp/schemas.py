@@ -1,10 +1,8 @@
-"""
-MCP configuration and request schemas.
-"""
+"""MCP configuration and request schemas."""
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -38,13 +36,13 @@ class MCPServerTemplate(str, Enum):
 class MCPServerConfig(BaseModel):
     """MCP server configuration model."""
 
-    id: Optional[UUID] = Field(None, description="Configuration ID (auto-generated)")
+    id: UUID | None = Field(None, description="Configuration ID (auto-generated)")
     agent_id: UUID = Field(..., description="Associated agent ID")
     service_name: str = Field(..., description="Unique service name")
     template: MCPServerTemplate = Field(..., description="Server template to use")
-    environment: Dict[str, Any] = Field(default_factory=dict, description="Environment variables")
+    environment: dict[str, Any] = Field(default_factory=dict, description="Environment variables")
     replicas: int = Field(default=1, ge=1, le=10, description="Number of replicas")
-    resources: Optional[Dict[str, str]] = Field(None, description="Resource limits")
+    resources: dict[str, str] | None = Field(None, description="Resource limits")
 
     class Config:
         """Pydantic config."""
@@ -58,11 +56,11 @@ class MCPServerDeployment(BaseModel):
     id: UUID = Field(..., description="Deployment ID")
     config_id: UUID = Field(..., description="Configuration ID")
     status: MCPServerStatus = Field(..., description="Current deployment status")
-    runtime_id: Optional[str] = Field(None, description="Container/Pod runtime ID")
-    endpoint: Optional[str] = Field(None, description="Public endpoint URL")
-    internal_endpoint: Optional[str] = Field(None, description="Internal service endpoint")
-    health_check_url: Optional[str] = Field(None, description="Health check endpoint")
-    error: Optional[str] = Field(None, description="Error message if failed")
+    runtime_id: str | None = Field(None, description="Container/Pod runtime ID")
+    endpoint: str | None = Field(None, description="Public endpoint URL")
+    internal_endpoint: str | None = Field(None, description="Internal service endpoint")
+    health_check_url: str | None = Field(None, description="Health check endpoint")
+    error: str | None = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Deployment creation time")
     updated_at: datetime = Field(..., description="Last update time")
 
@@ -81,9 +79,9 @@ class MCPServerCreateRequest(BaseModel):
     agent_id: UUID = Field(..., description="Agent ID")
     service_name: str = Field(..., min_length=1, max_length=50, description="Service name")
     template: MCPServerTemplate = Field(..., description="Server template")
-    environment: Dict[str, Any] = Field(default_factory=dict, description="Environment variables")
+    environment: dict[str, Any] = Field(default_factory=dict, description="Environment variables")
     replicas: int = Field(default=1, ge=1, le=10, description="Number of replicas")
-    resources: Optional[Dict[str, str]] = Field(None, description="Resource limits")
+    resources: dict[str, str] | None = Field(None, description="Resource limits")
 
 
 class MCPServerListResponse(BaseModel):
@@ -98,6 +96,6 @@ class MCPServerResponse(BaseModel):
 
     success: bool = Field(..., description="Operation success status")
     message: str = Field(..., description="Response message")
-    config_id: Optional[UUID] = Field(None, description="Configuration ID")
-    deployment_id: Optional[UUID] = Field(None, description="Deployment ID")
-    server: Optional[MCPServerDeployment] = Field(None, description="Server deployment info")
+    config_id: UUID | None = Field(None, description="Configuration ID")
+    deployment_id: UUID | None = Field(None, description="Deployment ID")
+    server: MCPServerDeployment | None = Field(None, description="Server deployment info")

@@ -1,19 +1,17 @@
 from fastapi import APIRouter
 
 # Unified protocol endpoint (A2A compliant + REST API)
-from . import protocol
-
 # Unified chat interface (consolidates A2A and REST chat functionality)
-from . import chat
-
 # Core API modules
 from . import (
     agents,
     agents_tasks,
+    chat,
     llm_model_instances,
     llm_models_specifications,
     mcp_server_instances,
     mcp_servers_specifications,
+    protocol,
 )
 
 # Removed unified LLM router - using proper service patterns instead

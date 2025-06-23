@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 from functools import lru_cache
@@ -13,9 +14,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import Session, sessionmaker
-
-import logging
-from typing import Optional
 
 # Configure logging
 logging.basicConfig(
@@ -151,7 +149,7 @@ class MCPManagerSettings(BaseSettings):
     """MCP Manager service configuration."""
 
     base_url: str = "http://localhost:8001"
-    api_key: Optional[str] = None
+    api_key: str | None = None
     timeout: int = 30
     max_retries: int = 3
 

@@ -4,13 +4,13 @@ Simple integration tests for MCPServerRepository.
 Tests all CRUD operations and business logic methods on the MCPServerRepository.
 """
 
+from uuid import uuid4
+
 import pytest
-from datetime import datetime, UTC
-from uuid import uuid4, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentarea.modules.mcp.infrastructure.repository import MCPServerRepository
 from agentarea.modules.mcp.domain.models import MCPServer
+from agentarea.modules.mcp.infrastructure.repository import MCPServerRepository
 
 
 class TestMCPServerRepository:

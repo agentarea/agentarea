@@ -1,19 +1,11 @@
-"""
-MCP event handlers using existing EventBroker architecture.
-"""
+"""MCP event handlers using existing EventBroker architecture."""
 
 import logging
-from typing import Any, Dict
-from uuid import UUID
+from typing import Any
 
 from faststream.redis.fastapi import RedisRouter
 
 from agentarea.modules.mcp.events import MCPEventType
-from agentarea.modules.mcp.domain.events import (
-    MCPServerInstanceUpdated,
-    MCPServerInstanceStarted,
-    MCPServerInstanceStopped,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +14,7 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
     """Register MCP event handlers with the FastStream router."""
 
     @router.subscriber(MCPEventType.SERVER_CREATING.value)
-    async def handle_server_creating_event(message: Dict[str, Any]) -> None:
+    async def handle_server_creating_event(message: dict[str, Any]) -> None:
         """Handle MCP server creating events from infrastructure."""
         logger.info(f"Received MCPServerCreating event: {message}")
 
@@ -37,8 +29,6 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
                 return
 
             # Update instance status to "creating"
-            from agentarea.api.deps.services import get_mcp_integration_service
-            from agentarea.api.deps.events import get_event_broker
 
             # Note: In real implementation, we'd properly inject dependencies
             # For now, this is a placeholder for the event handling pattern
@@ -48,7 +38,7 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
             logger.error(f"Failed to handle server creating event: {e}")
 
     @router.subscriber(MCPEventType.SERVER_READY.value)
-    async def handle_server_ready_event(message: Dict[str, Any]) -> None:
+    async def handle_server_ready_event(message: dict[str, Any]) -> None:
         """Handle MCP server ready events from infrastructure."""
         logger.info(f"Received MCPServerReady event: {message}")
 
@@ -67,7 +57,7 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
             logger.error(f"Failed to handle server ready event: {e}")
 
     @router.subscriber(MCPEventType.SERVER_FAILED.value)
-    async def handle_server_failed_event(message: Dict[str, Any]) -> None:
+    async def handle_server_failed_event(message: dict[str, Any]) -> None:
         """Handle MCP server failed events from infrastructure."""
         logger.info(f"Received MCPServerFailed event: {message}")
 
@@ -86,7 +76,7 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
             logger.error(f"Failed to handle server failed event: {e}")
 
     @router.subscriber(MCPEventType.SERVER_STOPPED.value)
-    async def handle_server_stopped_event(message: Dict[str, Any]) -> None:
+    async def handle_server_stopped_event(message: dict[str, Any]) -> None:
         """Handle MCP server stopped events from infrastructure."""
         logger.info(f"Received MCPServerStopped event: {message}")
 

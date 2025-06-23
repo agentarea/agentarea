@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Any
 from uuid import UUID
 
 from agentarea.common.events.broker import EventBroker
@@ -11,8 +11,8 @@ from agentarea.modules.mcp.application.service import MCPServerInstanceService
 
 from ..infrastructure.repository import AgentRepository
 from .agent_builder_service import AgentBuilderService
-from .agent_runner_service import AgentRunnerService
 from .agent_communication_service import AgentCommunicationService
+from .agent_runner_service import AgentRunnerService
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +73,8 @@ class TaskExecutionService:
         agent_id: UUID,
         description: str,
         user_id: str | None = None,
-        task_parameters: Dict[str, Any] | None = None,
-        metadata: Dict[str, Any] | None = None,
+        task_parameters: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Execute a task with the specified agent.
 
@@ -133,8 +133,8 @@ class TaskExecutionService:
         agent_id: UUID,
         description: str,
         user_id: str | None = None,
-        task_parameters: Dict[str, Any] | None = None,
-        metadata: Dict[str, Any] | None = None,
+        task_parameters: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "asyncio.Task[None]":
         """Execute a task asynchronously and return the task handle.
 
@@ -151,7 +151,7 @@ class TaskExecutionService:
             )
         )
 
-    async def get_agent_config(self, agent_id: UUID) -> Dict[str, Any] | None:
+    async def get_agent_config(self, agent_id: UUID) -> dict[str, Any] | None:
         """Get agent configuration for the specified agent."""
         if not self.agent_builder_service:
             logger.error("Agent builder service not available - cannot get agent config")
@@ -164,7 +164,7 @@ class TaskExecutionService:
             return ["Agent builder service not available"]
         return await self.agent_builder_service.validate_agent_config(agent_id)
 
-    async def get_agent_capabilities(self, agent_id: UUID) -> Dict[str, Any]:
+    async def get_agent_capabilities(self, agent_id: UUID) -> dict[str, Any]:
         """Get agent capabilities."""
         if not self.agent_builder_service:
             logger.error("Agent builder service not available - cannot get agent capabilities")

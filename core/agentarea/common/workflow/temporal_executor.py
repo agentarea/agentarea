@@ -7,12 +7,13 @@ while maintaining the clean abstraction layer.
 import asyncio
 import logging
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any
 
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import TemporalError
 
+from agentarea.common.utils.types import Artifact, Message, TextPart
 from agentarea.common.workflow.executor import (
     TaskExecutorInterface,
     WorkflowConfig,
@@ -20,14 +21,12 @@ from agentarea.common.workflow.executor import (
     WorkflowResult,
     WorkflowStatus,
 )
-from agentarea.common.utils.types import Message, TextPart, Artifact
 
 logger = logging.getLogger(__name__)
 
 
-def _extract_a2a_message_from_workflow_result(result: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Extract A2A-compatible message from workflow result.
+def _extract_a2a_message_from_workflow_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Extract A2A-compatible message from workflow result.
 
     Converts workflow events into A2A Message format with proper parts structure.
     """

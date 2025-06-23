@@ -7,7 +7,7 @@ and retrieving results using the A2A protocol, with Google ADK integration.
 import asyncio
 import logging
 import uuid
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from google.adk.agents import LlmAgent
@@ -196,7 +196,7 @@ class AgentCommunicationService:
         # Execute the task using AgentRunnerService
         try:
             # Start the task execution in the background
-            task_execution = asyncio.create_task(
+            asyncio.create_task(
                 self._execute_task_with_events(
                     agent_id=agent_id, task_id=task_id, message=message, metadata=task_metadata
                 )

@@ -1,5 +1,4 @@
-"""
-Local file-based secret manager implementation.
+"""Local file-based secret manager implementation.
 
 This implementation stores secrets in a local JSON file for development purposes.
 For production, use external secret management services like Infisical, AWS Secrets Manager, etc.
@@ -9,7 +8,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional
 
 from .secret_manager import BaseSecretManager
 
@@ -17,29 +15,27 @@ logger = logging.getLogger(__name__)
 
 
 class LocalSecretManager(BaseSecretManager):
-    """
-    Local file-based secret manager for development.
+    """Local file-based secret manager for development.
 
     Stores secrets in a local JSON file with basic encryption.
     NOT suitable for production use.
     """
 
     def __init__(self, secrets_file: str = ".secrets.json"):
-        """
-        Initialize local secret manager.
+        """Initialize local secret manager.
 
         Args:
             secrets_file: Path to the secrets file (relative to current directory)
         """
         self.secrets_file = Path(secrets_file)
-        self._secrets: Dict[str, str] = {}
+        self._secrets: dict[str, str] = {}
         self._load_secrets()
 
     def _load_secrets(self) -> None:
         """Load secrets from the local file."""
         try:
             if self.secrets_file.exists():
-                with open(self.secrets_file, "r") as f:
+                with open(self.secrets_file) as f:
                     self._secrets = json.load(f)
                 logger.info(f"Loaded {len(self._secrets)} secrets from {self.secrets_file}")
             else:
@@ -67,7 +63,7 @@ class LocalSecretManager(BaseSecretManager):
         except Exception as e:
             logger.error(f"Failed to save secrets to {self.secrets_file}: {e}")
 
-    async def get_secret(self, secret_name: str) -> Optional[str]:
+    async def get_secret(self, secret_name: str) -> str | None:
         """Get a secret value."""
         value = self._secrets.get(secret_name)
         if value is not None:

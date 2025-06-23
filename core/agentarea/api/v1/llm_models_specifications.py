@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -95,11 +94,11 @@ async def get_llm_model(
     return LLMModelResponse.from_domain(model)
 
 
-@router.get("/", response_model=List[LLMModelResponse])
+@router.get("/", response_model=list[LLMModelResponse])
 async def list_llm_models(
-    status: Optional[str] = None,
-    is_public: Optional[bool] = None,
-    provider: Optional[str] = None,
+    status: str | None = None,
+    is_public: bool | None = None,
+    provider: str | None = None,
     llm_model_service: LLMModelService = Depends(get_llm_model_service),
 ):
     models = await llm_model_service.list(status=status, is_public=is_public, provider=provider)

@@ -4,12 +4,12 @@ Integration tests for SQLAlchemyTaskRepository.
 Tests all CRUD operations and custom task-specific methods.
 """
 
-import pytest
-import pytest_asyncio
 from uuid import uuid4
 
+import pytest
+
+from agentarea.modules.tasks.domain.models import TaskStatus
 from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
-from agentarea.modules.tasks.domain.models import Task, TaskStatus
 
 
 class TestTaskRepository:

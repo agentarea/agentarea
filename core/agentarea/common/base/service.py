@@ -11,21 +11,21 @@ class BaseCrudService(Generic[T]):
         self.repository = repository
 
     async def get(self, id: UUID) -> T | None:
-        """Get an entity by ID"""
+        """Get an entity by ID."""
         return await self.repository.get(id)
 
     async def list(self) -> list[T]:
-        """List all entities"""
+        """List all entities."""
         return await self.repository.list()
 
     async def create(self, entity: T) -> T:
-        """Create a new entity"""
+        """Create a new entity."""
         return await self.repository.create(entity)
 
     async def update(self, entity: T) -> T:
-        """Update an existing entity"""
+        """Update an existing entity."""
         return await self.repository.update(entity)
 
     async def delete(self, id: UUID) -> bool:
-        """Delete an entity by ID"""
+        """Delete an entity by ID."""
         return await self.repository.delete(id)

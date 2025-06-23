@@ -1,10 +1,11 @@
 """Dependency injection for task execution services."""
 
 from typing import Annotated
+
 from fastapi import Depends
+from google.adk.sessions import BaseSessionService
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentarea.common.infrastructure.database import get_db_session
 from agentarea.api.deps.events import get_event_broker
 from agentarea.api.deps.services import (
     get_llm_model_instance_service,
@@ -12,16 +13,16 @@ from agentarea.api.deps.services import (
 )
 from agentarea.api.deps.session import get_session_service
 from agentarea.common.events.broker import EventBroker
-from agentarea.modules.agents.infrastructure.repository import AgentRepository
+from agentarea.common.infrastructure.database import get_db_session
 from agentarea.modules.agents.application.agent_builder_service import AgentBuilderService
-from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
 from agentarea.modules.agents.application.agent_communication_service import (
     AgentCommunicationService,
 )
+from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
 from agentarea.modules.agents.application.task_execution_service import TaskExecutionService
+from agentarea.modules.agents.infrastructure.repository import AgentRepository
 from agentarea.modules.llm.application.service import LLMModelInstanceService
 from agentarea.modules.mcp.application.service import MCPServerInstanceService
-from google.adk.sessions import BaseSessionService
 
 
 async def get_agent_repository(
@@ -66,7 +67,6 @@ class AgentServiceFactory:
         agent_builder_service: AgentBuilderService,
     ) -> tuple[AgentRunnerService, AgentCommunicationService]:
         """Create both services and wire them together to resolve circular dependency."""
-
         if self._agent_runner_service is None or self._agent_communication_service is None:
             # Create AgentRunnerService first without AgentCommunicationService
             self._agent_runner_service = AgentRunnerService(

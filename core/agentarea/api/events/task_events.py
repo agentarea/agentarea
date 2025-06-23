@@ -116,19 +116,19 @@ async def _create_agent_runner_service_with_session(db_session: AsyncSession):
     try:
         # Import dependencies
         from agentarea.api.deps.events import get_event_broker
-        from agentarea.api.deps.session import get_session_service
         from agentarea.api.deps.services import get_secret_manager
-        from agentarea.modules.agents.infrastructure.repository import AgentRepository
+        from agentarea.api.deps.session import get_session_service
         from agentarea.modules.agents.application.agent_builder_service import AgentBuilderService
         from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
+        from agentarea.modules.agents.infrastructure.repository import AgentRepository
         from agentarea.modules.llm.application.service import LLMModelInstanceService
         from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
             LLMModelInstanceRepository,
         )
         from agentarea.modules.mcp.application.service import MCPServerInstanceService
         from agentarea.modules.mcp.infrastructure.repository import (
-            MCPServerRepository,
             MCPServerInstanceRepository,
+            MCPServerRepository,
         )
 
         # Get basic dependencies

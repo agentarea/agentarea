@@ -1,15 +1,13 @@
-"""
-Task service for creating and managing tasks with automatic agent execution.
-"""
+"""Task service for creating and managing tasks with automatic agent execution."""
 
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Any
 from uuid import UUID
 
-from agentarea.modules.tasks.domain.task_factory import TaskFactory
-from agentarea.modules.tasks.domain.models import Task, TaskType, TaskPriority
 from agentarea.common.events.broker import EventBroker
 from agentarea.modules.tasks.domain.events import TaskCreated
+from agentarea.modules.tasks.domain.models import Task, TaskPriority, TaskType
+from agentarea.modules.tasks.domain.task_factory import TaskFactory
 from agentarea.modules.tasks.infrastructure.repository import TaskRepositoryInterface
 
 logger = logging.getLogger(__name__)
@@ -57,9 +55,9 @@ class TaskService:
         description: str,
         task_type: TaskType = TaskType.ANALYSIS,
         priority: TaskPriority = TaskPriority.MEDIUM,
-        parameters: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        created_by: Optional[str] = None,
+        parameters: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        created_by: str | None = None,
     ) -> Task:
         """Create a simple task without assigning it to an agent or starting execution."""
         try:
@@ -96,7 +94,7 @@ class TaskService:
         agent_id: UUID,
         task_type: TaskType = TaskType.ANALYSIS,
         priority: TaskPriority = TaskPriority.MEDIUM,
-        parameters: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any] | None = None,
     ) -> Task:
         """Create a simple task and automatically start agent execution."""
         try:
@@ -153,7 +151,7 @@ class TaskService:
         mcp_server_id: str,
         tool_name: str,
         agent_id: UUID,
-        tool_configuration: Optional[Dict[str, Any]] = None,
+        tool_configuration: dict[str, Any] | None = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
     ) -> Task:
         """Create an MCP integration task and start agent execution."""
@@ -189,28 +187,22 @@ class TaskService:
 
     async def get_tasks_by_user(
         self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
-        """
-        Retrieve tasks created by a specific user.
-        """
+    ) -> list[Task]:
+        """Retrieve tasks created by a specific user."""
         logger.debug("Fetching tasks for user %s (limit=%s offset=%s)", user_id, limit, offset)
         return await self.task_repository.get_by_user_id(user_id, limit, offset)
 
     async def get_tasks_by_agent(
         self, agent_id: UUID, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
-        """
-        Retrieve tasks assigned to a specific agent.
-        """
+    ) -> list[Task]:
+        """Retrieve tasks assigned to a specific agent."""
         logger.debug("Fetching tasks for agent %s (limit=%s offset=%s)", agent_id, limit, offset)
         return await self.task_repository.get_by_agent_id(agent_id, limit, offset)
 
     async def assign_task_to_agent(
-        self, task_id: str, agent_id: UUID, assigned_by: Optional[str] = None
+        self, task_id: str, agent_id: UUID, assigned_by: str | None = None
     ) -> Task:
-        """
-        Assign an existing task to an agent.
-        """
+        """Assign an existing task to an agent."""
         logger.info(
             "Assigning task %s to agent %s (assigned_by=%s)", task_id, agent_id, assigned_by
         )
@@ -225,9 +217,7 @@ class TaskService:
         await self.task_repository.update(task)
         return task
 
-    async def get_pending_tasks(self, limit: int = 20) -> List[Task]:
-        """
-        Retrieve tasks that are pending assignment to an agent.
-        """
+    async def get_pending_tasks(self, limit: int = 20) -> list[Task]:
+        """Retrieve tasks that are pending assignment to an agent."""
         logger.debug("Fetching up to %s pending tasks", limit)
         return await self.task_repository.get_pending_tasks(limit)

@@ -1,24 +1,21 @@
-"""
-MCP API routes for server instance management.
-"""
+"""MCP API routes for server instance management."""
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentarea.common.infrastructure.database import get_db_session
 from agentarea.api.deps.events import EventBrokerDep, get_event_broker
-
+from agentarea.common.infrastructure.database import get_db_session
 from agentarea.modules.mcp.application.service import MCPServerInstanceService, MCPServerService
+from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea.modules.mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +27,12 @@ router = APIRouter()
 class MCPServerInstanceCreate(BaseModel):
     """Schema for creating a new MCP server instance."""
 
-    server_spec_id: Optional[UUID] = Field(
+    server_spec_id: UUID | None = Field(
         None, description="ID of the MCPServer specification to use."
     )
     name: str = Field(..., description="A unique name for the instance.")
-    description: Optional[str] = Field(None, description="Optional description for the instance.")
-    json_spec: Dict[str, Any] = Field(..., description="Container specification as JSON.")
+    description: str | None = Field(None, description="Optional description for the instance.")
+    json_spec: dict[str, Any] = Field(..., description="Container specification as JSON.")
 
 
 class MCPServerInstanceResponse(BaseModel):
@@ -43,9 +40,9 @@ class MCPServerInstanceResponse(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
-    server_spec_id: Optional[str]
-    json_spec: Dict[str, Any]
+    description: str | None
+    server_spec_id: str | None
+    json_spec: dict[str, Any]
     status: str
     created_at: str
     updated_at: str
@@ -85,7 +82,7 @@ async def get_mcp_server_service(
 # --- API Routes ---
 
 
-@router.get("/v1/mcp-server-instances/", response_model=List[MCPServerInstanceResponse])
+@router.get("/v1/mcp-server-instances/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
     service=Depends(get_mcp_server_instance_service),
 ):

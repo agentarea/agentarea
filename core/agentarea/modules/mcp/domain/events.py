@@ -1,5 +1,5 @@
+from typing import Any
 from uuid import UUID
-from typing import Optional, Dict, Any
 
 from agentarea.common.events.base_events import DomainEvent
 
@@ -36,7 +36,7 @@ class MCPServerDeployed(DomainEvent):
 
 class MCPServerInstanceCreated(DomainEvent):
     def __init__(
-        self, instance_id: str, server_spec_id: Optional[str], name: str, json_spec: Dict[str, Any]
+        self, instance_id: str, server_spec_id: str | None, name: str, json_spec: dict[str, Any]
     ):
         super().__init__(
             instance_id=instance_id, server_spec_id=server_spec_id, name=name, json_spec=json_spec
@@ -48,7 +48,7 @@ class MCPServerInstanceCreated(DomainEvent):
 
 
 class MCPServerInstanceUpdated(DomainEvent):
-    def __init__(self, instance_id: UUID, server_spec_id: Optional[str], name: str, status: str):
+    def __init__(self, instance_id: UUID, server_spec_id: str | None, name: str, status: str):
         super().__init__()
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id
@@ -63,7 +63,7 @@ class MCPServerInstanceDeleted(DomainEvent):
 
 
 class MCPServerInstanceStarted(DomainEvent):
-    def __init__(self, instance_id: UUID, server_spec_id: Optional[str], name: str):
+    def __init__(self, instance_id: UUID, server_spec_id: str | None, name: str):
         super().__init__()
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id
@@ -71,7 +71,7 @@ class MCPServerInstanceStarted(DomainEvent):
 
 
 class MCPServerInstanceStopped(DomainEvent):
-    def __init__(self, instance_id: UUID, server_spec_id: Optional[str], name: str):
+    def __init__(self, instance_id: UUID, server_spec_id: str | None, name: str):
         super().__init__()
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id

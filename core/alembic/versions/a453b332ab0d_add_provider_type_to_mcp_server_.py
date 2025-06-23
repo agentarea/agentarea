@@ -1,4 +1,4 @@
-"""add json_spec and description, rename server_id to server_spec_id
+"""add json_spec and description, rename server_id to server_spec_id.
 
 Revision ID: a453b332ab0d
 Revises: c6d7e8f9a0b1
@@ -6,9 +6,10 @@ Create Date: 2024-12-19 12:00:00.000000
 
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "a453b332ab0d"
@@ -44,13 +45,13 @@ def upgrade() -> None:
 
     # Migrate existing data from config to json_spec
     op.execute("""
-        UPDATE mcp_server_instances 
+        UPDATE mcp_server_instances
         SET json_spec = COALESCE(config::jsonb, '{}'::jsonb)
     """)
 
     # Add endpoint_url from old column to json_spec if it exists
     op.execute("""
-        UPDATE mcp_server_instances 
+        UPDATE mcp_server_instances
         SET json_spec = json_spec::jsonb || jsonb_build_object('endpoint_url', endpoint_url)
         WHERE endpoint_url IS NOT NULL
     """)
@@ -69,7 +70,7 @@ def downgrade() -> None:
 
     # Migrate data back from json_spec
     op.execute("""
-        UPDATE mcp_server_instances 
+        UPDATE mcp_server_instances
         SET config = json_spec,
             endpoint_url = json_spec->>'endpoint_url'
     """)

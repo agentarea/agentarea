@@ -1,11 +1,10 @@
-"""Main FastAPI application for AgentArea"""
+"""Main FastAPI application for AgentArea."""
 
 # from agentarea.api.events.mcp_events import register_mcp_event_handlers
 # from agentarea.config import get_settings
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
 from agentarea.api.deps.services import get_event_broker, get_secret_manager
@@ -96,5 +95,5 @@ app.include_router(events_router)
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint."""
     return {"message": "AgentArea API is running."}

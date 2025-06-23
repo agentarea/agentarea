@@ -1,4 +1,4 @@
-"""Agent Protocol API Endpoints
+"""Agent Protocol API Endpoints.
 
 This module provides A2A protocol-compliant JSON-RPC endpoints for agent communication.
 Focused on A2A protocol compliance - use /v1/agents/{agent_id}/tasks/ for REST task operations.

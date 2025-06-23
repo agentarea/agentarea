@@ -1,10 +1,8 @@
-"""
-MCP Event schemas for event-driven architecture.
-"""
+"""MCP Event schemas for event-driven architecture."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -35,7 +33,7 @@ class MCPEventType(str, Enum):
 
 def utc_now() -> datetime:
     """Get current UTC datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class MCPBaseEvent(BaseModel):
@@ -45,8 +43,8 @@ class MCPBaseEvent(BaseModel):
     event_type: MCPEventType = Field(..., description="Type of the event")
     timestamp: datetime = Field(default_factory=utc_now, description="Event timestamp")
     config_id: UUID = Field(..., description="MCP server configuration ID")
-    agent_id: Optional[UUID] = Field(None, description="Associated agent ID")
-    correlation_id: Optional[str] = Field(None, description="Request correlation ID")
+    agent_id: UUID | None = Field(None, description="Associated agent ID")
+    correlation_id: str | None = Field(None, description="Request correlation ID")
 
 
 class MCPServerCreateRequestedEvent(MCPBaseEvent):
@@ -54,7 +52,7 @@ class MCPServerCreateRequestedEvent(MCPBaseEvent):
 
     event_type: MCPEventType = MCPEventType.SERVER_CREATE_REQUESTED
     template: str = Field(..., description="MCP server template name")
-    environment: Dict[str, Any] = Field(default_factory=dict, description="Environment variables")
+    environment: dict[str, Any] = Field(default_factory=dict, description="Environment variables")
     replicas: int = Field(default=1, description="Number of replicas")
     user_id: UUID = Field(..., description="User who requested the server")
 
@@ -91,7 +89,7 @@ class MCPServerFailedEvent(MCPBaseEvent):
     event_type: MCPEventType = MCPEventType.SERVER_FAILED
     error: str = Field(..., description="Error message")
     error_code: str = Field(..., description="Error code")
-    runtime_id: Optional[str] = Field(None, description="Container/Pod runtime ID if available")
+    runtime_id: str | None = Field(None, description="Container/Pod runtime ID if available")
     retry_count: int = Field(default=0, description="Number of retry attempts")
 
 
@@ -109,8 +107,8 @@ class MCPServerHealthEvent(MCPBaseEvent):
     event_type: MCPEventType = MCPEventType.SERVER_HEALTH_CHECK
     runtime_id: str = Field(..., description="Container/Pod runtime ID")
     status: str = Field(..., description="Health status (healthy/unhealthy)")
-    response_time_ms: Optional[int] = Field(None, description="Health check response time")
-    error: Optional[str] = Field(None, description="Error message if unhealthy")
+    response_time_ms: int | None = Field(None, description="Health check response time")
+    error: str | None = Field(None, description="Error message if unhealthy")
 
 
 # Event union type for type checking

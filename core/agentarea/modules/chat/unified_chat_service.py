@@ -1,5 +1,4 @@
-"""
-Unified Task Service
+"""Unified Task Service.
 
 This service provides a clean task interface that works with CopilotKit/Assistants-UI
 while supporting multiple agent protocols through adapters. All interactions with agents
@@ -7,26 +6,26 @@ are treated as tasks, whether they're chat messages or complex operations.
 """
 
 import uuid
-from typing import Dict, Any, List, Optional, AsyncGenerator
-from datetime import datetime, timezone
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from typing import Any
 
-from agentarea.modules.agents.adapters.base import AgentAdapter, AgentTask, AgentTaskResponse
 from agentarea.modules.agents.adapters.a2a_adapter import A2AAdapter
 from agentarea.modules.agents.adapters.acp_adapter import ACPAdapter
-from agentarea.modules.agents.adapters.native_adapter import NativeAdapter
+from agentarea.modules.agents.adapters.base import AgentAdapter, AgentTask
 from agentarea.modules.agents.adapters.mock_adapter import MockAdapter
+from agentarea.modules.agents.adapters.native_adapter import NativeAdapter
 
 
 class UnifiedTaskService:
-    """Unified task service with protocol adapters for agent communication"""
+    """Unified task service with protocol adapters for agent communication."""
 
     def __init__(self):
-        self.adapters: Dict[str, AgentAdapter] = {}
-        self.sessions: Dict[str, List[Dict[str, Any]]] = {}
+        self.adapters: dict[str, AgentAdapter] = {}
+        self.sessions: dict[str, list[dict[str, Any]]] = {}
 
-    def register_agent(self, agent_id: str, agent_config: Dict[str, Any]) -> None:
-        """Register an agent with appropriate adapter"""
-
+    def register_agent(self, agent_id: str, agent_config: dict[str, Any]) -> None:
+        """Register an agent with appropriate adapter."""
         protocol = agent_config.get("protocol", "native")
 
         if protocol == "a2a":
@@ -42,9 +41,8 @@ class UnifiedTaskService:
 
         self.adapters[agent_id] = adapter
 
-    async def create_agent(self, platform_id: str, agent_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new agent on a remote platform"""
-
+    async def create_agent(self, platform_id: str, agent_spec: dict[str, Any]) -> dict[str, Any]:
+        """Create a new agent on a remote platform."""
         if platform_id not in self.adapters:
             raise ValueError(f"Platform {platform_id} not found")
 
@@ -71,12 +69,11 @@ class UnifiedTaskService:
         content: str,
         agent_id: str,
         task_type: str = "message",
-        session_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Send a task to an agent - compatible with chat UIs"""
-
+        session_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Send a task to an agent - compatible with chat UIs."""
         if agent_id not in self.adapters:
             raise ValueError(f"Agent {agent_id} not found")
 
@@ -101,7 +98,7 @@ class UnifiedTaskService:
                 "role": "user",
                 "content": content,
                 "task_type": task_type,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "metadata": {"user_id": user_id},
             },
         )
@@ -119,7 +116,7 @@ class UnifiedTaskService:
                 "content": response.content,
                 "task_type": "response",
                 "artifacts": response.artifacts,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "metadata": response_metadata,
             },
         )
@@ -141,12 +138,11 @@ class UnifiedTaskService:
         content: str,
         agent_id: str,
         task_type: str = "message",
-        session_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Stream task response - compatible with streaming UIs"""
-
+        session_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        user_id: str | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream task response - compatible with streaming UIs."""
         if agent_id not in self.adapters:
             raise ValueError(f"Agent {agent_id} not found")
 
@@ -167,7 +163,7 @@ class UnifiedTaskService:
                 "role": "user",
                 "content": content,
                 "task_type": task_type,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "metadata": {"user_id": user_id},
             },
         )
@@ -197,7 +193,7 @@ class UnifiedTaskService:
                 "role": "assistant",
                 "content": full_content,
                 "task_type": "response",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "metadata": {"agent_id": agent_id},
             },
         )
@@ -211,15 +207,13 @@ class UnifiedTaskService:
             "type": "complete",
         }
 
-    async def get_session_history(self, session_id: str) -> List[Dict[str, Any]]:
-        """Get session history - compatible with chat UIs"""
-
+    async def get_session_history(self, session_id: str) -> list[dict[str, Any]]:
+        """Get session history - compatible with chat UIs."""
         return self.sessions.get(session_id, [])
 
-    async def list_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List all sessions - compatible with chat UIs"""
-
-        sessions: List[Dict[str, Any]] = []
+    async def list_sessions(self, user_id: str | None = None) -> list[dict[str, Any]]:
+        """List all sessions - compatible with chat UIs."""
+        sessions: list[dict[str, Any]] = []
 
         for session_id, interactions in self.sessions.items():
             if not interactions:
@@ -246,7 +240,7 @@ class UnifiedTaskService:
                     "last_message": last_interaction["content"],
                     "last_updated": last_interaction["timestamp"],
                     "interaction_count": len(interactions),
-                    "task_types": list(set(i.get("task_type", "message") for i in interactions)),
+                    "task_types": list({i.get("task_type", "message") for i in interactions}),
                 }
             )
 
@@ -255,10 +249,9 @@ class UnifiedTaskService:
 
         return sessions
 
-    async def get_available_agents(self) -> List[Dict[str, Any]]:
-        """Get list of available agents with capabilities"""
-
-        agents: List[Dict[str, Any]] = []
+    async def get_available_agents(self) -> list[dict[str, Any]]:
+        """Get list of available agents with capabilities."""
+        agents: list[dict[str, Any]] = []
 
         for agent_id, adapter in self.adapters.items():
             try:
@@ -290,9 +283,8 @@ class UnifiedTaskService:
 
         return agents
 
-    async def get_platforms(self) -> List[Dict[str, Any]]:
-        """Get list of available platforms for agent creation"""
-
+    async def get_platforms(self) -> list[dict[str, Any]]:
+        """Get list of available platforms for agent creation."""
         platforms = []
 
         for platform_id, adapter in self.adapters.items():
@@ -322,8 +314,8 @@ class UnifiedTaskService:
 
         return platforms
 
-    async def get_task_info(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Get task information by ID"""
+    async def get_task_info(self, task_id: str) -> dict[str, Any] | None:
+        """Get task information by ID."""
         # Search through all sessions for a task with this ID
         for session_id, interactions in self.sessions.items():
             for interaction in interactions:
@@ -340,14 +332,13 @@ class UnifiedTaskService:
         return None
 
     async def cancel_task(self, task_id: str) -> bool:
-        """Cancel a task by ID"""
+        """Cancel a task by ID."""
         # For now, just return True as tasks are completed immediately
         # In a real implementation, this would communicate with the agent to cancel
         return True
 
-    def _store_interaction(self, session_id: str, interaction: Dict[str, Any]) -> None:
-        """Store interaction in session history"""
-
+    def _store_interaction(self, session_id: str, interaction: dict[str, Any]) -> None:
+        """Store interaction in session history."""
         if session_id not in self.sessions:
             self.sessions[session_id] = []
 

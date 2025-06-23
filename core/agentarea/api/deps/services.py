@@ -1,5 +1,4 @@
-"""
-Service dependencies for FastAPI endpoints.
+"""Service dependencies for FastAPI endpoints.
 
 This module provides dependency injection functions for services
 used across the AgentArea API endpoints.
@@ -12,35 +11,35 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea.common.events.broker import EventBroker
-from agentarea.common.events.router import get_event_router, create_event_broker_from_router
+from agentarea.common.events.router import create_event_broker_from_router, get_event_router
 from agentarea.common.infrastructure.database import get_db_session
-from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 from agentarea.common.infrastructure.infisical_factory import get_real_secret_manager
+from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 from agentarea.config import get_settings
-from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
-from agentarea.modules.tasks.task_service import TaskService
-from agentarea.modules.tasks.task_manager import BaseTaskManager
-
-# from agentarea.modules.tasks.database_task_manager import DatabaseTaskManager  # TODO: Fix implementation
-from agentarea.modules.chat.unified_chat_service import UnifiedTaskService
 from agentarea.modules.agents.application.agent_service import AgentService
-from agentarea.modules.agents.infrastructure.repository import AgentRepository
-from agentarea.modules.llm.application.llm_model_service import LLMModelService
-from agentarea.modules.llm.application.service import LLMModelInstanceService
-from agentarea.modules.llm.infrastructure.llm_model_repository import LLMModelRepository
-from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
-    LLMModelInstanceRepository,
-)
-
-# LLM execution happens in agent_runner_service via Google ADK, not here
-from agentarea.modules.mcp.application.service import MCPServerService, MCPServerInstanceService
-from agentarea.modules.mcp.infrastructure.repository import (
-    MCPServerRepository,
-    MCPServerInstanceRepository,
-)
 from agentarea.modules.agents.application.workflow_task_execution_service import (
     WorkflowTaskExecutionService,
 )
+from agentarea.modules.agents.infrastructure.repository import AgentRepository
+
+# from agentarea.modules.tasks.database_task_manager import DatabaseTaskManager  # TODO: Fix implementation
+from agentarea.modules.chat.unified_chat_service import UnifiedTaskService
+from agentarea.modules.llm.application.llm_model_service import LLMModelService
+from agentarea.modules.llm.application.service import LLMModelInstanceService
+from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
+    LLMModelInstanceRepository,
+)
+from agentarea.modules.llm.infrastructure.llm_model_repository import LLMModelRepository
+
+# LLM execution happens in agent_runner_service via Google ADK, not here
+from agentarea.modules.mcp.application.service import MCPServerInstanceService, MCPServerService
+from agentarea.modules.mcp.infrastructure.repository import (
+    MCPServerInstanceRepository,
+    MCPServerRepository,
+)
+from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
+from agentarea.modules.tasks.task_manager import BaseTaskManager
+from agentarea.modules.tasks.task_service import TaskService
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +70,7 @@ async def get_secret_manager() -> BaseSecretManager:
 
 
 async def get_task_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """
-    Get a TaskRepository instance for the current request.
+    """Get a TaskRepository instance for the current request.
 
     Uses a new database session for each request to ensure transaction isolation.
     """
@@ -87,8 +85,7 @@ async def get_database_task_manager(
     task_repository: Annotated[SQLAlchemyTaskRepository, Depends(get_task_repository)],
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
 ) -> BaseTaskManager:
-    """
-    Get a real database-backed TaskManager instance.
+    """Get a real database-backed TaskManager instance.
 
     This replaces the in-memory task manager with real persistence.
     Note: DatabaseTaskManager is still under development.
@@ -109,8 +106,7 @@ async def get_task_service(
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
     task_repository: Annotated[SQLAlchemyTaskRepository, Depends(get_task_repository)],
 ):
-    """
-    Get a TaskService instance for the current request.
+    """Get a TaskService instance for the current request.
 
     Combines the global EventBroker singleton with a request-scoped TaskRepository.
     """
@@ -118,8 +114,7 @@ async def get_task_service(
 
 
 async def get_unified_chat_service():
-    """
-    Get a UnifiedTaskService instance for the current request.
+    """Get a UnifiedTaskService instance for the current request.
 
     Returns a new instance for each request with protocol adapters.
     """
@@ -127,9 +122,7 @@ async def get_unified_chat_service():
 
 
 async def get_agent_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """
-    Get an AgentRepository instance for the current request.
-    """
+    """Get an AgentRepository instance for the current request."""
     return AgentRepository(db)
 
 
@@ -137,8 +130,7 @@ async def get_agent_service(
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
     agent_repository: Annotated[AgentRepository, Depends(get_agent_repository)],
 ):
-    """
-    Get an AgentService instance for the current request.
+    """Get an AgentService instance for the current request.
 
     Returns a new instance for each request.
     """
@@ -146,8 +138,7 @@ async def get_agent_service(
 
 
 async def get_workflow_task_execution_service():
-    """
-    Get a WorkflowTaskExecutionService instance for the current request.
+    """Get a WorkflowTaskExecutionService instance for the current request.
 
     This service uses Temporal workflows for non-blocking task execution.
     """

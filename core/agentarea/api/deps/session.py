@@ -1,9 +1,9 @@
 """Session service dependencies for Google ADK."""
 
 from typing import Annotated
-from fastapi import Depends
 
-from google.adk.sessions import InMemorySessionService, BaseSessionService
+from fastapi import Depends
+from google.adk.sessions import BaseSessionService, InMemorySessionService
 
 
 async def get_session_service() -> BaseSessionService:

@@ -1,5 +1,4 @@
-"""
-Authentication dependencies for FastAPI endpoints.
+"""Authentication dependencies for FastAPI endpoints.
 
 This module provides dependency injection functions for authentication
 and authorization used across the AgentArea API endpoints.
@@ -9,7 +8,6 @@ environment, this would be replaced with proper authentication logic.
 """
 
 import logging
-from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request, status
 
@@ -21,10 +19,9 @@ DEFAULT_USER_ID = "test-user-123"
 
 async def get_current_user_id(
     request: Request,
-    x_user_id: Optional[str] = Header(None, description="User ID header (for testing)"),
+    x_user_id: str | None = Header(None, description="User ID header (for testing)"),
 ) -> str:
-    """
-    Get the current user ID from the request.
+    """Get the current user ID from the request.
 
     This is a simplified placeholder implementation. In a production environment,
     this would validate tokens, check session cookies, etc.
@@ -64,8 +61,7 @@ async def get_current_user_id(
 async def get_admin_user_id(
     user_id: str = Depends(get_current_user_id),
 ) -> str:
-    """
-    Get the current user ID and verify admin privileges.
+    """Get the current user ID and verify admin privileges.
 
     This is a simplified placeholder implementation. In a production environment,
     this would check user roles and permissions.

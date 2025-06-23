@@ -1,8 +1,10 @@
 import logging
+
 from agentarea.common.events.router import get_event_router
 from agentarea.config import get_settings
-from .task_events import register_task_event_handlers
+
 from .mcp_events import register_mcp_event_handlers
+from .task_events import register_task_event_handlers
 
 logger = logging.getLogger(__name__)
 

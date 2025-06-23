@@ -1,29 +1,28 @@
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea.common.base.repository import BaseRepository
-from ..domain.mpc_server_instance_model import MCPServerInstance
 
 from ..domain.models import MCPServer
+from ..domain.mpc_server_instance_model import MCPServerInstance
 
 
 class MCPServerRepository(BaseRepository[MCPServer]):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get(self, id: UUID) -> Optional[MCPServer]:
+    async def get(self, id: UUID) -> MCPServer | None:
         result = await self.session.execute(select(MCPServer).where(MCPServer.id == id))
         return result.scalar_one_or_none()
 
     async def list(
         self,
-        status: Optional[str] = None,
-        is_public: Optional[bool] = None,
-        tag: Optional[str] = None,
-    ) -> List[MCPServer]:
+        status: str | None = None,
+        is_public: bool | None = None,
+        tag: str | None = None,
+    ) -> list[MCPServer]:
         query = select(MCPServer)
 
         conditions = []
@@ -65,7 +64,7 @@ class MCPServerInstanceRepository(BaseRepository[MCPServerInstance]):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get(self, id: UUID) -> Optional[MCPServerInstance]:
+    async def get(self, id: UUID) -> MCPServerInstance | None:
         result = await self.session.execute(
             select(MCPServerInstance).where(MCPServerInstance.id == id)
         )
@@ -73,9 +72,9 @@ class MCPServerInstanceRepository(BaseRepository[MCPServerInstance]):
 
     async def list(
         self,
-        server_spec_id: Optional[str] = None,
-        status: Optional[str] = None,
-    ) -> List[MCPServerInstance]:
+        server_spec_id: str | None = None,
+        status: str | None = None,
+    ) -> list[MCPServerInstance]:
         query = select(MCPServerInstance)
 
         conditions = []

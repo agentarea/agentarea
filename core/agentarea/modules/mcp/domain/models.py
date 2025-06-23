@@ -1,6 +1,6 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
-from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, Boolean, String
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -19,13 +19,13 @@ class MCPServer(BaseModel):
     description: Mapped[str] = mapped_column(String, nullable=False)
     docker_image_url: Mapped[str] = mapped_column(String, nullable=False)
     version: Mapped[str] = mapped_column(String, nullable=False)
-    tags: Mapped[List[str]] = mapped_column(JSON, nullable=False, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String, nullable=False, default="draft")
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Environment variable schema - defines what env vars this server needs
-    env_schema: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    env_schema: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     # Custom command to override container CMD - useful for switching between stdio and HTTP modes
-    cmd: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True, default=None)
+    cmd: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
 
     def __init__(
         self,
@@ -33,13 +33,13 @@ class MCPServer(BaseModel):
         description: str,
         docker_image_url: str,
         version: str,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         status: str = "draft",
         is_public: bool = False,
-        env_schema: Optional[List[Dict[str, Any]]] = None,
-        cmd: Optional[List[str]] = None,
-        id: Optional[UUID] = None,
-        updated_at: Optional[datetime] = None,
+        env_schema: list[dict[str, Any]] | None = None,
+        cmd: list[str] | None = None,
+        id: UUID | None = None,
+        updated_at: datetime | None = None,
     ):
         self.id = id or uuid4()
         self.name = name

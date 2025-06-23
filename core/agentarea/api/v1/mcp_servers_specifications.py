@@ -1,14 +1,13 @@
 import os
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any
 from uuid import UUID
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-import yaml
 
 from agentarea.api.deps.services import get_mcp_server_service
-from agentarea.common.infrastructure.database import get_db_session
 from agentarea.modules.mcp.application.service import MCPServerService
 from agentarea.modules.mcp.domain.models import MCPServer
 
@@ -20,26 +19,26 @@ class MCPServerCreate(BaseModel):
     description: str = Field(..., description="Description of the MCP server")
     docker_image_url: str = Field(..., description="Docker image URL")
     version: str = Field(default="1.0.0", description="Version of the MCP server")
-    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    tags: list[str] = Field(default_factory=list, description="Tags for categorization")
     is_public: bool = Field(default=False, description="Whether the server is public")
-    env_schema: Optional[List[Dict[str, Any]]] = Field(
+    env_schema: list[dict[str, Any]] | None = Field(
         default_factory=list, description="Environment variable schema"
     )
-    cmd: Optional[List[str]] = Field(
+    cmd: list[str] | None = Field(
         default=None,
         description="Custom command to override container CMD (useful for switching between stdio and HTTP modes)",
     )
 
 
 class MCPServerUpdate(BaseModel):
-    name: Optional[str] = Field(None, description="Name of the MCP server")
-    description: Optional[str] = Field(None, description="Description of the MCP server")
-    docker_image_url: Optional[str] = Field(None, description="Docker image URL")
-    version: Optional[str] = Field(None, description="Version of the MCP server")
-    tags: Optional[List[str]] = Field(None, description="Tags for categorization")
-    is_public: Optional[bool] = Field(None, description="Whether the server is public")
-    status: Optional[str] = Field(None, description="Status of the MCP server")
-    cmd: Optional[List[str]] = Field(None, description="Custom command to override container CMD")
+    name: str | None = Field(None, description="Name of the MCP server")
+    description: str | None = Field(None, description="Description of the MCP server")
+    docker_image_url: str | None = Field(None, description="Docker image URL")
+    version: str | None = Field(None, description="Version of the MCP server")
+    tags: list[str] | None = Field(None, description="Tags for categorization")
+    is_public: bool | None = Field(None, description="Whether the server is public")
+    status: str | None = Field(None, description="Status of the MCP server")
+    cmd: list[str] | None = Field(None, description="Custom command to override container CMD")
 
 
 class MCPServerResponse(BaseModel):
@@ -48,10 +47,10 @@ class MCPServerResponse(BaseModel):
     description: str
     docker_image_url: str
     version: str
-    tags: List[str]
+    tags: list[str]
     is_public: bool
-    env_schema: List[Dict[str, Any]]
-    cmd: Optional[List[str]]
+    env_schema: list[dict[str, Any]]
+    cmd: list[str] | None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -103,11 +102,11 @@ async def get_mcp_server(
     return MCPServerResponse.from_domain(server)
 
 
-@router.get("/", response_model=List[MCPServerResponse])
+@router.get("/", response_model=list[MCPServerResponse])
 async def list_mcp_servers(
-    status: Optional[str] = None,
-    is_public: Optional[bool] = None,
-    tag: Optional[str] = None,
+    status: str | None = None,
+    is_public: bool | None = None,
+    tag: str | None = None,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     # Get all servers first, then filter manually since base service doesn't support filtering
@@ -182,7 +181,7 @@ async def deploy_mcp_server(
     }
 
 
-def load_mcp_provider_templates() -> Dict[str, Any]:
+def load_mcp_provider_templates() -> dict[str, Any]:
     """Load MCP provider templates from YAML file."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     # Go up to project root and then to data directory
@@ -193,7 +192,7 @@ def load_mcp_provider_templates() -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-@router.get("/templates", response_model=List[Dict[str, Any]])
+@router.get("/templates", response_model=list[dict[str, Any]])
 async def get_mcp_server_templates():
     """Get all available MCP server templates from the YAML configuration."""
     try:
@@ -219,7 +218,7 @@ async def get_mcp_server_templates():
         )
 
 
-@router.get("/templates/{template_key}", response_model=Dict[str, Any])
+@router.get("/templates/{template_key}", response_model=dict[str, Any])
 async def get_mcp_server_template(template_key: str):
     """Get a specific MCP server template by key."""
     try:

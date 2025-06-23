@@ -4,21 +4,21 @@ Simple integration tests for TaskRepository.
 Tests all CRUD operations and business logic methods on the TaskRepository.
 """
 
-from datetime import datetime, UTC
-from uuid import uuid4, UUID
-from typing import Optional
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
-from agentarea.modules.tasks.domain.models import (
-    Task,
-    TaskType,
-    TaskPriority,
-    TaskComplexity,
-    TaskStatus,
-    AgentCapability,
-)
 from agentarea.common.utils.types import TaskState
+from agentarea.modules.tasks.domain.models import (
+    AgentCapability,
+    Task,
+    TaskComplexity,
+    TaskPriority,
+    TaskStatus,
+    TaskType,
+)
+from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
 
 
 class TestTaskRepository:
@@ -26,12 +26,12 @@ class TestTaskRepository:
 
     def create_test_task(
         self,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
         title: str = "Test Task",
         description: str = "Test Description",
-        session_id: Optional[str] = None,
-        assigned_agent_id: Optional[UUID] = None,
-        created_by: Optional[str] = None,
+        session_id: str | None = None,
+        assigned_agent_id: UUID | None = None,
+        created_by: str | None = None,
         status_state: TaskState = TaskState.SUBMITTED,
     ) -> Task:
         """Create a test task with specified parameters."""

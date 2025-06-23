@@ -4,16 +4,16 @@ Simple integration tests for LLMModelInstanceRepository.
 Tests all CRUD operations and relationship handling on the LLMModelInstanceRepository.
 """
 
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
 import pytest
-from datetime import datetime, UTC
-from uuid import uuid4, UUID
-from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agentarea.modules.llm.domain.models import LLMModel, LLMModelInstance, LLMProvider
 from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
 )
-from agentarea.modules.llm.domain.models import LLMProvider, LLMModel, LLMModelInstance
 
 
 class TestLLMModelInstanceRepository:

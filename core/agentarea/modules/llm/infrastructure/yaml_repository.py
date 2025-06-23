@@ -72,7 +72,7 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
             if provider and provider != provider_id:
                 continue
 
-            provider_name = provider_data.get("name", provider_id)
+            provider_data.get("name", provider_id)
 
             for model_data in provider_data.get("models", []):
                 # Create a model instance with data from YAML

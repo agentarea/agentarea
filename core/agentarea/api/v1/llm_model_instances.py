@@ -1,9 +1,8 @@
-from typing import List, Optional
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from datetime import datetime
 
 from agentarea.api.deps.services import get_llm_model_instance_service
 from agentarea.modules.llm.application.service import LLMModelInstanceService
@@ -76,11 +75,11 @@ async def get_llm_model_instance(
     return LLMModelInstanceResponse.from_domain(instance)
 
 
-@router.get("/", response_model=List[LLMModelInstanceResponse])
+@router.get("/", response_model=list[LLMModelInstanceResponse])
 async def list_llm_model_instances(
-    model_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    is_public: Optional[bool] = None,
+    model_id: UUID | None = None,
+    status: str | None = None,
+    is_public: bool | None = None,
     llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
     instances = await llm_model_instance_service.list(

@@ -7,10 +7,9 @@ they're working correctly.
 """
 
 import asyncio
-import json
-import httpx
 import sys
-from typing import Dict, Any
+
+import httpx
 
 # Test configuration
 BASE_URL = "http://localhost:8000/v1/protocol"

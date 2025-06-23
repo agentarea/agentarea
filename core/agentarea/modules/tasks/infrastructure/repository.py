@@ -1,19 +1,17 @@
-"""
-Task repository for AgentArea platform.
+"""Task repository for AgentArea platform.
 
 This module provides repository implementations for task persistence and retrieval
 operations, following domain-driven design principles.
 """
 
+import builtins
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime, UTC
-from typing import List, Optional, Dict, Any
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, and_, desc
+from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from agentarea.common.base.repository import BaseRepository
 from agentarea.modules.tasks.domain.models import Task, TaskState
@@ -25,19 +23,19 @@ class TaskRepositoryInterface(ABC):
     """Interface for task repository operations."""
 
     @abstractmethod
-    async def get_by_id(self, task_id: str) -> Optional[Task]:
+    async def get_by_id(self, task_id: str) -> Task | None:
         """Get a task by its ID."""
         pass
 
     @abstractmethod
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> list[Task]:
         """Get tasks created by a specific user."""
         pass
 
     @abstractmethod
     async def get_by_agent_id(
         self, agent_id: UUID, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
+    ) -> list[Task]:
         """Get tasks assigned to a specific agent."""
         pass
 
@@ -57,14 +55,14 @@ class TaskRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_pending_tasks(self, limit: int = 20) -> List[Task]:
+    async def get_pending_tasks(self, limit: int = 20) -> list[Task]:
         """Get pending tasks that need to be assigned to agents."""
         pass
 
     @abstractmethod
     async def get_tasks_by_status(
         self, status: TaskState, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
+    ) -> list[Task]:
         """Get tasks by their status."""
         pass
 
@@ -76,11 +74,11 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         self.session = session
 
     # Implementation of BaseRepository abstract methods
-    async def get(self, task_id: UUID) -> Optional[Task]:
+    async def get(self, task_id: UUID) -> Task | None:
         """Get a task by its UUID ID (implementing BaseRepository interface)."""
         return await self.get_by_id(str(task_id))
 
-    async def list(self) -> List[Task]:
+    async def list(self) -> list[Task]:
         """List all tasks (implementing BaseRepository interface)."""
         try:
             stmt = select(Task).order_by(Task.id.desc())
@@ -90,7 +88,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
             logger.error(f"Error listing all tasks: {e}")
             return []
 
-    async def get_by_id(self, task_id: str) -> Optional[Task]:
+    async def get_by_id(self, task_id: str) -> Task | None:
         """Get a task by its ID."""
         try:
             stmt = select(Task).where(Task.id == task_id)
@@ -100,7 +98,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
             logger.error(f"Error retrieving task by ID {task_id}: {e}")
             return None
 
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> builtins.list[Task]:
         """Get tasks created by a specific user."""
         try:
             stmt = (
@@ -118,7 +116,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
 
     async def get_by_agent_id(
         self, agent_id: UUID, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
+    ) -> builtins.list[Task]:
         """Get tasks assigned to a specific agent."""
         try:
             stmt = (
@@ -169,7 +167,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
             logger.error(f"Error deleting task {task_id}: {e}")
             return False
 
-    async def get_pending_tasks(self, limit: int = 20) -> List[Task]:
+    async def get_pending_tasks(self, limit: int = 20) -> builtins.list[Task]:
         """Get pending tasks that need to be assigned to agents."""
         try:
             stmt = (
@@ -188,7 +186,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
 
     async def get_tasks_by_status(
         self, status: TaskState, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
+    ) -> builtins.list[Task]:
         """Get tasks by their status."""
         try:
             stmt = (
@@ -206,7 +204,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
 
     async def get_tasks_by_collaboration(
         self, agent_id: UUID, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
+    ) -> builtins.list[Task]:
         """Get tasks where the agent is a collaborator but not the primary assignee."""
         try:
             # This is a more complex query that would need to check the collaboration field
@@ -232,7 +230,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
 
     async def get_tasks_by_organization(
         self, organization_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
+    ) -> builtins.list[Task]:
         """Get tasks for a specific organization."""
         try:
             stmt = (
@@ -250,7 +248,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
 
     async def get_tasks_by_workspace(
         self, workspace_id: str, limit: int = 100, offset: int = 0
-    ) -> List[Task]:
+    ) -> builtins.list[Task]:
         """Get tasks for a specific workspace."""
         try:
             stmt = (

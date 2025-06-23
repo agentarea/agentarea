@@ -1,5 +1,4 @@
-"""
-A2A (Agent-to-Agent) Protocol Adapter
+"""A2A (Agent-to-Agent) Protocol Adapter.
 
 This adapter enables communication with remote A2A-compliant agents by translating
 between our internal task format and the A2A Task protocol.
@@ -8,28 +7,29 @@ Supports both existing remote agents and creating new agent instances on A2A pla
 """
 
 import asyncio
-import httpx
 import uuid
-from typing import Dict, Any, Optional, AsyncGenerator, List
-from datetime import datetime, timezone
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from typing import Any
+
+import httpx
 
 from .base import AgentAdapter, AgentTask, AgentTaskResponse
 
 
 class A2AAdapter(AgentAdapter):
-    """Adapter for remote A2A protocol agents"""
+    """Adapter for remote A2A protocol agents."""
 
-    def __init__(self, agent_config: Dict[str, Any]):
+    def __init__(self, agent_config: dict[str, Any]):
         super().__init__(agent_config)
         self.base_url = agent_config.get("endpoint")
         self.timeout = agent_config.get("timeout", 30)
         self.api_key = agent_config.get("api_key")
 
     async def send_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AgentTaskResponse:
-        """Send task to remote A2A agent"""
-
+        """Send task to remote A2A agent."""
         # Create A2A Task payload
         task_payload = {
             "id": str(uuid.uuid4()),
@@ -39,7 +39,7 @@ class A2AAdapter(AgentAdapter):
             "context": task.context or {},
             "metadata": {
                 **(task.metadata or {}),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "source": "agentarea",
             },
         }
@@ -86,17 +86,15 @@ class A2AAdapter(AgentAdapter):
             )
 
     def stream_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream task response from remote A2A agent"""
-
+        """Stream task response from remote A2A agent."""
         return self._stream_task_impl(task, session_id)
 
     async def _stream_task_impl(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Implementation of stream task"""
-
+        """Implementation of stream task."""
         task_payload = {
             "id": str(uuid.uuid4()),
             "sessionId": session_id or str(uuid.uuid4()),
@@ -120,9 +118,8 @@ class A2AAdapter(AgentAdapter):
                     if chunk.strip():
                         yield chunk
 
-    async def get_capabilities(self) -> Dict[str, Any]:
-        """Get remote A2A agent capabilities"""
-
+    async def get_capabilities(self) -> dict[str, Any]:
+        """Get remote A2A agent capabilities."""
         headers = {}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -149,8 +146,7 @@ class A2AAdapter(AgentAdapter):
                 }
 
     async def health_check(self) -> bool:
-        """Check if remote A2A agent is available"""
-
+        """Check if remote A2A agent is available."""
         try:
             headers = {}
             if self.api_key:
@@ -162,9 +158,8 @@ class A2AAdapter(AgentAdapter):
         except:
             return False
 
-    async def create_agent(self, agent_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new agent on remote A2A platform"""
-
+    async def create_agent(self, agent_spec: dict[str, Any]) -> dict[str, Any]:
+        """Create a new agent on remote A2A platform."""
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -201,11 +196,10 @@ class A2AAdapter(AgentAdapter):
         self,
         client: httpx.AsyncClient,
         task_id: str,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         max_attempts: int = 30,
-    ) -> Dict[str, Any]:
-        """Poll remote A2A task until completion"""
-
+    ) -> dict[str, Any]:
+        """Poll remote A2A task until completion."""
         for _ in range(max_attempts):
             response = await client.get(f"{self.base_url}/tasks/{task_id}", headers=headers)
             response.raise_for_status()

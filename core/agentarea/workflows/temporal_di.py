@@ -1,5 +1,4 @@
-"""
-Dependency Injection for Temporal Activities
+"""Dependency Injection for Temporal Activities.
 
 This module provides a clean, declarative way to inject dependencies
 into Temporal activities, eliminating the need for manual DI setup
@@ -14,22 +13,23 @@ Usage:
 """
 
 import logging
-from dataclasses import dataclass
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea.api.deps.database import get_db_session
+from agentarea.api.deps.session import InMemorySessionService
 from agentarea.common.events.broker import EventBroker
-from agentarea.common.events.router import get_event_router, create_event_broker_from_router
-from agentarea.common.infrastructure.secret_manager import BaseSecretManager
+from agentarea.common.events.router import create_event_broker_from_router, get_event_router
 from agentarea.common.infrastructure.infisical_factory import get_real_secret_manager
+from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 from agentarea.common.testing.mocks import TestEventBroker
 from agentarea.config import get_settings
-from agentarea.modules.agents.infrastructure.repository import AgentRepository
 from agentarea.modules.agents.application.agent_builder_service import AgentBuilderService
 from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
+from agentarea.modules.agents.infrastructure.repository import AgentRepository
 from agentarea.modules.llm.application.service import LLMModelInstanceService
 from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
@@ -39,7 +39,6 @@ from agentarea.modules.mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea.api.deps.session import InMemorySessionService
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +70,7 @@ class ActivityDependencies:
 
 @asynccontextmanager
 async def get_activity_deps() -> AsyncGenerator[ActivityDependencies, None]:
-    """
-    Get all dependencies needed for Temporal activities.
+    """Get all dependencies needed for Temporal activities.
 
     This is a single entry point that creates and manages all dependencies
     needed by activities, with proper cleanup and error handling.
@@ -84,7 +82,6 @@ async def get_activity_deps() -> AsyncGenerator[ActivityDependencies, None]:
                 agent = await deps.agent_repository.get(UUID(agent_id))
                 # ... rest of activity logic
     """
-
     async with get_db_session() as db_session:
         try:
             # Create event broker with fallback

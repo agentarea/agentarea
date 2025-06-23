@@ -1,5 +1,4 @@
-"""
-Base adapter interface for agent protocol adapters.
+"""Base adapter interface for agent protocol adapters.
 
 This module defines the common interface that all protocol adapters must implement
 to enable seamless integration of different agent communication protocols.
@@ -9,52 +8,53 @@ or complex multi-step operations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, AsyncGenerator, List
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class AgentTask:
-    """Standard internal task format for agent communication"""
+    """Standard internal task format for agent communication."""
 
     content: str
     task_type: str = "message"  # message, action, query, etc.
-    context: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass
 class AgentTaskResponse:
-    """Standard internal task response format"""
+    """Standard internal task response format."""
 
     content: str
-    artifacts: Optional[List[Dict[str, Any]]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    artifacts: list[dict[str, Any]] | None = None
+    metadata: dict[str, Any] | None = None
     status: str = "completed"
 
 
 # Backward compatibility aliases for chat interfaces
 @dataclass
 class ChatMessage:
-    """Chat message format for adapter compatibility"""
+    """Chat message format for adapter compatibility."""
 
     content: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass
 class ChatResponse:
-    """Chat response format for adapter compatibility"""
+    """Chat response format for adapter compatibility."""
 
     content: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
     status: str = "completed"
 
 
 class AgentAdapter(ABC):
-    """Base class for all agent protocol adapters"""
+    """Base class for all agent protocol adapters."""
 
-    def __init__(self, agent_config: Dict[str, Any]):
+    def __init__(self, agent_config: dict[str, Any]):
         self.agent_config = agent_config
         self.agent_id = agent_config.get("id")
         self.agent_name = agent_config.get("name")
@@ -63,29 +63,29 @@ class AgentAdapter(ABC):
 
     @abstractmethod
     async def send_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AgentTaskResponse:
-        """Send a task to the agent and get response"""
+        """Send a task to the agent and get response."""
         pass
 
     @abstractmethod
     def stream_task(
-        self, task: AgentTask, session_id: Optional[str] = None
+        self, task: AgentTask, session_id: str | None = None
     ) -> AsyncGenerator[str, None]:
-        """Stream task response from agent"""
+        """Stream task response from agent."""
         pass
 
     @abstractmethod
-    async def get_capabilities(self) -> Dict[str, Any]:
-        """Get agent capabilities and metadata"""
+    async def get_capabilities(self) -> dict[str, Any]:
+        """Get agent capabilities and metadata."""
         pass
 
     @abstractmethod
     async def health_check(self) -> bool:
-        """Check if agent is available"""
+        """Check if agent is available."""
         pass
 
     @abstractmethod
-    async def create_agent(self, agent_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new agent instance (for platforms that support it)"""
+    async def create_agent(self, agent_spec: dict[str, Any]) -> dict[str, Any]:
+        """Create a new agent instance (for platforms that support it)."""
         pass

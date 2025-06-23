@@ -1,31 +1,29 @@
-"""
-Provider API routes with static file support
-"""
+"""Provider API routes with static file support."""
 
-from typing import Dict, Any
-from fastapi import APIRouter, Request, HTTPException
-from core.api.schemas.provider_schema import Provider, ProvidersResponse
+from typing import Any
+
 import yaml
+from core.api.schemas.provider_schema import Provider, ProvidersResponse
+from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter()
 
 
-def load_providers_from_yaml() -> Dict[str, Any]:
-    """Load providers from YAML file"""
-    with open("data/providers.yaml", "r") as f:
+def load_providers_from_yaml() -> dict[str, Any]:
+    """Load providers from YAML file."""
+    with open("data/providers.yaml") as f:
         return yaml.safe_load(f)
 
 
 def generate_icon_url(request: Request, icon_id: str) -> str:
-    """Generate static file URL for icon"""
+    """Generate static file URL for icon."""
     base_url = str(request.base_url).rstrip("/")
     return f"{base_url}/static/icons/providers/{icon_id}.svg"
 
 
 @router.get("/providers", response_model=ProvidersResponse)
 async def get_providers(request: Request):
-    """
-    Get all available AI providers with static icon URLs.
+    """Get all available AI providers with static icon URLs.
 
     Icons are served as static files from /static/icons/providers/
     """
@@ -52,7 +50,7 @@ async def get_providers(request: Request):
 
 @router.get("/providers/{provider_id}", response_model=Provider)
 async def get_provider(provider_id: str, request: Request):
-    """Get a specific provider by ID with static icon URL"""
+    """Get a specific provider by ID with static icon URL."""
     providers_data = load_providers_from_yaml()
 
     # Find provider by ID

@@ -1,11 +1,11 @@
+import builtins
+from typing import Any
 from uuid import UUID
-from typing import Optional, List, Dict, Any
 
 from agentarea.common.base.service import BaseCrudService
 from agentarea.common.events.broker import EventBroker
 from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 from agentarea.config import get_database
-
 from agentarea.modules.mcp.domain.events import (
     MCPServerCreated,
     MCPServerDeleted,
@@ -26,11 +26,12 @@ from agentarea.modules.mcp.infrastructure.repository import (
 
 # McpManagerClient removed - using event-driven architecture instead
 from agentarea.modules.mcp.schemas import MCPServerStatus
+
 from .mcp_env_service import MCPEnvironmentService
 
 
 class MCPServerService(BaseCrudService[MCPServer]):
-    def __init__(self, repository: MCPServerRepository, event_broker: Optional[EventBroker] = None):
+    def __init__(self, repository: MCPServerRepository, event_broker: EventBroker | None = None):
         super().__init__(repository)
         self.event_broker = event_broker
 
@@ -40,11 +41,11 @@ class MCPServerService(BaseCrudService[MCPServer]):
         description: str,
         docker_image_url: str,
         version: str,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         is_public: bool = False,
-        env_schema: Optional[List[Dict[str, Any]]] = None,
-        cmd: Optional[List[str]] = None,
-        json_spec: Optional[Dict[str, Any]] = None,
+        env_schema: list[dict[str, Any]] | None = None,
+        cmd: list[str] | None = None,
+        json_spec: dict[str, Any] | None = None,
     ) -> MCPServer:
         server = MCPServer(
             name=name,
@@ -68,17 +69,17 @@ class MCPServerService(BaseCrudService[MCPServer]):
     async def update_mcp_server(
         self,
         id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        docker_image_url: Optional[str] = None,
-        version: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        is_public: Optional[bool] = None,
-        status: Optional[str] = None,
-        env_schema: Optional[List[Dict[str, Any]]] = None,
-        cmd: Optional[List[str]] = None,
-        json_spec: Optional[Dict[str, Any]] = None,
-    ) -> Optional[MCPServer]:
+        name: str | None = None,
+        description: str | None = None,
+        docker_image_url: str | None = None,
+        version: str | None = None,
+        tags: list[str] | None = None,
+        is_public: bool | None = None,
+        status: str | None = None,
+        env_schema: list[dict[str, Any]] | None = None,
+        cmd: list[str] | None = None,
+        json_spec: dict[str, Any] | None = None,
+    ) -> MCPServer | None:
         server = await self.get(id)
         if not server:
             return None
@@ -141,14 +142,14 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
     async def list_servers(
         self,
-        status: Optional[str] = None,
-        is_public: Optional[bool] = None,
-        tag: Optional[str] = None,
-    ) -> List[MCPServer]:
+        status: str | None = None,
+        is_public: bool | None = None,
+        tag: str | None = None,
+    ) -> list[MCPServer]:
         # Use repository directly since we need custom filtering
         return await self.repository.list(status=status, is_public=is_public, tag=tag)
 
-    async def get(self, id: UUID) -> Optional[MCPServer]:
+    async def get(self, id: UUID) -> MCPServer | None:
         return await self.repository.get(id)
 
 
@@ -170,9 +171,9 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
     async def create_instance_from_spec(
         self,
         name: str,
-        json_spec: Dict[str, Any],
+        json_spec: dict[str, Any],
         server_spec_id: UUID,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> MCPServerInstance:
         instance = MCPServerInstance(
             name=name,
@@ -194,10 +195,10 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
     async def create_instance_from_template(
         self,
         name: str,
-        description: Optional[str] = None,
-        server_spec_id: Optional[str] = None,
-        json_spec: Optional[Dict[str, Any]] = None,
-    ) -> Optional[MCPServerInstance]:
+        description: str | None = None,
+        server_spec_id: str | None = None,
+        json_spec: dict[str, Any] | None = None,
+    ) -> MCPServerInstance | None:
         # Implementation of create_instance_from_template method
         # This method should be implemented based on the original implementation
         # It should return an instance of MCPServerInstance or None if the creation fails
@@ -206,10 +207,10 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
     async def create_instance(
         self,
         name: str,
-        description: Optional[str] = None,
-        server_spec_id: Optional[str] = None,
-        json_spec: Optional[Dict[str, Any]] = None,
-    ) -> Optional[MCPServerInstance]:
+        description: str | None = None,
+        server_spec_id: str | None = None,
+        json_spec: dict[str, Any] | None = None,
+    ) -> MCPServerInstance | None:
         spec = json_spec or {}
 
         # Create instance - mcp-infrastructure will determine how to handle it based on json_spec
@@ -239,11 +240,11 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
     async def update_instance(
         self,
         id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        json_spec: Optional[Dict[str, Any]] = None,
-        status: Optional[str] = None,
-    ) -> Optional[MCPServerInstance]:
+        name: str | None = None,
+        description: str | None = None,
+        json_spec: dict[str, Any] | None = None,
+        status: str | None = None,
+    ) -> MCPServerInstance | None:
         instance = await self.get(id)
         if not instance:
             return None
@@ -270,9 +271,8 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
 
         return instance
 
-    async def get_instance_environment(self, instance_id: UUID) -> Dict[str, str]:
-        """
-        Get environment variables for an instance from the secret manager.
+    async def get_instance_environment(self, instance_id: UUID) -> dict[str, str]:
+        """Get environment variables for an instance from the secret manager.
 
         Args:
             instance_id: The MCP server instance ID
@@ -347,20 +347,19 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         return True
 
     async def list(
-        self, server_spec_id: Optional[str] = None, status: Optional[str] = None
-    ) -> List[MCPServerInstance]:
+        self, server_spec_id: str | None = None, status: str | None = None
+    ) -> list[MCPServerInstance]:
         return await self.repository.list(server_spec_id=server_spec_id, status=status)
 
     async def _validate_env_vars(
-        self, env_vars: Dict[str, str], env_schema: List[Dict[str, Any]]
-    ) -> List[str]:
-        """
-        Validate environment variables against the server's schema.
+        self, env_vars: dict[str, str], env_schema: builtins.list[dict[str, Any]]
+    ) -> builtins.list[str]:
+        """Validate environment variables against the server's schema.
 
         Returns:
             List of validation error messages (empty if valid)
         """
-        errors: List[str] = []
+        errors: list[str] = []
         schema_by_name = {item["name"]: item for item in env_schema}
 
         # Check required environment variables

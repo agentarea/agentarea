@@ -1,4 +1,4 @@
-"""Agent Task Workflow Definition
+"""Agent Task Workflow Definition.
 
 This workflow handles the execution of agent tasks, including dynamic
 activity discovery and long-running task management.
@@ -15,13 +15,11 @@ from temporalio.common import RetryPolicy
 with workflow.unsafe.imports_passed_through():
     from google.adk.sessions import InMemorySessionService
 
-    from agentarea.common.events.redis_event_broker import RedisEventBroker
     from agentarea.api.deps.database import get_db_session
 from agentarea.common.infrastructure.infisical_factory import get_real_secret_manager
 from agentarea.common.testing.mocks import TestEventBroker
 
 # from agentarea.common.events.router import get_event_router, create_event_broker_from_router
-from agentarea.config import get_settings
 from agentarea.modules.agents.application.agent_builder_service import AgentBuilderService
 from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
 from agentarea.modules.agents.infrastructure.repository import AgentRepository

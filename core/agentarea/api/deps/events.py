@@ -1,4 +1,5 @@
 from typing import Annotated
+
 from fastapi import Depends
 
 from ...common.events.broker import EventBroker

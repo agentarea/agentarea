@@ -1,8 +1,7 @@
-"""
-Simple Dependency Injection Container for managing application dependencies.
-"""
+"""Simple Dependency Injection Container for managing application dependencies."""
 
-from typing import Any, Callable, Dict, TypeVar, Type
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -11,18 +10,18 @@ class DIContainer:
     """Simple dependency injection container."""
 
     def __init__(self):
-        self._singletons: Dict[Type[Any], Any] = {}
-        self._factories: Dict[Type[Any], Callable[[], Any]] = {}
+        self._singletons: dict[type[Any], Any] = {}
+        self._factories: dict[type[Any], Callable[[], Any]] = {}
 
-    def register_singleton(self, interface: Type[T], instance: T) -> None:
+    def register_singleton(self, interface: type[T], instance: T) -> None:
         """Register a singleton instance."""
         self._singletons[interface] = instance
 
-    def register_factory(self, interface: Type[T], factory: Callable[[], T]) -> None:
+    def register_factory(self, interface: type[T], factory: Callable[[], T]) -> None:
         """Register a factory function for creating instances."""
         self._factories[interface] = factory
 
-    def get(self, interface: Type[T]) -> T:
+    def get(self, interface: type[T]) -> T:
         """Get an instance of the requested type."""
         # Check if we have a singleton
         if interface in self._singletons:
@@ -52,21 +51,21 @@ def get_container() -> DIContainer:
     return _container
 
 
-def register_singleton(interface: Type[T], instance: T) -> None:
+def register_singleton(interface: type[T], instance: T) -> None:
     """Convenience function to register a singleton."""
     _container.register_singleton(interface, instance)
 
 
-def register_factory(interface: Type[T], factory: Callable[[], T]) -> None:
+def register_factory(interface: type[T], factory: Callable[[], T]) -> None:
     """Convenience function to register a factory."""
     _container.register_factory(interface, factory)
 
 
-def resolve(interface: Type[T]) -> T:
+def resolve(interface: type[T]) -> T:
     """Convenience function to resolve a dependency."""
     return _container.get(interface)
 
 
-def get_instance(interface: Type[T]) -> T:
+def get_instance(interface: type[T]) -> T:
     """Alias for resolve - convenience function to get a dependency."""
     return _container.get(interface)

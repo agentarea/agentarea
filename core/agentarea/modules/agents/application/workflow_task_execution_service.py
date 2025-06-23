@@ -1,4 +1,4 @@
-"""Workflow-based Task Execution Service
+"""Workflow-based Task Execution Service.
 
 This service uses Temporal workflows for non-blocking task execution.
 """
@@ -9,11 +9,11 @@ from typing import Any
 from uuid import UUID
 
 from agentarea.common.workflow.executor import TaskExecutorInterface
-from agentarea.config import get_settings
 from agentarea.common.workflow.temporal_executor import (
     TemporalTaskExecutor,
     TemporalWorkflowExecutor,
 )
+from agentarea.config import get_settings
 
 logger = logging.getLogger(__name__)
 

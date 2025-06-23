@@ -1,5 +1,4 @@
-"""
-Clean Agent Task Workflow with Declarative DI
+"""Clean Agent Task Workflow with Declarative DI.
 
 This is a refactored version of the agent task workflow that uses
 the new dependency injection system for cleaner, more maintainable code.
@@ -80,8 +79,7 @@ class CleanAgentTaskWorkflow:
 # Clean activity definitions using declarative DI
 @activity.defn
 async def validate_agent_clean(agent_id: str) -> dict[str, Any]:
-    """
-    Validate agent configuration - Clean version with DI.
+    """Validate agent configuration - Clean version with DI.
 
     This replaces the manual dependency creation with a single
     declarative call to get_activity_deps().
@@ -99,8 +97,7 @@ async def validate_agent_clean(agent_id: str) -> dict[str, Any]:
 async def execute_agent_clean(
     agent_id: str, task_id: str, query: str, user_id: str, task_parameters: dict[str, Any]
 ) -> dict[str, Any]:
-    """
-    Execute agent task - Clean version with DI.
+    """Execute agent task - Clean version with DI.
 
     This replaces the manual dependency creation with a single
     declarative call to get_activity_deps().

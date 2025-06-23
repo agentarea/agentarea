@@ -1,8 +1,8 @@
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, Self
 from uuid import uuid4
-import re
 
 from pydantic import (
     BaseModel,
