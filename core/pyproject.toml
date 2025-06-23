@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "core"
 version = "0.1.0"
@@ -96,3 +100,6 @@ skip-magic-trailing-comma = false
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends", "fastapi.Query", "fastapi.params.Query"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea"]
