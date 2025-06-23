@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from agentarea.common.events.broker import EventBroker
+from agentarea.common.utils.types import sanitize_agent_name
 from agentarea.modules.agents.application.agent_builder_service import (
     AgentBuilderService,
 )
@@ -83,12 +84,13 @@ class TestAgentBuilderService:
         return LLMModelInstance(
             id=uuid4(),
             name="Test Model",
-            provider_id=uuid4(),
             model_id=uuid4(),
-            config={"temperature": 0.7},
+            description="Test model description",
+            api_key="test-api-key",
             status="active",
         )
 
+    @pytest.mark.asyncio
     async def test_build_agent_config_success(
         self,
         agent_builder_service,
@@ -108,7 +110,7 @@ class TestAgentBuilderService:
         # Verify
         assert result is not None
         assert result["id"] == str(sample_agent.id)
-        assert result["name"] == sample_agent.name
+        assert result["name"] == sanitize_agent_name(sample_agent.name)
         assert result["description"] == sample_agent.description
         assert result["instruction"] == sample_agent.instruction
         assert result["model_instance"] == sample_llm_instance
@@ -121,6 +123,7 @@ class TestAgentBuilderService:
         mock_repository.get.assert_called_once_with(sample_agent.id)
         mock_llm_service.get.assert_called_once_with(UUID(sample_agent.model_id))
 
+    @pytest.mark.asyncio
     async def test_build_agent_config_agent_not_found(self, agent_builder_service, mock_repository):
         """Test building config when agent doesn't exist"""
         # Setup mocks
@@ -134,6 +137,7 @@ class TestAgentBuilderService:
         assert result is None
         mock_repository.get.assert_called_once_with(agent_id)
 
+    @pytest.mark.asyncio
     async def test_build_agent_config_model_not_found(
         self, agent_builder_service, mock_repository, mock_llm_service, sample_agent
     ):
@@ -150,6 +154,7 @@ class TestAgentBuilderService:
         mock_repository.get.assert_called_once_with(sample_agent.id)
         mock_llm_service.get.assert_called_once_with(UUID(sample_agent.model_id))
 
+    @pytest.mark.asyncio
     async def test_build_tools_config_empty(self, agent_builder_service, sample_agent):
         """Test building tools config with empty configuration"""
         # Remove tools config
@@ -163,6 +168,7 @@ class TestAgentBuilderService:
         expected = {"mcp_servers": [], "builtin_tools": [], "custom_tools": []}
         assert result == expected
 
+    @pytest.mark.asyncio
     async def test_build_tools_config_with_builtin_tools(self, agent_builder_service, sample_agent):
         """Test building tools config with builtin tools"""
         # Setup agent with builtin tools
@@ -176,6 +182,7 @@ class TestAgentBuilderService:
         assert result["mcp_servers"] == []
         assert result["custom_tools"] == []
 
+    @pytest.mark.asyncio
     async def test_validate_agent_config_success(
         self,
         agent_builder_service,
@@ -195,6 +202,7 @@ class TestAgentBuilderService:
         # Verify
         assert errors == []
 
+    @pytest.mark.asyncio
     async def test_validate_agent_config_missing_fields(
         self, agent_builder_service, mock_repository, sample_agent
     ):
@@ -216,6 +224,7 @@ class TestAgentBuilderService:
         assert "Agent instruction is required" in errors
         assert "Agent model_id is required" in errors
 
+    @pytest.mark.asyncio
     async def test_get_agent_capabilities_planning_enabled(
         self,
         agent_builder_service,
@@ -243,6 +252,7 @@ class TestAgentBuilderService:
         assert "tools" in capabilities
         assert "events" in capabilities
 
+    @pytest.mark.asyncio
     async def test_get_agent_capabilities_no_planning(
         self,
         agent_builder_service,
@@ -265,6 +275,7 @@ class TestAgentBuilderService:
         assert capabilities["planning"] is False
         assert capabilities["workflow_type"] == "single"
 
+    @pytest.mark.asyncio
     async def test_get_agent_capabilities_agent_not_found(
         self, agent_builder_service, mock_repository
     ):
@@ -278,6 +289,7 @@ class TestAgentBuilderService:
 
         # Verify
         assert capabilities == {}
+        mock_repository.get.assert_called_once_with(agent_id)
 
 
 if __name__ == "__main__":

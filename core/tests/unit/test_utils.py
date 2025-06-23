@@ -27,8 +27,11 @@ def validate_model_name(model_name: str) -> bool:
         return False
 
     # Check for ollama format: ollama_chat/model_name
-    if model_name.startswith("ollama_chat/"):
-        return len(model_name.split("/")) == 2 and len(model_name.split("/")[1]) > 0
+    if model_name.startswith("ollama_chat"):
+        if "/" not in model_name:
+            return False  # ollama_chat without slash is invalid
+        parts = model_name.split("/")
+        return len(parts) == 2 and len(parts[1]) > 0
 
     return True
 
@@ -41,12 +44,13 @@ def format_task_id(agent_id: str, user_id: str, timestamp: int) -> str:
 def parse_llm_response(response_text: str) -> dict[str, Any]:
     """Parse LLM response and extract content"""
     if not response_text:
-        return {"content": "", "tokens": 0}
+        return {"content": "", "tokens": 0, "char_count": 0}
 
+    stripped_content = response_text.strip()
     return {
-        "content": response_text.strip(),
+        "content": stripped_content,
         "tokens": len(response_text.split()),
-        "char_count": len(response_text),
+        "char_count": len(stripped_content),
     }
 
 
@@ -118,7 +122,7 @@ class TestUtils:
 
         assert result["content"] == "This is a test response."
         assert result["tokens"] == 5
-        assert result["char_count"] == 27
+        assert result["char_count"] == 24
 
 
 if __name__ == "__main__":

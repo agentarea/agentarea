@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 
+from agentarea.common.utils.types import TaskState, TaskStatus
 from agentarea.modules.tasks.domain.models import Task, TaskPriority, TaskType
 from agentarea.modules.tasks.task_service import TaskService
 
@@ -23,9 +24,14 @@ class TestTaskService:
         return AsyncMock()
 
     @pytest.fixture
-    def task_service(self, mock_event_broker):
-        """Create TaskService with mocked event broker"""
-        return TaskService(event_broker=mock_event_broker)
+    def mock_task_repository(self):
+        """Mock task repository"""
+        return AsyncMock()
+
+    @pytest.fixture
+    def task_service(self, mock_event_broker, mock_task_repository):
+        """Create TaskService with mocked event broker and task repository"""
+        return TaskService(event_broker=mock_event_broker, task_repository=mock_task_repository)
 
     @pytest.fixture
     def sample_agent_id(self):
@@ -33,6 +39,7 @@ class TestTaskService:
         return uuid4()
 
     @patch("agentarea.modules.tasks.task_service.TaskFactory")
+    @pytest.mark.asyncio
     async def test_create_and_start_test_task_success(
         self, mock_task_factory, task_service, mock_event_broker, sample_agent_id
     ):
@@ -40,14 +47,19 @@ class TestTaskService:
         # Setup mock task
         mock_task = Task(
             id="test-task-123",
-            agent_id=sample_agent_id,
+            title="Test Task",
             description="Test task for agent",
-            task_type=TaskType.TEST,
+            task_type=TaskType.ANALYSIS,
             priority=TaskPriority.MEDIUM,
+            status=TaskStatus(state=TaskState.SUBMITTED),
+            assigned_agent_id=sample_agent_id,
             parameters={"test": True},
             metadata={"created_by": "test"},
         )
         mock_task_factory.create_test_task.return_value = mock_task
+        
+        # Mock task repository to return the mock task
+        task_service.task_repository.create.return_value = mock_task
 
         # Execute
         result = await task_service.create_and_start_test_task(sample_agent_id)
@@ -55,6 +67,7 @@ class TestTaskService:
         # Verify
         assert result == mock_task
         mock_task_factory.create_test_task.assert_called_once_with(sample_agent_id)
+        task_service.task_repository.create.assert_called_once_with(mock_task)
         mock_event_broker.publish.assert_called_once()
 
         # Verify the published event
@@ -64,6 +77,7 @@ class TestTaskService:
         assert published_event.description == mock_task.description
 
     @patch("agentarea.modules.tasks.task_service.TaskFactory")
+    @pytest.mark.asyncio
     async def test_create_and_start_test_task_factory_error(
         self, mock_task_factory, task_service, mock_event_broker, sample_agent_id
     ):
@@ -77,9 +91,12 @@ class TestTaskService:
 
         assert str(exc_info.value) == "Task creation failed"
         mock_task_factory.create_test_task.assert_called_once_with(sample_agent_id)
+        # Task repository create should not be called if factory fails
+        task_service.task_repository.create.assert_not_called()
         mock_event_broker.publish.assert_not_called()
 
     @patch("agentarea.modules.tasks.task_service.TaskFactory")
+    @pytest.mark.asyncio
     async def test_create_and_start_test_task_event_publish_error(
         self, mock_task_factory, task_service, mock_event_broker, sample_agent_id
     ):
@@ -87,14 +104,19 @@ class TestTaskService:
         # Setup mock task
         mock_task = Task(
             id="test-task-123",
-            agent_id=sample_agent_id,
+            title="Test Task",
             description="Test task for agent",
-            task_type=TaskType.TEST,
+            task_type=TaskType.ANALYSIS,
             priority=TaskPriority.MEDIUM,
+            status=TaskStatus(state=TaskState.SUBMITTED),
+            assigned_agent_id=sample_agent_id,
             parameters={"test": True},
             metadata={"created_by": "test"},
         )
         mock_task_factory.create_test_task.return_value = mock_task
+        
+        # Mock task repository to return the mock task
+        task_service.task_repository.create.return_value = mock_task
 
         # Setup event broker to raise exception
         mock_event_broker.publish.side_effect = Exception("Event publishing failed")
@@ -105,6 +127,7 @@ class TestTaskService:
 
         assert str(exc_info.value) == "Event publishing failed"
         mock_task_factory.create_test_task.assert_called_once_with(sample_agent_id)
+        task_service.task_repository.create.assert_called_once_with(mock_task)
         mock_event_broker.publish.assert_called_once()
 
 
