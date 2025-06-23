@@ -8,12 +8,11 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea.modules.llm.domain.models import LLMModel, LLMModelInstance, LLMProvider
-from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
+from agentarea_llm.domain.models import LLMModel, LLMModelInstance, LLMProvider
+from agentarea_llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestLLMModelInstanceRepository:

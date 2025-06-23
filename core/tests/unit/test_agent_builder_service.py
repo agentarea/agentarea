@@ -10,14 +10,13 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-
-from agentarea.common.events.broker import EventBroker
-from agentarea.common.utils.types import sanitize_agent_name
-from agentarea.modules.agents.application.agent_builder_service import (
+from agentarea_agents.application.agent_builder_service import (
     AgentBuilderService,
 )
-from agentarea.modules.agents.domain.models import Agent
-from agentarea.modules.llm.domain.models import LLMModelInstance
+from agentarea_agents.domain.models import Agent
+from agentarea_common.events.broker import EventBroker
+from agentarea_common.utils.types import sanitize_agent_name
+from agentarea_llm.domain.models import LLMModelInstance
 
 
 class TestAgentBuilderService:

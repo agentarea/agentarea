@@ -1,10 +1,9 @@
 from uuid import uuid4
 
 import pytest
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
-from agentarea.modules.mcp.infrastructure.repository import MCPServerInstanceRepository
 
 
 class TestMCPServerInstanceRepository:

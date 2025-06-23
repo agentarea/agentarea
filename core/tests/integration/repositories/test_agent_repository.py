@@ -6,12 +6,11 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from agentarea_agents.domain.models import Agent
+from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_common.base.models import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
-
-from agentarea.common.base.models import BaseModel
-from agentarea.modules.agents.domain.models import Agent
-from agentarea.modules.agents.infrastructure.repository import AgentRepository
 
 
 @pytest_asyncio.fixture(scope="function")

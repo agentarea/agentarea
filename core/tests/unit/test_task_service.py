@@ -9,10 +9,9 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-
-from agentarea.common.utils.types import TaskState, TaskStatus
-from agentarea.modules.tasks.domain.models import Task, TaskPriority, TaskType
-from agentarea.modules.tasks.task_service import TaskService
+from agentarea_common.utils.types import TaskState, TaskStatus
+from agentarea_tasks.domain.models import Task, TaskPriority, TaskType
+from agentarea_tasks.task_service import TaskService
 
 
 class TestTaskService:
@@ -38,7 +37,7 @@ class TestTaskService:
         """Sample agent ID for testing"""
         return uuid4()
 
-    @patch("agentarea.modules.tasks.task_service.TaskFactory")
+    @patch("agentarea_tasks.task_service.TaskFactory")
     @pytest.mark.asyncio
     async def test_create_and_start_test_task_success(
         self, mock_task_factory, task_service, mock_event_broker, sample_agent_id
@@ -76,7 +75,7 @@ class TestTaskService:
         assert published_event.agent_id == sample_agent_id
         assert published_event.description == mock_task.description
 
-    @patch("agentarea.modules.tasks.task_service.TaskFactory")
+    @patch("agentarea_tasks.task_service.TaskFactory")
     @pytest.mark.asyncio
     async def test_create_and_start_test_task_factory_error(
         self, mock_task_factory, task_service, mock_event_broker, sample_agent_id
@@ -95,7 +94,7 @@ class TestTaskService:
         task_service.task_repository.create.assert_not_called()
         mock_event_broker.publish.assert_not_called()
 
-    @patch("agentarea.modules.tasks.task_service.TaskFactory")
+    @patch("agentarea_tasks.task_service.TaskFactory")
     @pytest.mark.asyncio
     async def test_create_and_start_test_task_event_publish_error(
         self, mock_task_factory, task_service, mock_event_broker, sample_agent_id

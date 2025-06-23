@@ -7,10 +7,8 @@ Tests all CRUD operations and business logic methods on the TaskRepository.
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea.common.utils.types import TaskState
-from agentarea.modules.tasks.domain.models import (
+from agentarea_common.utils.types import TaskState
+from agentarea_tasks.domain.models import (
     AgentCapability,
     Task,
     TaskComplexity,
@@ -18,7 +16,8 @@ from agentarea.modules.tasks.domain.models import (
     TaskStatus,
     TaskType,
 )
-from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
+from agentarea_tasks.infrastructure.repository import SQLAlchemyTaskRepository
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestTaskRepository:

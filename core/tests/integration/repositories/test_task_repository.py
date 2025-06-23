@@ -7,9 +7,8 @@ Tests all CRUD operations and custom task-specific methods.
 from uuid import uuid4
 
 import pytest
-
-from agentarea.modules.tasks.domain.models import TaskStatus
-from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
+from agentarea_tasks.domain.models import TaskStatus
+from agentarea_tasks.infrastructure.repository import SQLAlchemyTaskRepository
 
 
 class TestTaskRepository:

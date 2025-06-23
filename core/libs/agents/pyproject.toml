@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-agents"
+version = "0.1.0"
+description = "Agent functionality for AgentArea"
+requires-python = ">=3.12"
+dependencies = [
+    "agentarea-common",
+    "a2a-sdk>=0.2.8",
+    "pydantic>=2.4.2",
+    "httpx>=0.25.0",
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_agents"] 

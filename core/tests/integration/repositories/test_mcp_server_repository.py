@@ -7,10 +7,9 @@ Tests all CRUD operations and business logic methods on the MCPServerRepository.
 from uuid import uuid4
 
 import pytest
+from agentarea_mcp.domain.models import MCPServer
+from agentarea_mcp.infrastructure.repository import MCPServerRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea.modules.mcp.domain.models import MCPServer
-from agentarea.modules.mcp.infrastructure.repository import MCPServerRepository
 
 
 class TestMCPServerRepository:

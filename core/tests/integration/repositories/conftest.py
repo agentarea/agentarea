@@ -9,28 +9,27 @@ from datetime import datetime
 from uuid import uuid4
 
 import pytest_asyncio
+from agentarea_agents.domain.models import Agent
+from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_common.base.models import BaseModel
+from agentarea_llm.domain.models import LLMModel, LLMModelInstance, LLMProvider
+from agentarea_llm.infrastructure.llm_model_instance_repository import (
+    LLMModelInstanceRepository,
+)
+from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
+from agentarea_mcp.domain.models import MCPServer
+from agentarea_mcp.domain.mpc_server_instance_model import Base as MCPBase
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.infrastructure.repository import (
+    MCPServerInstanceRepository,
+    MCPServerRepository,
+)
+from agentarea_tasks.domain.models import Task, TaskStatus
+from agentarea_tasks.infrastructure.repository import SQLAlchemyTaskRepository
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
-
-from agentarea.common.base.models import BaseModel
-from agentarea.modules.agents.domain.models import Agent
-from agentarea.modules.agents.infrastructure.repository import AgentRepository
-from agentarea.modules.llm.domain.models import LLMModel, LLMModelInstance, LLMProvider
-from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
-    LLMModelInstanceRepository,
-)
-from agentarea.modules.llm.infrastructure.llm_model_repository import LLMModelRepository
-from agentarea.modules.mcp.domain.models import MCPServer
-from agentarea.modules.mcp.domain.mpc_server_instance_model import Base as MCPBase
-from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
-from agentarea.modules.mcp.infrastructure.repository import (
-    MCPServerInstanceRepository,
-    MCPServerRepository,
-)
-from agentarea.modules.tasks.domain.models import Task, TaskStatus
-from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepository
 
 
 # SQLite foreign key support

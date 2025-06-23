@@ -1,1 +1,0 @@
-"""MCP (Model Context Protocol) module for AgentArea."""

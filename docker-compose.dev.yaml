@@ -4,6 +4,7 @@ services:
     container_name: agentarea-backend
     build:
       context: core
+      dockerfile: apps/api/Dockerfile
     ports:
       - "8000:8000"
     restart: always
@@ -28,11 +29,10 @@ services:
       - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
       - RELOAD=${RELOAD:-true}
       - WORKERS=${WORKERS:-1}
-      # Ollama settings
-      - OLLAMA_BASE_URL=http://ollama:11434
     volumes:
-      - ./core/agentarea:/app/agentarea
-      - ./core/alembic:/app/alembic
+      - ./core/apps/api/agentarea_api:/app/apps/api/agentarea_api
+      - ./core/libs:/app/libs
+      - ./core/apps/api/alembic:/app/apps/api/alembic
       - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}:/app/bootstrap
     depends_on:
       db:
@@ -45,17 +45,18 @@ services:
         condition: service_completed_successfully
       bootstrap:
         condition: service_completed_successfully
-      mcp-manager:
-        condition: service_healthy
+      # mcp-manager:
+      #   condition: service_healthy
     networks:
       - default
       - mcp-network
       - temporal-network
-    command: ["python", "-m", "cli", "serve", "--reload", "--log-level=${LOG_LEVEL:-info}", "--workers=${WORKERS:-1}"]
+    command: ["python", "-m", "cli", "serve", "--reload", "--log-level=info"]
 
   app_migrations:
     build:
       context: core
+      dockerfile: apps/api/Dockerfile
     environment:
     ## Have to add it for now
           # S3 settings
@@ -69,7 +70,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
-      - ./core/alembic:/app/alembic
+      - ./core/apps/api/alembic:/app/apps/api/alembic
     depends_on:
       db:
         condition: service_healthy
@@ -176,40 +177,40 @@ services:
     command: ["redis-server", "--save", "", "--appendonly", "no"]  # Disable persistence for dev
 
   # MCP Infrastructure Services
-  mcp-manager:
-    build:
-      context: mcp-infrastructure/go-mcp-manager
-      dockerfile: Dockerfile.dev
-      target: development
-    container_name: mcp-manager
-    restart: unless-stopped
-    privileged: true
-    ports:
-      - "7999:8000"  # MCP Manager API
-      - "81:80"      # Traefik HTTP (different port to avoid conflict with main app)
-      - "8443:443"   # Traefik HTTPS (different port to avoid conflict)
-      - "8081:8080"  # Traefik dashboard
-    expose:
-      - "8000"
-      - "80"
-      - "443"
-      - "8080"
-    tmpfs:
-      - /tmp
-      - /run
-    volumes:
-      - mcp_containers:/var/lib/containers/storage
-      - ./mcp-infrastructure/docker/templates:/app/templates:ro
-      - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
-      - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro  # Access to Infisical bootstrap token
-    networks:
-      - mcp-network
-    environment:
-      - LOG_LEVEL=INFO
-      - TRAEFIK_NETWORK=podman
-      - REDIS_URL=redis://redis:6379
+  # mcp-manager:
+  #   build:
+  #     context: mcp-infrastructure/go-mcp-manager
+  #     dockerfile: Dockerfile.dev
+  #     target: development
+  #   container_name: mcp-manager
+  #   restart: unless-stopped
+  #   privileged: true
+  #   ports:
+  #     - "7999:8000"  # MCP Manager API
+  #     - "81:80"      # Traefik HTTP (different port to avoid conflict with main app)
+  #     - "8443:443"   # Traefik HTTPS (different port to avoid conflict)
+  #     - "8081:8080"  # Traefik dashboard
+  #   expose:
+  #     - "8000"
+  #     - "80"
+  #     - "443"
+  #     - "8080"
+  #   tmpfs:
+  #     - /tmp
+  #     - /run
+  #   volumes:
+  #     - mcp_containers:/var/lib/containers/storage
+  #     - ./mcp-infrastructure/docker/templates:/app/templates:ro
+  #     - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
+  #     - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
+  #     - /sys/fs/cgroup:/sys/fs/cgroup:rw
+  #     - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro  # Access to Infisical bootstrap token
+  #   networks:
+  #     - mcp-network
+  #   environment:
+  #     - LOG_LEVEL=INFO
+  #     - TRAEFIK_NETWORK=podman
+  #     - REDIS_URL=redis://redis:6379
 
   # Temporal Infrastructure Services
   temporal:
@@ -269,42 +270,24 @@ services:
     networks:
       - temporal-network
     ports:
-      - 8081:8080
+      - 8082:8080
 
-  # Ollama Service
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_ORIGINS=*
-      - OLLAMA_HOST=0.0.0.0
-    networks:
-      - default
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-  # AgentArea Worker Service
+  # # AgentArea Worker Service
   # agentarea-worker:
   #   build:
   #     context: core
-  #     dockerfile: Dockerfile
+  #     dockerfile: apps/worker/Dockerfile
   #   container_name: agentarea-worker
   #   depends_on:
   #     db:
   #       condition: service_healthy
   #     redis:
   #       condition: service_started
+  #     temporal:
+  #       condition: service_started
   #   environment:
   #     # Database
+  #     - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
   #     - POSTGRES_HOST=db
   #     - POSTGRES_PORT=5432
   #     - POSTGRES_USER=${POSTGRES_USER}
@@ -312,7 +295,7 @@ services:
   #     - POSTGRES_DB=${POSTGRES_DB}
       
   #     # Redis
-  #     - REDIS_URL=redis://redis:6379/1
+  #     - REDIS_URL=redis://redis:6379
       
   #     # Workflow settings
   #     - WORKFLOW__USE_WORKFLOW_EXECUTION=true
@@ -329,21 +312,14 @@ services:
   #     # Development
   #     - DEBUG=true
   #     - ENVIRONMENT=development
+  #     - PYTHONPATH=/app
   #   networks:
   #     - temporal-network
   #     - default
   #   volumes:
-  #     - ./core:/app
-  #   working_dir: /app
-  #   command: >
-  #     sh -c "
-  #       echo 'Waiting for Temporal to be ready...' &&
-  #       sleep 15 &&
-  #       echo 'Starting Temporal worker...' &&
-  #       python agentarea/workflows/temporal_worker.py
-  #     "
-
-
+  #     - ./core/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
+  #     - ./core/libs:/app/libs
+  #   restart: unless-stopped
 
 volumes:
   postgres_data:

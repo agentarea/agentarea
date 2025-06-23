@@ -16,14 +16,13 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from agentarea_api.workflows.agent_task_workflow import (
+    AgentTaskWorkflow,
+)
 from temporalio import activity
 from temporalio.client import Client
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
-
-from agentarea.workflows.agent_task_workflow import (
-    AgentTaskWorkflow,
-)
 
 # Configure pytest for async tests
 pytestmark = pytest.mark.asyncio

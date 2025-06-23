@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-worker"
+version = "0.1.0"
+description = "AgentArea Worker application"
+requires-python = ">=3.12"
+dependencies = [
+    "agentarea-common",
+    "agentarea-agents", 
+    "agentarea-tasks",
+    "temporalio>=1.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+agentarea-agents = { workspace = true }
+agentarea-tasks = { workspace = true }
+
+[project.scripts]
+agentarea-worker = "agentarea_worker.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_worker"] 
