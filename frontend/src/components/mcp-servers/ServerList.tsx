@@ -137,7 +137,7 @@ export function ServerList({ mcpList }: ServerListProps) {
                           asChild
                         >
                           <Link 
-                            href={`/mcp-servers/setup?provider=${server.id}&type=${providerType}`}
+                            href={`/mcp-servers/${server.id}/setup`}
                             className="flex items-center gap-1"
                           >
                             <Settings className="h-3 w-3" />

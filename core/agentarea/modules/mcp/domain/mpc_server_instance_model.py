@@ -38,6 +38,9 @@ class MCPServerInstance(Base):
         Get list of environment variable names configured for this instance.
         
         Returns:
-            List of environment variable names (actual values stored in secret manager)
+            List of environment variable names from the environment section of json_spec
         """
-        return self.json_spec.get("env_vars", [])
+        environment = self.json_spec.get("environment", {})
+        if isinstance(environment, dict):
+            return [str(key) for key in environment.keys()]
+        return []

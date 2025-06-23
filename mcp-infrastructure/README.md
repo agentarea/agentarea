@@ -6,7 +6,7 @@ A secure, scalable infrastructure for running Model Context Protocol (MCP) servi
 
 **Environment-Aware Design**: The MCP Manager automatically detects its environment and uses the appropriate backend:
 
-- **Docker Compose** (Development): Uses Podman + Caddy for container management and routing
+- **Docker Compose** (Development): Uses Podman + Traefik for container management and routing
 - **Kubernetes** (Production): Uses native K8s resources (Deployments, Services, Ingress)
 
 ## 📁 Directory Structure
@@ -15,7 +15,7 @@ A secure, scalable infrastructure for running Model Context Protocol (MCP) servi
 mcp-infrastructure/
 ├── go-mcp-manager/         # Go-based MCP Manager (main application)
 ├── docker-compose.yml      # Docker Compose deployment
-├── caddy/                  # Caddy configuration for Docker Compose backend
+├── traefik/                # Traefik configuration for Docker Compose backend
 ├── docker/                 # Container templates and configurations
 ├── k8s/                    # Kubernetes manifests and examples
 ├── scripts/                # Utility scripts for testing and management
@@ -105,8 +105,8 @@ curl -X DELETE http://localhost:8000/containers/my-app
 | Feature | Docker Compose | Kubernetes |
 |---------|----------------|------------|
 | **Container Runtime** | Podman | kubelet + containerd |
-| **Service Discovery** | Caddy | Services |
-| **Load Balancing** | Caddy | Services + Ingress |
+| **Service Discovery** | Traefik | Services |
+| **Load Balancing** | Traefik | Services + Ingress |
 | **Scaling** | Manual | Automatic (HPA) |
 | **Storage** | Volumes | PVCs |
 | **Secrets** | Environment | K8s Secrets |

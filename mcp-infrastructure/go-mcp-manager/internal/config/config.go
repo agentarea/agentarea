@@ -15,11 +15,17 @@ type Config struct {
 	// Container runtime configuration
 	Container ContainerConfig `json:"container"`
 
-	// Caddy configuration
-	Caddy CaddyConfig `json:"caddy"`
+	// Traefik configuration
+	Traefik TraefikConfig `json:"traefik"`
 
 	// Logging configuration
 	Logging LoggingConfig `json:"logging"`
+
+	// Redis configuration for events
+	Redis RedisConfig `json:"redis"`
+
+	// Core API configuration
+	CoreAPIURL string `json:"core_api_url"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -38,7 +44,8 @@ type ContainerConfig struct {
 	StorageGraphroot string `json:"storage_graphroot"`
 
 	// Management settings
-	Prefix          string        `json:"prefix"`
+	NamePrefix      string        `json:"name_prefix"`
+	ManagedByLabel  string        `json:"managed_by_label"`
 	MaxContainers   int           `json:"max_containers"`
 	StartupTimeout  time.Duration `json:"startup_timeout"`
 	ShutdownTimeout time.Duration `json:"shutdown_timeout"`
@@ -46,23 +53,24 @@ type ContainerConfig struct {
 	// Resource limits
 	DefaultMemoryLimit string `json:"default_memory_limit"`
 	DefaultCPULimit    string `json:"default_cpu_limit"`
-
-	// Templates
-	TemplatesDir string `json:"templates_dir"`
 }
 
-// CaddyConfig holds Caddy API configuration
-type CaddyConfig struct {
-	APIURL        string        `json:"api_url"`
-	Host          string        `json:"host"`
-	Timeout       time.Duration `json:"timeout"`
-	DefaultDomain string        `json:"default_domain"`
+// TraefikConfig holds Traefik configuration
+type TraefikConfig struct {
+	Network       string `json:"network"`
+	ProxyPort     int    `json:"proxy_port"`
+	DefaultDomain string `json:"default_domain"`
 }
 
 // LoggingConfig holds logging configuration
 type LoggingConfig struct {
 	Level  string `json:"level"`
 	Format string `json:"format"`
+}
+
+// RedisConfig holds Redis configuration for event handling
+type RedisConfig struct {
+	URL string `json:"url"`
 }
 
 // Load loads configuration from environment variables with sensible defaults
@@ -79,24 +87,27 @@ func Load() *Config {
 			StorageDriver:      getEnv("CONTAINERS_STORAGE_DRIVER", "overlay"),
 			StorageRunroot:     getEnv("CONTAINERS_STORAGE_RUNROOT", "/tmp/containers"),
 			StorageGraphroot:   getEnv("CONTAINERS_STORAGE_GRAPHROOT", "/var/lib/containers/storage"),
-			Prefix:             getEnv("CONTAINER_PREFIX", "mcp-"),
+			NamePrefix:         getEnv("CONTAINER_NAME_PREFIX", "mcp-"),
+			ManagedByLabel:     getEnv("CONTAINER_MANAGED_BY_LABEL", "mcp-manager"),
 			MaxContainers:      getEnvInt("MAX_CONTAINERS", 50),
 			StartupTimeout:     getEnvDuration("STARTUP_TIMEOUT", 120*time.Second),
 			ShutdownTimeout:    getEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 			DefaultMemoryLimit: getEnv("DEFAULT_MEMORY_LIMIT", "512m"),
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
-			TemplatesDir:       getEnv("TEMPLATES_DIR", "/app/templates"),
 		},
-		Caddy: CaddyConfig{
-			APIURL:        getEnv("CADDY_API_URL", "http://caddy:2019"),
-			Host:          getEnv("CADDY_HOST", "caddy"),
-			Timeout:       getEnvDuration("CADDY_API_TIMEOUT", 10*time.Second),
+		Traefik: TraefikConfig{
+			Network:       getEnv("TRAEFIK_NETWORK", "podman"),
+			ProxyPort:     getEnvInt("TRAEFIK_PROXY_PORT", 81),
 			DefaultDomain: getEnv("DEFAULT_DOMAIN", "localhost"),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),
 			Format: getEnv("LOG_FORMAT", "json"),
 		},
+		Redis: RedisConfig{
+			URL: getEnv("REDIS_URL", "redis://localhost:6379"),
+		},
+		CoreAPIURL: getEnv("CORE_API_URL", "http://localhost:8000"),
 	}
 }
 
@@ -128,15 +139,15 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 
 // GetContainerName generates a container name for a service
 func (c *Config) GetContainerName(serviceName string) string {
-	return fmt.Sprintf("%s%s", c.Container.Prefix, serviceName)
+	return fmt.Sprintf("%s%s", c.Container.NamePrefix, serviceName)
 }
 
-// GetServiceURL generates a service URL for Caddy routing
+// GetServiceURL generates a service URL for Traefik routing
 func (c *Config) GetServiceURL(serviceName string, port int) string {
 	return fmt.Sprintf("http://%s:%d", c.GetContainerName(serviceName), port)
 }
 
 // GetServiceHost generates a service hostname
 func (c *Config) GetServiceHost(serviceName string) string {
-	return fmt.Sprintf("%s.%s", serviceName, c.Caddy.DefaultDomain)
+	return fmt.Sprintf("%s:%d", c.Traefik.DefaultDomain, c.Traefik.ProxyPort)
 }

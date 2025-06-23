@@ -36,7 +36,12 @@ class MCPServerDeployed(DomainEvent):
 
 class MCPServerInstanceCreated(DomainEvent):
     def __init__(self, instance_id: str, server_spec_id: Optional[str], name: str, json_spec: Dict[str, Any]):
-        super().__init__()
+        super().__init__(
+            instance_id=instance_id,
+            server_spec_id=server_spec_id,
+            name=name,
+            json_spec=json_spec
+        )
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id
         self.name = name
@@ -54,7 +59,7 @@ class MCPServerInstanceUpdated(DomainEvent):
 
 class MCPServerInstanceDeleted(DomainEvent):
     def __init__(self, instance_id: UUID):
-        super().__init__()
+        super().__init__(instance_id=str(instance_id))
         self.instance_id = instance_id
 
 
