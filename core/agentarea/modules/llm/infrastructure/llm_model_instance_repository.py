@@ -13,16 +13,15 @@ class LLMModelInstanceRepository(BaseRepository[LLMModelInstance]):
         self.session = session
 
     async def get(self, id: UUID) -> LLMModelInstance | None:
-        async with self.session.begin():
-            result = await self.session.execute(
-                select(LLMModelInstance)
-                .options(
-                    joinedload(LLMModelInstance.model)
-                    .joinedload(LLMModelInstance.model.mapper.class_.provider)
-                )
-                .where(LLMModelInstance.id == id)
+        result = await self.session.execute(
+            select(LLMModelInstance)
+            .options(
+                joinedload(LLMModelInstance.model)
+                .joinedload(LLMModelInstance.model.mapper.class_.provider)
             )
-            return result.scalar_one_or_none()
+            .where(LLMModelInstance.id == id)
+        )
+        return result.scalar_one_or_none()
 
     async def list(
         self,
@@ -49,15 +48,15 @@ class LLMModelInstanceRepository(BaseRepository[LLMModelInstance]):
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def create(self, instance: LLMModelInstance) -> LLMModelInstance:
-        self.session.add(instance)
+    async def create(self, entity: LLMModelInstance) -> LLMModelInstance:
+        self.session.add(entity)
         await self.session.flush()
-        return instance
+        return entity
 
-    async def update(self, instance: LLMModelInstance) -> LLMModelInstance:
-        await self.session.merge(instance)
+    async def update(self, entity: LLMModelInstance) -> LLMModelInstance:
+        await self.session.merge(entity)
         await self.session.flush()
-        return instance
+        return entity
 
     async def delete(self, id: UUID) -> bool:
         result = await self.session.execute(

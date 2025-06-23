@@ -1,0 +1,71 @@
+# Temporal development configuration for SQL database
+# This file configures Temporal server behavior for development
+
+# Frontend service configuration
+frontend.enableClientVersionCheck:
+  - value: true
+    constraints: {}
+
+# History service configuration
+history.defaultActivityRetryPolicy:
+  - value:
+      InitialIntervalInSeconds: 1
+      MaximumIntervalInSeconds: 100
+      BackoffCoefficient: 2.0
+      MaximumAttempts: 0
+    constraints: {}
+
+history.defaultWorkflowRetryPolicy:
+  - value:
+      InitialIntervalInSeconds: 1
+      MaximumIntervalInSeconds: 100
+      BackoffCoefficient: 2.0
+      MaximumAttempts: 0
+    constraints: {}
+
+# Matching service configuration
+matching.numTaskqueueReadPartitions:
+  - value: 4
+    constraints: {}
+
+matching.numTaskqueueWritePartitions:
+  - value: 4
+    constraints: {}
+
+# Worker service configuration
+worker.replicatorConcurrency:
+  - value: 1000
+    constraints: {}
+
+# System configuration
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}
+
+# Development-specific settings
+system.enableActivityEagerExecution:
+  - value: true
+    constraints: {}
+
+# Workflow execution timeout (for long-running agent tasks)
+system.defaultWorkflowExecutionTimeout:
+  - value: "168h"  # 7 days
+    constraints: {}
+
+# Activity execution timeout
+system.defaultActivityExecutionTimeout:
+  - value: "24h"  # 24 hours
+    constraints: {}
+
+# Search attributes
+system.searchAttributesNumberOfKeysLimit:
+  - value: 100
+    constraints: {}
+
+system.searchAttributesSizeOfValueLimit:
+  - value: 40960
+    constraints: {}
+
+system.searchAttributesTotalSizeLimit:
+  - value: 40960
+    constraints: {} 

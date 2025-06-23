@@ -4,6 +4,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from agentarea.common.events.broker import EventBroker
+from agentarea.common.utils.types import sanitize_agent_name
 from agentarea.modules.llm.application.service import LLMModelInstanceService
 from agentarea.modules.llm.domain.models import LLMModelInstance
 from agentarea.modules.mcp.application.service import MCPServerInstanceService
@@ -62,7 +63,7 @@ class AgentBuilderService:
         # Build complete agent configuration
         agent_config: dict[str, Any] = {
             "id": str(agent.id),
-            "name": agent.name,
+            "name": sanitize_agent_name(agent.name),  # Sanitize name for Google ADK
             "description": agent.description,
             "instruction": agent.instruction,
             "model_instance": model_instance,
@@ -79,7 +80,7 @@ class AgentBuilderService:
             }
         }
 
-        logger.info(f"Built agent configuration for {agent.name} (ID: {agent_id})")
+        logger.info(f"Built agent configuration for {agent.name} -> {sanitize_agent_name(agent.name)} (ID: {agent_id})")
         return agent_config
 
     async def _build_tools_config(self, agent: Agent) -> dict[str, Any]:

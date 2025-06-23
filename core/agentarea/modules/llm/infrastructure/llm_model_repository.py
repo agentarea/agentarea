@@ -14,13 +14,12 @@ class LLMModelRepository(BaseRepository[LLMModel]):
         self.session = session
 
     async def get(self, id: UUID) -> Optional[LLMModel]:
-        async with self.session.begin():
-            result = await self.session.execute(
-                select(LLMModel)
-                .options(selectinload(LLMModel.provider))
-                .where(LLMModel.id == id)
-            )
-            return result.scalar_one_or_none()
+        result = await self.session.execute(
+            select(LLMModel)
+            .options(selectinload(LLMModel.provider))
+            .where(LLMModel.id == id)
+        )
+        return result.scalar_one_or_none()
 
     async def list(
         self,
@@ -28,42 +27,38 @@ class LLMModelRepository(BaseRepository[LLMModel]):
         is_public: Optional[bool] = None,
         provider: Optional[str] = None,
     ) -> List[LLMModel]:
-        async with self.session.begin():
-            query = select(LLMModel).options(selectinload(LLMModel.provider))
+        query = select(LLMModel).options(selectinload(LLMModel.provider))
 
-            conditions = []
-            if status is not None:
-                conditions.append(LLMModel.status == status)
-            if is_public is not None:
-                conditions.append(LLMModel.is_public == is_public)
-            if provider is not None:
-                query = query.join(LLMProvider)
-                conditions.append(LLMProvider.name == provider)
+        conditions = []
+        if status is not None:
+            conditions.append(LLMModel.status == status)
+        if is_public is not None:
+            conditions.append(LLMModel.is_public == is_public)
+        if provider is not None:
+            query = query.join(LLMProvider)
+            conditions.append(LLMProvider.name == provider)
 
-            if conditions:
-                query = query.where(and_(*conditions))
+        if conditions:
+            query = query.where(and_(*conditions))
 
-            result = await self.session.execute(query)
-            return list(result.scalars().all())
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
-    async def create(self, model: LLMModel) -> LLMModel:
-        async with self.session.begin():
-            self.session.add(model)
-            await self.session.flush()
-            return model
+    async def create(self, entity: LLMModel) -> LLMModel:
+        self.session.add(entity)
+        await self.session.flush()
+        return entity
 
-    async def update(self, model: LLMModel) -> LLMModel:
-        async with self.session.begin():
-            await self.session.merge(model)
-            await self.session.flush()
-            return model
+    async def update(self, entity: LLMModel) -> LLMModel:
+        await self.session.merge(entity)
+        await self.session.flush()
+        return entity
 
     async def delete(self, id: UUID) -> bool:
-        async with self.session.begin():
-            result = await self.session.execute(select(LLMModel).where(LLMModel.id == id))
-            model = result.scalar_one_or_none()
-            if model:
-                await self.session.delete(model)
-                await self.session.flush()
-                return True
-            return False
+        result = await self.session.execute(select(LLMModel).where(LLMModel.id == id))
+        model = result.scalar_one_or_none()
+        if model:
+            await self.session.delete(model)
+            await self.session.flush()
+            return True
+        return False

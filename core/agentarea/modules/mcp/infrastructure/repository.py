@@ -34,7 +34,8 @@ class MCPServerRepository(BaseRepository[MCPServer]):
         if is_public is not None:
             conditions.append(MCPServer.is_public == is_public)
         if tag is not None:
-            conditions.append(MCPServer.tags.contains([tag]))
+            # For SQLite, use LIKE to search within JSON array
+            conditions.append(MCPServer.tags.like(f'%"{tag}"%'))
 
         if conditions:
             query = query.where(and_(*conditions))
@@ -42,15 +43,15 @@ class MCPServerRepository(BaseRepository[MCPServer]):
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def create(self, server: MCPServer) -> MCPServer:
-        self.session.add(server)
+    async def create(self, entity: MCPServer) -> MCPServer:
+        self.session.add(entity)
         await self.session.flush()
-        return server
+        return entity
 
-    async def update(self, server: MCPServer) -> MCPServer:
-        await self.session.merge(server)
+    async def update(self, entity: MCPServer) -> MCPServer:
+        await self.session.merge(entity)
         await self.session.flush()
-        return server
+        return entity
 
     async def delete(self, id: UUID) -> bool:
         result = await self.session.execute(
@@ -69,11 +70,10 @@ class MCPServerInstanceRepository(BaseRepository[MCPServerInstance]):
         self.session = session
 
     async def get(self, id: UUID) -> Optional[MCPServerInstance]:
-        async with self.session.begin():
-            result = await self.session.execute(
-                select(MCPServerInstance).where(MCPServerInstance.id == id)
-            )
-            return result.scalar_one_or_none()
+        result = await self.session.execute(
+            select(MCPServerInstance).where(MCPServerInstance.id == id)
+        )
+        return result.scalar_one_or_none()
 
     async def list(
         self,

@@ -28,12 +28,22 @@ dependencies = [
     "faststream[kafka,redis]>=0.5.42",
     "greenlet>=3.1.1",
     "google-adk>=1.1.1",
+    "a2a-sdk>=0.2.8",
     "litellm>=1.72.0",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
     "httpx>=0.25.0",
     "redis>=5.0.0",
+    "temporalio>=1.12.0",
 ]
+
+[project.scripts]
+# Standard development and testing commands  
+dev = "uvicorn agentarea.main:app --reload --host 0.0.0.0 --port 8000"
+test = "python -m pytest tests/integration/repositories/ -k 'not task and not old' --tb=short"
+test-unit = "python -m pytest tests/unit/ --tb=short -v"
+test-integration = "python -m pytest tests/integration/repositories/ -k 'not task and not old' --tb=short -v"
+test-quick = "python -m pytest tests/integration/repositories/ -k 'not task and not old' --tb=no -q"
 
 [tool.uv.workspace]
 members = ["venv"]
@@ -42,6 +52,7 @@ members = ["venv"]
 dev = [
     "ruff>=0.11.4",
     "pyright>=1.1.400",
+    "aiosqlite>=0.21.0",
 ]
 
 [tool.ruff]

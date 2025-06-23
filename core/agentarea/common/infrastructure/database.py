@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine, AsyncEngine
 
 from agentarea.config import DatabaseSettings, get_db_settings
 
@@ -11,22 +11,27 @@ class Database:
     """Database connection manager"""
 
     _instance: Optional["Database"] = None
+    _initialized: bool = False
+
+    def __init__(self, settings: DatabaseSettings | None = None) -> None:
+        if not Database._initialized:
+            self.settings = settings or get_db_settings()
+            self.engine: AsyncEngine = create_async_engine(
+                self.settings.url,
+                echo=self.settings.echo,
+                pool_size=self.settings.pool_size,
+                max_overflow=self.settings.max_overflow,
+            )
+            self.session_factory = async_sessionmaker(
+                self.engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+            Database._initialized = True
 
     def __new__(cls, settings: DatabaseSettings | None = None) -> "Database":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.settings = settings or get_db_settings()
-            cls._instance.engine = create_async_engine(
-                cls._instance.settings.url,
-                echo=cls._instance.settings.echo,
-                pool_size=cls._instance.settings.pool_size,
-                max_overflow=cls._instance.settings.max_overflow,
-            )
-            cls._instance.session_factory = async_sessionmaker(
-                cls._instance.engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-            )
         return cls._instance
 
     @asynccontextmanager

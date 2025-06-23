@@ -32,13 +32,14 @@ from agentarea.common.utils.types import (
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
+    TextPart,
 )
 from agentarea.modules.tasks.task_manager import BaseTaskManager
 
 new_not_implemented_error = JSONRPCResponse(
     id=None,
     error=JSONRPCError(
-        code=JSONRPCError.CODE_NOT_IMPLEMENTED,
+        code=-32004,  # UnsupportedOperationError code
         message="Not implemented",
     ),
 )
@@ -52,7 +53,7 @@ class InMemoryTaskManager(BaseTaskManager):
         self.tasks: dict[str, Task] = {}
         self.push_notification_infos: dict[str, PushNotificationConfig] = {}
         self.lock = asyncio.Lock()
-        self.task_sse_subscribers: dict[str, list[asyncio.Queue]] = {}
+        self.task_sse_subscribers: dict[str, list[asyncio.Queue[SendTaskStreamingResponse]]] = {}
         self.subscriber_lock = asyncio.Lock()
 
     async def on_get_task(self, request: GetTaskRequest) -> GetTaskResponse:
@@ -79,15 +80,74 @@ class InMemoryTaskManager(BaseTaskManager):
 
         return CancelTaskResponse(id=request.id, error=TaskNotCancelableError())
 
-    @abstractmethod
     async def on_send_task(self, request: SendTaskRequest) -> SendTaskResponse:
-        pass
+        """Handle A2A task sending."""
+        logger.info(f"Sending task {request.params.id}")
+        
+        try:
+            # Create or update the task
+            task = await self.upsert_task(request.params)
+            
+            # Simulate task processing by updating status to working
+            task.status.state = TaskState.WORKING
+            
+            # For demo purposes, immediately complete simple text tasks
+            if task.history and len(task.history) > 0:
+                latest_message = task.history[-1]
+                if latest_message.parts and latest_message.parts[0].type == 'text':
+                    # Create a simple response artifact
+                    response_text = f"Processed: {latest_message.parts[0].text}"
+                    response_artifact = Artifact(
+                        name="response",
+                        parts=[TextPart(text=response_text)],
+                        metadata={"type": "response", "timestamp": str(task.status.timestamp)}
+                    )
+                    
+                    # Update task with completion
+                    task.status.state = TaskState.COMPLETED
+                    if task.artifacts is None:
+                        task.artifacts = []
+                    task.artifacts.append(response_artifact)
+            
+            return SendTaskResponse(id=request.id, result=task)
+            
+        except Exception as e:
+            logger.error(f"Error in on_send_task: {e}", exc_info=True)
+            return SendTaskResponse(
+                id=request.id,
+                error=InternalError(message=f"Failed to send task: {str(e)}")
+            )
 
-    @abstractmethod
     async def on_send_task_subscribe(
         self, request: SendTaskStreamingRequest
     ) -> AsyncIterable[SendTaskStreamingResponse] | JSONRPCResponse:
-        pass
+        """Handle A2A task streaming subscription."""
+        logger.info(f"Starting task streaming for {request.params.id}")
+        
+        try:
+            # First, send the task if it doesn't exist
+            task = self.tasks.get(request.params.id)
+            if task is None:
+                send_response = await self.on_send_task(
+                    SendTaskRequest(id=request.id, params=request.params)
+                )
+                if send_response.error:
+                    return JSONRPCResponse(id=request.id, error=send_response.error)
+                task = send_response.result
+            
+            # Set up SSE streaming
+            await self.setup_sse_consumer(request.params.id)
+            
+            # Return streaming generator
+            return self.dequeue_events_for_sse(request.id, request.params.id, 
+                                               self.task_sse_subscribers.get(request.params.id, [None])[0])
+                
+        except Exception as e:
+            logger.error(f"Error in on_send_task_subscribe: {e}", exc_info=True)
+            return JSONRPCResponse(
+                id=request.id,
+                error=InternalError(message=f"Failed to subscribe to task: {str(e)}")
+            )
 
     async def set_push_notification_info(
         self, task_id: str, notification_config: PushNotificationConfig
@@ -175,7 +235,43 @@ class InMemoryTaskManager(BaseTaskManager):
             else:
                 task.history.append(task_send_params.message)
 
+            # -----------------------------------------------------------------
+            # Persist optional user / agent information into task.metadata
+            # -----------------------------------------------------------------
+            if task_send_params.metadata:
+                # Ensure metadata dict exists
+                if task.metadata is None:
+                    task.metadata = {}
+                # Merge (new keys override old)
+                task.metadata.update(task_send_params.metadata)
+
             return task
+
+    # ---------------------------------------------------------------------
+    # Extended querying capabilities required by BaseTaskManager
+    # ---------------------------------------------------------------------
+
+    async def on_get_tasks_by_user(self, user_id: str) -> list[Task]:
+        """
+        Return all tasks that have `metadata['user_id'] == user_id`.
+        """
+        async with self.lock:
+            return [
+                task
+                for task in self.tasks.values()
+                if task.metadata and task.metadata.get("user_id") == user_id
+            ]
+
+    async def on_get_tasks_by_agent(self, agent_id: str) -> list[Task]:
+        """
+        Return all tasks that have `metadata['agent_id'] == agent_id`.
+        """
+        async with self.lock:
+            return [
+                task
+                for task in self.tasks.values()
+                if task.metadata and task.metadata.get("agent_id") == agent_id
+            ]
 
     async def on_resubscribe_to_task(
         self, request: TaskResubscriptionRequest

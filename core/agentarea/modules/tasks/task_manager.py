@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterable
+from typing import List
 
 # from agentarea.common.utils import new_not_implemented_error
 from agentarea.common.utils.types import (
@@ -18,6 +19,7 @@ from agentarea.common.utils.types import (
     SetTaskPushNotificationRequest,
     SetTaskPushNotificationResponse,
     TaskResubscriptionRequest,
+    Task,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,4 +60,32 @@ class BaseTaskManager(ABC):
     async def on_resubscribe_to_task(
         self, request: TaskResubscriptionRequest
     ) -> AsyncIterable[SendTaskResponse] | JSONRPCResponse:
+        pass
+
+    # ------------------------------------------------------------------ #
+    # Extended querying capabilities                                     #
+    # ------------------------------------------------------------------ #
+
+    @abstractmethod
+    async def on_get_tasks_by_user(self, user_id: str) -> List[Task]:
+        """
+        Retrieve all tasks that were created by / assigned to a specific user.
+
+        Parameters
+        ----------
+        user_id: str
+            Identifier of the user whose tasks are requested.
+        """
+        pass
+
+    @abstractmethod
+    async def on_get_tasks_by_agent(self, agent_id: str) -> List[Task]:
+        """
+        Retrieve all tasks that are currently assigned to a specific agent.
+
+        Parameters
+        ----------
+        agent_id: str
+            Identifier of the agent whose tasks are requested.
+        """
         pass

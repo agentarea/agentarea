@@ -1,25 +1,22 @@
-from collections.abc import AsyncGenerator
-from uuid import UUID
 import logging
-from typing import Any, Dict
+from collections.abc import AsyncGenerator
+from typing import Any
+from uuid import UUID
 
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
-from google.genai import types
 from google.adk.runners import Runner
 from google.adk.sessions import BaseSessionService
+from google.genai import types
 
 from agentarea.common.events.broker import EventBroker
-from agentarea.modules.llm.application.service import LLMModelInstanceService
-from agentarea.modules.tasks.domain.events import (
-    TaskStatusChanged,
-    TaskCompleted,
-    TaskFailed
-)
 from agentarea.common.utils.types import TaskState
+from agentarea.modules.llm.application.service import LLMModelInstanceService
+from agentarea.modules.tasks.domain.events import TaskCompleted, TaskFailed, TaskStatusChanged
 
 from ..infrastructure.repository import AgentRepository
 from .agent_builder_service import AgentBuilderService
+from .agent_communication_service import AgentCommunicationService
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +29,16 @@ class AgentRunnerService:
         llm_model_instance_service: LLMModelInstanceService,
         session_service: BaseSessionService,
         agent_builder_service: AgentBuilderService,
+        agent_communication_service: "AgentCommunicationService | None" = None,
     ):
         self.repository = repository
         self.event_broker = event_broker
         self.llm_model_instance_service = llm_model_instance_service
         self.session_service = session_service
         self.agent_builder_service = agent_builder_service
+        self.agent_communication_service = agent_communication_service
 
-    def _create_litellm_model_from_instance(self, model_instance) -> str:
+    def _create_litellm_model_from_instance(self, model_instance: Any) -> str:
         """Create LiteLLM model string from database model instance.
         
         Args:
@@ -51,7 +50,7 @@ class AgentRunnerService:
         # For now, hardcode to our target Ollama model to avoid relationship loading issues
         # In the future, this should be properly configured based on the model instance
         logger.info(f"Using model instance: {model_instance.name}")
-        
+
         # Determine provider and model from the instance name for now
         # This is a temporary workaround until we fix the relationship loading
         if "qwen" in model_instance.name.lower():
@@ -63,13 +62,14 @@ class AgentRunnerService:
             return "ollama_chat/qwen2.5"
 
     async def run_agent_task(
-        self, 
-        agent_id: UUID, 
+        self,
+        agent_id: UUID,
         task_id: str,
-        user_id: str, 
+        user_id: str,
         query: str,
-        task_parameters: Dict[str, Any] | None = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        task_parameters: dict[str, Any] | None = None,
+        enable_agent_communication: bool | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Run an agent to execute a specific task.
         
         Args:
@@ -78,6 +78,7 @@ class AgentRunnerService:
             user_id: User running the task
             query: Query/instruction for the task
             task_parameters: Additional task parameters
+            enable_agent_communication: Override flag to enable/disable A2A communication for this run
             
         Yields:
             Task execution events
@@ -88,7 +89,7 @@ class AgentRunnerService:
             if validation_errors:
                 error_msg = f"Agent validation failed: {', '.join(validation_errors)}"
                 logger.error(error_msg)
-                
+
                 # Publish TaskFailed event
                 failed_event = TaskFailed(
                     task_id=task_id,
@@ -96,7 +97,7 @@ class AgentRunnerService:
                     error_code="AGENT_VALIDATION_ERROR"
                 )
                 await self.event_broker.publish(failed_event)
-                
+
                 yield {
                     "event_type": "TaskFailed",
                     "task_id": task_id,
@@ -111,7 +112,7 @@ class AgentRunnerService:
             if not agent_config:
                 error_msg = f"Failed to build agent configuration for agent {agent_id}"
                 logger.error(error_msg)
-                
+
                 # Publish TaskFailed event
                 failed_event = TaskFailed(
                     task_id=task_id,
@@ -119,7 +120,7 @@ class AgentRunnerService:
                     error_code="AGENT_CONFIG_ERROR"
                 )
                 await self.event_broker.publish(failed_event)
-                
+
                 yield {
                     "event_type": "TaskFailed",
                     "task_id": task_id,
@@ -153,8 +154,8 @@ class AgentRunnerService:
             # Create or get session
             app_name = f"agent_{agent_id}_task_{task_id}"
             session = await self.session_service.create_session(
-                state={"task_id": task_id, "parameters": task_parameters or {}}, 
-                app_name=app_name, 
+                state={"task_id": task_id, "parameters": task_parameters or {}},
+                app_name=app_name,
                 user_id=user_id
             )
 
@@ -167,7 +168,7 @@ class AgentRunnerService:
                     logger.info(f"Loading MCP server tool: {mcp_server['name']}")
                     # Here you would implement MCP server tool loading
                     # For now, we'll log the configuration
-                    
+
                 # Handle builtin tools
                 for builtin_tool in tools_config.get("builtin_tools", []):
                     logger.info(f"Loading builtin tool: {builtin_tool}")
@@ -182,13 +183,21 @@ class AgentRunnerService:
             # Создаем LiteLLM модель из model_instance
             litellm_model_string = self._create_litellm_model_from_instance(agent_config["model_instance"])
             litellm_model = LiteLlm(model=litellm_model_string)
-            
+
             llm_agent = LlmAgent(
                 name=agent_config["name"],
                 model=litellm_model,  # Используем LiteLlm объект
                 instruction=agent_config["instruction"],
                 tools=tools,
             )
+
+            # -------------------------------------------------------------
+            # Integrate Agent-to-Agent communication tool (optional)
+            # -------------------------------------------------------------
+            if self.agent_communication_service and enable_agent_communication is not False:
+                llm_agent = self.agent_communication_service.configure_agent_with_communication(
+                    llm_agent, enable_communication=enable_agent_communication
+                )
 
             # Create runner
             runner = Runner(
@@ -217,14 +226,14 @@ class AgentRunnerService:
                     "session_id": session.id,
                     "original_event": event
                 }
-                
+
                 # Determine event type based on the event content
                 if hasattr(event, 'event_type'):
                     enriched_event["event_type"] = event.event_type
                 else:
                     # Default event type processing
                     enriched_event["event_type"] = "TaskProgress"
-                
+
                 yield enriched_event
 
             # Publish TaskCompleted event
@@ -247,7 +256,7 @@ class AgentRunnerService:
 
         except Exception as e:
             logger.error(f"Error running agent task {task_id} for agent {agent_id}: {e}", exc_info=True)
-            
+
             # Publish TaskFailed event
             failed_event = TaskFailed(
                 task_id=task_id,
@@ -255,7 +264,7 @@ class AgentRunnerService:
                 error_code="EXECUTION_ERROR"
             )
             await self.event_broker.publish(failed_event)
-            
+
             yield {
                 "event_type": "TaskFailed",
                 "task_id": task_id,
@@ -266,7 +275,7 @@ class AgentRunnerService:
 
     async def run_agent(
         self, agent_id: UUID, user_id: str, query: str
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Legacy method for backward compatibility. Creates a simple task and runs it."""
         task_id = f"simple_task_{agent_id}_{user_id}"
         async for event in self.run_agent_task(agent_id, task_id, user_id, query):

@@ -26,7 +26,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
         model = LLMModel(
             name=name,
             description=description,
-            provider=provider,
+            provider_id=provider,
             model_type=model_type,
             endpoint_url=endpoint_url,
             context_window=context_window,
@@ -38,7 +38,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
             LLMModelCreated(
                 model_id=model.id,
                 name=model.name,
-                provider=model.provider,
+                provider=model.provider_id,
                 model_type=model.model_type,
             )
         )
@@ -66,7 +66,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
         if description is not None:
             model.description = description
         if provider is not None:
-            model.provider = provider
+            model.provider_id = provider
         if model_type is not None:
             model.model_type = model_type
         if endpoint_url is not None:
@@ -84,7 +84,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
             LLMModelUpdated(
                 model_id=model.id,
                 name=model.name,
-                provider=model.provider,
+                provider=model.provider_id,
                 model_type=model.model_type,
             )
         )

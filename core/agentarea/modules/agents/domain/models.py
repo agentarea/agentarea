@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, DateTime, String, Boolean
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from agentarea.common.base.models import BaseModel
 
@@ -24,3 +24,6 @@ class Agent(BaseModel):
     tools_config: Mapped[dict] = mapped_column(JSON, nullable=True)
     events_config: Mapped[dict] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool] = mapped_column(Boolean, nullable=True)
+
+    # Relationships
+    # chat_sessions = relationship("ChatSession", back_populates="agent")  # Disabled - ChatSession model not implemented
