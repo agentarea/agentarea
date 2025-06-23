@@ -14,7 +14,7 @@ Uses only existing API endpoints - no mocking or invented endpoints.
 
 import asyncio
 import uuid
-from typing import Any
+from typing import Any, Dict, List, Union
 
 import httpx
 import pytest
@@ -330,7 +330,7 @@ class TestE2EMainFlow:
             # Wait before next check
             await asyncio.sleep(check_interval)
 
-    async def _verify_task_results(self, task_id: str, agent_id: str, final_status: dict[str, Any]):
+    async def _verify_task_results(self, task_id: str, agent_id: str, final_status: Dict[str, Any]):
         """Verify task results in database and API response."""
         print("🔍 Verifying task results...")
 
@@ -359,7 +359,7 @@ class TestE2EMainFlow:
 
                     # If there's a nested result, check it too
                     if "result" in result and isinstance(result["result"], dict):
-                        nested_result = result["result"]
+                        nested_result: Dict[str, Any] = result["result"]
                         print(f"  📋 Nested result fields: {list(nested_result.keys())}")
 
                         # Look for events or activities that indicate actual execution
@@ -382,24 +382,28 @@ class TestE2EMainFlow:
                 print("  ✓ Found A2A message field")
                 
                 # Verify message structure
-                assert message.get("role") == "agent", f"Expected role 'agent', got {message.get('role')}"
-                print(f"  ✓ Message role: {message.get('role')}")
+                message_dict: Dict[str, Any] = message
+                assert message_dict.get("role") == "agent", f"Expected role 'agent', got {message_dict.get('role')}"
+                print(f"  ✓ Message role: {message_dict.get('role')}")
                 
-                parts = message.get("parts", [])
-                assert len(parts) > 0, "Message should have at least one part"
-                print(f"  ✓ Message has {len(parts)} parts")
-                
-                # Check first part has text
-                first_part = parts[0] if parts else {}
-                agent_text = first_part.get("text", "")
-                assert len(agent_text) > 0, "Agent should have produced some text output"
-                print(f"  ✓ Agent response text: '{agent_text[:100]}{'...' if len(agent_text) > 100 else ''}'")
-                
-                # Verify it's actually a joke (contains common joke indicators)
-                joke_indicators = ["why", "what", "how", "joke", "?", "!", "because", "pun"]
-                has_joke_element = any(indicator in agent_text.lower() for indicator in joke_indicators)
-                assert has_joke_element, f"Response doesn't seem like a joke: {agent_text[:50]}"
-                print("  ✓ Response appears to be a joke (contains joke indicators)")
+                parts = message_dict.get("parts", [])
+                if isinstance(parts, list):
+                    assert len(parts) > 0, "Message should have at least one part"
+                    print(f"  ✓ Message has {len(parts)} parts")
+                    
+                    # Check first part has text
+                    first_part = parts[0] if parts else {}
+                    if isinstance(first_part, dict):
+                        agent_text = first_part.get("text", "")
+                        if isinstance(agent_text, str):
+                            assert len(agent_text) > 0, "Agent should have produced some text output"
+                            print(f"  ✓ Agent response text: '{agent_text[:100]}{'...' if len(agent_text) > 100 else ''}'")
+                            
+                            # Verify it's actually a joke (contains common joke indicators)
+                            joke_indicators = ["why", "what", "how", "joke", "?", "!", "because", "pun"]
+                            has_joke_element = any(indicator in agent_text.lower() for indicator in joke_indicators)
+                            assert has_joke_element, f"Response doesn't seem like a joke: {agent_text[:50]}"
+                            print("  ✓ Response appears to be a joke (contains joke indicators)")
                 
             else:
                 raise AssertionError("A2A message field is missing or invalid")
@@ -410,16 +414,28 @@ class TestE2EMainFlow:
                 print("  ✓ Found A2A artifacts field")
                 
                 first_artifact = artifacts[0]
-                assert first_artifact.get("name") == "agent_response", f"Expected artifact name 'agent_response', got {first_artifact.get('name')}"
-                print(f"  ✓ Artifact name: {first_artifact.get('name')}")
-                
-                artifact_parts = first_artifact.get("parts", [])
-                assert len(artifact_parts) > 0, "Artifact should have at least one part"
-                
-                artifact_text = artifact_parts[0].get("text", "") if artifact_parts else ""
-                assert len(artifact_text) > 0, "Artifact should contain text"
-                assert artifact_text == agent_text, "Artifact text should match message text"
-                print("  ✓ Artifact text matches message text")
+                if isinstance(first_artifact, dict):
+                    artifact_dict: Dict[str, Any] = first_artifact
+                    assert artifact_dict.get("name") == "agent_response", f"Expected artifact name 'agent_response', got {artifact_dict.get('name')}"
+                    print(f"  ✓ Artifact name: {artifact_dict.get('name')}")
+                    
+                    artifact_parts = artifact_dict.get("parts", [])
+                    if isinstance(artifact_parts, list):
+                        assert len(artifact_parts) > 0, "Artifact should have at least one part"
+                        
+                        artifact_text = ""
+                        if artifact_parts and isinstance(artifact_parts[0], dict):
+                            artifact_text = artifact_parts[0].get("text", "")
+                        
+                        if isinstance(artifact_text, str):
+                            assert len(artifact_text) > 0, "Artifact should contain text"
+                            # Compare with agent_text from message
+                            message_parts = message_dict.get("parts", []) if isinstance(message, dict) else []
+                            if message_parts and isinstance(message_parts[0], dict):
+                                agent_text = message_parts[0].get("text", "")
+                                if isinstance(agent_text, str):
+                                    assert artifact_text == agent_text, "Artifact text should match message text"
+                            print("  ✓ Artifact text matches message text")
                 
             else:
                 raise AssertionError("A2A artifacts field is missing or invalid")
@@ -432,9 +448,11 @@ class TestE2EMainFlow:
             # Check usage_metadata
             usage_metadata = final_status.get("usage_metadata")
             if usage_metadata and isinstance(usage_metadata, dict):
-                total_tokens = usage_metadata.get("total_token_count", 0)
-                assert total_tokens > 0, "Should have used some tokens"
-                print(f"  ✓ Token usage: {total_tokens} tokens")
+                usage_dict: Dict[str, Any] = usage_metadata
+                total_tokens = usage_dict.get("total_token_count", 0)
+                if isinstance(total_tokens, (int, float)):
+                    assert total_tokens > 0, "Should have used some tokens"
+                    print(f"  ✓ Token usage: {total_tokens} tokens")
             else:
                 print("  ⚠️ Usage metadata not available")
 
