@@ -2,7 +2,11 @@
   "Common": {
     "search": "Search",
     "grid": "Grid",
-    "table": "Table"
+    "table": "Table",
+    "emptyState": {
+      "title": "Emty data",
+      "description": "Sorry, we couldn't find any data"
+    }
   },
   "404": {
     "title": "Error 404",

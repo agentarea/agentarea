@@ -2,11 +2,15 @@ import { Button } from "@/components/ui/button";
 import { listMCPServers, listMCPServerInstances } from "@/lib/api";
 import { Globe, Server } from "lucide-react";
 import Link from "next/link";
-import { ServerList } from "@/components/mcp-servers/ServerList";
-import { InstanceList } from "@/components/mcp-servers/InstanceList";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import ServerList from "@/components/mcp-servers/ServerList";
+import { InstanceList } from "@/components/mcp-servers/InstanceList";
 
-export default async function MCPServersPage() {
+export default async function MCPServersPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
   const mcpServers = await listMCPServers();
   const mcpList = mcpServers.data || [];
 
@@ -41,10 +45,11 @@ export default async function MCPServersPage() {
         )
       }}
     >
-    <>
-      <ServerList mcpList={mcpList} />
-      <InstanceList mcpInstanceList={mcpInstanceList} />
-    </>
+      <>
+        <ServerList data={mcpList} searchParams={searchParams} />
+
+        <InstanceList mcpInstanceList={mcpInstanceList} />
+      </>
     </ContentBlock>
   );
 } 
