@@ -40,10 +40,10 @@ class AgentRunnerService:
 
     def _create_litellm_model_from_instance(self, model_instance: Any) -> str:
         """Create LiteLLM model string from database model instance.
-        
+
         Args:
             model_instance: LLMModelInstance from database
-            
+
         Returns:
             LiteLLM model string (e.g., "ollama_chat/qwen2.5")
         """
@@ -71,7 +71,7 @@ class AgentRunnerService:
         enable_agent_communication: bool | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Run an agent to execute a specific task.
-        
+
         Args:
             agent_id: UUID of the agent to run
             task_id: Task identifier
@@ -79,7 +79,7 @@ class AgentRunnerService:
             query: Query/instruction for the task
             task_parameters: Additional task parameters
             enable_agent_communication: Override flag to enable/disable A2A communication for this run
-            
+
         Yields:
             Task execution events
         """
@@ -92,9 +92,7 @@ class AgentRunnerService:
 
                 # Publish TaskFailed event
                 failed_event = TaskFailed(
-                    task_id=task_id,
-                    error_message=error_msg,
-                    error_code="AGENT_VALIDATION_ERROR"
+                    task_id=task_id, error_message=error_msg, error_code="AGENT_VALIDATION_ERROR"
                 )
                 await self.event_broker.publish(failed_event)
 
@@ -103,7 +101,7 @@ class AgentRunnerService:
                     "task_id": task_id,
                     "agent_id": str(agent_id),
                     "error_message": error_msg,
-                    "error_code": "AGENT_VALIDATION_ERROR"
+                    "error_code": "AGENT_VALIDATION_ERROR",
                 }
                 return
 
@@ -115,9 +113,7 @@ class AgentRunnerService:
 
                 # Publish TaskFailed event
                 failed_event = TaskFailed(
-                    task_id=task_id,
-                    error_message=error_msg,
-                    error_code="AGENT_CONFIG_ERROR"
+                    task_id=task_id, error_message=error_msg, error_code="AGENT_CONFIG_ERROR"
                 )
                 await self.event_broker.publish(failed_event)
 
@@ -126,18 +122,20 @@ class AgentRunnerService:
                     "task_id": task_id,
                     "agent_id": str(agent_id),
                     "error_message": error_msg,
-                    "error_code": "AGENT_CONFIG_ERROR"
+                    "error_code": "AGENT_CONFIG_ERROR",
                 }
                 return
 
-            logger.info(f"Starting task {task_id} for agent {agent_config['name']} (ID: {agent_id})")
+            logger.info(
+                f"Starting task {task_id} for agent {agent_config['name']} (ID: {agent_id})"
+            )
 
             # Publish TaskStatusChanged event
             status_changed_event = TaskStatusChanged(
                 task_id=task_id,
                 old_status=TaskState.SUBMITTED,
                 new_status=TaskState.WORKING,
-                message=f"Agent {agent_config['name']} started working on task"
+                message=f"Agent {agent_config['name']} started working on task",
             )
             await self.event_broker.publish(status_changed_event)
 
@@ -148,7 +146,7 @@ class AgentRunnerService:
                 "agent_id": str(agent_id),
                 "old_status": "created",
                 "new_status": "working",
-                "agent_name": agent_config["name"]
+                "agent_name": agent_config["name"],
             }
 
             # Create or get session
@@ -156,7 +154,7 @@ class AgentRunnerService:
             session = await self.session_service.create_session(
                 state={"task_id": task_id, "parameters": task_parameters or {}},
                 app_name=app_name,
-                user_id=user_id
+                user_id=user_id,
             )
 
             # Configure tools based on agent's tools_config
@@ -181,7 +179,9 @@ class AgentRunnerService:
 
             # Create LLM agent with correct ADK API (no planning parameter)
             # Создаем LiteLLM модель из model_instance
-            litellm_model_string = self._create_litellm_model_from_instance(agent_config["model_instance"])
+            litellm_model_string = self._create_litellm_model_from_instance(
+                agent_config["model_instance"]
+            )
             litellm_model = LiteLlm(model=litellm_model_string)
 
             llm_agent = LlmAgent(
@@ -224,11 +224,11 @@ class AgentRunnerService:
                     "agent_id": str(agent_id),
                     "agent_name": agent_config["name"],
                     "session_id": session.id,
-                    "original_event": event
+                    "original_event": event,
                 }
 
                 # Determine event type based on the event content
-                if hasattr(event, 'event_type'):
+                if hasattr(event, "event_type"):
                     enriched_event["event_type"] = event.event_type
                 else:
                     # Default event type processing
@@ -240,7 +240,7 @@ class AgentRunnerService:
             completed_event = TaskCompleted(
                 task_id=task_id,
                 result={"status": "completed"},
-                execution_time=None  # Could calculate this if needed
+                execution_time=None,  # Could calculate this if needed
             )
             await self.event_broker.publish(completed_event)
 
@@ -251,17 +251,17 @@ class AgentRunnerService:
                 "agent_id": str(agent_id),
                 "agent_name": agent_config["name"],
                 "session_id": session.id,
-                "result": {"status": "completed"}
+                "result": {"status": "completed"},
             }
 
         except Exception as e:
-            logger.error(f"Error running agent task {task_id} for agent {agent_id}: {e}", exc_info=True)
+            logger.error(
+                f"Error running agent task {task_id} for agent {agent_id}: {e}", exc_info=True
+            )
 
             # Publish TaskFailed event
             failed_event = TaskFailed(
-                task_id=task_id,
-                error_message=str(e),
-                error_code="EXECUTION_ERROR"
+                task_id=task_id, error_message=str(e), error_code="EXECUTION_ERROR"
             )
             await self.event_broker.publish(failed_event)
 
@@ -270,7 +270,7 @@ class AgentRunnerService:
                 "task_id": task_id,
                 "agent_id": str(agent_id),
                 "error_message": str(e),
-                "error_code": "EXECUTION_ERROR"
+                "error_code": "EXECUTION_ERROR",
             }
 
     async def run_agent(

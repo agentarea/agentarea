@@ -68,14 +68,12 @@ class AgentResponse(BaseModel):
             model_id=agent.model_id,
             tools_config=agent.tools_config,
             events_config=agent.events_config,
-            planning=agent.planning
+            planning=agent.planning,
         )
 
 
 @router.post("/", response_model=AgentResponse)
-async def create_agent(
-    data: AgentCreate, agent_service: AgentService = Depends(get_agent_service)
-):
+async def create_agent(data: AgentCreate, agent_service: AgentService = Depends(get_agent_service)):
     agent = await agent_service.create_agent(
         name=data.name,
         description=data.description,
@@ -83,15 +81,13 @@ async def create_agent(
         model_id=data.model_id,
         tools_config=data.tools_config.dict() if data.tools_config else None,
         events_config=data.events_config.dict() if data.events_config else None,
-        planning=data.planning
+        planning=data.planning,
     )
     return AgentResponse.from_domain(agent)
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
-async def get_agent(
-    agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
-):
+async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)):
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -113,12 +109,11 @@ async def update_agent(
     agent = await agent_service.update_agent(
         id=agent_id,
         name=data.name,
-        
         description=data.description,
         model_id=data.model_id,
         tools_config=data.tools_config.dict() if data.tools_config else None,
         events_config=data.events_config.dict() if data.events_config else None,
-        planning=data.planning
+        planning=data.planning,
     )
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -126,9 +121,7 @@ async def update_agent(
 
 
 @router.delete("/{agent_id}")
-async def delete_agent(
-    agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
-):
+async def delete_agent(agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)):
     success = await agent_service.delete_agent(agent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")

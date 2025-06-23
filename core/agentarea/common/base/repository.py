@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 from uuid import UUID
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class BaseRepository(ABC, Generic[T]):
     @abstractmethod

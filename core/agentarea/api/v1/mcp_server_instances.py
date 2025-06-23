@@ -38,22 +38,26 @@ class MCPServerInstanceResponse(BaseModel):
 
     @classmethod
     def from_domain(cls, instance: MCPServerInstance) -> "MCPServerInstanceResponse":
-        return cls.model_validate({
-            "id": instance.id,
-            "name": instance.name,
-            "description": instance.description,
-            "server_spec_id": instance.server_spec_id,
-            "json_spec": instance.json_spec,
-            "status": instance.status,
-            "created_at": instance.created_at,
-            "updated_at": instance.updated_at,
-        })
+        return cls.model_validate(
+            {
+                "id": instance.id,
+                "name": instance.name,
+                "description": instance.description,
+                "server_spec_id": instance.server_spec_id,
+                "json_spec": instance.json_spec,
+                "status": instance.status,
+                "created_at": instance.created_at,
+                "updated_at": instance.updated_at,
+            }
+        )
 
 
 @router.post("/", response_model=MCPServerInstanceResponse)
 async def create_mcp_server_instance(
     data: MCPServerInstanceCreateRequest,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     try:
         instance = await mcp_server_instance_service.create_instance(
@@ -77,7 +81,9 @@ async def create_mcp_server_instance(
 @router.get("/{instance_id}/environment")
 async def get_instance_environment(
     instance_id: UUID,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     """Get environment variables for an MCP server instance.
     Note: This endpoint should have proper authentication and authorization in production.
@@ -89,7 +95,7 @@ async def get_instance_environment(
         return {
             "instance_id": instance_id,
             "env_vars": list(env_vars.keys()),
-            "message": f"Instance has {len(env_vars)} environment variables configured"
+            "message": f"Instance has {len(env_vars)} environment variables configured",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get environment: {str(e)}")
@@ -97,7 +103,9 @@ async def get_instance_environment(
 
 @router.get("/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     instances = await mcp_server_instance_service.list()
     return [MCPServerInstanceResponse.from_domain(instance) for instance in instances]
@@ -106,7 +114,9 @@ async def list_mcp_server_instances(
 @router.get("/{instance_id}", response_model=MCPServerInstanceResponse)
 async def get_mcp_server_instance(
     instance_id: UUID,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     instance = await mcp_server_instance_service.get(instance_id)
     if not instance:
@@ -118,7 +128,9 @@ async def get_mcp_server_instance(
 async def update_mcp_server_instance(
     instance_id: UUID,
     data: MCPServerInstanceUpdate,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     instance = await mcp_server_instance_service.update_instance(
         id=instance_id,
@@ -135,7 +147,9 @@ async def update_mcp_server_instance(
 @router.delete("/{instance_id}")
 async def delete_mcp_server_instance(
     instance_id: UUID,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     success = await mcp_server_instance_service.delete_instance(instance_id)
     if not success:
@@ -146,7 +160,9 @@ async def delete_mcp_server_instance(
 @router.post("/{instance_id}/start")
 async def start_mcp_server_instance(
     instance_id: UUID,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     success = await mcp_server_instance_service.start_instance(instance_id)
     if not success:
@@ -157,7 +173,9 @@ async def start_mcp_server_instance(
 @router.post("/{instance_id}/stop")
 async def stop_mcp_server_instance(
     instance_id: UUID,
-    mcp_server_instance_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
 ):
     success = await mcp_server_instance_service.stop_instance(instance_id)
     if not success:

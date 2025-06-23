@@ -46,4 +46,4 @@ class LLMModelInstanceUpdated(DomainEvent):
 class LLMModelInstanceDeleted(DomainEvent):
     def __init__(self, instance_id: UUID) -> None:
         super().__init__()
-        self.instance_id = instance_id 
+        self.instance_id = instance_id

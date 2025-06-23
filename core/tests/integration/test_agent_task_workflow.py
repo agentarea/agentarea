@@ -36,20 +36,12 @@ pytestmark = pytest.mark.asyncio
 @activity.defn(name="validate_agent_activity")
 async def mock_validate_agent_activity(agent_id: str) -> dict[str, Any]:
     """Mock agent validation - always returns valid."""
-    return {
-        "valid": True,
-        "errors": [],
-        "agent_id": agent_id
-    }
+    return {"valid": True, "errors": [], "agent_id": agent_id}
 
 
 @activity.defn(name="execute_agent_activity")
 async def mock_execute_agent_activity(
-    agent_id: str,
-    task_id: str,
-    query: str,
-    user_id: str,
-    task_parameters: dict[str, Any]
+    agent_id: str, task_id: str, query: str, user_id: str, task_parameters: dict[str, Any]
 ) -> dict[str, Any]:
     """Mock agent execution with some discovered activities."""
     return {
@@ -65,21 +57,20 @@ async def mock_execute_agent_activity(
             {"type": "custom_tool", "config": {"tool": "test-tool"}},
         ],
         "event_count": 4,
-        "task_id": task_id
+        "task_id": task_id,
     }
 
 
 @activity.defn(name="execute_dynamic_activity")
 async def mock_execute_dynamic_activity(
-    activity_type: str,
-    config: dict[str, Any]
+    activity_type: str, config: dict[str, Any]
 ) -> dict[str, Any]:
     """Mock dynamic activity execution."""
     return {
         "status": "completed",
         "activity_type": activity_type,
         "config": config,
-        "result": f"Mock {activity_type} executed successfully"
+        "result": f"Mock {activity_type} executed successfully",
     }
 
 
@@ -90,7 +81,7 @@ async def mock_execute_mcp_tool_activity(config: dict[str, Any]) -> dict[str, An
         "status": "completed",
         "activity_type": "mcp_tool_call",
         "config": config,
-        "result": "Mock MCP tool executed successfully"
+        "result": "Mock MCP tool executed successfully",
     }
 
 
@@ -101,7 +92,7 @@ async def mock_execute_custom_tool_activity(config: dict[str, Any]) -> dict[str,
         "status": "completed",
         "activity_type": "custom_tool",
         "config": config,
-        "result": "Mock custom tool executed successfully"
+        "result": "Mock custom tool executed successfully",
     }
 
 
@@ -112,7 +103,7 @@ async def mock_execute_agent_communication_activity(config: dict[str, Any]) -> d
         "status": "completed",
         "activity_type": "agent_communication",
         "config": config,
-        "result": "Mock agent communication completed"
+        "result": "Mock agent communication completed",
     }
 
 
@@ -140,7 +131,9 @@ class TestAgentTaskWorkflow:
         """Generate a unique workflow ID for each test."""
         return f"test-agent-workflow-{uuid.uuid4()}"
 
-    async def test_successful_workflow_execution(self, client: Client, task_queue: str, workflow_id: str):
+    async def test_successful_workflow_execution(
+        self, client: Client, task_queue: str, workflow_id: str
+    ):
         """Test successful workflow execution with mocked activities."""
         # Start worker with mocked activities
         async with Worker(
@@ -161,11 +154,11 @@ class TestAgentTaskWorkflow:
                 AgentTaskWorkflow.run,
                 args=[
                     "test-agent-123",
-                    "test-task-456", 
+                    "test-task-456",
                     "Test query for agent",
                     "test-user",
                     {"param1": "value1"},
-                    {"test": True}
+                    {"test": True},
                 ],
                 id=workflow_id,
                 task_queue=task_queue,
@@ -177,27 +170,29 @@ class TestAgentTaskWorkflow:
             assert result["task_id"] == "test-task-456"
             assert result["agent_id"] == "test-agent-123"
             assert "result" in result
-            
+
             # Verify main execution result
             execution_result = result["result"]
             assert execution_result["status"] == "completed"
             assert execution_result["event_count"] == 4
             assert len(execution_result["discovered_activities"]) == 2
-            
+
             # Verify dynamic activities were executed
             assert "dynamic_results" in execution_result
             assert len(execution_result["dynamic_results"]) == 2
 
-    async def test_agent_validation_failure(self, client: Client, task_queue: str, workflow_id: str):
+    async def test_agent_validation_failure(
+        self, client: Client, task_queue: str, workflow_id: str
+    ):
         """Test workflow behavior when agent validation fails."""
-        
+
         @activity.defn(name="validate_agent_activity")
         async def mock_validate_agent_activity_failure(agent_id: str) -> dict[str, Any]:
             """Mock agent validation that fails."""
             return {
                 "valid": False,
                 "errors": ["Agent not found", "Invalid configuration"],
-                "agent_id": agent_id
+                "agent_id": agent_id,
             }
 
         async with Worker(
@@ -224,16 +219,14 @@ class TestAgentTaskWorkflow:
             assert "Agent validation failed" in result["error"]
             assert result["task_id"] == "test-task-456"
 
-    async def test_workflow_timeout_handling(self, client: Client, task_queue: str, workflow_id: str):
+    async def test_workflow_timeout_handling(
+        self, client: Client, task_queue: str, workflow_id: str
+    ):
         """Test workflow behavior with long-running activities (time skipping)."""
-        
+
         @activity.defn(name="execute_agent_activity")
         async def mock_slow_agent_activity(
-            agent_id: str,
-            task_id: str,
-            query: str,
-            user_id: str,
-            task_parameters: dict[str, Any]
+            agent_id: str, task_id: str, query: str, user_id: str, task_parameters: dict[str, Any]
         ) -> dict[str, Any]:
             """Mock slow agent activity that would normally take hours."""
             # This would normally take hours, but with time skipping it's instant
@@ -243,7 +236,7 @@ class TestAgentTaskWorkflow:
                 "events": [{"event_type": "SlowTaskCompleted"}],
                 "discovered_activities": [],
                 "event_count": 1,
-                "task_id": task_id
+                "task_id": task_id,
             }
 
         async with Worker(
@@ -271,4 +264,4 @@ class TestAgentTaskWorkflow:
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"]) 
+    pytest.main([__file__, "-v"])

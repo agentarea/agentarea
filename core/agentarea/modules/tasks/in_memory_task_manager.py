@@ -83,39 +83,38 @@ class InMemoryTaskManager(BaseTaskManager):
     async def on_send_task(self, request: SendTaskRequest) -> SendTaskResponse:
         """Handle A2A task sending."""
         logger.info(f"Sending task {request.params.id}")
-        
+
         try:
             # Create or update the task
             task = await self.upsert_task(request.params)
-            
+
             # Simulate task processing by updating status to working
             task.status.state = TaskState.WORKING
-            
+
             # For demo purposes, immediately complete simple text tasks
             if task.history and len(task.history) > 0:
                 latest_message = task.history[-1]
-                if latest_message.parts and latest_message.parts[0].type == 'text':
+                if latest_message.parts and latest_message.parts[0].type == "text":
                     # Create a simple response artifact
                     response_text = f"Processed: {latest_message.parts[0].text}"
                     response_artifact = Artifact(
                         name="response",
                         parts=[TextPart(text=response_text)],
-                        metadata={"type": "response", "timestamp": str(task.status.timestamp)}
+                        metadata={"type": "response", "timestamp": str(task.status.timestamp)},
                     )
-                    
+
                     # Update task with completion
                     task.status.state = TaskState.COMPLETED
                     if task.artifacts is None:
                         task.artifacts = []
                     task.artifacts.append(response_artifact)
-            
+
             return SendTaskResponse(id=request.id, result=task)
-            
+
         except Exception as e:
             logger.error(f"Error in on_send_task: {e}", exc_info=True)
             return SendTaskResponse(
-                id=request.id,
-                error=InternalError(message=f"Failed to send task: {str(e)}")
+                id=request.id, error=InternalError(message=f"Failed to send task: {str(e)}")
             )
 
     async def on_send_task_subscribe(
@@ -123,7 +122,7 @@ class InMemoryTaskManager(BaseTaskManager):
     ) -> AsyncIterable[SendTaskStreamingResponse] | JSONRPCResponse:
         """Handle A2A task streaming subscription."""
         logger.info(f"Starting task streaming for {request.params.id}")
-        
+
         try:
             # First, send the task if it doesn't exist
             task = self.tasks.get(request.params.id)
@@ -134,19 +133,21 @@ class InMemoryTaskManager(BaseTaskManager):
                 if send_response.error:
                     return JSONRPCResponse(id=request.id, error=send_response.error)
                 task = send_response.result
-            
+
             # Set up SSE streaming
             await self.setup_sse_consumer(request.params.id)
-            
+
             # Return streaming generator
-            return self.dequeue_events_for_sse(request.id, request.params.id, 
-                                               self.task_sse_subscribers.get(request.params.id, [None])[0])
-                
+            return self.dequeue_events_for_sse(
+                request.id,
+                request.params.id,
+                self.task_sse_subscribers.get(request.params.id, [None])[0],
+            )
+
         except Exception as e:
             logger.error(f"Error in on_send_task_subscribe: {e}", exc_info=True)
             return JSONRPCResponse(
-                id=request.id,
-                error=InternalError(message=f"Failed to subscribe to task: {str(e)}")
+                id=request.id, error=InternalError(message=f"Failed to subscribe to task: {str(e)}")
             )
 
     async def set_push_notification_info(

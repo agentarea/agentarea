@@ -21,31 +21,29 @@ async def test_engine():
         "sqlite+aiosqlite:///:memory:",
         poolclass=StaticPool,
         connect_args={"check_same_thread": False},
-        echo=False
+        echo=False,
     )
-    
+
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(BaseModel.metadata.create_all)
-    
+
     yield engine
-    
+
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="function") 
+@pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine):
     """Create a test database session with transaction rollback."""
-    async_session = async_sessionmaker(
-        test_engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
+    async_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
     async with async_session() as session:
         # Start a transaction
         await session.begin()
-        
+
         yield session
-        
+
         # Rollback transaction to clean up
         await session.rollback()
 
@@ -81,18 +79,18 @@ class TestLLMModelRepository:
         """Test creating and retrieving an LLM model."""
         # Arrange
         model = create_test_llm_model(name="Test Model")
-        
+
         # Act - Create
         created_model = await llm_model_repository.create(model)
-        
+
         # Assert - Create
         assert created_model is not None
         assert created_model.name == "Test Model"
         assert created_model.id == model.id
-        
+
         # Act - Get
         retrieved_model = await llm_model_repository.get(created_model.id)
-        
+
         # Assert - Get
         assert retrieved_model is not None
         assert retrieved_model.id == created_model.id
@@ -104,13 +102,13 @@ class TestLLMModelRepository:
         # Arrange
         model1 = create_test_llm_model(name="Model 1")
         model2 = create_test_llm_model(name="Model 2")
-        
+
         await llm_model_repository.create(model1)
         await llm_model_repository.create(model2)
-        
+
         # Act
         models = await llm_model_repository.list()
-        
+
         # Assert
         assert len(models) == 2
         model_names = [model.name for model in models]
@@ -123,18 +121,18 @@ class TestLLMModelRepository:
         # Arrange
         model = create_test_llm_model(name="Original Name")
         created_model = await llm_model_repository.create(model)
-        
+
         # Modify
         created_model.name = "Updated Name"
         created_model.description = "Updated description"
-        
+
         # Act
         updated_model = await llm_model_repository.update(created_model)
-        
+
         # Assert
         assert updated_model.name == "Updated Name"
         assert updated_model.description == "Updated description"
-        
+
         # Verify persistence
         retrieved_model = await llm_model_repository.get(created_model.id)
         assert retrieved_model.name == "Updated Name"
@@ -145,13 +143,13 @@ class TestLLMModelRepository:
         # Arrange
         model = create_test_llm_model()
         created_model = await llm_model_repository.create(model)
-        
+
         # Act
         delete_result = await llm_model_repository.delete(created_model.id)
-        
+
         # Assert
         assert delete_result is True
-        
+
         # Verify deletion
         deleted_model = await llm_model_repository.get(created_model.id)
         assert deleted_model is None
@@ -161,7 +159,7 @@ class TestLLMModelRepository:
         """Test getting a non-existent model returns None."""
         # Act
         result = await llm_model_repository.get(uuid4())
-        
+
         # Assert
         assert result is None
 
@@ -170,7 +168,7 @@ class TestLLMModelRepository:
         """Test deleting a non-existent model returns False."""
         # Act
         result = await llm_model_repository.delete(uuid4())
-        
+
         # Assert
         assert result is False
 
@@ -179,16 +177,16 @@ class TestLLMModelRepository:
         """Test creating models with different statuses."""
         # Arrange
         statuses = ["active", "inactive", "draft"]
-        
+
         for status in statuses:
             model = create_test_llm_model(name=f"Model {status}", status=status)
-            
+
             # Act
             created_model = await llm_model_repository.create(model)
-            
+
             # Assert
             assert created_model.status == status
-            
+
             # Verify persistence
             retrieved_model = await llm_model_repository.get(created_model.id)
             assert retrieved_model.status == status
@@ -198,16 +196,16 @@ class TestLLMModelRepository:
         """Test creating models with different types."""
         # Arrange
         model_types = ["chat", "completion", "embedding"]
-        
+
         for model_type in model_types:
             model = create_test_llm_model(name=f"Model {model_type}", model_type=model_type)
-            
+
             # Act
             created_model = await llm_model_repository.create(model)
-            
+
             # Assert
             assert created_model.model_type == model_type
-            
+
             # Verify persistence
             retrieved_model = await llm_model_repository.get(created_model.id)
             assert retrieved_model.model_type == model_type
@@ -218,19 +216,19 @@ class TestLLMModelRepository:
         # Arrange
         public_model = create_test_llm_model(name="Public Model", is_public=True)
         private_model = create_test_llm_model(name="Private Model", is_public=False)
-        
+
         # Act
         created_public = await llm_model_repository.create(public_model)
         created_private = await llm_model_repository.create(private_model)
-        
+
         # Assert
         assert created_public.is_public is True
         assert created_private.is_public is False
-        
+
         # Verify both models exist
         models = await llm_model_repository.list()
         assert len(models) == 2
-        
+
         public_flags = [model.is_public for model in models]
         assert True in public_flags
         assert False in public_flags
@@ -241,22 +239,22 @@ class TestLLMModelRepository:
         # Arrange
         provider_id_1 = uuid4()
         provider_id_2 = uuid4()
-        
+
         model1 = create_test_llm_model(provider_id=provider_id_1, name="Model 1")
         model2 = create_test_llm_model(provider_id=provider_id_2, name="Model 2")
-        
+
         # Act
         created_model1 = await llm_model_repository.create(model1)
         created_model2 = await llm_model_repository.create(model2)
-        
+
         # Assert
         assert created_model1.provider_id == provider_id_1
         assert created_model2.provider_id == provider_id_2
-        
+
         # Verify both models exist
         models = await llm_model_repository.list()
         assert len(models) == 2
-        
+
         provider_ids = [model.provider_id for model in models]
         assert provider_id_1 in provider_ids
-        assert provider_id_2 in provider_ids 
+        assert provider_id_2 in provider_ids

@@ -24,28 +24,28 @@ logger = logging.getLogger(__name__)
 
 def create_agent_communication_function(agent_communication_service: "AgentCommunicationService"):
     """Create the agent communication function that will be wrapped as a FunctionTool.
-    
+
     Args:
         agent_communication_service: The AgentCommunicationService instance
-        
+
     Returns:
         The agent communication function
     """
-    
+
     async def ask_agent(
-        agent_id: str, 
-        message: str, 
-        wait_for_response: bool = True, 
-        metadata: dict[str, Any] | None = None
+        agent_id: str,
+        message: str,
+        wait_for_response: bool = True,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Ask another agent to perform a task and get the result.
-        
+
         Args:
             agent_id: ID of the agent to ask
             message: Message to send to the agent
             wait_for_response: Whether to wait for the response or just create the task
             metadata: Additional metadata for the task
-            
+
         Returns:
             Dictionary containing:
             - task_id: ID of the created task
@@ -61,23 +61,19 @@ def create_agent_communication_function(agent_communication_service: "AgentCommu
                 agent_id=agent_uuid,
                 message=message,
                 wait_for_response=wait_for_response,
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
 
             return {
                 "task_id": task_id,
                 "status": "completed" if result else "created",
-                "response": result if wait_for_response else None
+                "response": result if wait_for_response else None,
             }
 
         except Exception as e:
             logger.error(f"Error executing ask_agent tool: {e}", exc_info=True)
-            return {
-                "task_id": None,
-                "status": "failed",
-                "error": str(e)
-            }
-    
+            return {"task_id": None, "status": "failed", "error": str(e)}
+
     return ask_agent
 
 
@@ -92,7 +88,7 @@ class AgentCommunicationService:
         max_wait_time: int = 60,  # Maximum time to wait for task completion in seconds
     ):
         """Initialize the agent communication service.
-        
+
         Args:
             agent_runner_service: AgentRunnerService for executing tasks
             event_broker: Event broker for publishing and subscribing to events
@@ -103,7 +99,9 @@ class AgentCommunicationService:
         self.event_broker = event_broker
         self.enable_agent_communication = enable_agent_communication
         self.max_wait_time = max_wait_time
-        self.task_completion_events: dict[str, dict[str, Any]] = {}  # Dictionary to store task completion events
+        self.task_completion_events: dict[
+            str, dict[str, Any]
+        ] = {}  # Dictionary to store task completion events
 
         # Initialize task completion tracking
         self._initialize_task_tracking()
@@ -162,19 +160,19 @@ class AgentCommunicationService:
         agent_id: UUID,
         message: str,
         wait_for_response: bool = True,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> tuple[str, str | None]:
         """Execute a task on another agent using the proper agent execution flow.
-        
+
         Args:
             agent_id: ID of the agent to execute the task
             message: Message/query to send to the agent
             wait_for_response: Whether to wait for the response
             metadata: Additional metadata for the task
-            
+
         Returns:
             Tuple of (task_id, response) where response is None if not waiting
-            
+
         Raises:
             ValueError: If agent communication is disabled
         """
@@ -200,10 +198,7 @@ class AgentCommunicationService:
             # Start the task execution in the background
             task_execution = asyncio.create_task(
                 self._execute_task_with_events(
-                    agent_id=agent_id,
-                    task_id=task_id,
-                    message=message,
-                    metadata=task_metadata
+                    agent_id=agent_id, task_id=task_id, message=message, metadata=task_metadata
                 )
             )
 
@@ -222,11 +217,7 @@ class AgentCommunicationService:
             raise
 
     async def _execute_task_with_events(
-        self,
-        agent_id: UUID,
-        task_id: str,
-        message: str,
-        metadata: dict[str, Any]
+        self, agent_id: UUID, task_id: str, message: str, metadata: dict[str, Any]
     ):
         """Execute the task and handle events internally."""
         try:
@@ -241,7 +232,7 @@ class AgentCommunicationService:
             ):
                 # Log the event for debugging
                 logger.debug(f"A2A task {task_id} event: {event.get('event_type', 'Unknown')}")
-                
+
                 # The events will be handled by our event listeners automatically
                 # since AgentRunnerService publishes them to the event broker
 
@@ -250,7 +241,7 @@ class AgentCommunicationService:
 
     def _register_task_for_completion(self, task_id: str):
         """Register a task for completion tracking.
-        
+
         Args:
             task_id: ID of the task to track
         """
@@ -261,18 +252,18 @@ class AgentCommunicationService:
         self.task_completion_events[task_id] = {
             "event": asyncio.Event(),
             "result": None,
-            "status": "pending"
+            "status": "pending",
         }
 
     async def wait_for_task_completion(self, task_id: str) -> str:
         """Wait for a task to complete and return the result.
-        
+
         Args:
             task_id: ID of the task to wait for
-            
+
         Returns:
             Task result or error message
-            
+
         Raises:
             ValueError: If agent communication is disabled or task not found
             TimeoutError: If the task does not complete within the maximum wait time
@@ -319,7 +310,7 @@ class AgentCommunicationService:
 
     def get_agent_communication_tool(self) -> FunctionTool | None:
         """Get the agent communication tool for use with Google ADK.
-        
+
         Returns:
             FunctionTool for agent communication or None if communication is disabled
         """
@@ -331,21 +322,23 @@ class AgentCommunicationService:
         return FunctionTool(func=ask_agent_func)
 
     def configure_agent_with_communication(
-        self,
-        llm_agent: LlmAgent,
-        enable_communication: bool | None = None
+        self, llm_agent: LlmAgent, enable_communication: bool | None = None
     ) -> LlmAgent:
         """Configure an LlmAgent with agent communication capabilities.
-        
+
         Args:
             llm_agent: The LlmAgent to configure
             enable_communication: Override the global enable_agent_communication setting
-            
+
         Returns:
             The configured LlmAgent
         """
         # Determine whether to enable communication
-        should_enable = enable_communication if enable_communication is not None else self.enable_agent_communication
+        should_enable = (
+            enable_communication
+            if enable_communication is not None
+            else self.enable_agent_communication
+        )
 
         if not should_enable:
             logger.info("Agent-to-agent communication is disabled for this agent")

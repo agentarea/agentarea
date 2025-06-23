@@ -1,6 +1,7 @@
 """
 MCP configuration and request schemas.
 """
+
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -11,7 +12,7 @@ from pydantic import BaseModel, Field
 
 class MCPServerStatus(str, Enum):
     """MCP server status enum."""
-    
+
     REQUESTED = "requested"
     CREATING = "creating"
     CREATED = "created"
@@ -24,7 +25,7 @@ class MCPServerStatus(str, Enum):
 
 class MCPServerTemplate(str, Enum):
     """Available MCP server templates."""
-    
+
     FASTAPI = "fastapi"
     NODEJS = "nodejs"
     PYTHON = "python"
@@ -36,7 +37,7 @@ class MCPServerTemplate(str, Enum):
 
 class MCPServerConfig(BaseModel):
     """MCP server configuration model."""
-    
+
     id: Optional[UUID] = Field(None, description="Configuration ID (auto-generated)")
     agent_id: UUID = Field(..., description="Associated agent ID")
     service_name: str = Field(..., description="Unique service name")
@@ -44,17 +45,16 @@ class MCPServerConfig(BaseModel):
     environment: Dict[str, Any] = Field(default_factory=dict, description="Environment variables")
     replicas: int = Field(default=1, ge=1, le=10, description="Number of replicas")
     resources: Optional[Dict[str, str]] = Field(None, description="Resource limits")
-    
+
     class Config:
         """Pydantic config."""
-        json_encoders = {
-            UUID: str
-        }
+
+        json_encoders = {UUID: str}
 
 
 class MCPServerDeployment(BaseModel):
     """MCP server deployment information."""
-    
+
     id: UUID = Field(..., description="Deployment ID")
     config_id: UUID = Field(..., description="Configuration ID")
     status: MCPServerStatus = Field(..., description="Current deployment status")
@@ -65,18 +65,19 @@ class MCPServerDeployment(BaseModel):
     error: Optional[str] = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Deployment creation time")
     updated_at: datetime = Field(..., description="Last update time")
-    
+
     class Config:
         """Pydantic config."""
+
         json_encoders = {
             UUID: str,
-            datetime: lambda v: v.isoformat()  # type: ignore
+            datetime: lambda v: v.isoformat(),  # type: ignore
         }
 
 
 class MCPServerCreateRequest(BaseModel):
     """Request to create a new MCP server."""
-    
+
     agent_id: UUID = Field(..., description="Agent ID")
     service_name: str = Field(..., min_length=1, max_length=50, description="Service name")
     template: MCPServerTemplate = Field(..., description="Server template")
@@ -87,16 +88,16 @@ class MCPServerCreateRequest(BaseModel):
 
 class MCPServerListResponse(BaseModel):
     """Response for listing MCP servers."""
-    
+
     servers: list[MCPServerDeployment] = Field(..., description="List of MCP server deployments")
     total: int = Field(..., description="Total number of servers")
 
 
 class MCPServerResponse(BaseModel):
     """Response for MCP server operations."""
-    
+
     success: bool = Field(..., description="Operation success status")
     message: str = Field(..., description="Response message")
     config_id: Optional[UUID] = Field(None, description="Configuration ID")
     deployment_id: Optional[UUID] = Field(None, description="Deployment ID")
-    server: Optional[MCPServerDeployment] = Field(None, description="Server deployment info") 
+    server: Optional[MCPServerDeployment] = Field(None, description="Server deployment info")

@@ -5,7 +5,7 @@ End-to-End Test for Main AgentArea Flow
 This test covers the complete flow:
 1. Get existing LLM models/providers, find Ollama
 2. Create a new LLM model instance for qwen2.5:latest
-3. Create a new agent using that LLM model instance 
+3. Create a new agent using that LLM model instance
 4. Send a task to that agent
 5. Wait for task completion and verify results
 
@@ -44,7 +44,9 @@ class TestE2EMainFlow:
     """End-to-end tests for the main agent flow."""
 
     @pytest.mark.asyncio
-    async def test_complete_flow_with_execution_verification(self, http_client: httpx.AsyncClient, ensure_service_running: None):
+    async def test_complete_flow_with_execution_verification(
+        self, http_client: httpx.AsyncClient, ensure_service_running: None
+    ):
         """Test complete flow including waiting for task execution and verifying results."""
         print("\n🚀 Testing complete E2E flow with execution verification...")
 
@@ -71,7 +73,9 @@ class TestE2EMainFlow:
         print(f"🔄 Execution ID: {execution_id}")
 
         # Step 5: Wait for task completion
-        final_status = await self._wait_for_task_completion(http_client, agent_id, task_id, timeout_seconds=180)
+        final_status = await self._wait_for_task_completion(
+            http_client, agent_id, task_id, timeout_seconds=180
+        )
         assert final_status, "Failed to get task completion status"
 
         # Step 6: Verify task results
@@ -80,7 +84,9 @@ class TestE2EMainFlow:
         print("✅ Complete E2E flow with execution verification successful!")
 
     @pytest.mark.asyncio
-    async def test_complete_flow(self, http_client: httpx.AsyncClient, ensure_service_running: None):
+    async def test_complete_flow(
+        self, http_client: httpx.AsyncClient, ensure_service_running: None
+    ):
         """Test complete flow: create model -> create instance -> create agent -> send task."""
         print("\n🚀 Testing complete E2E flow...")
 
@@ -103,70 +109,75 @@ class TestE2EMainFlow:
         print("✅ Complete E2E flow successful!")
 
     @pytest.mark.asyncio
-    async def test_agent_output_verification(self, http_client: httpx.AsyncClient, ensure_service_running: None):
+    async def test_agent_output_verification(
+        self, http_client: httpx.AsyncClient, ensure_service_running: None
+    ):
         """Test specifically that agents produce meaningful output."""
         print("\n🎯 Testing agent output verification...")
-        
+
         # Step 1: Create or get Ollama model
         model_id = await self._get_or_create_model(http_client)
         assert model_id, "Failed to get or create model"
-        
+
         # Step 2: Create model instance
         instance_id = await self._create_model_instance(http_client, model_id)
         assert instance_id, "Failed to create model instance"
-        
+
         # Step 3: Create agent
         agent_id = await self._create_agent(http_client, instance_id)
         assert agent_id, "Failed to create agent"
-        
+
         # Step 4: Send a specific task that should produce clear output
         task_data = {
             "description": "Please count from 1 to 5 and explain what counting is.",
-            "parameters": {
-                "user_id": "test-output-verification",
-                "test_mode": True
-            }
+            "parameters": {"user_id": "test-output-verification", "test_mode": True},
         }
-        
+
         response = await http_client.post(f"/v1/agents/{agent_id}/tasks/", json=task_data)
         assert response.status_code in [200, 201], f"Failed to create task: {response.status_code}"
-        
+
         task_info = response.json()
         task_id = task_info["id"]
-        
+
         print(f"📋 Created counting task: {task_id}")
-        
+
         # Step 5: Wait for completion
-        final_status = await self._wait_for_task_completion(http_client, agent_id, task_id, timeout_seconds=60)
+        final_status = await self._wait_for_task_completion(
+            http_client, agent_id, task_id, timeout_seconds=60
+        )
         assert final_status, "Failed to get task completion status"
-        
+
         # Step 6: Verify specific output requirements
-        assert final_status["status"] == "completed", f"Task should complete successfully, got {final_status['status']}"
-        
+        assert final_status["status"] == "completed", (
+            f"Task should complete successfully, got {final_status['status']}"
+        )
+
         message = final_status.get("message", {})
         assert message, "Task should have A2A message"
-        
+
         parts = message.get("parts", [])
         assert len(parts) > 0, "Message should have parts"
-        
+
         agent_text = parts[0].get("text", "").lower()
         assert len(agent_text) > 20, "Agent should produce substantial output"
-        
+
         # Check that the agent actually counted
         numbers = ["1", "2", "3", "4", "5"]
         found_numbers = sum(1 for num in numbers if num in agent_text)
-        assert found_numbers >= 3, f"Agent should count numbers 1-5, only found {found_numbers} numbers"
-        
+        assert found_numbers >= 3, (
+            f"Agent should count numbers 1-5, only found {found_numbers} numbers"
+        )
+
         # Check that the agent explained counting
         explanation_words = ["count", "number", "sequence", "order", "math"]
         found_explanations = sum(1 for word in explanation_words if word in agent_text)
         assert found_explanations >= 1, "Agent should explain what counting is"
-        
+
         print(f"✅ Agent produced {len(agent_text)} characters of output")
         print(f"✅ Found {found_numbers}/5 numbers in response")
         print(f"✅ Found {found_explanations} explanation words")
         print(f"📝 Agent response preview: '{agent_text[:100]}...'")
-        
+
         print("🎉 Agent output verification successful!")
 
     async def _get_or_create_model(self, client: httpx.AsyncClient) -> str:
@@ -190,11 +201,13 @@ class TestE2EMainFlow:
             "model_type": "chat",
             "endpoint_url": "http://localhost:11434",
             "context_window": "32768",
-            "is_public": True
+            "is_public": True,
         }
 
         response = await client.post("/v1/llm-models/", json=model_data)
-        assert response.status_code in [200, 201], f"Failed to create model: {response.status_code} - {response.text}"
+        assert response.status_code in [200, 201], (
+            f"Failed to create model: {response.status_code} - {response.text}"
+        )
 
         model = response.json()
         model_id = model.get("id")
@@ -210,11 +223,13 @@ class TestE2EMainFlow:
             "api_key": "not-needed-for-ollama",
             "name": f"test-instance-{uuid.uuid4().hex[:8]}",
             "description": "Test instance for E2E testing",
-            "is_public": True
+            "is_public": True,
         }
 
         response = await client.post("/v1/llm-models/instances/", json=instance_data)
-        assert response.status_code in [200, 201], f"Failed to create instance: {response.status_code} - {response.text}"
+        assert response.status_code in [200, 201], (
+            f"Failed to create instance: {response.status_code} - {response.text}"
+        )
 
         instance = response.json()
         instance_id = instance.get("id")
@@ -230,11 +245,13 @@ class TestE2EMainFlow:
             "description": "E2E test agent",
             "instruction": "You are a helpful AI assistant. Please provide clear, concise answers.",
             "model_id": model_instance_id,
-            "planning": False
+            "planning": False,
         }
 
         response = await client.post("/v1/agents/", json=agent_data)
-        assert response.status_code in [200, 201], f"Failed to create agent: {response.status_code} - {response.text}"
+        assert response.status_code in [200, 201], (
+            f"Failed to create agent: {response.status_code} - {response.text}"
+        )
 
         agent = response.json()
         agent_id = agent.get("id")
@@ -248,10 +265,7 @@ class TestE2EMainFlow:
         # Use the unified agent tasks endpoint
         task_data = {
             "description": "Hello! Can you tell me a short joke?",
-            "parameters": {
-                "user_id": "test-user",
-                "test_mode": True
-            }
+            "parameters": {"user_id": "test-user", "test_mode": True},
         }
 
         response = await client.post(f"/v1/agents/{agent_id}/tasks/", json=task_data)
@@ -263,17 +277,16 @@ class TestE2EMainFlow:
         print(f"❌ Task creation failed: {response.status_code} - {response.text[:200]}")
         return False
 
-    async def _send_task_to_agent_with_info(self, client: httpx.AsyncClient, agent_id: str) -> dict[str, Any]:
+    async def _send_task_to_agent_with_info(
+        self, client: httpx.AsyncClient, agent_id: str
+    ) -> dict[str, Any]:
         """Send task to agent and return full task info."""
         print("📤 Sending task to agent...")
 
         # Use the unified agent tasks endpoint
         task_data = {
             "description": "Hello! Can you tell me a short joke about programming?",
-            "parameters": {
-                "user_id": "test-user-e2e",
-                "test_mode": True
-            }
+            "parameters": {"user_id": "test-user-e2e", "test_mode": True},
         }
 
         response = await client.post(f"/v1/agents/{agent_id}/tasks/", json=task_data)
@@ -285,7 +298,9 @@ class TestE2EMainFlow:
         print(f"❌ Task creation failed: {response.status_code} - {response.text[:200]}")
         return {}
 
-    async def _wait_for_task_completion(self, client: httpx.AsyncClient, agent_id: str, task_id: str, timeout_seconds: int = 120) -> dict[str, Any]:
+    async def _wait_for_task_completion(
+        self, client: httpx.AsyncClient, agent_id: str, task_id: str, timeout_seconds: int = 120
+    ) -> dict[str, Any]:
         """Wait for task completion and return final status."""
         print(f"⏳ Waiting for task {task_id} completion (timeout: {timeout_seconds}s)...")
 
@@ -375,36 +390,55 @@ class TestE2EMainFlow:
 
             # ✨ NEW: Verify A2A fields and actual agent output
             print("🎯 Verifying A2A fields and agent output...")
-            
+
             # Check A2A message field
             message = final_status.get("message")
             if message and isinstance(message, dict):
                 print("  ✓ Found A2A message field")
-                
+
                 # Verify message structure
                 message_dict: Dict[str, Any] = message
-                assert message_dict.get("role") == "agent", f"Expected role 'agent', got {message_dict.get('role')}"
+                assert message_dict.get("role") == "agent", (
+                    f"Expected role 'agent', got {message_dict.get('role')}"
+                )
                 print(f"  ✓ Message role: {message_dict.get('role')}")
-                
+
                 parts = message_dict.get("parts", [])
                 if isinstance(parts, list):
                     assert len(parts) > 0, "Message should have at least one part"
                     print(f"  ✓ Message has {len(parts)} parts")
-                    
+
                     # Check first part has text
                     first_part = parts[0] if parts else {}
                     if isinstance(first_part, dict):
                         agent_text = first_part.get("text", "")
                         if isinstance(agent_text, str):
-                            assert len(agent_text) > 0, "Agent should have produced some text output"
-                            print(f"  ✓ Agent response text: '{agent_text[:100]}{'...' if len(agent_text) > 100 else ''}'")
-                            
+                            assert len(agent_text) > 0, (
+                                "Agent should have produced some text output"
+                            )
+                            print(
+                                f"  ✓ Agent response text: '{agent_text[:100]}{'...' if len(agent_text) > 100 else ''}'"
+                            )
+
                             # Verify it's actually a joke (contains common joke indicators)
-                            joke_indicators = ["why", "what", "how", "joke", "?", "!", "because", "pun"]
-                            has_joke_element = any(indicator in agent_text.lower() for indicator in joke_indicators)
-                            assert has_joke_element, f"Response doesn't seem like a joke: {agent_text[:50]}"
+                            joke_indicators = [
+                                "why",
+                                "what",
+                                "how",
+                                "joke",
+                                "?",
+                                "!",
+                                "because",
+                                "pun",
+                            ]
+                            has_joke_element = any(
+                                indicator in agent_text.lower() for indicator in joke_indicators
+                            )
+                            assert has_joke_element, (
+                                f"Response doesn't seem like a joke: {agent_text[:50]}"
+                            )
                             print("  ✓ Response appears to be a joke (contains joke indicators)")
-                
+
             else:
                 raise AssertionError("A2A message field is missing or invalid")
 
@@ -412,37 +446,45 @@ class TestE2EMainFlow:
             artifacts = final_status.get("artifacts")
             if artifacts and isinstance(artifacts, list) and len(artifacts) > 0:
                 print("  ✓ Found A2A artifacts field")
-                
+
                 first_artifact = artifacts[0]
                 if isinstance(first_artifact, dict):
                     artifact_dict: Dict[str, Any] = first_artifact
-                    assert artifact_dict.get("name") == "agent_response", f"Expected artifact name 'agent_response', got {artifact_dict.get('name')}"
+                    assert artifact_dict.get("name") == "agent_response", (
+                        f"Expected artifact name 'agent_response', got {artifact_dict.get('name')}"
+                    )
                     print(f"  ✓ Artifact name: {artifact_dict.get('name')}")
-                    
+
                     artifact_parts = artifact_dict.get("parts", [])
                     if isinstance(artifact_parts, list):
                         assert len(artifact_parts) > 0, "Artifact should have at least one part"
-                        
+
                         artifact_text = ""
                         if artifact_parts and isinstance(artifact_parts[0], dict):
                             artifact_text = artifact_parts[0].get("text", "")
-                        
+
                         if isinstance(artifact_text, str):
                             assert len(artifact_text) > 0, "Artifact should contain text"
                             # Compare with agent_text from message
-                            message_parts = message_dict.get("parts", []) if isinstance(message, dict) else []
+                            message_parts = (
+                                message_dict.get("parts", []) if isinstance(message, dict) else []
+                            )
                             if message_parts and isinstance(message_parts[0], dict):
                                 agent_text = message_parts[0].get("text", "")
                                 if isinstance(agent_text, str):
-                                    assert artifact_text == agent_text, "Artifact text should match message text"
+                                    assert artifact_text == agent_text, (
+                                        "Artifact text should match message text"
+                                    )
                             print("  ✓ Artifact text matches message text")
-                
+
             else:
                 raise AssertionError("A2A artifacts field is missing or invalid")
 
             # Check session_id
             session_id = final_status.get("session_id")
-            assert session_id and isinstance(session_id, str), "Session ID should be a non-empty string"
+            assert session_id and isinstance(session_id, str), (
+                "Session ID should be a non-empty string"
+            )
             print(f"  ✓ Session ID: {session_id}")
 
             # Check usage_metadata

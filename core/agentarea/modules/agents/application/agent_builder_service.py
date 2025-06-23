@@ -1,4 +1,5 @@
 """Agent Builder Service for composing agents from database data."""
+
 import logging
 from typing import Any, cast
 from uuid import UUID
@@ -32,10 +33,10 @@ class AgentBuilderService:
 
     async def build_agent_config(self, agent_id: UUID) -> dict[str, Any] | None:
         """Build a complete agent configuration from database data.
-        
+
         Args:
             agent_id: The UUID of the agent to build
-            
+
         Returns:
             Complete agent configuration dict or None if agent not found
         """
@@ -51,10 +52,14 @@ class AgentBuilderService:
             try:
                 model_instance = await self.llm_model_instance_service.get(UUID(agent.model_id))
             except (ValueError, TypeError) as e:
-                logger.error(f"Invalid model_id format for agent {agent_id}: {agent.model_id}, error: {e}")
+                logger.error(
+                    f"Invalid model_id format for agent {agent_id}: {agent.model_id}, error: {e}"
+                )
 
         if not model_instance:
-            logger.error(f"LLM model instance not found for agent {agent_id}, model_id: {agent.model_id}")
+            logger.error(
+                f"LLM model instance not found for agent {agent_id}, model_id: {agent.model_id}"
+            )
             return None
 
         # Build tools configuration
@@ -77,25 +82,27 @@ class AgentBuilderService:
             "metadata": {
                 "created_at": agent.created_at.isoformat() if agent.created_at else None,
                 "updated_at": agent.updated_at.isoformat() if agent.updated_at else None,
-            }
+            },
         }
 
-        logger.info(f"Built agent configuration for {agent.name} -> {sanitize_agent_name(agent.name)} (ID: {agent_id})")
+        logger.info(
+            f"Built agent configuration for {agent.name} -> {sanitize_agent_name(agent.name)} (ID: {agent_id})"
+        )
         return agent_config
 
     async def _build_tools_config(self, agent: Agent) -> dict[str, Any]:
         """Build tools configuration for an agent.
-        
+
         Args:
             agent: The agent domain model
-            
+
         Returns:
             Complete tools configuration
         """
         tools_config: dict[str, list[Any]] = {
             "mcp_servers": [],
             "builtin_tools": [],
-            "custom_tools": []
+            "custom_tools": [],
         }
 
         # Check if agent has tools_config
@@ -112,18 +119,26 @@ class AgentBuilderService:
                         mcp_server_id = mcp_config.get("mcp_server_id")
                         if mcp_server_id:
                             # Get MCP server instance details
-                            mcp_instance = await self.mcp_server_instance_service.get(UUID(str(mcp_server_id)))
+                            mcp_instance = await self.mcp_server_instance_service.get(
+                                UUID(str(mcp_server_id))
+                            )
                             if mcp_instance:
-                                tools_config["mcp_servers"].append({
-                                    "instance_id": str(mcp_instance.id),
-                                    "name": mcp_instance.name,
-                                    "endpoint_url": mcp_instance.endpoint_url,
-                                    "config": mcp_instance.config,  # type: ignore
-                                    "requires_user_confirmation": mcp_config.get("requires_user_confirmation", False),
-                                    "agent_config": mcp_config.get("config", {})
-                                })
+                                tools_config["mcp_servers"].append(
+                                    {
+                                        "instance_id": str(mcp_instance.id),
+                                        "name": mcp_instance.name,
+                                        "endpoint_url": mcp_instance.endpoint_url,
+                                        "config": mcp_instance.config,  # type: ignore
+                                        "requires_user_confirmation": mcp_config.get(
+                                            "requires_user_confirmation", False
+                                        ),
+                                        "agent_config": mcp_config.get("config", {}),
+                                    }
+                                )
                             else:
-                                logger.warning(f"MCP server instance {mcp_server_id} not found for agent {agent.id}")
+                                logger.warning(
+                                    f"MCP server instance {mcp_server_id} not found for agent {agent.id}"
+                                )
                 except (ValueError, TypeError) as e:
                     logger.error(f"Invalid MCP server config for agent {agent.id}: {e}")
 
@@ -141,10 +156,10 @@ class AgentBuilderService:
 
     async def validate_agent_config(self, agent_id: UUID) -> list[str]:
         """Validate agent configuration and return list of validation errors.
-        
+
         Args:
             agent_id: The UUID of the agent to validate
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -188,20 +203,24 @@ class AgentBuilderService:
                     errors.append(f"MCP server config {i} missing mcp_server_id")
                 elif self.mcp_server_instance_service:
                     try:
-                        mcp_instance = await self.mcp_server_instance_service.get(UUID(str(mcp_server_id)))
+                        mcp_instance = await self.mcp_server_instance_service.get(
+                            UUID(str(mcp_server_id))
+                        )
                         if not mcp_instance:
                             errors.append(f"MCP server instance {mcp_server_id} not found")
                     except (ValueError, TypeError):
-                        errors.append(f"Invalid MCP server ID format in config {i}: {mcp_server_id}")
+                        errors.append(
+                            f"Invalid MCP server ID format in config {i}: {mcp_server_id}"
+                        )
 
         return errors
 
     async def get_agent_capabilities(self, agent_id: UUID) -> dict[str, Any]:
         """Get agent capabilities based on its configuration.
-        
+
         Args:
             agent_id: The UUID of the agent
-            
+
         Returns:
             Dictionary of agent capabilities
         """
@@ -216,13 +235,13 @@ class AgentBuilderService:
             "tools": {
                 "mcp_servers": len(agent_config.get("tools_config", {}).get("mcp_servers", [])),
                 "builtin_tools": len(agent_config.get("tools_config", {}).get("builtin_tools", [])),
-                "custom_tools": len(agent_config.get("tools_config", {}).get("custom_tools", []))
+                "custom_tools": len(agent_config.get("tools_config", {}).get("custom_tools", [])),
             },
             "events": bool(agent_config.get("events_config")),
             "model_provider": getattr(agent_config.get("model_instance"), "provider", "unknown"),
             # ADK-specific capabilities
             "supports_multi_agent": True,  # ADK supports multi-agent systems
-            "supports_workflows": True,   # Supports SequentialAgent, ParallelAgent, LoopAgent
+            "supports_workflows": True,  # Supports SequentialAgent, ParallelAgent, LoopAgent
             "supports_delegation": True,  # Supports LLM-driven delegation
         }
 

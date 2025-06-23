@@ -4,7 +4,6 @@ This module consolidates all the duplicated Simple/Mock implementations
 scattered across the codebase into a single shared location.
 """
 
-
 from agentarea.common.events.base_events import DomainEvent
 from agentarea.common.events.broker import EventBroker
 from agentarea.common.infrastructure.secret_manager import BaseSecretManager
@@ -12,7 +11,7 @@ from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 
 class TestEventBroker(EventBroker):
     """Simple event broker for testing.
-    
+
     Consolidates all the SimpleEventBroker/TestEventBroker implementations
     from various test files into a single shared implementation.
     """
@@ -36,7 +35,7 @@ class TestEventBroker(EventBroker):
 
 class TestSecretManager(BaseSecretManager):
     """Simple secret manager for testing.
-    
+
     Consolidates all the MockSecretManager/SimpleSecretManager/TestSecretManager
     implementations from various files into a single shared implementation.
     """

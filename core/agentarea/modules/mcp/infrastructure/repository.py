@@ -15,9 +15,7 @@ class MCPServerRepository(BaseRepository[MCPServer]):
         self.session = session
 
     async def get(self, id: UUID) -> Optional[MCPServer]:
-        result = await self.session.execute(
-            select(MCPServer).where(MCPServer.id == id)
-        )
+        result = await self.session.execute(select(MCPServer).where(MCPServer.id == id))
         return result.scalar_one_or_none()
 
     async def list(
@@ -54,9 +52,7 @@ class MCPServerRepository(BaseRepository[MCPServer]):
         return entity
 
     async def delete(self, id: UUID) -> bool:
-        result = await self.session.execute(
-            select(MCPServer).where(MCPServer.id == id)
-        )
+        result = await self.session.execute(select(MCPServer).where(MCPServer.id == id))
         server = result.scalar_one_or_none()
         if server:
             await self.session.delete(server)

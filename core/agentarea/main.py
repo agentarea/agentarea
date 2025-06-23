@@ -1,5 +1,5 @@
-"""Main FastAPI application for AgentArea
-"""
+"""Main FastAPI application for AgentArea"""
+
 # from agentarea.api.events.mcp_events import register_mcp_event_handlers
 # from agentarea.config import get_settings
 from contextlib import asynccontextmanager
@@ -20,6 +20,7 @@ from agentarea.common.infrastructure.secret_manager import BaseSecretManager
 
 container = DIContainer()
 
+
 # Use real service implementations instead of test mocks
 async def initialize_services():
     """Initialize real services instead of test mocks."""
@@ -32,13 +33,17 @@ async def initialize_services():
         secret_manager = await get_secret_manager()
         register_singleton(BaseSecretManager, secret_manager)
 
-        print(f"Real services initialized successfully - Event Broker: {type(event_broker).__name__}, Secret Manager: {type(secret_manager).__name__}")
+        print(
+            f"Real services initialized successfully - Event Broker: {type(event_broker).__name__}, Secret Manager: {type(secret_manager).__name__}"
+        )
     except Exception as e:
         print(f"Warning: Service initialization failed: {e}")
         # Fallback to test implementations
         from agentarea.common.testing.mocks import TestEventBroker, TestSecretManager
+
         register_singleton(EventBroker, TestEventBroker())
         register_singleton(BaseSecretManager, TestSecretManager())
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +52,7 @@ async def lifespan(app: FastAPI):
 
     # Start the FastStream events router
     from agentarea.api.events.events_router import start_events_router
+
     await start_events_router()
 
     print("Application started successfully")
@@ -56,7 +62,9 @@ async def lifespan(app: FastAPI):
 
     # Stop the FastStream events router
     from agentarea.api.events.events_router import stop_events_router
+
     await stop_events_router()
+
 
 app = FastAPI(
     title="AgentArea API",
@@ -85,9 +93,8 @@ from agentarea.api.events import events_router
 
 app.include_router(events_router)
 
+
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {
-        "message": "AgentArea API is running."
-    }
+    return {"message": "AgentArea API is running."}

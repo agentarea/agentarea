@@ -5,6 +5,7 @@ Revises: 8954caa2c0f6
 Create Date: 2025-05-04 21:58:23.775503
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -12,27 +13,27 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b5ce5d3145b5'
-down_revision: Union[str, None] = '8954caa2c0f6'
+revision: str = "b5ce5d3145b5"
+down_revision: Union[str, None] = "8954caa2c0f6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column('agents', sa.Column('description', sa.String(), nullable=True))
-    op.add_column('agents', sa.Column('model_id', sa.String(), nullable=True))
-    op.add_column('agents', sa.Column('tools_config', sa.JSON(), nullable=True))
-    op.add_column('agents', sa.Column('events_config', sa.JSON(), nullable=True))
-    op.add_column('agents', sa.Column('planning', sa.String(), nullable=True))
-    op.drop_column('agents', 'capabilities')
+    op.add_column("agents", sa.Column("description", sa.String(), nullable=True))
+    op.add_column("agents", sa.Column("model_id", sa.String(), nullable=True))
+    op.add_column("agents", sa.Column("tools_config", sa.JSON(), nullable=True))
+    op.add_column("agents", sa.Column("events_config", sa.JSON(), nullable=True))
+    op.add_column("agents", sa.Column("planning", sa.String(), nullable=True))
+    op.drop_column("agents", "capabilities")
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.add_column('agents', sa.Column('capabilities', sa.JSON(), nullable=False))
-    op.drop_column('agents', 'planning')
-    op.drop_column('agents', 'events_config')
-    op.drop_column('agents', 'tools_config')
-    op.drop_column('agents', 'model_id')
-    op.drop_column('agents', 'description')
+    op.add_column("agents", sa.Column("capabilities", sa.JSON(), nullable=False))
+    op.drop_column("agents", "planning")
+    op.drop_column("agents", "events_config")
+    op.drop_column("agents", "tools_config")
+    op.drop_column("agents", "model_id")
+    op.drop_column("agents", "description")

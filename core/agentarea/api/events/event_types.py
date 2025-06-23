@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class EventType(Enum):
     TASK_CREATED = "TaskCreated"
     TASK_UPDATED = "TaskUpdated"

@@ -19,6 +19,7 @@ with workflow.unsafe.imports_passed_through():
     from agentarea.api.deps.database import get_db_session
 from agentarea.common.infrastructure.infisical_factory import get_real_secret_manager
 from agentarea.common.testing.mocks import TestEventBroker
+
 # from agentarea.common.events.router import get_event_router, create_event_broker_from_router
 from agentarea.config import get_settings
 from agentarea.modules.agents.application.agent_builder_service import AgentBuilderService
@@ -60,7 +61,7 @@ class AgentTaskWorkflow:
         query: str,
         user_id: str = "system",
         task_parameters: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Main workflow execution logic."""
         workflow.logger.info(f"Starting agent task workflow {task_id} for agent {agent_id}")
@@ -70,17 +71,13 @@ class AgentTaskWorkflow:
             validate_agent_activity,
             args=[agent_id],
             start_to_close_timeout=timedelta(minutes=5),
-            retry_policy=RetryPolicy(maximum_attempts=3)
+            retry_policy=RetryPolicy(maximum_attempts=3),
         )
 
         if not validation_result.get("valid", False):
             error_msg = f"Agent validation failed: {validation_result.get('errors', [])}"
             workflow.logger.error(error_msg)
-            return {
-                "status": "failed",
-                "error": error_msg,
-                "task_id": task_id
-            }
+            return {"status": "failed", "error": error_msg, "task_id": task_id}
 
         # Activity 2: Execute main agent task
         execution_result = await workflow.execute_activity(
@@ -90,8 +87,8 @@ class AgentTaskWorkflow:
             retry_policy=RetryPolicy(
                 maximum_attempts=3,
                 initial_interval=timedelta(seconds=30),
-                maximum_interval=timedelta(minutes=10)
-            )
+                maximum_interval=timedelta(minutes=10),
+            ),
         )
 
         # Handle dynamic activities discovered during execution
@@ -104,7 +101,7 @@ class AgentTaskWorkflow:
                 execute_dynamic_activity,
                 args=[discovered_activity["type"], discovered_activity["config"]],
                 start_to_close_timeout=timedelta(minutes=30),
-                retry_policy=RetryPolicy(maximum_attempts=2)
+                retry_policy=RetryPolicy(maximum_attempts=2),
             )
 
             # Merge results
@@ -119,7 +116,7 @@ class AgentTaskWorkflow:
             signal_result = await workflow.execute_activity(
                 execute_dynamic_activity,
                 args=[signal_activity["type"], signal_activity["config"]],
-                start_to_close_timeout=timedelta(minutes=30)
+                start_to_close_timeout=timedelta(minutes=30),
             )
 
             if isinstance(signal_result, dict):
@@ -130,7 +127,7 @@ class AgentTaskWorkflow:
             "task_id": task_id,
             "agent_id": agent_id,
             "result": execution_result,
-            "execution_time": None  # Will be filled by executor
+            "execution_time": None,  # Will be filled by executor
         }
 
 
@@ -146,7 +143,6 @@ async def validate_agent_activity(agent_id: str) -> dict[str, Any]:
         mcp_server_instance_repository = MCPServerInstanceRepository(db_session)
         mcp_server_repository = MCPServerRepository(db_session)
 
-
         # Use TestEventBroker for simplicity in activities
         event_broker = TestEventBroker()
 
@@ -157,14 +153,14 @@ async def validate_agent_activity(agent_id: str) -> dict[str, Any]:
         llm_service = LLMModelInstanceService(
             repository=llm_model_instance_repository,
             event_broker=event_broker,
-            secret_manager=secret_manager
+            secret_manager=secret_manager,
         )
 
         mcp_service = MCPServerInstanceService(
             repository=mcp_server_instance_repository,
             event_broker=event_broker,
             mcp_server_repository=mcp_server_repository,
-            secret_manager=secret_manager
+            secret_manager=secret_manager,
         )
 
         # Create agent builder service
@@ -172,7 +168,7 @@ async def validate_agent_activity(agent_id: str) -> dict[str, Any]:
             repository=agent_repository,
             event_broker=event_broker,
             llm_model_instance_service=llm_service,
-            mcp_server_instance_service=mcp_service
+            mcp_server_instance_service=mcp_service,
         )
 
         # Validate agent
@@ -180,20 +176,12 @@ async def validate_agent_activity(agent_id: str) -> dict[str, Any]:
 
         activity.heartbeat()  # Send heartbeat for long-running validation
 
-        return {
-            "valid": len(errors) == 0,
-            "errors": errors,
-            "agent_id": agent_id
-        }
+        return {"valid": len(errors) == 0, "errors": errors, "agent_id": agent_id}
 
 
 @activity.defn
 async def execute_agent_activity(
-    agent_id: str,
-    task_id: str,
-    query: str,
-    user_id: str,
-    task_parameters: dict[str, Any]
+    agent_id: str, task_id: str, query: str, user_id: str, task_parameters: dict[str, Any]
 ) -> dict[str, Any]:
     """Execute the main agent task using existing AgentRunnerService."""
     # Collect events and results
@@ -221,14 +209,14 @@ async def execute_agent_activity(
         llm_service = LLMModelInstanceService(
             repository=llm_model_instance_repository,
             event_broker=event_broker,
-            secret_manager=secret_manager
+            secret_manager=secret_manager,
         )
 
         mcp_service = MCPServerInstanceService(
             repository=mcp_server_instance_repository,
             event_broker=event_broker,
             mcp_server_repository=mcp_server_repository,
-            secret_manager=secret_manager
+            secret_manager=secret_manager,
         )
 
         # Create agent builder service first
@@ -236,7 +224,7 @@ async def execute_agent_activity(
             repository=agent_repository,
             event_broker=event_broker,
             llm_model_instance_service=llm_service,
-            mcp_server_instance_service=mcp_service
+            mcp_server_instance_service=mcp_service,
         )
 
         # Create agent runner service
@@ -246,7 +234,7 @@ async def execute_agent_activity(
             llm_model_instance_service=llm_service,
             session_service=session_service,
             agent_builder_service=agent_builder,
-            agent_communication_service=None  # Not needed for basic task execution
+            agent_communication_service=None,  # Not needed for basic task execution
         )
 
         # Execute agent task and collect events
@@ -256,7 +244,7 @@ async def execute_agent_activity(
             user_id=user_id,
             query=query,
             task_parameters=task_parameters,
-            enable_agent_communication=True
+            enable_agent_communication=True,
         ):
             events.append(event)
 
@@ -267,20 +255,17 @@ async def execute_agent_activity(
             event_type = event.get("event_type", "")
 
             if event_type == "MCPServerDiscovered":
-                discovered_activities.append({
-                    "type": "mcp_tool_call",
-                    "config": event.get("mcp_config", {})
-                })
+                discovered_activities.append(
+                    {"type": "mcp_tool_call", "config": event.get("mcp_config", {})}
+                )
             elif event_type == "ToolDiscovered":
-                discovered_activities.append({
-                    "type": "custom_tool",
-                    "config": event.get("tool_config", {})
-                })
+                discovered_activities.append(
+                    {"type": "custom_tool", "config": event.get("tool_config", {})}
+                )
             elif event_type == "AgentCommunicationRequested":
-                discovered_activities.append({
-                    "type": "agent_communication",
-                    "config": event.get("communication_config", {})
-                })
+                discovered_activities.append(
+                    {"type": "agent_communication", "config": event.get("communication_config", {})}
+                )
 
     logger.info(f"Agent execution completed for task {task_id}")
 
@@ -289,15 +274,12 @@ async def execute_agent_activity(
         "events": events,
         "discovered_activities": discovered_activities,
         "event_count": len(events),
-        "task_id": task_id
+        "task_id": task_id,
     }
 
 
 @activity.defn
-async def execute_dynamic_activity(
-    activity_type: str,
-    config: dict[str, Any]
-) -> dict[str, Any]:
+async def execute_dynamic_activity(activity_type: str, config: dict[str, Any]) -> dict[str, Any]:
     """Execute dynamically discovered activities."""
     logger.info(f"Executing dynamic activity: {activity_type}")
 
@@ -314,7 +296,7 @@ async def execute_dynamic_activity(
         return {
             "status": "skipped",
             "activity_type": activity_type,
-            "reason": "Unknown activity type"
+            "reason": "Unknown activity type",
         }
 
 
@@ -330,7 +312,7 @@ async def execute_mcp_tool_activity(config: dict[str, Any]) -> dict[str, Any]:
         "status": "completed",
         "activity_type": "mcp_tool_call",
         "config": config,
-        "result": "MCP tool executed successfully"
+        "result": "MCP tool executed successfully",
     }
 
 
@@ -346,7 +328,7 @@ async def execute_custom_tool_activity(config: dict[str, Any]) -> dict[str, Any]
         "status": "completed",
         "activity_type": "custom_tool",
         "config": config,
-        "result": "Custom tool executed successfully"
+        "result": "Custom tool executed successfully",
     }
 
 
@@ -362,5 +344,5 @@ async def execute_agent_communication_activity(config: dict[str, Any]) -> dict[s
         "status": "completed",
         "activity_type": "agent_communication",
         "config": config,
-        "result": "Agent communication completed"
+        "result": "Agent communication completed",
     }

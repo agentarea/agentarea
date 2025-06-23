@@ -84,7 +84,6 @@ class AgentService(BaseCrudService[Agent]):
             AgentUpdated(
                 agent_id=agent.id,
                 name=agent.name,
-                
                 description=agent.description,
                 model_id=agent.model_id,
                 tools_config=agent.tools_config,

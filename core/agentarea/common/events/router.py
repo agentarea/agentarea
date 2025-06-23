@@ -19,11 +19,11 @@ def get_event_router(
     Raises:
         ValueError: If settings type is not supported or if Kafka is used (not implemented)
     """
-    if hasattr(settings, 'REDIS_URL'):
+    if hasattr(settings, "REDIS_URL"):
         # Redis settings
         router = RedisRouter(settings.REDIS_URL)  # type: ignore
         return router
-    elif hasattr(settings, 'KAFKA_BOOTSTRAP_SERVERS'):
+    elif hasattr(settings, "KAFKA_BOOTSTRAP_SERVERS"):
         # Kafka settings - not implemented yet
         raise ValueError(
             "Kafka broker is not yet implemented. Please use Redis settings. "
@@ -35,12 +35,12 @@ def get_event_router(
 
 def create_event_broker_from_router(router: RedisRouter) -> RedisEventBroker:
     """Create an EventBroker instance from a router's underlying broker.
-    
+
     This ensures the EventBroker uses the same broker instance as the router.
-    
+
     Args:
         router: RedisRouter instance
-        
+
     Returns:
         RedisEventBroker that uses the same broker as the router
     """

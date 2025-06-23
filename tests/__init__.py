@@ -1,1 +1,1 @@
-"""AgentArea Test Suite""" 
+"""AgentArea Test Suite"""

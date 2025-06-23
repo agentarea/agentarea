@@ -65,23 +65,27 @@ def check_migrations_status():
     raise Exception("Migrations not up to date")
 
 
-async def make_api_request(method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, 
-                          base_url: str = "http://localhost:8000") -> Dict[str, Any]:
+async def make_api_request(
+    method: str,
+    endpoint: str,
+    data: Optional[Dict[str, Any]] = None,
+    base_url: str = "http://localhost:8000",
+) -> Dict[str, Any]:
     """Make HTTP request to the API"""
     async with httpx.AsyncClient(timeout=10.0) as client:
         url = f"{base_url}{endpoint}"
         try:
-            if method.upper() == 'GET':
+            if method.upper() == "GET":
                 response = await client.get(url)
-            elif method.upper() == 'POST':
+            elif method.upper() == "POST":
                 response = await client.post(url, json=data or {})
-            elif method.upper() == 'PUT':
+            elif method.upper() == "PUT":
                 response = await client.put(url, json=data or {})
-            elif method.upper() == 'DELETE':
+            elif method.upper() == "DELETE":
                 response = await client.delete(url)
             else:
                 raise ValueError(f"Unsupported method: {method}")
-            
+
             response.raise_for_status()
             return response.json()
         except httpx.ConnectError:
@@ -144,9 +148,7 @@ def migrate():
     type=click.Choice(["critical", "error", "warning", "info", "debug", "trace"]),
     help="Logging level",
 )
-@click.option(
-    "--access-log/--no-access-log", default=True, help="Enable/disable access logs"
-)
+@click.option("--access-log/--no-access-log", default=True, help="Enable/disable access logs")
 @click.option("--workers", default=1, help="Number of worker processes")
 def serve(host: str, port: int, reload: bool, log_level: str, access_log: bool, workers: int):
     """Start the main application server."""
@@ -172,6 +174,7 @@ def serve(host: str, port: int, reload: bool, log_level: str, access_log: bool, 
 # LLM Management Commands
 # ============================================================================
 
+
 @cli.group()
 def llm():
     """LLM model and instance management commands"""
@@ -181,43 +184,45 @@ def llm():
 @llm.command()
 def models():
     """List available LLM models"""
+
     async def _list_models():
         try:
             data = await make_api_request("GET", "/v1/llm-models")
             if data and isinstance(data, list):
                 click.echo("Available LLM Models:")
                 for model in data:
-                    name = safe_get_field(model, 'name')
-                    provider = safe_get_field(model, 'provider')
-                    description = safe_get_field(model, 'description')
+                    name = safe_get_field(model, "name")
+                    provider = safe_get_field(model, "provider")
+                    description = safe_get_field(model, "description")
                     click.echo(f"  • {name} ({provider}) - {description}")
             else:
                 click.echo("No LLM models found")
         except Exception as e:
             click.echo(f"Error listing models: {e}")
-    
+
     asyncio.run(_list_models())
 
 
 @llm.command()
 def instances():
     """List LLM model instances"""
+
     async def _list_instances():
         try:
             data = await make_api_request("GET", "/v1/llm-models/instances")
             if data and isinstance(data, list):
                 click.echo("LLM Model Instances:")
                 for instance in data:
-                    name = safe_get_field(instance, 'name')
-                    description = safe_get_field(instance, 'description')
-                    status = safe_get_field(instance, 'status')
+                    name = safe_get_field(instance, "name")
+                    description = safe_get_field(instance, "description")
+                    status = safe_get_field(instance, "status")
                     click.echo(f"  • {name} - {description}")
                     click.echo(f"    Status: {status}")
             else:
                 click.echo("No LLM instances found")
         except Exception as e:
             click.echo(f"Error listing instances: {e}")
-    
+
     asyncio.run(_list_instances())
 
 
@@ -229,9 +234,17 @@ def instances():
 @click.option("--endpoint-url", required=True, help="API endpoint URL")
 @click.option("--context-window", default="4096", help="Context window size")
 @click.option("--is-public/--no-public", default=False, help="Make model public")
-def create_model(name: str, description: str, provider: str, model_type: str, 
-                endpoint_url: str, context_window: str, is_public: bool):
+def create_model(
+    name: str,
+    description: str,
+    provider: str,
+    model_type: str,
+    endpoint_url: str,
+    context_window: str,
+    is_public: bool,
+):
     """Create a new LLM model"""
+
     async def _create_model():
         data = {
             "name": name,
@@ -240,18 +253,18 @@ def create_model(name: str, description: str, provider: str, model_type: str,
             "model_type": model_type,
             "endpoint_url": endpoint_url,
             "context_window": context_window,
-            "is_public": is_public
+            "is_public": is_public,
         }
-        
+
         try:
             result = await make_api_request("POST", "/v1/llm-models", data)
-            name_result = safe_get_field(result, 'name')
-            id_result = safe_get_field(result, 'id')
+            name_result = safe_get_field(result, "name")
+            id_result = safe_get_field(result, "id")
             click.echo(f"✅ Created LLM model: {name_result}")
             click.echo(f"   ID: {id_result}")
         except Exception as e:
             click.echo(f"❌ Error creating model: {e}")
-    
+
     asyncio.run(_create_model())
 
 
@@ -263,30 +276,32 @@ def create_model(name: str, description: str, provider: str, model_type: str,
 @click.option("--is-public/--no-public", default=False, help="Make instance public")
 def create_instance(model_id: str, name: str, description: str, api_key: str, is_public: bool):
     """Create a new LLM model instance"""
+
     async def _create_instance():
         data = {
             "model_id": model_id,
             "name": name,
             "description": description,
             "api_key": api_key,
-            "is_public": is_public
+            "is_public": is_public,
         }
-        
+
         try:
             result = await make_api_request("POST", "/v1/llm-models/instances", data)
-            name_result = safe_get_field(result, 'name')
-            id_result = safe_get_field(result, 'id')
+            name_result = safe_get_field(result, "name")
+            id_result = safe_get_field(result, "id")
             click.echo(f"✅ Created LLM instance: {name_result}")
             click.echo(f"   ID: {id_result}")
         except Exception as e:
             click.echo(f"❌ Error creating instance: {e}")
-    
+
     asyncio.run(_create_instance())
 
 
 # ============================================================================
 # MCP Management Commands
 # ============================================================================
+
 
 @cli.group()
 def mcp():
@@ -297,37 +312,39 @@ def mcp():
 @mcp.command()
 def servers():
     """List available MCP servers"""
+
     async def _list_servers():
         try:
             data = await make_api_request("GET", "/v1/mcp-servers")
             if data and isinstance(data, list):
                 click.echo("Available MCP Servers:")
                 for server in data:
-                    name = safe_get_field(server, 'name')
-                    description = safe_get_field(server, 'description')
-                    image = safe_get_field(server, 'docker_image_url')
+                    name = safe_get_field(server, "name")
+                    description = safe_get_field(server, "description")
+                    image = safe_get_field(server, "docker_image_url")
                     click.echo(f"  • {name} - {description}")
                     click.echo(f"    Image: {image}")
             else:
                 click.echo("No MCP servers found")
         except Exception as e:
             click.echo(f"Error listing servers: {e}")
-    
+
     asyncio.run(_list_servers())
 
 
 @mcp.command()
 def instances():
     """List MCP server instances"""
+
     async def _list_instances():
         try:
             data = await make_api_request("GET", "/v1/mcp-server-instances")
             if data and isinstance(data, list):
                 click.echo("MCP Server Instances:")
                 for instance in data:
-                    name = safe_get_field(instance, 'name')
-                    endpoint = safe_get_field(instance, 'endpoint_url')
-                    status = safe_get_field(instance, 'status')
+                    name = safe_get_field(instance, "name")
+                    endpoint = safe_get_field(instance, "endpoint_url")
+                    status = safe_get_field(instance, "status")
                     click.echo(f"  • {name}")
                     click.echo(f"    Endpoint: {endpoint}")
                     click.echo(f"    Status: {status}")
@@ -335,7 +352,7 @@ def instances():
                 click.echo("No MCP instances found")
         except Exception as e:
             click.echo(f"Error listing instances: {e}")
-    
+
     asyncio.run(_list_instances())
 
 
@@ -346,9 +363,16 @@ def instances():
 @click.option("--version", default="latest", help="Version tag")
 @click.option("--tags", help="Comma-separated tags")
 @click.option("--is-public/--no-public", default=False, help="Make server public")
-def create_server(name: str, description: str, docker_image: str, version: str, 
-                 tags: Optional[str], is_public: bool):
+def create_server(
+    name: str,
+    description: str,
+    docker_image: str,
+    version: str,
+    tags: Optional[str],
+    is_public: bool,
+):
     """Create a new MCP server"""
+
     async def _create_server():
         data = {
             "name": name,
@@ -356,18 +380,18 @@ def create_server(name: str, description: str, docker_image: str, version: str,
             "docker_image_url": docker_image,
             "version": version,
             "tags": tags.split(",") if tags else [],
-            "is_public": is_public
+            "is_public": is_public,
         }
-        
+
         try:
             result = await make_api_request("POST", "/v1/mcp-servers", data)
-            name_result = safe_get_field(result, 'name')
-            id_result = safe_get_field(result, 'id')
+            name_result = safe_get_field(result, "name")
+            id_result = safe_get_field(result, "id")
             click.echo(f"✅ Created MCP server: {name_result}")
             click.echo(f"   ID: {id_result}")
         except Exception as e:
             click.echo(f"❌ Error creating server: {e}")
-    
+
     asyncio.run(_create_server())
 
 
@@ -378,6 +402,7 @@ def create_server(name: str, description: str, docker_image: str, version: str,
 @click.option("--config", help="JSON configuration string")
 def create_instance(server_id: str, name: str, endpoint_url: str, config: Optional[str]):
     """Create a new MCP server instance"""
+
     async def _create_instance():
         config_data = {}
         if config:
@@ -386,29 +411,30 @@ def create_instance(server_id: str, name: str, endpoint_url: str, config: Option
             except json.JSONDecodeError:
                 click.echo("❌ Invalid JSON in config parameter")
                 return
-        
+
         data = {
             "server_id": server_id,
             "name": name,
             "endpoint_url": endpoint_url,
-            "config": config_data
+            "config": config_data,
         }
-        
+
         try:
             result = await make_api_request("POST", "/v1/mcp-server-instances", data)
-            name_result = safe_get_field(result, 'name')
-            id_result = safe_get_field(result, 'id')
+            name_result = safe_get_field(result, "name")
+            id_result = safe_get_field(result, "id")
             click.echo(f"✅ Created MCP instance: {name_result}")
             click.echo(f"   ID: {id_result}")
         except Exception as e:
             click.echo(f"❌ Error creating instance: {e}")
-    
+
     asyncio.run(_create_instance())
 
 
 # ============================================================================
 # Agent Management Commands
 # ============================================================================
+
 
 @cli.group()
 def agent():
@@ -419,16 +445,17 @@ def agent():
 @agent.command()
 def list():
     """List available agents"""
+
     async def _list_agents():
         try:
             data = await make_api_request("GET", "/v1/agents")
             if data and isinstance(data, list):
                 click.echo("Available Agents:")
                 for agent in data:
-                    name = safe_get_field(agent, 'name')
-                    description = safe_get_field(agent, 'description')
-                    model_id = safe_get_field(agent, 'model_id')
-                    status = safe_get_field(agent, 'status')
+                    name = safe_get_field(agent, "name")
+                    description = safe_get_field(agent, "description")
+                    model_id = safe_get_field(agent, "model_id")
+                    status = safe_get_field(agent, "status")
                     click.echo(f"  • {name} - {description}")
                     click.echo(f"    Model: {model_id}")
                     click.echo(f"    Status: {status}")
@@ -436,7 +463,7 @@ def list():
                 click.echo("No agents found")
         except Exception as e:
             click.echo(f"Error listing agents: {e}")
-    
+
     asyncio.run(_list_agents())
 
 
@@ -448,6 +475,7 @@ def list():
 @click.option("--planning/--no-planning", default=False, help="Enable planning capabilities")
 def create(name: str, description: str, instruction: str, model_id: str, planning: bool):
     """Create a new agent"""
+
     async def _create_agent():
         data = {
             "name": name,
@@ -455,29 +483,26 @@ def create(name: str, description: str, instruction: str, model_id: str, plannin
             "instruction": instruction,
             "model_id": model_id,
             "planning": planning,
-            "tools_config": {
-                "mcp_server_configs": []
-            },
-            "events_config": {
-                "events": []
-            }
+            "tools_config": {"mcp_server_configs": []},
+            "events_config": {"events": []},
         }
-        
+
         try:
             result = await make_api_request("POST", "/v1/agents", data)
-            name_result = safe_get_field(result, 'name')
-            id_result = safe_get_field(result, 'id')
+            name_result = safe_get_field(result, "name")
+            id_result = safe_get_field(result, "id")
             click.echo(f"✅ Created agent: {name_result}")
             click.echo(f"   ID: {id_result}")
         except Exception as e:
             click.echo(f"❌ Error creating agent: {e}")
-    
+
     asyncio.run(_create_agent())
 
 
 # ============================================================================
 # Task/Chat Commands
 # ============================================================================
+
 
 @cli.group()
 def chat():
@@ -492,26 +517,27 @@ def chat():
 @click.option("--user-id", help="User ID")
 def send(agent_id: str, message: str, session_id: Optional[str], user_id: Optional[str]):
     """Send a chat message to an agent"""
+
     async def _send_message():
         data = {
             "content": message,
             "agent_id": agent_id,
             "task_type": "message",
             "session_id": session_id,
-            "user_id": user_id
+            "user_id": user_id,
         }
-        
+
         try:
             result = await make_api_request("POST", "/v1/chat/messages", data)
-            content = safe_get_field(result, 'content', 'No response')
-            session_id_result = safe_get_field(result, 'session_id')
+            content = safe_get_field(result, "content", "No response")
+            session_id_result = safe_get_field(result, "session_id")
             click.echo(f"Agent Response:")
             click.echo(f"  {content}")
-            if session_id_result != 'Unknown':
+            if session_id_result != "Unknown":
                 click.echo(f"Session ID: {session_id_result}")
         except Exception as e:
             click.echo(f"❌ Error sending message: {e}")
-    
+
     asyncio.run(_send_message())
 
 
@@ -521,41 +547,41 @@ def send(agent_id: str, message: str, session_id: Optional[str], user_id: Option
 def interactive(agent_id: str, session_id: Optional[str]):
     """Start an interactive chat session with an agent"""
     import uuid
-    
+
     if not session_id:
         session_id = str(uuid.uuid4())
-    
+
     click.echo(f"Starting interactive chat with agent {agent_id}")
     click.echo(f"Session ID: {session_id}")
     click.echo("Type 'exit' or 'quit' to end the session")
     click.echo("-" * 50)
-    
+
     async def _interactive_chat():
         while True:
             try:
                 message = click.prompt("You", type=str, prompt_suffix="> ")
-                
-                if message.lower() in ['exit', 'quit']:
+
+                if message.lower() in ["exit", "quit"]:
                     click.echo("Goodbye!")
                     break
-                
+
                 data = {
                     "content": message,
                     "agent_id": agent_id,
                     "task_type": "message",
-                    "session_id": session_id
+                    "session_id": session_id,
                 }
-                
+
                 result = await make_api_request("POST", "/v1/chat/messages", data)
-                content = safe_get_field(result, 'content', 'No response')
+                content = safe_get_field(result, "content", "No response")
                 click.echo(f"Agent> {content}")
-                
+
             except KeyboardInterrupt:
                 click.echo("\nGoodbye!")
                 break
             except Exception as e:
                 click.echo(f"❌ Error: {e}")
-    
+
     asyncio.run(_interactive_chat())
 
 
@@ -563,21 +589,22 @@ def interactive(agent_id: str, session_id: Optional[str]):
 @click.option("--session-id", required=True, help="Session ID")
 def history(session_id: str):
     """Get chat history for a session"""
+
     async def _get_history():
         try:
             data = await make_api_request("GET", f"/v1/chat/sessions/{session_id}/history")
             if data:
                 click.echo(f"Chat History (Session: {session_id}):")
                 for msg in data:
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')
-                    timestamp = msg.get('timestamp', '')
+                    role = msg.get("role", "unknown")
+                    content = msg.get("content", "")
+                    timestamp = msg.get("timestamp", "")
                     click.echo(f"[{timestamp}] {role.capitalize()}: {content}")
             else:
                 click.echo("No chat history found")
         except Exception as e:
             click.echo(f"Error getting history: {e}")
-    
+
     asyncio.run(_get_history())
 
 

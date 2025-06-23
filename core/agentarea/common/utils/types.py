@@ -15,17 +15,17 @@ from pydantic import (
 
 
 class TaskState(str, Enum):
-    SUBMITTED = 'submitted'
-    WORKING = 'working'
-    INPUT_REQUIRED = 'input-required'
-    COMPLETED = 'completed'
-    CANCELED = 'canceled'
-    FAILED = 'failed'
-    UNKNOWN = 'unknown'
+    SUBMITTED = "submitted"
+    WORKING = "working"
+    INPUT_REQUIRED = "input-required"
+    COMPLETED = "completed"
+    CANCELED = "canceled"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
 
 
 class TextPart(BaseModel):
-    type: Literal['text'] = 'text'
+    type: Literal["text"] = "text"
     text: str
     metadata: dict[str, Any] | None = None
 
@@ -36,36 +36,32 @@ class FileContent(BaseModel):
     bytes: str | None = None
     uri: str | None = None
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def check_content(self) -> Self:
         if not (self.bytes or self.uri):
-            raise ValueError(
-                "Either 'bytes' or 'uri' must be present in the file data"
-            )
+            raise ValueError("Either 'bytes' or 'uri' must be present in the file data")
         if self.bytes and self.uri:
-            raise ValueError(
-                "Only one of 'bytes' or 'uri' can be present in the file data"
-            )
+            raise ValueError("Only one of 'bytes' or 'uri' can be present in the file data")
         return self
 
 
 class FilePart(BaseModel):
-    type: Literal['file'] = 'file'
+    type: Literal["file"] = "file"
     file: FileContent
     metadata: dict[str, Any] | None = None
 
 
 class DataPart(BaseModel):
-    type: Literal['data'] = 'data'
+    type: Literal["data"] = "data"
     data: dict[str, Any]
     metadata: dict[str, Any] | None = None
 
 
-Part = Annotated[TextPart | FilePart | DataPart, Field(discriminator='type')]
+Part = Annotated[TextPart | FilePart | DataPart, Field(discriminator="type")]
 
 
 class Message(BaseModel):
-    role: Literal['user', 'agent']
+    role: Literal["user", "agent"]
     parts: list[Part]
     metadata: dict[str, Any] | None = None
 
@@ -75,7 +71,7 @@ class TaskStatus(BaseModel):
     message: Message | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
 
-    @field_serializer('timestamp')
+    @field_serializer("timestamp")
     def serialize_dt(self, dt: datetime, _info):
         return dt.isoformat()
 
@@ -113,7 +109,7 @@ class TaskArtifactUpdateEvent(BaseModel):
 
 
 class AuthenticationInfo(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    model_config = ConfigDict(extra="allow")
 
     schemes: list[str]
     credentials: str | None = None
@@ -153,7 +149,7 @@ class TaskPushNotificationConfig(BaseModel):
 
 
 class JSONRPCMessage(BaseModel):
-    jsonrpc: Literal['2.0'] = '2.0'
+    jsonrpc: Literal["2.0"] = "2.0"
     id: int | str | None = Field(default_factory=lambda: uuid4().hex)
 
 
@@ -174,7 +170,7 @@ class JSONRPCResponse(JSONRPCMessage):
 
 
 class SendTaskRequest(JSONRPCRequest):
-    method: Literal['tasks/send'] = 'tasks/send'
+    method: Literal["tasks/send"] = "tasks/send"
     params: TaskSendParams
 
 
@@ -183,7 +179,7 @@ class SendTaskResponse(JSONRPCResponse):
 
 
 class SendTaskStreamingRequest(JSONRPCRequest):
-    method: Literal['tasks/sendSubscribe'] = 'tasks/sendSubscribe'
+    method: Literal["tasks/sendSubscribe"] = "tasks/sendSubscribe"
     params: TaskSendParams
 
 
@@ -192,7 +188,7 @@ class SendTaskStreamingResponse(JSONRPCResponse):
 
 
 class GetTaskRequest(JSONRPCRequest):
-    method: Literal['tasks/get'] = 'tasks/get'
+    method: Literal["tasks/get"] = "tasks/get"
     params: TaskQueryParams
 
 
@@ -201,7 +197,7 @@ class GetTaskResponse(JSONRPCResponse):
 
 
 class CancelTaskRequest(JSONRPCRequest):
-    method: Literal['tasks/cancel',] = 'tasks/cancel'
+    method: Literal["tasks/cancel",] = "tasks/cancel"
     params: TaskIdParams
 
 
@@ -210,9 +206,7 @@ class CancelTaskResponse(JSONRPCResponse):
 
 
 class SetTaskPushNotificationRequest(JSONRPCRequest):
-    method: Literal['tasks/pushNotification/set',] = (
-        'tasks/pushNotification/set'
-    )
+    method: Literal["tasks/pushNotification/set",] = "tasks/pushNotification/set"
     params: TaskPushNotificationConfig
 
 
@@ -221,9 +215,7 @@ class SetTaskPushNotificationResponse(JSONRPCResponse):
 
 
 class GetTaskPushNotificationRequest(JSONRPCRequest):
-    method: Literal['tasks/pushNotification/get',] = (
-        'tasks/pushNotification/get'
-    )
+    method: Literal["tasks/pushNotification/get",] = "tasks/pushNotification/get"
     params: TaskIdParams
 
 
@@ -232,7 +224,7 @@ class GetTaskPushNotificationResponse(JSONRPCResponse):
 
 
 class TaskResubscriptionRequest(JSONRPCRequest):
-    method: Literal['tasks/resubscribe',] = 'tasks/resubscribe'
+    method: Literal["tasks/resubscribe",] = "tasks/resubscribe"
     params: TaskIdParams
 
 
@@ -244,7 +236,7 @@ class MessageSendParams(BaseModel):
 
 
 class MessageSendRequest(JSONRPCRequest):
-    method: Literal['message/send'] = 'message/send'
+    method: Literal["message/send"] = "message/send"
     params: MessageSendParams
 
 
@@ -253,7 +245,7 @@ class MessageSendResponse(JSONRPCResponse):
 
 
 class MessageStreamRequest(JSONRPCRequest):
-    method: Literal['message/stream'] = 'message/stream'
+    method: Literal["message/stream"] = "message/stream"
     params: MessageSendParams
 
 
@@ -297,8 +289,8 @@ class AgentCard(BaseModel):
     documentationUrl: str | None = None
     capabilities: AgentCapabilities
     authentication: AgentAuthentication | None = None
-    defaultInputModes: list[str] = ['text']
-    defaultOutputModes: list[str] = ['text']
+    defaultInputModes: list[str] = ["text"]
+    defaultOutputModes: list[str] = ["text"]
     skills: list[AgentSkill]
 
 
@@ -308,7 +300,7 @@ class AuthenticatedExtendedCardParams(BaseModel):
 
 
 class AuthenticatedExtendedCardRequest(JSONRPCRequest):
-    method: Literal['agent/authenticatedExtendedCard'] = 'agent/authenticatedExtendedCard'
+    method: Literal["agent/authenticatedExtendedCard"] = "agent/authenticatedExtendedCard"
     params: AuthenticatedExtendedCardParams
 
 
@@ -328,7 +320,7 @@ A2ARequest = TypeAdapter(
         | TaskResubscriptionRequest
         | SendTaskStreamingRequest
         | AuthenticatedExtendedCardRequest,
-        Field(discriminator='method'),
+        Field(discriminator="method"),
     ]
 )
 
@@ -337,65 +329,66 @@ A2ARequest = TypeAdapter(
 
 class JSONParseError(JSONRPCError):
     code: int = -32700
-    message: str = 'Invalid JSON payload'
+    message: str = "Invalid JSON payload"
     data: Any | None = None
 
 
 class InvalidRequestError(JSONRPCError):
     code: int = -32600
-    message: str = 'Request payload validation error'
+    message: str = "Request payload validation error"
     data: Any | None = None
 
 
 class MethodNotFoundError(JSONRPCError):
     code: int = -32601
-    message: str = 'Method not found'
+    message: str = "Method not found"
     data: None = None
 
 
 class InvalidParamsError(JSONRPCError):
     code: int = -32602
-    message: str = 'Invalid parameters'
+    message: str = "Invalid parameters"
     data: Any | None = None
 
 
 class InternalError(JSONRPCError):
     code: int = -32603
-    message: str = 'Internal error'
+    message: str = "Internal error"
     data: Any | None = None
 
 
 class TaskNotFoundError(JSONRPCError):
     code: int = -32001
-    message: str = 'Task not found'
+    message: str = "Task not found"
     data: None = None
 
 
 class TaskNotCancelableError(JSONRPCError):
     code: int = -32002
-    message: str = 'Task cannot be canceled'
+    message: str = "Task cannot be canceled"
     data: None = None
 
 
 class PushNotificationNotSupportedError(JSONRPCError):
     code: int = -32003
-    message: str = 'Push Notification is not supported'
+    message: str = "Push Notification is not supported"
     data: None = None
 
 
 class UnsupportedOperationError(JSONRPCError):
     code: int = -32004
-    message: str = 'This operation is not supported'
+    message: str = "This operation is not supported"
     data: None = None
 
 
 class ContentTypeNotSupportedError(JSONRPCError):
     code: int = -32005
-    message: str = 'Incompatible content types'
+    message: str = "Incompatible content types"
     data: None = None
 
 
 # Duplicate agent card types removed - already defined above
+
 
 class A2AClientError(Exception):
     pass
@@ -405,13 +398,13 @@ class A2AClientHTTPError(A2AClientError):
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
         self.message = message
-        super().__init__(f'HTTP Error {status_code}: {message}')
+        super().__init__(f"HTTP Error {status_code}: {message}")
 
 
 class A2AClientJSONError(A2AClientError):
     def __init__(self, message: str):
         self.message = message
-        super().__init__(f'JSON Error: {message}')
+        super().__init__(f"JSON Error: {message}")
 
 
 class MissingAPIKeyError(Exception):
@@ -420,17 +413,17 @@ class MissingAPIKeyError(Exception):
 
 def sanitize_agent_name(name: str) -> str:
     """Sanitize agent name to be a valid Python identifier for Google ADK.
-    
+
     Google ADK requires agent names to be valid Python identifiers:
     - Must start with a letter (a-z, A-Z) or underscore (_)
     - Can only contain letters, digits (0-9), and underscores
-    
+
     Args:
         name: The original agent name
-        
+
     Returns:
         Sanitized agent name that is a valid Python identifier
-        
+
     Examples:
         >>> sanitize_agent_name("test-agent-123")
         'test_agent_123'
@@ -441,26 +434,26 @@ def sanitize_agent_name(name: str) -> str:
     """
     if not name:
         return "agent"
-    
+
     # Replace hyphens and other invalid characters with underscores
-    sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-    
+    sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+
     # Ensure it starts with a letter or underscore
     if sanitized and sanitized[0].isdigit():
         sanitized = f"agent_{sanitized}"
-    
+
     # Ensure it's not empty
     if not sanitized:
         return "agent"
-    
+
     # Remove consecutive underscores
-    sanitized = re.sub(r'_+', '_', sanitized)
-    
+    sanitized = re.sub(r"_+", "_", sanitized)
+
     # Remove trailing underscores (but keep leading ones)
-    sanitized = sanitized.rstrip('_')
-    
+    sanitized = sanitized.rstrip("_")
+
     # Ensure it's not empty after cleanup
     if not sanitized:
         return "agent"
-    
+
     return sanitized

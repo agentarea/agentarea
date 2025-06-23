@@ -1,1 +1,1 @@
-"""Integration Tests - Test full system interaction with real services""" 
+"""Integration Tests - Test full system interaction with real services"""

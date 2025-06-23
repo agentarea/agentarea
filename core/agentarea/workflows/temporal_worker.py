@@ -16,8 +16,7 @@ dotenv.load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -48,8 +47,14 @@ class TemporalWorker:
         self.should_stop = False
 
         # Setup signal handlers for graceful shutdown
-        signal.signal(signal.SIGINT, lambda signum, frame: asyncio.create_task(self._signal_handler(signum, frame)))
-        signal.signal(signal.SIGTERM, lambda signum, frame: asyncio.create_task(self._signal_handler(signum, frame)))
+        signal.signal(
+            signal.SIGINT,
+            lambda signum, frame: asyncio.create_task(self._signal_handler(signum, frame)),
+        )
+        signal.signal(
+            signal.SIGTERM,
+            lambda signum, frame: asyncio.create_task(self._signal_handler(signum, frame)),
+        )
 
     async def _signal_handler(self, signum: int, frame) -> None:
         """Handle shutdown signals gracefully."""
@@ -65,10 +70,7 @@ class TemporalWorker:
         logger.info(f"Connecting to Temporal server at {temporal_url}, namespace: {namespace}")
 
         try:
-            self.client = await Client.connect(
-                temporal_url,
-                namespace=namespace
-            )
+            self.client = await Client.connect(temporal_url, namespace=namespace)
             logger.info("Successfully connected to Temporal server")
 
         except Exception as e:
@@ -174,7 +176,9 @@ async def start_worker() -> None:
     logger.info(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
     logger.info(f"Namespace: {settings.workflow.TEMPORAL_NAMESPACE}")
     logger.info(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    logger.info(f"Max Concurrent Activities: {settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES}")
+    logger.info(
+        f"Max Concurrent Activities: {settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES}"
+    )
     logger.info(f"Max Concurrent Workflows: {settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS}")
 
     # Start worker

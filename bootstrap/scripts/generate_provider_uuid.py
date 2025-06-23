@@ -16,17 +16,17 @@ from typing import Optional
 
 def generate_uuid(provider_name: Optional[str] = None) -> str:
     """Generate a UUID for a provider.
-    
+
     Args:
         provider_name: Optional provider name for deterministic UUID generation
-        
+
     Returns:
         UUID string
     """
     if provider_name:
         # Generate a deterministic UUID based on the provider name
         # This ensures the same provider name always gets the same UUID
-        namespace = uuid.UUID('550e8400-e29b-41d4-a716-446655440000')
+        namespace = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
         provider_uuid = uuid.uuid5(namespace, provider_name)
         return str(provider_uuid)
     else:
@@ -48,4 +48,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main() 
+    main()

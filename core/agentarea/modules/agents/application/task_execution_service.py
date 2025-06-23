@@ -1,4 +1,5 @@
 """Task Execution Service for coordinating task events with agent execution."""
+
 import asyncio
 import logging
 from typing import Any, Dict
@@ -18,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 class TaskExecutionService:
     """Service for coordinating task execution with agents.
-    
+
     This is a thin wrapper around AgentRunnerService that provides
     a simple interface for task execution from event handlers.
     """
-    
+
     def __init__(
         self,
         agent_repository: AgentRepository | None,
@@ -38,7 +39,7 @@ class TaskExecutionService:
         self.mcp_server_instance_service = mcp_server_instance_service
         self.session_service = session_service
         self.agent_communication_service = agent_communication_service
-        
+
         # Initialize agent builder service only if required dependencies are available
         self.agent_builder_service = None
         if agent_repository and llm_model_instance_service:
@@ -46,12 +47,17 @@ class TaskExecutionService:
                 repository=agent_repository,
                 event_broker=event_broker,
                 llm_model_instance_service=llm_model_instance_service,
-                mcp_server_instance_service=mcp_server_instance_service
+                mcp_server_instance_service=mcp_server_instance_service,
             )
-        
+
         # Initialize agent runner service only if all dependencies are available
         self.agent_runner_service = None
-        if self.agent_builder_service and session_service and agent_repository and llm_model_instance_service:
+        if (
+            self.agent_builder_service
+            and session_service
+            and agent_repository
+            and llm_model_instance_service
+        ):
             self.agent_runner_service = AgentRunnerService(
                 repository=agent_repository,
                 event_broker=event_broker,
@@ -68,13 +74,13 @@ class TaskExecutionService:
         description: str,
         user_id: str | None = None,
         task_parameters: Dict[str, Any] | None = None,
-        metadata: Dict[str, Any] | None = None
+        metadata: Dict[str, Any] | None = None,
     ) -> None:
         """Execute a task with the specified agent.
-        
+
         This method delegates to AgentRunnerService for the actual execution
         and handles the event streaming in the background.
-        
+
         Args:
             task_id: Unique task identifier
             agent_id: UUID of the agent to execute the task
@@ -84,21 +90,25 @@ class TaskExecutionService:
             metadata: Task metadata
         """
         if not self.agent_runner_service:
-            logger.error("Agent runner service not available - session service and dependencies required")
+            logger.error(
+                "Agent runner service not available - session service and dependencies required"
+            )
             return
-            
+
         try:
             # Ensure user_id is not None
-            effective_user_id = user_id or (metadata.get("user_id") if metadata else None) or "system"
+            effective_user_id = (
+                user_id or (metadata.get("user_id") if metadata else None) or "system"
+            )
             query = description or "Execute the assigned task"
-            
+
             logger.info(f"Starting task execution: {task_id} for agent {agent_id}")
-            
+
             # Check if we have an override for agent-to-agent communication
             enable_comm: bool | None = None
             if metadata is not None and "enable_agent_communication" in metadata:
                 enable_comm = bool(metadata.get("enable_agent_communication"))
-            
+
             # Execute the task using AgentRunnerService
             # The AgentRunnerService already handles all event publishing internally
             async for event in self.agent_runner_service.run_agent_task(
@@ -111,9 +121,11 @@ class TaskExecutionService:
             ):
                 # Just log the events - AgentRunnerService already publishes them to the event broker
                 logger.debug(f"Task event: {event.get('event_type', 'Unknown')} for task {task_id}")
-                
+
         except Exception as e:
-            logger.error(f"Error executing task {task_id} with agent {agent_id}: {e}", exc_info=True)
+            logger.error(
+                f"Error executing task {task_id} with agent {agent_id}: {e}", exc_info=True
+            )
 
     def execute_task_async(
         self,
@@ -122,10 +134,10 @@ class TaskExecutionService:
         description: str,
         user_id: str | None = None,
         task_parameters: Dict[str, Any] | None = None,
-        metadata: Dict[str, Any] | None = None
+        metadata: Dict[str, Any] | None = None,
     ) -> "asyncio.Task[None]":
         """Execute a task asynchronously and return the task handle.
-        
+
         This method creates a background task for execution without blocking.
         """
         return asyncio.create_task(
@@ -135,7 +147,7 @@ class TaskExecutionService:
                 description=description,
                 user_id=user_id,
                 task_parameters=task_parameters,
-                metadata=metadata
+                metadata=metadata,
             )
         )
 
@@ -157,4 +169,4 @@ class TaskExecutionService:
         if not self.agent_builder_service:
             logger.error("Agent builder service not available - cannot get agent capabilities")
             return {}
-        return await self.agent_builder_service.get_agent_capabilities(agent_id) 
+        return await self.agent_builder_service.get_agent_capabilities(agent_id)

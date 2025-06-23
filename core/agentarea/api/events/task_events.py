@@ -34,15 +34,19 @@ def register_task_event_handlers(router: RedisRouter) -> None:
             metadata = event_data.get("metadata") or message.get("metadata", {})
 
             # Additional fallback: check if we have a TaskCreated event object structure
-            if not task_id and hasattr(message, 'task_id'):
-                task_id = getattr(message, 'task_id', None)
-            if not agent_id and hasattr(message, 'agent_id'):
-                agent_id = getattr(message, 'agent_id', None)
+            if not task_id and hasattr(message, "task_id"):
+                task_id = getattr(message, "task_id", None)
+            if not agent_id and hasattr(message, "agent_id"):
+                agent_id = getattr(message, "agent_id", None)
 
-            logger.debug(f"Extracted data: task_id={task_id}, agent_id={agent_id}, description={description}")
+            logger.debug(
+                f"Extracted data: task_id={task_id}, agent_id={agent_id}, description={description}"
+            )
 
             if not task_id or not agent_id:
-                logger.error(f"Missing required fields in TaskCreated event: task_id={task_id}, agent_id={agent_id}")
+                logger.error(
+                    f"Missing required fields in TaskCreated event: task_id={task_id}, agent_id={agent_id}"
+                )
                 logger.debug(f"Full event message: {message}")
                 return
 
@@ -62,7 +66,7 @@ def register_task_event_handlers(router: RedisRouter) -> None:
                 task_id=task_id,
                 description=description,
                 parameters=parameters,
-                metadata=metadata
+                metadata=metadata,
             )
 
             logger.info(f"Agent execution completed for task {task_id}")
@@ -76,16 +80,16 @@ async def _execute_agent_task_with_session(
     task_id: str,
     description: str,
     parameters: dict[str, Any],
-    metadata: dict[str, Any]
+    metadata: dict[str, Any],
 ):
     """Execute agent task with proper session management."""
     from agentarea.common.infrastructure.database import db
-    
+
     # Use the database session context manager for proper lifecycle management
     async with db.session() as db_session:
         # Create agent runner service with this session
         agent_runner_service = await _create_agent_runner_service_with_session(db_session)
-        
+
         if not agent_runner_service:
             logger.error("Could not create agent runner service for event processing")
             return
@@ -93,7 +97,7 @@ async def _execute_agent_task_with_session(
         # Execute the task directly using AgentRunnerService
         user_id = metadata.get("user_id", "system")
         query = description or "Execute the assigned task"
-        
+
         # Execute the task and consume all events
         async for event in agent_runner_service.run_agent_task(
             agent_id=agent_id,
@@ -118,43 +122,48 @@ async def _create_agent_runner_service_with_session(db_session: AsyncSession):
         from agentarea.modules.agents.application.agent_builder_service import AgentBuilderService
         from agentarea.modules.agents.application.agent_runner_service import AgentRunnerService
         from agentarea.modules.llm.application.service import LLMModelInstanceService
-        from agentarea.modules.llm.infrastructure.llm_model_instance_repository import LLMModelInstanceRepository
+        from agentarea.modules.llm.infrastructure.llm_model_instance_repository import (
+            LLMModelInstanceRepository,
+        )
         from agentarea.modules.mcp.application.service import MCPServerInstanceService
-        from agentarea.modules.mcp.infrastructure.repository import MCPServerRepository, MCPServerInstanceRepository
-        
+        from agentarea.modules.mcp.infrastructure.repository import (
+            MCPServerRepository,
+            MCPServerInstanceRepository,
+        )
+
         # Get basic dependencies
         event_broker = await get_event_broker()
         session_service = await get_session_service()
         secret_manager = await get_secret_manager()
-        
+
         # Create repositories with the provided session
         agent_repository = AgentRepository(db_session)
         llm_model_instance_repository = LLMModelInstanceRepository(db_session)
         mcp_server_repository = MCPServerRepository(db_session)
         mcp_server_instance_repository = MCPServerInstanceRepository(db_session)
-        
+
         # Create services
         llm_model_instance_service = LLMModelInstanceService(
             repository=llm_model_instance_repository,
             event_broker=event_broker,
-            secret_manager=secret_manager
+            secret_manager=secret_manager,
         )
-        
+
         mcp_server_instance_service = MCPServerInstanceService(
             repository=mcp_server_instance_repository,
             event_broker=event_broker,
             mcp_server_repository=mcp_server_repository,
-            secret_manager=secret_manager
+            secret_manager=secret_manager,
         )
-        
+
         # Create agent builder service
         agent_builder_service = AgentBuilderService(
             repository=agent_repository,
             event_broker=event_broker,
             llm_model_instance_service=llm_model_instance_service,
-            mcp_server_instance_service=mcp_server_instance_service
+            mcp_server_instance_service=mcp_server_instance_service,
         )
-        
+
         # Create agent runner service (without agent communication to avoid circular dependency)
         agent_runner_service = AgentRunnerService(
             repository=agent_repository,
@@ -164,9 +173,9 @@ async def _create_agent_runner_service_with_session(db_session: AsyncSession):
             agent_builder_service=agent_builder_service,
             agent_communication_service=None,  # No A2A communication in event handlers to avoid complexity
         )
-        
+
         return agent_runner_service
-        
+
     except Exception as e:
         logger.error(f"Error creating agent runner service: {e}", exc_info=True)
         return None

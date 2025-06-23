@@ -16,22 +16,21 @@ class LLMModelInstanceRepository(BaseRepository[LLMModelInstance]):
         result = await self.session.execute(
             select(LLMModelInstance)
             .options(
-                joinedload(LLMModelInstance.model)
-                .joinedload(LLMModelInstance.model.mapper.class_.provider)
+                joinedload(LLMModelInstance.model).joinedload(
+                    LLMModelInstance.model.mapper.class_.provider
+                )
             )
             .where(LLMModelInstance.id == id)
         )
         return result.scalar_one_or_none()
 
     async def list(
-        self,
-        model_id: UUID | None = None,
-        status: str | None = None,
-        is_public: bool | None = None
+        self, model_id: UUID | None = None, status: str | None = None, is_public: bool | None = None
     ) -> list[LLMModelInstance]:
         query = select(LLMModelInstance).options(
-            joinedload(LLMModelInstance.model)
-            .joinedload(LLMModelInstance.model.mapper.class_.provider)
+            joinedload(LLMModelInstance.model).joinedload(
+                LLMModelInstance.model.mapper.class_.provider
+            )
         )
 
         conditions = []

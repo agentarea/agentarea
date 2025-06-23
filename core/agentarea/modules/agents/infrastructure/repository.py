@@ -12,9 +12,7 @@ class AgentRepository(BaseRepository[Agent]):
         self.session = session
 
     async def get(self, id: UUID) -> Agent | None:
-        result = await self.session.execute(
-            select(Agent).where(Agent.id == id)
-        )
+        result = await self.session.execute(select(Agent).where(Agent.id == id))
         return result.scalar_one_or_none()
 
     async def list(self) -> list[Agent]:
@@ -32,9 +30,7 @@ class AgentRepository(BaseRepository[Agent]):
         return agent
 
     async def delete(self, id: UUID) -> bool:
-        result = await self.session.execute(
-            select(Agent).where(Agent.id == id)
-        )
+        result = await self.session.execute(select(Agent).where(Agent.id == id))
         agent = result.scalar_one_or_none()
         if agent:
             await self.session.delete(agent)

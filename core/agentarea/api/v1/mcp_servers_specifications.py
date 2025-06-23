@@ -22,8 +22,13 @@ class MCPServerCreate(BaseModel):
     version: str = Field(default="1.0.0", description="Version of the MCP server")
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
     is_public: bool = Field(default=False, description="Whether the server is public")
-    env_schema: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Environment variable schema")
-    cmd: Optional[List[str]] = Field(default=None, description="Custom command to override container CMD (useful for switching between stdio and HTTP modes)")
+    env_schema: Optional[List[Dict[str, Any]]] = Field(
+        default_factory=list, description="Environment variable schema"
+    )
+    cmd: Optional[List[str]] = Field(
+        default=None,
+        description="Custom command to override container CMD (useful for switching between stdio and HTTP modes)",
+    )
 
 
 class MCPServerUpdate(BaseModel):
@@ -35,7 +40,6 @@ class MCPServerUpdate(BaseModel):
     is_public: Optional[bool] = Field(None, description="Whether the server is public")
     status: Optional[str] = Field(None, description="Status of the MCP server")
     cmd: Optional[List[str]] = Field(None, description="Custom command to override container CMD")
-
 
 
 class MCPServerResponse(BaseModel):
@@ -108,7 +112,7 @@ async def list_mcp_servers(
 ):
     # Get all servers first, then filter manually since base service doesn't support filtering
     all_servers = await mcp_server_service.list()
-    
+
     # Apply filters manually
     filtered_servers = []
     for server in all_servers:
@@ -122,7 +126,7 @@ async def list_mcp_servers(
         if tag is not None and (not server.tags or tag not in server.tags):
             continue
         filtered_servers.append(server)
-    
+
     return [MCPServerResponse.from_domain(server) for server in filtered_servers]
 
 
@@ -184,7 +188,7 @@ def load_mcp_provider_templates() -> Dict[str, Any]:
     # Go up to project root and then to data directory
     root_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "..", ".."))
     yaml_path = os.path.join(root_dir, "data", "mcp_providers.yaml")
-    
+
     with open(yaml_path) as f:
         return yaml.safe_load(f)
 
@@ -195,7 +199,7 @@ async def get_mcp_server_templates():
     try:
         data = load_mcp_provider_templates()
         providers = data.get("providers", {})
-        
+
         return [
             {
                 "id": provider_data.get("id"),
@@ -210,7 +214,9 @@ async def get_mcp_server_templates():
             for provider_key, provider_data in providers.items()
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load MCP server templates: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to load MCP server templates: {str(e)}"
+        )
 
 
 @router.get("/templates/{template_key}", response_model=Dict[str, Any])
@@ -219,10 +225,10 @@ async def get_mcp_server_template(template_key: str):
     try:
         data = load_mcp_provider_templates()
         providers = data.get("providers", {})
-        
+
         if template_key not in providers:
             raise HTTPException(status_code=404, detail="MCP Server template not found")
-        
+
         provider_data = providers[template_key]
         return {
             "id": provider_data.get("id"),
@@ -252,12 +258,12 @@ async def create_mcp_server_from_template(
     try:
         data = load_mcp_provider_templates()
         providers = data.get("providers", {})
-        
+
         if template_key not in providers:
             raise HTTPException(status_code=404, detail="MCP Server template not found")
-        
+
         provider_data = providers[template_key]
-        
+
         # Create MCP server using the template
         server = await mcp_server_service.create_mcp_server(
             name=server_name,
@@ -273,4 +279,6 @@ async def create_mcp_server_from_template(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create server from template: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create server from template: {str(e)}"
+        )

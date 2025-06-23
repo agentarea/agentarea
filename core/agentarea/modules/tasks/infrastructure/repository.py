@@ -23,59 +23,63 @@ logger = logging.getLogger(__name__)
 
 class TaskRepositoryInterface(ABC):
     """Interface for task repository operations."""
-    
+
     @abstractmethod
     async def get_by_id(self, task_id: str) -> Optional[Task]:
         """Get a task by its ID."""
         pass
-    
+
     @abstractmethod
     async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
         """Get tasks created by a specific user."""
         pass
-    
+
     @abstractmethod
-    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_by_agent_id(
+        self, agent_id: UUID, limit: int = 100, offset: int = 0
+    ) -> List[Task]:
         """Get tasks assigned to a specific agent."""
         pass
-    
+
     @abstractmethod
     async def create(self, task: Task) -> Task:
         """Create a new task."""
         pass
-    
+
     @abstractmethod
     async def update(self, task: Task) -> Task:
         """Update an existing task."""
         pass
-    
+
     @abstractmethod
     async def delete(self, task_id: str) -> bool:
         """Delete a task by its ID."""
         pass
-    
+
     @abstractmethod
     async def get_pending_tasks(self, limit: int = 20) -> List[Task]:
         """Get pending tasks that need to be assigned to agents."""
         pass
-    
+
     @abstractmethod
-    async def get_tasks_by_status(self, status: TaskState, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_tasks_by_status(
+        self, status: TaskState, limit: int = 100, offset: int = 0
+    ) -> List[Task]:
         """Get tasks by their status."""
         pass
 
 
 class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
     """SQLAlchemy implementation of the task repository."""
-    
+
     def __init__(self, session: AsyncSession):
         self.session = session
-    
+
     # Implementation of BaseRepository abstract methods
     async def get(self, task_id: UUID) -> Optional[Task]:
         """Get a task by its UUID ID (implementing BaseRepository interface)."""
         return await self.get_by_id(str(task_id))
-    
+
     async def list(self) -> List[Task]:
         """List all tasks (implementing BaseRepository interface)."""
         try:
@@ -85,7 +89,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error listing all tasks: {e}")
             return []
-    
+
     async def get_by_id(self, task_id: str) -> Optional[Task]:
         """Get a task by its ID."""
         try:
@@ -95,7 +99,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error retrieving task by ID {task_id}: {e}")
             return None
-    
+
     async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
         """Get tasks created by a specific user."""
         try:
@@ -111,8 +115,10 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error retrieving tasks for user {user_id}: {e}")
             return []
-    
-    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> List[Task]:
+
+    async def get_by_agent_id(
+        self, agent_id: UUID, limit: int = 100, offset: int = 0
+    ) -> List[Task]:
         """Get tasks assigned to a specific agent."""
         try:
             stmt = (
@@ -127,7 +133,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error retrieving tasks for agent {agent_id}: {e}")
             return []
-    
+
     async def create(self, task: Task) -> Task:
         """Create a new task."""
         try:
@@ -138,7 +144,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error creating task: {e}")
             raise
-    
+
     async def update(self, task: Task) -> Task:
         """Update an existing task."""
         try:
@@ -150,7 +156,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error updating task {task.id}: {e}")
             raise
-    
+
     async def delete(self, task_id: str) -> bool:
         """Delete a task by its ID."""
         try:
@@ -162,17 +168,14 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error deleting task {task_id}: {e}")
             return False
-    
+
     async def get_pending_tasks(self, limit: int = 20) -> List[Task]:
         """Get pending tasks that need to be assigned to agents."""
         try:
             stmt = (
                 select(Task)
                 .where(
-                    and_(
-                        Task.status.state == TaskState.SUBMITTED,
-                        Task.assigned_agent_id.is_(None)
-                    )
+                    and_(Task.status.state == TaskState.SUBMITTED, Task.assigned_agent_id.is_(None))
                 )
                 .order_by(desc(Task.priority), Task.created_at)
                 .limit(limit)
@@ -182,8 +185,10 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error retrieving pending tasks: {e}")
             return []
-    
-    async def get_tasks_by_status(self, status: TaskState, limit: int = 100, offset: int = 0) -> List[Task]:
+
+    async def get_tasks_by_status(
+        self, status: TaskState, limit: int = 100, offset: int = 0
+    ) -> List[Task]:
         """Get tasks by their status."""
         try:
             stmt = (
@@ -198,8 +203,10 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error retrieving tasks by status {status}: {e}")
             return []
-    
-    async def get_tasks_by_collaboration(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> List[Task]:
+
+    async def get_tasks_by_collaboration(
+        self, agent_id: UUID, limit: int = 100, offset: int = 0
+    ) -> List[Task]:
         """Get tasks where the agent is a collaborator but not the primary assignee."""
         try:
             # This is a more complex query that would need to check the collaboration field
@@ -210,7 +217,7 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
                 .where(
                     and_(
                         Task.assigned_agent_id != agent_id,  # Not the primary assignee
-                        Task.collaboration.has(collaborating_agents=agent_id)  # Is a collaborator
+                        Task.collaboration.has(collaborating_agents=agent_id),  # Is a collaborator
                     )
                 )
                 .order_by(desc(Task.created_at))
@@ -222,8 +229,10 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error retrieving collaboration tasks for agent {agent_id}: {e}")
             return []
-    
-    async def get_tasks_by_organization(self, organization_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+
+    async def get_tasks_by_organization(
+        self, organization_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Task]:
         """Get tasks for a specific organization."""
         try:
             stmt = (
@@ -238,8 +247,10 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
         except Exception as e:
             logger.error(f"Error retrieving tasks for organization {organization_id}: {e}")
             return []
-    
-    async def get_tasks_by_workspace(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+
+    async def get_tasks_by_workspace(
+        self, workspace_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Task]:
         """Get tasks for a specific workspace."""
         try:
             stmt = (

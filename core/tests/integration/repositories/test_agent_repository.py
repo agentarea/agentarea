@@ -21,31 +21,29 @@ async def test_engine():
         "sqlite+aiosqlite:///:memory:",
         poolclass=StaticPool,
         connect_args={"check_same_thread": False},
-        echo=False
+        echo=False,
     )
-    
+
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(BaseModel.metadata.create_all)
-    
+
     yield engine
-    
+
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="function") 
+@pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine):
     """Create a test database session with transaction rollback."""
-    async_session = async_sessionmaker(
-        test_engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
+    async_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
     async with async_session() as session:
         # Start a transaction
         await session.begin()
-        
+
         yield session
-        
+
         # Rollback transaction to clean up
         await session.rollback()
 
@@ -61,7 +59,7 @@ def create_test_agent(**kwargs) -> Agent:
     defaults = {
         "id": uuid4(),
         "name": f"test_agent_{uuid4().hex[:8]}",
-        "status": "active", 
+        "status": "active",
         "description": "Test agent",
         "instruction": "You are a helpful test agent",
         "model_id": str(uuid4()),  # model_id is String in the model
@@ -81,18 +79,18 @@ class TestAgentRepository:
         """Test creating and retrieving an agent."""
         # Arrange
         agent = create_test_agent(name="Test Agent")
-        
+
         # Act - Create
         created_agent = await agent_repository.create(agent)
-        
+
         # Assert - Create
         assert created_agent is not None
         assert created_agent.name == "Test Agent"
         assert created_agent.id == agent.id
-        
+
         # Act - Get
         retrieved_agent = await agent_repository.get(created_agent.id)
-        
+
         # Assert - Get
         assert retrieved_agent is not None
         assert retrieved_agent.id == created_agent.id
@@ -104,13 +102,13 @@ class TestAgentRepository:
         # Arrange
         agent1 = create_test_agent(name="Agent 1")
         agent2 = create_test_agent(name="Agent 2")
-        
+
         await agent_repository.create(agent1)
         await agent_repository.create(agent2)
-        
+
         # Act
         agents = await agent_repository.list()
-        
+
         # Assert
         assert len(agents) == 2
         agent_names = [agent.name for agent in agents]
@@ -123,18 +121,18 @@ class TestAgentRepository:
         # Arrange
         agent = create_test_agent(name="Original Name")
         created_agent = await agent_repository.create(agent)
-        
+
         # Modify
         created_agent.name = "Updated Name"
         created_agent.description = "Updated description"
-        
+
         # Act
         updated_agent = await agent_repository.update(created_agent)
-        
+
         # Assert
         assert updated_agent.name == "Updated Name"
         assert updated_agent.description == "Updated description"
-        
+
         # Verify persistence
         retrieved_agent = await agent_repository.get(created_agent.id)
         assert retrieved_agent.name == "Updated Name"
@@ -145,13 +143,13 @@ class TestAgentRepository:
         # Arrange
         agent = create_test_agent()
         created_agent = await agent_repository.create(agent)
-        
+
         # Act
         delete_result = await agent_repository.delete(created_agent.id)
-        
+
         # Assert
         assert delete_result is True
-        
+
         # Verify deletion
         deleted_agent = await agent_repository.get(created_agent.id)
         assert deleted_agent is None
@@ -161,7 +159,7 @@ class TestAgentRepository:
         """Test getting a non-existent agent returns None."""
         # Act
         result = await agent_repository.get(uuid4())
-        
+
         # Assert
         assert result is None
 
@@ -170,6 +168,6 @@ class TestAgentRepository:
         """Test deleting a non-existent agent returns False."""
         # Act
         result = await agent_repository.delete(uuid4())
-        
+
         # Assert
-        assert result is False 
+        assert result is False

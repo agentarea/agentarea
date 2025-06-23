@@ -1,8 +1,8 @@
-# AgentArea - Universal AI Agent Platform
+# AgentArea - AI Agent Platform
 
 ## Project Overview
 
-AgentArea is a next-generation platform for AI agents that leverages the Model Context Protocol (MCP) and Agent-to-Agent (A2A) communication to create a unified ecosystem where AI agents can seamlessly connect, collaborate, and access real-world data and tools.
+AgentArea is a next-generation platform for AI agents that creates a unified ecosystem where AI agents can seamlessly connect, collaborate, and access real-world data and tools.
 
 ## Vision
 

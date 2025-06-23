@@ -19,7 +19,11 @@ from agentarea.modules.mcp.domain.events import (
 )
 from agentarea.modules.mcp.domain.models import MCPServer
 from agentarea.modules.mcp.domain.mpc_server_instance_model import MCPServerInstance
-from agentarea.modules.mcp.infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
+from agentarea.modules.mcp.infrastructure.repository import (
+    MCPServerInstanceRepository,
+    MCPServerRepository,
+)
+
 # McpManagerClient removed - using event-driven architecture instead
 from agentarea.modules.mcp.schemas import MCPServerStatus
 from .mcp_env_service import MCPEnvironmentService
@@ -40,7 +44,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         is_public: bool = False,
         env_schema: Optional[List[Dict[str, Any]]] = None,
         cmd: Optional[List[str]] = None,
-        json_spec: Optional[Dict[str, Any]] = None
+        json_spec: Optional[Dict[str, Any]] = None,
     ) -> MCPServer:
         server = MCPServer(
             name=name,
@@ -50,17 +54,13 @@ class MCPServerService(BaseCrudService[MCPServer]):
             tags=tags or [],
             is_public=is_public,
             env_schema=env_schema or [],
-            cmd=cmd
+            cmd=cmd,
         )
         server = await self.create(server)
 
         if self.event_broker:
             await self.event_broker.publish(
-                MCPServerCreated(
-                    server_id=server.id,
-                    name=server.name,
-                    version=server.version
-                )
+                MCPServerCreated(server_id=server.id, name=server.name, version=server.version)
             )
 
         return server
@@ -77,7 +77,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         status: Optional[str] = None,
         env_schema: Optional[List[Dict[str, Any]]] = None,
         cmd: Optional[List[str]] = None,
-        json_spec: Optional[Dict[str, Any]] = None
+        json_spec: Optional[Dict[str, Any]] = None,
     ) -> Optional[MCPServer]:
         server = await self.get(id)
         if not server:
@@ -102,16 +102,11 @@ class MCPServerService(BaseCrudService[MCPServer]):
         if cmd is not None:
             server.cmd = cmd
 
-
         server = await self.update(server)
 
         if self.event_broker:
             await self.event_broker.publish(
-                MCPServerUpdated(
-                    server_id=server.id,
-                    name=server.name,
-                    version=server.version
-                )
+                MCPServerUpdated(server_id=server.id, name=server.name, version=server.version)
             )
 
         return server
@@ -139,11 +134,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
 
         if self.event_broker:
             await self.event_broker.publish(
-                MCPServerDeployed(
-                    server_id=server.id,
-                    name=server.name,
-                    version=server.version
-                )
+                MCPServerDeployed(server_id=server.id, name=server.name, version=server.version)
             )
 
         return True
@@ -152,7 +143,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self,
         status: Optional[str] = None,
         is_public: Optional[bool] = None,
-        tag: Optional[str] = None
+        tag: Optional[str] = None,
     ) -> List[MCPServer]:
         # Use repository directly since we need custom filtering
         return await self.repository.list(status=status, is_public=is_public, tag=tag)
@@ -195,9 +186,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         # Publish event for Go MCP Manager to handle container creation
         await self.event_broker.publish(
             MCPServerInstanceCreated(
-                instance_id=str(instance.id),
-                name=instance.name,
-                json_spec=json_spec
+                instance_id=str(instance.id), name=instance.name, json_spec=json_spec
             )
         )
         return instance
@@ -221,16 +210,15 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         server_spec_id: Optional[str] = None,
         json_spec: Optional[Dict[str, Any]] = None,
     ) -> Optional[MCPServerInstance]:
-        
         spec = json_spec or {}
-        
+
         # Create instance - mcp-infrastructure will determine how to handle it based on json_spec
         instance = MCPServerInstance(
             name=name,
             description=description,
             server_spec_id=server_spec_id,
             json_spec=spec,
-            status="pending"  # Will be updated by mcp-infrastructure
+            status="pending",  # Will be updated by mcp-infrastructure
         )
 
         # Save to database
@@ -242,7 +230,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
                 instance_id=str(instance.id),
                 server_spec_id=server_spec_id,
                 name=instance.name,
-                json_spec=spec
+                json_spec=spec,
             )
         )
 
@@ -276,22 +264,19 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
                 instance_id=instance.id,
                 server_spec_id=instance.server_spec_id,
                 name=instance.name,
-                status=instance.status
+                status=instance.status,
             )
         )
 
         return instance
 
-    async def get_instance_environment(
-        self, 
-        instance_id: UUID
-    ) -> Dict[str, str]:
+    async def get_instance_environment(self, instance_id: UUID) -> Dict[str, str]:
         """
         Get environment variables for an instance from the secret manager.
-        
+
         Args:
             instance_id: The MCP server instance ID
-            
+
         Returns:
             Dictionary of environment variable names and values
         """
@@ -312,10 +297,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
 
         # Publish event for Go MCP Manager to handle container deletion
         await self.event_broker.publish(
-            MCPServerInstanceDeleted(
-                instance_id=str(instance.id),
-                name=instance.name
-            )
+            MCPServerInstanceDeleted(instance_id=str(instance.id), name=instance.name)
         )
 
         # Delete the instance from the database
@@ -341,9 +323,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
 
         await self.event_broker.publish(
             MCPServerInstanceStarted(
-                instance_id=instance.id,
-                server_spec_id=instance.server_spec_id,
-                name=instance.name
+                instance_id=instance.id, server_spec_id=instance.server_spec_id, name=instance.name
             )
         )
 
@@ -360,48 +340,46 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
 
         await self.event_broker.publish(
             MCPServerInstanceStopped(
-                instance_id=instance.id,
-                server_spec_id=instance.server_spec_id,
-                name=instance.name
+                instance_id=instance.id, server_spec_id=instance.server_spec_id, name=instance.name
             )
         )
 
         return True
 
-    async def list(self, server_spec_id: Optional[str] = None, status: Optional[str] = None) -> List[MCPServerInstance]:
+    async def list(
+        self, server_spec_id: Optional[str] = None, status: Optional[str] = None
+    ) -> List[MCPServerInstance]:
         return await self.repository.list(server_spec_id=server_spec_id, status=status)
 
     async def _validate_env_vars(
-        self, 
-        env_vars: Dict[str, str], 
-        env_schema: List[Dict[str, Any]]
+        self, env_vars: Dict[str, str], env_schema: List[Dict[str, Any]]
     ) -> List[str]:
         """
         Validate environment variables against the server's schema.
-        
+
         Returns:
             List of validation error messages (empty if valid)
         """
         errors: List[str] = []
         schema_by_name = {item["name"]: item for item in env_schema}
-        
+
         # Check required environment variables
         for schema_item in env_schema:
             env_name = schema_item["name"]
             is_required = schema_item.get("required", False)
-            
+
             if is_required and env_name not in env_vars:
                 errors.append(f"Required environment variable '{env_name}' is missing")
-        
+
         # Check provided environment variables against schema
         for env_name, env_value in env_vars.items():
             if env_name not in schema_by_name:
                 errors.append(f"Environment variable '{env_name}' is not defined in server schema")
                 continue
-            
+
             schema_item = schema_by_name[env_name]
             env_type = schema_item.get("type", "string")
-            
+
             # Basic type validation
             if env_type == "number":
                 try:
@@ -410,6 +388,8 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
                     errors.append(f"Environment variable '{env_name}' must be a number")
             elif env_type == "boolean":
                 if env_value.lower() not in ["true", "false", "1", "0"]:
-                    errors.append(f"Environment variable '{env_name}' must be a boolean (true/false)")
-        
+                    errors.append(
+                        f"Environment variable '{env_name}' must be a boolean (true/false)"
+                    )
+
         return errors

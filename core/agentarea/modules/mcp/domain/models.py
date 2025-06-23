@@ -52,4 +52,3 @@ class MCPServer(BaseModel):
         self.env_schema = env_schema or []
         self.cmd = cmd
         self.updated_at = updated_at or datetime.now()
-

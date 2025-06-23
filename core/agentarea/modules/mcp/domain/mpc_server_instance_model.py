@@ -7,9 +7,10 @@ import uuid
 
 Base = declarative_base()
 
+
 class MCPServerInstance(Base):
     __tablename__ = "mcp_server_instances"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -18,14 +19,14 @@ class MCPServerInstance(Base):
     status = Column(String(50), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     def __init__(
         self,
         name: str,
         description: Optional[str] = None,
         server_spec_id: Optional[str] = None,
         json_spec: Optional[Dict[str, Any]] = None,
-        status: str = "pending"
+        status: str = "pending",
     ):
         self.name = name
         self.description = description
@@ -36,7 +37,7 @@ class MCPServerInstance(Base):
     def get_configured_env_vars(self) -> List[str]:
         """
         Get list of environment variable names configured for this instance.
-        
+
         Returns:
             List of environment variable names from the environment section of json_spec
         """

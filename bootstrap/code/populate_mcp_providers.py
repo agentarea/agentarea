@@ -7,34 +7,34 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 # Adjust these as needed
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/agentarea")
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/agentarea"
+)
 MCP_PROVIDERS_YAML = os.environ.get("MCP_PROVIDERS_YAML", "/app/llm/mcp_providers.yaml")
 
 engine = create_engine(DATABASE_URL)
 
+
 def upsert_mcp_server(
-    conn: Connection, 
-    provider_key: str, 
-    provider_data: Dict[str, Any]
+    conn: Connection, provider_key: str, provider_data: Dict[str, Any]
 ) -> str:
     """Create or update MCP server specification from provider data."""
-    
+
     # Use the predefined ID from YAML if available, otherwise generate one
     server_id: Optional[str] = provider_data.get("id")
     if not server_id:
         server_id = str(uuid.uuid4())
-    
+
     server_name: str = provider_data.get("name", provider_key)
     description: str = provider_data.get("description", "")
     docker_image_url: str = provider_data.get("docker_image", "")
     env_schema: List[Dict[str, Any]] = provider_data.get("env_vars", [])
-    
+
     # Check if server already exists by ID
     result = conn.execute(
-        text("SELECT id FROM mcp_servers WHERE id = :id"), 
-        {"id": server_id}
+        text("SELECT id FROM mcp_servers WHERE id = :id"), {"id": server_id}
     ).fetchone()
-    
+
     if result:
         # Update existing server
         conn.execute(
@@ -47,18 +47,17 @@ def upsert_mcp_server(
                 "name": server_name,
                 "description": description,
                 "docker_image_url": docker_image_url,
-                "env_schema": json.dumps(env_schema)  # Store as JSON string
-            }
+                "env_schema": json.dumps(env_schema),  # Store as JSON string
+            },
         )
         print(f"✓ Updated MCP server: {server_name}")
         return server_id
-    
+
     # Check if server exists by name (for migration purposes)
     result = conn.execute(
-        text("SELECT id FROM mcp_servers WHERE name = :name"), 
-        {"name": server_name}
+        text("SELECT id FROM mcp_servers WHERE name = :name"), {"name": server_name}
     ).fetchone()
-    
+
     if result:
         existing_id = result[0]
         if str(existing_id) != server_id:
@@ -73,12 +72,12 @@ def upsert_mcp_server(
                     "old_id": existing_id,
                     "description": description,
                     "docker_image_url": docker_image_url,
-                    "env_schema": json.dumps(env_schema)
-                }
+                    "env_schema": json.dumps(env_schema),
+                },
             )
         print(f"✓ Migrated MCP server: {server_name}")
         return server_id
-    
+
     # Insert new server
     conn.execute(
         text("""INSERT INTO mcp_servers 
@@ -94,26 +93,27 @@ def upsert_mcp_server(
             "tags": json.dumps([provider_key]),  # Store provider key as tag
             "status": "active",
             "is_public": True,
-            "env_schema": json.dumps(env_schema)
-        }
+            "env_schema": json.dumps(env_schema),
+        },
     )
     print(f"✓ Created MCP server: {server_name}")
     return server_id
 
+
 def main() -> None:
     """Main function to populate MCP servers from YAML configuration."""
     print("Loading MCP providers from:", MCP_PROVIDERS_YAML)
-    
+
     # Try to find the YAML file in multiple locations
     yaml_paths = [
         MCP_PROVIDERS_YAML,
         "data/mcp_providers.yaml",  # local development
-        "bootstrap/data/mcp_providers.yaml"  # alternative path
+        "bootstrap/data/mcp_providers.yaml",  # alternative path
     ]
-    
+
     yaml_data = None
     used_path = None
-    
+
     for path in yaml_paths:
         try:
             with open(path) as f:
@@ -122,34 +122,35 @@ def main() -> None:
                 break
         except FileNotFoundError:
             continue
-    
+
     if yaml_data is None:
         print(f"❌ MCP providers YAML file not found in any of these locations:")
         for path in yaml_paths:
             print(f"   - {path}")
         return
-    
+
     print(f"✓ Found MCP providers YAML at: {used_path}")
-    
+
     data = yaml_data
     providers = data.get("providers", {})
     if not providers:
         print("⚠️  No MCP providers found in YAML file")
         return
-    
+
     print(f"Found {len(providers)} MCP providers to process")
-    
+
     try:
         with engine.begin() as conn:
             for provider_key, provider_data in providers.items():
                 print(f"Processing MCP provider: {provider_key}")
                 upsert_mcp_server(conn, provider_key, provider_data)
-        
+
         print(f"✅ Successfully populated {len(providers)} MCP server specifications")
-        
+
     except Exception as e:
         print(f"❌ Error populating MCP providers: {e}")
         raise
 
+
 if __name__ == "__main__":
-    main() 
+    main()

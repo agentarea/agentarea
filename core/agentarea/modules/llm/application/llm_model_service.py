@@ -103,6 +103,4 @@ class LLMModelService(BaseCrudService[LLMModel]):
         is_public: bool | None = None,
         provider: str | None = None,
     ) -> list[LLMModel]:
-        return await self.repository.list(
-            status=status, is_public=is_public, provider=provider
-        )
+        return await self.repository.list(status=status, is_public=is_public, provider=provider)

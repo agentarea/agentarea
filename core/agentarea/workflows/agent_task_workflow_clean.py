@@ -39,7 +39,7 @@ class CleanAgentTaskWorkflow:
         query: str,
         user_id: str = "system",
         task_parameters: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Main workflow execution logic."""
         workflow.logger.info(f"Starting clean agent task workflow {task_id} for agent {agent_id}")
@@ -49,17 +49,13 @@ class CleanAgentTaskWorkflow:
             validate_agent_clean,
             args=[agent_id],
             start_to_close_timeout=timedelta(minutes=5),
-            retry_policy=RetryPolicy(maximum_attempts=3)
+            retry_policy=RetryPolicy(maximum_attempts=3),
         )
 
         if not validation_result.get("valid", False):
             error_msg = f"Agent validation failed: {validation_result.get('errors', [])}"
             workflow.logger.error(error_msg)
-            return {
-                "status": "failed",
-                "error": error_msg,
-                "task_id": task_id
-            }
+            return {"status": "failed", "error": error_msg, "task_id": task_id}
 
         # Activity 2: Execute main agent task
         execution_result = await workflow.execute_activity(
@@ -69,8 +65,8 @@ class CleanAgentTaskWorkflow:
             retry_policy=RetryPolicy(
                 maximum_attempts=3,
                 initial_interval=timedelta(seconds=30),
-                maximum_interval=timedelta(minutes=10)
-            )
+                maximum_interval=timedelta(minutes=10),
+            ),
         )
 
         return {
@@ -86,7 +82,7 @@ class CleanAgentTaskWorkflow:
 async def validate_agent_clean(agent_id: str) -> dict[str, Any]:
     """
     Validate agent configuration - Clean version with DI.
-    
+
     This replaces the manual dependency creation with a single
     declarative call to get_activity_deps().
     """
@@ -96,24 +92,16 @@ async def validate_agent_clean(agent_id: str) -> dict[str, Any]:
 
         activity.heartbeat()  # Send heartbeat for long-running validation
 
-        return {
-            "valid": len(errors) == 0,
-            "errors": errors,
-            "agent_id": agent_id
-        }
+        return {"valid": len(errors) == 0, "errors": errors, "agent_id": agent_id}
 
 
 @activity.defn
 async def execute_agent_clean(
-    agent_id: str,
-    task_id: str,
-    query: str,
-    user_id: str,
-    task_parameters: dict[str, Any]
+    agent_id: str, task_id: str, query: str, user_id: str, task_parameters: dict[str, Any]
 ) -> dict[str, Any]:
     """
     Execute agent task - Clean version with DI.
-    
+
     This replaces the manual dependency creation with a single
     declarative call to get_activity_deps().
     """
@@ -130,7 +118,7 @@ async def execute_agent_clean(
             user_id=user_id,
             query=query,
             task_parameters=task_parameters,
-            enable_agent_communication=True
+            enable_agent_communication=True,
         ):
             events.append(event)
             activity.heartbeat()  # Send periodic heartbeat
@@ -138,20 +126,17 @@ async def execute_agent_clean(
             # Detect dynamic activity discovery
             event_type = event.get("event_type", "")
             if event_type == "MCPServerDiscovered":
-                discovered_activities.append({
-                    "type": "mcp_tool_call",
-                    "config": event.get("mcp_config", {})
-                })
+                discovered_activities.append(
+                    {"type": "mcp_tool_call", "config": event.get("mcp_config", {})}
+                )
             elif event_type == "ToolDiscovered":
-                discovered_activities.append({
-                    "type": "custom_tool",
-                    "config": event.get("tool_config", {})
-                })
+                discovered_activities.append(
+                    {"type": "custom_tool", "config": event.get("tool_config", {})}
+                )
             elif event_type == "AgentCommunicationRequested":
-                discovered_activities.append({
-                    "type": "agent_communication",
-                    "config": event.get("communication_config", {})
-                })
+                discovered_activities.append(
+                    {"type": "agent_communication", "config": event.get("communication_config", {})}
+                )
 
     logger.info(f"Clean agent execution completed for task {task_id}")
 
@@ -160,14 +145,13 @@ async def execute_agent_clean(
         "events": events,
         "discovered_activities": discovered_activities,
         "event_count": len(events),
-        "task_id": task_id
+        "task_id": task_id,
     }
 
 
 @activity.defn
 async def execute_dynamic_activity_clean(
-    activity_type: str,
-    config: dict[str, Any]
+    activity_type: str, config: dict[str, Any]
 ) -> dict[str, Any]:
     """Execute dynamically discovered activities - Clean version."""
     logger.info(f"Executing clean dynamic activity: {activity_type}")
@@ -176,8 +160,4 @@ async def execute_dynamic_activity_clean(
 
     # This would be expanded based on activity type
     # For now, just return a placeholder
-    return {
-        "status": "completed",
-        "activity_type": activity_type,
-        "config": config
-    } 
+    return {"status": "completed", "activity_type": activity_type, "config": config}

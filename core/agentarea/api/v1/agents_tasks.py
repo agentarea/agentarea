@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from agentarea.api.deps.events import EventBrokerDep
 from agentarea.api.deps.services import get_agent_service, get_workflow_task_execution_service
 from agentarea.modules.agents.application.agent_service import AgentService
-from agentarea.modules.agents.application.workflow_task_execution_service import WorkflowTaskExecutionService
+from agentarea.modules.agents.application.workflow_task_execution_service import (
+    WorkflowTaskExecutionService,
+)
 from agentarea.modules.tasks.domain.events import TaskCreated
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,14 @@ class TaskResponse(BaseModel):
     execution_id: str | None = None  # Workflow execution ID
 
     @classmethod
-    def create_new(cls, task_id: UUID, agent_id: UUID, description: str, parameters: dict[str, Any], execution_id: str | None = None) -> "TaskResponse":
+    def create_new(
+        cls,
+        task_id: UUID,
+        agent_id: UUID,
+        description: str,
+        parameters: dict[str, Any],
+        execution_id: str | None = None,
+    ) -> "TaskResponse":
         """Create a new task response for a newly created task."""
         return cls(
             id=task_id,
@@ -44,7 +53,7 @@ class TaskResponse(BaseModel):
             status="running",  # Tasks are immediately running with workflows
             result=None,
             created_at=datetime.now(UTC),
-            execution_id=execution_id
+            execution_id=execution_id,
         )
 
 
@@ -57,7 +66,9 @@ async def create_task_for_agent(
     data: TaskCreate,
     event_broker: EventBrokerDep,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(get_workflow_task_execution_service),
+    workflow_task_service: WorkflowTaskExecutionService = Depends(
+        get_workflow_task_execution_service
+    ),
 ):
     """Create and execute a task for the specified agent using Temporal workflows."""
     # Verify agent exists
@@ -81,8 +92,8 @@ async def create_task_for_agent(
                 "agent_name": agent.name,
                 "created_via": "api",
                 "enable_agent_communication": data.enable_agent_communication,
-                "created_at": datetime.now(UTC).isoformat()
-            }
+                "created_at": datetime.now(UTC).isoformat(),
+            },
         )
 
         # Create the task response with execution ID
@@ -91,7 +102,7 @@ async def create_task_for_agent(
             agent_id=agent_id,
             description=data.description,
             parameters=data.parameters,
-            execution_id=execution_id
+            execution_id=execution_id,
         )
 
         # Create and publish TaskCreated event (for compatibility with existing event listeners)
@@ -106,14 +117,16 @@ async def create_task_for_agent(
                 "created_at": task_response.created_at.isoformat(),
                 "user_id": data.user_id,
                 "enable_agent_communication": data.enable_agent_communication,
-                "execution_id": execution_id
-            }
+                "execution_id": execution_id,
+            },
         )
 
         # Publish the event to the event broker
         await event_broker.publish(task_created_event)
 
-        logger.info(f"Task {task_id_str} started with workflow execution ID {execution_id} for agent {agent_id}")
+        logger.info(
+            f"Task {task_id_str} started with workflow execution ID {execution_id} for agent {agent_id}"
+        )
 
         return task_response
 
@@ -136,8 +149,10 @@ async def list_agent_tasks(
     # Note: With Temporal workflows, task listing would require workflow history queries
     # For now, we return an empty list since individual task status can be checked via /{task_id}/status
     # TODO: Implement workflow history querying to list agent tasks
-    logger.info(f"Task listing requested for agent {agent_id}. Use individual task status endpoints for workflow-based tasks.")
-    
+    logger.info(
+        f"Task listing requested for agent {agent_id}. Use individual task status endpoints for workflow-based tasks."
+    )
+
     return []
 
 
@@ -146,7 +161,9 @@ async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(get_workflow_task_execution_service),
+    workflow_task_service: WorkflowTaskExecutionService = Depends(
+        get_workflow_task_execution_service
+    ),
 ):
     """Get a specific task for the specified agent using workflow status."""
     # Verify agent exists
@@ -158,7 +175,7 @@ async def get_agent_task(
         # Get workflow status using the execution ID pattern
         execution_id = f"agent-task-{task_id}"
         status = await workflow_task_service.get_task_status(execution_id)
-        
+
         # If status indicates unknown, the task/workflow doesn't exist
         if status.get("status") == "unknown":
             raise HTTPException(status_code=404, detail="Task not found")
@@ -172,7 +189,7 @@ async def get_agent_task(
             status=status.get("status", "unknown"),
             result=status.get("result"),
             created_at=datetime.now(UTC),  # Could be extracted from start_time if available
-            execution_id=execution_id
+            execution_id=execution_id,
         )
 
         return task_response
@@ -188,7 +205,9 @@ async def get_agent_task_status(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(get_workflow_task_execution_service),
+    workflow_task_service: WorkflowTaskExecutionService = Depends(
+        get_workflow_task_execution_service
+    ),
 ):
     """Get the execution status of a specific task workflow."""
     # Verify agent exists
@@ -200,7 +219,7 @@ async def get_agent_task_status(
         # Get workflow status using the execution ID pattern
         execution_id = f"agent-task-{task_id}"
         status = await workflow_task_service.get_task_status(execution_id)
-        
+
         return {
             "task_id": str(task_id),
             "agent_id": str(agent_id),
@@ -215,7 +234,7 @@ async def get_agent_task_status(
             "message": status.get("message"),
             "artifacts": status.get("artifacts"),
             "session_id": status.get("session_id"),
-            "usage_metadata": status.get("usage_metadata")
+            "usage_metadata": status.get("usage_metadata"),
         }
 
     except Exception as e:
@@ -227,7 +246,9 @@ async def cancel_agent_task(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(get_workflow_task_execution_service),
+    workflow_task_service: WorkflowTaskExecutionService = Depends(
+        get_workflow_task_execution_service
+    ),
 ):
     """Cancel a specific task workflow for the specified agent."""
     # Verify agent exists

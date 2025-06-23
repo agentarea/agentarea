@@ -20,7 +20,7 @@ from . import (
 
 v1_router = APIRouter(prefix="/v1")
 
-# Include unified protocol router first (primary A2A interface) 
+# Include unified protocol router first (primary A2A interface)
 v1_router.include_router(protocol.router)
 
 # Include unified chat router (consolidates all chat functionality)

@@ -36,7 +36,7 @@ from agentarea.modules.tasks.infrastructure.repository import SQLAlchemyTaskRepo
 # SQLite foreign key support
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
-    if 'sqlite' in str(dbapi_connection):
+    if "sqlite" in str(dbapi_connection):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
@@ -49,7 +49,7 @@ async def test_engine():
         "sqlite+aiosqlite:///:memory:",
         poolclass=StaticPool,
         connect_args={"check_same_thread": False},
-        echo=True  # Enable SQL logging for debugging
+        echo=True,  # Enable SQL logging for debugging
     )
 
     # Create all tables from both metadata objects
@@ -65,9 +65,7 @@ async def test_engine():
 @pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine):
     """Create a test database session with transaction rollback."""
-    async_session = async_sessionmaker(
-        test_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
         # Start a transaction

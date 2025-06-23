@@ -54,8 +54,7 @@ async def get_task_manager() -> BaseTaskManager:
 
 # Real agent registry using database
 async def get_agent_card_by_id(
-    agent_id: str,
-    agent_service: AgentService = Depends(get_agent_service)
+    agent_id: str, agent_service: AgentService = Depends(get_agent_service)
 ) -> AgentCard | None:
     """Get agent card from database by ID."""
     try:
@@ -73,9 +72,7 @@ async def get_agent_card_by_id(
             url="http://localhost:8000/v1/protocol",
             version="1.0.0",
             capabilities=AgentCapabilities(
-                streaming=True,
-                pushNotifications=False,
-                stateTransitionHistory=True
+                streaming=True, pushNotifications=False, stateTransitionHistory=True
             ),
             provider=AgentProvider(organization="AgentArea"),
             skills=[
@@ -84,9 +81,9 @@ async def get_agent_card_by_id(
                     name="Text Processing",
                     description="Process and respond to text messages using " + agent.name,
                     inputModes=["text"],
-                    outputModes=["text"]
+                    outputModes=["text"],
                 )
-            ]
+            ],
         )
     except (ValueError, TypeError):
         # If not a valid UUID, try the demo agent fallback
@@ -97,9 +94,7 @@ async def get_agent_card_by_id(
                 url="http://localhost:8000/v1/protocol",
                 version="1.0.0",
                 capabilities=AgentCapabilities(
-                    streaming=True,
-                    pushNotifications=False,
-                    stateTransitionHistory=True
+                    streaming=True, pushNotifications=False, stateTransitionHistory=True
                 ),
                 provider=AgentProvider(organization="AgentArea Demo"),
                 skills=[
@@ -108,9 +103,9 @@ async def get_agent_card_by_id(
                         name="Text Processing",
                         description="Process and respond to text messages",
                         inputModes=["text"],
-                        outputModes=["text"]
+                        outputModes=["text"],
                     )
-                ]
+                ],
             )
         return None
 
@@ -118,14 +113,13 @@ async def get_agent_card_by_id(
 # A2A JSON-RPC Endpoint
 @router.post("/rpc")
 async def handle_jsonrpc(
-    request: Request,
-    task_manager: BaseTaskManager = Depends(get_task_manager)
+    request: Request, task_manager: BaseTaskManager = Depends(get_task_manager)
 ) -> JSONRPCResponse:
     """Unified A2A JSON-RPC endpoint.
-    
+
     Handles all A2A protocol methods:
     - message/send
-    - message/stream  
+    - message/stream
     - tasks/get
     - tasks/cancel
     - agent/authenticatedExtendedCard
@@ -136,61 +130,55 @@ async def handle_jsonrpc(
         logger.info(f"Received JSON-RPC request: {body.get('method')}")
 
         # Validate basic JSON-RPC structure
-        if not isinstance(body, dict) or 'method' not in body:
+        if not isinstance(body, dict) or "method" not in body:
             return JSONRPCResponse(
-                id=body.get('id') if isinstance(body, dict) else None,
-                error=InvalidRequestError()
+                id=body.get("id") if isinstance(body, dict) else None, error=InvalidRequestError()
             )
 
-        method = body.get('method')
-        params = body.get('params', {})
-        request_id = body.get('id', str(uuid4()))
+        method = body.get("method")
+        params = body.get("params", {})
+        request_id = body.get("id", str(uuid4()))
 
         # Route to appropriate handler
-        if method == 'message/send':
+        if method == "message/send":
             return await handle_message_send(request_id, params, task_manager)
-        elif method == 'message/stream':
+        elif method == "message/stream":
             return await handle_message_stream(request_id, params, task_manager)
-        elif method == 'tasks/get':
+        elif method == "tasks/get":
             return await handle_task_get(request_id, params, task_manager)
-        elif method == 'tasks/cancel':
+        elif method == "tasks/cancel":
             return await handle_task_cancel(request_id, params, task_manager)
-        elif method == 'agent/authenticatedExtendedCard':
+        elif method == "agent/authenticatedExtendedCard":
             return await handle_agent_card(request_id, params)
         else:
-            return JSONRPCResponse(
-                id=request_id,
-                error=MethodNotFoundError()
-            )
+            return JSONRPCResponse(id=request_id, error=MethodNotFoundError())
 
     except Exception as e:
         logger.error(f"Error in JSON-RPC handler: {e}", exc_info=True)
         return JSONRPCResponse(
-            id=body.get('id') if 'body' in locals() and isinstance(body, dict) else None,
-            error=InternalError(message=str(e))
+            id=body.get("id") if "body" in locals() and isinstance(body, dict) else None,
+            error=InternalError(message=str(e)),
         )
 
 
 # JSON-RPC Method Handlers
 async def handle_message_send(
-    request_id: str,
-    params: dict[str, Any],
-    task_manager: BaseTaskManager
+    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
 ) -> MessageSendResponse:
     """Handle message/send RPC method."""
     try:
         # Convert to A2A message format
         message = Message(
             role="user",
-            parts=[TextPart(text=params.get('message', {}).get('parts', [{}])[0].get('text', ''))]
+            parts=[TextPart(text=params.get("message", {}).get("parts", [{}])[0].get("text", ""))],
         )
 
         # Create task parameters
         task_params = TaskSendParams(
             id=str(uuid4()),
-            sessionId=params.get('contextId', str(uuid4())),
+            sessionId=params.get("contextId", str(uuid4())),
             message=message,
-            metadata=params.get('metadata', {})
+            metadata=params.get("metadata", {}),
         )
 
         # Send task
@@ -201,16 +189,11 @@ async def handle_message_send(
 
     except Exception as e:
         logger.error(f"Error in message/send: {e}", exc_info=True)
-        return MessageSendResponse(
-            id=request_id,
-            error=InternalError(message=str(e))
-        )
+        return MessageSendResponse(id=request_id, error=InternalError(message=str(e)))
 
 
 async def handle_message_stream(
-    request_id: str,
-    params: dict[str, Any],
-    task_manager: BaseTaskManager
+    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
 ) -> MessageStreamResponse:
     """Handle message/stream RPC method."""
     # For now, return a simple stream response
@@ -218,61 +201,41 @@ async def handle_message_stream(
     try:
         message_response = await handle_message_send(request_id, params, task_manager)
         return MessageStreamResponse(
-            id=request_id,
-            result=message_response.result,
-            error=message_response.error
+            id=request_id, result=message_response.result, error=message_response.error
         )
     except Exception as e:
         logger.error(f"Error in message/stream: {e}", exc_info=True)
-        return MessageStreamResponse(
-            id=request_id,
-            error=InternalError(message=str(e))
-        )
+        return MessageStreamResponse(id=request_id, error=InternalError(message=str(e)))
 
 
 async def handle_task_get(
-    request_id: str,
-    params: dict[str, Any],
-    task_manager: BaseTaskManager
+    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
 ) -> GetTaskResponse:
     """Handle tasks/get RPC method."""
     try:
-        get_request = GetTaskRequest(
-            id=request_id,
-            params=TaskQueryParams(id=params.get('id', ''))
-        )
+        get_request = GetTaskRequest(id=request_id, params=TaskQueryParams(id=params.get("id", "")))
         return await task_manager.on_get_task(get_request)
     except Exception as e:
         logger.error(f"Error in tasks/get: {e}", exc_info=True)
-        return GetTaskResponse(
-            id=request_id,
-            error=InternalError(message=str(e))
-        )
+        return GetTaskResponse(id=request_id, error=InternalError(message=str(e)))
 
 
 async def handle_task_cancel(
-    request_id: str,
-    params: dict[str, Any],
-    task_manager: BaseTaskManager
+    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
 ) -> CancelTaskResponse:
     """Handle tasks/cancel RPC method."""
     try:
         cancel_request = CancelTaskRequest(
-            id=request_id,
-            params=TaskIdParams(id=params.get('id', ''))
+            id=request_id, params=TaskIdParams(id=params.get("id", ""))
         )
         return await task_manager.on_cancel_task(cancel_request)
     except Exception as e:
         logger.error(f"Error in tasks/cancel: {e}", exc_info=True)
-        return CancelTaskResponse(
-            id=request_id,
-            error=InternalError(message=str(e))
-        )
+        return CancelTaskResponse(id=request_id, error=InternalError(message=str(e)))
 
 
 async def handle_agent_card(
-    request_id: str,
-    params: dict[str, Any]
+    request_id: str, params: dict[str, Any]
 ) -> AuthenticatedExtendedCardResponse:
     """Handle agent/authenticatedExtendedCard RPC method."""
     # Use demo agent card for now - in production would look up real agent
@@ -282,9 +245,7 @@ async def handle_agent_card(
         url="http://localhost:8000/v1/protocol",
         version="1.0.0",
         capabilities=AgentCapabilities(
-            streaming=True,
-            pushNotifications=False,
-            stateTransitionHistory=True
+            streaming=True, pushNotifications=False, stateTransitionHistory=True
         ),
         provider=AgentProvider(organization="AgentArea Demo"),
         skills=[
@@ -293,22 +254,18 @@ async def handle_agent_card(
                 name="Text Processing",
                 description="Process and respond to text messages",
                 inputModes=["text"],
-                outputModes=["text"]
+                outputModes=["text"],
             )
-        ]
+        ],
     )
 
-    return AuthenticatedExtendedCardResponse(
-        id=request_id,
-        result=demo_card
-    )
+    return AuthenticatedExtendedCardResponse(id=request_id, result=demo_card)
 
 
 # Agent discovery endpoint
 @router.get("/agents/{agent_id}/card")
 async def get_agent_card(
-    agent_id: str,
-    agent_service: AgentService = Depends(get_agent_service)
+    agent_id: str, agent_service: AgentService = Depends(get_agent_service)
 ) -> AgentCard:
     """Get agent card for discovery using real agent service."""
     agent_card = await get_agent_card_by_id(agent_id, agent_service)

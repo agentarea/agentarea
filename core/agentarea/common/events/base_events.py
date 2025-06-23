@@ -12,7 +12,7 @@ class DomainEvent:
     data: dict[str, Any]
 
     def __init__(self, **kwargs: Any) -> None:
-        self.event_id = kwargs.get('event_id', uuid4())
-        self.timestamp = kwargs.get('timestamp', datetime.now(UTC))
+        self.event_id = kwargs.get("event_id", uuid4())
+        self.timestamp = kwargs.get("timestamp", datetime.now(UTC))
         self.event_type = self.__class__.__name__
         self.data = kwargs

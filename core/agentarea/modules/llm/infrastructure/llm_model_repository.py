@@ -15,9 +15,7 @@ class LLMModelRepository(BaseRepository[LLMModel]):
 
     async def get(self, id: UUID) -> Optional[LLMModel]:
         result = await self.session.execute(
-            select(LLMModel)
-            .options(selectinload(LLMModel.provider))
-            .where(LLMModel.id == id)
+            select(LLMModel).options(selectinload(LLMModel.provider)).where(LLMModel.id == id)
         )
         return result.scalar_one_or_none()
 

@@ -53,9 +53,7 @@ class LLMModelInstanceResponse(BaseModel):
 @router.post("/", response_model=LLMModelInstanceResponse)
 async def create_llm_model_instance(
     data: LLMModelInstanceCreate,
-    llm_model_instance_service: LLMModelInstanceService = Depends(
-        get_llm_model_instance_service
-    ),
+    llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
     instance = await llm_model_instance_service.create_llm_model_instance(
         model_id=data.model_id,
@@ -70,9 +68,7 @@ async def create_llm_model_instance(
 @router.get("/{instance_id}", response_model=LLMModelInstanceResponse)
 async def get_llm_model_instance(
     instance_id: UUID,
-    llm_model_instance_service: LLMModelInstanceService = Depends(
-        get_llm_model_instance_service
-    ),
+    llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
     instance = await llm_model_instance_service.get(instance_id)
     if not instance:
@@ -85,9 +81,7 @@ async def list_llm_model_instances(
     model_id: Optional[UUID] = None,
     status: Optional[str] = None,
     is_public: Optional[bool] = None,
-    llm_model_instance_service: LLMModelInstanceService = Depends(
-        get_llm_model_instance_service
-    ),
+    llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
     instances = await llm_model_instance_service.list(
         model_id=model_id, status=status, is_public=is_public
@@ -99,9 +93,7 @@ async def list_llm_model_instances(
 async def update_llm_model_instance(
     instance_id: UUID,
     data: LLMModelInstanceUpdate,
-    llm_model_instance_service: LLMModelInstanceService = Depends(
-        get_llm_model_instance_service
-    ),
+    llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
     instance = await llm_model_instance_service.update_llm_model_instance(
         id=instance_id,
@@ -119,9 +111,7 @@ async def update_llm_model_instance(
 @router.delete("/{instance_id}")
 async def delete_llm_model_instance(
     instance_id: UUID,
-    llm_model_instance_service: LLMModelInstanceService = Depends(
-        get_llm_model_instance_service
-    ),
+    llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
     success = await llm_model_instance_service.delete_llm_model_instance(instance_id)
     if not success:

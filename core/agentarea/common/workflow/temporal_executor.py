@@ -28,52 +28,49 @@ logger = logging.getLogger(__name__)
 def _extract_a2a_message_from_workflow_result(result: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extract A2A-compatible message from workflow result.
-    
+
     Converts workflow events into A2A Message format with proper parts structure.
     """
     if not result or not isinstance(result, dict):
         return {}
-    
+
     # Navigate to the nested result structure: result.result.events
     nested_result = result.get("result", {})
     if not nested_result:
         return {}
-    
+
     events = nested_result.get("events", [])
     if not events:
         return {}
-    
+
     # Find the TaskProgress event with agent response
     agent_response_text = ""
     session_id = None
     usage_metadata = None
-    
+
     for event in events:
         if event.get("event_type") == "TaskProgress":
             original_event = event.get("original_event", {})
             content = original_event.get("content", {})
             parts = content.get("parts", [])
-            
+
             # Extract text from parts
             for part in parts:
                 if part.get("text"):
                     agent_response_text = part["text"]
                     break
-            
+
             # Extract session_id and metadata
             session_id = event.get("session_id")
             usage_metadata = original_event.get("usage_metadata")
             break
-    
+
     if not agent_response_text:
         return {}
-    
+
     # Create A2A-compatible response
-    a2a_message = Message(
-        role="agent",
-        parts=[TextPart(text=agent_response_text)]
-    )
-    
+    a2a_message = Message(role="agent", parts=[TextPart(text=agent_response_text)])
+
     # Create A2A-compatible artifact
     a2a_artifact = Artifact(
         name="agent_response",
@@ -82,22 +79,27 @@ def _extract_a2a_message_from_workflow_result(result: Dict[str, Any]) -> Dict[st
         metadata={
             "session_id": session_id,
             "usage_metadata": usage_metadata,
-            "source": "workflow_execution"
-        }
+            "source": "workflow_execution",
+        },
     )
-    
+
     return {
         "message": a2a_message.model_dump(),
         "artifacts": [a2a_artifact.model_dump()],
         "session_id": session_id,
-        "usage_metadata": usage_metadata
+        "usage_metadata": usage_metadata,
     }
 
 
 class TemporalWorkflowExecutor(WorkflowExecutor):
     """Temporal implementation of WorkflowExecutor."""
 
-    def __init__(self, client: Client | None = None, namespace: str = "default", server_url: str = "localhost:7233"):
+    def __init__(
+        self,
+        client: Client | None = None,
+        namespace: str = "default",
+        server_url: str = "localhost:7233",
+    ):
         self.client = client
         self.namespace = namespace
         self.server_url = server_url
@@ -108,7 +110,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         if not self._connected and self.client is None:
             try:
                 # Connect to configured Temporal server
-                logger.info(f"Connecting to Temporal server at {self.server_url} with namespace {self.namespace}")
+                logger.info(
+                    f"Connecting to Temporal server at {self.server_url} with namespace {self.namespace}"
+                )
                 self.client = await Client.connect(self.server_url, namespace=self.namespace)
                 self._connected = True
                 logger.info("Successfully connected to Temporal server")
@@ -154,7 +158,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         workflow_name: str,
         workflow_id: str,
         args: dict[str, Any],
-        config: WorkflowConfig | None = None
+        config: WorkflowConfig | None = None,
     ) -> str:
         """Start a Temporal workflow."""
         await self._ensure_connected()
@@ -164,6 +168,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         # Import workflow class dynamically based on name
         if workflow_name == "AgentTaskWorkflow":
             from agentarea.workflows.agent_task_workflow import AgentTaskWorkflow
+
             workflow_class = AgentTaskWorkflow.run
         else:
             raise ValueError(f"Unknown workflow: {workflow_name}")
@@ -177,14 +182,14 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                 args.get("query"),
                 args.get("user_id", "system"),
                 args.get("task_parameters", {}),
-                args.get("metadata", {})
+                args.get("metadata", {}),
             ]
 
             handle = await self.client.start_workflow(
                 workflow_class,
                 args=workflow_args,  # Pass as args parameter
                 id=workflow_id,
-                **temporal_params
+                **temporal_params,
             )
 
             logger.info(f"Started Temporal workflow {workflow_id} ({workflow_name})")
@@ -205,11 +210,13 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             # Handle execution_time safely - it might be timedelta or datetime
             execution_time_seconds = None
             if description.execution_time:
-                if hasattr(description.execution_time, 'total_seconds'):
+                if hasattr(description.execution_time, "total_seconds"):
                     execution_time_seconds = description.execution_time.total_seconds()
                 else:
                     # If it's not a timedelta, try to convert or log warning
-                    logger.warning(f"Unexpected execution_time type: {type(description.execution_time)}")
+                    logger.warning(
+                        f"Unexpected execution_time type: {type(description.execution_time)}"
+                    )
                     execution_time_seconds = None
 
             # Get result if workflow is completed
@@ -229,7 +236,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                 start_time=description.start_time.isoformat() if description.start_time else None,
                 end_time=description.close_time.isoformat() if description.close_time else None,
                 execution_time=execution_time_seconds,
-                result=result
+                result=result,
             )
 
         except TemporalError as e:
@@ -237,16 +244,14 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                 return WorkflowResult(
                     workflow_id=workflow_id,
                     status=WorkflowStatus.UNKNOWN,
-                    error="Workflow not found"
+                    error="Workflow not found",
                 )
             else:
                 raise
         except Exception as e:
             logger.error(f"Failed to get workflow status for {workflow_id}: {e}")
             return WorkflowResult(
-                workflow_id=workflow_id,
-                status=WorkflowStatus.UNKNOWN,
-                error=str(e)
+                workflow_id=workflow_id, status=WorkflowStatus.UNKNOWN, error=str(e)
             )
 
     async def cancel_workflow(self, workflow_id: str) -> bool:
@@ -270,9 +275,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             return False
 
     async def wait_for_result(
-        self,
-        workflow_id: str,
-        timeout: timedelta | None = None
+        self, workflow_id: str, timeout: timedelta | None = None
     ) -> WorkflowResult:
         """Wait for Temporal workflow completion."""
         await self._ensure_connected()
@@ -292,10 +295,12 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             # Handle execution_time safely - it might be timedelta or datetime
             execution_time_seconds = None
             if description.execution_time:
-                if hasattr(description.execution_time, 'total_seconds'):
+                if hasattr(description.execution_time, "total_seconds"):
                     execution_time_seconds = description.execution_time.total_seconds()
                 else:
-                    logger.warning(f"Unexpected execution_time type in wait_for_result: {type(description.execution_time)}")
+                    logger.warning(
+                        f"Unexpected execution_time type in wait_for_result: {type(description.execution_time)}"
+                    )
 
             return WorkflowResult(
                 workflow_id=workflow_id,
@@ -311,17 +316,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         except Exception as e:
             logger.error(f"Failed to wait for workflow {workflow_id}: {e}")
             return WorkflowResult(
-                workflow_id=workflow_id,
-                status=WorkflowStatus.FAILED,
-                error=str(e)
+                workflow_id=workflow_id, status=WorkflowStatus.FAILED, error=str(e)
             )
 
-    async def signal_workflow(
-        self,
-        workflow_id: str,
-        signal_name: str,
-        data: Any = None
-    ) -> None:
+    async def signal_workflow(self, workflow_id: str, signal_name: str, data: Any = None) -> None:
         """Send signal to Temporal workflow."""
         await self._ensure_connected()
 
@@ -335,10 +333,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             raise
 
     async def query_workflow(
-        self,
-        workflow_id: str,
-        query_name: str,
-        args: dict[str, Any] | None = None
+        self, workflow_id: str, query_name: str, args: dict[str, Any] | None = None
     ) -> Any:
         """Query Temporal workflow."""
         await self._ensure_connected()
@@ -355,14 +350,14 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
 class TemporalTaskExecutor(TaskExecutorInterface):
     """High-level task executor using Temporal workflows.
-    
+
     This is the main class that AgentArea services will use.
     """
 
     def __init__(
         self,
         workflow_executor: TemporalWorkflowExecutor | None = None,
-        default_task_queue: str = "agent-tasks"
+        default_task_queue: str = "agent-tasks",
     ):
         self.workflow_executor = workflow_executor or TemporalWorkflowExecutor()
         self.default_task_queue = default_task_queue
@@ -374,7 +369,7 @@ class TemporalTaskExecutor(TaskExecutorInterface):
         description: str,
         user_id: str | None = None,
         task_parameters: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Execute agent task using Temporal workflow."""
         workflow_id = f"agent-task-{task_id}"
@@ -386,14 +381,14 @@ class TemporalTaskExecutor(TaskExecutorInterface):
             "query": description,
             "user_id": user_id or "system",
             "task_parameters": task_parameters or {},
-            "metadata": metadata or {}
+            "metadata": metadata or {},
         }
 
         # Configure workflow
         config = WorkflowConfig(
             timeout=timedelta(days=7),  # Tasks can run for a week
             task_queue=self.default_task_queue,
-            retry_attempts=3
+            retry_attempts=3,
         )
 
         # Start workflow - this returns immediately!
@@ -401,7 +396,7 @@ class TemporalTaskExecutor(TaskExecutorInterface):
             workflow_name="AgentTaskWorkflow",
             workflow_id=workflow_id,
             args=workflow_args,
-            config=config
+            config=config,
         )
 
         logger.info(f"Started agent task {task_id} with execution ID {execution_id}")
@@ -426,7 +421,7 @@ class TemporalTaskExecutor(TaskExecutorInterface):
             "message": a2a_data.get("message"),
             "artifacts": a2a_data.get("artifacts"),
             "session_id": a2a_data.get("session_id"),
-            "usage_metadata": a2a_data.get("usage_metadata")
+            "usage_metadata": a2a_data.get("usage_metadata"),
         }
 
     async def cancel_task(self, execution_id: str) -> bool:
@@ -434,9 +429,7 @@ class TemporalTaskExecutor(TaskExecutorInterface):
         return await self.workflow_executor.cancel_workflow(execution_id)
 
     async def wait_for_task_completion(
-        self,
-        execution_id: str,
-        timeout: timedelta | None = None
+        self, execution_id: str, timeout: timedelta | None = None
     ) -> dict[str, Any]:
         """Wait for task completion."""
         result = await self.workflow_executor.wait_for_result(execution_id, timeout)
@@ -446,5 +439,5 @@ class TemporalTaskExecutor(TaskExecutorInterface):
             "status": result.status.value,
             "result": result.result,
             "error": result.error,
-            "execution_time": result.execution_time
+            "execution_time": result.execution_time,
         }

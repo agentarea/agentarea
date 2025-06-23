@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def register_services():
     """Services are now registered via FastAPI dependency injection.
-    
+
     This function is kept for compatibility but no longer registers
     services with a custom DI container.
     """
@@ -27,7 +27,7 @@ def register_services():
 
 async def startup_event(app: FastAPI):
     """Handle application startup events.
-    
+
     This function is called when the FastAPI application starts up.
     It initializes services and registers them with the DI container.
     """
@@ -41,7 +41,7 @@ async def startup_event(app: FastAPI):
 
 async def shutdown_event(app: FastAPI):
     """Handle application shutdown events.
-    
+
     This function is called when the FastAPI application shuts down.
     It performs cleanup and resource release.
     """
@@ -50,7 +50,7 @@ async def shutdown_event(app: FastAPI):
 
 def setup_app(app: FastAPI):
     """Configure the FastAPI application with startup and shutdown events.
-    
+
     Args:
         app: The FastAPI application instance to configure
     """

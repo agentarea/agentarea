@@ -6,9 +6,16 @@ from ....common.events.base_events import DomainEvent
 class AgentCreated(DomainEvent):
     """Event emitted when a new agent is created"""
 
-    def __init__(self, agent_id: UUID, name: str, description: str, model_id: str,
-                 tools_config: Dict[str, Any] | None = None, events_config: Dict[str, Any] | None = None,
-                 planning: bool | None = None) -> None:
+    def __init__(
+        self,
+        agent_id: UUID,
+        name: str,
+        description: str,
+        model_id: str,
+        tools_config: Dict[str, Any] | None = None,
+        events_config: Dict[str, Any] | None = None,
+        planning: bool | None = None,
+    ) -> None:
         super().__init__()
         self.agent_id = agent_id
         self.name = name
@@ -22,9 +29,16 @@ class AgentCreated(DomainEvent):
 class AgentUpdated(DomainEvent):
     """Event emitted when an agent is updated"""
 
-    def __init__(self, agent_id: UUID, name: str, description: str | None = None,
-                 model_id: str | None = None, tools_config: Dict[str, Any] | None = None,
-                 events_config: Dict[str, Any] | None = None, planning: bool | None = None) -> None:
+    def __init__(
+        self,
+        agent_id: UUID,
+        name: str,
+        description: str | None = None,
+        model_id: str | None = None,
+        tools_config: Dict[str, Any] | None = None,
+        events_config: Dict[str, Any] | None = None,
+        planning: bool | None = None,
+    ) -> None:
         super().__init__()
         self.agent_id = agent_id
         self.name = name

@@ -13,7 +13,7 @@ import os
 import sys
 
 # Add the core directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.fixture(scope="session")
@@ -49,7 +49,7 @@ def mock_ollama_config():
     return {
         "model": "ollama_chat/qwen2.5",
         "base_url": "http://localhost:11434",
-        "timeout": 30.0
+        "timeout": 30.0,
     }
 
 
@@ -63,11 +63,7 @@ def mock_agent_config():
         "instruction": "You are a helpful test assistant",
         "planning_enabled": False,
         "workflow_type": "single",
-        "tools_config": {
-            "mcp_servers": [],
-            "builtin_tools": [],
-            "custom_tools": []
-        }
+        "tools_config": {"mcp_servers": [], "builtin_tools": [], "custom_tools": []},
     }
 
 
@@ -80,12 +76,8 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "integration: mark test as integration test requiring real services"
     )
-    config.addinivalue_line(
-        "markers", "slow: mark test as slow running"
-    )
-    config.addinivalue_line(
-        "markers", "unit: mark test as unit test (isolated)"
-    )
+    config.addinivalue_line("markers", "slow: mark test as slow running")
+    config.addinivalue_line("markers", "unit: mark test as unit test (isolated)")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -96,7 +88,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.integration)
         elif "unit" in str(item.fspath):
             item.add_marker(pytest.mark.unit)
-        
+
         # Mark slow tests
         if "slow" in item.name.lower():
-            item.add_marker(pytest.mark.slow) 
+            item.add_marker(pytest.mark.slow)

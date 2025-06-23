@@ -8,10 +8,16 @@ from agentarea.common.utils.types import TaskState, TaskStatus, Artifact
 
 class TaskCreated(DomainEvent):
     """Event emitted when a new task is created"""
-    
-    def __init__(self, task_id: str, agent_id: UUID, description: str | None = None,
-                 parameters: Dict[str, Any] | None = None, session_id: str | None = None,
-                 metadata: Dict[str, Any] | None = None) -> None:
+
+    def __init__(
+        self,
+        task_id: str,
+        agent_id: UUID,
+        description: str | None = None,
+        parameters: Dict[str, Any] | None = None,
+        session_id: str | None = None,
+        metadata: Dict[str, Any] | None = None,
+    ) -> None:
         # Store attributes on self for backward compatibility
         self.task_id = task_id
         self.agent_id = agent_id
@@ -19,7 +25,7 @@ class TaskCreated(DomainEvent):
         self.parameters = parameters or {}
         self.session_id = session_id
         self.metadata = metadata or {}
-        
+
         # Initialize parent with data populated properly
         super().__init__(
             task_id=task_id,
@@ -27,15 +33,20 @@ class TaskCreated(DomainEvent):
             description=description,
             parameters=self.parameters,
             session_id=session_id,
-            metadata=self.metadata
+            metadata=self.metadata,
         )
 
 
 class TaskUpdated(DomainEvent):
     """Event emitted when a task is updated"""
-    
-    def __init__(self, task_id: str, status: TaskStatus, artifacts: list[Artifact] | None = None,
-                 metadata: Dict[str, Any] | None = None) -> None:
+
+    def __init__(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        artifacts: list[Artifact] | None = None,
+        metadata: Dict[str, Any] | None = None,
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.status = status
@@ -45,9 +56,15 @@ class TaskUpdated(DomainEvent):
 
 class TaskStatusChanged(DomainEvent):
     """Event emitted when a task status changes"""
-    
-    def __init__(self, task_id: str, old_status: TaskState, new_status: TaskState,
-                 message: str | None = None, status_timestamp: datetime | None = None) -> None:
+
+    def __init__(
+        self,
+        task_id: str,
+        old_status: TaskState,
+        new_status: TaskState,
+        message: str | None = None,
+        status_timestamp: datetime | None = None,
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.old_status = old_status
@@ -58,9 +75,14 @@ class TaskStatusChanged(DomainEvent):
 
 class TaskCompleted(DomainEvent):
     """Event emitted when a task is completed successfully"""
-    
-    def __init__(self, task_id: str, result: Dict[str, Any] | None = None,
-                 artifacts: list[Artifact] | None = None, execution_time: float | None = None) -> None:
+
+    def __init__(
+        self,
+        task_id: str,
+        result: Dict[str, Any] | None = None,
+        artifacts: list[Artifact] | None = None,
+        execution_time: float | None = None,
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.result = result or {}
@@ -70,9 +92,14 @@ class TaskCompleted(DomainEvent):
 
 class TaskFailed(DomainEvent):
     """Event emitted when a task fails"""
-    
-    def __init__(self, task_id: str, error_message: str, error_code: str | None = None,
-                 stack_trace: str | None = None) -> None:
+
+    def __init__(
+        self,
+        task_id: str,
+        error_message: str,
+        error_code: str | None = None,
+        stack_trace: str | None = None,
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.error_message = error_message
@@ -82,8 +109,10 @@ class TaskFailed(DomainEvent):
 
 class TaskCanceled(DomainEvent):
     """Event emitted when a task is canceled"""
-    
-    def __init__(self, task_id: str, reason: str | None = None, canceled_by: str | None = None) -> None:
+
+    def __init__(
+        self, task_id: str, reason: str | None = None, canceled_by: str | None = None
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.reason = reason
@@ -92,9 +121,14 @@ class TaskCanceled(DomainEvent):
 
 class TaskInputRequired(DomainEvent):
     """Event emitted when a task requires user input"""
-    
-    def __init__(self, task_id: str, input_request: str, input_schema: Dict[str, Any] | None = None,
-                 timeout: int | None = None) -> None:
+
+    def __init__(
+        self,
+        task_id: str,
+        input_request: str,
+        input_schema: Dict[str, Any] | None = None,
+        timeout: int | None = None,
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.input_request = input_request
@@ -104,7 +138,7 @@ class TaskInputRequired(DomainEvent):
 
 class TaskArtifactAdded(DomainEvent):
     """Event emitted when an artifact is added to a task"""
-    
+
     def __init__(self, task_id: str, artifact: Artifact, artifact_type: str | None = None) -> None:
         super().__init__()
         self.task_id = task_id
@@ -114,11 +148,16 @@ class TaskArtifactAdded(DomainEvent):
 
 class TaskAssigned(DomainEvent):
     """Event emitted when a task is assigned to an agent"""
-    
-    def __init__(self, task_id: str, agent_id: UUID, assigned_by: str | None = None,
-                 assignment_reason: str | None = None) -> None:
+
+    def __init__(
+        self,
+        task_id: str,
+        agent_id: UUID,
+        assigned_by: str | None = None,
+        assignment_reason: str | None = None,
+    ) -> None:
         super().__init__()
         self.task_id = task_id
         self.agent_id = agent_id
         self.assigned_by = assigned_by
-        self.assignment_reason = assignment_reason 
+        self.assignment_reason = assignment_reason
