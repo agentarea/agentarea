@@ -73,9 +73,9 @@ async def create_mcp_server_instance(
         return MCPServerInstanceResponse.from_domain(instance)
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create instance: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create instance: {str(e)}") from e
 
 
 @router.get("/{instance_id}/environment")
@@ -86,6 +86,7 @@ async def get_instance_environment(
     ),
 ):
     """Get environment variables for an MCP server instance.
+
     Note: This endpoint should have proper authentication and authorization in production.
     """
     try:
@@ -98,7 +99,7 @@ async def get_instance_environment(
             "message": f"Instance has {len(env_vars)} environment variables configured",
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get environment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get environment: {str(e)}") from e
 
 
 @router.get("/", response_model=list[MCPServerInstanceResponse])

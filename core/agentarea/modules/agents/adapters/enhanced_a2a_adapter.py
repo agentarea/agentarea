@@ -291,11 +291,11 @@ class EnhancedA2AAdapter(AgentAdapter):
                             if any(key in health_data for key in ["protocol", "a2a", "agent"]):
                                 logger.info(f"A2A agent healthy via {endpoint}")
                                 return True
-                    except:
+                    except Exception:
                         continue
 
                 return False
-        except:
+        except Exception:
             return False
 
     async def _poll_task_completion(
@@ -328,7 +328,7 @@ class EnhancedA2AAdapter(AgentAdapter):
 
                     task_data = result.get("result", {})
 
-                except:
+                except Exception:
                     # Fallback to REST
                     response = await client.get(f"{self.base_url}/tasks/{task_id}", headers=headers)
                     response.raise_for_status()

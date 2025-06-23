@@ -3,18 +3,18 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, Boolean, String
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 
-Base = declarative_base()
-
 from agentarea.common.base.models import BaseModel
+
+Base = declarative_base()
 
 
 class MCPServer(BaseModel):
     __tablename__ = "mcp_servers"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
     docker_image_url: Mapped[str] = mapped_column(String, nullable=False)

@@ -107,7 +107,7 @@ async def list_mcp_server_instances(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list MCP server instances",
-        )
+        ) from e
 
 
 @router.post("/v1/mcp-server-instances/", response_model=MCPServerInstanceResponse)
@@ -191,7 +191,7 @@ async def create_mcp_server_instance(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create MCP server instance",
-        )
+        ) from e
 
 
 @router.get("/v1/mcp-server-instances/{instance_id}", response_model=MCPServerInstanceResponse)
@@ -225,7 +225,7 @@ async def get_mcp_server_instance(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get MCP server instance",
-        )
+        ) from e
 
 
 @router.delete("/v1/mcp-server-instances/{instance_id}")
@@ -256,4 +256,4 @@ async def delete_mcp_server_instance(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete MCP server instance",
-        )
+        ) from e

@@ -111,10 +111,10 @@ async def send_message(
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to send chat message: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/messages/stream")
@@ -159,7 +159,7 @@ async def stream_message(
 
     except Exception as e:
         logger.error(f"Failed to stream chat message: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Conversation Management
@@ -184,7 +184,7 @@ async def get_conversation_history(
 
     except Exception as e:
         logger.error(f"Failed to get conversation history: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/conversations")
@@ -199,7 +199,7 @@ async def list_conversations(
 
     except Exception as e:
         logger.error(f"Failed to list conversations: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Agent Management
@@ -223,7 +223,7 @@ async def get_available_agents(
 
     except Exception as e:
         logger.error(f"Failed to get agents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/agents/{agent_id}", response_model=AgentResponse)
@@ -242,12 +242,14 @@ async def get_agent(agent_id: str, agent_service: AgentService = Depends(get_age
         )
 
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid agent ID format: {agent_id}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid agent ID format: {agent_id}"
+        ) from None
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get agent {agent_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # NOTE: Task management endpoints have been moved to /v1/agents/{agent_id}/tasks/
@@ -310,7 +312,7 @@ async def websocket_endpoint(
         logger.error(f"WebSocket error for session {session_id}: {e}", exc_info=True)
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
 
 

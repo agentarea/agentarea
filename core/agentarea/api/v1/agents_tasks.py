@@ -125,14 +125,15 @@ async def create_task_for_agent(
         await event_broker.publish(task_created_event)
 
         logger.info(
-            f"Task {task_id_str} started with workflow execution ID {execution_id} for agent {agent_id}"
+            f"Task {task_id_str} started with workflow execution ID "
+            f"{execution_id} for agent {agent_id}"
         )
 
         return task_response
 
     except Exception as e:
         logger.error(f"Failed to start task workflow for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to start task: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start task: {str(e)}") from e
 
 
 @router.get("/", response_model=list[TaskResponse])
@@ -147,10 +148,12 @@ async def list_agent_tasks(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     # Note: With Temporal workflows, task listing would require workflow history queries
-    # For now, we return an empty list since individual task status can be checked via /{task_id}/status
+    # For now, we return an empty list since individual task status can be checked
+    # via /{task_id}/status
     # TODO: Implement workflow history querying to list agent tasks
     logger.info(
-        f"Task listing requested for agent {agent_id}. Use individual task status endpoints for workflow-based tasks."
+        f"Task listing requested for agent {agent_id}. "
+        f"Use individual task status endpoints for workflow-based tasks."
     )
 
     return []
@@ -197,7 +200,7 @@ async def get_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get task: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get task: {str(e)}") from e
 
 
 @router.get("/{task_id}/status")
@@ -238,7 +241,7 @@ async def get_agent_task_status(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get task status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get task status: {str(e)}") from e
 
 
 @router.delete("/{task_id}")
@@ -269,4 +272,4 @@ async def cancel_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to cancel task: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel task: {str(e)}") from e

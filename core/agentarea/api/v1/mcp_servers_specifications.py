@@ -26,7 +26,8 @@ class MCPServerCreate(BaseModel):
     )
     cmd: list[str] | None = Field(
         default=None,
-        description="Custom command to override container CMD (useful for switching between stdio and HTTP modes)",
+        description="Custom command to override container CMD "
+        "(useful for switching between stdio and HTTP modes)",
     )
 
 
@@ -215,7 +216,7 @@ async def get_mcp_server_templates():
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to load MCP server templates: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/templates/{template_key}", response_model=dict[str, Any])
@@ -242,7 +243,7 @@ async def get_mcp_server_template(template_key: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get MCP server template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get MCP server template: {str(e)}") from e
 
 
 @router.post("/from-template/{template_key}", response_model=MCPServerResponse)
@@ -280,4 +281,4 @@ async def create_mcp_server_from_template(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to create server from template: {str(e)}"
-        )
+        ) from e

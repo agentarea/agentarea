@@ -54,6 +54,7 @@ async def create_llm_model_instance(
     data: LLMModelInstanceCreate,
     llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
+    """Create a new LLM model instance."""
     instance = await llm_model_instance_service.create_llm_model_instance(
         model_id=data.model_id,
         api_key=data.api_key,
@@ -69,6 +70,7 @@ async def get_llm_model_instance(
     instance_id: UUID,
     llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
+    """Get an LLM model instance by ID."""
     instance = await llm_model_instance_service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="LLM Model Instance not found")
@@ -82,6 +84,7 @@ async def list_llm_model_instances(
     is_public: bool | None = None,
     llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
+    """List LLM model instances with optional filters."""
     instances = await llm_model_instance_service.list(
         model_id=model_id, status=status, is_public=is_public
     )
@@ -94,6 +97,7 @@ async def update_llm_model_instance(
     data: LLMModelInstanceUpdate,
     llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
+    """Update an LLM model instance."""
     instance = await llm_model_instance_service.update_llm_model_instance(
         id=instance_id,
         name=data.name,
@@ -112,6 +116,7 @@ async def delete_llm_model_instance(
     instance_id: UUID,
     llm_model_instance_service: LLMModelInstanceService = Depends(get_llm_model_instance_service),
 ):
+    """Delete an LLM model instance."""
     success = await llm_model_instance_service.delete_llm_model_instance(instance_id)
     if not success:
         raise HTTPException(status_code=404, detail="LLM Model Instance not found")

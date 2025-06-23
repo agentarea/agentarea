@@ -11,15 +11,6 @@ import signal
 import sys
 
 import dotenv
-
-dotenv.load_dotenv()
-
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
 from temporalio.client import Client
 from temporalio.worker import Worker
 
@@ -35,6 +26,14 @@ from agentarea.workflows.agent_task_workflow import (
     execute_mcp_tool_activity,
     validate_agent_activity,
 )
+
+dotenv.load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 class TemporalWorker:

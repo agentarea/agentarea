@@ -1,6 +1,7 @@
 from ...common.events.broker import EventBroker
-from .application.agent_service import AgentService
-from .infrastructure.repository import AgentRepository
+
+# from .application.agent_service import AgentService
+# from .infrastructure.repository import AgentRepository
 
 
 class AgentModule:

@@ -57,6 +57,7 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
         """List models from the YAML file.
 
         Args:
+            model_id: Filter by model ID (not implemented)
             status: Filter by status (not implemented)
             is_public: Filter by public status (not implemented)
             provider: Filter by provider name

@@ -121,7 +121,7 @@ class ACPAdapter(AgentAdapter):
             async with httpx.AsyncClient(timeout=5) as client:
                 response = await client.get(f"{self.base_url}/acp/health")
                 return response.status_code == 200
-        except:
+        except Exception:
             return False
 
     async def create_agent(self, agent_spec: dict[str, Any]) -> dict[str, Any]:

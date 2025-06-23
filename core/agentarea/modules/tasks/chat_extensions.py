@@ -264,6 +264,7 @@ class A2AChatService:
 
 class A2AChatTaskManager:
     """Extension to BaseTaskManager specifically for chat functionality.
+
     Provides chat-specific convenience methods while maintaining A2A compliance.
     """
 

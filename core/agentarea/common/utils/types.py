@@ -32,7 +32,7 @@ class TextPart(BaseModel):
 
 class FileContent(BaseModel):
     name: str | None = None
-    mimeType: str | None = None
+    mime_type: str | None = None
     bytes: str | None = None
     uri: str | None = None
 
@@ -83,12 +83,12 @@ class Artifact(BaseModel):
     metadata: dict[str, Any] | None = None
     index: int = 0
     append: bool | None = None
-    lastChunk: bool | None = None
+    last_chunk: bool | None = None
 
 
 class Task(BaseModel):
     id: str
-    sessionId: str | None = None
+    session_id: str | None = None
     status: TaskStatus
     artifacts: list[Artifact] | None = None
     history: list[Message] | None = None
@@ -127,22 +127,22 @@ class TaskIdParams(BaseModel):
 
 
 class TaskQueryParams(TaskIdParams):
-    historyLength: int | None = None
+    history_length: int | None = None
 
 
 class TaskSendParams(BaseModel):
     id: str
-    sessionId: str = Field(default_factory=lambda: uuid4().hex)
+    session_id: str = Field(default_factory=lambda: uuid4().hex)
     message: Message
-    acceptedOutputModes: list[str] | None = None
-    pushNotification: PushNotificationConfig | None = None
-    historyLength: int | None = None
+    accepted_output_modes: list[str] | None = None
+    push_notification: PushNotificationConfig | None = None
+    history_length: int | None = None
     metadata: dict[str, Any] | None = None
 
 
 class TaskPushNotificationConfig(BaseModel):
     id: str
-    pushNotificationConfig: PushNotificationConfig
+    push_notification_config: PushNotificationConfig
 
 
 ## RPC Messages
@@ -231,7 +231,7 @@ class TaskResubscriptionRequest(JSONRPCRequest):
 # A2A Message endpoints
 class MessageSendParams(BaseModel):
     message: Message
-    contextId: str | None = None
+    context_id: str | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -261,8 +261,8 @@ class AgentProvider(BaseModel):
 
 class AgentCapabilities(BaseModel):
     streaming: bool = False
-    pushNotifications: bool = False
-    stateTransitionHistory: bool = False
+    push_notifications: bool = False
+    state_transition_history: bool = False
 
 
 class AgentAuthentication(BaseModel):
@@ -276,8 +276,8 @@ class AgentSkill(BaseModel):
     description: str | None = None
     tags: list[str] | None = None
     examples: list[str] | None = None
-    inputModes: list[str] | None = None
-    outputModes: list[str] | None = None
+    input_modes: list[str] | None = None
+    output_modes: list[str] | None = None
 
 
 class AgentCard(BaseModel):
@@ -286,11 +286,11 @@ class AgentCard(BaseModel):
     url: str
     provider: AgentProvider | None = None
     version: str
-    documentationUrl: str | None = None
+    documentation_url: str | None = None
     capabilities: AgentCapabilities
     authentication: AgentAuthentication | None = None
-    defaultInputModes: list[str] = ["text"]
-    defaultOutputModes: list[str] = ["text"]
+    default_input_modes: list[str] = ["text"]
+    default_output_modes: list[str] = ["text"]
     skills: list[AgentSkill]
 
 

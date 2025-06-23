@@ -55,7 +55,7 @@ class WorkflowTaskExecutionService:
             )
         except ImportError as e:
             logger.error(f"Temporal not available: {e}")
-            raise RuntimeError(f"Temporal is required but not available: {e}")
+            raise RuntimeError(f"Temporal is required but not available: {e}") from e
         except Exception as e:
             logger.error(f"Failed to create Temporal executor: {e}")
             raise

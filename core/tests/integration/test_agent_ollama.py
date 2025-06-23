@@ -37,7 +37,7 @@ class SimpleAgent:
             )
             return response.choices[0].message.content
         except Exception as e:
-            raise Exception(f"Ошибка при вызове агента: {e}")
+            raise Exception(f"Ошибка при вызове агента: {e}") from e
 
 
 class TestAgentOllama:

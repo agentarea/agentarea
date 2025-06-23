@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from agentarea.api.deps.services import get_event_broker, get_secret_manager
+from agentarea.api.events import events_router
 from agentarea.api.v1.router import v1_router
 
 # Dependency injection container setup
@@ -33,7 +34,9 @@ async def initialize_services():
         register_singleton(BaseSecretManager, secret_manager)
 
         print(
-            f"Real services initialized successfully - Event Broker: {type(event_broker).__name__}, Secret Manager: {type(secret_manager).__name__}"
+            f"Real services initialized successfully - "
+            f"Event Broker: {type(event_broker).__name__}, "
+            f"Secret Manager: {type(secret_manager).__name__}"
         )
     except Exception as e:
         print(f"Warning: Service initialization failed: {e}")
@@ -88,8 +91,6 @@ app.add_middleware(
 app.include_router(v1_router)
 
 # Include events router to handle task events
-from agentarea.api.events import events_router
-
 app.include_router(events_router)
 
 

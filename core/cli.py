@@ -332,8 +332,8 @@ def servers():
     asyncio.run(_list_servers())
 
 
-@mcp.command()
-def instances():
+@mcp.command("instances")
+def mcp_instances():
     """List MCP server instances."""
 
     async def _list_instances():
@@ -400,7 +400,7 @@ def create_server(
 @click.option("--name", required=True, help="Instance name")
 @click.option("--endpoint-url", required=True, help="MCP endpoint URL")
 @click.option("--config", help="JSON configuration string")
-def create_instance(server_id: str, name: str, endpoint_url: str, config: str | None):
+def create_mcp_instance(server_id: str, name: str, endpoint_url: str, config: str | None):
     """Create a new MCP server instance."""
 
     async def _create_instance():

@@ -154,6 +154,7 @@ class MCPManagerSettings(BaseSettings):
     max_retries: int = 3
 
     class Config:
+        """Configuration for MCPManagerSettings."""
         env_prefix = "MCP_MANAGER_"
 
 

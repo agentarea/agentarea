@@ -283,10 +283,10 @@ class AgentCommunicationService:
         # Wait for the event with timeout
         try:
             await asyncio.wait_for(completion_data["event"].wait(), timeout=self.max_wait_time)
-        except TimeoutError:
+        except TimeoutError as e:
             # Remove the task from tracking
             self.task_completion_events.pop(task_id, None)
-            raise TimeoutError(f"Timed out waiting for task {task_id} to complete")
+            raise TimeoutError(f"Timed out waiting for task {task_id} to complete") from e
 
         # Get the result
         result = completion_data.get("result")

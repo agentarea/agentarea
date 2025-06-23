@@ -280,9 +280,9 @@ class InMemoryTaskManager(BaseTaskManager):
         async with self.lock:
             try:
                 task = self.tasks[task_id]
-            except KeyError:
+            except KeyError as e:
                 logger.error(f"Task {task_id} not found for updating the task")
-                raise ValueError(f"Task {task_id} not found")
+                raise ValueError(f"Task {task_id} not found") from e
 
             task.status = status
 
@@ -296,10 +296,10 @@ class InMemoryTaskManager(BaseTaskManager):
 
             return task
 
-    def append_task_history(self, task: Task, historyLength: int | None):
+    def append_task_history(self, task: Task, history_length: int | None):
         new_task = task.model_copy()
-        if historyLength is not None and historyLength > 0:
-            new_task.history = new_task.history[-historyLength:]
+        if history_length is not None and history_length > 0:
+            new_task.history = new_task.history[-history_length:]
         else:
             new_task.history = []
 

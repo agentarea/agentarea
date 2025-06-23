@@ -8,6 +8,7 @@ import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
+from uuid import UUID
 
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
@@ -110,7 +111,8 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             try:
                 # Connect to configured Temporal server
                 logger.info(
-                    f"Connecting to Temporal server at {self.server_url} with namespace {self.namespace}"
+                    f"Connecting to Temporal server at {self.server_url} "
+                    f"with namespace {self.namespace}"
                 )
                 self.client = await Client.connect(self.server_url, namespace=self.namespace)
                 self._connected = True
@@ -310,8 +312,8 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                 execution_time=execution_time_seconds,
             )
 
-        except TimeoutError:
-            raise TimeoutError(f"Workflow {workflow_id} did not complete within timeout")
+        except TimeoutError as e:
+            raise TimeoutError(f"Workflow {workflow_id} did not complete within timeout") from e
         except Exception as e:
             logger.error(f"Failed to wait for workflow {workflow_id}: {e}")
             return WorkflowResult(
@@ -364,7 +366,7 @@ class TemporalTaskExecutor(TaskExecutorInterface):
     async def execute_task_async(
         self,
         task_id: str,
-        agent_id: "UUID",
+        agent_id: UUID,
         description: str,
         user_id: str | None = None,
         task_parameters: dict[str, Any] | None = None,

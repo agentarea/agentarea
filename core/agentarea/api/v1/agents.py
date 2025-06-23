@@ -74,6 +74,7 @@ class AgentResponse(BaseModel):
 
 @router.post("/", response_model=AgentResponse)
 async def create_agent(data: AgentCreate, agent_service: AgentService = Depends(get_agent_service)):
+    """Create a new agent."""
     agent = await agent_service.create_agent(
         name=data.name,
         description=data.description,
@@ -88,6 +89,7 @@ async def create_agent(data: AgentCreate, agent_service: AgentService = Depends(
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)):
+    """Get an agent by ID."""
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -96,6 +98,7 @@ async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_ag
 
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(agent_service: AgentService = Depends(get_agent_service)):
+    """List all agents."""
     agents = await agent_service.list()
     return [AgentResponse.from_domain(agent) for agent in agents]
 
@@ -106,6 +109,7 @@ async def update_agent(
     data: AgentUpdate,
     agent_service: AgentService = Depends(get_agent_service),
 ):
+    """Update an agent."""
     agent = await agent_service.update_agent(
         id=agent_id,
         name=data.name,
@@ -122,6 +126,7 @@ async def update_agent(
 
 @router.delete("/{agent_id}")
 async def delete_agent(agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)):
+    """Delete an agent."""
     success = await agent_service.delete_agent(agent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")

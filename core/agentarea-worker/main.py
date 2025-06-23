@@ -9,15 +9,18 @@ router = RedisRouter(broker)
 
 @router.after_startup
 async def setup():
+    """Set up broker connection on startup."""
     await broker.connect()
 
 
 @router.before_shutdown
 async def cleanup():
+    """Clean up broker connection on shutdown."""
     await broker.disconnect()
 
 
 def main():
+    """Run the worker server."""
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

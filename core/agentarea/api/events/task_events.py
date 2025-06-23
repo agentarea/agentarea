@@ -45,7 +45,8 @@ def register_task_event_handlers(router: RedisRouter) -> None:
 
             if not task_id or not agent_id:
                 logger.error(
-                    f"Missing required fields in TaskCreated event: task_id={task_id}, agent_id={agent_id}"
+                    f"Missing required fields in TaskCreated event: "
+                    f"task_id={task_id}, agent_id={agent_id}"
                 )
                 logger.debug(f"Full event message: {message}")
                 return
@@ -171,7 +172,8 @@ async def _create_agent_runner_service_with_session(db_session: AsyncSession):
             llm_model_instance_service=llm_model_instance_service,
             session_service=session_service,
             agent_builder_service=agent_builder_service,
-            agent_communication_service=None,  # No A2A communication in event handlers to avoid complexity
+            agent_communication_service=None,  # No A2A communication in event handlers
+            # to avoid complexity
         )
 
         return agent_runner_service

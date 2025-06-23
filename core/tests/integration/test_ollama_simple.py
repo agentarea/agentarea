@@ -21,7 +21,7 @@ class TestOllamaSimple:
     async def test_ollama_available(self):
         """Проверяем, что Ollama доступна"""
         try:
-            response = await acompletion(
+            _ = await acompletion(
                 model="ollama_chat/qwen2.5",
                 messages=[{"role": "user", "content": "Test"}],
                 timeout=10,
@@ -31,7 +31,7 @@ class TestOllamaSimple:
             print("✅ Ollama доступна")
         except Exception as e:
             print(f"❌ Ollama недоступна: {e}")
-            assert False, f"Ollama недоступна: {e}"
+            raise AssertionError(f"Ollama недоступна: {e}") from e
 
     async def test_ollama_math_response(self):
         """Проверяем, что Ollama отвечает на простые вопросы"""
@@ -58,7 +58,7 @@ class TestOllamaSimple:
 
         except Exception as e:
             print(f"❌ Ошибка при запросе к Ollama: {e}")
-            assert False, f"Ошибка при запросе к Ollama: {e}"
+            raise AssertionError(f"Ошибка при запросе к Ollama: {e}") from e
 
     async def test_ollama_russian_response(self):
         """Проверяем, что Ollama отвечает на русском"""
@@ -82,7 +82,7 @@ class TestOllamaSimple:
 
         except Exception as e:
             print(f"❌ Ошибка при русском запросе: {e}")
-            assert False, f"Ошибка при русском запросе: {e}"
+            raise AssertionError(f"Ошибка при русском запросе: {e}") from e
 
 
 async def main():

@@ -67,6 +67,7 @@ async def create_llm_model(
     data: LLMModelCreate,
     llm_model_service: LLMModelService = Depends(get_llm_model_service),
 ):
+    """Create a new LLM model."""
     model = await llm_model_service.create_llm_model(
         name=data.name,
         description=data.description,
@@ -86,7 +87,9 @@ async def get_llm_model(
     try:
         model_uuid = UUID(model_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid model ID format: {model_id}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid model ID format: {model_id}"
+        ) from None
 
     model = await llm_model_service.get(model_uuid)
     if not model:
@@ -114,7 +117,7 @@ async def update_llm_model(
     try:
         model_uuid = UUID(model_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid model ID format: {model_id}")
+        raise HTTPException(status_code=400, detail=f"Invalid model ID format: {model_id}") from None
 
     model = await llm_model_service.update_llm_model(
         id=model_uuid,
@@ -139,7 +142,7 @@ async def delete_llm_model(
     try:
         model_uuid = UUID(model_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid model ID format: {model_id}")
+        raise HTTPException(status_code=400, detail=f"Invalid model ID format: {model_id}") from None
 
     success = await llm_model_service.delete_llm_model(model_uuid)
     if not success:
