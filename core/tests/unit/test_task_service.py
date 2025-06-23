@@ -57,7 +57,7 @@ class TestTaskService:
             metadata={"created_by": "test"},
         )
         mock_task_factory.create_test_task.return_value = mock_task
-        
+
         # Mock task repository to return the mock task
         task_service.task_repository.create.return_value = mock_task
 
@@ -114,7 +114,7 @@ class TestTaskService:
             metadata={"created_by": "test"},
         )
         mock_task_factory.create_test_task.return_value = mock_task
-        
+
         # Mock task repository to return the mock task
         task_service.task_repository.create.return_value = mock_task
 
