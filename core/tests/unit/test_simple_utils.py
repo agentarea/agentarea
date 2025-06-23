@@ -6,13 +6,14 @@ Basic unit tests that don't depend on complex AgentArea imports.
 These tests focus on simple utility functions and string operations.
 """
 
+from typing import Any
+
 import pytest
-from typing import Dict, Any
 
 
 def create_agent_config(
     name: str, model_type: str, planning: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Simple utility function to create agent configuration"""
     return {
         "name": name,
@@ -40,7 +41,7 @@ def format_task_id(agent_id: str, user_id: str, timestamp: int) -> str:
     return f"task_{agent_id}_{user_id}_{timestamp}"
 
 
-def parse_query_response(query: str, response: str) -> Dict[str, Any]:
+def parse_query_response(query: str, response: str) -> dict[str, Any]:
     """Parse query and response for analysis"""
     return {
         "query": query,

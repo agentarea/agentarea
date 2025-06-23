@@ -5,12 +5,12 @@ Global pytest configuration and fixtures
 Shared fixtures and configuration for all tests.
 """
 
-import pytest
 import asyncio
-from typing import AsyncGenerator
-from uuid import uuid4
 import os
 import sys
+from uuid import uuid4
+
+import pytest
 
 # Add the core directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))

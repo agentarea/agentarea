@@ -5,17 +5,18 @@ Unit Tests for AgentBuilderService
 Tests individual methods of AgentBuilderService in isolation using mocks.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4, UUID
 from datetime import datetime
+from unittest.mock import AsyncMock
+from uuid import UUID, uuid4
 
+import pytest
+
+from agentarea.common.events.broker import EventBroker
 from agentarea.modules.agents.application.agent_builder_service import (
     AgentBuilderService,
 )
 from agentarea.modules.agents.domain.models import Agent
 from agentarea.modules.llm.domain.models import LLMModelInstance
-from agentarea.common.events.broker import EventBroker
 
 
 class TestAgentBuilderService:

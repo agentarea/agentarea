@@ -5,12 +5,13 @@ Unit Tests for TaskService
 Tests TaskService methods in isolation using mocks.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
+import pytest
+
+from agentarea.modules.tasks.domain.models import Task, TaskPriority, TaskType
 from agentarea.modules.tasks.task_service import TaskService
-from agentarea.modules.tasks.domain.models import Task, TaskType, TaskPriority
 
 
 class TestTaskService:

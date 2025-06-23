@@ -5,13 +5,14 @@ Simple Unit Tests
 Basic unit tests for AgentArea utility functions.
 """
 
+from typing import Any
+
 import pytest
-from typing import Dict, Any
 
 
 def create_agent_config(
     name: str, model_type: str, planning: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Simple utility function to create agent configuration"""
     return {
         "name": name,
@@ -39,7 +40,7 @@ def format_task_id(agent_id: str, user_id: str, timestamp: int) -> str:
     return f"task_{agent_id}_{user_id}_{timestamp}"
 
 
-def parse_llm_response(response_text: str) -> Dict[str, Any]:
+def parse_llm_response(response_text: str) -> dict[str, Any]:
     """Parse LLM response and extract content"""
     if not response_text:
         return {"content": "", "tokens": 0}

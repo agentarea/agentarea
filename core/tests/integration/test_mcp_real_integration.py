@@ -9,10 +9,9 @@ Tests the complete workflow with a real MCP server:
 """
 
 import asyncio
-import pytest
+
 import httpx
-from typing import Optional, Dict, Any
-import time
+import pytest
 
 
 class MCPRealIntegrationTest:
@@ -20,11 +19,11 @@ class MCPRealIntegrationTest:
 
     def __init__(self, api_base: str = "http://localhost:8000"):
         self.api_base = api_base
-        self.client: Optional[httpx.AsyncClient] = None
-        self.agent_id: Optional[str] = None
-        self.mcp_server_id: Optional[str] = None
-        self.mcp_instance_id: Optional[str] = None
-        self.task_id: Optional[str] = None
+        self.client: httpx.AsyncClient | None = None
+        self.agent_id: str | None = None
+        self.mcp_server_id: str | None = None
+        self.mcp_instance_id: str | None = None
+        self.task_id: str | None = None
 
     async def setup(self):
         """Setup test client."""
@@ -174,7 +173,7 @@ class MCPRealIntegrationTest:
             return False
 
         instance = instance_response.json()
-        print(f"✅ MCP Integration verified")
+        print("✅ MCP Integration verified")
         print(f"   Instance status: {instance['status']}")
 
         return True

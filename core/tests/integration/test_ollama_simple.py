@@ -11,7 +11,7 @@
 """
 
 import asyncio
-import pytest
+
 from litellm import acompletion
 
 
@@ -48,7 +48,7 @@ class TestOllamaSimple:
             )
 
             content = response.choices[0].message.content
-            print(f"Вопрос: What is 2 + 2?")
+            print("Вопрос: What is 2 + 2?")
             print(f"Ответ: {content}")
 
             # Проверяем, что получили непустой ответ
@@ -72,7 +72,7 @@ class TestOllamaSimple:
             )
 
             content = response.choices[0].message.content
-            print(f"Вопрос: Привет! Как дела?")
+            print("Вопрос: Привет! Как дела?")
             print(f"Ответ: {content}")
 
             # Проверяем, что получили непустой ответ
