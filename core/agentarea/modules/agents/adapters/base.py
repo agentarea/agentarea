@@ -62,9 +62,7 @@ class AgentAdapter(ABC):
         self.is_remote = agent_config.get("endpoint") is not None
 
     @abstractmethod
-    async def send_task(
-        self, task: AgentTask, session_id: str | None = None
-    ) -> AgentTaskResponse:
+    async def send_task(self, task: AgentTask, session_id: str | None = None) -> AgentTaskResponse:
         """Send a task to the agent and get response."""
         pass
 

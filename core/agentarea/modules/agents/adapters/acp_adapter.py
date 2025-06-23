@@ -21,9 +21,7 @@ class ACPAdapter(AgentAdapter):
         self.base_url = agent_config.get("endpoint")
         self.timeout = agent_config.get("timeout", 30)
 
-    async def send_task(
-        self, task: AgentTask, session_id: str | None = None
-    ) -> AgentTaskResponse:
+    async def send_task(self, task: AgentTask, session_id: str | None = None) -> AgentTaskResponse:
         """Send task via ACP protocol."""
         # Convert task to chat message for backward compatibility
         chat_message = ChatMessage(content=task.content, metadata=task.metadata)

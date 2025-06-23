@@ -26,9 +26,7 @@ class A2AAdapter(AgentAdapter):
         self.timeout = agent_config.get("timeout", 30)
         self.api_key = agent_config.get("api_key")
 
-    async def send_task(
-        self, task: AgentTask, session_id: str | None = None
-    ) -> AgentTaskResponse:
+    async def send_task(self, task: AgentTask, session_id: str | None = None) -> AgentTaskResponse:
         """Send task to remote A2A agent."""
         # Create A2A Task payload
         task_payload = {

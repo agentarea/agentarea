@@ -65,9 +65,7 @@ class TestOllamaSimple:
         try:
             response = await acompletion(
                 model="ollama_chat/qwen2.5",
-                messages=[
-                    {"role": "user", "content": "Привет! Как дела? Ответь кратко."}
-                ],
+                messages=[{"role": "user", "content": "Привет! Как дела? Ответь кратко."}],
                 timeout=10,
             )
 

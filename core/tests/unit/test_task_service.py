@@ -69,9 +69,7 @@ class TestTaskService:
     ):
         """Test handling of TaskFactory error"""
         # Setup mock to raise exception
-        mock_task_factory.create_test_task.side_effect = Exception(
-            "Task creation failed"
-        )
+        mock_task_factory.create_test_task.side_effect = Exception("Task creation failed")
 
         # Execute and verify exception is raised
         with pytest.raises(Exception) as exc_info:

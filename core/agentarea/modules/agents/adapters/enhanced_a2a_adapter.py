@@ -47,9 +47,7 @@ class EnhancedA2AAdapter(AgentAdapter):
             logger.warning("A2A SDK not available, falling back to HTTP implementation")
             self.use_official_sdk = False
 
-    async def send_task(
-        self, task: AgentTask, session_id: str | None = None
-    ) -> AgentTaskResponse:
+    async def send_task(self, task: AgentTask, session_id: str | None = None) -> AgentTaskResponse:
         """Send task to remote A2A agent."""
         if self.use_official_sdk and self.a2a_client:
             return await self._send_task_via_sdk(task, session_id)

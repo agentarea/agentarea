@@ -10,9 +10,7 @@ from typing import Any
 import pytest
 
 
-def create_agent_config(
-    name: str, model_type: str, planning: bool = False
-) -> dict[str, Any]:
+def create_agent_config(name: str, model_type: str, planning: bool = False) -> dict[str, Any]:
     """Simple utility function to create agent configuration"""
     return {
         "name": name,

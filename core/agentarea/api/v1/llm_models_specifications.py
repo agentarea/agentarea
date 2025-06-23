@@ -117,7 +117,9 @@ async def update_llm_model(
     try:
         model_uuid = UUID(model_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid model ID format: {model_id}") from None
+        raise HTTPException(
+            status_code=400, detail=f"Invalid model ID format: {model_id}"
+        ) from None
 
     model = await llm_model_service.update_llm_model(
         id=model_uuid,
@@ -142,7 +144,9 @@ async def delete_llm_model(
     try:
         model_uuid = UUID(model_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid model ID format: {model_id}") from None
+        raise HTTPException(
+            status_code=400, detail=f"Invalid model ID format: {model_id}"
+        ) from None
 
     success = await llm_model_service.delete_llm_model(model_uuid)
     if not success:

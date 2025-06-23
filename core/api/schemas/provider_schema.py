@@ -1,6 +1,5 @@
 """Provider API schemas with icon support."""
 
-
 from pydantic import BaseModel, Field
 
 

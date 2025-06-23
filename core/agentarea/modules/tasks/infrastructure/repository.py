@@ -98,7 +98,9 @@ class SQLAlchemyTaskRepository(BaseRepository[Task], TaskRepositoryInterface):
             logger.error(f"Error retrieving task by ID {task_id}: {e}")
             return None
 
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> builtins.list[Task]:
+    async def get_by_user_id(
+        self, user_id: str, limit: int = 100, offset: int = 0
+    ) -> builtins.list[Task]:
         """Get tasks created by a specific user."""
         try:
             stmt = (

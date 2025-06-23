@@ -243,7 +243,9 @@ async def get_mcp_server_template(template_key: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get MCP server template: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get MCP server template: {str(e)}"
+        ) from e
 
 
 @router.post("/from-template/{template_key}", response_model=MCPServerResponse)

@@ -121,9 +121,7 @@ class TestAgentBuilderService:
         mock_repository.get.assert_called_once_with(sample_agent.id)
         mock_llm_service.get.assert_called_once_with(UUID(sample_agent.model_id))
 
-    async def test_build_agent_config_agent_not_found(
-        self, agent_builder_service, mock_repository
-    ):
+    async def test_build_agent_config_agent_not_found(self, agent_builder_service, mock_repository):
         """Test building config when agent doesn't exist"""
         # Setup mocks
         mock_repository.get.return_value = None
@@ -165,14 +163,10 @@ class TestAgentBuilderService:
         expected = {"mcp_servers": [], "builtin_tools": [], "custom_tools": []}
         assert result == expected
 
-    async def test_build_tools_config_with_builtin_tools(
-        self, agent_builder_service, sample_agent
-    ):
+    async def test_build_tools_config_with_builtin_tools(self, agent_builder_service, sample_agent):
         """Test building tools config with builtin tools"""
         # Setup agent with builtin tools
-        sample_agent.tools_config = {
-            "builtin_tools": ["calculator", "weather", "web_search"]
-        }
+        sample_agent.tools_config = {"builtin_tools": ["calculator", "weather", "web_search"]}
 
         # Execute
         result = await agent_builder_service._build_tools_config(sample_agent)
@@ -237,9 +231,7 @@ class TestAgentBuilderService:
         mock_llm_service.get.return_value = sample_llm_instance
 
         # Execute
-        capabilities = await agent_builder_service.get_agent_capabilities(
-            sample_agent.id
-        )
+        capabilities = await agent_builder_service.get_agent_capabilities(sample_agent.id)
 
         # Verify
         assert capabilities["streaming"] is True
@@ -266,9 +258,7 @@ class TestAgentBuilderService:
         mock_llm_service.get.return_value = sample_llm_instance
 
         # Execute
-        capabilities = await agent_builder_service.get_agent_capabilities(
-            sample_agent.id
-        )
+        capabilities = await agent_builder_service.get_agent_capabilities(sample_agent.id)
 
         # Verify
         assert capabilities["streaming"] is True

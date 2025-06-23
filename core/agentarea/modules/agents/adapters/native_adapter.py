@@ -17,9 +17,7 @@ class NativeAdapter(AgentAdapter):
         super().__init__(agent_config)
         self.agent_instance = agent_config.get("instance")
 
-    async def send_task(
-        self, task: AgentTask, session_id: str | None = None
-    ) -> AgentTaskResponse:
+    async def send_task(self, task: AgentTask, session_id: str | None = None) -> AgentTaskResponse:
         """Send task to native agent."""
         # Convert task to chat message for backward compatibility
         chat_message = ChatMessage(content=task.content, metadata=task.metadata)

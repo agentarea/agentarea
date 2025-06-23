@@ -124,7 +124,7 @@ def main() -> None:
             continue
 
     if yaml_data is None:
-        print(f"❌ MCP providers YAML file not found in any of these locations:")
+        print("❌ MCP providers YAML file not found in any of these locations:")
         for path in yaml_paths:
             print(f"   - {path}")
         return

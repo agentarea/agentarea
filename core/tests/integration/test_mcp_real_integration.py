@@ -43,18 +43,14 @@ class MCPRealIntegrationTest:
             "model_id": "test-model",  # Placeholder model
         }
 
-        response = await self.client.post(
-            f"{self.api_base}/v1/agents/", json=agent_data
-        )
+        response = await self.client.post(f"{self.api_base}/v1/agents/", json=agent_data)
         if response.status_code in [200, 201]:
             agent = response.json()
             self.agent_id = agent["id"]
             print(f"✅ Agent created: {self.agent_id}")
             return True
         else:
-            print(
-                f"❌ Failed to create agent: {response.status_code} - {response.text}"
-            )
+            print(f"❌ Failed to create agent: {response.status_code} - {response.text}")
             return False
 
     async def deploy_mcp_server(
@@ -77,13 +73,9 @@ class MCPRealIntegrationTest:
         }
 
         # Create server
-        response = await self.client.post(
-            f"{self.api_base}/v1/mcp-servers/", json=server_data
-        )
+        response = await self.client.post(f"{self.api_base}/v1/mcp-servers/", json=server_data)
         if response.status_code not in [200, 201]:
-            print(
-                f"❌ Failed to create MCP server: {response.status_code} - {response.text}"
-            )
+            print(f"❌ Failed to create MCP server: {response.status_code} - {response.text}")
             return False
 
         server = response.json()
@@ -102,9 +94,7 @@ class MCPRealIntegrationTest:
             f"{self.api_base}/v1/mcp-server-instances/", json=instance_data
         )
         if response.status_code not in [200, 201]:
-            print(
-                f"❌ Failed to create MCP instance: {response.status_code} - {response.text}"
-            )
+            print(f"❌ Failed to create MCP instance: {response.status_code} - {response.text}")
             return False
 
         instance = response.json()
@@ -118,9 +108,7 @@ class MCPRealIntegrationTest:
 
         return True
 
-    async def execute_mcp_task(
-        self, task_description: str, expected_tools: list
-    ) -> bool:
+    async def execute_mcp_task(self, task_description: str, expected_tools: list) -> bool:
         """Execute a task that should use MCP tools."""
         task_data = {
             "description": task_description,
@@ -149,17 +137,13 @@ class MCPRealIntegrationTest:
             return False
 
         # Check agent
-        agent_response = await self.client.get(
-            f"{self.api_base}/v1/agents/{self.agent_id}"
-        )
+        agent_response = await self.client.get(f"{self.api_base}/v1/agents/{self.agent_id}")
         if agent_response.status_code != 200:
             print("❌ Agent not accessible")
             return False
 
         # Check MCP server
-        mcp_response = await self.client.get(
-            f"{self.api_base}/v1/mcp-servers/{self.mcp_server_id}"
-        )
+        mcp_response = await self.client.get(f"{self.api_base}/v1/mcp-servers/{self.mcp_server_id}")
         if mcp_response.status_code != 200:
             print("❌ MCP server not accessible")
             return False
@@ -260,9 +244,7 @@ CMD ["python", "weather_mcp_server.py"]
         ), "Failed to execute MCP task"
 
         # Step 4: Verify integration
-        assert await test.verify_mcp_integration(), (
-            "MCP integration verification failed"
-        )
+        assert await test.verify_mcp_integration(), "MCP integration verification failed"
 
         print("🎉 Weather MCP integration test passed!")
 
@@ -318,9 +300,7 @@ CMD ["uvicorn", "filesystem_mcp_server:app", "--host", "0.0.0.0", "--port", "300
             "description": "List files in a directory",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Directory path"}
-                },
+                "properties": {"path": {"type": "string", "description": "Directory path"}},
                 "required": ["path"],
             },
         },
@@ -348,9 +328,7 @@ CMD ["uvicorn", "filesystem_mcp_server:app", "--host", "0.0.0.0", "--port", "300
         ), "Failed to execute MCP task"
 
         # Step 4: Verify integration
-        assert await test.verify_mcp_integration(), (
-            "MCP integration verification failed"
-        )
+        assert await test.verify_mcp_integration(), "MCP integration verification failed"
 
         print("🎉 Filesystem MCP integration test passed!")
 
@@ -385,9 +363,7 @@ CMD ["npm", "start"]
             "description": "A custom MCP tool",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "input": {"type": "string", "description": "Input parameter"}
-                },
+                "properties": {"input": {"type": "string", "description": "Input parameter"}},
                 "required": ["input"],
             },
         }
@@ -415,9 +391,7 @@ CMD ["npm", "start"]
         ), "Failed to execute MCP task"
 
         # Step 4: Verify integration
-        assert await test.verify_mcp_integration(), (
-            "MCP integration verification failed"
-        )
+        assert await test.verify_mcp_integration(), "MCP integration verification failed"
 
         print("🎉 Custom MCP integration test passed!")
 

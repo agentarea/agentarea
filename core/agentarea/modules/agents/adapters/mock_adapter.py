@@ -20,9 +20,7 @@ class MockAdapter(AgentAdapter):
         self.agent_name = agent_config.get("name", "Mock Agent")
         self.agent_id = agent_config.get("id", "mock-agent")
 
-    async def send_task(
-        self, task: AgentTask, session_id: str | None = None
-    ) -> AgentTaskResponse:
+    async def send_task(self, task: AgentTask, session_id: str | None = None) -> AgentTaskResponse:
         """Simulate sending a task to an agent."""
         # Simulate processing delay
         await asyncio.sleep(0.1)
