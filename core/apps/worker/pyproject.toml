@@ -13,6 +13,7 @@ dependencies = [
     "agentarea-tasks",
     "temporalio>=1.0.0",
     "python-dotenv>=1.0.0",
+    "watchfiles>=0.21.0",
 ]
 
 [tool.uv.sources]
