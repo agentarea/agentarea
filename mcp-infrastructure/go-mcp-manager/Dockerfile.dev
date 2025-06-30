@@ -17,8 +17,14 @@ RUN apk add --no-cache \
     iptables \
     && rm -rf /var/cache/apk/*
 
-# Install Traefik
-RUN wget -O /tmp/traefik.tar.gz https://github.com/traefik/traefik/releases/download/v3.0.4/traefik_v3.0.4_linux_amd64.tar.gz \
+# Install Traefik with architecture detection
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+        "amd64") TRAEFIK_ARCH="amd64" ;; \
+        "arm64") TRAEFIK_ARCH="arm64" ;; \
+        *) TRAEFIK_ARCH="amd64" ;; \
+    esac \
+    && wget -O /tmp/traefik.tar.gz "https://github.com/traefik/traefik/releases/download/v3.0.4/traefik_v3.0.4_linux_${TRAEFIK_ARCH}.tar.gz" \
     && tar -xzf /tmp/traefik.tar.gz -C /usr/local/bin/ \
     && chmod +x /usr/local/bin/traefik \
     && rm /tmp/traefik.tar.gz
@@ -41,11 +47,6 @@ RUN adduser -D -u 1000 -g users -s /bin/sh podman-user \
 
 # Set working directory
 WORKDIR /app
-
-# Copy startup script for development
-COPY scripts/start.sh /app/start.sh
-COPY scripts/start-dev.sh /app/start-dev.sh
-RUN chmod +x /app/start.sh /app/start-dev.sh
 
 # Initialize Podman for the user (as podman-user)
 USER podman-user
@@ -83,8 +84,10 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/mcp-manager ./cmd/mcp-manager
+# Build the application for target architecture
+ARG TARGETARCH
+ARG TARGETOS
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o bin/mcp-manager ./cmd/mcp-manager
 
 # Production runtime stage
 FROM alpine:3.20 AS production
@@ -104,8 +107,14 @@ RUN apk add --no-cache \
     iptables \
     && rm -rf /var/cache/apk/*
 
-# Install Traefik
-RUN wget -O /tmp/traefik.tar.gz https://github.com/traefik/traefik/releases/download/v3.0.4/traefik_v3.0.4_linux_amd64.tar.gz \
+# Install Traefik with architecture detection
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+        "amd64") TRAEFIK_ARCH="amd64" ;; \
+        "arm64") TRAEFIK_ARCH="arm64" ;; \
+        *) TRAEFIK_ARCH="amd64" ;; \
+    esac \
+    && wget -O /tmp/traefik.tar.gz "https://github.com/traefik/traefik/releases/download/v3.0.4/traefik_v3.0.4_linux_${TRAEFIK_ARCH}.tar.gz" \
     && tar -xzf /tmp/traefik.tar.gz -C /usr/local/bin/ \
     && chmod +x /usr/local/bin/traefik \
     && rm /tmp/traefik.tar.gz
@@ -129,8 +138,8 @@ WORKDIR /app
 # Copy binary from builder stage
 COPY --from=builder /app/bin/mcp-manager /app/mcp-manager
 
-# Copy startup script
-COPY scripts/start.sh /app/start.sh
+# Copy startup script  
+COPY start-go.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Copy templates directory structure (will be mounted)

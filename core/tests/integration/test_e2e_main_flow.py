@@ -199,7 +199,7 @@ class TestE2EMainFlow:
             "description": "Qwen2.5 model via Ollama",
             "provider": "ollama",
             "model_type": "chat",
-            "endpoint_url": "http://localhost:11434",
+            "endpoint_url": "http://host.docker.internal:11434",
             "context_window": "32768",
             "is_public": True,
         }

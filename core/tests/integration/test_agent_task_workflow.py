@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
-from agentarea_api.workflows.agent_task_workflow import (
+from agentarea_tasks.workflows.agent_task_workflow import (
     AgentTaskWorkflow,
 )
 from temporalio import activity

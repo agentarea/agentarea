@@ -178,41 +178,35 @@ services:
       - mcp-network
     command: ["redis-server", "--save", "", "--appendonly", "no"]  # Disable persistence for dev
 
-  # MCP Infrastructure Services
-  # mcp-manager:
-  #   build:
-  #     context: mcp-infrastructure/go-mcp-manager
-  #     dockerfile: Dockerfile.dev
-  #     target: development
-  #   container_name: mcp-manager
-  #   restart: unless-stopped
-  #   privileged: true
-  #   ports:
-  #     - "7999:8000"  # MCP Manager API
-  #     - "81:80"      # Traefik HTTP (different port to avoid conflict with main app)
-  #     - "8443:443"   # Traefik HTTPS (different port to avoid conflict)
-  #     - "8081:8080"  # Traefik dashboard
-  #   expose:
-  #     - "8000"
-  #     - "80"
-  #     - "443"
-  #     - "8080"
-  #   tmpfs:
-  #     - /tmp
-  #     - /run
-  #   volumes:
-  #     - mcp_containers:/var/lib/containers/storage
-  #     - ./mcp-infrastructure/docker/templates:/app/templates:ro
-  #     - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
-  #     - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:rw
-  #     - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro  # Access to Infisical bootstrap token
-  #   networks:
-  #     - mcp-network
-  #   environment:
-  #     - LOG_LEVEL=INFO
-  #     - TRAEFIK_NETWORK=podman
-  #     - REDIS_URL=redis://redis:6379
+  mcp-manager:
+    build:
+      context: mcp-infrastructure/go-mcp-manager
+      dockerfile: Dockerfile.dev
+      target: development
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    container_name: mcp-manager
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "7999:8000"  # MCP Manager API
+    tmpfs:
+      - /tmp
+      - /run
+    volumes:
+      - mcp_containers:/var/lib/containers/storage
+      - ./mcp-infrastructure/docker/templates:/app/templates:ro
+      - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
+      - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro  # Access to Infisical bootstrap token
+    networks:
+      - mcp-network
+    environment:
+      - LOG_LEVEL=INFO
+      - TRAEFIK_NETWORK=podman
+      - REDIS_URL=redis://redis:6379
 
   # Temporal Infrastructure Services
   temporal:

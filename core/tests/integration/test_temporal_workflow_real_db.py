@@ -25,7 +25,7 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 
 # Import database and models for test setup
 from agentarea_api.api.deps.database import get_db_session
-from agentarea_api.workflows.agent_task_workflow import (
+from agentarea_tasks.workflows.agent_task_workflow import (
     AgentTaskWorkflow,
     execute_agent_activity,
     execute_agent_communication_activity,
@@ -210,6 +210,7 @@ class TestTemporalWorkflowRealDB:
             assert result["status"] == "failed"
             assert "Agent validation failed" in result.get("error", "")
 
+    @pytest.mark.asyncio
     async def test_real_activity_validate_agent_directly(self, test_agent_data: dict[str, Any]):
         """Test the validate_agent_activity directly with real database."""
 
@@ -230,6 +231,7 @@ class TestTemporalWorkflowRealDB:
             assert len(result["errors"]) > 0
             print(f"Validation errors: {result['errors']}")
 
+    @pytest.mark.asyncio
     async def test_real_activity_validate_agent_invalid_id(self):
         """Test validate_agent_activity with invalid agent ID."""
 
@@ -242,6 +244,7 @@ class TestTemporalWorkflowRealDB:
         assert len(result["errors"]) > 0
         assert result["agent_id"] == invalid_agent_id
 
+    @pytest.mark.asyncio
     async def test_real_activity_execute_agent_basic(self, test_agent_data: dict[str, Any]):
         """Test execute_agent_activity directly with real database."""
 
@@ -265,6 +268,7 @@ class TestTemporalWorkflowRealDB:
         assert isinstance(result["discovered_activities"], list)
         assert result["event_count"] >= 0
 
+    @pytest.mark.asyncio
     async def test_database_connection_in_activities(self):
         """Test that database connections work properly in activities."""
 

@@ -159,6 +159,7 @@ class MCPManagerSettings(BaseSettings):
         env_prefix = "MCP_MANAGER_"
 
 
+
 # ============================================================================
 # Workflow Execution Settings
 # ============================================================================

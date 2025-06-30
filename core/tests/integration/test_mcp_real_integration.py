@@ -85,9 +85,15 @@ class MCPRealIntegrationTest:
         # Create and deploy instance
         instance_data = {
             "name": f"{server_name}-instance",
-            "server_id": self.mcp_server_id,
-            "endpoint_url": mcp_endpoint_url,
-            "config": {"env": {"PORT": "3000"}},
+            "server_spec_id": self.mcp_server_id,
+            "json_spec": {
+                "type": "docker",
+                "image": f"{server_name}:latest",
+                "port": 3000,
+                "endpoint_url": mcp_endpoint_url,
+                "environment": {"PORT": "3000"},
+                "resources": {"memory_limit": "256m", "cpu_limit": "0.5"}
+            },
         }
 
         response = await self.client.post(

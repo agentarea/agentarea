@@ -24,8 +24,10 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea_tasks.domain.models import Task, TaskStatus
+from agentarea_tasks.domain.models import Task, TaskType
+from agentarea_common.utils.types import TaskStatus, TaskState
 from agentarea_tasks.infrastructure.repository import SQLAlchemyTaskRepository
+from agentarea_tasks.infrastructure.models import Task as TaskORM
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -197,12 +199,14 @@ class ModelFactory:
         defaults = {
             "id": str(uuid4()),
             "session_id": f"session-{uuid4().hex[:8]}",
-            "agent_id": agent_id,
-            "status": TaskStatus.CREATED,
+            "title": "Test Task",
             "description": "Test task",
+            "task_type": TaskType.ANALYSIS,
+            "assigned_agent_id": agent_id,
+            "status": TaskStatus(state=TaskState.SUBMITTED),
             "parameters": {},
             "result": None,
-            "error": None,
+            "error_message": None,
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
