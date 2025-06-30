@@ -2,8 +2,7 @@ version: "3.8"
 services:
   app:
     container_name: agentarea-backend
-    build:
-      context: core
+    image: agentarea/backend:${VERSION}
     ports:
       - "8000:8000"
     restart: always
@@ -36,14 +35,22 @@ services:
         condition: service_completed_successfully
       bootstrap:
         condition: service_completed_successfully
-    command: ["python", "-m", "cli", "serve", "--reload", "--log-level=${LOG_LEVEL:-info}", "--workers=${WORKERS:-1}"]
+    command:
+      [
+        "python",
+        "-m",
+        "cli",
+        "serve",
+        "--reload",
+        "--log-level=${LOG_LEVEL:-info}",
+        "--workers=${WORKERS:-1}",
+      ]
 
   app_migrations:
-    build:
-      context: core
+    image: agentarea:${VERSION}
     environment:
-    ## Have to add it for now
-          # S3 settings
+      ## Have to add it for now
+      # S3 settings
       - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
       - AWS_REGION=${MINIO_REGION}
@@ -154,11 +161,10 @@ services:
 
 volumes:
   postgres_data:
-  minio_data: 
+  minio_data:
   redis_data:
   infisical_bootstrap:
 
 networks:
   infisical:
     driver: bridge
-

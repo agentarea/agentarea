@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-cli"
+version = "0.1.0"
+description = "AgentArea Management CLI"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.0.0",
+    "httpx>=0.24.0",
+]
+
+[project.scripts]
+agentarea = "agentarea_cli.main:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_cli"] 

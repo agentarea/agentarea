@@ -1,57 +1,59 @@
 version: "3.8"
 services:
-  # app:
-  #   container_name: agentarea-backend
-  #   build:
-  #     context: core
-  #     dockerfile: apps/api/Dockerfile
-  #   ports:
-  #     - "8000:8000"
-  #   restart: always
-  #   environment:
-  #     # S3 settings
-  #     - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
-  #     - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
-  #     - AWS_REGION=${MINIO_REGION}
-  #     - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-  #     - AWS_ENDPOINT_URL=http://minio:9000
-  #     # Database settings
-  #     - POSTGRES_USER=${POSTGRES_USER}
-  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-  #     - POSTGRES_DB=${POSTGRES_DB}
-  #     # MCP settings
-  #     - MCP_MANAGER_URL=http://mcp-manager:8000
-  #     - REDIS_URL=redis://redis:6379
-  #     - MCP_CLIENT_TIMEOUT=30
-  #     # Server settings
-  #     - PORT=${PORT:-8000}
-  #     - LOG_LEVEL=${LOG_LEVEL:-info}
-  #     - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
-  #     - RELOAD=${RELOAD:-true}
-  #     - WORKERS=${WORKERS:-1}
-  #   volumes:
-  #     - ./core/apps/api/agentarea_api:/app/apps/api/agentarea_api
-  #     - ./core/libs:/app/libs
-  #     - ./core/apps/api/alembic:/app/apps/api/alembic
-  #     - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}:/app/bootstrap
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #     minio:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_started
-  #     app_migrations:
-  #       condition: service_completed_successfully
-  #     bootstrap:
-  #       condition: service_completed_successfully
-  #     # mcp-manager:
-  #     #   condition: service_healthy
-  #   networks:
-  #     - default
-  #     - mcp-network
-  #     - temporal-network
-  #   command: ["python", "-m", "cli", "serve", "--reload", "--log-level=info"]
+  app:
+    container_name: agentarea-backend
+    build:
+      context: core
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "8000:8000"
+    restart: always
+    environment:
+      # S3 settings
+      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
+      - AWS_REGION=${MINIO_REGION}
+      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
+      - AWS_ENDPOINT_URL=http://minio:9000
+      # Database settings
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      # MCP settings
+      - MCP_MANAGER_URL=http://mcp-manager:8000
+      - REDIS_URL=redis://redis:6379
+      - MCP_CLIENT_TIMEOUT=30
+      # Server settings
+      - PORT=${PORT:-8000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
+      - RELOAD=${RELOAD:-true}
+      - WORKERS=${WORKERS:-1}
+    volumes:
+      - ./core/apps/api/agentarea_api:/app/apps/api/agentarea_api
+      - ./core/libs:/app/libs
+      - ./core/apps/api/alembic:/app/apps/api/alembic
+      - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}:/app/bootstrap
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      app_migrations:
+        condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
+      # mcp-manager:
+      #   condition: service_healthy
+    networks:
+      - default
+      - mcp-network
+      - temporal-network
+    command: ["python", "-m", "agentarea_api.cli", "serve", "--reload", "--log-level=info"]
 
   app_migrations:
     build:
@@ -74,7 +76,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["python", "-m", "cli", "migrate"]
+    command: ["python", "-m", "agentarea_api.cli", "migrate"]
 
   bootstrap:
     build:
@@ -231,6 +233,7 @@ services:
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CLI_ADDRESS=temporal:7233
+      - BIND_ON_IP=0.0.0.0
     image: temporalio/auto-setup:1.27
     networks:
       - temporal-network
@@ -241,12 +244,12 @@ services:
       kompose.volume.type: configMap
     volumes:
       - ./core/temporal-config:/etc/temporal/config/dynamicconfig
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:7233/"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 5
-    #   start_period: 60s
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
   temporal-admin-tools:
     image: temporalio/admin-tools:1.27
     container_name: agentarea-temporal-admin-tools
@@ -261,9 +264,9 @@ services:
 
   temporal-ui:
     container_name: temporal-ui
-    # depends_on:
-    #   temporal:
-    #     condition: service_healthy
+    depends_on:
+      temporal:
+        condition: service_healthy
     environment:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CORS_ORIGINS=http://localhost:3000
@@ -285,7 +288,7 @@ services:
       redis:
         condition: service_started
       temporal:
-        condition: service_started
+        condition: service_healthy
     environment:
       # Database
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
@@ -313,16 +316,14 @@ services:
       # Development
       - DEBUG=true
       - ENVIRONMENT=development
-      - PYTHONPATH=/app
     networks:
       - temporal-network
       - default
     volumes:
       - ./core/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
       - ./core/libs:/app/libs
-      - ./core/watch_worker.py:/app/watch_worker.py
     restart: unless-stopped
-    command: ["python", "/app/watch_worker.py"]
+    command: ["python", "-m", "agentarea_worker.cli", "dev"]
 
 volumes:
   postgres_data:

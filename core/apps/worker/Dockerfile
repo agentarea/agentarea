@@ -8,11 +8,12 @@ RUN pip install uv
 
 # Copy workspace configuration and source
 COPY pyproject.toml uv.lock ./
+COPY README.md ./
 COPY libs/ ./libs/
 COPY apps/ ./apps/
 
-# Use uv to install dependencies  
-RUN uv sync --frozen --no-install-project
+# Use uv to install dependencies and project packages
+RUN uv sync --frozen
 
 # Runtime stage
 FROM python:3.12-slim
@@ -40,7 +41,6 @@ COPY pyproject.toml ./
 RUN chown -R appuser:appuser /app
 
 # Set environment variables
-ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
@@ -48,7 +48,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Switch to non-root user
 USER appuser
 
-# Set working directory to worker app
-WORKDIR /app/apps/worker
+# Stay in root directory
+WORKDIR /app
 
-CMD ["python", "-m", "agentarea_worker.main"] 
+CMD ["python", "-m", "agentarea_worker.cli", "start"] 

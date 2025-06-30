@@ -1,6 +1,6 @@
-# AgentMesh
+# AgentArea
 
-An open-core platform for building, testing, and running automation agents. AgentMesh provides a simple way to create and experiment with AI agents locally, while offering enterprise features for production deployments.
+An open-core platform for building, testing, and running automation agents. AgentArea provides a simple way to create and experiment with AI agents locally, while offering enterprise features for production deployments.
 
 ## 🚀 Quick Start
 
@@ -8,8 +8,8 @@ Run your first agent in minutes:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/agentmesh.git
-cd agentmesh
+git clone https://github.com/your-org/agentarea.git
+cd agentarea
 
 # Set up your environment
 cp .env.example .env
@@ -18,6 +18,12 @@ docker-compose up
 
 ## ✨ Features
 
+- **Universal Tool Integration** via Model Context Protocol (MCP)
+- **Agent-to-Agent Communication** for collaborative workflows
+- **Enterprise-Grade Security** with role-based access control
+- **Visual Workflow Builder** for complex automation
+- **Real-time Monitoring** and analytics dashboard
+- **Marketplace Integration** for sharing and discovering agents
 
 ## 📖 Usage
 
@@ -53,17 +59,27 @@ See `tests/integration/README_MCP.md` for detailed testing documentation.
 
 ## 📚 Documentation
 
+### Quick Start
+- [Project Overview](docs/project-overview.md) - Vision, features, and business model
+- [Current Tasks](docs/current-tasks.md) - Development status and active tasks
+- [Quick Reference Guide](docs/quick-reference.md) - Commands, URLs, and troubleshooting
+
 ### Architecture & Design
 - [Architecture Decisions (ADR)](docs/architecture-decisions.md) - Key architectural decisions and rationale
-- [Quick Reference Guide](docs/quick-reference.md) - Commands, URLs, and troubleshooting
 - [MCP Architecture Overview](docs/mcp_architecture.md) - System architecture and components
 - [Architecture Insights](docs/architecture_insights.md) - Design patterns and insights
+- [Agent-to-Agent Communication](docs/agent_to_agent_communication.md) - A2A protocol design
+- [Dependency Injection Patterns](docs/dependency_injection_patterns.md) - DI patterns and best practices
+
+### Implementation
+- [MCP Implementation Plan](docs/mcp-implementation-plan.md) - Technical implementation roadmap
+- [Task Assignment](docs/task_assignment.md) - Task distribution and management
 
 ### Development
 - [E2E Testing](test_mcp_flow.py) - Comprehensive end-to-end test suite
 - [MCP Integration Testing](tests/integration/README_MCP.md) - MCP server testing framework
 
-For more detailed information, please refer to the [full documentation](docs/index.md).
+For more detailed information, please refer to the [documentation index](docs/README.md).
 
 ## 🤝 Contributing
 
@@ -71,9 +87,9 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE.md).
 
 ## 💬 Community & Support
 
-*   [Join our Discord](link-to-your-discord)
-*   [Report an issue](link-to-your-issue-tracker)
+- [Report an issue](https://github.com/your-org/agentarea/issues)
+- [Discussions](https://github.com/your-org/agentarea/discussions)

@@ -8,11 +8,12 @@ RUN pip install uv
 
 # Copy workspace configuration and source
 COPY pyproject.toml uv.lock ./
+COPY README.md ./
 COPY libs/ ./libs/
 COPY apps/ ./apps/
 
-# Use uv to install dependencies  
-RUN uv sync --frozen --no-install-project
+# Use uv to install dependencies and project packages
+RUN uv sync --frozen
 
 # Runtime stage
 FROM python:3.12-slim
@@ -44,7 +45,6 @@ COPY pyproject.toml ./
 RUN chown -R appuser:appuser /app
 
 # Set environment variables
-ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
@@ -61,4 +61,4 @@ EXPOSE 8000
 # Stay in root directory where cli.py is located
 WORKDIR /app
 
-CMD ["python", "-m", "cli", "serve"] 
+CMD ["python", "-m", "agentarea_api.cli", "serve"] 

@@ -21,6 +21,7 @@ dependencies = [
 members = [
     "apps/api",
     "apps/worker", 
+    "apps/cli",
     "libs/common",
     "libs/agents",
     "libs/chat",
@@ -40,6 +41,7 @@ agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
+agentarea-cli = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -122,8 +124,7 @@ skip-magic-trailing-comma = false
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends", "fastapi.Query", "fastapi.params.Query"]
 
-[tool.hatch.build.targets.wheel]
-packages = ["agentarea"]
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -246,3 +247,18 @@ reportUnusedCallResult = false
 reportUnusedExpression = "warning"
 reportUnnecessaryTypeIgnoreComment = "warning"
 reportMatchNotExhaustive = "warning"
+
+# Hatch build configuration for workspace root
+[tool.hatch.build.targets.wheel]
+packages = ["cli.py", "main.py"]
+include = [
+    "cli.py",
+    "main.py", 
+    "alembic.ini"
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build]
+exclude = ["README.md"]

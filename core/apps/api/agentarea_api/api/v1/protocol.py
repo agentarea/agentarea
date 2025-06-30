@@ -1,11 +1,14 @@
 """Agent Protocol API Endpoints.
 
 This module provides A2A protocol-compliant JSON-RPC endpoints for agent communication.
+Also includes AG-UI endpoints for frontend integration with CopilotKit.
 Focused on A2A protocol compliance - use /v1/agents/{agent_id}/tasks/ for REST task operations.
 """
 
+import asyncio
+import json
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 from uuid import UUID, uuid4
 
 from agentarea_agents.application.agent_service import AgentService
@@ -39,10 +42,56 @@ from agentarea_common.utils.types import (
 from agentarea_tasks.in_memory_task_manager import InMemoryTaskManager
 from agentarea_tasks.task_manager import BaseTaskManager
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/protocol", tags=["protocol"])
+
+
+# AG-UI Event Types
+class AGUIEvent(BaseModel):
+    """Base AG-UI event structure."""
+    type: str
+    timestamp: str | None = None
+
+
+class LifecycleEvent(AGUIEvent):
+    """AG-UI lifecycle event."""
+    type: str = "lifecycle"
+    status: str  # started, completed, failed
+
+
+class TextDeltaEvent(AGUIEvent):
+    """AG-UI text streaming event."""
+    type: str = "text-delta"
+    value: str
+
+
+class ToolCallEvent(AGUIEvent):
+    """AG-UI tool call event."""
+    type: str = "tool-call"
+    tool: str
+    input: dict[str, Any]
+
+
+class StateUpdateEvent(AGUIEvent):
+    """AG-UI state update event."""
+    type: str = "state-update"
+    snapshot: dict[str, Any] | None = None
+    diff: dict[str, Any] | None = None
+
+
+class AGUIRequest(BaseModel):
+    """AG-UI request format."""
+    thread_id: str
+    run_id: str | None = None
+    messages: list[dict[str, Any]]
+    tools: list[dict[str, Any]] = []
+    context: list[dict[str, Any]] = []
+    forwarded_props: dict[str, Any] = {}
+    state: dict[str, Any] = {}
 
 
 # Dependency injection
@@ -273,8 +322,95 @@ async def get_agent_card(
     return agent_card
 
 
+# AG-UI Endpoint for CopilotKit Integration
+@router.post("/ag-ui")
+async def handle_ag_ui_request(
+    request: AGUIRequest, 
+    task_manager: BaseTaskManager = Depends(get_task_manager)
+) -> StreamingResponse:
+    """AG-UI endpoint for CopilotKit integration.
+    
+    Converts A2A protocol events to AG-UI events for frontend consumption.
+    """
+    
+    async def convert_a2a_to_agui_stream() -> AsyncGenerator[str, None]:
+        """Convert A2A task events to AG-UI events."""
+        try:
+            # Send lifecycle start event
+            yield f"data: {json.dumps(LifecycleEvent(status='started').model_dump())}\n\n"
+            
+            # Extract user message from AG-UI request
+            if request.messages:
+                last_message = request.messages[-1]
+                user_text = last_message.get('content', '')
+                
+                # Create A2A message
+                message = Message(
+                    role="user",
+                    parts=[TextPart(text=user_text)]
+                )
+                
+                # Create A2A task parameters
+                task_params = TaskSendParams(
+                    id=str(uuid4()),
+                    sessionId=request.thread_id,
+                    message=message,
+                    metadata={
+                        "ag_ui_request": True,
+                        "run_id": request.run_id,
+                        "forwarded_props": request.forwarded_props
+                    }
+                )
+                
+                # Send task to A2A backend
+                send_request = SendTaskRequest(id=str(uuid4()), params=task_params)
+                a2a_response = await task_manager.on_send_task(send_request)
+                
+                if a2a_response.result and a2a_response.result.artifacts:
+                    # Convert A2A artifacts to AG-UI text deltas
+                    for artifact in a2a_response.result.artifacts:
+                        if hasattr(artifact, 'parts'):
+                            for part in artifact.parts:
+                                if hasattr(part, 'text') and part.text:
+                                    # Stream text as deltas
+                                    words = part.text.split(' ')
+                                    for word in words:
+                                        event = TextDeltaEvent(value=word + ' ')
+                                        yield f"data: {json.dumps(event.model_dump())}\n\n"
+                                        await asyncio.sleep(0.01)  # Small delay for streaming effect
+                
+                # Send state update if needed
+                if request.state:
+                    state_event = StateUpdateEvent(
+                        snapshot={
+                            **request.state,
+                            "last_task_id": task_params.id,
+                            "session_id": request.thread_id
+                        }
+                    )
+                    yield f"data: {json.dumps(state_event.model_dump())}\n\n"
+            
+            # Send lifecycle completion event
+            yield f"data: {json.dumps(LifecycleEvent(status='completed').model_dump())}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Error in AG-UI stream: {e}", exc_info=True)
+            error_event = LifecycleEvent(status='failed')
+            yield f"data: {json.dumps(error_event.model_dump())}\n\n"
+    
+    return StreamingResponse(
+        convert_a2a_to_agui_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
+
+
 # Health check endpoint
 @router.get("/health")
 async def health_check():
     """Health check for the protocol endpoint."""
-    return {"status": "healthy", "protocol": "A2A", "version": "1.0.0"}
+    return {"status": "healthy", "protocol": "A2A + AG-UI", "version": "1.0.0"}
