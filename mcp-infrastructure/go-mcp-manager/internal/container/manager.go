@@ -7,9 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -23,7 +21,6 @@ import (
 type Manager struct {
 	config         *config.Config
 	containers     map[string]*models.Container
-	templates      map[string]*models.Template
 	mutex          sync.RWMutex
 	logger         *slog.Logger
 	traefikManager *TraefikManager
@@ -34,7 +31,6 @@ func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	return &Manager{
 		config:         cfg,
 		containers:     make(map[string]*models.Container),
-		templates:      make(map[string]*models.Template),
 		logger:         logger,
 		traefikManager: NewTraefikManager(logger),
 	}
@@ -42,19 +38,16 @@ func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 
 // Initialize initializes the container manager
 func (m *Manager) Initialize(ctx context.Context) error {
-	// Load templates
-	if err := m.loadTemplates(); err != nil {
-		return fmt.Errorf("failed to load templates: %w", err)
-	}
+	m.logger.Info("Initializing container manager")
 
 	// Discover existing containers
 	if err := m.discoverContainers(ctx); err != nil {
-		return fmt.Errorf("failed to discover containers: %w", err)
+		m.logger.Error("Failed to discover existing containers", slog.String("error", err.Error()))
+		return err
 	}
 
-	m.logger.Info("Container manager initialized",
-		slog.Int("templates", len(m.templates)),
-		slog.Int("containers", len(m.containers)))
+	m.logger.Info("Container manager initialized successfully",
+		slog.Int("existing_containers", len(m.containers)))
 
 	return nil
 }
@@ -171,6 +164,74 @@ func (m *Manager) ListContainers() []models.Container {
 	return containers
 }
 
+// GetContainerStatus gets the real-time status of a container
+func (m *Manager) GetContainerStatus(ctx context.Context, serviceName string) (models.ContainerStatus, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	containerName := m.config.GetContainerName(serviceName)
+	container, exists := m.containers[containerName]
+	if !exists {
+		return models.StatusError, fmt.Errorf("container %s not found", containerName)
+	}
+
+	// Get real-time status from podman
+	cmd := exec.CommandContext(ctx, "podman", "inspect", container.ID, "--format", "{{.State.Status}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return models.StatusError, fmt.Errorf("failed to get container status: %w", err)
+	}
+
+	podmanStatus := strings.TrimSpace(string(output))
+	status := m.mapPodmanStatus(podmanStatus)
+
+	// Update cached status
+	m.mutex.RUnlock()
+	m.mutex.Lock()
+	container.Status = status
+	m.mutex.Unlock()
+	m.mutex.RLock()
+
+	return status, nil
+}
+
+// PerformHealthCheck performs an HTTP health check on a container
+func (m *Manager) PerformHealthCheck(ctx context.Context, serviceName string) (map[string]interface{}, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	containerName := m.config.GetContainerName(serviceName)
+	_, exists := m.containers[containerName]
+	if !exists {
+		return nil, fmt.Errorf("container %s not found", containerName)
+	}
+
+	// First check if container is running
+	status, err := m.GetContainerStatus(ctx, serviceName)
+	if err != nil {
+		return nil, err
+	}
+
+	result := map[string]interface{}{
+		"container_status": string(status),
+		"timestamp":        time.Now(),
+		"service_name":     serviceName,
+	}
+
+	if status != models.StatusRunning {
+		result["healthy"] = false
+		result["reason"] = "container not running"
+		return result, nil
+	}
+
+	// TODO: Perform actual HTTP health check
+	// For now, just return that container is running
+	result["healthy"] = true
+	result["reason"] = "container is running"
+
+	return result, nil
+}
+
 // DeleteContainer stops and removes a container
 func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error {
 	m.mutex.Lock()
@@ -235,73 +296,6 @@ func (m *Manager) GetRunningCount() int {
 		}
 	}
 	return count
-}
-
-// ListTemplates returns all available templates
-func (m *Manager) ListTemplates() []models.Template {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
-
-	templates := make([]models.Template, 0, len(m.templates))
-	for _, template := range m.templates {
-		templates = append(templates, *template)
-	}
-
-	return templates
-}
-
-// loadTemplates loads container templates from the templates directory
-func (m *Manager) loadTemplates() error {
-	templatesDir := "./templates" // Default templates directory
-	if _, err := os.Stat(templatesDir); os.IsNotExist(err) {
-		m.logger.Warn("Templates directory does not exist", slog.String("dir", templatesDir))
-		return nil
-	}
-
-	entries, err := os.ReadDir(templatesDir)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-
-		templatePath := filepath.Join(templatesDir, entry.Name())
-		template, err := m.loadTemplate(templatePath)
-		if err != nil {
-			m.logger.Error("Failed to load template",
-				slog.String("file", templatePath),
-				slog.String("error", err.Error()))
-			continue
-		}
-
-		templateName := strings.TrimSuffix(entry.Name(), ".json")
-		template.Name = templateName
-		m.templates[templateName] = template
-
-		m.logger.Debug("Loaded template",
-			slog.String("name", templateName),
-			slog.String("image", template.Image))
-	}
-
-	return nil
-}
-
-// loadTemplate loads a single template from a JSON file
-func (m *Manager) loadTemplate(path string) (*models.Template, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var template models.Template
-	if err := json.Unmarshal(data, &template); err != nil {
-		return nil, err
-	}
-
-	return &template, nil
 }
 
 // discoverContainers discovers existing containers managed by this service
@@ -581,8 +575,8 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Image:       image,
 		Status:      models.StatusStarting,
 		Port:        containerPort,
-		URL:         fmt.Sprintf("http://localhost:81/mcp/%s", slug), // Use slug-based routing
-		Host:        fmt.Sprintf("localhost:81"),
+		URL:         fmt.Sprintf("%s/mcp/%s", m.config.Traefik.ProxyHost, slug), // External access via unified endpoint
+		Host:        m.config.Traefik.ProxyHost,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		Labels:      make(map[string]string), // No labels needed for Traefik

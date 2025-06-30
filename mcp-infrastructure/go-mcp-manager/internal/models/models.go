@@ -33,20 +33,6 @@ type Container struct {
 	Command     []string          `json:"command,omitempty"`
 }
 
-// Template represents a container template
-type Template struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Image       string            `json:"image"`
-	Port        int               `json:"port"`
-	Environment map[string]string `json:"environment,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Command     []string          `json:"command,omitempty"`
-	Volumes     []VolumeMount     `json:"volumes,omitempty"`
-	MemoryLimit string            `json:"memory_limit,omitempty"`
-	CPULimit    string            `json:"cpu_limit,omitempty"`
-}
-
 // VolumeMount represents a volume mount
 type VolumeMount struct {
 	Source      string `json:"source"`
@@ -80,12 +66,6 @@ type HealthResponse struct {
 type ListContainersResponse struct {
 	Containers []Container `json:"containers"`
 	Total      int         `json:"total"`
-}
-
-// ListTemplatesResponse represents the response for listing templates
-type ListTemplatesResponse struct {
-	Templates []Template `json:"templates"`
-	Total     int        `json:"total"`
 }
 
 // ErrorResponse represents an error response

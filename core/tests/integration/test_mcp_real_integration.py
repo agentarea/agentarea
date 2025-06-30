@@ -9,6 +9,7 @@ Tests the complete workflow with a real MCP server:
 """
 
 import asyncio
+from typing import Optional
 
 import httpx
 import pytest
@@ -36,11 +37,22 @@ class MCPRealIntegrationTest:
 
     async def create_test_agent(self) -> bool:
         """Create a test agent for MCP integration."""
+        # Create or get Ollama model and instance
+        model_id = await self._get_or_create_model()
+        if not model_id:
+            print("❌ Failed to get or create model")
+            return False
+
+        instance_id = await self._create_model_instance(model_id)
+        if not instance_id:
+            print("❌ Failed to create model instance")
+            return False
+
         agent_data = {
             "name": "MCP Test Agent",
             "description": "Agent for testing real MCP integration",
             "instruction": "You are a helpful assistant that uses MCP tools to help users.",
-            "model_id": "test-model",  # Placeholder model
+            "model_id": instance_id,
         }
 
         response = await self.client.post(f"{self.api_base}/v1/agents/", json=agent_data)
@@ -167,6 +179,55 @@ class MCPRealIntegrationTest:
         print(f"   Instance status: {instance['status']}")
 
         return True
+
+    async def _get_or_create_model(self) -> Optional[str]:
+        """Get existing or create new Ollama model."""
+        # Try to find existing model
+        response = await self.client.get(f"{self.api_base}/v1/llm-models/")
+        if response.status_code == 200:
+            models = response.json()
+            for model in models:
+                if "ollama" in str(model.get("provider", "")).lower():
+                    return str(model.get("id"))
+
+        # Create new model
+        model_data = {
+            "name": "qwen2.5:latest",
+            "description": "Qwen2.5 model via Ollama",
+            "provider": "ollama",
+            "model_type": "chat",
+            "endpoint_url": "http://host.docker.internal:11434",
+            "context_window": "32768",
+            "is_public": True,
+        }
+
+        response = await self.client.post(f"{self.api_base}/v1/llm-models/", json=model_data)
+        if response.status_code in [200, 201]:
+            model = response.json()
+            return str(model.get("id"))
+        else:
+            print(f"❌ Failed to create model: {response.status_code} - {response.text}")
+            return None
+
+    async def _create_model_instance(self, model_id: str) -> Optional[str]:
+        """Create model instance."""
+        import uuid
+        
+        instance_data = {
+            "model_id": model_id,
+            "api_key": "not-needed-for-ollama",
+            "name": f"test-instance-{uuid.uuid4().hex[:8]}",
+            "description": "Test instance for MCP testing",
+            "is_public": True,
+        }
+
+        response = await self.client.post(f"{self.api_base}/v1/llm-models/instances/", json=instance_data)
+        if response.status_code in [200, 201]:
+            instance = response.json()
+            return str(instance.get("id"))
+        else:
+            print(f"❌ Failed to create instance: {response.status_code} - {response.text}")
+            return None
 
 
 @pytest.mark.asyncio
@@ -348,18 +409,13 @@ async def test_custom_mcp_integration():
 
     # This can be customized for specific MCP servers
     custom_dockerfile = """
-FROM node:18-alpine
+FROM nginx:alpine
 
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
+COPY nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["nginx", "-g", "daemon off;"]
 """
 
     # Custom tools - can be modified based on actual MCP server
@@ -384,9 +440,9 @@ CMD ["npm", "start"]
 
         # Step 2: Deploy custom MCP server
         assert await test.deploy_mcp_server(
-            server_name="custom-mcp-service",
+            server_name="nginx-mcp-service",  # Use existing image
             dockerfile_content=custom_dockerfile,
-            mcp_endpoint_url="http://custom-mcp:3000",  # This can be customized
+            mcp_endpoint_url="http://nginx-mcp:3000",  # This can be customized
             tools_metadata=tools_metadata,
         ), "Failed to deploy MCP server"
 

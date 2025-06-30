@@ -142,8 +142,7 @@ COPY --from=builder /app/bin/mcp-manager /app/mcp-manager
 COPY start-go.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Copy templates directory structure (will be mounted)
-RUN mkdir -p /app/templates
+
 
 # Create Traefik configuration directory
 RUN mkdir -p /etc/traefik /var/lib/traefik /var/log/traefik \

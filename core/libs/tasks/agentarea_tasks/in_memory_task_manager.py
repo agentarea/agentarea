@@ -65,7 +65,7 @@ class InMemoryTaskManager(BaseTaskManager):
             if task is None:
                 return GetTaskResponse(id=request.id, error=TaskNotFoundError())
 
-            task_result = self.append_task_history(task, task_query_params.historyLength)
+            task_result = self.append_task_history(task, task_query_params.history_length)
 
         return GetTaskResponse(id=request.id, result=task_result)
 
@@ -183,7 +183,7 @@ class InMemoryTaskManager(BaseTaskManager):
         try:
             await self.set_push_notification_info(
                 task_notification_params.id,
-                task_notification_params.pushNotificationConfig,
+                task_notification_params.push_notification_config,
             )
         except Exception as e:
             logger.error(f"Error while setting push notification info: {e}")
@@ -216,7 +216,7 @@ class InMemoryTaskManager(BaseTaskManager):
         return GetTaskPushNotificationResponse(
             id=request.id,
             result=TaskPushNotificationConfig(
-                id=task_params.id, pushNotificationConfig=notification_info
+                id=task_params.id, push_notification_config=notification_info
             ),
         )
 
@@ -227,7 +227,7 @@ class InMemoryTaskManager(BaseTaskManager):
             if task is None:
                 task = Task(
                     id=task_send_params.id,
-                    sessionId=task_send_params.sessionId,
+                    session_id=task_send_params.session_id,
                     messages=[task_send_params.message],
                     status=TaskStatus(state=TaskState.SUBMITTED),
                     history=[task_send_params.message],

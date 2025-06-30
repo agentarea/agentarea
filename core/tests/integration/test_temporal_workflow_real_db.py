@@ -22,6 +22,7 @@ import pytest
 import pytest_asyncio
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.repository import AgentRepository
+from sqlalchemy import select
 
 # Import database and models for test setup
 from agentarea_api.api.deps.database import get_db_session
@@ -83,14 +84,32 @@ class TestTemporalWorkflowRealDB:
             llm_instance_repo = LLMModelInstanceRepository(db_session)
             agent_repo = AgentRepository(db_session)
 
+            # First, create or get an LLM provider
+            from agentarea_llm.domain.models import LLMProvider
+            
+            # Try to get existing ollama provider or create one
+            provider_result = await db_session.execute(
+                select(LLMProvider).where(LLMProvider.name == "ollama")
+            )
+            ollama_provider = provider_result.scalar_one_or_none()
+            
+            if not ollama_provider:
+                ollama_provider = LLMProvider(
+                    name="ollama",
+                    description="Ollama provider for testing",
+                    is_builtin=True,
+                )
+                db_session.add(ollama_provider)
+                await db_session.flush()  # Flush to get the ID
+
             # Create a test LLM model
             llm_model = LLMModel(
                 name="test-model-workflow",
                 description="Test model for workflow testing",
-                provider="ollama",
+                provider_id=ollama_provider.id,
                 model_type="chat",
                 endpoint_url="http://localhost:11434",
-                context_window=4096,
+                context_window="4096",
                 is_public=True,
             )
             await llm_model_repo.create(llm_model)
@@ -112,7 +131,7 @@ class TestTemporalWorkflowRealDB:
                 name="test-agent-workflow",
                 description="Test agent for workflow testing",
                 instruction="You are a test agent for workflow integration testing.",
-                model_id=llm_instance.id,
+                model_id=str(llm_instance.id),
                 planning=False,
             )
             await agent_repo.create(agent)
@@ -210,7 +229,6 @@ class TestTemporalWorkflowRealDB:
             assert result["status"] == "failed"
             assert "Agent validation failed" in result.get("error", "")
 
-    @pytest.mark.asyncio
     async def test_real_activity_validate_agent_directly(self, test_agent_data: dict[str, Any]):
         """Test the validate_agent_activity directly with real database."""
 
@@ -231,7 +249,6 @@ class TestTemporalWorkflowRealDB:
             assert len(result["errors"]) > 0
             print(f"Validation errors: {result['errors']}")
 
-    @pytest.mark.asyncio
     async def test_real_activity_validate_agent_invalid_id(self):
         """Test validate_agent_activity with invalid agent ID."""
 
@@ -244,7 +261,6 @@ class TestTemporalWorkflowRealDB:
         assert len(result["errors"]) > 0
         assert result["agent_id"] == invalid_agent_id
 
-    @pytest.mark.asyncio
     async def test_real_activity_execute_agent_basic(self, test_agent_data: dict[str, Any]):
         """Test execute_agent_activity directly with real database."""
 
@@ -268,7 +284,6 @@ class TestTemporalWorkflowRealDB:
         assert isinstance(result["discovered_activities"], list)
         assert result["event_count"] >= 0
 
-    @pytest.mark.asyncio
     async def test_database_connection_in_activities(self):
         """Test that database connections work properly in activities."""
 

@@ -11,6 +11,7 @@ members = [
     "agentarea-agents",
     "agentarea-api",
     "agentarea-chat",
+    "agentarea-cli",
     "agentarea-common",
     "agentarea-llm",
     "agentarea-mcp",
@@ -132,6 +133,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "agentarea-cli"
+version = "0.1.0"
+source = { editable = "apps/cli" }
+dependencies = [
+    { name = "click" },
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.0.0" },
+    { name = "httpx", specifier = ">=0.24.0" },
+]
+
+[[package]]
 name = "agentarea-common"
 version = "0.1.0"
 source = { editable = "libs/common" }
@@ -238,8 +254,10 @@ dependencies = [
     { name = "agentarea-agents" },
     { name = "agentarea-common" },
     { name = "agentarea-tasks" },
+    { name = "click" },
     { name = "python-dotenv" },
     { name = "temporalio" },
+    { name = "watchfiles" },
 ]
 
 [package.metadata]
@@ -247,8 +265,10 @@ requires-dist = [
     { name = "agentarea-agents", editable = "libs/agents" },
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-tasks", editable = "libs/tasks" },
+    { name = "click", specifier = ">=8.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "temporalio", specifier = ">=1.0.0" },
+    { name = "watchfiles", specifier = ">=0.21.0" },
 ]
 
 [[package]]

@@ -60,6 +60,7 @@ type TraefikConfig struct {
 	Network       string `json:"network"`
 	ProxyPort     int    `json:"proxy_port"`
 	DefaultDomain string `json:"default_domain"`
+	ProxyHost     string `json:"proxy_host"`
 }
 
 // LoggingConfig holds logging configuration
@@ -99,6 +100,7 @@ func Load() *Config {
 			Network:       getEnv("TRAEFIK_NETWORK", "podman"),
 			ProxyPort:     getEnvInt("TRAEFIK_PROXY_PORT", 81),
 			DefaultDomain: getEnv("DEFAULT_DOMAIN", "localhost"),
+			ProxyHost:     getEnv("MCP_PROXY_HOST", "http://localhost:7999"),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),

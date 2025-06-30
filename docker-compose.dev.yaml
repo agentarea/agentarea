@@ -22,7 +22,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
-      - MCP_MANAGER_URL=http://mcp-manager:8000
+      - MCP_MANAGER_URL=http://mcp-manager:80/api/mcp
+      - MCP_PROXY_HOST=http://mcp-manager
       - REDIS_URL=redis://redis:6379
       - MCP_CLIENT_TIMEOUT=30
       # Server settings
@@ -190,13 +191,12 @@ services:
     restart: unless-stopped
     privileged: true
     ports:
-      - "7999:8000"  # MCP Manager API
+      - "7999:80"   # Traefik proxy (unified entry point)
     tmpfs:
       - /tmp
       - /run
     volumes:
       - mcp_containers:/var/lib/containers/storage
-      - ./mcp-infrastructure/docker/templates:/app/templates:ro
       - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
       - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -207,6 +207,7 @@ services:
       - LOG_LEVEL=INFO
       - TRAEFIK_NETWORK=podman
       - REDIS_URL=redis://redis:6379
+      - MCP_PROXY_HOST=http://mcp-manager
 
   # Temporal Infrastructure Services
   temporal:

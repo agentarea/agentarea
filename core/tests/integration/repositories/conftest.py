@@ -6,7 +6,7 @@ and repository fixtures for testing AgentArea repositories.
 """
 
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest_asyncio
 from agentarea_agents.domain.models import Agent
@@ -24,9 +24,8 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea_tasks.domain.models import Task, TaskType
-from agentarea_common.utils.types import TaskStatus, TaskState
-from agentarea_tasks.infrastructure.repository import SQLAlchemyTaskRepository
+from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.infrastructure.models import Task as TaskORM
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
@@ -191,27 +190,25 @@ class ModelFactory:
         return MCPServerInstance(**defaults)
 
     @staticmethod
-    def create_task(agent_id: str = None, **kwargs) -> Task:
-        """Create a test task."""
+    def create_task(agent_id: UUID = None, **kwargs) -> SimpleTask:
+        """Create a test simple task."""
         if agent_id is None:
-            agent_id = str(uuid4())
+            agent_id = uuid4()
 
         defaults = {
-            "id": str(uuid4()),
-            "session_id": f"session-{uuid4().hex[:8]}",
+            "id": uuid4(),
             "title": "Test Task",
-            "description": "Test task",
-            "task_type": TaskType.ANALYSIS,
-            "assigned_agent_id": agent_id,
-            "status": TaskStatus(state=TaskState.SUBMITTED),
-            "parameters": {},
+            "description": "Test task description",
+            "query": "Test query for the agent",
+            "status": "submitted",
+            "user_id": "test-user",
+            "agent_id": agent_id,
+            "task_parameters": {},
             "result": None,
             "error_message": None,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
         }
         defaults.update(kwargs)
-        return Task(**defaults)
+        return SimpleTask(**defaults)
 
 
 @pytest_asyncio.fixture
@@ -253,5 +250,5 @@ async def mcp_server_instance_repository(db_session):
 
 @pytest_asyncio.fixture
 async def task_repository(db_session):
-    """Provide a SQLAlchemyTaskRepository instance."""
-    return SQLAlchemyTaskRepository(db_session)
+    """Provide a TaskRepository instance."""
+    return TaskRepository(db_session)

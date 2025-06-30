@@ -21,7 +21,6 @@ from agentarea_agents.application.agent_builder_service import AgentBuilderServi
 from agentarea_agents.application.agent_runner_service import AgentRunnerService
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
-from agentarea_common.testing.mocks import TestEventBroker
 from agentarea_llm.application.service import LLMModelInstanceService
 from agentarea_llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
@@ -142,8 +141,9 @@ async def validate_agent_activity(agent_id: str) -> dict[str, Any]:
         mcp_server_instance_repository = MCPServerInstanceRepository(db_session)
         mcp_server_repository = MCPServerRepository(db_session)
 
-        # Use TestEventBroker for simplicity in activities
-        event_broker = TestEventBroker()
+        # Import and use temporal_di function for event broker
+        from agentarea_tasks.workflows.temporal_di import _create_event_broker
+        event_broker = await _create_event_broker()
 
         # Create secret manager
         secret_manager = get_real_secret_manager()
@@ -204,8 +204,9 @@ async def execute_agent_activity(
         mcp_server_instance_repository = MCPServerInstanceRepository(db_session)
         mcp_server_repository = MCPServerRepository(db_session)
 
-        # Create event broker - use TestEventBroker for simplicity in activities
-        event_broker = TestEventBroker()
+        # Import and use temporal_di function for event broker
+        from agentarea_tasks.workflows.temporal_di import _create_event_broker
+        event_broker = await _create_event_broker()
 
         # Create secret manager and session service
         secret_manager = get_real_secret_manager()

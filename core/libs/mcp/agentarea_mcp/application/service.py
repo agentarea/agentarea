@@ -298,7 +298,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
 
         # Publish event for Go MCP Manager to handle container deletion
         await self.event_broker.publish(
-            MCPServerInstanceDeleted(instance_id=str(instance.id), name=instance.name)
+            MCPServerInstanceDeleted(instance_id=instance.id)
         )
 
         # Delete the instance from the database

@@ -35,7 +35,7 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
-from agentarea_tasks.infrastructure.repository import SQLAlchemyTaskRepository
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_manager import BaseTaskManager
 from agentarea_tasks.task_service import TaskService
 from fastapi import Depends
@@ -53,15 +53,8 @@ async def get_event_broker() -> EventBroker:
         logger.info(f"Created Redis event broker: {type(event_broker).__name__}")
         return event_broker
     except Exception as e:
-        logger.warning(
-            f"Failed to create Redis event broker: {e}. Falling back to in-memory implementation."
-        )
-        # Fallback to in-memory implementation for development
-        from agentarea_common.testing.mocks import TestEventBroker
-
-        test_broker = TestEventBroker()
-        logger.info(f"Using TestEventBroker fallback: {type(test_broker).__name__}")
-        return test_broker
+        logger.error(f"Failed to create Redis event broker: {e}")
+        raise e
 
 
 async def get_secret_manager() -> BaseSecretManager:
@@ -74,7 +67,7 @@ async def get_task_repository(db: Annotated[AsyncSession, Depends(get_db_session
 
     Uses a new database session for each request to ensure transaction isolation.
     """
-    return SQLAlchemyTaskRepository(db)
+    return TaskRepository(db)
 
 
 # Shared task manager instance
@@ -82,7 +75,7 @@ _task_manager_instance: BaseTaskManager | None = None
 
 
 async def get_database_task_manager(
-    task_repository: Annotated[SQLAlchemyTaskRepository, Depends(get_task_repository)],
+    task_repository: Annotated[TaskRepository, Depends(get_task_repository)],
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
 ) -> BaseTaskManager:
     """Get a real database-backed TaskManager instance.
@@ -104,7 +97,7 @@ async def get_database_task_manager(
 
 async def get_task_service(
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    task_repository: Annotated[SQLAlchemyTaskRepository, Depends(get_task_repository)],
+    task_repository: Annotated[TaskRepository, Depends(get_task_repository)],
 ):
     """Get a TaskService instance for the current request.
 

@@ -23,9 +23,9 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.config import get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.events.router import create_event_broker_from_router, get_event_router
+from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.testing.mocks import TestEventBroker
 from agentarea_llm.application.service import LLMModelInstanceService
 from agentarea_llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
@@ -35,10 +35,8 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from google.adk.sessions import InMemorySessionService
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea_api.api.deps.database import get_db_session
-from agentarea_api.api.deps.session import InMemorySessionService
 
 logger = logging.getLogger(__name__)
 
@@ -160,8 +158,8 @@ async def _create_event_broker() -> EventBroker:
         logger.debug(f"Created Redis event broker: {type(event_broker).__name__}")
         return event_broker
     except Exception as e:
-        logger.warning(f"Failed to create Redis event broker: {e}. Using TestEventBroker fallback.")
-        return TestEventBroker()
+        logger.error(f"Failed to create Redis event broker: {e}")
+        raise
 
 
 # Convenience functions for common use cases

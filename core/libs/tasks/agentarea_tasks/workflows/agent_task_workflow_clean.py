@@ -12,7 +12,7 @@ from uuid import UUID
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
 
-from agentarea_tasks.workflows.temporal_di import get_activity_deps
+from agentarea_api.workflows.temporal_di import get_activity_deps
 
 logger = logging.getLogger(__name__)
 

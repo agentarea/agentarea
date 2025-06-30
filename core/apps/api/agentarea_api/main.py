@@ -38,12 +38,8 @@ async def initialize_services():
             f"Secret Manager: {type(secret_manager).__name__}"
         )
     except Exception as e:
-        print(f"Warning: Service initialization failed: {e}")
-        # Fallback to test implementations
-        from agentarea_common.testing.mocks import TestEventBroker, TestSecretManager
-
-        register_singleton(EventBroker, TestEventBroker())
-        register_singleton(BaseSecretManager, TestSecretManager())
+        print(f"ERROR: Service initialization failed: {e}")
+        raise e
 
 
 @asynccontextmanager

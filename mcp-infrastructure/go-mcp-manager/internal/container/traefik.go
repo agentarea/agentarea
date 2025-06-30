@@ -208,7 +208,13 @@ func (tm *TraefikManager) createDefaultConfig() (*TraefikConfig, error) {
 					EntryPoints: []string{"web"},
 				},
 				"mcp-manager-api": {
-					Rule:        "PathPrefix(`/containers`) || PathPrefix(`/templates`)",
+					Rule:        "PathPrefix(`/api/mcp`)",
+					Service:     "mcp-manager-service",
+					EntryPoints: []string{"web"},
+					Middlewares: []string{"mcp-api-stripprefix"},
+				},
+				"mcp-manager-catchall": {
+					Rule:        "!PathPrefix(`/mcp/`) && !PathPrefix(`/api/mcp`)",
 					Service:     "mcp-manager-service",
 					EntryPoints: []string{"web"},
 				},
@@ -217,7 +223,7 @@ func (tm *TraefikManager) createDefaultConfig() (*TraefikConfig, error) {
 				"mcp-manager-service": {
 					LoadBalancer: TraefikLoadBalancer{
 						Servers: []TraefikServer{
-							{URL: "http://127.0.0.1:8000"},
+							{URL: "http://localhost:8000"},
 						},
 					},
 				},
@@ -226,6 +232,12 @@ func (tm *TraefikManager) createDefaultConfig() (*TraefikConfig, error) {
 				"mcp-stripprefix": {
 					StripPrefix: &TraefikStripPrefix{
 						Prefixes:   []string{"/mcp"},
+						ForceSlash: false,
+					},
+				},
+				"mcp-api-stripprefix": {
+					StripPrefix: &TraefikStripPrefix{
+						Prefixes:   []string{"/api/mcp"},
 						ForceSlash: false,
 					},
 				},

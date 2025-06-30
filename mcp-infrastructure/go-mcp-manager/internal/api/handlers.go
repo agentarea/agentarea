@@ -37,8 +37,10 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.GET("/containers/:service", h.getContainer)
 	router.DELETE("/containers/:service", h.deleteContainer)
 
-	// Template management
-	router.GET("/templates", h.listTemplates)
+	// Container monitoring
+	router.GET("/containers/:service/health", h.checkContainerHealth)
+	router.POST("/containers/:service/health", h.healthCheckContainer)
+	router.GET("/monitoring/status", h.getMonitoringStatus)
 }
 
 // healthCheck returns the health status of the service
@@ -132,13 +134,112 @@ func (h *Handler) deleteContainer(c *gin.Context) {
 	})
 }
 
-// listTemplates returns a list of available templates
-func (h *Handler) listTemplates(c *gin.Context) {
-	templates := h.containerManager.ListTemplates()
+// checkContainerHealth checks if a specific container is healthy
+func (h *Handler) checkContainerHealth(c *gin.Context) {
+	serviceName := c.Param("service")
 
-	response := models.ListTemplatesResponse{
-		Templates: templates,
-		Total:     len(templates),
+	container, err := h.containerManager.GetContainer(serviceName)
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse{
+			Error:   "container_not_found",
+			Code:    http.StatusNotFound,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Get real-time container status
+	status, err := h.containerManager.GetContainerStatus(c.Request.Context(), container.ServiceName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "status_check_failed",
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	isHealthy := status == models.StatusRunning
+	healthStatus := "unhealthy"
+	if isHealthy {
+		healthStatus = "healthy"
+	}
+
+	response := gin.H{
+		"service":   serviceName,
+		"status":    string(status),
+		"healthy":   isHealthy,
+		"health":    healthStatus,
+		"timestamp": time.Now(),
+		"container": container,
+	}
+
+	if isHealthy {
+		c.JSON(http.StatusOK, response)
+	} else {
+		c.JSON(http.StatusServiceUnavailable, response)
+	}
+}
+
+// healthCheckContainer performs an HTTP health check on the container's endpoint
+func (h *Handler) healthCheckContainer(c *gin.Context) {
+	serviceName := c.Param("service")
+
+	container, err := h.containerManager.GetContainer(serviceName)
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse{
+			Error:   "container_not_found",
+			Code:    http.StatusNotFound,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Perform HTTP health check
+	healthStatus, err := h.containerManager.PerformHealthCheck(c.Request.Context(), container.ServiceName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "health_check_failed",
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"service":       serviceName,
+		"health_status": healthStatus,
+		"timestamp":     time.Now(),
+	})
+}
+
+// getMonitoringStatus returns the overall monitoring status
+func (h *Handler) getMonitoringStatus(c *gin.Context) {
+	containers := h.containerManager.ListContainers()
+
+	totalContainers := len(containers)
+	healthyContainers := 0
+	unhealthyContainers := 0
+	stoppedContainers := 0
+
+	for _, container := range containers {
+		switch container.Status {
+		case models.StatusRunning:
+			healthyContainers++
+		case models.StatusStopped, models.StatusError:
+			unhealthyContainers++
+		default:
+			stoppedContainers++
+		}
+	}
+
+	response := gin.H{
+		"total_containers":     totalContainers,
+		"healthy_containers":   healthyContainers,
+		"unhealthy_containers": unhealthyContainers,
+		"stopped_containers":   stoppedContainers,
+		"timestamp":            time.Now(),
+		"uptime":               time.Since(h.startTime).String(),
 	}
 
 	c.JSON(http.StatusOK, response)

@@ -172,7 +172,7 @@ async def get_agent_service(
 ```python
 # Request-scoped sessions for transaction isolation
 async def get_task_repository(db: AsyncSession):
-    return SQLAlchemyTaskRepository(db)
+    return TaskRepository(db)
 ```
 
 ## Integration Points
