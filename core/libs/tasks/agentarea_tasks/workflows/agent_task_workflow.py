@@ -131,56 +131,20 @@ class AgentTaskWorkflow:
 @activity.defn
 async def validate_agent_activity(agent_id: str) -> dict[str, Any]:
     """Validate agent configuration before execution."""
-    # Create dependencies manually for Temporal activity
-    db_session_gen = get_db_session()
-    db_session = await db_session_gen.__anext__()
-    try:
-        # Create repositories
-        agent_repository = AgentRepository(db_session)
-        llm_model_instance_repository = LLMModelInstanceRepository(db_session)
-        mcp_server_instance_repository = MCPServerInstanceRepository(db_session)
-        mcp_server_repository = MCPServerRepository(db_session)
+    from agentarea_tasks.workflows.temporal_di import get_activity_deps
+    
+    async with get_activity_deps() as deps:
+        # Validate agent using proper dependency injection
+        errors = await deps.agent_builder.validate_agent_config(UUID(agent_id))
 
-        # Import and use temporal_di function for event broker
-        from agentarea_tasks.workflows.temporal_di import _create_event_broker
-        event_broker = await _create_event_broker()
-
-        # Create secret manager
-        secret_manager = get_real_secret_manager()
-
-        # Create services
-        llm_service = LLMModelInstanceService(
-            repository=llm_model_instance_repository,
-            event_broker=event_broker,
-            secret_manager=secret_manager,
-        )
-
-        mcp_service = MCPServerInstanceService(
-            repository=mcp_server_instance_repository,
-            event_broker=event_broker,
-            mcp_server_repository=mcp_server_repository,
-            secret_manager=secret_manager,
-        )
-
-        # Create agent builder service
-        agent_builder = AgentBuilderService(
-            repository=agent_repository,
-            event_broker=event_broker,
-            llm_model_instance_service=llm_service,
-            mcp_server_instance_service=mcp_service,
-        )
-
-        # Validate agent
-        errors = await agent_builder.validate_agent_config(UUID(agent_id))
-
-        activity.heartbeat()  # Send heartbeat for long-running validation
+        # Send heartbeat for long-running validation (only if in activity context)
+        try:
+            activity.heartbeat()
+        except RuntimeError:
+            # Not in activity context - this is fine for direct testing
+            pass
 
         return {"valid": len(errors) == 0, "errors": errors, "agent_id": agent_id}
-    finally:
-        try:
-            await db_session_gen.__anext__()
-        except StopAsyncIteration:
-            pass
 
 
 @activity.defn
@@ -188,64 +152,17 @@ async def execute_agent_activity(
     agent_id: str, task_id: str, query: str, user_id: str, task_parameters: dict[str, Any]
 ) -> dict[str, Any]:
     """Execute the main agent task using existing AgentRunnerService."""
+    from agentarea_tasks.workflows.temporal_di import get_activity_deps
+    
     # Collect events and results
     events = []
     discovered_activities = []
 
     logger.info(f"Starting agent execution for task {task_id}")
 
-    # Create dependencies manually for Temporal activity
-    db_session_gen = get_db_session()
-    db_session = await db_session_gen.__anext__()
-    try:
-        # Create repositories
-        agent_repository = AgentRepository(db_session)
-        llm_model_instance_repository = LLMModelInstanceRepository(db_session)
-        mcp_server_instance_repository = MCPServerInstanceRepository(db_session)
-        mcp_server_repository = MCPServerRepository(db_session)
-
-        # Import and use temporal_di function for event broker
-        from agentarea_tasks.workflows.temporal_di import _create_event_broker
-        event_broker = await _create_event_broker()
-
-        # Create secret manager and session service
-        secret_manager = get_real_secret_manager()
-        session_service = InMemorySessionService()
-
-        # Create services
-        llm_service = LLMModelInstanceService(
-            repository=llm_model_instance_repository,
-            event_broker=event_broker,
-            secret_manager=secret_manager,
-        )
-
-        mcp_service = MCPServerInstanceService(
-            repository=mcp_server_instance_repository,
-            event_broker=event_broker,
-            mcp_server_repository=mcp_server_repository,
-            secret_manager=secret_manager,
-        )
-
-        # Create agent builder service first
-        agent_builder = AgentBuilderService(
-            repository=agent_repository,
-            event_broker=event_broker,
-            llm_model_instance_service=llm_service,
-            mcp_server_instance_service=mcp_service,
-        )
-
-        # Create agent runner service
-        agent_runner = AgentRunnerService(
-            repository=agent_repository,
-            event_broker=event_broker,
-            llm_model_instance_service=llm_service,
-            session_service=session_service,
-            agent_builder_service=agent_builder,
-            agent_communication_service=None,  # Not needed for basic task execution
-        )
-
+    async with get_activity_deps() as deps:
         # Execute agent task and collect events
-        async for event in agent_runner.run_agent_task(
+        async for event in deps.agent_runner.run_agent_task(
             agent_id=UUID(agent_id),
             task_id=task_id,
             user_id=user_id,
@@ -255,8 +172,12 @@ async def execute_agent_activity(
         ):
             events.append(event)
 
-            # Send periodic heartbeat for long-running tasks
-            activity.heartbeat()
+            # Send periodic heartbeat for long-running tasks (only if in activity context)
+            try:
+                activity.heartbeat()
+            except RuntimeError:
+                # Not in activity context - this is fine for direct testing
+                pass
 
             # Detect dynamic activity discovery
             event_type = event.get("event_type", "")
@@ -283,11 +204,6 @@ async def execute_agent_activity(
             "event_count": len(events),
             "task_id": task_id,
         }
-    finally:
-        try:
-            await db_session_gen.__anext__()
-        except StopAsyncIteration:
-            pass
 
 
 @activity.defn
@@ -295,7 +211,12 @@ async def execute_dynamic_activity(activity_type: str, config: dict[str, Any]) -
     """Execute dynamically discovered activities."""
     logger.info(f"Executing dynamic activity: {activity_type}")
 
-    activity.heartbeat()
+    # Send heartbeat (only if in activity context)
+    try:
+        activity.heartbeat()
+    except RuntimeError:
+        # Not in activity context - this is fine for direct testing
+        pass
 
     if activity_type == "mcp_tool_call":
         return await execute_mcp_tool_activity(config)
@@ -318,7 +239,12 @@ async def execute_mcp_tool_activity(config: dict[str, Any]) -> dict[str, Any]:
     # Placeholder for MCP tool execution
     logger.info(f"Executing MCP tool: {config}")
 
-    activity.heartbeat()
+    # Send heartbeat (only if in activity context)
+    try:
+        activity.heartbeat()
+    except RuntimeError:
+        # Not in activity context - this is fine for direct testing
+        pass
 
     return {
         "status": "completed",
@@ -334,7 +260,12 @@ async def execute_custom_tool_activity(config: dict[str, Any]) -> dict[str, Any]
     # Placeholder for custom tool execution
     logger.info(f"Executing custom tool: {config}")
 
-    activity.heartbeat()
+    # Send heartbeat (only if in activity context)
+    try:
+        activity.heartbeat()
+    except RuntimeError:
+        # Not in activity context - this is fine for direct testing
+        pass
 
     return {
         "status": "completed",
@@ -350,7 +281,12 @@ async def execute_agent_communication_activity(config: dict[str, Any]) -> dict[s
     # Placeholder for agent communication
     logger.info(f"Executing agent communication: {config}")
 
-    activity.heartbeat()
+    # Send heartbeat (only if in activity context)
+    try:
+        activity.heartbeat()
+    except RuntimeError:
+        # Not in activity context - this is fine for direct testing
+        pass
 
     return {
         "status": "completed",

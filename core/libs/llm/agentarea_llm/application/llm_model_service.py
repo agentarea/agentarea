@@ -18,7 +18,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
         name: str,
         description: str,
         provider: str,
-        model_type: str,
+        model_name: str,
         endpoint_url: str,
         context_window: str,
         is_public: bool = False,
@@ -27,7 +27,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
             name=name,
             description=description,
             provider_id=provider,
-            model_type=model_type,
+            model_type=model_name,
             endpoint_url=endpoint_url,
             context_window=context_window,
             is_public=is_public,
@@ -51,7 +51,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
         name: str | None = None,
         description: str | None = None,
         provider: str | None = None,
-        model_type: str | None = None,
+        model_name: str | None = None,
         endpoint_url: str | None = None,
         context_window: str | None = None,
         is_public: bool | None = None,
@@ -67,8 +67,8 @@ class LLMModelService(BaseCrudService[LLMModel]):
             model.description = description
         if provider is not None:
             model.provider_id = provider
-        if model_type is not None:
-            model.model_type = model_type
+        if model_name is not None:
+            model.model_type = model_name
         if endpoint_url is not None:
             model.endpoint_url = endpoint_url
         if context_window is not None:

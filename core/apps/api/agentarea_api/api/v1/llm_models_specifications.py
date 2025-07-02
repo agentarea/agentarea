@@ -15,7 +15,7 @@ class LLMModelCreate(BaseModel):
     name: str
     description: str
     provider: str
-    model_type: str
+    model_name: str
     endpoint_url: str
     context_window: str
     is_public: bool = False
@@ -25,7 +25,7 @@ class LLMModelUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     provider: str | None = None
-    model_type: str | None = None
+    model_name: str | None = None
     endpoint_url: str | None = None
     context_window: str | None = None
     is_public: bool | None = None
@@ -37,7 +37,8 @@ class LLMModelResponse(BaseModel):
     name: str
     description: str
     provider: str
-    model_type: str
+    provider_key: str
+    model_name: str
     endpoint_url: str
     context_window: str
     status: str
@@ -50,8 +51,9 @@ class LLMModelResponse(BaseModel):
             id=str(model.id),
             name=model.name,
             description=model.description,
-            provider=model.provider.name if model.provider else "",
-            model_type=model.model_type,
+            provider=model.provider.name,
+            provider_key=model.provider.provider_type,
+            model_name=model.model_type,
             endpoint_url=model.endpoint_url,
             context_window=model.context_window,
             status=model.status,
@@ -71,7 +73,7 @@ async def create_llm_model(
         name=data.name,
         description=data.description,
         provider=data.provider,
-        model_type=data.model_type,
+        model_name=data.model_name,
         endpoint_url=data.endpoint_url,
         context_window=data.context_window,
         is_public=data.is_public,
@@ -125,7 +127,7 @@ async def update_llm_model(
         name=data.name,
         description=data.description,
         provider=data.provider,
-        model_type=data.model_type,
+        model_name=data.model_name,
         endpoint_url=data.endpoint_url,
         context_window=data.context_window,
         is_public=data.is_public,

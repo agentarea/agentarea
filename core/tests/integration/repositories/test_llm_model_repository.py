@@ -61,7 +61,7 @@ def create_test_llm_model(**kwargs) -> LLMModel:
         "description": "Test LLM model",
         "provider_id": uuid4(),  # provider_id is UUID in the model
         "model_type": "chat",
-        "endpoint_url": "http://localhost:11434",
+        "endpoint_url": "http://host.docker.internal:11434",
         "context_window": "8192",
         "status": "active",
         "is_public": True,

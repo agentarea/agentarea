@@ -26,31 +26,58 @@ def event_loop():
 
 
 @pytest.fixture
-def sample_agent_id():
-    """Generate a sample agent ID for testing"""
-    return uuid4()
+def test_redis_available():
+    """Check if Redis is available for tests."""
+    try:
+        import redis
+        r = redis.Redis.from_url("redis://localhost:6379")
+        r.ping()
+        return True
+    except (ImportError, redis.ConnectionError, redis.TimeoutError):
+        pytest.skip("Redis not available for testing")
 
 
 @pytest.fixture
-def sample_user_id():
-    """Generate a sample user ID for testing"""
-    return "test_user_123"
+def test_postgres_available():
+    """Check if PostgreSQL is available for tests."""
+    try:
+        import asyncpg
+        import asyncio
+        
+        async def check_postgres():
+            try:
+                conn = await asyncpg.connect(
+                    host="localhost",
+                    port=5432,
+                    user="postgres",
+                    password="postgres",
+                    database="aiagents"
+                )
+                await conn.close()
+                return True
+            except Exception:
+                return False
+        
+        if not asyncio.run(check_postgres()):
+            pytest.skip("PostgreSQL not available for testing")
+    except ImportError:
+        pytest.skip("asyncpg not available for testing")
 
 
 @pytest.fixture
-def sample_task_id():
-    """Generate a sample task ID for testing"""
-    return f"task_{uuid4()}"
-
-
-@pytest.fixture
-def mock_ollama_config():
-    """Mock Ollama configuration"""
-    return {
-        "model": "ollama_chat/qwen2.5",
-        "base_url": "http://localhost:11434",
-        "timeout": 30.0,
-    }
+def test_temporal_available():
+    """Check if Temporal is available for tests."""
+    import socket
+    
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(("localhost", 7233))
+        sock.close()
+        if result != 0:
+            pytest.skip("Temporal not available for testing")
+    except Exception:
+        pytest.skip("Temporal not available for testing")
 
 
 @pytest.fixture

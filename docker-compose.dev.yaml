@@ -1,6 +1,7 @@
 version: "3.8"
 services:
   app:
+    image: agentarea-backend:latest
     container_name: agentarea-backend
     build:
       context: core
@@ -57,6 +58,7 @@ services:
     command: ["python", "-m", "agentarea_api.cli", "serve", "--reload", "--log-level=info"]
 
   app_migrations:
+    image: agentarea-backend:latest
     build:
       context: core
       dockerfile: apps/api/Dockerfile
@@ -73,13 +75,14 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
-      - ./core/apps/api/alembic:/app/apps/api/alembic
+      - ./core/apps/api/alembic:/app/alembic
     depends_on:
       db:
         condition: service_healthy
     command: ["python", "-m", "agentarea_api.cli", "migrate"]
 
   bootstrap:
+    image: agentarea-bootstrap:latest
     build:
       context: bootstrap
       dockerfile: Dockerfile
@@ -112,7 +115,7 @@ services:
         condition: service_started
 
   minio:
-    image: minio/minio
+    image: minio/minio:latest
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -148,6 +151,7 @@ services:
       - temporal-network
 
   infisical:
+    image: infisical/infisical:latest-postgres
     container_name: infisical-backend
     restart: always
     depends_on:
@@ -155,12 +159,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    image: infisical/infisical:latest-postgres
     env_file: .env
     ports:
       - 3333:8080
     environment:
       - NODE_ENV=production
+      - POSTGRES_DB=infisical
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/infisical
 
   redis:
@@ -180,6 +184,7 @@ services:
     command: ["redis-server", "--save", "", "--appendonly", "no"]  # Disable persistence for dev
 
   mcp-manager:
+    image: mcp-manager:latest
     build:
       context: mcp-infrastructure/go-mcp-manager
       dockerfile: Dockerfile.dev
@@ -211,6 +216,7 @@ services:
 
   # Temporal Infrastructure Services
   temporal:
+    image: temporalio/auto-setup:1.27
     container_name: agentarea-temporal
     restart: unless-stopped
     depends_on:
@@ -229,7 +235,6 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CLI_ADDRESS=temporal:7233
       - BIND_ON_IP=0.0.0.0
-    image: temporalio/auto-setup:1.27
     networks:
       - temporal-network
       - default

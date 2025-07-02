@@ -13,6 +13,7 @@ class LLMProvider(BaseModel):
     id: Mapped[str] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     description: Mapped[str] = mapped_column(String, nullable=True)
+    provider_type: Mapped[str] = mapped_column(String, nullable=False)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
@@ -35,7 +36,7 @@ class LLMModel(BaseModel):
     provider_id: Mapped[str] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("llm_providers.id"), nullable=False
     )
-    model_type: Mapped[str] = mapped_column(String, nullable=False)
+    model_type: Mapped[str] = mapped_column(String, nullable=False)  # Keep as model_type
     endpoint_url: Mapped[str] = mapped_column(String, nullable=False)
     context_window: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")

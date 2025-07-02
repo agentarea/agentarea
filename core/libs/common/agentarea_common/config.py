@@ -135,10 +135,10 @@ class SecretManagerSettings(BaseAppSettings):
 class MCPSettings(BaseAppSettings):
     """MCP (Model Context Protocol) configuration."""
 
-    MCP_MANAGER_URL: str = "http://mcp-manager:80/api/mcp"
+    MCP_MANAGER_URL: str = "http://localhost:8001/api/mcp"
     MCP_PROXY_HOST: str = "http://localhost:7999"  # Host for agents to access MCP servers
     MCP_CLIENT_TIMEOUT: int = 30
-    REDIS_URL: str = "redis://redis:6379"
+    REDIS_URL: str = "redis://localhost:6379"
 
 
 # ============================================================================
@@ -272,6 +272,9 @@ def get_app_settings() -> AppSettings:
 def get_secret_manager_settings() -> SecretManagerSettings:
     """Get secret manager settings."""
     return SecretManagerSettings()
+
+
+
 
 
 # ============================================================================

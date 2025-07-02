@@ -38,28 +38,46 @@ class AgentRunnerService:
         self.agent_builder_service = agent_builder_service
         self.agent_communication_service = agent_communication_service
 
-    def _create_litellm_model_from_instance(self, model_instance: Any) -> str:
-        """Create LiteLLM model string from database model instance.
+    def _create_litellm_model_from_instance(
+        self, model_instance: Any
+    ) -> tuple[str, str | None]:
+        """Create LiteLLM model string and endpoint URL from database model instance.
 
         Args:
             model_instance: LLMModelInstance from database
 
         Returns:
-            LiteLLM model string (e.g., "ollama_chat/qwen2.5")
+            Tuple of (LiteLLM model string, endpoint_url or None)
         """
-        # For now, hardcode to our target Ollama model to avoid relationship loading issues
-        # In the future, this should be properly configured based on the model instance
         logger.info(f"Using model instance: {model_instance.name}")
 
-        # Determine provider and model from the instance name for now
-        # This is a temporary workaround until we fix the relationship loading
-        if "qwen" in model_instance.name.lower():
-            return "ollama_chat/qwen2.5"
-        elif "gpt" in model_instance.name.lower():
-            return "openai/gpt-3.5-turbo"
+        # Get endpoint_url from the model relationship if available
+        endpoint_url = None
+        if (
+            hasattr(model_instance, "model")
+            and model_instance.model
+            and hasattr(model_instance.model, "endpoint_url")
+        ):
+            endpoint_url = model_instance.model.endpoint_url
+
+        # Construct LiteLLM model string from provider.provider_type and model.model_type
+        # For example: "ollama_chat/qwen2.5" or "openai/gpt-4"
+        if hasattr(model_instance, 'model') and model_instance.model:
+            model = model_instance.model
+            if hasattr(model, 'provider') and model.provider:
+                provider_type = model.provider.provider_type
+                model_type = model.model_type
+                litellm_model_string = f"{provider_type}/{model_type}"
+            else:
+                # This shouldn't happen in normal operation
+                logger.error("Provider relationship not loaded")
+                raise ValueError("Provider relationship not loaded for model instance")
         else:
-            # Default fallback
-            return "ollama_chat/qwen2.5"
+            # This shouldn't happen in normal operation
+            logger.error("Model relationship not loaded")
+            raise ValueError("Model relationship not loaded for model instance")
+
+        return litellm_model_string, endpoint_url
 
     async def run_agent_task(
         self,
@@ -85,14 +103,18 @@ class AgentRunnerService:
         """
         try:
             # Validate agent configuration
-            validation_errors = await self.agent_builder_service.validate_agent_config(agent_id)
+            validation_errors = await self.agent_builder_service.validate_agent_config(
+                agent_id
+            )
             if validation_errors:
                 error_msg = f"Agent validation failed: {', '.join(validation_errors)}"
                 logger.error(error_msg)
 
                 # Publish TaskFailed event
                 failed_event = TaskFailed(
-                    task_id=task_id, error_message=error_msg, error_code="AGENT_VALIDATION_ERROR"
+                    task_id=task_id,
+                    error_message=error_msg,
+                    error_code="AGENT_VALIDATION_ERROR",
                 )
                 await self.event_broker.publish(failed_event)
 
@@ -113,7 +135,9 @@ class AgentRunnerService:
 
                 # Publish TaskFailed event
                 failed_event = TaskFailed(
-                    task_id=task_id, error_message=error_msg, error_code="AGENT_CONFIG_ERROR"
+                    task_id=task_id,
+                    error_message=error_msg,
+                    error_code="AGENT_CONFIG_ERROR",
                 )
                 await self.event_broker.publish(failed_event)
 
@@ -179,10 +203,19 @@ class AgentRunnerService:
 
             # Create LLM agent with correct ADK API (no planning parameter)
             # Создаем LiteLLM модель из model_instance
-            litellm_model_string = self._create_litellm_model_from_instance(
-                agent_config["model_instance"]
+            litellm_model_string, endpoint_url = (
+                self._create_litellm_model_from_instance(agent_config["model_instance"])
             )
-            litellm_model = LiteLlm(model=litellm_model_string)
+
+            # Create LiteLlm with or without base_url depending on endpoint_url availability
+            if endpoint_url:
+                litellm_model = LiteLlm(
+                    model=litellm_model_string, base_url=endpoint_url
+                )
+                logger.info(f"Created LiteLlm with custom endpoint: {endpoint_url}")
+            else:
+                litellm_model = LiteLlm(model=litellm_model_string)
+                logger.info("Created LiteLlm with default endpoint")
 
             llm_agent = LlmAgent(
                 name=agent_config["name"],
@@ -194,9 +227,14 @@ class AgentRunnerService:
             # -------------------------------------------------------------
             # Integrate Agent-to-Agent communication tool (optional)
             # -------------------------------------------------------------
-            if self.agent_communication_service and enable_agent_communication is not False:
-                llm_agent = self.agent_communication_service.configure_agent_with_communication(
-                    llm_agent, enable_communication=enable_agent_communication
+            if (
+                self.agent_communication_service
+                and enable_agent_communication is not False
+            ):
+                llm_agent = (
+                    self.agent_communication_service.configure_agent_with_communication(
+                        llm_agent, enable_communication=enable_agent_communication
+                    )
                 )
 
             # Create runner
@@ -256,7 +294,8 @@ class AgentRunnerService:
 
         except Exception as e:
             logger.error(
-                f"Error running agent task {task_id} for agent {agent_id}: {e}", exc_info=True
+                f"Error running agent task {task_id} for agent {agent_id}: {e}",
+                exc_info=True,
             )
 
             # Publish TaskFailed event

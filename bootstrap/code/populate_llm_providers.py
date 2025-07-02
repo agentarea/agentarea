@@ -14,6 +14,15 @@ YAML_PATH = os.environ.get("LLM_PROVIDERS_YAML", "/app/llm/providers.yaml")
 engine = create_engine(DATABASE_URL)
 
 
+def get_provider_type(provider_key: str) -> str:
+    """Convert provider key to provider type for LiteLLM."""
+    # Special case for ollama - LiteLLM expects "ollama_chat"
+    if provider_key == "ollama":
+        return "ollama_chat"
+    # For most providers, the YAML key matches the LiteLLM provider key
+    return provider_key
+
+
 def upsert_provider(
     conn: Connection,
     provider_key: str,
@@ -27,6 +36,9 @@ def upsert_provider(
 
     provider_name: str = provider_data.get("name", provider_key)
     description: Optional[str] = provider_data.get("description")
+    
+    # Use YAML provider key with minimal mapping
+    provider_type = get_provider_type(provider_key)
 
     # Check if provider already exists by ID
     result = conn.execute(
@@ -36,9 +48,9 @@ def upsert_provider(
         # Update existing provider
         conn.execute(
             text(
-                "UPDATE llm_providers SET name = :name, description = :description, updated_at = now() WHERE id = :id"
+                "UPDATE llm_providers SET name = :name, description = :description, provider_type = :provider_type, updated_at = now() WHERE id = :id"
             ),
-            {"id": provider_id, "name": provider_name, "description": description},
+            {"id": provider_id, "name": provider_name, "description": description, "provider_type": provider_type},
         )
         return provider_id
 
@@ -52,12 +64,13 @@ def upsert_provider(
         if existing_id != provider_id:
             conn.execute(
                 text(
-                    "UPDATE llm_providers SET id = :new_id, description = :description, updated_at = now() WHERE id = :old_id"
+                    "UPDATE llm_providers SET id = :new_id, description = :description, provider_type = :provider_type, updated_at = now() WHERE id = :old_id"
                 ),
                 {
                     "new_id": provider_id,
                     "old_id": existing_id,
                     "description": description,
+                    "provider_type": provider_type,
                 },
             )
         return provider_id
@@ -65,19 +78,20 @@ def upsert_provider(
     # Insert new provider
     conn.execute(
         text(
-            "INSERT INTO llm_providers (id, name, description, is_builtin, created_at, updated_at) VALUES (:id, :name, :description, :is_builtin, now(), now())"
+            "INSERT INTO llm_providers (id, name, description, provider_type, is_builtin, created_at, updated_at) VALUES (:id, :name, :description, :provider_type, :is_builtin, now(), now())"
         ),
         {
             "id": provider_id,
             "name": provider_name,
             "description": description,
+            "provider_type": provider_type,
             "is_builtin": is_builtin,
         },
     )
     return provider_id
 
 
-def upsert_model(conn: Connection, model: Dict[str, Any], provider_id: str) -> str:
+def upsert_model(conn: Connection, model: Dict[str, Any], provider_id: str, provider_key: str) -> str:
     result = conn.execute(
         text(
             "SELECT id FROM llm_models WHERE name = :name AND provider_id = :provider_id"
@@ -87,6 +101,10 @@ def upsert_model(conn: Connection, model: Dict[str, Any], provider_id: str) -> s
     if result:
         return result[0]
     model_id = str(uuid.uuid4())
+    
+    # Store the model name in model_type field
+    model_type = model["name"]
+    
     conn.execute(
         text("""INSERT INTO llm_models
         (id, name, description, provider_id, model_type, endpoint_url, context_window, status, is_public, created_at, updated_at)
@@ -98,7 +116,7 @@ def upsert_model(conn: Connection, model: Dict[str, Any], provider_id: str) -> s
             "name": model["name"],
             "description": model.get("description", ""),
             "provider_id": provider_id,
-            "model_type": model["name"],
+            "model_type": model_type,
             "context_window": str(model.get("context_window", 0)),
         },
     )
@@ -113,7 +131,7 @@ def main() -> None:
         for provider_key, provider_data in providers.items():
             provider_id = upsert_provider(conn, provider_key, provider_data)
             for model in provider_data.get("models", []):
-                upsert_model(conn, model, provider_id)
+                upsert_model(conn, model, provider_id, provider_key)
     print("Providers and models populated.")
 
 

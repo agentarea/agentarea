@@ -23,7 +23,7 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.config import get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.events.router import create_event_broker_from_router, get_event_router
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.infrastructure.database import Database
 from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.service import LLMModelInstanceService
@@ -80,9 +80,18 @@ async def get_activity_deps() -> AsyncGenerator[ActivityDependencies, None]:
                 agent = await deps.agent_repository.get(UUID(agent_id))
                 # ... rest of activity logic
     """
-    async with get_db_session() as db_session:
+    # Create a new database instance per activity to avoid connection sharing issues
+    from agentarea_common.infrastructure.database import Database
+    from agentarea_common.config import get_db_settings
+    
+    # Create a new database instance (not singleton) for this activity
+    db_settings = get_db_settings()
+    db = Database.__new__(Database)  # Bypass singleton
+    db.__init__(db_settings)
+    
+    async with db.session() as db_session:
         try:
-            # Create event broker with fallback
+            # Create event broker
             event_broker = await _create_event_broker()
 
             # Create infrastructure dependencies
@@ -150,15 +159,16 @@ async def get_activity_deps() -> AsyncGenerator[ActivityDependencies, None]:
 
 
 async def _create_event_broker() -> EventBroker:
-    """Create event broker with fallback to test broker."""
+    """Create event broker."""
     try:
+        from agentarea_common.config import get_settings
         settings = get_settings()
         router = get_event_router(settings.broker)
         event_broker = create_event_broker_from_router(router)
-        logger.debug(f"Created Redis event broker: {type(event_broker).__name__}")
+        logger.debug(f"Created event broker: {type(event_broker).__name__}")
         return event_broker
     except Exception as e:
-        logger.error(f"Failed to create Redis event broker: {e}")
+        logger.error(f"Failed to create event broker: {e}")
         raise
 
 

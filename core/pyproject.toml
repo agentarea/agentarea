@@ -62,6 +62,7 @@ dev = [
     "agentarea-secrets",
     "agentarea-api",
     "agentarea-worker",
+    "pytest-env>=1.1.5",
 ]
 
 test = [
@@ -152,6 +153,29 @@ markers = [
     "unit: marks tests as unit tests",
 ]
 asyncio_mode = "auto"
+
+# Test environment isolation - override env vars for docker-compose services
+env = [
+    # Database (docker-compose postgres service mapped to localhost:5432)
+    "POSTGRES_HOST=localhost",
+    "POSTGRES_PORT=5432", 
+    "POSTGRES_USER=postgres",
+    "POSTGRES_PASSWORD=postgres",
+    "POSTGRES_DB=aiagents",
+    
+    # Redis (docker-compose redis service mapped to localhost:6379) 
+    "REDIS_URL=redis://localhost:6379",
+    
+    # Temporal (docker-compose temporal service mapped to localhost:7233)
+    "TEMPORAL_SERVER_URL=localhost:7233",
+    "TEMPORAL_NAMESPACE=default",
+    
+    # Test-specific settings to prevent production interference
+    "APP_ENV=test",
+    "DEBUG=false",
+    "SECRET_MANAGER_TYPE=local",
+    "USE_LEGACY_TASK_EXECUTION=true",
+]
 
 [tool.coverage.run]
 source = [

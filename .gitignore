@@ -81,3 +81,5 @@ infisical-local-data
 memory-bank/
 
 *.py.bak
+
+mcp-infrastructure/traefik/
