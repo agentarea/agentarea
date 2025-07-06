@@ -276,54 +276,54 @@ services:
     ports:
       - 8082:8080
 
-  # AgentArea Worker Service
-  agentarea-worker:
-    build:
-      context: core
-      dockerfile: apps/worker/Dockerfile
-    container_name: agentarea-worker
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      temporal:
-        condition: service_healthy
-    environment:
-      # Database
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+  # # AgentArea Worker Service
+  # agentarea-worker:
+  #   build:
+  #     context: core
+  #     dockerfile: apps/worker/Dockerfile
+  #   container_name: agentarea-worker
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #     temporal:
+  #       condition: service_healthy
+  #   environment:
+  #     # Database
+  #     - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  #     - POSTGRES_HOST=db
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_DB=${POSTGRES_DB}
       
-      # Redis
-      - REDIS_URL=redis://redis:6379
+  #     # Redis
+  #     - REDIS_URL=redis://redis:6379
       
-      # Workflow settings
-      - WORKFLOW__USE_WORKFLOW_EXECUTION=true
-      - WORKFLOW__WORKFLOW_ENGINE=temporal
-      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
-      - WORKFLOW__TEMPORAL_NAMESPACE=default
-      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
-      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
-      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
+  #     # Workflow settings
+  #     - WORKFLOW__USE_WORKFLOW_EXECUTION=true
+  #     - WORKFLOW__WORKFLOW_ENGINE=temporal
+  #     - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
+  #     - WORKFLOW__TEMPORAL_NAMESPACE=default
+  #     - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
+  #     - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
+  #     - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
       
-      # Task execution
-      - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
+  #     # Task execution
+  #     - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
       
-      # Development
-      - DEBUG=true
-      - ENVIRONMENT=development
-    networks:
-      - temporal-network
-      - default
-    volumes:
-      - ./core/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
-      - ./core/libs:/app/libs
-    restart: unless-stopped
-    command: ["python", "-m", "agentarea_worker.cli", "dev"]
+  #     # Development
+  #     - DEBUG=true
+  #     - ENVIRONMENT=development
+  #   networks:
+  #     - temporal-network
+  #     - default
+  #   volumes:
+  #     - ./core/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
+  #     - ./core/libs:/app/libs
+  #   restart: unless-stopped
+  #   command: ["python", "-m", "agentarea_worker.cli", "dev"]
 
 volumes:
   postgres_data:

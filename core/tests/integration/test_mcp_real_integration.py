@@ -9,7 +9,7 @@ Tests the complete workflow with a real MCP server:
 """
 
 import asyncio
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 import pytest
@@ -20,11 +20,11 @@ class MCPRealIntegrationTest:
 
     def __init__(self, api_base: str = "http://localhost:8000"):
         self.api_base = api_base
-        self.client: httpx.AsyncClient | None = None
-        self.agent_id: str | None = None
-        self.mcp_server_id: str | None = None
-        self.mcp_instance_id: str | None = None
-        self.task_id: str | None = None
+        self.client: Optional[httpx.AsyncClient] = None
+        self.agent_id: Optional[str] = None
+        self.mcp_server_id: Optional[str] = None
+        self.mcp_instance_id: Optional[str] = None
+        self.task_id: Optional[str] = None
 
     async def setup(self):
         """Setup test client."""
@@ -37,6 +37,10 @@ class MCPRealIntegrationTest:
 
     async def create_test_agent(self) -> bool:
         """Create a test agent for MCP integration."""
+        if not self.client:
+            print("❌ Client not initialized")
+            return False
+
         # Create or get Ollama model and instance
         model_id = await self._get_or_create_model()
         if not model_id:
@@ -70,9 +74,12 @@ class MCPRealIntegrationTest:
         server_name: str,
         dockerfile_content: str,
         mcp_endpoint_url: str,
-        tools_metadata: list,
+        tools_metadata: List[Dict[str, Any]],
     ) -> bool:
         """Deploy a real MCP server with Dockerfile."""
+        if not self.client:
+            print("❌ Client not initialized")
+            return False
 
         # Create MCP Server definition
         server_data = {
@@ -126,8 +133,12 @@ class MCPRealIntegrationTest:
 
         return True
 
-    async def execute_mcp_task(self, task_description: str, expected_tools: list) -> bool:
+    async def execute_mcp_task(self, task_description: str, expected_tools: List[str]) -> bool:
         """Execute a task that should use MCP tools."""
+        if not self.client:
+            print("❌ Client not initialized")
+            return False
+
         task_data = {
             "description": task_description,
             "parameters": {"use_mcp_tools": True, "expected_tools": expected_tools},
@@ -150,6 +161,10 @@ class MCPRealIntegrationTest:
 
     async def verify_mcp_integration(self) -> bool:
         """Verify that MCP integration is working."""
+        if not self.client:
+            print("❌ Client not initialized")
+            return False
+
         if not all([self.agent_id, self.mcp_server_id, self.mcp_instance_id]):
             print("❌ Missing required components for verification")
             return False
@@ -181,52 +196,122 @@ class MCPRealIntegrationTest:
         return True
 
     async def _get_or_create_model(self) -> Optional[str]:
-        """Get existing or create new Ollama model."""
-        # Try to find existing model
-        response = await self.client.get(f"{self.api_base}/v1/llm-models/")
-        if response.status_code == 200:
-            models = response.json()
-            for model in models:
-                if "ollama" in str(model.get("provider", "")).lower():
-                    return str(model.get("id"))
-
-        # Create new model
-        model_data = {
-            "name": "qwen2.5:latest",
-            "description": "Qwen2.5 model via Ollama",
-            "provider": "ollama",
-            "model_type": "chat",
-            "endpoint_url": "http://host.docker.internal:11434",
-            "context_window": "32768",
-            "is_public": True,
-        }
-
-        response = await self.client.post(f"{self.api_base}/v1/llm-models/", json=model_data)
-        if response.status_code in [200, 201]:
-            model = response.json()
-            return str(model.get("id"))
-        else:
-            print(f"❌ Failed to create model: {response.status_code} - {response.text}")
+        """Get existing or create new Ollama model using new 4-entity architecture."""
+        if not self.client:
+            print("❌ Client not initialized")
             return None
 
-    async def _create_model_instance(self, model_id: str) -> Optional[str]:
-        """Create model instance."""
-        import uuid
+        # Step 1: Get or find Ollama provider spec
+        response = await self.client.get(f"{self.api_base}/v1/provider-specs/")
+        if response.status_code != 200:
+            print(f"❌ Failed to get provider specs: {response.status_code}")
+            return None
+
+        provider_specs = response.json()
+        ollama_provider_spec = None
+        for spec in provider_specs:
+            if spec.get("provider_key") == "ollama":
+                ollama_provider_spec = spec
+                break
+
+        if not ollama_provider_spec:
+            print("❌ Ollama provider specification not found")
+            return None
+
+        provider_spec_id = ollama_provider_spec["id"]
+        print(f"✅ Found Ollama provider spec: {provider_spec_id}")
+
+        # Step 2: Check for existing provider config
+        response = await self.client.get(
+            f"{self.api_base}/v1/provider-configs/",
+            params={"provider_spec_id": provider_spec_id}
+        )
         
+        provider_config_id = None
+        if response.status_code == 200:
+            configs = response.json()
+            if configs:
+                provider_config_id = configs[0]["id"]
+                print(f"✅ Found existing provider config: {provider_config_id}")
+
+        # Step 3: Create provider config if needed
+        if not provider_config_id:
+            config_data = {
+                "provider_spec_id": provider_spec_id,
+                "name": "Ollama Local",
+                "api_key": "not-needed-for-ollama",
+                "endpoint_url": "http://host.docker.internal:11434",
+                "is_public": True,
+            }
+
+            response = await self.client.post(f"{self.api_base}/v1/provider-configs/", json=config_data)
+            if response.status_code in [200, 201]:
+                config = response.json()
+                provider_config_id = config["id"]
+                print(f"✅ Created provider config: {provider_config_id}")
+            else:
+                print(f"❌ Failed to create provider config: {response.status_code} - {response.text}")
+                return None
+
+        return provider_config_id
+
+    async def _create_model_instance(self, provider_config_id: str) -> Optional[str]:
+        """Create model instance using new 4-entity architecture."""
+        if not self.client:
+            print("❌ Client not initialized")
+            return None
+
+        import uuid
+
+        # Step 1: Get model specs for the provider
+        response = await self.client.get(f"{self.api_base}/v1/provider-specs/with-models")
+        if response.status_code != 200:
+            print(f"❌ Failed to get provider specs with models: {response.status_code}")
+            return None
+
+        provider_specs = response.json()
+        model_spec = None
+        
+        # Look for any available model in Ollama provider
+        for spec in provider_specs:
+            if spec.get("provider_key") == "ollama":
+                models = spec.get("models", [])
+                if models:
+                    # Try to find qwen first, then fallback to any available model
+                    for model in models:
+                        if "qwen" in model.get("model_name", "").lower():
+                            model_spec = model
+                            break
+                    # If no qwen found, use first available model
+                    if not model_spec and models:
+                        model_spec = models[0]
+                        print(f"⚠️  Using fallback model: {model_spec.get('model_name', 'unknown')}")
+                break
+
+        if not model_spec:
+            print("❌ No model specification found for Ollama")
+            return None
+
+        model_spec_id = model_spec["id"]
+        model_name = model_spec.get("model_name", "unknown")
+        print(f"✅ Found model spec: {model_name} ({model_spec_id})")
+
+        # Step 2: Create model instance
         instance_data = {
-            "model_id": model_id,
-            "api_key": "not-needed-for-ollama",
-            "name": f"test-instance-{uuid.uuid4().hex[:8]}",
-            "description": "Test instance for MCP testing",
+            "provider_config_id": provider_config_id,
+            "model_spec_id": model_spec_id,
+            "name": f"test-{model_name}-instance-{uuid.uuid4().hex[:8]}",
+            "description": f"Test {model_name} instance for MCP testing",
             "is_public": True,
         }
 
-        response = await self.client.post(f"{self.api_base}/v1/llm-models/instances/", json=instance_data)
+        response = await self.client.post(f"{self.api_base}/v1/model-instances/", json=instance_data)
         if response.status_code in [200, 201]:
             instance = response.json()
+            print(f"✅ Created model instance: {instance['id']}")
             return str(instance.get("id"))
         else:
-            print(f"❌ Failed to create instance: {response.status_code} - {response.text}")
+            print(f"❌ Failed to create model instance: {response.status_code} - {response.text}")
             return None
 
 

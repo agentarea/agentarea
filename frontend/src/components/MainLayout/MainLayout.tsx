@@ -8,6 +8,9 @@ import {
   Package,
   Plug,
   ClipboardList,
+  Brain,
+  Key,
+  Globe,
 } from "lucide-react";
 import { LucideProps } from "lucide-react";
 import Header from "./components/Header";
@@ -73,10 +76,22 @@ export const navContent: NavSection[] = [
     isCollapsed: true,
     items: [
       {
-        label: "LLM Models",
-        labelKey: "llms",
-        href: "/admin/llms",
-        icon: <Cpu />,
+        label: "Providers",
+        labelKey: "providers",
+        href: "/admin/providers",
+        icon: <Server />,
+      },
+      {
+        label: "Provider Configs",
+        labelKey: "providerConfigs",
+        href: "/admin/provider-configs",
+        icon: <Key />,
+      },
+      {
+        label: "Model Specs",
+        labelKey: "modelSpecs",
+        href: "/admin/model-specs",
+        icon: <Brain />,
       },
     ],
   },

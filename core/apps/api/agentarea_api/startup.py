@@ -8,19 +8,13 @@ import logging
 
 from fastapi import FastAPI
 
-# Temporarily disabled due to Google ADK import issues
-# from agentarea_agents.application.agent_communication_service import (
-#     AgentCommunicationService,
-# )
-
 logger = logging.getLogger(__name__)
 
 
 def register_services():
-    """Services are now registered via FastAPI dependency injection.
+    """Register services with the application.
 
-    This function is kept for compatibility but no longer registers
-    services with a custom DI container.
+    This function handles service registration for the AgentArea platform.
     """
     logger.info("Services are registered via FastAPI dependency injection")
 

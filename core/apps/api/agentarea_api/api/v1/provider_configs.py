@@ -1,9 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from agentarea_api.api.deps.services import get_provider_service
-from agentarea_llm.application.provider_service import ProviderService
-from agentarea_llm.domain.models import ProviderConfig
+from agentarea_api.api.deps.services import get_provider_service  # type: ignore
+from agentarea_llm.application.provider_service import ProviderService  # type: ignore
+from agentarea_llm.domain.models import ProviderConfig  # type: ignore
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -130,4 +130,36 @@ async def delete_provider_config(
     success = await provider_service.delete_provider_config(config_id)
     if not success:
         raise HTTPException(status_code=404, detail="Provider configuration not found")
-    return {"message": "Provider configuration deleted successfully"} 
+    return {"message": "Provider configuration deleted successfully"}
+
+
+# Logo/Icon endpoints
+@router.get("/admin/{provider_key}/logo")
+async def get_provider_logo(
+    provider_key: str,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Get provider logo via admin route pattern."""
+    from fastapi.responses import FileResponse
+    import os
+    
+    # Map provider key to icon file
+    icon_path = f"core/static/icons/providers/{provider_key.lower()}.svg"
+    
+    if os.path.exists(icon_path):
+        return FileResponse(
+            icon_path,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    
+    # Return default icon if specific one doesn't exist
+    default_path = "core/static/icons/providers/default.svg"
+    if os.path.exists(default_path):
+        return FileResponse(
+            default_path,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    
+    raise HTTPException(status_code=404, detail="Provider logo not found") 

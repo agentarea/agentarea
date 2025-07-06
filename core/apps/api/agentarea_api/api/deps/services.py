@@ -22,12 +22,12 @@ from agentarea_common.events.router import create_event_broker_from_router, get_
 from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_llm.application.llm_model_service import LLMModelService
-from agentarea_llm.application.service import LLMModelInstanceService
-from agentarea_llm.infrastructure.llm_model_instance_repository import (
-    LLMModelInstanceRepository,
-)
-from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
+from agentarea_llm.application.provider_service import ProviderService
+from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
+from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 
 # LLM execution happens in agent_runner_service via Google ADK, not here
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
@@ -138,35 +138,54 @@ async def get_workflow_task_execution_service():
     return WorkflowTaskExecutionService()
 
 
-# LLM Services
-async def get_llm_model_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get a LLMModelRepository instance for the current request."""
-    return LLMModelRepository(db)
+# LLM Services (4-entity system)
+async def get_provider_spec_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
+    """Get a ProviderSpecRepository instance for the current request."""
+    return ProviderSpecRepository(db)
 
 
-async def get_llm_model_service(
+async def get_provider_config_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
+    """Get a ProviderConfigRepository instance for the current request."""
+    return ProviderConfigRepository(db)
+
+
+async def get_model_spec_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
+    """Get a ModelSpecRepository instance for the current request."""
+    return ModelSpecRepository(db)
+
+
+async def get_model_instance_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
+    """Get a ModelInstanceRepository instance for the current request."""
+    return ModelInstanceRepository(db)
+
+
+async def get_model_instance_service(
+    model_instance_repository: Annotated[ModelInstanceRepository, Depends(get_model_instance_repository)],
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    llm_model_repository: Annotated[LLMModelRepository, Depends(get_llm_model_repository)],
-):
-    """Get a LLMModelService instance for the current request."""
-    return LLMModelService(repository=llm_model_repository, event_broker=event_broker)
-
-
-async def get_llm_model_instance_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get a LLMModelInstanceRepository instance for the current request."""
-    return LLMModelInstanceRepository(db)
-
-
-async def get_llm_model_instance_service(
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    llm_model_instance_repository: Annotated[
-        LLMModelInstanceRepository, Depends(get_llm_model_instance_repository)
-    ],
     secret_manager: Annotated[BaseSecretManager, Depends(get_secret_manager)],
 ):
-    """Get a LLMModelInstanceService instance for the current request."""
-    return LLMModelInstanceService(
-        repository=llm_model_instance_repository,
+    """Get a ModelInstanceService instance for the current request."""
+    return ModelInstanceService(
+        repository=model_instance_repository,
+        event_broker=event_broker,
+        secret_manager=secret_manager,
+    )
+
+
+async def get_provider_service(
+    provider_spec_repository: Annotated[ProviderSpecRepository, Depends(get_provider_spec_repository)],
+    provider_config_repository: Annotated[ProviderConfigRepository, Depends(get_provider_config_repository)],
+    model_spec_repository: Annotated[ModelSpecRepository, Depends(get_model_spec_repository)],
+    model_instance_repository: Annotated[ModelInstanceRepository, Depends(get_model_instance_repository)],
+    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
+    secret_manager: Annotated[BaseSecretManager, Depends(get_secret_manager)],
+):
+    """Get a ProviderService instance for the current request."""
+    return ProviderService(
+        provider_spec_repo=provider_spec_repository,
+        provider_config_repo=provider_config_repository,
+        model_spec_repo=model_spec_repository,
+        model_instance_repo=model_instance_repository,
         event_broker=event_broker,
         secret_manager=secret_manager,
     )

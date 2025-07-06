@@ -234,7 +234,7 @@ class TestAgentMCPE2E:
         }
 
         # This should either fail during agent creation or handle gracefully during execution
-        response = requests.post(f"{API_BASE_URL}/agents", json=agent_data)
+        response = requests.post(f"{API_BASE_URL}/v1/agents/", json=agent_data)
         
         if response.status_code == 201:
             # Agent created successfully, test task execution with broken MCP
@@ -247,7 +247,7 @@ class TestAgentMCPE2E:
                 "priority": "high"
             }
             
-            task_response = requests.post(f"{API_BASE_URL}/tasks", json=task_data)
+            task_response = requests.post(f"{API_BASE_URL}/v1/tasks/", json=task_data)
             assert task_response.status_code == 201
             task = task_response.json()
             self.task_id = task["id"]

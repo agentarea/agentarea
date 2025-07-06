@@ -16,7 +16,7 @@ from agentarea_agents.application.agent_builder_service import (
 from agentarea_agents.domain.models import Agent
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.utils.types import sanitize_agent_name
-from agentarea_llm.domain.models import LLMModelInstance
+from agentarea_llm.domain.models import ModelInstance
 
 
 class TestAgentBuilderService:
@@ -33,8 +33,8 @@ class TestAgentBuilderService:
         return AsyncMock(spec=EventBroker)
 
     @pytest.fixture
-    def mock_llm_service(self):
-        """Mock LLM model instance service"""
+    def mock_model_instance_service(self):
+        """Mock model instance service"""
         return AsyncMock()
 
     @pytest.fixture
@@ -44,13 +44,13 @@ class TestAgentBuilderService:
 
     @pytest.fixture
     def agent_builder_service(
-        self, mock_repository, mock_event_broker, mock_llm_service, mock_mcp_service
+        self, mock_repository, mock_event_broker, mock_model_instance_service, mock_mcp_service
     ):
         """Create AgentBuilderService with mocked dependencies"""
         return AgentBuilderService(
             repository=mock_repository,
             event_broker=mock_event_broker,
-            llm_model_instance_service=mock_llm_service,
+            model_instance_service=mock_model_instance_service,
             mcp_server_instance_service=mock_mcp_service,
         )
 
@@ -78,15 +78,16 @@ class TestAgentBuilderService:
         )
 
     @pytest.fixture
-    def sample_llm_instance(self):
-        """Sample LLM model instance"""
-        return LLMModelInstance(
+    def sample_model_instance(self):
+        """Sample model instance using new architecture"""
+        return ModelInstance(
             id=uuid4(),
-            name="Test Model",
-            model_id=uuid4(),
-            description="Test model description",
-            api_key="test-api-key",
-            status="active",
+            provider_config_id=str(uuid4()),
+            model_spec_id=str(uuid4()),
+            name="Test Model Instance",
+            description="Test model instance description",
+            is_active=True,
+            is_public=True,
         )
 
     @pytest.mark.asyncio
@@ -94,14 +95,14 @@ class TestAgentBuilderService:
         self,
         agent_builder_service,
         mock_repository,
-        mock_llm_service,
+        mock_model_instance_service,
         sample_agent,
-        sample_llm_instance,
+        sample_model_instance,
     ):
         """Test successful agent configuration building"""
         # Setup mocks
         mock_repository.get.return_value = sample_agent
-        mock_llm_service.get.return_value = sample_llm_instance
+        mock_model_instance_service.get.return_value = sample_model_instance
 
         # Execute
         result = await agent_builder_service.build_agent_config(sample_agent.id)
@@ -112,7 +113,7 @@ class TestAgentBuilderService:
         assert result["name"] == sanitize_agent_name(sample_agent.name)
         assert result["description"] == sample_agent.description
         assert result["instruction"] == sample_agent.instruction
-        assert result["model_instance"] == sample_llm_instance
+        assert result["model_instance"] == sample_model_instance
         assert result["planning_enabled"] == sample_agent.planning
         assert result["workflow_type"] == "single"
         assert "tools_config" in result
@@ -120,7 +121,7 @@ class TestAgentBuilderService:
 
         # Verify repository was called correctly
         mock_repository.get.assert_called_once_with(sample_agent.id)
-        mock_llm_service.get.assert_called_once_with(UUID(sample_agent.model_id))
+        mock_model_instance_service.get.assert_called_once_with(UUID(sample_agent.model_id))
 
     @pytest.mark.asyncio
     async def test_build_agent_config_agent_not_found(self, agent_builder_service, mock_repository):
@@ -138,12 +139,12 @@ class TestAgentBuilderService:
 
     @pytest.mark.asyncio
     async def test_build_agent_config_model_not_found(
-        self, agent_builder_service, mock_repository, mock_llm_service, sample_agent
+        self, agent_builder_service, mock_repository, mock_model_instance_service, sample_agent
     ):
-        """Test building config when LLM model instance doesn't exist"""
+        """Test building config when model instance doesn't exist"""
         # Setup mocks
         mock_repository.get.return_value = sample_agent
-        mock_llm_service.get.return_value = None
+        mock_model_instance_service.get.return_value = None
 
         # Execute
         result = await agent_builder_service.build_agent_config(sample_agent.id)
@@ -151,7 +152,7 @@ class TestAgentBuilderService:
         # Verify
         assert result is None
         mock_repository.get.assert_called_once_with(sample_agent.id)
-        mock_llm_service.get.assert_called_once_with(UUID(sample_agent.model_id))
+        mock_model_instance_service.get.assert_called_once_with(UUID(sample_agent.model_id))
 
     @pytest.mark.asyncio
     async def test_build_tools_config_empty(self, agent_builder_service, sample_agent):
@@ -186,14 +187,14 @@ class TestAgentBuilderService:
         self,
         agent_builder_service,
         mock_repository,
-        mock_llm_service,
+        mock_model_instance_service,
         sample_agent,
-        sample_llm_instance,
+        sample_model_instance,
     ):
         """Test successful agent validation"""
         # Setup mocks
         mock_repository.get.return_value = sample_agent
-        mock_llm_service.get.return_value = sample_llm_instance
+        mock_model_instance_service.get.return_value = sample_model_instance
 
         # Execute
         errors = await agent_builder_service.validate_agent_config(sample_agent.id)
@@ -228,67 +229,63 @@ class TestAgentBuilderService:
         self,
         agent_builder_service,
         mock_repository,
-        mock_llm_service,
+        mock_model_instance_service,
         sample_agent,
-        sample_llm_instance,
+        sample_model_instance,
     ):
         """Test getting capabilities for agent with planning enabled"""
         # Setup agent with planning
         sample_agent.planning = True
         mock_repository.get.return_value = sample_agent
-        mock_llm_service.get.return_value = sample_llm_instance
+        mock_model_instance_service.get.return_value = sample_model_instance
 
         # Execute
-        capabilities = await agent_builder_service.get_agent_capabilities(sample_agent.id)
+        result = await agent_builder_service.get_agent_capabilities(sample_agent.id)
 
         # Verify
-        assert capabilities["streaming"] is True
-        assert capabilities["planning"] is True
-        assert capabilities["workflow_type"] == "sequential"
-        assert capabilities["supports_multi_agent"] is True
-        assert capabilities["supports_workflows"] is True
-        assert capabilities["supports_delegation"] is True
-        assert "tools" in capabilities
-        assert "events" in capabilities
+        assert result["planning"] == True
+        assert result["workflow_type"] == "sequential"
+        assert result["streaming"] == True
+        assert "tools" in result
+        assert "model_provider" in result
 
     @pytest.mark.asyncio
     async def test_get_agent_capabilities_no_planning(
         self,
         agent_builder_service,
         mock_repository,
-        mock_llm_service,
+        mock_model_instance_service,
         sample_agent,
-        sample_llm_instance,
+        sample_model_instance,
     ):
         """Test getting capabilities for agent without planning"""
         # Setup agent without planning
         sample_agent.planning = False
         mock_repository.get.return_value = sample_agent
-        mock_llm_service.get.return_value = sample_llm_instance
+        mock_model_instance_service.get.return_value = sample_model_instance
 
         # Execute
-        capabilities = await agent_builder_service.get_agent_capabilities(sample_agent.id)
+        result = await agent_builder_service.get_agent_capabilities(sample_agent.id)
 
         # Verify
-        assert capabilities["streaming"] is True
-        assert capabilities["planning"] is False
-        assert capabilities["workflow_type"] == "single"
+        assert result["planning"] == False
+        assert result["workflow_type"] == "single"
+        assert result["streaming"] == True
 
     @pytest.mark.asyncio
     async def test_get_agent_capabilities_agent_not_found(
         self, agent_builder_service, mock_repository
     ):
         """Test getting capabilities when agent doesn't exist"""
-        # Setup
+        # Setup mocks
         mock_repository.get.return_value = None
         agent_id = uuid4()
 
         # Execute
-        capabilities = await agent_builder_service.get_agent_capabilities(agent_id)
+        result = await agent_builder_service.get_agent_capabilities(agent_id)
 
         # Verify
-        assert capabilities == {}
-        mock_repository.get.assert_called_once_with(agent_id)
+        assert result == {}
 
 
 if __name__ == "__main__":

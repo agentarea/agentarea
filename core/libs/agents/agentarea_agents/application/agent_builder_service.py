@@ -6,8 +6,8 @@ from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.utils.types import sanitize_agent_name
-from agentarea_llm.application.service import LLMModelInstanceService
-from agentarea_llm.domain.models import LLMModelInstance
+from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.domain.models import ModelInstance
 from agentarea_mcp.application.service import MCPServerInstanceService
 
 from agentarea_agents.domain.models import Agent
@@ -23,12 +23,12 @@ class AgentBuilderService:
         self,
         repository: AgentRepository,
         event_broker: EventBroker,
-        llm_model_instance_service: LLMModelInstanceService,
+        model_instance_service: ModelInstanceService,
         mcp_server_instance_service: MCPServerInstanceService | None = None,
     ):
         self.repository = repository
         self.event_broker = event_broker
-        self.llm_model_instance_service = llm_model_instance_service
+        self.model_instance_service = model_instance_service
         self.mcp_server_instance_service = mcp_server_instance_service
 
     async def build_agent_config(self, agent_id: UUID) -> dict[str, Any] | None:
@@ -46,11 +46,13 @@ class AgentBuilderService:
             logger.error(f"Agent with ID {agent_id} not found")
             return None
 
-        # Get LLM model instance
-        model_instance: LLMModelInstance | None = None
+        # Get model instance using new 4-entity architecture
+        model_instance: ModelInstance | None = None
         if agent.model_id:
             try:
-                model_instance = await self.llm_model_instance_service.get(UUID(agent.model_id))
+                model_instance = await self.model_instance_service.get(UUID(agent.model_id))
+                if model_instance:
+                    logger.info(f"Using ModelInstance for agent {agent_id}")
             except (ValueError, TypeError) as e:
                 logger.error(
                     f"Invalid model_id format for agent {agent_id}: {agent.model_id}, error: {e}"
@@ -58,7 +60,7 @@ class AgentBuilderService:
 
         if not model_instance:
             logger.error(
-                f"LLM model instance not found for agent {agent_id}, model_id: {agent.model_id}"
+                f"Model instance not found for agent {agent_id}, model_id: {agent.model_id}"
             )
             return None
 
@@ -183,9 +185,9 @@ class AgentBuilderService:
         else:
             # Validate model instance exists
             try:
-                model_instance = await self.llm_model_instance_service.get(UUID(agent.model_id))
+                model_instance = await self.model_instance_service.get(UUID(agent.model_id))
                 if not model_instance:
-                    errors.append(f"LLM model instance {agent.model_id} not found")
+                    errors.append(f"Model instance {agent.model_id} not found")
             except (ValueError, TypeError):
                 errors.append(f"Invalid model_id format: {agent.model_id}")
 

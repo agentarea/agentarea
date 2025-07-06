@@ -10,14 +10,12 @@ import { Card } from "@/components/ui/card";
 import { 
   BasicInformation, 
   AgentTriggers, 
-  ToolConfig, 
-  AdvancedSettings, 
-  InstructionInfo 
+  ToolConfig
 } from './components';
 import type { AgentFormValues, EventConfig } from './types';
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
-type LLMModelInstance = components["schemas"]["LLMModelInstanceResponse"];
+type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
 export default function CreateAgentClient({ 
   mcpServers, 
@@ -28,7 +26,7 @@ export default function CreateAgentClient({
 }) {
   const [state, formAction] = useActionState(addAgent, agentInitialState);
 
-  const { register, control, setValue, formState: { errors } } = useForm<AgentFormValues>({
+  const { register, control, setValue, handleSubmit, formState: { errors } } = useForm<AgentFormValues>({
     defaultValues: {
       name: '',
       description: '',
@@ -60,7 +58,7 @@ export default function CreateAgentClient({
       setValue("model_id", state.fieldValues.model_id ?? '');
       
       if (Array.isArray(state.fieldValues.events_config?.events)) {
-        setValue("events_config.events", state.fieldValues.events_config.events as EventConfig[]);
+        setValue("events_config.events", state.fieldValues.events_config.events as unknown as EventConfig[]);
       }
       
       if (Array.isArray(state.fieldValues.tools_config?.mcp_server_configs)) {
@@ -76,8 +74,39 @@ export default function CreateAgentClient({
     }
   }, [state?.fieldValues, setValue]);
 
+  // Handle form submission with react-hook-form validation
+  const onSubmit = (data: AgentFormValues) => {
+    // Create FormData for server action
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('description', data.description || '');
+    formData.append('instruction', data.instruction);
+    formData.append('model_id', data.model_id);
+    formData.append('planning', data.planning.toString());
+
+    // Add tools config
+    data.tools_config.mcp_server_configs.forEach((config, index) => {
+      formData.append(`tools_config.mcp_server_configs[${index}].mcp_server_id`, config.mcp_server_id);
+      formData.append(`tools_config.mcp_server_configs[${index}].api_key`, config.api_key);
+      if (config.config) {
+        formData.append(`tools_config.mcp_server_configs[${index}].config`, JSON.stringify(config.config));
+      }
+    });
+
+    // Add events config
+    data.events_config.events.forEach((event, index) => {
+      formData.append(`events_config.events[${index}].event_type`, event.event_type);
+      if (event.config) {
+        formData.append(`events_config.events[${index}].config`, JSON.stringify(event.config));
+      }
+    });
+
+    // Call server action
+    formAction(formData);
+  };
+
   return (
-    <form action={formAction}>
+    <form onSubmit={handleSubmit(onSubmit)}>
         <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 lg:gap-x-[12px] gap-[12px] items-start">
           <div className="">
             <BasicInformation 

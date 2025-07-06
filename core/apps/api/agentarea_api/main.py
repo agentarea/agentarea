@@ -1,34 +1,29 @@
 """Main FastAPI application for AgentArea."""
 
-# from agentarea_api.api.events.mcp_events import register_mcp_event_handlers
-# from agentarea_common.config import get_settings
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-# Dependency injection container setup
-from agentarea_common.di.container import DIContainer, register_singleton
+from agentarea_common.di.container import DIContainer, register_singleton, get_container
 from agentarea_common.events.broker import EventBroker
-
-# from agentarea_common.events.base_events import DomainEvent  # Removed - not used
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
 from agentarea_api.api.deps.services import get_event_broker, get_secret_manager
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import v1_router
+from agentarea_api.startup import startup_event
 
 container = DIContainer()
 
 
-# Use real service implementations instead of test mocks
 async def initialize_services():
     """Initialize real services instead of test mocks."""
     try:
-        # Get real event broker (Redis-based with fallback)
         event_broker = await get_event_broker()
         register_singleton(EventBroker, event_broker)
 
-        # Get real secret manager (Infisical-based with fallback)
         secret_manager = await get_secret_manager()
         register_singleton(BaseSecretManager, secret_manager)
 
@@ -44,49 +39,53 @@ async def initialize_services():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # await startup_handler()
+    container = get_container()
     await initialize_services()
 
-    # Start the FastStream events router
     from agentarea_api.api.events.events_router import start_events_router
-
     await start_events_router()
 
     print("Application started successfully")
     yield
-    # Shutdown
+
     print("Application shutting down")
 
-    # Stop the FastStream events router
     from agentarea_api.api.events.events_router import stop_events_router
-
     await stop_events_router()
+    await container.shutdown_resources()
 
 
-app = FastAPI(
-    title="AgentArea API",
-    description="Modular and extensible framework for building AI agents.",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    app = FastAPI(
+        title="AgentArea API",
+        description="Modular and extensible framework for building AI agents.",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# Mount static files
-# app.mount("/static", StaticFiles(directory="static"), name="static")
+    # Add static file serving for provider icons
+    static_path = Path(__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
-# API routers
-app.include_router(v1_router)
+    # Include API router
+    app.include_router(v1_router)
+    app.include_router(events_router)
 
-# Include events router to handle task events
-app.include_router(events_router)
+    return app
+
+
+app = create_app()
 
 
 @app.get("/")

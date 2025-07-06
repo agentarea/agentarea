@@ -12,11 +12,19 @@ import pytest_asyncio
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.base.models import BaseModel
-from agentarea_llm.domain.models import LLMModel, LLMModelInstance, LLMProvider
+from agentarea_llm.domain.models import (
+    ProviderSpec, ProviderConfig, ModelSpec, ModelInstance,
+    # Legacy models - still needed for some tests
+    LLMModel, LLMModelInstance, LLMProvider
+)
 from agentarea_llm.infrastructure.llm_model_instance_repository import (
     LLMModelInstanceRepository,
 )
 from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
+from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
+from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import Base as MCPBase
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
@@ -77,15 +85,214 @@ async def db_session(test_engine):
         await session.rollback()
 
 
+@pytest_asyncio.fixture(scope="function")
+async def populated_db_session(test_engine):
+    """Create a test database session with populated test data."""
+    async_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with async_session() as session:
+        # Start a transaction
+        await session.begin()
+
+        # Populate test data
+        await _populate_test_data(session)
+
+        yield session
+
+        # Rollback transaction to clean up
+        await session.rollback()
+
+
+async def _populate_test_data(session: AsyncSession):
+    """Populate test database with essential LLM data."""
+    # Create Ollama provider spec
+    ollama_provider_spec = ProviderSpec(
+        id=UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"),
+        provider_key="ollama",
+        name="Ollama",
+        description="Local and open source models through Ollama",
+        provider_type="ollama_chat",
+        icon="ollama",
+        is_builtin=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    session.add(ollama_provider_spec)
+    
+    # Create model specs for Ollama
+    qwen_model_spec = ModelSpec(
+        id=uuid4(),
+        provider_spec_id=UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"),
+        model_name="qwen2.5",
+        display_name="Qwen 2.5",
+        description="Meta's Llama 3.1 model",
+        context_window=4096,
+        is_active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    session.add(qwen_model_spec)
+    
+    llama2_model_spec = ModelSpec(
+        id=uuid4(),
+        provider_spec_id=UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"),
+        model_name="llama2",
+        display_name="Llama 2",
+        description="Meta's Llama 2 model",
+        context_window=4096,
+        is_active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    session.add(llama2_model_spec)
+    
+    mistral_model_spec = ModelSpec(
+        id=uuid4(),
+        provider_spec_id=UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"),
+        model_name="mistral",
+        display_name="Mistral",
+        description="Mistral's open source model",
+        context_window=8192,
+        is_active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    session.add(mistral_model_spec)
+    
+    # Create provider config for Ollama
+    ollama_provider_config = ProviderConfig(
+        id=uuid4(),
+        provider_spec_id=UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"),
+        name="Ollama Local",
+        api_key="not-needed-for-ollama",
+        endpoint_url="http://host.docker.internal:11434",
+        is_active=True,
+        is_public=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    session.add(ollama_provider_config)
+    
+    # Create model instances
+    qwen_instance = ModelInstance(
+        id=uuid4(),
+        provider_config_id=ollama_provider_config.id,
+        model_spec_id=qwen_model_spec.id,
+        name="Qwen 2.5 Test Instance",
+        description="Test instance for Qwen 2.5 model",
+        is_active=True,
+        is_public=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    session.add(qwen_instance)
+    
+    llama2_instance = ModelInstance(
+        id=uuid4(),
+        provider_config_id=ollama_provider_config.id,
+        model_spec_id=llama2_model_spec.id,
+        name="Llama 2 Test Instance",
+        description="Test instance for Llama 2 model",
+        is_active=True,
+        is_public=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    session.add(llama2_instance)
+    
+    # Commit the test data
+    await session.commit()
+
+
 # Model Factories
 class ModelFactory:
     """Base factory for creating test models."""
 
     @staticmethod
+    def create_provider_spec(**kwargs) -> ProviderSpec:
+        """Create a test provider spec."""
+        defaults = {
+            "id": uuid4(),
+            "provider_key": f"test-provider-{uuid4().hex[:8]}",
+            "name": f"Test Provider {uuid4().hex[:8]}",
+            "description": "Test provider specification",
+            "provider_type": "test",
+            "icon": "test",
+            "is_builtin": True,
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+        defaults.update(kwargs)
+        return ProviderSpec(**defaults)
+
+    @staticmethod
+    def create_provider_config(provider_spec_id: UUID = None, **kwargs) -> ProviderConfig:
+        """Create a test provider config."""
+        if provider_spec_id is None:
+            provider_spec_id = uuid4()
+
+        defaults = {
+            "id": uuid4(),
+            "provider_spec_id": provider_spec_id,
+            "name": f"Test Config {uuid4().hex[:8]}",
+            "api_key": "test-api-key",
+            "endpoint_url": "https://test.example.com",
+            "is_active": True,
+            "is_public": True,
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+        defaults.update(kwargs)
+        return ProviderConfig(**defaults)
+
+    @staticmethod
+    def create_model_spec(provider_spec_id: UUID = None, **kwargs) -> ModelSpec:
+        """Create a test model spec."""
+        if provider_spec_id is None:
+            provider_spec_id = uuid4()
+
+        defaults = {
+            "id": uuid4(),
+            "provider_spec_id": provider_spec_id,
+            "model_name": f"test-model-{uuid4().hex[:8]}",
+            "display_name": f"Test Model {uuid4().hex[:8]}",
+            "description": "Test model specification",
+            "context_window": 4096,
+            "is_active": True,
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+        defaults.update(kwargs)
+        return ModelSpec(**defaults)
+
+    @staticmethod
+    def create_model_instance(provider_config_id: UUID = None, model_spec_id: UUID = None, **kwargs) -> ModelInstance:
+        """Create a test model instance."""
+        if provider_config_id is None:
+            provider_config_id = uuid4()
+        if model_spec_id is None:
+            model_spec_id = uuid4()
+
+        defaults = {
+            "id": uuid4(),
+            "provider_config_id": provider_config_id,
+            "model_spec_id": model_spec_id,
+            "name": f"Test Instance {uuid4().hex[:8]}",
+            "description": "Test model instance",
+            "is_active": True,
+            "is_public": True,
+            "created_at": datetime.now(),
+            "updated_at": datetime.now(),
+        }
+        defaults.update(kwargs)
+        return ModelInstance(**defaults)
+
+    # Legacy model factories - still needed for some tests
+    @staticmethod
     def create_llm_provider(**kwargs) -> LLMProvider:
         """Create a test LLM provider."""
         defaults = {
-            "id": str(uuid4()),
+            "id": uuid4(),
             "name": f"test-provider-{uuid4().hex[:8]}",
             "description": "Test LLM provider",
             "provider_type": "test",
@@ -97,13 +304,13 @@ class ModelFactory:
         return LLMProvider(**defaults)
 
     @staticmethod
-    def create_llm_model(provider_id: str = None, **kwargs) -> LLMModel:
+    def create_llm_model(provider_id: UUID = None, **kwargs) -> LLMModel:
         """Create a test LLM model."""
         if provider_id is None:
-            provider_id = str(uuid4())
+            provider_id = uuid4()
 
         defaults = {
-            "id": str(uuid4()),
+            "id": uuid4(),
             "name": f"test-model-{uuid4().hex[:8]}",
             "description": "Test LLM model",
             "provider_id": provider_id,
@@ -119,13 +326,13 @@ class ModelFactory:
         return LLMModel(**defaults)
 
     @staticmethod
-    def create_llm_model_instance(model_id: str = None, **kwargs) -> LLMModelInstance:
+    def create_llm_model_instance(model_id: UUID = None, **kwargs) -> LLMModelInstance:
         """Create a test LLM model instance."""
         if model_id is None:
-            model_id = str(uuid4())
+            model_id = uuid4()
 
         defaults = {
-            "id": str(uuid4()),
+            "id": uuid4(),
             "model_id": model_id,
             "name": f"test-instance-{uuid4().hex[:8]}",
             "description": "Test LLM model instance",
@@ -139,13 +346,13 @@ class ModelFactory:
         return LLMModelInstance(**defaults)
 
     @staticmethod
-    def create_agent(model_id: str = None, **kwargs) -> Agent:
+    def create_agent(model_id: UUID = None, **kwargs) -> Agent:
         """Create a test agent."""
         if model_id is None:
-            model_id = str(uuid4())
+            model_id = uuid4()
 
         defaults = {
-            "id": str(uuid4()),
+            "id": uuid4(),
             "name": f"test_agent_{uuid4().hex[:8]}",
             "status": "active",
             "description": "Test agent",
@@ -175,10 +382,10 @@ class ModelFactory:
         return MCPServer(**defaults)
 
     @staticmethod
-    def create_mcp_server_instance(server_spec_id: str = None, **kwargs) -> MCPServerInstance:
+    def create_mcp_server_instance(server_spec_id: UUID = None, **kwargs) -> MCPServerInstance:
         """Create a test MCP server instance."""
         if server_spec_id is None:
-            server_spec_id = str(uuid4())
+            server_spec_id = uuid4()
 
         defaults = {
             "name": f"test-mcp-instance-{uuid4().hex[:8]}",
@@ -225,6 +432,31 @@ async def agent_repository(db_session):
     return AgentRepository(db_session)
 
 
+@pytest_asyncio.fixture
+async def provider_spec_repository(db_session):
+    """Provide a ProviderSpecRepository instance."""
+    return ProviderSpecRepository(db_session)
+
+
+@pytest_asyncio.fixture
+async def provider_config_repository(db_session):
+    """Provide a ProviderConfigRepository instance."""
+    return ProviderConfigRepository(db_session)
+
+
+@pytest_asyncio.fixture
+async def model_spec_repository(db_session):
+    """Provide a ModelSpecRepository instance."""
+    return ModelSpecRepository(db_session)
+
+
+@pytest_asyncio.fixture
+async def model_instance_repository(db_session):
+    """Provide a ModelInstanceRepository instance."""
+    return ModelInstanceRepository(db_session)
+
+
+# Legacy repository fixtures - still needed for some tests
 @pytest_asyncio.fixture
 async def llm_model_repository(db_session):
     """Provide an LLMModelRepository instance."""

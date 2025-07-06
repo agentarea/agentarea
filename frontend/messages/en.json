@@ -4,7 +4,7 @@
     "grid": "Grid",
     "table": "Table",
     "emptyState": {
-      "title": "Emty data",
+      "title": "Empty data",
       "description": "Sorry, we couldn't find any data"
     }
   },
@@ -15,7 +15,34 @@
     "goHome": "Go to home"
   },
   "admin": {
-    "llms": "LLM Models"
+    "title": "Admin Dashboard",
+    "overview": "Overview and quick access to all admin sections",
+    "llms": "LLM Models",
+    "providers": "Providers",
+    "providerConfigs": "Provider Configs",
+    "modelSpecs": "Model Specs",
+    "modelInstances": "Model Instances",
+    "providerSpecifications": "Provider Specifications",
+    "providerConfigurations": "Provider Configurations",
+    "modelSpecifications": "Model Specifications",
+    "sections": {
+      "modelInstances": {
+        "title": "Model Instances",
+        "description": "Manage configured AI model instances ready for use by agents"
+      },
+      "providers": {
+        "title": "Providers",
+        "description": "View AI provider specifications and available models"
+      },
+      "providerConfigs": {
+        "title": "Provider Configs", 
+        "description": "Manage API configurations and credentials for AI providers"
+      },
+      "modelSpecs": {
+        "title": "Model Specs",
+        "description": "Manage AI model specifications and capabilities"
+      }
+    }
   },
   "Sidebar": {
     "admin": "Admin",
@@ -27,6 +54,9 @@
     "llmBrowse": "Browse",
     "mcp": "MCP Servers",
     "connections": "Connections",
+    "providers": "Providers",
+    "providerConfigs": "Provider Configs",
+    "modelSpecs": "Model Specs",
     "settings": "Settings",
     "logout": "Logout"
   },
@@ -64,6 +94,33 @@
     }
   },
 
+  "ProvidersPage": {
+    "title": "Providers",
+    "noProviders": "No providers found",
+    "addProvider": "Add Provider",
+    "emptyDescription": "No AI providers are currently available."
+  },
+
+  "ProviderConfigsPage": {
+    "title": "Provider Configurations",
+    "noConfigs": "No provider configurations",
+    "addConfig": "Add Configuration",
+    "emptyDescription": "Add a new provider configuration to connect to AI services",
+    "create": {
+      "title": "Add Provider Configuration",
+      "backToConfigs": "Back to Provider Configs",
+      "success": "Provider configuration created successfully",
+      "error": "Failed to create provider configuration"
+    }
+  },
+
+  "ModelSpecsPage": {
+    "title": "Model Specifications",
+    "noSpecs": "No model specifications",
+    "addSpec": "Add Model Spec",
+    "emptyDescription": "Add a new model specification to define available AI models"
+  },
+
   "SettingsPage": {
     "title": "Settings",
     "logout": "Logout",
@@ -92,7 +149,21 @@
   "AgentsPage": {
     "create": {
       "title": "Create Agent",
-      "back": "Back to Browse Agents"
+      "back": "Back to Browse Agents",
+      "success": "Agent created successfully!",
+      "error": "Failed to create agent",
+      "validation": "Validation failed. Please check the fields.",
+      "fields": {
+        "name": "Agent Name",
+        "description": "Description / Goal",
+        "instruction": "Instruction",
+        "model": "LLM Model",
+        "namePlaceholder": "Enter agent name",
+        "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
+        "instructionPlaceholder": "Provide specific instructions for this agent...",
+        "selectModel": "Select a model",
+        "noModels": "No LLM models configured. Please add models in Admin → Model Instances"
+      }
     }
   }
 }

@@ -4,7 +4,7 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_provider_service
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ProviderSpec, ModelSpec
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/provider-specs", tags=["provider-specs"])
@@ -18,12 +18,18 @@ class ProviderSpecResponse(BaseModel):
     description: str | None
     provider_type: str
     icon: str | None
+    icon_url: str | None
     is_builtin: bool
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, provider_spec: ProviderSpec) -> "ProviderSpecResponse":
+    def from_domain(cls, provider_spec: ProviderSpec, request: Request | None = None) -> "ProviderSpecResponse":
+        icon_url = None
+        if provider_spec.icon and request:
+            base_url = str(request.base_url).rstrip('/')
+            icon_url = f"{base_url}/static/icons/providers/{provider_spec.icon}.svg"
+        
         return cls(
             id=str(provider_spec.id),
             provider_key=provider_spec.provider_key,
@@ -31,6 +37,7 @@ class ProviderSpecResponse(BaseModel):
             description=provider_spec.description,
             provider_type=provider_spec.provider_type,
             icon=provider_spec.icon,
+            icon_url=icon_url,
             is_builtin=provider_spec.is_builtin,
             created_at=provider_spec.created_at,
             updated_at=provider_spec.updated_at,
@@ -70,13 +77,19 @@ class ProviderSpecWithModelsResponse(BaseModel):
     description: str | None
     provider_type: str
     icon: str | None
+    icon_url: str | None
     is_builtin: bool
     created_at: datetime
     updated_at: datetime
     models: list[ModelSpecResponse]
 
     @classmethod
-    def from_domain(cls, provider_spec: ProviderSpec) -> "ProviderSpecWithModelsResponse":
+    def from_domain(cls, provider_spec: ProviderSpec, request: Request | None = None) -> "ProviderSpecWithModelsResponse":
+        icon_url = None
+        if provider_spec.icon and request:
+            base_url = str(request.base_url).rstrip('/')
+            icon_url = f"{base_url}/static/icons/providers/{provider_spec.icon}.svg"
+        
         return cls(
             id=str(provider_spec.id),
             provider_key=provider_spec.provider_key,
@@ -84,6 +97,7 @@ class ProviderSpecWithModelsResponse(BaseModel):
             description=provider_spec.description,
             provider_type=provider_spec.provider_type,
             icon=provider_spec.icon,
+            icon_url=icon_url,
             is_builtin=provider_spec.is_builtin,
             created_at=provider_spec.created_at,
             updated_at=provider_spec.updated_at,
@@ -94,26 +108,29 @@ class ProviderSpecWithModelsResponse(BaseModel):
 # Provider Spec endpoints
 @router.get("/", response_model=list[ProviderSpecResponse])
 async def list_provider_specs(
+    request: Request,
     is_builtin: bool | None = None,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """List all provider specifications."""
     provider_specs = await provider_service.list_provider_specs(is_builtin=is_builtin)
-    return [ProviderSpecResponse.from_domain(spec) for spec in provider_specs]
+    return [ProviderSpecResponse.from_domain(spec, request) for spec in provider_specs]
 
 
 @router.get("/with-models", response_model=list[ProviderSpecWithModelsResponse])
 async def list_provider_specs_with_models(
+    request: Request,
     is_builtin: bool | None = None,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """List all provider specifications with their available models."""
     provider_specs = await provider_service.list_provider_specs(is_builtin=is_builtin)
-    return [ProviderSpecWithModelsResponse.from_domain(spec) for spec in provider_specs]
+    return [ProviderSpecWithModelsResponse.from_domain(spec, request) for spec in provider_specs]
 
 
 @router.get("/{provider_spec_id}", response_model=ProviderSpecWithModelsResponse)
 async def get_provider_spec(
+    request: Request,
     provider_spec_id: UUID,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
@@ -121,11 +138,12 @@ async def get_provider_spec(
     provider_spec = await provider_service.get_provider_spec(provider_spec_id)
     if not provider_spec:
         raise HTTPException(status_code=404, detail="Provider specification not found")
-    return ProviderSpecWithModelsResponse.from_domain(provider_spec)
+    return ProviderSpecWithModelsResponse.from_domain(provider_spec, request)
 
 
 @router.get("/by-key/{provider_key}", response_model=ProviderSpecWithModelsResponse)
 async def get_provider_spec_by_key(
+    request: Request,
     provider_key: str,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
@@ -133,7 +151,7 @@ async def get_provider_spec_by_key(
     provider_spec = await provider_service.get_provider_spec_by_key(provider_key)
     if not provider_spec:
         raise HTTPException(status_code=404, detail="Provider specification not found")
-    return ProviderSpecWithModelsResponse.from_domain(provider_spec)
+    return ProviderSpecWithModelsResponse.from_domain(provider_spec, request)
 
 
  

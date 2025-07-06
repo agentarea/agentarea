@@ -10,7 +10,7 @@ import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
 import type { components } from '@/api/schema';
 
-type LLMModelInstance = components["schemas"]["LLMModelInstanceResponse"];
+type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
 type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
@@ -83,12 +83,17 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
                   {llmModelInstances.length > 0 ? (
                     llmModelInstances.map((instance) => (
                       <SelectItem key={instance.id} value={instance.id}>
-                        {instance.name}
+                        <div className="flex flex-col">
+                          <span className="font-medium">{instance.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {instance.provider_name} - {instance.model_display_name}
+                          </span>
+                        </div>
                       </SelectItem>
                     ))
                   ) : (
                     <SelectItem value="null" disabled>
-                      No LLM models configured. Please add models in Admin → LLMs
+                      No LLM models configured. Please add models in Admin → Model Instances
                     </SelectItem>
                   )}
                 </SelectContent>

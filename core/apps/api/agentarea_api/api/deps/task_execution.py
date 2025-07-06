@@ -11,13 +11,13 @@ from agentarea_agents.application.task_execution_service import TaskExecutionSer
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_api.api.deps.events import get_event_broker
 from agentarea_api.api.deps.services import (
-    get_llm_model_instance_service,
+    get_model_instance_service,
     get_mcp_server_instance_service,
 )
 from agentarea_api.api.deps.session import get_session_service
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.database import get_db_session
-from agentarea_llm.application.service import LLMModelInstanceService
+from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import Depends
 from google.adk.sessions import BaseSessionService
@@ -34,8 +34,8 @@ async def get_agent_repository(
 async def get_agent_builder_service(
     agent_repository: Annotated[AgentRepository, Depends(get_agent_repository)],
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    llm_model_instance_service: Annotated[
-        LLMModelInstanceService, Depends(get_llm_model_instance_service)
+    model_instance_service: Annotated[
+        ModelInstanceService, Depends(get_model_instance_service)
     ],
     mcp_server_instance_service: Annotated[
         MCPServerInstanceService, Depends(get_mcp_server_instance_service)
@@ -45,7 +45,7 @@ async def get_agent_builder_service(
     return AgentBuilderService(
         repository=agent_repository,
         event_broker=event_broker,
-        llm_model_instance_service=llm_model_instance_service,
+        model_instance_service=model_instance_service,
         mcp_server_instance_service=mcp_server_instance_service,
     )
 
@@ -61,7 +61,7 @@ class AgentServiceFactory:
         self,
         agent_repository: AgentRepository,
         event_broker: EventBroker,
-        llm_model_instance_service: LLMModelInstanceService,
+        model_instance_service: ModelInstanceService,
         session_service: BaseSessionService,
         agent_builder_service: AgentBuilderService,
     ) -> tuple[AgentRunnerService, AgentCommunicationService]:
@@ -71,7 +71,7 @@ class AgentServiceFactory:
             self._agent_runner_service = AgentRunnerService(
                 repository=agent_repository,
                 event_broker=event_broker,
-                llm_model_instance_service=llm_model_instance_service,
+                model_instance_service=model_instance_service,
                 session_service=session_service,
                 agent_builder_service=agent_builder_service,
                 agent_communication_service=None,  # Will be set later
@@ -99,8 +99,8 @@ _agent_service_factory = AgentServiceFactory()
 async def get_agent_services(
     agent_repository: Annotated[AgentRepository, Depends(get_agent_repository)],
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    llm_model_instance_service: Annotated[
-        LLMModelInstanceService, Depends(get_llm_model_instance_service)
+    model_instance_service: Annotated[
+        ModelInstanceService, Depends(get_model_instance_service)
     ],
     session_service: Annotated[BaseSessionService, Depends(get_session_service)],
     agent_builder_service: Annotated[AgentBuilderService, Depends(get_agent_builder_service)],
@@ -109,7 +109,7 @@ async def get_agent_services(
     return _agent_service_factory.create_services(
         agent_repository=agent_repository,
         event_broker=event_broker,
-        llm_model_instance_service=llm_model_instance_service,
+        model_instance_service=model_instance_service,
         session_service=session_service,
         agent_builder_service=agent_builder_service,
     )
@@ -136,8 +136,8 @@ async def get_agent_communication_service(
 async def get_task_execution_service(
     agent_repository: Annotated[AgentRepository, Depends(get_agent_repository)],
     event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    llm_model_instance_service: Annotated[
-        LLMModelInstanceService, Depends(get_llm_model_instance_service)
+    model_instance_service: Annotated[
+        ModelInstanceService, Depends(get_model_instance_service)
     ],
     mcp_server_instance_service: Annotated[
         MCPServerInstanceService, Depends(get_mcp_server_instance_service)
@@ -151,7 +151,7 @@ async def get_task_execution_service(
     return TaskExecutionService(
         agent_repository=agent_repository,
         event_broker=event_broker,
-        llm_model_instance_service=llm_model_instance_service,
+        model_instance_service=model_instance_service,
         mcp_server_instance_service=mcp_server_instance_service,
         session_service=session_service,
         agent_communication_service=agent_communication_service,

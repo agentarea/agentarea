@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -5,7 +6,8 @@ from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.utils.types import TaskState
-from agentarea_llm.application.service import LLMModelInstanceService
+
+# Legacy import removed - now using new 4-entity architecture
 from agentarea_tasks.domain.events import TaskCompleted, TaskFailed, TaskStatusChanged
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
@@ -16,7 +18,6 @@ from google.genai import types
 from agentarea_agents.infrastructure.repository import AgentRepository
 
 from .agent_builder_service import AgentBuilderService
-from .agent_communication_service import AgentCommunicationService
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +27,12 @@ class AgentRunnerService:
         self,
         repository: AgentRepository,
         event_broker: EventBroker,
-        llm_model_instance_service: LLMModelInstanceService,
         session_service: BaseSessionService,
         agent_builder_service: AgentBuilderService,
-        agent_communication_service: "AgentCommunicationService | None" = None,
+        agent_communication_service: Any | None = None,
     ):
         self.repository = repository
         self.event_broker = event_broker
-        self.llm_model_instance_service = llm_model_instance_service
         self.session_service = session_service
         self.agent_builder_service = agent_builder_service
         self.agent_communication_service = agent_communication_service
@@ -41,41 +40,26 @@ class AgentRunnerService:
     def _create_litellm_model_from_instance(
         self, model_instance: Any
     ) -> tuple[str, str | None]:
-        """Create LiteLLM model string and endpoint URL from database model instance.
-
-        Args:
-            model_instance: LLMModelInstance from database
-
-        Returns:
-            Tuple of (LiteLLM model string, endpoint_url or None)
-        """
+        """Create LiteLLM model string and endpoint URL from database model instance."""
         logger.info(f"Using model instance: {model_instance.name}")
 
-        # Get endpoint_url from the model relationship if available
-        endpoint_url = None
-        if (
-            hasattr(model_instance, "model")
-            and model_instance.model
-            and hasattr(model_instance.model, "endpoint_url")
-        ):
-            endpoint_url = model_instance.model.endpoint_url
+        # Extract endpoint_url from provider_config
+        endpoint_url = getattr(
+            getattr(model_instance, "provider_config", None), "endpoint_url", None
+        )
 
-        # Construct LiteLLM model string from provider.provider_type and model.model_type
-        # For example: "ollama_chat/qwen2.5" or "openai/gpt-4"
-        if hasattr(model_instance, 'model') and model_instance.model:
-            model = model_instance.model
-            if hasattr(model, 'provider') and model.provider:
-                provider_type = model.provider.provider_type
-                model_type = model.model_type
-                litellm_model_string = f"{provider_type}/{model_type}"
-            else:
-                # This shouldn't happen in normal operation
-                logger.error("Provider relationship not loaded")
-                raise ValueError("Provider relationship not loaded for model instance")
-        else:
-            # This shouldn't happen in normal operation
-            logger.error("Model relationship not loaded")
-            raise ValueError("Model relationship not loaded for model instance")
+        # Construct LiteLLM model string from provider_spec and model_spec
+        provider_config = getattr(model_instance, "provider_config", None)
+        provider_spec = getattr(provider_config, "provider_spec", None)
+        model_spec = getattr(model_instance, "model_spec", None)
+
+        if not (provider_spec and model_spec):
+            raise ValueError(
+                "Model instance relationships not loaded - ensure provider_config, provider_spec, and model_spec are loaded"
+            )
+
+        litellm_model_string = f"{provider_spec.provider_type}/{model_spec.model_name}"
+        logger.info(f"Created LiteLLM model string: {litellm_model_string}")
 
         return litellm_model_string, endpoint_url
 
@@ -207,15 +191,7 @@ class AgentRunnerService:
                 self._create_litellm_model_from_instance(agent_config["model_instance"])
             )
 
-            # Create LiteLlm with or without base_url depending on endpoint_url availability
-            if endpoint_url:
-                litellm_model = LiteLlm(
-                    model=litellm_model_string, base_url=endpoint_url
-                )
-                logger.info(f"Created LiteLlm with custom endpoint: {endpoint_url}")
-            else:
-                litellm_model = LiteLlm(model=litellm_model_string)
-                logger.info("Created LiteLlm with default endpoint")
+            litellm_model = LiteLlm(model=litellm_model_string, base_url=endpoint_url)
 
             llm_agent = LlmAgent(
                 name=agent_config["name"],

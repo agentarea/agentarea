@@ -50,6 +50,7 @@ class TaskService:
         
         # Persist the task
         created_task = await self.task_repository.create(task)
+
         logger.info(f"Created task {created_task.id} for agent {agent_id}")
         
         return created_task

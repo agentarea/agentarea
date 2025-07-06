@@ -14,9 +14,7 @@ from agentarea_common.events.broker import EventBroker
 from google.adk.agents import LlmAgent
 from google.adk.tools.function_tool import FunctionTool
 
-# Avoid circular imports
-if TYPE_CHECKING:
-    from .agent_runner_service import AgentRunnerService
+from .agent_runner_service import AgentRunnerService
 
 logger = logging.getLogger(__name__)
 

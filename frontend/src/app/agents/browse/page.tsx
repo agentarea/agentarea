@@ -1,7 +1,7 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Bot, Search, Filter, ArrowUpDown, Zap } from "lucide-react";
+import { Bot, Search, Filter, ArrowUpDown, Zap, Edit } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,13 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
                       {agent.status}
                     </Badge>
                   </div>
-                  <div className="flex justify-end items-center mt-auto">
+                  <div className="flex justify-end items-center mt-auto gap-2">
+                    <Link href={`/agents/${agent.id}/edit`}>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </Button>
+                    </Link>
                     <Button variant="ghost" size="sm" className="text-primary hover:text-primary font-normal">
                       View Details
                     </Button>
