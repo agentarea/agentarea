@@ -19,7 +19,7 @@ class LLMModelService(BaseCrudService[LLMModel]):
         description: str,
         provider: str,
         model_name: str,
-        endpoint_url: str,
+        endpoint_url: str | None,
         context_window: str,
         is_public: bool = False,
     ) -> LLMModel:
