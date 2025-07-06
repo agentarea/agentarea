@@ -1,0 +1,133 @@
+from datetime import datetime
+from uuid import UUID
+
+from agentarea_api.api.deps.services import get_provider_service
+from agentarea_llm.application.provider_service import ProviderService
+from agentarea_llm.domain.models import ProviderConfig
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/provider-configs", tags=["provider-configs"])
+
+
+# Provider Config schemas
+class ProviderConfigCreate(BaseModel):
+    provider_spec_id: UUID
+    name: str
+    api_key: str
+    endpoint_url: str | None = None
+    is_public: bool = False
+
+
+class ProviderConfigUpdate(BaseModel):
+    name: str | None = None
+    api_key: str | None = None
+    endpoint_url: str | None = None
+    is_active: bool | None = None
+
+
+class ProviderConfigResponse(BaseModel):
+    id: str
+    provider_spec_id: str
+    name: str
+    endpoint_url: str | None
+    user_id: str | None
+    is_active: bool
+    is_public: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    # Related data
+    provider_spec_name: str | None = None
+    provider_spec_key: str | None = None
+
+    @classmethod
+    def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigResponse":
+        return cls(
+            id=str(provider_config.id),
+            provider_spec_id=str(provider_config.provider_spec_id),
+            name=provider_config.name,
+            endpoint_url=provider_config.endpoint_url,
+            user_id=str(provider_config.user_id) if provider_config.user_id else None,
+            is_active=provider_config.is_active,
+            is_public=provider_config.is_public,
+            created_at=provider_config.created_at,
+            updated_at=provider_config.updated_at,
+            provider_spec_name=provider_config.provider_spec.name if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
+            provider_spec_key=provider_config.provider_spec.provider_key if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
+        )
+
+
+# Provider Config endpoints
+
+@router.post("/", response_model=ProviderConfigResponse)
+async def create_provider_config(
+    data: ProviderConfigCreate,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Create a new provider configuration."""
+    config = await provider_service.create_provider_config(
+        provider_spec_id=data.provider_spec_id,
+        name=data.name,
+        api_key=data.api_key,
+        endpoint_url=data.endpoint_url,
+        is_public=data.is_public,
+    )
+    return ProviderConfigResponse.from_domain(config)
+
+
+@router.get("/", response_model=list[ProviderConfigResponse])
+async def list_provider_configs(
+    provider_spec_id: UUID | None = None,
+    is_active: bool | None = None,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """List provider configurations."""
+    configs = await provider_service.list_provider_configs(
+        provider_spec_id=provider_spec_id,
+        is_active=is_active,
+    )
+    return [ProviderConfigResponse.from_domain(config) for config in configs]
+
+
+@router.get("/{config_id}", response_model=ProviderConfigResponse)
+async def get_provider_config(
+    config_id: UUID,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Get a specific provider configuration."""
+    config = await provider_service.get_provider_config(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider configuration not found")
+    return ProviderConfigResponse.from_domain(config)
+
+
+@router.put("/{config_id}", response_model=ProviderConfigResponse)
+async def update_provider_config(
+    config_id: UUID,
+    data: ProviderConfigUpdate,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Update a provider configuration."""
+    config = await provider_service.update_provider_config(
+        config_id=config_id,
+        name=data.name,
+        api_key=data.api_key,
+        endpoint_url=data.endpoint_url,
+        is_active=data.is_active,
+    )
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider configuration not found")
+    return ProviderConfigResponse.from_domain(config)
+
+
+@router.delete("/{config_id}")
+async def delete_provider_config(
+    config_id: UUID,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Delete a provider configuration."""
+    success = await provider_service.delete_provider_config(config_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Provider configuration not found")
+    return {"message": "Provider configuration deleted successfully"} 
