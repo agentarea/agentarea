@@ -51,27 +51,70 @@ const sheetVariants = cva(
 
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+    VariantProps<typeof sheetVariants> {
+  /**
+   * When true, the background overlay behind the sheet will not be rendered.
+   * Useful for non-modal side panels.
+   */
+  hideOverlay?: boolean
+
+  /**
+   * When true, clicks outside the sheet will NOT close it.
+   */
+  disableOutsideClose?: boolean
+}
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(sheetVariants({ side }), className)}
-      {...props}
-    >
-      <SheetPrimitive.Close className="absolute right-3 top-3 rounded-sm opacity-70  transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-secondary">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </SheetPrimitive.Close>
-      {children}
-    </SheetPrimitive.Content>
-  </SheetPortal>
-))
+>(
+  (
+    {
+      side = "right",
+      className,
+      children,
+      hideOverlay = false,
+      disableOutsideClose = false,
+      onPointerDownOutside,
+      onInteractOutside,
+      ...props
+    },
+    ref
+  ) => {
+    const mergedPointerDownOutside = disableOutsideClose
+      ? (e: Event) => {
+          e.preventDefault()
+          onPointerDownOutside?.(e as any)
+        }
+      : onPointerDownOutside
+
+    const mergedInteractOutside = disableOutsideClose
+      ? (e: Event) => {
+          e.preventDefault()
+          onInteractOutside?.(e as any)
+        }
+      : onInteractOutside
+
+    return (
+      <SheetPortal>
+        {!hideOverlay && <SheetOverlay />}
+        <SheetPrimitive.Content
+          ref={ref}
+          className={cn(sheetVariants({ side }), className)}
+          onPointerDownOutside={mergedPointerDownOutside as any}
+          onInteractOutside={mergedInteractOutside as any}
+          {...props}
+        >
+          <SheetPrimitive.Close className="absolute right-3 top-3 rounded-sm opacity-70  transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-secondary">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+          {children}
+        </SheetPrimitive.Content>
+      </SheetPortal>
+    )
+  }
+)
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({
@@ -80,7 +123,7 @@ const SheetHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-2 text-center sm:text-left",
+      "flex flex-col space-y-1 text-center sm:text-left",
       className
     )}
     {...props}
@@ -108,7 +151,7 @@ const SheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold text-foreground", className)}
+    className={cn("text-lg font-semibold text-foreground mb-0", className)}
     {...props}
   />
 ))

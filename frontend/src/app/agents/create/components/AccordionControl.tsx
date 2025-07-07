@@ -4,6 +4,22 @@ import { HelpCircle, Plus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
+type DropdownItem = {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+};
+
+type DropdownControlProps = {
+    addText?: string;
+    onAdd: (id: string) => void;
+    dropdownItems: DropdownItem[];
+}
+
+type CustomControlProps = {
+    mainControl: React.ReactNode;
+}
+
 type AccordionControlProps = {
   id: string;
   accordionValue: string;
@@ -11,16 +27,13 @@ type AccordionControlProps = {
   title: React.ReactNode;
   children: React.ReactNode;
   note?: string | React.ReactNode;
-  addText?: string;
-  onAdd: (id: string) => void;
-  dropdownItems: {
-    id: string;
-    label: string;
-    icon: React.ReactNode;
-  }[];
-};
+} & (DropdownControlProps | CustomControlProps);
 
-export default function AccordionControl({id, accordionValue, setAccordionValue, onAdd, title, children, note, addText, dropdownItems}: AccordionControlProps) {
+
+
+export default function AccordionControl({ id, accordionValue, setAccordionValue, title, children, note, ...props }: AccordionControlProps) {
+  const isDropdown = "dropdownItems" in props;
+
   return (
     <div className="flex flex-row gap-2">
         <Accordion 
@@ -46,32 +59,38 @@ export default function AccordionControl({id, accordionValue, setAccordionValue,
                                     </Tooltip>
                                 </TooltipProvider>
                             )}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button 
-                                        className="focus-visible:ring-0"
-                                        type="button" 
-                                        size="xs"
-                                    >
-                                        <Plus />
-                                        {addText ? addText : "Add"}
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    {
-                                        dropdownItems?.map((item) => (
+                            {
+                                isDropdown ? (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button 
+                                            className="focus-visible:ring-0"
+                                            type="button" 
+                                            size="xs"
+                                        >
+                                            <Plus />
+                                            {isDropdown && props.addText ? props.addText : "Add"}
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        {isDropdown &&
+                                          props.dropdownItems.map((item: DropdownItem) => (
                                             <DropdownMenuItem 
                                                 key={item.id} 
-                                                onClick={() => onAdd(item.id)}
+                                                onClick={() => props.onAdd(item.id)}
                                                 className="flex flex-row items-center gap-2 cursor-pointer"
                                             >
                                                 <div className="w-4 h-4 min-w-4">{item.icon}</div>
                                                 <div className="text-sm font-light">{item.label}</div>
                                             </DropdownMenuItem>
-                                        ))
-                                    }
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                          ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                ) : (
+                                  (props as CustomControlProps).mainControl
+                                )
+                            }
+                            
                         </div>
                     }
                 >
