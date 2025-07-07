@@ -7,7 +7,7 @@ import type { components } from '@/api/schema';
 import AccordionControl from "./AccordionControl";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TriggerControl } from "./TriggerControl";
 import { Accordion } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
@@ -28,6 +28,8 @@ type ToolConfigProps = {
 
 const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpServers }: ToolConfigProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("tools");
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [scrollToolId, setScrollToolId] = useState<string | null>(null);
   const t = useTranslations('AgentsPage');
   const title = (
     <div className="flex items-center gap-2">
@@ -53,9 +55,27 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
       mcp_server_id: server.id,
       api_key: "",
       config: null,
+      enabled: true,
     }));
     appendTool(configs);
   };
+
+  const editTool = (index: number) => {
+    const tool = toolFields[index];
+    if (!tool) return;
+    setScrollToolId(tool.mcp_server_id);
+    setIsSheetOpen(true);
+  };
+
+  useEffect(() => {
+    if (isSheetOpen && scrollToolId) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`mcp-${scrollToolId}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isSheetOpen, scrollToolId]);
 
   return (
   <>
@@ -66,7 +86,7 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
       title={title}
       note={note}
       mainControl={
-        <Sheet modal={false}>
+        <Sheet modal={false} open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetTrigger asChild>
           <Button size="xs">
             <Plus className="h-4 w-4" />
@@ -91,13 +111,15 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
           {
             toolFields.map((item, index) => (
               <TriggerControl 
-              name={`tools_config.mcp_server_configs.${index}.mcp_server_id`}
-              key={`tool-${index}`}
-              trigger={mcpServers.find(option => option.id === item.mcp_server_id) || undefined} 
-              index={index} 
-              control={control} 
-              removeEvent={() => removeTool(index)}   
-            />
+                name={`tools_config.mcp_server_configs.${index}.mcp_server_id`}
+                enabledName={`tools_config.mcp_server_configs.${index}.enabled`}
+                key={`tool-${index}`}
+                trigger={mcpServers.find(option => option.id === item.mcp_server_id) || undefined}
+                index={index}
+                control={control}
+                removeEvent={() => removeTool(index)}
+                editEvent={() => editTool(index)}
+              />
             ))
           }
         </Accordion>

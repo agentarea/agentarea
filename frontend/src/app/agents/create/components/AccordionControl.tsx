@@ -44,7 +44,7 @@ export default function AccordionControl({ id, accordionValue, setAccordionValue
             onValueChange={setAccordionValue}
         >
             <AccordionItem value={id} className="border-none">
-                <AccordionTrigger className="label py-0 justify-start"
+                <AccordionTrigger className="label py-0 justify-start pb-4"
                     controls={
                         <div className="flex flex-row gap-2">
                             {note && (

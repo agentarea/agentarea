@@ -43,7 +43,7 @@ export default function SelectMcp({ mcpServers, onAddTools, acceptedTools }: Sel
             <div className="flex flex-col flex-1 overflow-y-auto space-y-1 pb-[40px]">
                 {
                     mcpServers.map((server) => (
-                        <div key={server.id} className="flex flex-row items-center justify-between cursor-pointer group hover:bg-primary/20 dark:hover:bg-accent-foreground/20 px-[7px] py-[7px] rounded-md"
+                        <div id={`mcp-${server.id}`} key={server.id} className="flex flex-row items-center justify-between cursor-pointer group hover:bg-primary/20 dark:hover:bg-accent-foreground/20 px-[7px] py-[7px] rounded-md"
                             onClick={() => {
                                 if (acceptedTools.includes(server.id)) {
                                     return;

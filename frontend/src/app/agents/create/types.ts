@@ -15,6 +15,8 @@ export type MCPServerConfig = {
   mcp_server_id: string;
   api_key: string;
   config?: Record<string, unknown> | null;
+  /** Whether the tool is enabled (default true). */
+  enabled?: boolean;
 };
 
 /**
