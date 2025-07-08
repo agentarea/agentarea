@@ -3,8 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Edit, Trash2 } from "lucide-react";
 import type { AgentFormValues } from "../types";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Control } from "react-hook-form";
 import { AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
@@ -110,12 +108,14 @@ export const TriggerControl = ({ trigger, index, control, removeEvent, editEvent
             </AccordionTrigger>
             <AccordionContent className="px-4 ">
                 {/* TODO: test form! FIX THIS */}
-                <Label htmlFor="name" className="text-sm font-medium">IT IS TEST FIELD</Label>
-                <Input
-                    type="text"
-                    placeholder="Event name"
-                    className="w-full"
-                />
+                <div className="mt-2 gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs cursor-default">
+                    SOME INFO HERE SOME INFO HERE SOME INFO HERE SOME INFO HERE 
+                    <br />
+                    <br />
+                    - some info here
+                    <br />
+                    - some info here
+                </div>
             </AccordionContent>
         </AccordionItem>
     );

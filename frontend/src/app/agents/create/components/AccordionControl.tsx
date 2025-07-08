@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { HelpCircle, Plus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 type DropdownItem = {
   id: string;
@@ -27,11 +28,12 @@ type AccordionControlProps = {
   title: React.ReactNode;
   children: React.ReactNode;
   note?: string | React.ReactNode;
+  triggerClassName?: string;
+  chevron?: React.ReactNode;
 } & (DropdownControlProps | CustomControlProps);
 
 
-
-export default function AccordionControl({ id, accordionValue, setAccordionValue, title, children, note, ...props }: AccordionControlProps) {
+export default function AccordionControl({ id, accordionValue, setAccordionValue, title, children, note, triggerClassName, chevron, ...props }: AccordionControlProps) {
   const isDropdown = "dropdownItems" in props;
 
   return (
@@ -44,9 +46,10 @@ export default function AccordionControl({ id, accordionValue, setAccordionValue
             onValueChange={setAccordionValue}
         >
             <AccordionItem value={id} className="border-none">
-                <AccordionTrigger className="label py-0 justify-start pb-4"
+                <AccordionTrigger className={cn("label py-0 justify-start pb-4", triggerClassName)}
+                    chevron={chevron}
                     controls={
-                        <div className="flex flex-row gap-2">
+                        <div className="flex flex-row items-center gap-2">
                             {note && (
                                 <TooltipProvider>
                                     <Tooltip delayDuration={300}>

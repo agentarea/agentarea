@@ -100,7 +100,12 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
               {t('create.toolsMcpDescription')}
             </SheetDescription>
           </SheetHeader>
-          <SelectMcp mcpServers={mcpServers} onAddTools={handleAddTools} acceptedTools={toolFields.map(item => item.mcp_server_id)} />
+          <SelectMcp 
+            mcpServers={mcpServers} 
+            onAddTools={handleAddTools} 
+            acceptedTools={toolFields.map(item => item.mcp_server_id)} 
+            openToolId={scrollToolId}
+          />
         </SheetContent>
       </Sheet>
       }
