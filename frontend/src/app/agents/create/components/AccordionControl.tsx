@@ -30,10 +30,11 @@ type AccordionControlProps = {
   note?: string | React.ReactNode;
   triggerClassName?: string;
   chevron?: React.ReactNode;
+  itemClassName?: string;
 } & (DropdownControlProps | CustomControlProps);
 
 
-export default function AccordionControl({ id, accordionValue, setAccordionValue, title, children, note, triggerClassName, chevron, ...props }: AccordionControlProps) {
+export default function AccordionControl({ id, accordionValue, setAccordionValue, title, children, note, triggerClassName, chevron, itemClassName, ...props }: AccordionControlProps) {
   const isDropdown = "dropdownItems" in props;
 
   return (
@@ -45,7 +46,7 @@ export default function AccordionControl({ id, accordionValue, setAccordionValue
             value={accordionValue}
             onValueChange={setAccordionValue}
         >
-            <AccordionItem value={id} className="border-none">
+            <AccordionItem value={id} className={cn(itemClassName)}>
                 <AccordionTrigger className={cn("label py-0 justify-start pb-4", triggerClassName)}
                     chevron={chevron}
                     controls={

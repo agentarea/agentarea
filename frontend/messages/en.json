@@ -100,7 +100,8 @@
       "addTool": "Add Tool",
       "selectedTools": "Selected {count, plural, =0 {0 Tools} one {# Tool} other {# Tools}}",
       "selected": "Selected",
-      "added": "Added"
+      "added": "Added",
+      "remove": "Remove"
     }
   }
 }
