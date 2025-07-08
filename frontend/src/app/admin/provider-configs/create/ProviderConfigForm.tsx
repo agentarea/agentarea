@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createProviderConfig, createModelInstance, updateProviderConfig } from '@/lib/api';
 import { components } from '@/api/schema';
@@ -12,9 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Key, Globe, Server, Brain, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Key, Globe, Server, Brain, CheckCircle2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 
 type ProviderSpec = components['schemas']['ProviderSpecResponse'];
 type ModelSpec = {
@@ -32,6 +31,7 @@ interface ProviderConfigFormProps {
   modelSpecs: ModelSpec[];
   initialData?: components['schemas']['ProviderConfigResponse'];
   isEdit?: boolean;
+  preselectedProviderId?: string;
 }
 
 interface SelectedModel {
@@ -41,23 +41,30 @@ interface SelectedModel {
   isPublic: boolean;
 }
 
-export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialData, isEdit = false }: ProviderConfigFormProps) {
+export default function ProviderConfigForm({ 
+  providerSpecs, 
+  modelSpecs, 
+  initialData, 
+  isEdit = false,
+  preselectedProviderId 
+}: ProviderConfigFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
 
   // Handle case where data is not loaded
   if (!providerSpecs || !modelSpecs) {
     return (
       <div className="text-center py-10">
-        <p className="text-gray-500">Loading provider data...</p>
+        <p className="text-muted-foreground">Loading provider specifications...</p>
       </div>
     );
   }
   
   const [formData, setFormData] = useState({
-    provider_spec_id: initialData?.provider_spec_id || '',
+    provider_spec_id: preselectedProviderId || initialData?.provider_spec_id || '',
     name: initialData?.name || '',
     api_key: '', // API key is not returned in responses for security
     endpoint_url: initialData?.endpoint_url || '',
@@ -65,12 +72,24 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
   });
 
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
-  const [bulkCreateModels, setBulkCreateModels] = useState(true);
 
   const selectedProvider = providerSpecs?.find?.(spec => spec.id === formData.provider_spec_id);
   const availableModels = modelSpecs?.filter?.(model => 
     selectedProvider && model.provider_spec_id === selectedProvider.id
   ) || [];
+
+  // Auto-select all models when provider changes
+  useEffect(() => {
+    if (selectedProvider && availableModels.length > 0 && !isEdit) {
+      const allModels = availableModels.map(model => ({
+        modelSpecId: model.id,
+        instanceName: `${selectedProvider.name} ${model.display_name}`,
+        description: model.description || '',
+        isPublic: false
+      }));
+      setSelectedModels(allModels);
+    }
+  }, [selectedProvider, availableModels, isEdit]);
 
   const handleProviderChange = (providerId: string) => {
     setFormData(prev => ({ ...prev, provider_spec_id: providerId }));
@@ -94,6 +113,18 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
     setSelectedModels(prev => prev.map(model => 
       model.modelSpecId === modelSpecId ? { ...model, ...updates } : model
     ));
+  };
+
+  const toggleModelExpanded = (modelId: string) => {
+    setExpandedModels(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(modelId)) {
+        newSet.delete(modelId);
+      } else {
+        newSet.add(modelId);
+      }
+      return newSet;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,8 +164,8 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
         throw new Error(`Failed to ${isEdit ? 'update' : 'create'} provider configuration: ${errorMessage}`);
       }
 
-      // Step 2: Create model instances if bulk creation is enabled (only for create mode)
-      if (!isEdit && bulkCreateModels && selectedModels.length > 0) {
+      // Step 2: Create model instances if any are selected (only for create mode)
+      if (!isEdit && selectedModels.length > 0) {
         const modelCreationPromises = selectedModels.map(async (model) => {
           const { data, error } = await createModelInstance({
             provider_config_id: providerConfig.id,
@@ -215,8 +246,9 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
               id="provider"
               value={formData.provider_spec_id}
               onChange={(e) => handleProviderChange(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               required
+              disabled={!!preselectedProviderId && !isEdit}
             >
               <option value="">Select a provider</option>
               {providerSpecs.map((provider) => (
@@ -225,6 +257,11 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
                 </option>
               ))}
             </select>
+            {preselectedProviderId && !isEdit && (
+              <p className="text-sm text-muted-foreground">
+                Provider is pre-selected for this configuration.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -276,7 +313,7 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
         </CardContent>
       </Card>
 
-      {/* Step 2: Bulk Model Selection (only for create mode) */}
+      {/* Step 2: Model Selection (only for create mode) */}
       {!isEdit && selectedProvider && (
         <Card>
           <CardHeader>
@@ -289,60 +326,105 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="bulk_create"
-                checked={bulkCreateModels}
-                onCheckedChange={setBulkCreateModels}
-              />
-              <Label htmlFor="bulk_create">
-                Create model instances automatically
-              </Label>
-            </div>
-
-                         {bulkCreateModels && (
-               <>
-                 <div className="border-t pt-4" />
-                 <div className="space-y-4">
-                  <div className="text-sm font-medium">
-                    Available Models for {selectedProvider.name}:
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">
+                  Available Models for {selectedProvider.name}:
+                </div>
+                {availableModels.length > 0 && (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Select all models
+                        const allModels = availableModels.map(model => ({
+                          modelSpecId: model.id,
+                          instanceName: `${selectedProvider?.name} ${model.display_name}`,
+                          description: model.description || '',
+                          isPublic: false
+                        }));
+                        setSelectedModels(allModels);
+                      }}
+                      disabled={selectedModels.length === availableModels.length}
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedModels([])}
+                      disabled={selectedModels.length === 0}
+                    >
+                      Clear All
+                    </Button>
                   </div>
-                  
-                  {availableModels.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      No models available for this provider.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {availableModels.map((model) => {
-                        const isSelected = selectedModels.some(m => m.modelSpecId === model.id);
-                        const selectedModel = selectedModels.find(m => m.modelSpecId === model.id);
-                        
-                        return (
-                          <div key={model.id} className="border rounded-lg p-4 space-y-3">
-                            <div className="flex items-start space-x-3">
-                              <Checkbox
-                                id={`model-${model.id}`}
-                                checked={isSelected}
-                                onCheckedChange={(checked) => handleModelToggle(model, checked as boolean)}
-                              />
-                              <div className="flex-1 space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Label htmlFor={`model-${model.id}`} className="font-medium">
-                                    {model.display_name}
-                                  </Label>
-                                  <Badge variant="outline">
-                                    {model.context_window?.toLocaleString()} tokens
-                                  </Badge>
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {model.description}
-                                </div>
-                              </div>
+                )}
+              </div>
+              
+              {availableModels.length === 0 ? (
+                <div className="text-sm text-muted-foreground bg-gray-50 p-4 rounded-lg text-center">
+                  No models available for this provider.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {availableModels.map((model) => {
+                    const isSelected = selectedModels.some(m => m.modelSpecId === model.id);
+                    const selectedModel = selectedModels.find(m => m.modelSpecId === model.id);
+                    const isExpanded = expandedModels.has(model.id);
+                    
+                    return (
+                      <div key={model.id} className="border rounded-lg p-4 space-y-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start space-x-3">
+                          <Checkbox
+                            id={`model-${model.id}`}
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleModelToggle(model, checked as boolean)}
+                          />
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor={`model-${model.id}`} className="font-medium cursor-pointer">
+                                {model.display_name}
+                              </Label>
+                              {model.context_window && (
+                                <Badge variant="outline">
+                                  {model.context_window.toLocaleString()} tokens
+                                </Badge>
+                              )}
                             </div>
+                            <div className="text-sm text-muted-foreground">
+                              {model.description || 'No description available'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Model: {model.model_name}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {isSelected && selectedModel && (
+                          <>
+                            <Button 
+                              type="button"
+                              variant="ghost" 
+                              size="sm" 
+                              className="ml-6 w-full justify-start"
+                              onClick={() => toggleModelExpanded(model.id)}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 mr-2" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 mr-2" />
+                              )}
+                              Configure Instance Settings
+                            </Button>
                             
-                            {isSelected && selectedModel && (
-                              <div className="ml-6 space-y-3 bg-gray-50 p-3 rounded">
+                            {isExpanded && (
+                              <div className="ml-6 space-y-3 bg-blue-50 p-3 rounded border-l-2 border-blue-200 mt-2">
+                                <div className="text-sm font-medium text-blue-900">
+                                  Instance Configuration
+                                </div>
                                 <div className="space-y-2">
                                   <Label htmlFor={`name-${model.id}`}>Instance Name</Label>
                                   <Input
@@ -374,14 +456,25 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
                                 </div>
                               </div>
                             )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </>
-            )}
+              )}
+              
+              {selectedModels.length > 0 && (
+                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                  <div className="text-sm font-medium text-green-900">
+                    {selectedModels.length} model{selectedModels.length === 1 ? '' : 's'} selected
+                  </div>
+                  <div className="text-xs text-green-700 mt-1">
+                    These model instances will be created along with your provider configuration.
+                  </div>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -400,7 +493,7 @@ export default function ProviderConfigForm({ providerSpecs, modelSpecs, initialD
             ? (isEdit ? 'Updating...' : 'Creating...') 
             : (isEdit 
                 ? 'Update Configuration' 
-                : `Create Configuration${bulkCreateModels && selectedModels.length > 0 ? ` + ${selectedModels.length} Models` : ''}`
+                : `Create Configuration${selectedModels.length > 0 ? ` + ${selectedModels.length} Models` : ''}`
               )
           }
         </Button>

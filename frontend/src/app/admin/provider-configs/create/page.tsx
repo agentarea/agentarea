@@ -3,7 +3,18 @@ import { ArrowLeft } from 'lucide-react';
 import { listProviderSpecs, listProviderSpecsWithModels } from '@/lib/api';
 import ProviderConfigForm from './ProviderConfigForm';
 
-export default async function CreateProviderConfigPage() {
+export default async function CreateProviderConfigPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const resolvedSearchParams = await searchParams;
+  
+  // Get the provider_spec_id from query params if provided
+  const preselectedProviderId = typeof resolvedSearchParams.provider_spec_id === 'string' 
+    ? resolvedSearchParams.provider_spec_id 
+    : undefined;
+
   // Fetch both provider specs and model specs
   const [providerSpecsResponse, providerSpecsWithModelsResponse] = await Promise.all([
     listProviderSpecs(),
@@ -12,26 +23,20 @@ export default async function CreateProviderConfigPage() {
 
   if (providerSpecsResponse.error || providerSpecsWithModelsResponse.error) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center space-x-4">
-          <Link href="/admin/provider-configs" className="flex items-center text-gray-600 hover:text-gray-900">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Provider Configs
-          </Link>
-        </div>
-        
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add Provider Configuration</h1>
-          <p className="text-gray-600 mt-2">Error loading provider data. Please try again.</p>
-        </div>
+      <div className="text-center py-10">
+        <p className="text-red-500">
+          Error loading provider specifications: {
+            providerSpecsResponse.error?.message || providerSpecsWithModelsResponse.error?.message
+          }
+        </p>
       </div>
     );
   }
 
-  const providerSpecs = providerSpecsResponse.data ?? [];
-  const providerSpecsWithModels = providerSpecsWithModelsResponse.data ?? [];
-
-  // Extract model specs from the provider specs with models
+  const providerSpecs = providerSpecsResponse.data || [];
+  const providerSpecsWithModels = providerSpecsWithModelsResponse.data || [];
+  
+  // Extract and flatten model specs from the provider specs with models
   const modelSpecs = providerSpecsWithModels.flatMap(spec => 
     spec.models.map(model => ({
       id: model.id,
@@ -45,20 +50,37 @@ export default async function CreateProviderConfigPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-4">
-        <Link href="/admin/provider-configs" className="flex items-center text-gray-600 hover:text-gray-900">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to Provider Configs
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="mb-6">
+        <Link 
+          href="/admin/provider-configs" 
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Provider Management
         </Link>
-      </div>
-      
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Add Provider Configuration</h1>
-        <p className="text-gray-600 mt-2">Configure API access to an AI provider and optionally create model instances.</p>
+        
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold">
+            {preselectedProviderId 
+              ? `Configure ${providerSpecs.find(p => p.id === preselectedProviderId)?.name || 'Provider'}`
+              : 'Add Provider Configuration'
+            }
+          </h1>
+          <p className="text-muted-foreground">
+            {preselectedProviderId 
+              ? `Set up API access for ${providerSpecs.find(p => p.id === preselectedProviderId)?.name || 'this provider'} and optionally create model instances.`
+              : 'Configure API access to an AI provider and optionally create model instances.'
+            }
+          </p>
+        </div>
       </div>
 
-      <ProviderConfigForm providerSpecs={providerSpecs} modelSpecs={modelSpecs} />
+      <ProviderConfigForm 
+        providerSpecs={providerSpecs}
+        modelSpecs={modelSpecs}
+        preselectedProviderId={preselectedProviderId}
+      />
     </div>
   );
 } 

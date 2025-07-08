@@ -696,6 +696,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/provider-configs/admin/{provider_key}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Provider Logo
+         * @description Get provider logo via admin route pattern.
+         */
+        get: operations["get_provider_logo_v1_provider_configs_admin__provider_key__logo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/model-specs/": {
         parameters: {
             query?: never;
@@ -3263,6 +3283,37 @@ export interface operations {
             header?: never;
             path: {
                 config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_provider_logo_v1_provider_configs_admin__provider_key__logo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_key: string;
             };
             cookie?: never;
         };

@@ -114,7 +114,7 @@ export function AddMCPServerForm() {
   useEffect(() => {
     if (state.fieldValues) {
       Object.entries(state.fieldValues).forEach(([key, value]) => {
-        if (key in MCPServerSchema.shape) {
+        if (MCPServerSchema.shape && key in MCPServerSchema.shape) {
           setValue(key as keyof FormData, value as string | boolean);
         }
       });

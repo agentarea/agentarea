@@ -3,14 +3,9 @@ import {
   Bot,
   Home,
   Settings,
-  Server,
-  Cpu,
-  Package,
   Plug,
   ClipboardList,
-  Brain,
   Key,
-  Globe,
 } from "lucide-react";
 import { LucideProps } from "lucide-react";
 import Header from "./components/Header";
@@ -76,22 +71,10 @@ export const navContent: NavSection[] = [
     isCollapsed: true,
     items: [
       {
-        label: "Providers",
-        labelKey: "providers",
-        href: "/admin/providers",
-        icon: <Server />,
-      },
-      {
-        label: "Provider Configs",
+        label: "Models",
         labelKey: "providerConfigs",
         href: "/admin/provider-configs",
         icon: <Key />,
-      },
-      {
-        label: "Model Specs",
-        labelKey: "modelSpecs",
-        href: "/admin/model-specs",
-        icon: <Brain />,
       },
     ],
   },

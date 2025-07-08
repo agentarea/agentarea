@@ -2,6 +2,7 @@ import "./globals.css";
 
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import MainLayout from "@/components/MainLayout";
+import { Toaster } from "@/components/ui/sonner";
 import { Open_Sans, Montserrat } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
@@ -30,6 +31,7 @@ export default async function RootLayout({
             <MainLayout>{children}</MainLayout>
           </NextIntlClientProvider>
         </ThemeProvider>
+        <Toaster />
       </body>
     </html>
   );

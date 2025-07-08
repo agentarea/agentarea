@@ -182,36 +182,6 @@ export const deployMCPServer = async (serverId: string) => {
   return { data, error };
 };
 
-// MCP Server Template API
-export const getMCPServerTemplates = async () => {
-  const { data, error } = await client.GET("/v1/mcp-servers/templates");
-  return { data, error };
-};
-
-export const getMCPServerTemplate = async (templateKey: string) => {
-  const { data, error } = await client.GET("/v1/mcp-servers/templates/{template_key}", {
-    params: { path: { template_key: templateKey } },
-  });
-  return { data, error };
-};
-
-export const createMCPServerFromTemplate = async (
-  templateKey: string,
-  params: {
-    server_name: string;
-    server_description?: string;
-    version?: string;
-  }
-) => {
-  const { data, error } = await client.POST("/v1/mcp-servers/from-template/{template_key}", {
-    params: { 
-      path: { template_key: templateKey },
-      query: params
-    },
-  });
-  return { data, error };
-};
-
 // MCP Server Instance API
 export const listMCPServerInstances = async () => {
   const { data, error } = await client.GET("/v1/mcp-server-instances/");
@@ -237,8 +207,8 @@ export const deleteMCPServerInstance = async (instanceId: string) => {
   return { data, error };
 };
 
-export const updateMCPServerInstance = async (instanceId: string, instance: components["schemas"]["MCPServerInstanceUpdate"]) => {
-  const { data, error } = await client.PATCH("/v1/mcp-server-instances/{instance_id}", {
+export const updateMCPServerInstance = async (instanceId: string, instance: Partial<components["schemas"]["MCPServerInstanceCreateRequest"]>) => {
+  const { data, error } = await client.PUT("/v1/mcp-server-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
     body: instance,
   });
@@ -323,8 +293,6 @@ export async function getProviderConfig(id: string): Promise<components["schemas
   return response.data;
 }
 
-
-
 export const updateProviderConfig = async (configId: string, config: components["schemas"]["ProviderConfigUpdate"]) => {
   const { data, error } = await client.PUT("/v1/provider-configs/{config_id}", {
     params: { path: { config_id: configId } },
@@ -338,6 +306,20 @@ export const deleteProviderConfig = async (configId: string) => {
     params: { path: { config_id: configId } },
   });
   return { data, error };
+};
+
+// Combined API for unified provider management
+export const getProvidersAndConfigs = async () => {
+  const [specsResponse, configsResponse] = await Promise.all([
+    listProviderSpecsWithModels(),
+    listProviderConfigs()
+  ]);
+
+  return {
+    specs: specsResponse.data || [],
+    configs: configsResponse.data || [],
+    error: specsResponse.error || configsResponse.error
+  };
 };
 
 // Model Spec API

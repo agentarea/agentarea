@@ -91,17 +91,6 @@ async def create_mcp_server(
     return MCPServerResponse.from_domain(server)
 
 
-@router.get("/{server_id}", response_model=MCPServerResponse)
-async def get_mcp_server(
-    server_id: UUID,
-    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
-):
-    server = await mcp_server_service.get(server_id)
-    if not server:
-        raise HTTPException(status_code=404, detail="MCP Server not found")
-    return MCPServerResponse.from_domain(server)
-
-
 @router.get("/", response_model=list[MCPServerResponse])
 async def list_mcp_servers(
     status: str | None = None,
@@ -129,67 +118,36 @@ async def list_mcp_servers(
     return [MCPServerResponse.from_domain(server) for server in filtered_servers]
 
 
-@router.patch("/{server_id}", response_model=MCPServerResponse)
-async def update_mcp_server(
-    server_id: UUID,
-    data: MCPServerUpdate,
-    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
-):
-    server = await mcp_server_service.update_mcp_server(
-        id=server_id,
-        name=data.name,
-        description=data.description,
-        docker_image_url=data.docker_image_url,
-        version=data.version,
-        tags=data.tags,
-        is_public=data.is_public,
-        status=data.status,
-    )
-    if not server:
-        raise HTTPException(status_code=404, detail="MCP Server not found")
-    return MCPServerResponse.from_domain(server)
-
-
-@router.delete("/{server_id}")
-async def delete_mcp_server(
-    server_id: UUID,
-    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
-):
-    success = await mcp_server_service.delete_mcp_server(server_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="MCP Server not found")
-    return {"status": "success"}
-
-
-@router.post("/{server_id}/deploy")
-async def deploy_mcp_server(
-    server_id: UUID,
-    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
-):
-    server = await mcp_server_service.get(server_id)
-    if not server:
-        raise HTTPException(status_code=404, detail="MCP Server not found")
-
-    # This would trigger the deployment process using the docker_image_url
-    deployment_result = await mcp_server_service.deploy_server(server_id)
-    if not deployment_result:
-        raise HTTPException(status_code=500, detail="Failed to deploy MCP server")
-
-    return {
-        "status": "success",
-        "message": f"MCP server {server.name} deployed successfully",
-    }
-
-
 def load_mcp_provider_templates() -> dict[str, Any]:
     """Load MCP provider templates from YAML file."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     # Go up to project root and then to data directory
-    root_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "..", ".."))
+    # From core/apps/api/agentarea_api/api/v1/ -> go up to project root
+    root_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "..", ".."))
     yaml_path = os.path.join(root_dir, "data", "mcp_providers.yaml")
 
-    with open(yaml_path) as f:
-        return yaml.safe_load(f)
+    try:
+        with open(yaml_path) as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        # Fallback: try alternative paths
+        alternative_paths = [
+            os.path.join(root_dir, "core", "..", "data", "mcp_providers.yaml"),
+            os.path.join(os.getcwd(), "data", "mcp_providers.yaml"),
+            os.path.join(os.getcwd(), "..", "data", "mcp_providers.yaml"),
+        ]
+        
+        for alt_path in alternative_paths:
+            try:
+                with open(alt_path) as f:
+                    return yaml.safe_load(f)
+            except FileNotFoundError:
+                continue
+        
+        # If all paths fail, raise the original error with helpful info
+        raise FileNotFoundError(
+            f"Could not find mcp_providers.yaml. Tried paths: {yaml_path}, {alternative_paths}"
+        )
 
 
 @router.get("/templates", response_model=list[dict[str, Any]])
@@ -283,3 +241,66 @@ async def create_mcp_server_from_template(
         raise HTTPException(
             status_code=500, detail=f"Failed to create server from template: {e!s}"
         ) from e
+
+
+@router.get("/{server_id}", response_model=MCPServerResponse)
+async def get_mcp_server(
+    server_id: UUID,
+    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
+):
+    server = await mcp_server_service.get(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="MCP Server not found")
+    return MCPServerResponse.from_domain(server)
+
+
+@router.patch("/{server_id}", response_model=MCPServerResponse)
+async def update_mcp_server(
+    server_id: UUID,
+    data: MCPServerUpdate,
+    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
+):
+    server = await mcp_server_service.update_mcp_server(
+        id=server_id,
+        name=data.name,
+        description=data.description,
+        docker_image_url=data.docker_image_url,
+        version=data.version,
+        tags=data.tags,
+        is_public=data.is_public,
+        status=data.status,
+    )
+    if not server:
+        raise HTTPException(status_code=404, detail="MCP Server not found")
+    return MCPServerResponse.from_domain(server)
+
+
+@router.delete("/{server_id}")
+async def delete_mcp_server(
+    server_id: UUID,
+    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
+):
+    success = await mcp_server_service.delete_mcp_server(server_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="MCP Server not found")
+    return {"status": "success"}
+
+
+@router.post("/{server_id}/deploy")
+async def deploy_mcp_server(
+    server_id: UUID,
+    mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
+):
+    server = await mcp_server_service.get(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="MCP Server not found")
+
+    # This would trigger the deployment process using the docker_image_url
+    deployment_result = await mcp_server_service.deploy_server(server_id)
+    if not deployment_result:
+        raise HTTPException(status_code=500, detail="Failed to deploy MCP server")
+
+    return {
+        "status": "success",
+        "message": f"MCP server {server.name} deployed successfully",
+    }
