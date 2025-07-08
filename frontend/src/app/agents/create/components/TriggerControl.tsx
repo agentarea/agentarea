@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
 import type { AgentFormValues } from "../types";
 import { Control } from "react-hook-form";
-import { CardAccordionItem } from "@/components/CardAccordionItem";
+import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Switch } from "@/components/ui/switch";
 
 type TriggerControlProps = {
@@ -76,12 +76,12 @@ export const TriggerControl = ({ trigger, index, control, removeEvent, editEvent
         <CardAccordionItem
             value={`trigger-${index}`}
             controls={controls}
-            title={trigger.name}
+            title={trigger.label || trigger.name}
             iconSrc="/Icon.svg" // TODO: replace with real icon
         >
             {/* TODO: test form! FIX THIS */}
             <div className="mt-2 gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs cursor-default">
-                SOME INFO HERE SOME INFO HERE SOME INFO HERE SOME INFO HERE
+            {trigger.label || trigger.name}
                 <br />
                 <br />
                 - some info here

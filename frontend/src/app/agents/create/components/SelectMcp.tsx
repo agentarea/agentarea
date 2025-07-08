@@ -2,7 +2,7 @@ import { components } from "@/api/schema";
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Accordion } from "@/components/ui/accordion";
-import { CardAccordionItem } from "@/components/CardAccordionItem";
+import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
 
@@ -24,6 +24,8 @@ export default function SelectMcp({ mcpServers, onAddTools, onRemoveTool, accept
     useEffect(() => {
         if (openToolId) {
             setAccordionValue(`mcp-${openToolId}`);
+        } else {
+            setAccordionValue("");
         }
     }, [openToolId]);
     return (
@@ -60,6 +62,7 @@ export default function SelectMcp({ mcpServers, onAddTools, onRemoveTool, accept
                     <CardAccordionItem
                         key={server.id}
                         value={`mcp-${server.id}`}
+                        id={`mcp-${server.id}`}
                         title={server.name}
                         iconSrc="/Icon.svg" // TODO: replace with real icon
                         controls={controls}
