@@ -4,18 +4,18 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertCircle, Settings, Trash2, ExternalLink, Grid, List, AlertTriangle, Loader2 } from "lucide-react";
+import { CheckCircle, AlertCircle, Settings, Trash2, ExternalLink, Grid, List, AlertTriangle, Loader2, Copy } from "lucide-react";
 import Link from "next/link";
 import { getMCPHealthStatus } from "@/lib/api";
 
 interface MCPInstance {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   status: string;
   endpoint_url?: string;
   created_at: string;
-  server_spec_id?: string;
+  server_spec_id?: string | null;
   json_spec?: any;
 }
 
@@ -111,6 +111,35 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
   const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
   const [healthLoading, setHealthLoading] = useState(true);
 
+  // Helper function to copy URL to clipboard
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // Could add a toast notification here
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+    }
+  };
+
+  // Helper function to get display URL info
+  const getUrlInfo = (instance: MCPInstance, healthCheck?: HealthCheck) => {
+    // Don't show any URL while health checks are still loading and we don't have health data
+    if (healthLoading && !healthCheck) {
+      return { url: null, displayText: null };
+    }
+
+    const url = healthCheck?.url || 
+                instance.endpoint_url || 
+                instance.json_spec?.url || 
+                instance.json_spec?.endpoint_url ||
+                null; // Remove the localhost fallback
+    
+    const displayText = healthCheck?.slug || 
+                       (url ? url.split('/').pop() || url : null);
+    
+    return { url, displayText };
+  };
+
   // Fetch health status on component mount and set up polling
   useEffect(() => {
     const fetchHealthStatus = async () => {
@@ -119,6 +148,7 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
         setHealthChecks(healthData.health_checks);
       } catch (error) {
         console.error('Failed to fetch health status:', error);
+        // Don't set error state, just keep loading false
       } finally {
         setHealthLoading(false);
       }
@@ -127,15 +157,34 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     // Initial fetch
     fetchHealthStatus();
 
-    // Set up polling every 30 seconds
-    const interval = setInterval(fetchHealthStatus, 30000);
+    // Set up polling every 60 seconds (reduced from 30 seconds)
+    const interval = setInterval(() => {
+      fetchHealthStatus();
+    }, 60000);
 
     return () => clearInterval(interval);
   }, []);
 
   // Helper function to get health check for an instance
   const getHealthCheck = (instanceName: string): HealthCheck | undefined => {
-    return healthChecks.find(check => check.service_name === instanceName);
+    // Try exact match first
+    let healthCheck = healthChecks.find(check => check.service_name === instanceName);
+    
+    // If no exact match, try to match by converting instance name to service name format
+    if (!healthCheck) {
+      const normalizedInstanceName = instanceName
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
+      
+      healthCheck = healthChecks.find(check => 
+        check.service_name === normalizedInstanceName ||
+        check.service_name.includes(normalizedInstanceName) ||
+        normalizedInstanceName.includes(check.service_name)
+      );
+    }
+    
+    return healthCheck;
   };
 
   const displayedInstances = showAll ? mcpInstances : mcpInstances.slice(0, 3);
@@ -144,6 +193,7 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     const healthCheck = getHealthCheck(instance.name);
     const statusInfo = getStatusDisplay(instance.status, healthCheck);
     const StatusIcon = statusInfo.icon;
+    const urlInfo = getUrlInfo(instance, healthCheck);
 
     return (
       <div key={instance.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-secondary/50 transition-colors">
@@ -155,7 +205,10 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
             <div className="flex items-center gap-2">
               <h3 className="font-medium">{instance.name}</h3>
               <StatusIcon className={`h-4 w-4 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
-              {healthLoading && !healthCheck && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
+              {/* Show health loading spinner only when actually loading health data */}
+              {healthLoading && !healthCheck && (
+                <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               {instance.description || `${getCategory(instance)} instance`}
@@ -166,11 +219,20 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                 {statusInfo.detail}
               </p>
             )}
-            {/* Show endpoint URL (prefer health check URL over instance URL) */}
-            {(healthCheck?.url || instance.endpoint_url) && (
-              <p className="text-xs text-blue-600 truncate max-w-xs">
-                🔗 {healthCheck?.url || instance.endpoint_url}
-              </p>
+            {/* Show endpoint URL with copy functionality */}
+            {urlInfo.url && urlInfo.displayText && (
+              <div className="flex items-center gap-1 mt-1">
+                <p className="text-xs text-blue-600 truncate max-w-xs">
+                  🔗 {urlInfo.displayText}
+                </p>
+                <button
+                  onClick={() => copyToClipboard(urlInfo.url!)}
+                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                  title="Copy URL to clipboard"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              </div>
             )}
             <div className="flex flex-wrap gap-1 mt-1">
               <Badge variant="outline" className="text-xs">
@@ -193,9 +255,10 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {(healthCheck?.url || instance.endpoint_url) && healthCheck?.healthy && (
+          {/* Show Access button if we have any URL, regardless of health status */}
+          {urlInfo.url && (
             <Button size="sm" variant="outline" asChild>
-              <a href={healthCheck?.url || instance.endpoint_url} target="_blank" rel="noopener noreferrer">
+              <a href={urlInfo.url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Access
               </a>
@@ -219,6 +282,7 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     const healthCheck = getHealthCheck(instance.name);
     const statusInfo = getStatusDisplay(instance.status, healthCheck);
     const StatusIcon = statusInfo.icon;
+    const urlInfo = getUrlInfo(instance, healthCheck);
 
     return (
       <Card key={instance.id} className="hover:shadow-md transition-shadow">
@@ -235,7 +299,10 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                     {getCategory(instance)}
                   </Badge>
                   <StatusIcon className={`h-3 w-3 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
-                  {healthLoading && !healthCheck && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
+                  {/* Show health loading spinner only when actually loading health data */}
+                  {healthLoading && !healthCheck && (
+                    <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                  )}
                 </div>
               </div>
             </div>
@@ -254,11 +321,20 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
               {statusInfo.detail}
             </p>
           )}
-          {/* Show endpoint URL (prefer health check URL over instance URL) */}
-          {(healthCheck?.url || instance.endpoint_url) && (
-            <p className="text-xs text-blue-600 truncate mb-2">
-              🔗 {healthCheck?.url || instance.endpoint_url}
-            </p>
+          {/* Show endpoint URL with copy functionality */}
+          {urlInfo.url && urlInfo.displayText && (
+            <div className="flex items-center gap-1 mb-2">
+              <p className="text-xs text-blue-600 truncate">
+                🔗 {urlInfo.displayText}
+              </p>
+              <button
+                onClick={() => copyToClipboard(urlInfo.url!)}
+                className="text-gray-400 hover:text-blue-600 transition-colors"
+                title="Copy URL to clipboard"
+              >
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
           )}
           <div className="flex flex-wrap gap-1 mb-3">
             <Badge variant="outline" className="text-xs">
@@ -276,9 +352,10 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
             )}
           </div>
           <div className="flex gap-2">
-            {(healthCheck?.url || instance.endpoint_url) && healthCheck?.healthy && (
+            {/* Show Access button if we have any URL, regardless of health status */}
+            {urlInfo.url && (
               <Button size="sm" className="flex-1" asChild>
-                <a href={healthCheck?.url || instance.endpoint_url} target="_blank" rel="noopener noreferrer">
+                <a href={urlInfo.url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4 mr-1" />
                   Access
                 </a>

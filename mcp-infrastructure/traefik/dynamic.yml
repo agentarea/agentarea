@@ -31,6 +31,13 @@ http:
                 - web
             middlewares:
                 - mcp-nginx-e68fb249-stripprefix
+        mcp-nginx-test-server-instance-d86883d1:
+            rule: PathPrefix(`/mcp/nginx-test-server-instance-d86883d1`)
+            service: mcp-nginx-test-server-instance-d86883d1-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-nginx-test-server-instance-d86883d1-stripprefix
         mcp-nginx-test-server-instance-fac991fe:
             rule: PathPrefix(`/mcp/nginx-test-server-instance-fac991fe`)
             service: mcp-nginx-test-server-instance-fac991fe-service
@@ -58,6 +65,10 @@ http:
             loadBalancer:
                 servers:
                     - url: http://10.88.0.2:8000
+        mcp-nginx-test-server-instance-d86883d1-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.2:8000
         mcp-nginx-test-server-instance-fac991fe-service:
             loadBalancer:
                 servers:
@@ -81,6 +92,11 @@ http:
             stripPrefix:
                 prefixes:
                     - /mcp/nginx-e68fb249
+                forceSlash: false
+        mcp-nginx-test-server-instance-d86883d1-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/nginx-test-server-instance-d86883d1
                 forceSlash: false
         mcp-nginx-test-server-instance-fac991fe-stripprefix:
             stripPrefix:

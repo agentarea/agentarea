@@ -66,27 +66,35 @@ func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 func (m *Manager) Initialize(ctx context.Context) error {
 	m.logger.Info("Initializing container manager")
 
-	// Start health monitoring
-	m.startHealthMonitoring()
+	// Start health monitoring in background
+	m.logger.Info("Starting health monitoring...")
+	go m.startHealthMonitoring()
+	m.logger.Info("Health monitoring started")
 
 	// Discover existing containers
+	m.logger.Info("Discovering existing containers...")
 	if err := m.discoverContainers(ctx); err != nil {
 		m.logger.Error("Failed to discover containers", slog.String("error", err.Error()))
 		return err
 	}
+	m.logger.Info("Container discovery completed")
 
 	// Synchronize with Core API to handle pending instances
+	m.logger.Info("Starting Core API synchronization...")
 	if err := m.syncWithCoreAPI(ctx); err != nil {
 		m.logger.Error("Failed to sync with Core API", slog.String("error", err.Error()))
 		// Don't fail initialization - log warning and continue
 		m.logger.Warn("Continuing without full sync - some instances may need manual intervention")
 	}
+	m.logger.Info("Core API synchronization completed")
 
 	// Auto-restart containers that should be running
+	m.logger.Info("Starting auto-restart check...")
 	if err := m.autoRestartContainers(ctx); err != nil {
 		m.logger.Error("Failed to auto-restart containers", slog.String("error", err.Error()))
 		// Don't fail initialization - this is not critical
 	}
+	m.logger.Info("Auto-restart check completed")
 
 	m.logger.Info("Container manager initialized successfully")
 	return nil
@@ -1383,10 +1391,15 @@ func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
 	m.logger.Info("Starting synchronization with Core API")
 
 	// Get all MCP instances from Core API
-	url := fmt.Sprintf("%s/v1/mcp-server-instances", m.config.CoreAPIURL)
+	url := fmt.Sprintf("%s/v1/mcp-server-instances/", m.config.CoreAPIURL)
 	m.logger.Info("Fetching MCP instances from Core API", slog.String("url", url))
 
-	resp, err := http.Get(url)
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to fetch MCP instances: %w", err)
 	}
@@ -1441,7 +1454,7 @@ func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
 						}
 					}
 				}
-				
+
 				// Add MCP instance ID to environment for tracking
 				environment["MCP_INSTANCE_ID"] = instance.InstanceID
 

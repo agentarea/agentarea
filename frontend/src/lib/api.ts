@@ -477,9 +477,16 @@ export async function getMCPHealthStatus(): Promise<{
   }>;
   total: number;
 }> {
-  const response = await fetch(`http://localhost:8000/v1/mcp-server-instances/health/containers`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch health status: ${response.statusText}`);
+  try {
+    const response = await fetch(`http://localhost:8000/v1/mcp-server-instances/health/containers`);
+    if (!response.ok) {
+      // Return empty health checks if endpoint is not available
+      return { health_checks: [], total: 0 };
+    }
+    return response.json();
+  } catch (error) {
+    console.warn('Failed to fetch MCP health status:', error);
+    // Return empty health checks instead of throwing
+    return { health_checks: [], total: 0 };
   }
-  return response.json();
 }
