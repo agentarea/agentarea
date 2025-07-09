@@ -319,6 +319,7 @@ async def get_containers_health():
                     detail=f"Failed to get container health: {response.text}"
                 )
             
+            # No URL transformation needed - Go manager returns correct external URLs
             return response.json()
     except httpx.RequestError as e:
         raise HTTPException(

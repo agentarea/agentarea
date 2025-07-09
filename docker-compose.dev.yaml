@@ -24,7 +24,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80/api/mcp
-      - MCP_PROXY_HOST=http://mcp-manager
+      - MCP_PROXY_HOST=http://localhost:7999
       - REDIS_URL=redis://redis:6379
       - MCP_CLIENT_TIMEOUT=30
       # Server settings
@@ -212,7 +212,7 @@ services:
       LOG_LEVEL: INFO
       TRAEFIK_NETWORK: podman
       REDIS_URL: redis://redis:6379
-      MCP_PROXY_HOST: http://mcp-manager
+      MCP_PROXY_HOST: http://localhost:7999
       CORE_API_URL: http://agentarea-backend:8000
 
   # Temporal Infrastructure Services

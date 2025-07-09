@@ -132,7 +132,7 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                 instance.endpoint_url || 
                 instance.json_spec?.url || 
                 instance.json_spec?.endpoint_url ||
-                null; // Remove the localhost fallback
+                null;
     
     const displayText = healthCheck?.slug || 
                        (url ? url.split('/').pop() || url : null);
