@@ -193,6 +193,30 @@ providers:
       - "news_search"
       - "image_search"
 
+  nginx_test:
+    id: "f012a345-def0-1234-89ab-cdef01234567"
+    name: "Nginx Test Server"
+    description: "Nginx web server for MCP infrastructure testing and validation"
+    icon: "nginx"
+    docker_image: "nginx:alpine"
+    env_vars:
+      - name: "NGINX_PORT"
+        description: "Port for nginx server"
+        required: false
+        default: "80"
+      - name: "NGINX_HOST"
+        description: "Host for nginx server"
+        required: false
+        default: "0.0.0.0"
+      - name: "NGINX_ROOT"
+        description: "Document root directory"
+        required: false
+        default: "/usr/share/nginx/html"
+    capabilities:
+      - "web_server"
+      - "http_endpoint"
+      - "health_check"
+
   gmail:
     id: "e901f234-cdef-0123-789a-bcdef0123456"
     name: "Gmail"

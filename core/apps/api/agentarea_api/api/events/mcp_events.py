@@ -93,4 +93,41 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
         except Exception as e:
             logger.error(f"Failed to handle server stopped event: {e}")
 
+    @router.subscriber("MCPServerInstanceStatusChanged")
+    async def handle_instance_status_change(message: dict[str, Any]) -> None:
+        """Handle MCP server instance status change events from MCP Manager."""
+        logger.info(f"Received MCPServerInstanceStatusChanged event: {message}")
+
+        try:
+            # Extract event data from the FastStream message format
+            event_data = message.get("data", {})
+            if isinstance(event_data, dict) and "data" in event_data:
+                # Unwrap nested data structure
+                status_data = event_data["data"]
+            else:
+                status_data = event_data
+
+            instance_id = status_data.get("instance_id")
+            status = status_data.get("status")
+            container_id = status_data.get("container_id")
+            url = status_data.get("url")
+
+            if not instance_id:
+                logger.warning("MCPServerInstanceStatusChanged event missing instance_id")
+                return
+
+            logger.info(f"Updating MCP instance {instance_id} status to {status}")
+
+            # TODO: Update instance status in database
+            # This would require injecting the MCP instance service
+            # For now, this is a placeholder that logs the event
+            logger.info(f"MCP instance {instance_id} status updated to {status}")
+            if container_id:
+                logger.info(f"Container ID: {container_id}")
+            if url:
+                logger.info(f"Instance URL: {url}")
+
+        except Exception as e:
+            logger.error(f"Failed to handle instance status change event: {e}")
+
     logger.info("✅ MCP event handlers registered")

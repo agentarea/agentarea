@@ -17,67 +17,83 @@ http:
             service: mcp-manager-service
             entryPoints:
                 - web
-        mcp-test-instance-d4fda19d:
-            rule: PathPrefix(`/mcp/test-instance-d4fda19d`)
-            service: mcp-test-instance-d4fda19d-service
+        mcp-nginx-704e5037:
+            rule: PathPrefix(`/mcp/nginx-704e5037`)
+            service: mcp-nginx-704e5037-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-test-instance-d4fda19d-stripprefix
-        mcp-test-mcp-instance-f2665b00:
-            rule: PathPrefix(`/mcp/test-mcp-instance-f2665b00`)
-            service: mcp-test-mcp-instance-f2665b00-service
+                - mcp-nginx-704e5037-stripprefix
+        mcp-nginx-e68fb249:
+            rule: PathPrefix(`/mcp/nginx-e68fb249`)
+            service: mcp-nginx-e68fb249-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-test-mcp-instance-f2665b00-stripprefix
-        mcp-test-redis-event-633828f7:
-            rule: PathPrefix(`/mcp/test-redis-event-633828f7`)
-            service: mcp-test-redis-event-633828f7-service
+                - mcp-nginx-e68fb249-stripprefix
+        mcp-nginx-test-server-instance-fac991fe:
+            rule: PathPrefix(`/mcp/nginx-test-server-instance-fac991fe`)
+            service: mcp-nginx-test-server-instance-fac991fe-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-test-redis-event-633828f7-stripprefix
+                - mcp-nginx-test-server-instance-fac991fe-stripprefix
+        mcp-test-nginx-server-cb3bd69f:
+            rule: PathPrefix(`/mcp/test-nginx-server-cb3bd69f`)
+            service: mcp-test-nginx-server-cb3bd69f-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-test-nginx-server-cb3bd69f-stripprefix
     services:
         mcp-manager-service:
             loadBalancer:
                 servers:
-                    - url: http://localhost:8000
-        mcp-test-instance-d4fda19d-service:
+                    - url: http://mcp-manager:8000
+        mcp-nginx-704e5037-service:
             loadBalancer:
                 servers:
-                    - url: http://10.88.0.3:80
-        mcp-test-mcp-instance-f2665b00-service:
+                    - url: http://10.88.0.2:8000
+        mcp-nginx-e68fb249-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.2:8000
+        mcp-nginx-test-server-instance-fac991fe-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.2:8000
+        mcp-test-nginx-server-cb3bd69f-service:
             loadBalancer:
                 servers:
                     - url: http://10.88.0.2:80
-        mcp-test-redis-event-633828f7-service:
-            loadBalancer:
-                servers:
-                    - url: http://10.88.0.4:80
     middlewares:
         mcp-api-stripprefix:
             stripPrefix:
                 prefixes:
                     - /api/mcp
                 forceSlash: false
+        mcp-nginx-704e5037-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/nginx-704e5037
+                forceSlash: false
+        mcp-nginx-e68fb249-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/nginx-e68fb249
+                forceSlash: false
+        mcp-nginx-test-server-instance-fac991fe-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/nginx-test-server-instance-fac991fe
+                forceSlash: false
         mcp-stripprefix:
             stripPrefix:
                 prefixes:
                     - /mcp
                 forceSlash: false
-        mcp-test-instance-d4fda19d-stripprefix:
+        mcp-test-nginx-server-cb3bd69f-stripprefix:
             stripPrefix:
                 prefixes:
-                    - /mcp/test-instance-d4fda19d
-                forceSlash: false
-        mcp-test-mcp-instance-f2665b00-stripprefix:
-            stripPrefix:
-                prefixes:
-                    - /mcp/test-mcp-instance-f2665b00
-                forceSlash: false
-        mcp-test-redis-event-633828f7-stripprefix:
-            stripPrefix:
-                prefixes:
-                    - /mcp/test-redis-event-633828f7
+                    - /mcp/test-nginx-server-cb3bd69f
                 forceSlash: false

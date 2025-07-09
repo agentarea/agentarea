@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,6 +36,9 @@ type ServerConfig struct {
 	Port         int           `json:"port"`
 	ReadTimeout  time.Duration `json:"read_timeout"`
 	WriteTimeout time.Duration `json:"write_timeout"`
+	// CORS configuration
+	CORSEnabled        bool     `json:"cors_enabled"`
+	CORSAllowedOrigins []string `json:"cors_allowed_origins"`
 }
 
 // ContainerConfig holds container runtime configuration
@@ -57,10 +62,11 @@ type ContainerConfig struct {
 
 // TraefikConfig holds Traefik configuration
 type TraefikConfig struct {
-	Network       string `json:"network"`
-	ProxyPort     int    `json:"proxy_port"`
-	DefaultDomain string `json:"default_domain"`
-	ProxyHost     string `json:"proxy_host"`
+	Network           string `json:"network"`
+	ProxyPort         int    `json:"proxy_port"`
+	DefaultDomain     string `json:"default_domain"`
+	ProxyHost         string `json:"proxy_host"`
+	ManagerServiceURL string `json:"manager_service_url"`
 }
 
 // LoggingConfig holds logging configuration
@@ -82,6 +88,9 @@ func Load() *Config {
 			Port:         getEnvInt("SERVER_PORT", 8000),
 			ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
 			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+			// CORS disabled by default for security
+			CORSEnabled:        getEnvBool("CORS_ENABLED", false),
+			CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{}),
 		},
 		Container: ContainerConfig{
 			Runtime:            getEnv("CONTAINER_RUNTIME", "podman"),
@@ -97,10 +106,11 @@ func Load() *Config {
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
 		},
 		Traefik: TraefikConfig{
-			Network:       getEnv("TRAEFIK_NETWORK", "podman"),
-			ProxyPort:     getEnvInt("TRAEFIK_PROXY_PORT", 81),
-			DefaultDomain: getEnv("DEFAULT_DOMAIN", "localhost"),
-			ProxyHost:     getEnv("MCP_PROXY_HOST", "http://localhost:7999"),
+			Network:           getEnv("TRAEFIK_NETWORK", "podman"),
+			ProxyPort:         getEnvInt("TRAEFIK_PROXY_PORT", 81),
+			DefaultDomain:     getEnv("DEFAULT_DOMAIN", "localhost"),
+			ProxyHost:         getEnv("MCP_PROXY_HOST", "http://localhost:7999"),
+			ManagerServiceURL: getEnv("MANAGER_SERVICE_URL", "http://localhost:8000"),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),
@@ -139,9 +149,51 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvStringSlice(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		// Split by comma and trim spaces
+		values := strings.Split(value, ",")
+		for i, v := range values {
+			values[i] = strings.TrimSpace(v)
+		}
+		return values
+	}
+	return defaultValue
+}
+
+// sanitizeServiceName sanitizes a service name to be valid for container names
+func sanitizeServiceName(serviceName string) string {
+	// Convert to lowercase
+	sanitized := strings.ToLower(serviceName)
+
+	// Replace any non-alphanumeric characters with hyphens
+	reg := regexp.MustCompile(`[^a-z0-9]+`)
+	sanitized = reg.ReplaceAllString(sanitized, "-")
+
+	// Remove leading/trailing hyphens
+	sanitized = strings.Trim(sanitized, "-")
+
+	// Ensure it's not empty and starts with alphanumeric
+	if sanitized == "" || !regexp.MustCompile(`^[a-z0-9]`).MatchString(sanitized) {
+		sanitized = "container-" + sanitized
+	}
+
+	return sanitized
+}
+
 // GetContainerName generates a container name for a service
 func (c *Config) GetContainerName(serviceName string) string {
-	return fmt.Sprintf("%s%s", c.Container.NamePrefix, serviceName)
+	sanitizedName := sanitizeServiceName(serviceName)
+	return fmt.Sprintf("%s%s", c.Container.NamePrefix, sanitizedName)
 }
 
 // GetServiceURL generates a service URL for Traefik routing

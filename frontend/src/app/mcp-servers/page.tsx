@@ -10,11 +10,12 @@ import { MyMCPsSection } from "./components/MyMCPsSection";
 export default async function MCPServersPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  const [mcpServers, mcpInstances] = await Promise.all([
+  const [mcpServers, mcpInstances, resolvedSearchParams] = await Promise.all([
     listMCPServers(),
     listMCPServerInstances(),
+    searchParams,
   ]);
 
   const mcpList = mcpServers.data || [];
@@ -40,7 +41,7 @@ export default async function MCPServersPage({
 
       {/* Browse MCP Specifications Section */}
       <div id="specs-section">
-        <MCPSpecsSection mcpServers={mcpList} searchParams={searchParams} />
+        <MCPSpecsSection mcpServers={mcpList} searchParams={resolvedSearchParams} />
       </div>
     </div>
   );

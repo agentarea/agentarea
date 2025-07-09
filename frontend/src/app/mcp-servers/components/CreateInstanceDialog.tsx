@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Info } from "lucide-react";
-import { createMCPServerInstance } from "@/lib/api";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Info, CheckCircle, XCircle } from "lucide-react";
+import { createMCPServerInstance, checkMCPServerInstanceConfiguration } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -41,6 +42,13 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
   const [instanceDescription, setInstanceDescription] = useState("");
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
   const [isCreating, setIsCreating] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [validationResult, setValidationResult] = useState<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
+  const [forceCreate, setForceCreate] = useState(false);
   const router = useRouter();
 
   // Initialize form when dialog opens
@@ -64,9 +72,48 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
 
   const handleEnvVarChange = (name: string, value: string) => {
     setEnvVars(prev => ({ ...prev, [name]: value }));
+    // Clear validation when user changes input
+    if (validationResult) {
+      setValidationResult(null);
+      setForceCreate(false);
+    }
   };
 
-  const handleCreateInstance = async () => {
+  const handleCheckConfiguration = async () => {
+    if (!mcpServer) return;
+
+    setIsChecking(true);
+    
+    try {
+      const checkResult = await checkMCPServerInstanceConfiguration({
+        json_spec: {
+          image: mcpServer.docker_image_url,
+          port: 8000,
+          environment: envVars,
+        }
+      });
+
+      if (checkResult.error) {
+        toast.error('Failed to validate configuration');
+        return;
+      }
+
+      setValidationResult(checkResult.data);
+      
+      if (checkResult.data.valid) {
+        toast.success('Configuration is valid!');
+      } else {
+        toast.warning(`Configuration has ${checkResult.data.errors.length} error(s)`);
+      }
+    } catch (error) {
+      console.error('Validation error:', error);
+      toast.error('Failed to validate configuration');
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleCreateInstance = async (force = false) => {
     if (!mcpServer) return;
 
     // Validate required environment variables
@@ -79,6 +126,18 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
       return;
     }
 
+    // Check if validation is required and hasn't been done
+    if (!force && !validationResult) {
+      toast.warning('Please validate the configuration first');
+      return;
+    }
+
+    // If validation failed and not forcing, require explicit force
+    if (!force && validationResult && !validationResult.valid) {
+      toast.error('Configuration validation failed. Use "Force Create" to proceed anyway.');
+      return;
+    }
+
     setIsCreating(true);
     
     try {
@@ -87,14 +146,9 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
         description: instanceDescription,
         server_spec_id: mcpServer.id,
         json_spec: {
-          type: "docker",
           image: mcpServer.docker_image_url,
           port: 8000,
           environment: envVars,
-          resources: {
-            memory_limit: "512m",
-            cpu_limit: "0.5"
-          }
         }
       });
 
@@ -110,6 +164,8 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
       setInstanceName("");
       setInstanceDescription("");
       setEnvVars({});
+      setValidationResult(null);
+      setForceCreate(false);
     } catch (error) {
       console.error('Instance creation error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create MCP instance');
@@ -124,6 +180,8 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
     setInstanceName("");
     setInstanceDescription("");
     setEnvVars({});
+    setValidationResult(null);
+    setForceCreate(false);
   };
 
   if (!mcpServer) return null;
@@ -210,23 +268,92 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
             </>
           )}
 
+          {/* Configuration Validation */}
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-medium">Configuration Validation</h4>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCheckConfiguration}
+                disabled={isChecking || !instanceName.trim()}
+              >
+                {isChecking ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  'Check Configuration'
+                )}
+              </Button>
+            </div>
+            
+            {validationResult && (
+              <Alert variant={validationResult.valid ? "default" : "destructive"}>
+                <div className="flex items-center gap-2">
+                  {validationResult.valid ? (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  <AlertDescription>
+                    {validationResult.valid ? (
+                      "Configuration is valid and ready for deployment!"
+                    ) : (
+                      <div>
+                        <div className="font-medium mb-1">Configuration errors found:</div>
+                        <ul className="text-sm list-disc list-inside space-y-1">
+                          {validationResult.errors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </AlertDescription>
+                </div>
+              </Alert>
+            )}
+          </div>
+
           {/* Docker Configuration Summary */}
           <Separator />
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Container Configuration</h4>
             <div className="bg-muted/50 rounded-lg p-3 space-y-1">
               <div className="text-xs"><span className="font-medium">Image:</span> {mcpServer.docker_image_url}</div>
-              <div className="text-xs"><span className="font-medium">Memory:</span> 512MB</div>
-              <div className="text-xs"><span className="font-medium">CPU:</span> 0.5 cores</div>
+              <div className="text-xs"><span className="font-medium">Port:</span> 8000</div>
             </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={handleCancel} disabled={isCreating}>
             Cancel
           </Button>
-          <Button onClick={handleCreateInstance} disabled={isCreating || !instanceName.trim()}>
+          
+          {validationResult && !validationResult.valid && (
+            <Button
+              variant="destructive"
+              onClick={() => handleCreateInstance(true)}
+              disabled={isCreating || !instanceName.trim()}
+            >
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Force Creating...
+                </>
+              ) : (
+                'Force Create'
+              )}
+            </Button>
+          )}
+          
+          <Button 
+            onClick={() => handleCreateInstance(false)} 
+            disabled={isCreating || !instanceName.trim() || (validationResult && !validationResult.valid)}
+          >
             {isCreating ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

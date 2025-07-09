@@ -188,6 +188,29 @@ export const listMCPServerInstances = async () => {
   return { data, error };
 };
 
+export const checkMCPServerInstanceConfiguration = async (checkRequest: { json_spec: Record<string, any> }) => {
+  // Use fetch directly since the endpoint isn't in the generated schema yet
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/v1/mcp-server-instances/check`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(checkRequest),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      return { data: null, error: errorData };
+    }
+    
+    const data = await response.json();
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error: { message: 'Network error' } };
+  }
+};
+
 export const createMCPServerInstance = async (instance: components["schemas"]["MCPServerInstanceCreateRequest"]) => {
   const { data, error } = await client.POST("/v1/mcp-server-instances/", { body: instance });
   return { data, error };
@@ -438,3 +461,25 @@ export type ChatResponse = components["schemas"]["ChatResponse"];
 export type ConversationResponse = components["schemas"]["ConversationResponse"];
 export type TaskResponse = components["schemas"]["TaskResponse"];
 export type AgentCard = components["schemas"]["AgentCard"];
+
+// MCP Health Monitoring
+export async function getMCPHealthStatus(): Promise<{
+  health_checks: Array<{
+    service_name: string;
+    slug: string;
+    url: string;
+    healthy: boolean;
+    http_reachable: boolean;
+    response_time_ms: number;
+    error?: string;
+    timestamp: string;
+    container_status: string;
+  }>;
+  total: number;
+}> {
+  const response = await fetch(`http://localhost:8000/v1/mcp-server-instances/health/containers`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch health status: ${response.statusText}`);
+  }
+  return response.json();
+}

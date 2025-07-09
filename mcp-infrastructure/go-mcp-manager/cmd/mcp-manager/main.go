@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/agentarea/mcp-manager/internal/api"
@@ -23,52 +24,12 @@ import (
 
 const version = "0.1.0"
 
-// startTraefik starts Traefik server in the background
-func startTraefik(logger *slog.Logger) (*exec.Cmd, error) {
-	// Start Traefik with configuration for Podman monitoring
-	cmd := exec.Command("traefik",
-		"--api.dashboard=true",
-		"--api.insecure=true",
-		"--providers.file.directory=/etc/traefik",
-		"--providers.file.watch=true",
-		"--entrypoints.web.address=:80",
-		"--entrypoints.websecure.address=:443",
-		"--log.level=INFO",
-	)
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start Traefik: %w", err)
-	}
-
-	logger.Info("Traefik started successfully", slog.Int("pid", cmd.Process.Pid))
-	return cmd, nil
-}
-
 func main() {
 	// Load configuration
 	cfg := config.Load()
 
 	// Setup logging
 	logger := setupLogging(cfg)
-
-	// Start Traefik server
-	traefikCmd, err := startTraefik(logger)
-	if err != nil {
-		logger.Error("Failed to start Traefik", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	defer func() {
-		if traefikCmd != nil && traefikCmd.Process != nil {
-			logger.Info("Stopping Traefik")
-			traefikCmd.Process.Kill()
-		}
-	}()
-
-	// Wait a moment for Traefik to start
-	time.Sleep(2 * time.Second)
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,6 +43,13 @@ func main() {
 		logger.Error("Failed to initialize container manager", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+
+	// Start Traefik in background
+	go func() {
+		if err := startTraefik(logger); err != nil {
+			logger.Error("Failed to start Traefik", slog.String("error", err.Error()))
+		}
+	}()
 
 	// Initialize secret resolver with Infisical SDK
 	secretResolver, err := secrets.NewSecretResolver(logger)
@@ -150,6 +118,11 @@ func main() {
 		logger.Error("Failed to close event subscriber", slog.String("error", err.Error()))
 	}
 
+	// Shutdown container manager
+	if err := containerManager.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Failed to shutdown container manager", slog.String("error", err.Error()))
+	}
+
 	logger.Info("Server shutdown complete")
 }
 
@@ -195,6 +168,25 @@ func setupRouter(cfg *config.Config, logger *slog.Logger) *gin.Engine {
 		return ""
 	}))
 
+	// Add CORS middleware if enabled
+	if cfg.Server.CORSEnabled {
+		corsConfig := cors.DefaultConfig()
+		if len(cfg.Server.CORSAllowedOrigins) > 0 {
+			corsConfig.AllowOrigins = cfg.Server.CORSAllowedOrigins
+		} else {
+			corsConfig.AllowAllOrigins = true
+		}
+		corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+		corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+		corsConfig.ExposeHeaders = []string{"Content-Length"}
+		corsConfig.AllowCredentials = true
+
+		router.Use(cors.New(corsConfig))
+		logger.Info("CORS enabled", slog.Any("allowed_origins", cfg.Server.CORSAllowedOrigins))
+	} else {
+		logger.Info("CORS disabled")
+	}
+
 	return router
 }
 
@@ -212,4 +204,66 @@ func getLogLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// startTraefik starts the Traefik reverse proxy
+func startTraefik(logger *slog.Logger) error {
+	logger.Info("Starting embedded Traefik reverse proxy")
+
+	// Create Traefik static configuration
+	if err := createTraefikStaticConfig(); err != nil {
+		return fmt.Errorf("failed to create Traefik static config: %w", err)
+	}
+
+	// Ensure dynamic config directory exists
+	os.MkdirAll("/etc/traefik", 0755)
+
+	// Start Traefik process
+	cmd := exec.Command("traefik", "--configfile=/etc/traefik/traefik.yml")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start Traefik: %w", err)
+	}
+
+	logger.Info("Traefik started successfully", slog.Int("pid", cmd.Process.Pid))
+
+	// Wait for process to finish (this will run until container stops)
+	if err := cmd.Wait(); err != nil {
+		logger.Error("Traefik process exited", slog.String("error", err.Error()))
+		return err
+	}
+
+	return nil
+}
+
+// createTraefikStaticConfig creates the static Traefik configuration
+func createTraefikStaticConfig() error {
+	staticConfig := `
+# Static Traefik configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    directory: /etc/traefik
+    watch: true
+
+api:
+  dashboard: true
+  insecure: true
+`
+
+	return os.WriteFile("/etc/traefik/traefik.yml", []byte(staticConfig), 0644)
 }

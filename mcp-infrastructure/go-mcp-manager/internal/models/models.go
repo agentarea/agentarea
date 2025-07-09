@@ -8,12 +8,31 @@ import (
 type ContainerStatus string
 
 const (
-	StatusStopped  ContainerStatus = "stopped"
-	StatusStarting ContainerStatus = "starting"
-	StatusRunning  ContainerStatus = "running"
-	StatusStopping ContainerStatus = "stopping"
-	StatusError    ContainerStatus = "error"
+	StatusValidating ContainerStatus = "validating"
+	StatusPulling    ContainerStatus = "pulling"
+	StatusStopped    ContainerStatus = "stopped"
+	StatusStarting   ContainerStatus = "starting"
+	StatusRunning    ContainerStatus = "running"
+	StatusStopping   ContainerStatus = "stopping"
+	StatusError      ContainerStatus = "error"
+	StatusHealthy    ContainerStatus = "healthy"
+	StatusUnhealthy  ContainerStatus = "unhealthy"
 )
+
+// DetailedContainerStatus represents detailed container status information
+type DetailedContainerStatus struct {
+	Status     string `json:"status"`
+	Running    bool   `json:"running"`
+	Paused     bool   `json:"paused"`
+	Restarting bool   `json:"restarting"`
+	OOMKilled  bool   `json:"oom_killed"`
+	Dead       bool   `json:"dead"`
+	Pid        int    `json:"pid"`
+	ExitCode   int    `json:"exit_code"`
+	Error      string `json:"error"`
+	StartedAt  string `json:"started_at"`
+	FinishedAt string `json:"finished_at"`
+}
 
 // Container represents a managed container
 type Container struct {

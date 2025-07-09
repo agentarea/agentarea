@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/agentarea/mcp-manager/internal/config"
 )
 
 // TraefikConfig represents the dynamic Traefik configuration
@@ -49,17 +51,19 @@ type TraefikStripPrefix struct {
 	ForceSlash bool     `yaml:"forceSlash"`
 }
 
-// TraefikManager manages dynamic Traefik configuration
+// TraefikManager manages Traefik configuration
 type TraefikManager struct {
 	configPath string
 	logger     *slog.Logger
+	config     *config.Config
 }
 
-// NewTraefikManager creates a new Traefik configuration manager
-func NewTraefikManager(logger *slog.Logger) *TraefikManager {
+// NewTraefikManager creates a new Traefik manager
+func NewTraefikManager(cfg *config.Config, logger *slog.Logger) *TraefikManager {
 	return &TraefikManager{
 		configPath: "/etc/traefik/dynamic.yml",
 		logger:     logger,
+		config:     cfg,
 	}
 }
 
@@ -138,8 +142,8 @@ func (tm *TraefikManager) RemoveMCPService(ctx context.Context, slug string) err
 	return nil
 }
 
-// loadConfig loads the current Traefik configuration
-func (tm *TraefikManager) loadConfig() (*TraefikConfig, error) {
+// LoadConfig loads the current Traefik configuration
+func (tm *TraefikManager) LoadConfig() (*TraefikConfig, error) {
 	config := &TraefikConfig{
 		HTTP: TraefikHTTP{
 			Routers:     make(map[string]TraefikRouter),
@@ -176,6 +180,11 @@ func (tm *TraefikManager) loadConfig() (*TraefikConfig, error) {
 	}
 
 	return config, nil
+}
+
+// loadConfig loads the current Traefik configuration (private version)
+func (tm *TraefikManager) loadConfig() (*TraefikConfig, error) {
+	return tm.LoadConfig()
 }
 
 // saveConfig saves the Traefik configuration to file
@@ -223,7 +232,7 @@ func (tm *TraefikManager) createDefaultConfig() (*TraefikConfig, error) {
 				"mcp-manager-service": {
 					LoadBalancer: TraefikLoadBalancer{
 						Servers: []TraefikServer{
-							{URL: "http://localhost:8000"},
+							{URL: tm.config.Traefik.ManagerServiceURL},
 						},
 					},
 				},

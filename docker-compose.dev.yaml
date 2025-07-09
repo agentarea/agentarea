@@ -213,6 +213,7 @@ services:
       - TRAEFIK_NETWORK=podman
       - REDIS_URL=redis://redis:6379
       - MCP_PROXY_HOST=http://mcp-manager
+      - CORE_API_URL=http://agentarea-backend:8000
 
   # Temporal Infrastructure Services
   temporal:

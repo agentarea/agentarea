@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertCircle, Settings, Trash2, ExternalLink, Grid, List } from "lucide-react";
+import { CheckCircle, AlertCircle, Settings, Trash2, ExternalLink, Grid, List, AlertTriangle, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { getMCPHealthStatus } from "@/lib/api";
 
 interface MCPInstance {
   id: string;
@@ -16,6 +17,18 @@ interface MCPInstance {
   created_at: string;
   server_spec_id?: string;
   json_spec?: any;
+}
+
+interface HealthCheck {
+  service_name: string;
+  slug: string;
+  url: string;
+  healthy: boolean;
+  http_reachable: boolean;
+  response_time_ms: number;
+  error?: string;
+  timestamp: string;
+  container_status: string;
 }
 
 interface MyMCPsSectionProps {
@@ -48,15 +61,45 @@ const getCategory = (instance: MCPInstance) => {
   return 'Tools';
 };
 
-// Helper function to get status display
-const getStatusDisplay = (status: string) => {
+// Helper function to get status display with health information
+const getStatusDisplay = (status: string, healthCheck?: HealthCheck) => {
+  // If we have health information, use it to determine actual status
+  if (healthCheck) {
+    if (healthCheck.container_status === 'running' && healthCheck.healthy) {
+      return { 
+        text: 'Healthy', 
+        variant: 'default' as const, 
+        icon: CheckCircle, 
+        color: 'text-green-500',
+        detail: `${healthCheck.response_time_ms}ms`
+      };
+    } else if (healthCheck.container_status === 'running' && !healthCheck.healthy) {
+      return { 
+        text: 'Unhealthy', 
+        variant: 'destructive' as const, 
+        icon: AlertTriangle, 
+        color: 'text-red-500',
+        detail: healthCheck.error || 'Health check failed'
+      };
+    } else if (healthCheck.container_status === 'stopped') {
+      return { 
+        text: 'Stopped', 
+        variant: 'secondary' as const, 
+        icon: AlertCircle, 
+        color: 'text-gray-500',
+        detail: 'Container not running'
+      };
+    }
+  }
+  
+  // Fallback to original status logic
   switch (status) {
     case 'running':
       return { text: 'Available', variant: 'default' as const, icon: CheckCircle, color: 'text-green-500' };
     case 'stopped':
       return { text: 'Stopped', variant: 'secondary' as const, icon: AlertCircle, color: 'text-red-500' };
     case 'pending':
-      return { text: 'Starting', variant: 'secondary' as const, icon: AlertCircle, color: 'text-amber-500' };
+      return { text: 'Starting', variant: 'secondary' as const, icon: Loader2, color: 'text-amber-500' };
     default:
       return { text: 'Needs Setup', variant: 'outline' as const, icon: AlertCircle, color: 'text-amber-500' };
   }
@@ -65,11 +108,41 @@ const getStatusDisplay = (status: string) => {
 export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showAll, setShowAll] = useState(false);
+  const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
+  const [healthLoading, setHealthLoading] = useState(true);
+
+  // Fetch health status on component mount and set up polling
+  useEffect(() => {
+    const fetchHealthStatus = async () => {
+      try {
+        const healthData = await getMCPHealthStatus();
+        setHealthChecks(healthData.health_checks);
+      } catch (error) {
+        console.error('Failed to fetch health status:', error);
+      } finally {
+        setHealthLoading(false);
+      }
+    };
+
+    // Initial fetch
+    fetchHealthStatus();
+
+    // Set up polling every 30 seconds
+    const interval = setInterval(fetchHealthStatus, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Helper function to get health check for an instance
+  const getHealthCheck = (instanceName: string): HealthCheck | undefined => {
+    return healthChecks.find(check => check.service_name === instanceName);
+  };
 
   const displayedInstances = showAll ? mcpInstances : mcpInstances.slice(0, 3);
 
   const renderInstanceCard = (instance: MCPInstance) => {
-    const statusInfo = getStatusDisplay(instance.status);
+    const healthCheck = getHealthCheck(instance.name);
+    const statusInfo = getStatusDisplay(instance.status, healthCheck);
     const StatusIcon = statusInfo.icon;
 
     return (
@@ -81,11 +154,24 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-medium">{instance.name}</h3>
-              <StatusIcon className={`h-4 w-4 ${statusInfo.color}`} />
+              <StatusIcon className={`h-4 w-4 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
+              {healthLoading && !healthCheck && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
             </div>
             <p className="text-sm text-muted-foreground">
               {instance.description || `${getCategory(instance)} instance`}
             </p>
+            {/* Show health details if available */}
+            {healthCheck && statusInfo.detail && (
+              <p className={`text-xs ${healthCheck.healthy ? 'text-green-600' : 'text-red-600'}`}>
+                {statusInfo.detail}
+              </p>
+            )}
+            {/* Show endpoint URL (prefer health check URL over instance URL) */}
+            {(healthCheck?.url || instance.endpoint_url) && (
+              <p className="text-xs text-blue-600 truncate max-w-xs">
+                🔗 {healthCheck?.url || instance.endpoint_url}
+              </p>
+            )}
             <div className="flex flex-wrap gap-1 mt-1">
               <Badge variant="outline" className="text-xs">
                 {getCategory(instance)}
@@ -93,15 +179,28 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
               <Badge variant={statusInfo.variant} className="text-xs">
                 {statusInfo.text}
               </Badge>
-              {instance.endpoint_url && (
+              {healthCheck?.healthy && healthCheck.http_reachable && (
                 <Badge variant="outline" className="text-xs">
-                  {instance.endpoint_url.includes('http') ? 'External' : 'Local'}
+                  🌐 Reachable
+                </Badge>
+              )}
+              {healthCheck && !healthCheck.healthy && (
+                <Badge variant="destructive" className="text-xs">
+                  ⚠️ Warning
                 </Badge>
               )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {(healthCheck?.url || instance.endpoint_url) && healthCheck?.healthy && (
+            <Button size="sm" variant="outline" asChild>
+              <a href={healthCheck?.url || instance.endpoint_url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Access
+              </a>
+            </Button>
+          )}
           <Button size="sm" variant="outline" asChild>
             <Link href={`/mcp-servers/${instance.id}/edit`}>
               <Settings className="h-4 w-4 mr-1" />
@@ -117,7 +216,8 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
   };
 
   const renderInstanceGrid = (instance: MCPInstance) => {
-    const statusInfo = getStatusDisplay(instance.status);
+    const healthCheck = getHealthCheck(instance.name);
+    const statusInfo = getStatusDisplay(instance.status, healthCheck);
     const StatusIcon = statusInfo.icon;
 
     return (
@@ -134,7 +234,8 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                   <Badge variant="secondary" className="text-xs">
                     {getCategory(instance)}
                   </Badge>
-                  <StatusIcon className={`h-3 w-3 ${statusInfo.color}`} />
+                  <StatusIcon className={`h-3 w-3 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
+                  {healthLoading && !healthCheck && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
                 </div>
               </div>
             </div>
@@ -147,17 +248,42 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
           <p className="text-sm text-muted-foreground mb-3">
             {instance.description || `${getCategory(instance)} instance`}
           </p>
+          {/* Show health details if available */}
+          {healthCheck && statusInfo.detail && (
+            <p className={`text-xs mb-2 ${healthCheck.healthy ? 'text-green-600' : 'text-red-600'}`}>
+              {statusInfo.detail}
+            </p>
+          )}
+          {/* Show endpoint URL (prefer health check URL over instance URL) */}
+          {(healthCheck?.url || instance.endpoint_url) && (
+            <p className="text-xs text-blue-600 truncate mb-2">
+              🔗 {healthCheck?.url || instance.endpoint_url}
+            </p>
+          )}
           <div className="flex flex-wrap gap-1 mb-3">
             <Badge variant="outline" className="text-xs">
               {getCategory(instance)}
             </Badge>
-            {instance.endpoint_url && (
+            {healthCheck?.healthy && healthCheck.http_reachable && (
               <Badge variant="outline" className="text-xs">
-                {instance.endpoint_url.includes('http') ? 'External' : 'Local'}
+                🌐 Reachable
+              </Badge>
+            )}
+            {healthCheck && !healthCheck.healthy && (
+              <Badge variant="destructive" className="text-xs">
+                ⚠️ Warning
               </Badge>
             )}
           </div>
           <div className="flex gap-2">
+            {(healthCheck?.url || instance.endpoint_url) && healthCheck?.healthy && (
+              <Button size="sm" className="flex-1" asChild>
+                <a href={healthCheck?.url || instance.endpoint_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Access
+                </a>
+              </Button>
+            )}
             <Button size="sm" className="flex-1" asChild>
               <Link href={`/mcp-servers/${instance.id}/edit`}>
                 <Settings className="h-4 w-4 mr-1" />
