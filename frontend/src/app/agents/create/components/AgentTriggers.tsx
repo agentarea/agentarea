@@ -1,11 +1,14 @@
-import React, { useState } from "react";
-import { Wand2, Zap, Clock } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Wand2, Zap, Clock, Plus } from "lucide-react";
 import { FieldErrors, UseFieldArrayReturn, Control } from 'react-hook-form';
 import AccordionControl from "./AccordionControl";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues, EventConfig } from "../types";
 import { TriggerControl } from "./TriggerControl";
 import { Accordion } from "@/components/ui/accordion";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import SelectTrigger from "./SelectTrigger";
+import { Button } from "@/components/ui/button";
 
 // Define event trigger types
 const eventOptions = [
@@ -33,6 +36,8 @@ type AgentTriggersProps = {
 
 const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent }: AgentTriggersProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("triggers");
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [scrollTriggerId, setScrollTriggerId] = useState<string | null>(null);
 
   // // Add default events if none exist
   // useEffect(() => {
@@ -68,51 +73,99 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
     </div>
   );
 
+  useEffect(()=>{
+    if(isSheetOpen && scrollTriggerId){
+      const timer=setTimeout(()=>{
+        const el=document.getElementById(`trigger-${scrollTriggerId}`);
+        el?.scrollIntoView({behavior:'smooth', block:'center'});
+      },100);
+      return ()=>clearTimeout(timer);
+    }
+  },[isSheetOpen, scrollTriggerId]);
+
   return (
     <>
-        <AccordionControl 
-          id="triggers" 
-          accordionValue={accordionValue} 
-          setAccordionValue={setAccordionValue} 
-          onAdd={(id: string) => {
-            appendEvent({ event_type: id });
-            setAccordionValue("triggers");
-          }}
-          dropdownItems={eventOptions}
-          title={title}
-          note={note}
-          addText="Trigger"
-        >
-          {/*  */}
-          <div className="space-y-1">
-          {eventFields.length > 0 ? (
-              <Accordion type="multiple" id="triggers-items">
-                {
-                  eventFields.map((item, index) => (
-                    <TriggerControl 
-                      key={`trigger-${index}`}
-                      trigger={eventOptions.find(option => option.id === item.event_type) || undefined} 
-                      index={index} 
-                      control={control} 
-                      removeEvent={removeEvent}
-                      name={`events_config.events.${index}.event_type`}
-                    />
-                  ))
+      <AccordionControl
+        id="triggers"
+        accordionValue={accordionValue}
+        setAccordionValue={setAccordionValue}
+        title={title}
+        note={note}
+        mainControl={
+          <Sheet modal={false} open={isSheetOpen} onOpenChange={(open:boolean)=>{
+            setIsSheetOpen(open);
+            if(!open) setScrollTriggerId(null);
+          }}>
+            <SheetTrigger asChild>
+              <Button size="xs">
+                <Plus className="h-4 w-4" />
+                Trigger
+              </Button>
+            </SheetTrigger>
+            <SheetContent
+              className="w-full flex flex-col sm:w-[540px] overflow-y-hidden pb-0"
+              hideOverlay
+              onPointerDownOutside={(e)=>{
+                const target=e.target as HTMLElement;
+                if(target.closest('button, input, select, textarea, a, [role="button"], label') || target.closest('[data-radix-select-content]') || target.closest('[data-radix-scroll-area]')){
+                  e.preventDefault();
                 }
-              </Accordion>
-            ) : (
+              }}
+              onInteractOutside={(e)=>{
+                const target=e.target as HTMLElement;
+                if(target.closest('button, input, select, textarea, a, [role="button"], label') || target.closest('[data-radix-select-content]') || target.closest('[data-radix-scroll-area]')){
+                  e.preventDefault();
+                }
+              }}
+            >
+              <SheetHeader className="mb-[12px] md:mb-[24px]">
+                <SheetTitle>Agent Triggers</SheetTitle>
+                <SheetDescription className="text-xs">Select triggers for your agent</SheetDescription>
+              </SheetHeader>
+              <SelectTrigger
+                triggerOptions={eventOptions}
+                onAdd={(opt)=>appendEvent({event_type:opt.id})}
+                onRemove={(id)=>{
+                  const idx = eventFields.findIndex(f=>f.event_type===id);
+                  if(idx!==-1) removeEvent(idx);
+                }}
+                acceptedTriggers={eventFields.map(f=>f.event_type)}
+                openTriggerId={scrollTriggerId}
+              />
+            </SheetContent>
+          </Sheet>
+        }
+      >
+        <div className="space-y-1">
+          {eventFields.length>0 ? (
+            <Accordion type="multiple" id="triggers-items" className="space-y-2">
+              {eventFields.map((item,index)=>(
+                <TriggerControl
+                  key={`trigger-${index}`}
+                  trigger={eventOptions.find(o=>o.id===item.event_type)}
+                  index={index}
+                  control={control}
+                  removeEvent={removeEvent}
+                  enabledName={`events_config.events.${index}.enabled`}
+                  name={`events_config.events.${index}.event_type`}
+                  editEvent={()=>{
+                    setScrollTriggerId(item.event_type);
+                    setIsSheetOpen(true);
+                  }}
+                />
+              ))}
+            </Accordion>
+          ): (
             <div className="mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center cursor-default">
               {note}
             </div>
           )}
         </div>
+      </AccordionControl>
 
-        </AccordionControl>
-
-        {
-          getNestedErrorMessage(errors, 'events_config.events') && 
-          <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'events_config.events')}</p>
-        }
+      {getNestedErrorMessage(errors,'events_config.events') && (
+        <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors,'events_config.events')}</p>
+      )}
     </>
   );
 };
