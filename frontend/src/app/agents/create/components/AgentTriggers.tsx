@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Wand2, Zap, Clock, Plus } from "lucide-react";
 import { FieldErrors, UseFieldArrayReturn, Control } from 'react-hook-form';
 import AccordionControl from "./AccordionControl";
@@ -7,7 +7,7 @@ import type { AgentFormValues, EventConfig } from "../types";
 import { TriggerControl } from "./TriggerControl";
 import { Accordion } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import SelectTrigger from "./SelectTrigger";
+import { SelectableList } from "./SelectableList";
 import { Button } from "@/components/ui/button";
 
 // Define event trigger types
@@ -39,39 +39,33 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollTriggerId, setScrollTriggerId] = useState<string | null>(null);
 
-  // // Add default events if none exist
-  // useEffect(() => {
-  //   if (eventFields.length === 0) {
-  //     // Add the two default event types
-  //     appendEvent({ event_type: 'text_input' });
-  //     appendEvent({ event_type: 'agent_call' });
-  //   }
-  // }, []);
+  // Helper to determine if outside click should be ignored (e.g., when interacting with controls)
+  const shouldIgnoreOutsideClick = (target: HTMLElement) =>
+    !!target.closest(
+      'button, input, select, textarea, a, [role="button"], label, [data-radix-select-content], [data-radix-scroll-area]'
+    );
 
-  // const searchUsers = async (query?: string) => {
-  //   // Simulate API delay
-  //   await new Promise(resolve => setTimeout(resolve, 500));
+  // Precompute map for quick lookup of trigger option by id
+  const triggerMap = useMemo(() => {
+    const map: Record<string, typeof eventOptions[number]> = {};
+    eventOptions.forEach((o) => {
+      map[o.id] = o;
+    });
+    return map;
+  }, []);
 
-  //   if (!query) return eventOptions;
-
-  //   return eventOptions.filter(item => 
-  //     item.label.toLowerCase().includes(query.toLowerCase()) ||
-  //     item.description.toLowerCase().includes(query.toLowerCase())
-  //   );
-  // };
-
-  const note = (
+  const note = useMemo(() => (
     <>
       <p>Triggers determine when your agent is activated to perform its tasks.</p>
       <p>Select when you want your agent to be activated. You can add multiple triggers.</p>
     </>
-  );
+  ), []);
 
-  const title = (
+  const title = useMemo(() => (
     <div className="flex items-center gap-2">
       <Zap className="label-icon" style={{ strokeWidth: 1.5 }} /> Agent Triggers
     </div>
-  );
+  ), []);
 
   useEffect(()=>{
     if(isSheetOpen && scrollTriggerId){
@@ -106,14 +100,14 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
               className="w-full flex flex-col sm:w-[540px] overflow-y-hidden pb-0"
               hideOverlay
               onPointerDownOutside={(e)=>{
-                const target=e.target as HTMLElement;
-                if(target.closest('button, input, select, textarea, a, [role="button"], label') || target.closest('[data-radix-select-content]') || target.closest('[data-radix-scroll-area]')){
+                const target = e.target as HTMLElement;
+                if (shouldIgnoreOutsideClick(target)) {
                   e.preventDefault();
                 }
               }}
               onInteractOutside={(e)=>{
-                const target=e.target as HTMLElement;
-                if(target.closest('button, input, select, textarea, a, [role="button"], label') || target.closest('[data-radix-select-content]') || target.closest('[data-radix-scroll-area]')){
+                const target = e.target as HTMLElement;
+                if (shouldIgnoreOutsideClick(target)) {
                   e.preventDefault();
                 }
               }}
@@ -122,15 +116,20 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
                 <SheetTitle>Agent Triggers</SheetTitle>
                 <SheetDescription className="text-xs">Select triggers for your agent</SheetDescription>
               </SheetHeader>
-              <SelectTrigger
-                triggerOptions={eventOptions}
-                onAdd={(opt)=>appendEvent({event_type:opt.id})}
-                onRemove={(id)=>{
-                  const idx = eventFields.findIndex(f=>f.event_type===id);
-                  if(idx!==-1) removeEvent(idx);
+              <SelectableList
+                items={eventOptions}
+                prefix="trigger"
+                extractTitle={(opt) => opt.label}
+                onAdd={(opt) => appendEvent({ event_type: opt.id })}
+                onRemove={(opt) => {
+                  const idx = eventFields.findIndex((f) => f.event_type === opt.id);
+                  if (idx !== -1) removeEvent(idx);
                 }}
-                acceptedTriggers={eventFields.map(f=>f.event_type)}
-                openTriggerId={scrollTriggerId}
+                selectedIds={eventFields.map((f) => f.event_type)}
+                openItemId={scrollTriggerId}
+                renderContent={(opt) => (
+                  <div className="p-4 text-sm text-muted-foreground">{opt.description || "Description"}</div>
+                )}
               />
             </SheetContent>
           </Sheet>
@@ -141,8 +140,8 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
             <Accordion type="multiple" id="triggers-items" className="space-y-2">
               {eventFields.map((item,index)=>(
                 <TriggerControl
-                  key={`trigger-${index}`}
-                  trigger={eventOptions.find(o=>o.id===item.event_type)}
+                  key={item.id}
+                  trigger={triggerMap[item.event_type]}
                   index={index}
                   control={control}
                   removeEvent={removeEvent}

@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 import { TriggerControl } from "./TriggerControl";
 import { Accordion } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
-import SelectMcp from "./SelectMcp";
+import { SelectableList } from "./SelectableList";
 import { useTranslations } from "next-intl";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
@@ -41,12 +41,6 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
       Add MCP Servers to your agent to enable tool use.
     </p>
   );
-
-  const mcpServerTEST = [
-    {id: 'mcp_server_id', name: 'MCP Server1', icon: <Cpu className="h-4 w-4" />},
-    {id: 'mcp_server_id1', name: 'MCP Server2', icon: <Zap className="h-4 w-4" />},
-    {id: 'mcp_server_id2', name: 'MCP Server3', icon: <Trash2 className="h-4 w-4" />},
-  ];
 
   // Helper converts raw MCP server objects to form-compatible configs
   const handleAddTools = (servers: MCPServer[]) => {
@@ -136,12 +130,17 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
               {t('create.toolsMcpDescription')}
             </SheetDescription>
           </SheetHeader>
-          <SelectMcp 
-            mcpServers={mcpServers} 
-            onAddTools={handleAddTools}
-            onRemoveTool={handleRemoveTool}
-            acceptedTools={toolFields.map(item => item.mcp_server_id)} 
-            openToolId={scrollToolId}
+          <SelectableList
+            items={mcpServers}
+            prefix="mcp"
+            extractTitle={(server) => server.name}
+            onAdd={(server) => handleAddTools([server])}
+            onRemove={(server) => handleRemoveTool(server.id)}
+            selectedIds={toolFields.map((item) => item.mcp_server_id)}
+            openItemId={scrollToolId}
+            renderContent={() => (
+              <div className="p-4 text-sm text-muted-foreground">TEST</div>
+            )}
           />
         </SheetContent>
       </Sheet>
