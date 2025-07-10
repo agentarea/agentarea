@@ -8,8 +8,8 @@ import logging
 from typing import Annotated
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.application.workflow_task_execution_service import (
-    WorkflowTaskExecutionService,
+from agentarea_agents.application.temporal_workflow_service import (
+    TemporalWorkflowService,
 )
 from agentarea_agents.infrastructure.repository import AgentRepository
 
@@ -130,12 +130,12 @@ async def get_agent_service(
     return AgentService(repository=agent_repository, event_broker=event_broker)
 
 
-async def get_workflow_task_execution_service():
-    """Get a WorkflowTaskExecutionService instance for the current request.
+async def get_temporal_workflow_service():
+    """Get a TemporalWorkflowService instance for the current request.
 
     This service uses Temporal workflows for non-blocking task execution.
     """
-    return WorkflowTaskExecutionService()
+    return TemporalWorkflowService()
 
 
 # LLM Services (4-entity system)

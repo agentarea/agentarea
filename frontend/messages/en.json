@@ -148,6 +148,8 @@
 
   "AgentsPage": {
     "create": {
+      "add": "Add",
+      "cancel": "Cancel",
       "title": "Create Agent",
       "back": "Back to Browse Agents",
       "success": "Agent created successfully!",
@@ -163,7 +165,14 @@
         "instructionPlaceholder": "Provide specific instructions for this agent...",
         "selectModel": "Select a model",
         "noModels": "No LLM models configured. Please add models in Admin → Model Instances"
-      }
+      },
+      "toolsMcp": "Tools (MCP Servers)",
+      "toolsMcpDescription": "Select an MCP Server to add to your agent.",
+      "addTool": "Add Tool",
+      "selectedTools": "Selected {count, plural, =0 {0 Tools} one {# Tool} other {# Tools}}",
+      "selected": "Selected",
+      "added": "Added",
+      "remove": "Remove"
     }
   }
 }

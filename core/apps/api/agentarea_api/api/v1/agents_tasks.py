@@ -4,11 +4,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.application.workflow_task_execution_service import (
-    WorkflowTaskExecutionService,
+from agentarea_agents.application.temporal_workflow_service import (
+    TemporalWorkflowService,
 )
 from agentarea_api.api.deps.events import EventBrokerDep
-from agentarea_api.api.deps.services import get_agent_service, get_workflow_task_execution_service
+from agentarea_api.api.deps.services import get_agent_service, get_temporal_workflow_service
 from agentarea_tasks.domain.events import TaskCreated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -65,8 +65,8 @@ async def create_task_for_agent(
     data: TaskCreate,
     event_broker: EventBrokerDep,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(
-        get_workflow_task_execution_service
+    workflow_task_service: TemporalWorkflowService = Depends(
+        get_temporal_workflow_service
     ),
 ):
     """Create and execute a task for the specified agent using Temporal workflows."""
@@ -81,19 +81,13 @@ async def create_task_for_agent(
 
     try:
         # Execute task using Temporal workflow - this returns immediately!
-        execution_id = await workflow_task_service.execute_task_async(
-            task_id=task_id_str,
+        result = await workflow_task_service.execute_agent_task_async(
             agent_id=agent_id,
-            description=data.description,
-            user_id=data.user_id,
+            task_query=data.description,
+            user_id=data.user_id or "api_user",
             task_parameters=data.parameters,
-            metadata={
-                "agent_name": agent.name,
-                "created_via": "api",
-                "enable_agent_communication": data.enable_agent_communication,
-                "created_at": datetime.now(UTC).isoformat(),
-            },
         )
+        execution_id = result.get("execution_id")
 
         # Create the task response with execution ID
         task_response = TaskResponse.create_new(
@@ -163,8 +157,8 @@ async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(
-        get_workflow_task_execution_service
+    workflow_task_service: TemporalWorkflowService = Depends(
+        get_temporal_workflow_service
     ),
 ):
     """Get a specific task for the specified agent using workflow status."""
@@ -176,7 +170,7 @@ async def get_agent_task(
     try:
         # Get workflow status using the execution ID pattern
         execution_id = f"agent-task-{task_id}"
-        status = await workflow_task_service.get_task_status(execution_id)
+        status = await workflow_task_service.get_workflow_status(execution_id)
 
         # If status indicates unknown, the task/workflow doesn't exist
         if status.get("status") == "unknown":
@@ -207,8 +201,8 @@ async def get_agent_task_status(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(
-        get_workflow_task_execution_service
+    workflow_task_service: TemporalWorkflowService = Depends(
+        get_temporal_workflow_service
     ),
 ):
     """Get the execution status of a specific task workflow."""
@@ -220,7 +214,7 @@ async def get_agent_task_status(
     try:
         # Get workflow status using the execution ID pattern
         execution_id = f"agent-task-{task_id}"
-        status = await workflow_task_service.get_task_status(execution_id)
+        status = await workflow_task_service.get_workflow_status(execution_id)
 
         return {
             "task_id": str(task_id),
@@ -248,8 +242,8 @@ async def cancel_agent_task(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: WorkflowTaskExecutionService = Depends(
-        get_workflow_task_execution_service
+    workflow_task_service: TemporalWorkflowService = Depends(
+        get_temporal_workflow_service
     ),
 ):
     """Cancel a specific task workflow for the specified agent."""

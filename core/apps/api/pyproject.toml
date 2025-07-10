@@ -26,6 +26,7 @@ dependencies = [
     "greenlet>=3.1.1",
     "google-adk>=1.1.1",
     "faststream[kafka,redis]>=0.5.42",
+    "pytz>=2025.2",
 ]
 
 [tool.uv.sources]

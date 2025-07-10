@@ -15,6 +15,8 @@ import json
 import logging
 from typing import Any
 from uuid import UUID, uuid4
+from datetime import datetime
+from pytz import UTC
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_api.api.deps.services import get_agent_service
@@ -49,6 +51,7 @@ class ChatResponse(BaseModel):
     agent_id: str = Field(..., description="Agent ID")
     status: str = Field(..., description="Task status")
     timestamp: str = Field(..., description="Message timestamp")
+    execution_id: str | None = Field(None, description="Temporal execution ID")
 
 
 class ConversationResponse(BaseModel):
@@ -79,40 +82,106 @@ async def get_unified_chat_service() -> UnifiedTaskService:
 @router.post("/messages", response_model=ChatResponse)
 async def send_message(
     request: ChatMessageRequest,
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
+    agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Send a chat message to an agent.
+    """Send a chat message to a real agent.
 
-    Unified endpoint that handles both A2A protocol and REST API.
+    Returns task_id immediately, executes via Temporal workflow asynchronously.
     """
     try:
-        # Generate session ID if not provided
+        # Validate agent exists
+        try:
+            agent_uuid = UUID(request.agent_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid agent ID format")
+        
+        agent = await agent_service.get(agent_uuid)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        # Generate task and session IDs
+        task_id = uuid4()
         session_id = request.session_id or f"chat-{uuid4()}"
 
-        # Send message using the unified service
-        response = await chat_service.send_task(
-            content=request.content,
-            agent_id=request.agent_id,
-            task_type="chat",
+        # Start Temporal workflow asynchronously - returns immediately!
+        from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+        workflow_service = TemporalWorkflowService()
+        
+        workflow_result = await workflow_service.execute_agent_task_async(
+            agent_id=agent_uuid,
+            task_query=request.content,
+            user_id=request.user_id or "anonymous",
             session_id=session_id,
-            context=request.context,
-            user_id=request.user_id,
+            task_parameters={
+                "context": request.context or {},
+                "task_type": "chat"
+            },
+            timeout_seconds=300,
         )
+        
+        execution_id = workflow_result.get("execution_id", f"task-{task_id}")
 
+        # Return immediately with task_id - execution happens in background
         return ChatResponse(
-            task_id=response.get("id", str(uuid4())),
-            content=response.get("content", f"Response to: {request.content}"),
-            role="assistant",
+            task_id=str(task_id),
+            content="Message received. Processing...", # Will be updated when complete
+            role="assistant", 
             session_id=session_id,
             agent_id=request.agent_id,
-            status=response.get("status", "completed"),
-            timestamp=response.get("timestamp", ""),
+            status="processing", # Frontend will poll for completion
+            timestamp=datetime.now(UTC).isoformat(),
+            execution_id=execution_id, # For tracking workflow
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to send chat message: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/messages/{task_id}/status")
+async def get_message_status(
+    task_id: str,
+    agent_service: AgentService = Depends(get_agent_service),
+):
+    """Get the status of a chat message task.
+    
+    Used for long polling - frontend calls this to check if message is complete.
+    """
+    try:
+        from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+        workflow_service = TemporalWorkflowService()
+        
+        # Get workflow status using execution_id pattern
+        execution_id = f"agent-task-{task_id}"
+        status = await workflow_service.get_workflow_status(execution_id)
+        
+        # Extract the actual response content if completed
+        response_content = "Processing..."
+        if status.get("status") == "completed":
+            result = status.get("result", {})
+            if isinstance(result, dict):
+                response_content = result.get("response", result.get("content", "Task completed"))
+            else:
+                response_content = str(result)
+        elif status.get("status") == "failed":
+            error_msg = status.get("error", "Task failed")
+            response_content = f"I apologize, but I encountered an error: {error_msg}"
+
+        return {
+            "task_id": task_id,
+            "status": status.get("status", "unknown"),
+            "content": response_content,
+            "execution_id": execution_id,
+            "start_time": status.get("start_time"),
+            "end_time": status.get("end_time"),
+            "error": status.get("error"),
+            "timestamp": status.get("end_time") or datetime.now(UTC).isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get message status: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -204,17 +273,17 @@ async def list_conversations(
 # Agent Management
 @router.get("/agents", response_model=list[AgentResponse])
 async def get_available_agents(
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
+    agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Get list of available agents."""
+    """Get list of real agents from database."""
     try:
-        agents = await chat_service.get_available_agents()
-
+        agents = await agent_service.list()
+        
         return [
             AgentResponse(
-                id=agent.get("id", ""),
-                name=agent.get("name", "Unknown"),
-                description=agent.get("description"),
+                id=str(agent.id),
+                name=agent.name,
+                description=agent.description,
                 status="active",
             )
             for agent in agents
