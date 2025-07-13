@@ -104,7 +104,6 @@ const getTaskDetails = (id: string) => {
         notificationSettings: "Email on failure"
       }
     };
-  }
   
   // Completed task example
   return {

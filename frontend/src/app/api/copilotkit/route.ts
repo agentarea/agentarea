@@ -1,5 +1,5 @@
 import { CopilotRuntime, HttpAgent } from "@copilotkit/runtime";
-import { copilotRuntimeNextJSAppRouterEndpoint } from "@copilotkit/runtime/nextjs";
+import { copilotRuntimeNextJSAppRouterEndpoint } from "@copilotkit/runtime";
 import { NextRequest } from "next/server";
 
 // Create HttpAgent that connects to our AG-UI endpoint

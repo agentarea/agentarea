@@ -71,6 +71,36 @@ export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
   return { data, error };
 };
 
+// Get all tasks across all agents
+export const getAllTasks = async () => {
+  try {
+    // First get all agents
+    const { data: agents, error: agentsError } = await listAgents();
+    if (agentsError || !agents) {
+      return { data: [], error: agentsError };
+    }
+
+    // Then get tasks for each agent
+    const allTasks = [];
+    for (const agent of agents) {
+      const { data: agentTasks, error: tasksError } = await listAgentTasks(agent.id);
+      if (!tasksError && agentTasks) {
+        // Add agent info to each task for display purposes
+        const tasksWithAgentInfo = agentTasks.map(task => ({
+          ...task,
+          agent_name: agent.name,
+          agent_description: agent.description,
+        }));
+        allTasks.push(...tasksWithAgentInfo);
+      }
+    }
+
+    return { data: allTasks, error: null };
+  } catch (error) {
+    return { data: [], error: error as Error };
+  }
+};
+
 // Chat API
 export const sendMessage = async (message: components["schemas"]["ChatMessageRequest"]) => {
   const { data, error } = await client.POST("/v1/chat/messages", { body: message });

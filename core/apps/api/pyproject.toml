@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",
     "agentarea-agents",
-    "agentarea-chat",
+    "agentarea-execution",
     "agentarea-llm",
     "agentarea-mcp",
     "agentarea-tasks",
@@ -32,7 +32,7 @@ dependencies = [
 [tool.uv.sources]
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
-agentarea-chat = { workspace = true }
+agentarea-execution = { workspace = true }
 agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }

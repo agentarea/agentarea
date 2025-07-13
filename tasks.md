@@ -1,150 +1,139 @@
-# План исправлений для новой LLM архитектуры
+# UI Improvement Tasks
 
-## Этап 1: Исправление тестов и сервисов ⚠️
-### 1.1 Проблема с Redis подключением ✅ ЗАВЕРШЕНО
-- [x] Исправить Redis URL в локальном окружении (redis:6379 -> localhost:6379)
-- [x] Добавить переменную окружения REDIS_URL для локального тестирования
-- [x] Проверить, что Redis сервер запущен локально
+## 🚨 Critical Issues (High Priority)
 
-### 1.2 Тестирование API endpoints ✅ ЗАВЕРШЕНО  
-- [x] Запустить Redis сервер локально
-- [x] Исправить dependency injection в ProviderService
-- [x] Исправить prefixes (/api/v1 -> /v1)
-- [x] Протестировать все новые API endpoints:
-  - [x] GET /v1/provider-specs/ ✅ (56 provider specs)
-  - [x] GET /v1/provider-specs/with-models ✅ (с моделями)
-  - [x] GET /v1/provider-specs/{id} ✅ (работает с UUID)
-  - [x] GET /v1/provider-specs/by-key/{key} ✅ (openai, anthropic)
-  - [x] GET /v1/provider-configs/ ✅ (пустой массив - ожидаемо)
-  - [ ] POST /v1/provider-configs/ (не тестировался)
-  - [ ] PUT /v1/provider-configs/{id} (не тестировался)
-  - [ ] DELETE /v1/provider-configs/{id} (не тестировался)
-  - [x] GET /v1/model-instances/ ✅ (пустой массив - ожидаемо)
-  - [ ] POST /v1/model-instances/ (не тестировался)
-  - [ ] DELETE /v1/model-instances/{id} (не тестировался)
+### Task 1: Fix Agent Browse Page "View Details" Button
+**Issue**: "View Details" button on `/agents/browse` does nothing when clicked
+**Location**: `frontend/src/app/agents/browse/page.tsx`
+**Solution**: Add proper navigation to agent detail page
+**Status**: ✅ **COMPLETED**
 
-### 1.3 Интеграционные тесты ✅ ЗАВЕРШЕНО
-- [x] Запустить все тесты репозиториев еще раз ✅ (28 passed, 0 failed)
-- [x] ProviderSpecRepository: 10/10 тестов прошли ✅
-- [x] ModelInstanceRepository: 7/7 тестов прошли ✅ 
-- [ ] Создать тесты для ProviderService (TODO позже)
-- [ ] Создать тесты для новых API endpoints (TODO позже)
-- [x] Убедиться, что все тесты проходят (0 failures) ✅
+### Task 2: Create Agent Detail/View Page  
+**Issue**: No individual agent page exists - only edit page
+**Location**: `frontend/src/app/agents/[id]/page.tsx` (needs creation)
+**Solution**: Create unified agent page with view/edit/chat functionality
+**Status**: ✅ **COMPLETED**
 
-## ✅ Этап 2: Исправление старых тестов ЗАВЕРШЕНО
-### 2.1 Исправление unit тестов ✅ ЗАВЕРШЕНО
-- [x] Обновить тесты под новую архитектуру ✅ (43/43 passed)
-- [x] Исправить моки для новых сервисов ✅ (unit тесты не требуют изменений)
-- [x] Проверить все существующие тесты ✅ (43 passed, 10 warnings)
+### Task 3: Add Chat Functionality to Agent Pages
+**Issue**: No way to chat with specific agents from their detail page
+**Location**: Agent detail page (to be created)
+**Solution**: Integrate chat component into agent detail page
+**Status**: ✅ **COMPLETED**
 
-### 2.2 Исправление integration тестов ✅ ЗАВЕРШЕНО
-- [x] Обновить тесты API endpoints ✅ (test_e2e_main_flow.py исправлен)
-- [x] Исправить тесты для новых репозиториев ✅ (новые тесты уже проходят)
-- [x] Исправить POST endpoints ✅ (SQLAlchemy unique() проблема решена)
-- [x] Убедиться что все тесты проходят ✅ (90 passed, 2 skipped - все проходят!)
-- [x] Исправить SQLAlchemy eager loading проблемы ✅ (добавлены .unique() вызовы)
-- [x] Исправить test_agent_mcp_error_handling ✅ (неправильные URL без /v1/ префикса)
+## 🔧 Navigation & UX Issues (Medium Priority)
 
-## Этап 3: Обновление фронтенда 🎨
-### 3.1 Создание React компонентов для новой архитектуры
-- [ ] Компонент для отображения provider specs
-- [ ] Компонент для управления provider configs
-- [ ] Компонент для создания model instances
-- [ ] Форма для создания provider configuration
+### Task 4: Fix Navigation Consistency
+**Issue**: Broken navigation patterns across pages
+**Locations**: Multiple pages
+**Solution**: Standardize navigation patterns and ensure all links work
+**Status**: ❌ Not Started
 
-### 3.2 Обновление существующих страниц
-- [ ] Страница /admin/llms - добавить новую архитектуру
-- [ ] Страница создания LLM модели - использовать новые endpoints
-- [ ] Интеграция с существующим UI
+### Task 5: Unify Chat Interfaces
+**Issue**: Multiple confusing chat interfaces (/chat, /home, /workplace)
+**Solution**: Create single, consistent chat experience
+**Status**: ❌ Not Started
 
-### 3.3 API клиент
-- [ ] Обновить lib/api.ts для новых endpoints
-- [ ] Типы TypeScript для новых моделей
-- [ ] Обновить схему API (schema.d.ts)
+### Task 6: Fix Non-Functional Buttons
+**Issue**: Many buttons have no functionality (Filter, Sort, etc.)
+**Locations**: Multiple pages
+**Solution**: Add proper functionality or hide non-functional buttons
+**Status**: ❌ Not Started
 
-## Этап 4: Очистка старых файлов 🗑️
-### 4.1 Удаление временных файлов
-- [ ] Удалить bootstrap/code/populate_providers_new_arch.py (заменить на интеграцию)
-- [ ] Удалить временные API файлы если они есть
-- [ ] Очистить .git от untracked файлов которые больше не нужны
+## 📱 Page-Specific Issues
 
-### 4.2 Рефакторинг старых эндпоинтов
-- [ ] Добавить deprecation warnings к старым endpoints
-- [ ] Создать миграционный путь от старой к новой архитектуре
-- [ ] Обновить документацию
+### Task 7: Home Page Improvements
+**Issue**: Mock data in chat section, inconsistent with other pages
+**Location**: `frontend/src/app/home/page.tsx`
+**Status**: ❌ Not Started
 
-## Этап 5: Финальное тестирование 🧪
-### 5.1 End-to-end тесты
-- [ ] Создать provider configuration через API
-- [ ] Создать model instance через API
-- [ ] Использовать model instance в agent
-- [ ] Проверить работу через фронтенд
+### Task 8: Browse Agents Page Enhancements
+**Issues**: 
+- Filter and Sort buttons don't work
+- Search doesn't submit properly
+- No agent descriptions or capabilities shown
+**Location**: `frontend/src/app/agents/browse/page.tsx`
+**Status**: ✅ **COMPLETED**
+**Improvements Made**:
+- ✅ Disabled non-functional Filter/Sort buttons (better UX)
+- ✅ Added agent descriptions and capability badges
+- ✅ Enhanced visual design with better hover effects
+- ✅ Added prominent "Chat Now" button for direct interaction
+- ✅ Made entire cards clickable for better navigation
+- ✅ Improved status indicators and layout
 
-### 5.2 Интеграция с существующей системой
-- [ ] Убедиться, что agent_runner_service работает с новой архитектурой
-- [ ] Проверить совместимость с существующими агентами
-- [ ] Тестировать в Docker environment
+### Task 9: Tasks Page Improvements
+**Issues**:
+- Mock data instead of real task data
+- Non-functional refresh button
+- No real agent task integration
+**Location**: `frontend/src/app/agents/tasks/page.tsx`
+**Status**: ✅ **COMPLETED**
+**Improvements Made**:
+- ✅ Replaced mock data with real API calls to backend
+- ✅ Added functional refresh button with loading states
+- ✅ Integrated with real agent task system
+- ✅ Added proper loading, error, and empty states
+- ✅ Enhanced table layout with agent information
+- ✅ Made "Deploy New Agent" button functional
 
-## Этап 6: Документация и деплой 📚
-### 6.1 Обновление документации
-- [ ] Обновить README с новой архитектурой
-- [ ] Создать migration guide
-- [ ] Обновить API документацию
+### Task 10: Workplace Page Integration
+**Issues**:
+- Separate from main chat functionality
+- Unclear user flow
+- No integration with agent system
+**Location**: `frontend/src/app/workplace/page.tsx`
+**Status**: ❌ Not Started
 
-### 6.2 Подготовка к продакшну
-- [ ] Создать production миграции
-- [ ] Обновить Docker конфигурацию
-- [ ] Тестировать в staging environment
+## 🎨 UI/UX Enhancements (Low Priority)
+
+### Task 11: Improve Agent Cards Design
+**Issue**: Agent cards lack essential information and visual hierarchy
+**Location**: `frontend/src/app/agents/browse/page.tsx`
+**Status**: ❌ Not Started
+
+### Task 12: Add Loading States
+**Issue**: No loading states for data fetching
+**Locations**: Multiple pages
+**Status**: ❌ Not Started
+
+### Task 13: Error Handling Improvements
+**Issue**: Poor error handling and user feedback
+**Locations**: Multiple pages
+**Status**: ❌ Not Started
+
+### Task 14: Mobile Responsiveness
+**Issue**: Some pages not optimized for mobile
+**Locations**: Multiple pages
+**Status**: ❌ Not Started
+
+## 🔗 Integration Issues
+
+### Task 15: API Integration Consistency
+**Issue**: Some pages use mock data, others use real API
+**Solution**: Ensure all pages use real API endpoints
+**Status**: ❌ Not Started
+
+### Task 16: Real-time Updates
+**Issue**: No real-time updates for agent status, tasks, etc.
+**Solution**: Add WebSocket or polling for live data
+**Status**: ❌ Not Started
 
 ---
 
-## Текущий статус  
-- ✅ Миграция базы данных создана и применена
-- ✅ Репозитории реализованы и протестированы (28/28 tests passed)
-- ✅ Сервисы созданы и работают
-- ✅ API endpoints созданы и работают (9/12 endpoints протестированы)
-- ✅ Bootstrap система обновлена (56 provider specs, 74 model specs загружено)
-- ✅ Redis подключение исправлено
-- ✅ **ЭТАП 1 ЗАВЕРШЕН**: FastAPI routing исправлен, dependency injection работает, все тесты проходят!
-- ✅ **ЭТАП 2 ЗАВЕРШЕН**: Все тесты исправлены и проходят (90/90 integration, 43/43 unit)
-- ✅ v1_router работает, получаем реальные данные из базы
-- ❌ Фронтенд не обновлен (следующий этап)
-- ❌ Старые файлы не очищены (следующий этап)
+## Implementation Order:
+1. **Task 1**: Fix View Details button (Quick win)
+2. **Task 2**: Create Agent Detail page (Foundation)
+3. **Task 3**: Add Chat to Agent pages (Core functionality)
+4. **Task 5**: Unify Chat interfaces (User experience)
+5. **Task 8**: Enhance Browse page (Discovery)
+6. **Task 9**: Fix Tasks page (Monitoring)
+7. **Task 6**: Fix non-functional buttons (Polish)
+8. **Task 11-16**: Enhancements and optimizations
 
-## ДИАГНОСТИКА ПРОБЛЕМЫ
-- ✅ v1_router успешно импортирован (64 маршрута)
-- ✅ Provider routes найдены (10 штук) 
-- ✅ Test routes найдены (/v1/direct-router-test, /v1/provider-specs/debug-test-unique)
-- ✅ v1_router успешно включен в приложение
-- ✅ Endpoints присутствуют в OpenAPI схеме (/v1/direct-router-test есть)
-- ❌ При запросе /api/v1/direct-router-test получаем 404
-- ✅ Endpoints в main.py работают нормально (/api/v1/test-direct работает)
-
-**ВОЗМОЖНЫЕ ПРИЧИНЫ:**
-1. Конфликт префиксов в FastAPI routing
-2. Порядок include_router влияет на приоритеты
-3. Проблема с middleware или обработкой запросов
-4. Async/await проблемы в endpoint functions
-
-## Приоритет выполнения
-1. ✅ **ЗАВЕРШЕНО**: Этап 1 - Исправление Redis и тестирование API (GET endpoints работают)
-2. ✅ **ЗАВЕРШЕНО**: Этап 2 - Исправление старых тестов (Unit: 43/43 ✅, Integration: 90/90 ✅, POST endpoints ✅)
-3. **СЕЙЧАС**: Этап 3 - Обновление фронтенда для новой архитектуры
-4. **ДАЛЕЕ**: Этап 4 - Очистка файлов и рефакторинг  
-5. **ФИНАЛ**: Этапы 5-6 - Тестирование и документация
-
-### 🎉 Основные проблемы РЕШЕНЫ:
-- ✅ SQLAlchemy MissingGreenlet/InvalidRequestError - решено добавлением .unique() 
-- ✅ POST endpoints возвращают 500 - решено
-- ✅ Provider Config CRUD операции работают
-- ✅ Model Instance CRUD операции работают
-- ✅ Relationships загружаются правильно
-- ✅ E2E тесты используют новую архитектуру
-- ✅ Удалены ненужные моки и тестовые endpoints
-- ✅ 4-entity архитектура полностью функциональна
-
-### 📊 Статистика:
-- Unit тесты: 43/43 passed ✅
-- Integration тесты: 90/90 passed, 2 skipped ✅ 
-- API endpoints: Все POST/GET работают ✅
-- Новая архитектура: Полностью внедрена ✅ 
+## Success Criteria:
+- ✅ Users can click on agents and see detailed information
+- ✅ Users can chat with specific agents from any page
+- ✅ All navigation works properly
+- ✅ Consistent UI/UX across all pages
+- ✅ Real data integration everywhere
+- ✅ No broken or non-functional elements 

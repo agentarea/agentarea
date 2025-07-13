@@ -14,16 +14,14 @@ import sys
 import dotenv
 from agentarea_common.config import get_settings
 
-# Import workflow and activity definitions from the tasks library
-from agentarea_tasks.workflows.agent_task_workflow import (
-    AgentTaskWorkflow,
-    execute_agent_activity,
-    execute_agent_communication_activity,
-    execute_custom_tool_activity,
-    execute_dynamic_activity,
-    execute_mcp_tool_activity,
-    validate_agent_activity,
+# Initialize DI container with proper config injection
+from agentarea_agents.infrastructure.di_container import initialize_di_container
+
+# Import workflow and activity definitions from the execution library
+from agentarea_execution.workflows.agent_execution_workflow import (
+    AgentExecutionWorkflow,
 )
+from agentarea_execution import ALL_ACTIVITIES
 from temporalio.client import Client
 from temporalio.worker import Worker
 
@@ -98,15 +96,8 @@ class AgentAreaWorker:
         self.worker = Worker(
             self.client,
             task_queue=task_queue,
-            workflows=[AgentTaskWorkflow],
-            activities=[
-                validate_agent_activity,
-                execute_agent_activity,
-                execute_dynamic_activity,
-                execute_mcp_tool_activity,
-                execute_custom_tool_activity,
-                execute_agent_communication_activity,
-            ],
+            workflows=[AgentExecutionWorkflow],
+            activities=ALL_ACTIVITIES,
             max_concurrent_activities=max_concurrent_activities,
             max_concurrent_workflow_tasks=max_concurrent_workflows,
         )
@@ -175,6 +166,10 @@ async def main() -> None:
 
     # Validate settings
     settings = get_settings()
+    
+    # Initialize DI container with proper config injection
+    initialize_di_container(settings.workflow)
+    logger.info("✅ DI Container initialized with workflow settings")
 
     # Log configuration
     logger.info(f"Database Host: {settings.database.POSTGRES_HOST}")

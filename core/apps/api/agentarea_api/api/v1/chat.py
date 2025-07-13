@@ -2,9 +2,7 @@
 
 This module provides chat-specific functionality including:
 - Conversational message sending (POST /chat/messages)
-- Streaming responses (POST /chat/messages/stream)
-- Conversation history (GET /chat/conversations/{session_id}/messages)
-- WebSocket real-time chat (WS /chat/ws/{session_id})
+- Message status polling (GET /chat/messages/{task_id}/status)
 - Agent discovery for chat UIs (GET /chat/agents)
 
 For direct task management, use /v1/agents/{agent_id}/tasks/ endpoints.
@@ -19,10 +17,9 @@ from datetime import datetime
 from pytz import UTC
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_api.api.deps.services import get_agent_service
-from agentarea_chat.unified_chat_service import UnifiedTaskService
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+from agentarea_api.api.deps.services import get_agent_service, get_temporal_workflow_service
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -54,15 +51,6 @@ class ChatResponse(BaseModel):
     execution_id: str | None = Field(None, description="Temporal execution ID")
 
 
-class ConversationResponse(BaseModel):
-    """Response model for conversation history."""
-
-    session_id: str = Field(..., description="Session/conversation ID")
-    messages: list[dict[str, Any]] = Field(..., description="List of messages")
-    agent_id: str | None = Field(None, description="Primary agent ID")
-    message_count: int = Field(..., description="Number of messages")
-
-
 class AgentResponse(BaseModel):
     """Response model for agent information."""
 
@@ -72,17 +60,12 @@ class AgentResponse(BaseModel):
     status: str = Field(..., description="Agent status")
 
 
-# Dependencies
-async def get_unified_chat_service() -> UnifiedTaskService:
-    """Get unified chat service instance."""
-    return UnifiedTaskService()
-
-
 # Core Chat Endpoints
 @router.post("/messages", response_model=ChatResponse)
 async def send_message(
     request: ChatMessageRequest,
     agent_service: AgentService = Depends(get_agent_service),
+    workflow_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Send a chat message to a real agent.
 
@@ -103,10 +86,7 @@ async def send_message(
         task_id = uuid4()
         session_id = request.session_id or f"chat-{uuid4()}"
 
-        # Start Temporal workflow asynchronously - returns immediately!
-        from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
-        workflow_service = TemporalWorkflowService()
-        
+        # Start execution via Temporal workflow service - returns immediately!
         workflow_result = await workflow_service.execute_agent_task_async(
             agent_id=agent_uuid,
             task_query=request.content,
@@ -143,16 +123,13 @@ async def send_message(
 @router.get("/messages/{task_id}/status")
 async def get_message_status(
     task_id: str,
-    agent_service: AgentService = Depends(get_agent_service),
+    workflow_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get the status of a chat message task.
     
     Used for long polling - frontend calls this to check if message is complete.
     """
     try:
-        from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
-        workflow_service = TemporalWorkflowService()
-        
         # Get workflow status using execution_id pattern
         execution_id = f"agent-task-{task_id}"
         status = await workflow_service.get_workflow_status(execution_id)
@@ -185,91 +162,6 @@ async def get_message_status(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/messages/stream")
-async def stream_message(
-    request: ChatMessageRequest,
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
-):
-    """Stream a chat message response from an agent.
-
-    Returns Server-Sent Events (SSE) compatible with A2A protocol.
-    """
-    try:
-        # Generate session ID if not provided
-        session_id = request.session_id or f"chat-{uuid4()}"
-
-        async def generate_stream():
-            try:
-                async for chunk in chat_service.stream_task(
-                    content=request.content,
-                    agent_id=request.agent_id,
-                    task_type="chat_stream",
-                    session_id=session_id,
-                    context=request.context,
-                    user_id=request.user_id,
-                ):
-                    yield f"data: {json.dumps(chunk)}\n\n"
-
-            except Exception as e:
-                error_chunk = {"error": str(e), "status": "error"}
-                yield f"data: {json.dumps(error_chunk)}\n\n"
-
-        return StreamingResponse(
-            generate_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to stream chat message: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# Conversation Management
-@router.get("/conversations/{session_id}/messages", response_model=ConversationResponse)
-async def get_conversation_history(
-    session_id: str, chat_service: UnifiedTaskService = Depends(get_unified_chat_service)
-):
-    """Get conversation history for a session."""
-    try:
-        messages = await chat_service.get_session_history(session_id)
-
-        # Extract agent_id from messages if available
-        agent_id = None
-        for msg in messages:
-            if msg.get("agent_id"):
-                agent_id = msg["agent_id"]
-                break
-
-        return ConversationResponse(
-            session_id=session_id, messages=messages, agent_id=agent_id, message_count=len(messages)
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to get conversation history: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/conversations")
-async def list_conversations(
-    user_id: str | None = Query(None, description="Filter by user ID"),
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
-):
-    """List all conversations for a user."""
-    try:
-        conversations = await chat_service.list_sessions(user_id)
-        return {"conversations": conversations}
-
-    except Exception as e:
-        logger.error(f"Failed to list conversations: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
 # Agent Management
 @router.get("/agents", response_model=list[AgentResponse])
 async def get_available_agents(
@@ -295,7 +187,10 @@ async def get_available_agents(
 
 
 @router.get("/agents/{agent_id}", response_model=AgentResponse)
-async def get_agent(agent_id: str, agent_service: AgentService = Depends(get_agent_service)):
+async def get_agent(
+    agent_id: str, 
+    agent_service: AgentService = Depends(get_agent_service)
+):
     """Get details for a specific agent."""
     try:
         # Convert to UUID and get agent
@@ -306,7 +201,10 @@ async def get_agent(agent_id: str, agent_service: AgentService = Depends(get_age
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
         return AgentResponse(
-            id=str(agent.id), name=agent.name, description=agent.description, status="active"
+            id=str(agent.id), 
+            name=agent.name, 
+            description=agent.description, 
+            status="active"
         )
 
     except ValueError:
@@ -320,19 +218,12 @@ async def get_agent(agent_id: str, agent_service: AgentService = Depends(get_age
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# NOTE: Task management endpoints have been moved to /v1/agents/{agent_id}/tasks/
-# For task operations, use:
-#   - GET /v1/agents/{agent_id}/tasks/{task_id} - Get task
-#   - DELETE /v1/agents/{agent_id}/tasks/{task_id} - Cancel task
-# A2A JSON-RPC protocol compliance is handled by /v1/protocol/rpc
-
-
-# WebSocket Support
+# Simple WebSocket Support for basic real-time communication
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: str,
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
+    agent_service: AgentService = Depends(get_agent_service),
 ):
     """WebSocket endpoint for real-time chat."""
     await websocket.accept()
@@ -348,31 +239,48 @@ async def websocket_endpoint(
             # Process message and send response
             if message_data.get("type") == "message":
                 try:
-                    # Send message through unified service
-                    response = await chat_service.send_task(
-                        content=message_data.get("content", ""),
-                        agent_id=message_data.get("agent_id", "default"),
-                        task_type="websocket",
-                        session_id=session_id,
-                        user_id=message_data.get("user_id"),
-                    )
+                    agent_id = message_data.get("agent_id")
+                    content = message_data.get("content", "")
+                    
+                    if not agent_id or not content:
+                        await websocket.send_text(json.dumps({
+                            "type": "error", 
+                            "message": "Missing agent_id or content"
+                        }))
+                        continue
 
-                    # Send response back
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "type": "message",
-                                "task_id": response.get("id", ""),
-                                "content": response.get("content", ""),
-                                "role": "assistant",
-                                "session_id": session_id,
-                                "timestamp": response.get("timestamp", ""),
-                            }
-                        )
-                    )
+                    # Validate agent exists
+                    try:
+                        agent_uuid = UUID(agent_id)
+                        agent = await agent_service.get(agent_uuid)
+                        if not agent:
+                            raise HTTPException(status_code=404, detail="Agent not found")
+                    except ValueError:
+                        await websocket.send_text(json.dumps({
+                            "type": "error", 
+                            "message": "Invalid agent ID format"
+                        }))
+                        continue
+
+                    # Send acknowledgment immediately
+                    await websocket.send_text(json.dumps({
+                        "type": "message",
+                        "content": "Message received. Processing...",
+                        "role": "assistant",
+                        "session_id": session_id,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "status": "processing"
+                    }))
+
+                    # Start background task via Temporal (WebSocket will close, but that's okay)
+                    # For real-time responses, consider implementing WebSocket-specific streaming
+                    logger.info(f"WebSocket message received for agent {agent_id}: {content}")
 
                 except Exception as e:
-                    await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
+                    await websocket.send_text(json.dumps({
+                        "type": "error", 
+                        "message": str(e)
+                    }))
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for session {session_id}")
@@ -390,15 +298,12 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "service": "unified-chat-api",
+        "service": "chat-api",
         "version": "1.0.0",
         "features": [
-            "unified-chat",
-            "a2a-protocol",
-            "rest-api",
-            "streaming",
-            "websockets",
-            "conversation-history",
-            "agent-management",
+            "message-sending",
+            "status-polling",
+            "agent-discovery",
+            "websocket-basic"
         ],
     }

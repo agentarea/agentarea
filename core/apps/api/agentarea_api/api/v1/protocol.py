@@ -1,8 +1,12 @@
-"""Agent Protocol API Endpoints.
+"""Legacy Protocol API Endpoints.
 
-This module provides A2A protocol-compliant JSON-RPC endpoints for agent communication.
-Also includes AG-UI endpoints for frontend integration with CopilotKit.
-Focused on A2A protocol compliance - use /v1/agents/{agent_id}/tasks/ for REST task operations.
+This module now contains only the AG-UI endpoints for CopilotKit integration.
+A2A protocol endpoints have been moved to agent-specific endpoints at /v1/agents/{agent_id}/rpc
+
+For A2A protocol compliance, use:
+- /v1/agents/{agent_id}/rpc for JSON-RPC communication
+- /v1/agents/{agent_id}/card for agent discovery
+- /v1/agents/{agent_id}/tasks/ for REST task operations
 """
 
 import asyncio
@@ -134,192 +138,18 @@ async def get_agent_card_by_id(
             ],
         )
     except (ValueError, TypeError):
-        # If not a valid UUID, try the demo agent fallback
-        if agent_id == "demo-agent":
-            return AgentCard(
-                name="Demo Agent",
-                description="A demonstration agent for testing A2A protocol",
-                url="http://localhost:8000/v1/protocol",
-                version="1.0.0",
-                capabilities=AgentCapabilities(
-                    streaming=True, pushNotifications=False, stateTransitionHistory=True
-                ),
-                provider=AgentProvider(organization="AgentArea Demo"),
-                skills=[
-                    AgentSkill(
-                        id="text-processing",
-                        name="Text Processing",
-                        description="Process and respond to text messages",
-                        inputModes=["text"],
-                        outputModes=["text"],
-                    )
-                ],
-            )
         return None
 
 
-# A2A JSON-RPC Endpoint
-@router.post("/rpc")
-async def handle_jsonrpc(
-    request: Request, task_manager: BaseTaskManager = Depends(get_task_manager)
-) -> JSONRPCResponse:
-    """Unified A2A JSON-RPC endpoint.
-
-    Handles all A2A protocol methods:
-    - message/send
-    - message/stream
-    - tasks/get
-    - tasks/cancel
-    - agent/authenticatedExtendedCard
-    """
-    try:
-        # Parse JSON-RPC request
-        body = await request.json()
-        logger.info(f"Received JSON-RPC request: {body.get('method')}")
-
-        # Validate basic JSON-RPC structure
-        if not isinstance(body, dict) or "method" not in body:
-            return JSONRPCResponse(
-                id=body.get("id") if isinstance(body, dict) else None, error=InvalidRequestError()
-            )
-
-        method = body.get("method")
-        params = body.get("params", {})
-        request_id = body.get("id", str(uuid4()))
-
-        # Route to appropriate handler
-        if method == "message/send":
-            return await handle_message_send(request_id, params, task_manager)
-        elif method == "message/stream":
-            return await handle_message_stream(request_id, params, task_manager)
-        elif method == "tasks/get":
-            return await handle_task_get(request_id, params, task_manager)
-        elif method == "tasks/cancel":
-            return await handle_task_cancel(request_id, params, task_manager)
-        elif method == "agent/authenticatedExtendedCard":
-            return await handle_agent_card(request_id, params)
-        else:
-            return JSONRPCResponse(id=request_id, error=MethodNotFoundError())
-
-    except Exception as e:
-        logger.error(f"Error in JSON-RPC handler: {e}", exc_info=True)
-        return JSONRPCResponse(
-            id=body.get("id") if "body" in locals() and isinstance(body, dict) else None,
-            error=InternalError(message=str(e)),
-        )
+# A2A JSON-RPC endpoints have been moved to agent-specific endpoints
+# Use /v1/agents/{agent_id}/rpc for A2A protocol communication
 
 
-# JSON-RPC Method Handlers
-async def handle_message_send(
-    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
-) -> MessageSendResponse:
-    """Handle message/send RPC method."""
-    try:
-        # Convert to A2A message format
-        message = Message(
-            role="user",
-            parts=[TextPart(text=params.get("message", {}).get("parts", [{}])[0].get("text", ""))],
-        )
+# A2A JSON-RPC method handlers have been moved to agent-specific endpoints
+# Use /v1/agents/{agent_id}/rpc for A2A protocol communication
 
-        # Create task parameters
-        task_params = TaskSendParams(
-            id=str(uuid4()),
-            sessionId=params.get("contextId", str(uuid4())),
-            message=message,
-            metadata=params.get("metadata", {}),
-        )
-
-        # Send task
-        send_request = SendTaskRequest(id=request_id, params=task_params)
-        response = await task_manager.on_send_task(send_request)
-
-        return MessageSendResponse(id=request_id, result=response.result)
-
-    except Exception as e:
-        logger.error(f"Error in message/send: {e}", exc_info=True)
-        return MessageSendResponse(id=request_id, error=InternalError(message=str(e)))
-
-
-async def handle_message_stream(
-    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
-) -> MessageStreamResponse:
-    """Handle message/stream RPC method."""
-    # For now, return a simple stream response
-    # In production, this would set up SSE streaming
-    try:
-        message_response = await handle_message_send(request_id, params, task_manager)
-        return MessageStreamResponse(
-            id=request_id, result=message_response.result, error=message_response.error
-        )
-    except Exception as e:
-        logger.error(f"Error in message/stream: {e}", exc_info=True)
-        return MessageStreamResponse(id=request_id, error=InternalError(message=str(e)))
-
-
-async def handle_task_get(
-    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
-) -> GetTaskResponse:
-    """Handle tasks/get RPC method."""
-    try:
-        get_request = GetTaskRequest(id=request_id, params=TaskQueryParams(id=params.get("id", "")))
-        return await task_manager.on_get_task(get_request)
-    except Exception as e:
-        logger.error(f"Error in tasks/get: {e}", exc_info=True)
-        return GetTaskResponse(id=request_id, error=InternalError(message=str(e)))
-
-
-async def handle_task_cancel(
-    request_id: str, params: dict[str, Any], task_manager: BaseTaskManager
-) -> CancelTaskResponse:
-    """Handle tasks/cancel RPC method."""
-    try:
-        cancel_request = CancelTaskRequest(
-            id=request_id, params=TaskIdParams(id=params.get("id", ""))
-        )
-        return await task_manager.on_cancel_task(cancel_request)
-    except Exception as e:
-        logger.error(f"Error in tasks/cancel: {e}", exc_info=True)
-        return CancelTaskResponse(id=request_id, error=InternalError(message=str(e)))
-
-
-async def handle_agent_card(
-    request_id: str, params: dict[str, Any]
-) -> AuthenticatedExtendedCardResponse:
-    """Handle agent/authenticatedExtendedCard RPC method."""
-    # Use demo agent card for now - in production would look up real agent
-    demo_card = AgentCard(
-        name="Demo Agent",
-        description="A demonstration agent for testing A2A protocol",
-        url="http://localhost:8000/v1/protocol",
-        version="1.0.0",
-        capabilities=AgentCapabilities(
-            streaming=True, pushNotifications=False, stateTransitionHistory=True
-        ),
-        provider=AgentProvider(organization="AgentArea Demo"),
-        skills=[
-            AgentSkill(
-                id="text-processing",
-                name="Text Processing",
-                description="Process and respond to text messages",
-                inputModes=["text"],
-                outputModes=["text"],
-            )
-        ],
-    )
-
-    return AuthenticatedExtendedCardResponse(id=request_id, result=demo_card)
-
-
-# Agent discovery endpoint
-@router.get("/agents/{agent_id}/card")
-async def get_agent_card(
-    agent_id: str, agent_service: AgentService = Depends(get_agent_service)
-) -> AgentCard:
-    """Get agent card for discovery using real agent service."""
-    agent_card = await get_agent_card_by_id(agent_id, agent_service)
-    if not agent_card:
-        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
-    return agent_card
+# A2A agent discovery has been moved to agent-specific endpoints
+# Use /v1/agents/{agent_id}/card for agent discovery
 
 
 # AG-UI Endpoint for CopilotKit Integration
@@ -409,8 +239,33 @@ async def handle_ag_ui_request(
     )
 
 
-# Health check endpoint
+# Health check and deprecation notice
 @router.get("/health")
 async def health_check():
     """Health check for the protocol endpoint."""
-    return {"status": "healthy", "protocol": "A2A + AG-UI", "version": "1.0.0"}
+    return {
+        "status": "healthy",
+        "protocol": "AG-UI only",
+        "version": "1.0.0",
+        "notice": "A2A protocol endpoints have been moved to agent-specific URLs",
+        "a2a_endpoints": {
+            "rpc": "/v1/agents/{agent_id}/rpc",
+            "card": "/v1/agents/{agent_id}/card",
+            "tasks": "/v1/agents/{agent_id}/tasks/"
+        }
+    }
+
+@router.get("/")
+async def protocol_info():
+    """Information about protocol endpoints."""
+    return {
+        "message": "A2A protocol endpoints have been moved to agent-specific URLs",
+        "deprecated_endpoints": {
+            "/protocol/rpc": "moved to /v1/agents/{agent_id}/rpc",
+            "/protocol/agents/{agent_id}/card": "moved to /v1/agents/{agent_id}/card"
+        },
+        "active_endpoints": {
+            "/protocol/ag-ui": "AG-UI endpoint for CopilotKit integration"
+        },
+        "migration_guide": "Update your A2A clients to use agent-specific endpoints"
+    }

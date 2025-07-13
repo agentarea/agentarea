@@ -41,15 +41,16 @@ export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
-      content: "Hello! I'm your AgentMesh assistant. How can I help you today?",
+      content: "Hello! I'm your AgentArea assistant. How can I help you today?",
       sender: "agent",
       timestamp: new Date(),
     },
   ]);
   const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
     
     // Add user message
     const userMessage: Message = {
@@ -60,18 +61,61 @@ export default function HomePage() {
     };
     
     setMessages((prev) => [...prev, userMessage]);
+    const messageContent = inputValue;
     setInputValue("");
+    setIsLoading(true);
     
-    // Simulate agent response
-    setTimeout(() => {
+    try {
+      // Get available agents first
+      const agentsResponse = await fetch('/api/v1/chat/agents');
+      const agents = await agentsResponse.json();
+      
+      if (agents.length === 0) {
+        throw new Error('No agents available');
+      }
+      
+      // Send message to first available agent
+      const response = await fetch('/api/v1/chat/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: messageContent,
+          agent_id: agents[0].id,
+          user_id: 'home_user',
+          session_id: 'home_session',
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+      
+      const result = await response.json();
+      
+      // Add agent response
       const agentMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: `I'll help you with "${inputValue}". What specific details do you need?`,
+        id: result.task_id || (Date.now() + 1).toString(),
+        content: result.content || "Message received and processing...",
         sender: "agent",
         timestamp: new Date(),
       };
+      
       setMessages((prev) => [...prev, agentMessage]);
-    }, 1000);
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `Sorry, I couldn't process your message. Error: ${error}`,
+        sender: "agent",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -150,8 +194,8 @@ export default function HomePage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                 className="flex-1"
               />
-              <Button onClick={handleSendMessage} size="icon">
-                <Send className="h-4 w-4" />
+              <Button onClick={handleSendMessage} size="icon" disabled={isLoading}>
+                {isLoading ? <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
           </Card>

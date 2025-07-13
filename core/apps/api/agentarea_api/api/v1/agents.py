@@ -6,6 +6,9 @@ from agentarea_api.api.deps.services import get_agent_service
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+# Import A2A protocol subroutes
+from . import agents_a2a, agents_well_known
+
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
@@ -130,3 +133,18 @@ async def delete_agent(agent_id: UUID, agent_service: AgentService = Depends(get
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success"}
+
+
+# Include A2A protocol subroutes
+router.include_router(
+    agents_a2a.router,
+    prefix="/{agent_id}",
+    tags=["agents-a2a"]
+)
+
+# Include agent-specific well-known subroutes
+router.include_router(
+    agents_well_known.router,
+    prefix="/{agent_id}",
+    tags=["agents-well-known"]
+)

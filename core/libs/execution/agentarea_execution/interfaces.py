@@ -113,38 +113,15 @@ class EventBrokerInterface(ABC):
     
     @abstractmethod
     async def publish_event(self, event_type: str, event_data: Dict[str, Any]) -> None:
-        """Publish an event to the event system."""
+        """Publish an event to the event broker."""
         pass
 
 
 class ActivityServicesInterface:
     """Container for all services needed by temporal activities."""
     
-    def __init__(
-        self,
-        agent_service: AgentServiceInterface,
-        mcp_service: MCPServiceInterface,
-        llm_service: LLMServiceInterface,
-        event_broker: EventBrokerInterface,
-    ):
+    def __init__(self, agent_service: Any, llm_service: Any, mcp_service: Any, event_broker: Optional[Any] = None):
         self.agent_service = agent_service
-        self.mcp_service = mcp_service
         self.llm_service = llm_service
-        self.event_broker = event_broker
-
-
-# Global context for activities (to be injected by the application)
-_activity_services: ActivityServicesInterface | None = None
-
-
-def set_activity_services(services: ActivityServicesInterface) -> None:
-    """Set the global activity services with injected dependencies."""
-    global _activity_services
-    _activity_services = services
-
-
-def get_activity_services() -> ActivityServicesInterface:
-    """Get the global activity services."""
-    if _activity_services is None:
-        raise RuntimeError("Activity services not initialized. Call set_activity_services() first.")
-    return _activity_services 
+        self.mcp_service = mcp_service
+        self.event_broker = event_broker 

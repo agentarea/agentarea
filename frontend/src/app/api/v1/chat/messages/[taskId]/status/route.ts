@@ -7,9 +7,9 @@ export async function GET(
   try {
     const { taskId } = params;
     
-    // Proxy to our mock API server running on port 8000  
-    // Our mock server uses /api/v1/chat/tasks/{taskId} format
-    const response = await fetch(`http://localhost:8000/api/v1/chat/tasks/${taskId}`);
+    // Proxy to our backend API server running on port 8000  
+    // Our backend uses /v1/chat/messages/{taskId}/status format
+    const response = await fetch(`http://localhost:8000/v1/chat/messages/${taskId}/status`);
     
     if (!response.ok) {
       throw new Error(`Backend responded with status: ${response.status}`);
@@ -18,22 +18,30 @@ export async function GET(
     const data = await response.json();
     
     // Transform the response to match what the frontend expects
-    if (data.status === 'completed' && data.result) {
+    // Backend returns: { status, content, task_id, execution_id, timestamp, error }
+    if (data.status === 'completed') {
       return NextResponse.json({
         status: 'completed',
-        content: data.result.response,
-        timestamp: new Date().toISOString(),
+        content: data.content,
+        timestamp: data.timestamp,
+        task_id: data.task_id,
+        execution_id: data.execution_id,
       });
     } else if (data.status === 'processing') {
       return NextResponse.json({
         status: 'processing',
+        content: data.content || 'Processing...',
+        task_id: data.task_id,
       });
     } else if (data.status === 'failed') {
       return NextResponse.json({
         status: 'failed',
         error: data.error || 'Task failed',
+        content: data.content || 'Sorry, there was an error processing your request.',
+        task_id: data.task_id,
       });
     } else {
+      // Pass through the raw response for any other status
       return NextResponse.json(data);
     }
     

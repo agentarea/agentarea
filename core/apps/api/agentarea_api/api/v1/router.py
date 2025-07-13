@@ -12,9 +12,12 @@ from . import (
     protocol,
     provider_configs,
     provider_specs,
+    well_known,
 )
 
 v1_router = APIRouter(prefix="/v1")
+
+# Well-known endpoints are included at the root level in main.py
 
 # Include protocol router (A2A compliant + REST API)
 v1_router.include_router(protocol.router)

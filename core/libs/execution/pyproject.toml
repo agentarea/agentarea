@@ -1,15 +1,17 @@
 [project]
 name = "agentarea-execution"
 version = "0.1.0"
-description = "AgentArea execution library using Google ADK (Agent Development Kit)"
+description = "AgentArea execution library using LangGraph for agent workflows"
 requires-python = ">=3.9"
 dependencies = [
     # Core dependencies
     "temporalio>=1.0.0",
     "pydantic>=2.0.0",
     
-    # Google ADK - Agent Development Kit
-    "google-adk>=0.1.0",
+    # LangGraph and LangChain for agent workflows
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "langchain>=0.3.0",
     
     # HTTP client
     "httpx>=0.24.0",

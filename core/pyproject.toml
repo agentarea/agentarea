@@ -14,31 +14,32 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "python-dotenv>=1.1.0",
+    "pytz>=2025.2",
     "watchfiles>=1.1.0",
 ]
 
 [tool.uv.workspace]
 members = [
     "apps/api",
-    "apps/worker", 
+    "apps/worker",
     "apps/cli",
     "libs/common",
     "libs/agents",
-    "libs/chat",
     "libs/llm",
     "libs/mcp",
     "libs/tasks",
-    "libs/secrets"
+    "libs/secrets",
+    "libs/execution"
 ]
 
 [tool.uv.sources]
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
-agentarea-chat = { workspace = true }
 agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
+agentarea-execution = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
 agentarea-cli = { workspace = true }
@@ -55,11 +56,11 @@ dev = [
     "coverage[toml]>=7.6.0",
     "agentarea-common",
     "agentarea-agents",
-    "agentarea-chat",
     "agentarea-llm",
     "agentarea-mcp",
     "agentarea-tasks",
     "agentarea-secrets",
+    "agentarea-execution",
     "agentarea-api",
     "agentarea-worker",
     "pytest-env>=1.1.5",
@@ -137,7 +138,6 @@ addopts = [
     "--strict-config",
     "--cov=agentarea_common",
     "--cov=agentarea_agents", 
-    "--cov=agentarea_chat",
     "--cov=agentarea_llm",
     "--cov=agentarea_mcp",
     "--cov=agentarea_tasks",
@@ -181,11 +181,11 @@ env = [
 source = [
     "libs/common/agentarea_common",
     "libs/agents/agentarea_agents",
-    "libs/chat/agentarea_chat", 
     "libs/llm/agentarea_llm",
     "libs/mcp/agentarea_mcp",
     "libs/tasks/agentarea_tasks",
     "libs/secrets/agentarea_secrets",
+    "libs/execution/agentarea_execution",
     "apps/api/agentarea_api",
     "apps/worker/agentarea_worker",
 ]

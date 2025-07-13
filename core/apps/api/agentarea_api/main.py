@@ -10,9 +10,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
-from agentarea_api.api.deps.services import get_event_broker, get_secret_manager
+from agentarea_common.events.router import get_event_router
+from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import v1_router
+from agentarea_api.api.v1.well_known import router as well_known_router
 from agentarea_api.startup import startup_event
 
 container = DIContainer()
@@ -21,10 +23,15 @@ container = DIContainer()
 async def initialize_services():
     """Initialize real services instead of test mocks."""
     try:
-        event_broker = await get_event_broker()
+        from agentarea_common.events.router import create_event_broker_from_router
+        from agentarea_common.config import get_settings
+        
+        settings = get_settings()
+        event_router = get_event_router(settings.broker)
+        event_broker = create_event_broker_from_router(event_router)
         register_singleton(EventBroker, event_broker)
 
-        secret_manager = await get_secret_manager()
+        secret_manager = get_real_secret_manager()
         register_singleton(BaseSecretManager, secret_manager)
 
         print(
@@ -53,7 +60,7 @@ async def lifespan(app: FastAPI):
 
     from agentarea_api.api.events.events_router import stop_events_router
     await stop_events_router()
-    await container.shutdown_resources()
+    # Note: DIContainer doesn't need explicit shutdown
 
 
 def create_app() -> FastAPI:
@@ -81,6 +88,9 @@ def create_app() -> FastAPI:
     # Include API router
     app.include_router(v1_router)
     app.include_router(events_router)
+    
+    # Include well-known endpoints for A2A agent discovery (at root level)
+    app.include_router(well_known_router)
 
     return app
 

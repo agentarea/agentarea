@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createProviderConfig, createModelInstance, updateProviderConfig } from '@/lib/api';
 import { components } from '@/api/schema';
@@ -74,9 +74,13 @@ export default function ProviderConfigForm({
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
 
   const selectedProvider = providerSpecs?.find?.(spec => spec.id === formData.provider_spec_id);
-  const availableModels = modelSpecs?.filter?.(model => 
-    selectedProvider && model.provider_spec_id === selectedProvider.id
-  ) || [];
+  
+  // Memoize availableModels to prevent infinite re-renders
+  const availableModels = useMemo(() => {
+    return modelSpecs?.filter?.(model => 
+      selectedProvider && model.provider_spec_id === selectedProvider.id
+    ) || [];
+  }, [modelSpecs, selectedProvider]);
 
   // Auto-select all models when provider changes
   useEffect(() => {

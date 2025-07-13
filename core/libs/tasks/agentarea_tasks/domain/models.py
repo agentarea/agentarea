@@ -4,10 +4,26 @@ These models represent the minimal task entities needed for agent execution.
 """
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+
+class TaskType(str, Enum):
+    """Task type enumeration."""
+    SIMPLE = "simple"
+    CHAT = "chat"
+    WORKFLOW = "workflow"
+
+
+class TaskPriority(str, Enum):
+    """Task priority enumeration."""
+    LOW = "low"
+    NORMAL = "normal" 
+    HIGH = "high"
+    URGENT = "urgent"
 
 
 class SimpleTask(BaseModel):

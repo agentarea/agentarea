@@ -5,8 +5,8 @@ export async function POST(request: NextRequest) {
     // Get the request body
     const body = await request.json();
     
-    // Proxy to our mock API server running on port 8000
-    const response = await fetch('http://localhost:8000/api/v1/chat/messages', {
+    // Proxy to our backend API server running on port 8000
+    const response = await fetch('http://localhost:8000/v1/chat/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
