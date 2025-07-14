@@ -127,7 +127,7 @@ class AgentExecutionWorkflow:
             "call_llm_activity",
             args=[
                 state["messages"],
-                state["agent_config"].get("model", "gpt-4"),
+                state["agent_config"].get("model_id"),
                 state["available_tools"]
             ],
             start_to_close_timeout=timedelta(minutes=5),

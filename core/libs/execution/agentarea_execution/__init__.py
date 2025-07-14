@@ -6,122 +6,60 @@ LangGraph-based Temporal workflow execution for agent tasks.
 Core Components:
 - Models: Data models for agent task execution
 - Activities: Atomic agent execution activities (focused on LLM and tool execution)
-- Interfaces: Service interfaces for AgentArea integration
+- Interfaces: Service container for AgentArea service injection
 - TemporalFlow: Custom ADK flow that routes LLM calls through Temporal activities
 - TemporalLlmAgent: LlmAgent that uses TemporalFlow for execution
 - Workflows: LangGraph-based workflows that orchestrate activities
-- LLM Integration: LiteLLM-based model calls with configurable providers
+- LLM Integration: Direct LiteLLM integration for model execution
+- MCP Integration: Tool execution via MCP server instances
+- Agent Management: Agent configuration and state management
 
-Features:
-- Google ADK agent execution with TemporalFlow for durability
-- LangGraph agent execution with Temporal workflow orchestration
-- Temporal workflow orchestration
-- Proper error handling and retry mechanisms
+The library provides a clean separation between:
+- Workflows (orchestration logic)
+- Activities (atomic operations)
+- Services (business logic from other libraries)
+
+This architecture allows for:
+- Easy testing and mocking
+- Clean dependency injection
+- Scalable workflow execution
 - Integration with existing AgentArea services
-- Minimal changes to existing architecture - just override the LLM flow
-- Drop-in replacement for LlmAgent with Temporal benefits
-- LiteLLM integration for flexible model providers
-- Activity-based architecture for durable execution
-
-Architecture:
-    AgentExecutionWorkflow (Temporal workflow)
-        ↓ orchestrates activities step-by-step
-    Temporal Activities (build_config, call_llm, execute_tools, check_completion)
-        ↓ uses AgentArea services + LiteLLM
-    AgentArea Services (Agent, MCP, Events) + LiteLLM
-
-Usage:
-    from agentarea_execution import AgentExecutionWorkflow, set_global_services
-    
-    # Set up services for activities
-    set_global_services(activity_services)
-    
-    # Execute via Temporal workflow
-    result = await client.execute_workflow(
-        AgentExecutionWorkflow.run,
-        AgentExecutionRequest(...),
-        id="workflow-id",
-        task_queue="agent-task-queue"
-    )
 """
 
-# Activities exports
-from .activities.agent_execution_activities import (
-    AgentActivities,
-)
-
-# Backward compatibility - ALL_ACTIVITIES list
-ALL_ACTIVITIES = [
-    "build_agent_config_activity",
-    "discover_available_tools_activity", 
-    "call_llm_activity",
-    "execute_mcp_tool_activity",
-    "check_task_completion_activity",
-]
-
-# Interfaces exports
-from .interfaces import (
-    ActivityServicesInterface,
-    AgentServiceInterface,
-    MCPServiceInterface,
-    LLMServiceInterface,
-    EventBrokerInterface,
-)
-
-# Models exports
-from .models import (
+from agentarea_execution.interfaces import ActivityDependencies, ActivityServicesInterface
+from agentarea_execution.models import (
     AgentExecutionRequest,
     AgentExecutionResult,
     ToolExecutionRequest,
     ToolExecutionResult,
+    LLMReasoningRequest,
     LLMReasoningResult,
 )
 
-# Workflow exports
-from .workflows.agent_execution_workflow import AgentExecutionWorkflow
-
-
-def create_activities_for_worker(services: ActivityServicesInterface) -> list[object]:
-    """Create activity instances for Temporal worker registration.
+# Import activities creation function for worker setup
+def create_activities_for_worker(dependencies: ActivityDependencies):
+    """Create activities instances for the Temporal worker.
     
     Args:
-        services: Injected services for activities
+        dependencies: Basic dependencies needed to create services within activities
         
     Returns:
-        List of activity methods ready for worker registration
+        List of activity functions ready for worker registration
     """
-    # Create activities instance
-    activities = AgentActivities(services)
-    return [
-        activities.build_agent_config_activity,
-        activities.discover_available_tools_activity,
-        activities.call_llm_activity,
-        activities.execute_mcp_tool_activity,
-        activities.check_task_completion_activity,
-    ]
+    from agentarea_execution.activities.agent_execution_activities import make_agent_activities
+    
+    # Create activities using the factory pattern
+    return make_agent_activities(dependencies)
 
 
-# Base exports that are always available
 __all__ = [
-    # Interfaces
-    "ActivityServicesInterface",
-    "AgentServiceInterface",
-    "MCPServiceInterface",
-    "LLMServiceInterface",
-    "EventBrokerInterface",
-    
-    # Models
+    "ActivityDependencies",
+    "ActivityServicesInterface",  # Keep for backward compatibility
     "AgentExecutionRequest",
-    "AgentExecutionResult",
-    "ToolExecutionRequest", 
+    "AgentExecutionResult", 
+    "ToolExecutionRequest",
     "ToolExecutionResult",
+    "LLMReasoningRequest",
     "LLMReasoningResult",
-    
-    # Activities (Temporal activities for LLM and tool execution)
-    "AgentActivities",
     "create_activities_for_worker",
-    "ALL_ACTIVITIES",
-    
-    # Workflows
-    "AgentExecutionWorkflow",
 ] 
