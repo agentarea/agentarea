@@ -48,21 +48,15 @@ Usage:
 # Activities exports
 from .activities.agent_execution_activities import (
     AgentActivities,
-    set_global_services,
-    build_agent_config_activity,
-    discover_available_tools_activity,
-    call_llm_activity,
-    execute_mcp_tool_activity,
-    check_task_completion_activity,
 )
 
 # Backward compatibility - ALL_ACTIVITIES list
 ALL_ACTIVITIES = [
-    build_agent_config_activity,
-    discover_available_tools_activity,
-    call_llm_activity,
-    execute_mcp_tool_activity,
-    check_task_completion_activity,
+    "build_agent_config_activity",
+    "discover_available_tools_activity", 
+    "call_llm_activity",
+    "execute_mcp_tool_activity",
+    "check_task_completion_activity",
 ]
 
 # Interfaces exports
@@ -77,10 +71,14 @@ from .interfaces import (
 # Models exports
 from .models import (
     AgentExecutionRequest,
+    AgentExecutionResult,
     ToolExecutionRequest,
     ToolExecutionResult,
     LLMReasoningResult,
 )
+
+# Workflow exports
+from .workflows.agent_execution_workflow import AgentExecutionWorkflow
 
 
 def create_activities_for_worker(services: ActivityServicesInterface) -> list[object]:
@@ -92,6 +90,7 @@ def create_activities_for_worker(services: ActivityServicesInterface) -> list[ob
     Returns:
         List of activity methods ready for worker registration
     """
+    # Create activities instance
     activities = AgentActivities(services)
     return [
         activities.build_agent_config_activity,
@@ -113,6 +112,7 @@ __all__ = [
     
     # Models
     "AgentExecutionRequest",
+    "AgentExecutionResult",
     "ToolExecutionRequest", 
     "ToolExecutionResult",
     "LLMReasoningResult",
@@ -120,11 +120,8 @@ __all__ = [
     # Activities (Temporal activities for LLM and tool execution)
     "AgentActivities",
     "create_activities_for_worker",
-    "set_global_services",
-    "build_agent_config_activity",
-    "discover_available_tools_activity",
-    "call_llm_activity",
-    "execute_mcp_tool_activity",
-    "check_task_completion_activity",
     "ALL_ACTIVITIES",
+    
+    # Workflows
+    "AgentExecutionWorkflow",
 ] 

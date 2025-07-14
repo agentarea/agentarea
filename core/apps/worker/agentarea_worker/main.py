@@ -21,7 +21,9 @@ from agentarea_agents.infrastructure.di_container import initialize_di_container
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
-from agentarea_execution import ALL_ACTIVITIES
+from agentarea_execution.activities import AgentActivities
+from agentarea_execution import create_activities_for_worker
+from agentarea_execution.interfaces import ActivityServicesInterface
 from temporalio.client import Client
 from temporalio.worker import Worker
 
@@ -92,12 +94,26 @@ class AgentAreaWorker:
         logger.info(f"Max concurrent activities: {max_concurrent_activities}")
         logger.info(f"Max concurrent workflows: {max_concurrent_workflows}")
 
+
+        # Initialize DI container with proper config injection
+        initialize_di_container(self.settings.workflow)
+        logger.info("✅ DI Container initialized with workflow settings")
+
+        # Get services from DI container
+        services = get_services()
+
+        services = ActivityServicesInterface(
+            agent_service=self.services.agent_service,
+            llm_service=self.services.llm_service,
+            mcp_service=self.services.mcp_service,
+        )
+        activities = create_activities_for_worker(services)
         # Create worker with our workflows and activities
         self.worker = Worker(
             self.client,
             task_queue=task_queue,
             workflows=[AgentExecutionWorkflow],
-            activities=ALL_ACTIVITIES,
+            activities=activities,
             max_concurrent_activities=max_concurrent_activities,
             max_concurrent_workflow_tasks=max_concurrent_workflows,
         )
