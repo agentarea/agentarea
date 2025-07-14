@@ -12,7 +12,7 @@ from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_api.api.deps.services import get_agent_service
-from agentarea_common.utils.types import AgentCard, AgentCapabilities, AgentProvider, AgentSkill
+from agentarea_common.utils.types import AgentCapabilities, AgentCard, AgentProvider, AgentSkill
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 logger = logging.getLogger(__name__)
@@ -35,15 +35,13 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
         version="1.0.0",
         documentation_url=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
         capabilities=AgentCapabilities(
-            streaming=True,
-            pushNotifications=False,
-            stateTransitionHistory=True
+            streaming=True, pushNotifications=False, stateTransitionHistory=True
         ),
         provider=AgentProvider(organization="AgentArea"),
         skills=[
             AgentSkill(
                 id="text-processing",
-                name="Text Processing", 
+                name="Text Processing",
                 description=f"Process and respond to text messages using {agent.name}",
                 inputModes=["text"],
                 outputModes=["text"],
@@ -59,10 +57,10 @@ async def get_agent_well_known_card(
     agent_service: AgentService = Depends(get_agent_service),
 ) -> AgentCard:
     """Agent-specific well-known discovery endpoint.
-    
+
     Returns the agent card for this specific agent.
     This endpoint can be accessed at: /v1/agents/{agent_id}/.well-known/agent.json
-    
+
     This allows each agent to have its own well-known endpoint, which is A2A compliant.
     Later, this can be proxied to subdomains:
     - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
@@ -72,15 +70,15 @@ async def get_agent_well_known_card(
         agent = await agent_service.get(agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
-        
+
         base_url = get_base_url(request)
-        
+
         # Create agent card for this specific agent
         agent_card = await create_agent_card_for_agent(agent, base_url, agent_id)
-        
+
         logger.info(f"Agent well-known discovery: {agent.name} ({agent_id})")
         return agent_card
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -95,7 +93,7 @@ async def get_agent_a2a_info(
     agent_service: AgentService = Depends(get_agent_service),
 ) -> dict:
     """Agent-specific A2A protocol information.
-    
+
     Provides A2A protocol information specific to this agent.
     """
     try:
@@ -103,9 +101,9 @@ async def get_agent_a2a_info(
         agent = await agent_service.get(agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
-        
+
         base_url = get_base_url(request)
-        
+
         return {
             "protocol": "A2A",
             "version": "1.0.0",
@@ -114,40 +112,40 @@ async def get_agent_a2a_info(
                 "id": str(agent_id),
                 "name": agent.name,
                 "description": agent.description,
-                "status": agent.status
+                "status": agent.status,
             },
             "compliance": {
                 "a2a_specification": "https://a2aproject.github.io/A2A/latest/specification/",
                 "rfc_8615": "https://tools.ietf.org/html/rfc8615",
-                "json_rpc": "https://www.jsonrpc.org/specification/v2"
+                "json_rpc": "https://www.jsonrpc.org/specification/v2",
             },
             "endpoints": {
                 "agent_card": f"{base_url}/v1/agents/{agent_id}/.well-known/agent.json",
                 "rpc": f"{base_url}/v1/agents/{agent_id}/rpc",
                 "stream": f"{base_url}/v1/agents/{agent_id}/stream",
-                "tasks": f"{base_url}/v1/agents/{agent_id}/tasks/"
+                "tasks": f"{base_url}/v1/agents/{agent_id}/tasks/",
             },
             "future_subdomain": f"agent-{agent_id}.{request.url.hostname}",
             "subdomain_note": "This agent will be available at its own subdomain in the future",
             "supported_methods": [
                 "message/send",
                 "message/stream",
-                "tasks/get", 
+                "tasks/get",
                 "tasks/cancel",
-                "agent/authenticatedExtendedCard"
+                "agent/authenticatedExtendedCard",
             ],
             "capabilities": {
                 "streaming": True,
                 "pushNotifications": False,
-                "stateTransitionHistory": True
+                "stateTransitionHistory": True,
             },
             "authentication": {
                 "supported": True,
                 "methods": ["bearer", "api_key"],
-                "required": False
-            }
+                "required": False,
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -167,25 +165,21 @@ async def get_agent_well_known_index(
         agent = await agent_service.get(agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
-        
+
         base_url = get_base_url(request)
-        
+
         return {
             "message": f"A2A Protocol Well-Known Endpoints for {agent.name}",
-            "agent": {
-                "id": str(agent_id),
-                "name": agent.name,
-                "description": agent.description
-            },
+            "agent": {"id": str(agent_id), "name": agent.name, "description": agent.description},
             "endpoints": {
                 "agent.json": f"{base_url}/v1/agents/{agent_id}/.well-known/agent.json",
-                "a2a-info.json": f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json"
+                "a2a-info.json": f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
             },
             "specification": "https://a2aproject.github.io/A2A/latest/specification/",
             "rfc": "https://tools.ietf.org/html/rfc8615",
-            "note": "This agent-specific well-known endpoint can be proxied to a subdomain"
+            "note": "This agent-specific well-known endpoint can be proxied to a subdomain",
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

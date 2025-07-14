@@ -15,6 +15,7 @@ dependencies = [
     "agentarea-mcp",
     "agentarea-tasks",
     "agentarea-secrets",
+    "a2a-sdk>=0.2.8",
     "alembic>=1.15.2",
     "uvicorn>=0.34.0",
     "fastapi>=0.104.0",

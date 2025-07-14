@@ -9,6 +9,7 @@ description = "Task management functionality for AgentArea"
 requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",
+    "a2a-sdk>=0.2.8",
     "pydantic>=2.4.2",
     "temporalio>=1.0.0",
 ]

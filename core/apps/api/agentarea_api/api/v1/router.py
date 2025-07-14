@@ -9,7 +9,6 @@ from . import (
     mcp_servers_specifications,
     model_instances_new,
     model_specs,
-    protocol,
     provider_configs,
     provider_specs,
     well_known,
@@ -18,9 +17,6 @@ from . import (
 v1_router = APIRouter(prefix="/v1")
 
 # Well-known endpoints are included at the root level in main.py
-
-# Include protocol router (A2A compliant + REST API)
-v1_router.include_router(protocol.router)
 
 # Include chat router (unified chat interface)
 v1_router.include_router(chat.router)

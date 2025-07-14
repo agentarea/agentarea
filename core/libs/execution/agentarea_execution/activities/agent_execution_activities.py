@@ -191,7 +191,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 litellm_params["base_url"] = "http://host.docker.internal:11434"
                 response = await litellm.acompletion(**litellm_params)
 
-
                 # Extract response content
                 message = response.choices[0].message
                 result = {
@@ -308,6 +307,148 @@ def make_agent_activities(dependencies: ActivityDependencies):
             "reason": f"Task not complete, iteration {current_iteration}/{max_iterations}"
         }
 
+    @activity.defn
+    async def create_execution_plan_activity(
+        goal: dict[str, Any],
+        available_tools: list[dict[str, Any]],
+        messages: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Create an execution plan based on the goal and available tools."""
+        try:
+            # Use LLM to create an execution plan
+            planning_messages = [
+                {
+                    "role": "system",
+                    "content": f"""You are an AI planning assistant. Create a step-by-step execution plan to achieve the given goal.
+
+GOAL: {goal.get('description', 'No description provided')}
+
+SUCCESS CRITERIA:
+{chr(10).join(f"- {criteria}" for criteria in goal.get('success_criteria', []))}
+
+AVAILABLE TOOLS:
+{chr(10).join(f"- {tool.get('name', 'Unknown')}: {tool.get('description', 'No description')}" for tool in available_tools)}
+
+Create a concrete plan with estimated steps. Return your response as a JSON object with:
+- "plan": string describing the step-by-step approach
+- "estimated_steps": integer number of expected steps
+- "key_tools": list of tool names that will likely be needed
+- "risk_factors": list of potential challenges or risks"""
+                },
+                {
+                    "role": "user", 
+                    "content": f"Create an execution plan for: {goal.get('description', 'Unknown goal')}"
+                }
+            ]
+            
+            # For now, return a simple plan - could be enhanced with actual LLM call
+            tool_names = [tool.get("name", "unknown") for tool in available_tools]
+            
+            return {
+                "plan": f"Execute the task '{goal.get('description', 'Unknown')}' systematically using available tools",
+                "estimated_steps": min(max(len(available_tools), 3), 8),  # Between 3-8 steps
+                "key_tools": tool_names[:3],  # First 3 tools
+                "risk_factors": ["Tool execution failures", "LLM response issues", "External API timeouts"]
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create execution plan: {e}")
+            return {
+                "plan": f"Execute the task '{goal.get('description', 'Unknown')}' step by step",
+                "estimated_steps": 5,
+                "key_tools": [],
+                "risk_factors": ["Planning failed - proceeding with default approach"]
+            }
+
+    @activity.defn
+    async def evaluate_goal_progress_activity(
+        goal: dict[str, Any],
+        messages: list[dict[str, Any]],
+        current_iteration: int,
+    ) -> dict[str, Any]:
+        """Evaluate progress toward the goal."""
+        try:
+            # Analyze the conversation to determine if goal is achieved
+            goal_achieved = False
+            final_response = None
+            
+            if messages:
+                # Check if the last few messages indicate task completion
+                recent_messages = messages[-3:]  # Look at last 3 messages
+                
+                for message in reversed(recent_messages):
+                    if message.get("role") == "assistant":
+                        content = message.get("content", "").lower()
+                        
+                        # Check for completion indicators
+                        completion_indicators = [
+                            "task completed",
+                            "finished",
+                            "done",
+                            "complete",
+                            "successfully",
+                            "final answer",
+                            "here is the result",
+                            "i have completed",
+                            "task is finished"
+                        ]
+                        
+                        if any(indicator in content for indicator in completion_indicators):
+                            goal_achieved = True
+                            final_response = message.get("content", "Task completed")
+                            break
+                
+                # Also check if we have successful tool executions that might indicate completion
+                if not goal_achieved:
+                    tool_successes = sum(1 for msg in recent_messages 
+                                       if msg.get("role") == "tool" and "error" not in str(msg.get("content", "")).lower())
+                    
+                    if tool_successes >= 2:  # Multiple successful tool calls might indicate progress
+                        # Check if assistant is providing a summary or conclusion
+                        for message in reversed(recent_messages):
+                            if message.get("role") == "assistant" and len(message.get("content", "")) > 50:
+                                content = message.get("content", "")
+                                if any(word in content.lower() for word in ["summary", "result", "conclusion", "completed"]):
+                                    goal_achieved = True
+                                    final_response = content
+                                    break
+            
+            # Evaluate against success criteria if available
+            success_criteria_met = []
+            if goal.get("success_criteria"):
+                # This is a simplified evaluation - could be enhanced with LLM analysis
+                for criteria in goal["success_criteria"]:
+                    # Simple keyword matching for now
+                    criteria_met = any(
+                        keyword in " ".join(msg.get("content", "") for msg in messages[-5:]).lower()
+                        for keyword in criteria.lower().split()[:3]  # First 3 words of criteria
+                    )
+                    success_criteria_met.append({
+                        "criteria": criteria,
+                        "met": criteria_met
+                    })
+            
+            return {
+                "goal_achieved": goal_achieved,
+                "final_response": final_response,
+                "success_criteria_met": success_criteria_met,
+                "progress_indicators": {
+                    "message_count": len(messages),
+                    "tool_calls": sum(1 for msg in messages if msg.get("role") == "tool"),
+                    "assistant_responses": sum(1 for msg in messages if msg.get("role") == "assistant"),
+                    "iteration": current_iteration
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to evaluate goal progress: {e}")
+            return {
+                "goal_achieved": False,
+                "final_response": None,
+                "success_criteria_met": [],
+                "progress_indicators": {"error": str(e)}
+            }
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -315,18 +456,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
         call_llm_activity,
         execute_mcp_tool_activity,
         check_task_completion_activity,
+        create_execution_plan_activity,
+        evaluate_goal_progress_activity,
     ]
-
-
-# Legacy class for backward compatibility during transition
-class AgentActivities:
-    """Legacy AgentActivities class for backward compatibility."""
-
-    def __init__(self, services):
-        """Initialize with services (legacy interface)."""
-        # For now, just store services for compatibility
-        self.services = services
-        logger.warning("AgentActivities class is deprecated. Use make_agent_activities factory function instead.")
-
-    # Legacy methods that delegate to the new factory pattern would go here if needed
-    # For now, we'll let the transition happen through the factory function

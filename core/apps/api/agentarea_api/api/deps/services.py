@@ -94,11 +94,9 @@ async def get_task_manager(
     task_repository: TaskRepository = Depends(get_task_repository),
 ) -> BaseTaskManager:
     """Get a BaseTaskManager instance for the current request."""
-    # This is a placeholder implementation
-    # TODO: Replace with actual task manager implementation when available
-    from agentarea_tasks.in_memory_task_manager import InMemoryTaskManager
-
-    return InMemoryTaskManager(task_repository)
+    # Use TemporalTaskManager for A2A protocol compliance
+    from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+    return TemporalTaskManager()
 
 
 async def get_temporal_workflow_service():

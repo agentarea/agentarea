@@ -2,21 +2,20 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterable
 
-# from agentarea_common.utils import new_not_implemented_error
-from agentarea_common.utils.types import (
+from a2a.types import (
     CancelTaskRequest,
     CancelTaskResponse,
-    GetTaskPushNotificationRequest,
-    GetTaskPushNotificationResponse,
+    GetTaskPushNotificationConfigRequest,
+    GetTaskPushNotificationConfigResponse,
     GetTaskRequest,
     GetTaskResponse,
     JSONRPCResponse,
-    SendTaskRequest,
-    SendTaskResponse,
-    SendTaskStreamingRequest,
-    SendTaskStreamingResponse,
-    SetTaskPushNotificationRequest,
-    SetTaskPushNotificationResponse,
+    SendMessageRequest,
+    SendMessageResponse,
+    SendStreamingMessageRequest,
+    SendStreamingMessageResponse,
+    SetTaskPushNotificationConfigRequest,
+    SetTaskPushNotificationConfigResponse,
     Task,
     TaskResubscriptionRequest,
 )
@@ -34,31 +33,31 @@ class BaseTaskManager(ABC):
         pass
 
     @abstractmethod
-    async def on_send_task(self, request: SendTaskRequest) -> SendTaskResponse:
+    async def on_send_task(self, request: SendMessageRequest) -> SendMessageResponse:
         pass
 
     @abstractmethod
     async def on_send_task_subscribe(
-        self, request: SendTaskStreamingRequest
-    ) -> AsyncIterable[SendTaskStreamingResponse] | JSONRPCResponse:
+        self, request: SendStreamingMessageRequest
+    ) -> AsyncIterable[SendStreamingMessageResponse] | JSONRPCResponse:
         pass
 
     @abstractmethod
     async def on_set_task_push_notification(
-        self, request: SetTaskPushNotificationRequest
-    ) -> SetTaskPushNotificationResponse:
+        self, request: SetTaskPushNotificationConfigRequest
+    ) -> SetTaskPushNotificationConfigResponse:
         pass
 
     @abstractmethod
     async def on_get_task_push_notification(
-        self, request: GetTaskPushNotificationRequest
-    ) -> GetTaskPushNotificationResponse:
+        self, request: GetTaskPushNotificationConfigRequest
+    ) -> GetTaskPushNotificationConfigResponse:
         pass
 
     @abstractmethod
     async def on_resubscribe_to_task(
         self, request: TaskResubscriptionRequest
-    ) -> AsyncIterable[SendTaskResponse] | JSONRPCResponse:
+    ) -> AsyncIterable[SendMessageResponse] | JSONRPCResponse:
         pass
 
     # ------------------------------------------------------------------ #

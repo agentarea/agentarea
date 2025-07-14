@@ -25,6 +25,7 @@ class AgentExecutionRequest:
     timeout_seconds: int = 300
     max_reasoning_iterations: int = 10
     enable_agent_communication: bool = False
+    requires_human_approval: bool = False
 
     # Additional workflow metadata
     workflow_metadata: dict[str, Any] = field(default_factory=dict)
