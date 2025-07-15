@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path
 
-from .secret_manager import BaseSecretManager
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
 logger = logging.getLogger(__name__)
 
@@ -95,4 +95,4 @@ class LocalSecretManager(BaseSecretManager):
         """Clear all secrets (for testing purposes)."""
         self._secrets.clear()
         self._save_secrets()
-        logger.warning("Cleared all secrets")
+        logger.warning("Cleared all secrets") 

@@ -7,8 +7,9 @@ Infisical secret manager instances based on environment configuration.
 import logging
 import os
 
-from agentarea_common.infrastructure.local_secret_manager import LocalSecretManager
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+
+from .local_secret_manager import LocalSecretManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +22,9 @@ def create_infisical_secret_manager() -> BaseSecretManager:
     """
     try:
         # Check if Infisical SDK is available
-        from agentarea_secrets.infisical_secret_manager import InfisicalSecretManager
         from infisical_sdk.client import InfisicalSDKClient
+
+        from .infisical_secret_manager import InfisicalSecretManager
 
         # Get Infisical configuration from environment
         infisical_url = os.getenv("INFISICAL_URL", "https://app.infisical.com")
@@ -37,7 +39,9 @@ def create_infisical_secret_manager() -> BaseSecretManager:
 
         # Initialize Infisical client
         client = InfisicalSDKClient(
-            client_id=client_id, client_secret=client_secret, site_url=infisical_url
+            host=infisical_url,
+            client_id=client_id,
+            client_secret=client_secret,
         )
 
         logger.info(
@@ -61,4 +65,4 @@ def get_real_secret_manager() -> BaseSecretManager:
     Returns:
         BaseSecretManager: Real secret manager instance
     """
-    return create_infisical_secret_manager()
+    return create_infisical_secret_manager() 

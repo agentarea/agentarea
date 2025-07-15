@@ -14,7 +14,7 @@ from typing import Any
 import dotenv
 from agentarea_common.config import get_settings
 from agentarea_common.events.router import get_event_router
-from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
+from agentarea_secrets import get_real_secret_manager
 
 # Initialize DI container with proper config injection
 from agentarea_agents.infrastructure.di_container import initialize_di_container

@@ -1,27 +1,11 @@
 [project]
 name = "agentarea-execution"
 version = "0.1.0"
-description = "AgentArea execution library using LangGraph for agent workflows"
-requires-python = ">=3.9"
+description = "AgentArea execution library"
+requires-python = ">=3.11"
 dependencies = [
-    # Core dependencies
     "temporalio>=1.0.0",
     "pydantic>=2.0.0",
-    
-    # LangGraph and LangChain for agent workflows
-    "langgraph>=0.2.0",
-    "langchain-core>=0.3.0",
-    "langchain>=0.3.0",
-    
-    # HTTP client
-    "httpx>=0.24.0",
-    
-    # For testing only - remove these for production
-    # "agentarea-common",
-    # "agentarea-agents",
-    # "agentarea-mcp",
-    # "agentarea-llm",
-    # "agentarea-tasks",
 ]
 
 [project.optional-dependencies]

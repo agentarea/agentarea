@@ -290,20 +290,3 @@ async def websocket_endpoint(
             await websocket.close()
         except Exception:
             pass
-
-
-# Health Check
-@router.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "chat-api",
-        "version": "1.0.0",
-        "features": [
-            "message-sending",
-            "status-polling",
-            "agent-discovery",
-            "websocket-basic"
-        ],
-    }

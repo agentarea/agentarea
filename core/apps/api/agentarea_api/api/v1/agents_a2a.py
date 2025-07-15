@@ -1,50 +1,51 @@
-"""A2A Protocol endpoints for agent-specific communication.
+"""A2A (Agent-to-Agent) protocol endpoints for AgentArea.
 
-This module provides A2A protocol-compliant JSON-RPC endpoints for individual agents.
-Each agent has its own RPC endpoint at /v1/agents/{agent_id}/rpc
+This module implements the A2A protocol for inter-agent communication.
+The A2A protocol is a JSON-RPC based protocol that allows agents to:
+- Send messages to other agents
+- Submit tasks for execution
+- Query task status
+- Cancel tasks
+
+Key endpoints:
+- POST /agents/{agent_id}/a2a/rpc - JSON-RPC endpoint for A2A protocol
+- GET /agents/{agent_id}/a2a/well-known - Agent discovery endpoint
 """
 
-import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from a2a.types import (
-    AgentCapabilities,
+from agentarea_common.utils.types import (
     AgentCard,
-    AgentProvider,
-    AgentSkill,
+    AgentCapabilities,
+    AuthenticatedExtendedCardResponse as AgentAuthenticatedExtendedCardResponse,
     CancelTaskRequest,
     CancelTaskResponse,
-    DataPart,
-    FileBase,
-    FilePart,
     GetTaskRequest,
     GetTaskResponse,
-    InternalError,
-    InvalidRequestError,
+    JSONRPCRequest,
     JSONRPCResponse,
     Message,
     MessageSendParams,
-    MethodNotFoundError,
-    SendMessageRequest,
-    SendMessageResponse,
-    SendStreamingMessageResponse,
+    MessageSendResponse as SendMessageResponse,
+    MessageStreamResponse as SendStreamingMessageResponse,
     TaskIdParams,
     TaskQueryParams,
+    TaskStatus,
     TextPart,
 )
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.domain.models import Agent
-from agentarea_api.api.deps.services import TaskManagerDep, get_agent_service
+from agentarea_api.api.deps.services import get_agent_service, get_task_service
 from agentarea_api.api.v1.a2a_auth import (
     A2AAuthContext,
     allow_public_access,
     require_a2a_execute_auth,
     require_a2a_stream_auth,
 )
-from agentarea_tasks.task_manager import BaseTaskManager
+from agentarea_tasks.task_service import TaskService
+from agentarea_tasks.domain.models import SimpleTask
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -58,7 +59,7 @@ router = APIRouter()
 async def handle_agent_jsonrpc(
     agent_id: UUID,
     request: Request,
-    task_manager: TaskManagerDep,
+    task_service: TaskService = Depends(get_task_service),
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     agent_service: AgentService = Depends(get_agent_service),
 ) -> JSONRPCResponse:
@@ -69,604 +70,411 @@ async def handle_agent_jsonrpc(
     - message/stream
     - tasks/get
     - tasks/cancel
+    - tasks/send
     - agent/authenticatedExtendedCard
     """
     try:
-        # Authentication is handled by auth_context dependency
-        logger.info(f"A2A RPC request from user {auth_context.user_id} to agent {agent_id}")
-
         # Parse JSON-RPC request
-        body = await request.json()
-        logger.info(f"Received A2A JSON-RPC request for agent {agent_id}: {body.get('method')}")
+        body = await request.body()
+        request_data = json.loads(body)
+        rpc_request = JSONRPCRequest(**request_data)
+        
+        method = rpc_request.method
+        params = rpc_request.params or {}
+        request_id = rpc_request.id
 
-        # Validate basic JSON-RPC structure
-        if not isinstance(body, dict) or "method" not in body:
-            return JSONRPCResponse(
-                jsonrpc="2.0",
-                id=body.get("id") if isinstance(body, dict) else None,
-                result=None,
-                error=InvalidRequestError(code=-32600, message="Invalid Request", data=None),
-            )
-
-        method = body.get("method")
-        params = body.get("params", {})
-        request_id = body.get("id", str(uuid4()))
+        logger.info(f"A2A RPC call: {method} for agent {agent_id}")
 
         # Route to appropriate handler with agent context
         if method == "tasks/send":  # A2A standard method
-            return await handle_task_send(request_id, params, task_manager, agent_id)
+            return await handle_task_send(request_id, params, task_service, agent_id)
         elif method == "message/send":  # Legacy compatibility
-            return await handle_message_send(request_id, params, task_manager, agent_id)
+            return await handle_message_send(request_id, params, task_service, agent_id)
         elif method == "message/stream":
             # For streaming, we need to return SSE response directly
             return await handle_message_stream_sse(
-                request, request_id, params, task_manager, agent_id
+                request, request_id, params, task_service, agent_id
             )
         elif method == "tasks/get":
-            return await handle_task_get(request_id, params, task_manager)
+            return await handle_task_get(request_id, params, task_service)
         elif method == "tasks/cancel":
-            return await handle_task_cancel(request_id, params, task_manager)
+            return await handle_task_cancel(request_id, params, task_service)
         elif method == "agent/authenticatedExtendedCard":
             base_url = f"{request.url.scheme}://{request.url.netloc}"
-            # Get agent from service
-            agent = await agent_service.get(agent_id)
-            return await handle_agent_card(request_id, params, agent, base_url)
+            return await handle_agent_card(
+                request_id, params, agent_service, agent_id, base_url
+            )
         else:
-            return JSONRPCResponse(id=request_id, error=MethodNotFoundError())
+            return JSONRPCResponse(
+                jsonrpc="2.0",
+                id=request_id,
+                error={"code": -32601, "message": f"Method not found: {method}"},
+            )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in A2A JSON-RPC handler for agent {agent_id}: {e}", exc_info=True)
+    except json.JSONDecodeError:
         return JSONRPCResponse(
-            id=body.get("id") if "body" in locals() and isinstance(body, dict) else None,
-            error=InternalError(message=str(e)),
+            jsonrpc="2.0",
+            id=None,
+            error={"code": -32700, "message": "Parse error"},
+        )
+    except Exception as e:
+        logger.error(f"A2A RPC error: {e}")
+        return JSONRPCResponse(
+            jsonrpc="2.0",
+            id=request_id if 'request_id' in locals() else None,
+            error={"code": -32603, "message": f"Internal error: {str(e)}"},
         )
 
 
-@router.get("/card")
-async def get_agent_card(
-    agent_id: UUID,
-    request: Request,
-    auth_context: A2AAuthContext = Depends(allow_public_access),
-    agent_service: AgentService = Depends(get_agent_service),
-) -> AgentCard:
-    """Get A2A agent card for discovery."""
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+# A2A Protocol Helper Functions
 
-    base_url = f"{request.url.scheme}://{request.url.netloc}"
-
-    # Convert database agent to A2A AgentCard
-    return AgentCard(
-        name=agent.name,
-        description=agent.description,
-        url=f"{base_url}/v1/agents/{agent_id}/rpc",  # Agent-specific RPC endpoint
-        version="1.0.0",
-        documentation_url=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
-        capabilities=AgentCapabilities(
-            streaming=True, push_notifications=False, state_transition_history=True
-        ),
-        provider=AgentProvider(organization="AgentArea"),
-        skills=[
-            AgentSkill(
-                id="text-processing",
-                name="Text Processing",
-                description=f"Process and respond to text messages using {agent.name}",
-                inputModes=["text"],
-                outputModes=["text"],
-            )
-        ],
+def convert_a2a_message_to_task(message_params: MessageSendParams, agent_id: UUID) -> SimpleTask:
+    """Convert A2A message parameters to internal SimpleTask format."""
+    # Extract message content
+    message_content = ""
+    if message_params.message and message_params.message.parts:
+        for part in message_params.message.parts:
+            if hasattr(part, 'text'):
+                message_content += part.text
+    
+    # Create task from A2A message
+    task = SimpleTask(
+        id=UUID(message_params.id) if message_params.id else uuid4(),
+        title=f"A2A Message Task",
+        description=f"Task created from A2A message",
+        query=message_content,
+        user_id="a2a_user",  # A2A requests don't have user context
+        agent_id=agent_id,
+        status="submitted",
+        task_parameters={}
     )
+    return task
 
 
-# A2A JSON-RPC Method Handlers
+def convert_task_to_a2a_response(task: SimpleTask) -> Dict[str, Any]:
+    """Convert internal task to A2A response format."""
+    return {
+        "id": str(task.id),
+        "status": task.status,
+        "result": task.result,
+        "error": task.error_message,
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+    }
 
+
+# A2A Protocol Handler Functions
 
 async def handle_task_send(
     request_id: str,
     params: dict[str, Any],
-    task_manager: BaseTaskManager,
+    task_service: TaskService,
     agent_id: UUID,
 ) -> SendMessageResponse:
-    """Handle tasks/send RPC method (A2A standard method).
-
-    This is the standard A2A method for sending tasks to agents.
-    """
+    """Handle tasks/send RPC method (A2A standard method)."""
     try:
-        # Extract task ID and message from params
-        task_id = params.get("id", str(uuid4()))
-        message_data = params.get("message", {})
-
-        # Convert to A2A message format with support for all part types
-        parts = []
-        for part_data in message_data.get("parts", [{}]):
-            part_type = part_data.get("type", "text")
-
-            if part_type == "text":
-                parts.append(
-                    TextPart(text=part_data.get("text", ""), metadata=part_data.get("metadata"))
-                )
-            elif part_type == "file":
-                file_data = part_data.get("file", {})
-                parts.append(
-                    FilePart(
-                        file=FileBase(
-                            name=file_data.get("name"),
-                            mime_type=file_data.get("mime_type"),
-                            bytes=file_data.get("bytes"),
-                            uri=file_data.get("uri"),
-                        ),
-                        metadata=part_data.get("metadata"),
-                    )
-                )
-            elif part_type == "data":
-                parts.append(
-                    DataPart(data=part_data.get("data", {}), metadata=part_data.get("metadata"))
-                )
-            else:
-                # Fallback to text part for unknown types
-                parts.append(TextPart(text=str(part_data), metadata=part_data.get("metadata")))
-
-        message = Message(role=message_data.get("role", "user"), parts=parts)
-
-        # Create task parameters with agent context
-        task_params = MessageSendParams(
-            id=task_id,
-            session_id=params.get("sessionId", str(uuid4())),
-            message=message,
-            metadata={
-                **params.get("metadata", {}),
-                "agent_id": str(agent_id),
-                "a2a_request": True,
-                "method": "tasks/send",
-            },
+        # Convert params to MessageSendParams
+        message_send_params = MessageSendParams(**params)
+        
+        # Convert A2A message to internal task
+        task = convert_a2a_message_to_task(message_send_params, agent_id)
+        
+        # Submit task through task service
+        created_task = await task_service.submit_task(task)
+        
+        # Return A2A response
+        return SendMessageResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            result={
+                "id": str(created_task.id),
+                "status": created_task.status,
+                "message": "Task submitted successfully"
+            }
         )
-
-        # Send task
-        send_request = SendMessageRequest(id=request_id, params=task_params)
-        response = await task_manager.on_send_message(send_request)
-
-        return SendMessageResponse(id=request_id, result=response.result)
-
+    
     except Exception as e:
-        logger.error(f"Error in tasks/send for agent {agent_id}: {e}", exc_info=True)
-        return SendMessageResponse(id=request_id, error=InternalError(message=str(e)))
+        logger.error(f"Error in handle_task_send: {e}")
+        return SendMessageResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            error={"code": -32603, "message": f"Task submission failed: {str(e)}"}
+        )
 
 
 async def handle_message_send(
     request_id: str,
     params: dict[str, Any],
-    task_manager: BaseTaskManager,
+    task_service: TaskService,
     agent_id: UUID,
 ) -> SendMessageResponse:
-    """Handle message/send RPC method for specific agent."""
+    """Handle message/send RPC method (legacy compatibility)."""
     try:
-        # Convert to A2A message format
+        # Convert legacy message format to A2A format
+        message_data = params.get("message", {})
+        parts = message_data.get("parts", [])
+        
+        # Extract text from parts
+        text_content = ""
+        for part in parts:
+            if isinstance(part, dict) and "text" in part:
+                text_content += part["text"]
+        
+        # Create A2A message format
         message = Message(
             role="user",
-            parts=[TextPart(text=params.get("message", {}).get("parts", [{}])[0].get("text", ""))],
+            parts=[TextPart(text=text_content)]
         )
-
-        # Create task parameters with agent context
-        task_params = MessageSendParams(
-            id=str(uuid4()),
-            session_id=params.get("contextId", str(uuid4())),
-            message=message,
-            metadata={
-                **params.get("metadata", {}),
-                "agent_id": str(agent_id),
-                "a2a_request": True,
-            },
+        
+        # Create MessageSendParams
+        message_params = MessageSendParams(
+            id=params.get("id", str(uuid4())),
+            message=message
         )
-
-        # Send task
-        send_request = SendMessageRequest(id=request_id, params=task_params)
-        response = await task_manager.on_send_message(send_request)
-
-        return SendMessageResponse(id=request_id, result=response.result)
+        
+        # Use the same logic as handle_task_send
+        return await handle_task_send(request_id, message_params.dict(), task_service, agent_id)
 
     except Exception as e:
-        logger.error(f"Error in message/send for agent {agent_id}: {e}", exc_info=True)
-        return SendMessageResponse(id=request_id, error=InternalError(message=str(e)))
+        logger.error(f"Error in handle_message_send: {e}")
+        return SendMessageResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            error={"code": -32603, "message": f"Message send failed: {str(e)}"}
+        )
 
 
 async def handle_message_stream_sse(
     request: Request,
     request_id: str,
     params: dict[str, Any],
-    task_manager: BaseTaskManager,
+    task_service: TaskService,
     agent_id: UUID,
 ) -> StreamingResponse:
     """Handle message/stream RPC method with Server-Sent Events."""
     try:
         # Convert to A2A message format
         message_data = params.get("message", {})
-        user_text = ""
-        if message_data.get("parts"):
-            user_text = message_data["parts"][0].get("text", "")
-
-        message = Message(
-            role="user",
-            parts=[TextPart(text=user_text)],
+        parts = message_data.get("parts", [])
+        
+        # Extract text from parts
+        text_content = ""
+        for part in parts:
+            if isinstance(part, dict) and "text" in part:
+                text_content += part["text"]
+        
+        # Create task from message
+        task = SimpleTask(
+            id=UUID(params.get("id", str(uuid4()))),
+            title="A2A Stream Task",
+            description="Task created from A2A stream message",
+            query=text_content,
+            user_id="a2a_user",
+            agent_id=agent_id,
+            status="submitted",
+            task_parameters={}
         )
-
-        # Create task parameters with agent context
-        task_params = MessageSendParams(
-            id=str(uuid4()),
-            session_id=params.get("contextId", str(uuid4())),
-            message=message,
-            metadata={
-                **params.get("metadata", {}),
-                "agent_id": str(agent_id),
-                "a2a_request": True,
-                "streaming": True,
-            },
-        )
-
-        async def stream_response():
-            """Generate Server-Sent Events for A2A streaming."""
-            try:
-                # Send initial connection event as JSON-RPC response
-                connection_event = {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "result": {
-                        "type": "connection",
-                        "status": "connected",
-                        "taskId": task_params.id,
-                        "sessionId": task_params.sessionId,
-                        "kind": "connection",
-                    },
-                }
-                yield f"data: {json.dumps(connection_event)}\n\n"
-
-                # Send task to task manager
-                send_request = SendMessageRequest(jsonrpc="2.0", id=request_id, params=task_params)
-                response = await task_manager.on_send_message(send_request)
-
-                if response.error:
-                    # Send error event as JSON-RPC response
-                    error_event = {
-                        "jsonrpc": "2.0",
-                        "id": request_id,
-                        "error": {
-                            "code": response.error.code,
-                            "message": response.error.message,
-                            "data": response.error.data,
-                        },
-                    }
-                    yield f"data: {json.dumps(error_event)}\n\n"
-                    return
-
-                # Send task started event as TaskStatusUpdateEvent
-                if response.result:
-                    task_started_event = {
-                        "jsonrpc": "2.0",
-                        "id": request_id,
-                        "result": {
-                            "taskId": response.result.id,
-                            "sessionId": response.result.sessionId,
-                            "status": {
-                                "state": response.result.status.state,
-                                "message": response.result.status.message,
-                                "timestamp": response.result.status.timestamp.isoformat()
-                                if response.result.status.timestamp
-                                else None,
-                            },
-                            "final": False,
-                            "kind": "status-update",
-                        },
-                    }
-                    yield f"data: {json.dumps(task_started_event)}\n\n"
-
-                # Poll for task completion and stream updates
-                task_id = response.result.id if response.result else None
-                if task_id:
-                    max_attempts = 60  # 60 seconds timeout
-                    for attempt in range(max_attempts):
-                        # Get task status
-                        get_request = GetTaskRequest(
-                            jsonrpc="2.0",
-                            id=f"{request_id}_poll_{attempt}",
-                            params=TaskQueryParams(id=task_id),
-                        )
-                        task_response = await task_manager.on_get_task(get_request)
-
-                        if task_response.result:
-                            task = task_response.result
-
-                            # Send status update as TaskStatusUpdateEvent
-                            status_event = {
-                                "jsonrpc": "2.0",
-                                "id": request_id,
-                                "result": {
-                                    "taskId": task.id,
-                                    "sessionId": task.sessionId,
-                                    "status": {
-                                        "state": task.status.state,
-                                        "message": task.status.message,
-                                        "timestamp": task.status.timestamp.isoformat()
-                                        if task.status.timestamp
-                                        else None,
-                                    },
-                                    "final": task.status.state
-                                    in ["completed", "failed", "canceled"],
-                                    "kind": "status-update",
-                                },
-                            }
-                            yield f"data: {json.dumps(status_event)}\n\n"
-
-                            # Send artifact updates if available
-                            if task.artifacts:
-                                for i, artifact in enumerate(task.artifacts):
-                                    artifact_event = {
-                                        "jsonrpc": "2.0",
-                                        "id": request_id,
-                                        "result": {
-                                            "taskId": task.id,
-                                            "sessionId": task.sessionId,
-                                            "artifact": {
-                                                "name": artifact.name,
-                                                "description": artifact.description,
-                                                "parts": [
-                                                    part.model_dump() for part in artifact.parts
-                                                ],
-                                                "index": artifact.index,
-                                                "append": artifact.append,
-                                                "lastChunk": artifact.lastChunk,
-                                                "metadata": artifact.metadata,
-                                            },
-                                            "kind": "artifact-update",
-                                        },
-                                    }
-                                    yield f"data: {json.dumps(artifact_event)}\n\n"
-
-                            # Check if task is complete
-                            if task.status.state in ["completed", "failed", "canceled"]:
-                                # Send final status event
-                                final_event = {
-                                    "jsonrpc": "2.0",
-                                    "id": request_id,
-                                    "result": {
-                                        "taskId": task.id,
-                                        "sessionId": task.sessionId,
-                                        "status": {
-                                            "state": task.status.state,
-                                            "message": task.status.message,
-                                            "timestamp": task.status.timestamp.isoformat()
-                                            if task.status.timestamp
-                                            else None,
-                                        },
-                                        "final": True,
-                                        "kind": "status-update",
-                                    },
-                                }
-                                yield f"data: {json.dumps(final_event)}\n\n"
-                                break
-
-                        # Wait before next poll
-                        await asyncio.sleep(1)
-
-                    else:
-                        # Timeout reached
-                        timeout_event = {
-                            "jsonrpc": "2.0",
-                            "id": request_id,
-                            "error": {
-                                "code": -32603,
-                                "message": "Task polling timeout reached",
-                                "data": {"timeout_seconds": 60},
-                            },
-                        }
-                        yield f"data: {json.dumps(timeout_event)}\n\n"
-
-            except Exception as e:
-                logger.error(f"Error in SSE stream for agent {agent_id}: {e}", exc_info=True)
-                error_event = {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {
-                        "code": -32603,
-                        "message": "Internal error",
-                        "data": {"details": str(e)},
-                    },
-                }
-                yield f"data: {json.dumps(error_event)}\n\n"
+        
+        # Submit task
+        created_task = await task_service.submit_task(task)
+        
+        # Create SSE stream
+        async def event_stream():
+            # Send initial response
+            yield f"data: {json.dumps({'event': 'task_created', 'task_id': str(created_task.id)})}\n\n"
+            
+            # For now, just send a completion event
+            # In a real implementation, this would stream events from the task execution
+            yield f"data: {json.dumps({'event': 'task_completed', 'task_id': str(created_task.id), 'result': created_task.result})}\n\n"
+            
+            # Send end event
+            yield f"data: [DONE]\n\n"
 
         return StreamingResponse(
-            stream_response(),
+            event_stream(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control",
-            },
+            }
         )
 
     except Exception as e:
-        logger.error(f"Error setting up SSE stream for agent {agent_id}: {e}", exc_info=True)
-        error_message = str(e)
+        logger.error(f"Error in handle_message_stream_sse: {e}")
 
-        # Return error as SSE
         async def error_stream():
-            error_data = {
-                "type": "error",
-                "id": request_id,
-                "error": {"code": -32603, "message": f"Failed to setup stream: {error_message}"},
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
+            yield f"data: {json.dumps({'event': 'error', 'message': str(e)})}\n\n"
 
         return StreamingResponse(
             error_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control",
-            },
+            media_type="text/event-stream"
         )
 
 
 async def handle_message_stream(
     request_id: str,
     params: dict[str, Any],
-    task_manager: BaseTaskManager,
+    task_service: TaskService,
     agent_id: UUID,
 ) -> SendStreamingMessageResponse:
-    """Handle message/stream RPC method for specific agent (legacy)."""
+    """Handle message/stream RPC method (legacy)."""
     try:
         # For now, use the same logic as message/send
-        # In production, this would set up SSE streaming with task manager
-        message_response = await handle_message_send(request_id, params, task_manager, agent_id)
+        message_response = await handle_message_send(request_id, params, task_service, agent_id)
         return SendStreamingMessageResponse(
-            id=request_id, result=message_response.result, error=message_response.error
+            jsonrpc="2.0",
+            id=request_id,
+            result=message_response.result if hasattr(message_response, 'result') else {},
         )
     except Exception as e:
-        logger.error(f"Error in message/stream for agent {agent_id}: {e}", exc_info=True)
-        return SendStreamingMessageResponse(id=request_id, error=InternalError(message=str(e)))
+        logger.error(f"Error in handle_message_stream: {e}")
+        return SendStreamingMessageResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            error={"code": -32603, "message": f"Stream failed: {str(e)}"}
+        )
 
 
 async def handle_task_get(
     request_id: str,
     params: dict[str, Any],
-    task_manager: BaseTaskManager,
+    task_service: TaskService,
 ) -> GetTaskResponse:
     """Handle tasks/get RPC method."""
     try:
-        get_request = GetTaskRequest(id=request_id, params=TaskQueryParams(id=params.get("id", "")))
-        return await task_manager.on_get_task(get_request)
+        task_id = UUID(params.get("id", ""))
+        task = await task_service.get_task(task_id)
+        
+        if not task:
+            return GetTaskResponse(
+                jsonrpc="2.0",
+                id=request_id,
+                error={"code": -32602, "message": f"Task not found: {task_id}"}
+            )
+        
+        return GetTaskResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            result=convert_task_to_a2a_response(task)
+        )
+    
     except Exception as e:
-        logger.error(f"Error in tasks/get: {e}", exc_info=True)
-        return GetTaskResponse(id=request_id, error=InternalError(message=str(e)))
+        logger.error(f"Error in handle_task_get: {e}")
+        return GetTaskResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            error={"code": -32603, "message": f"Task get failed: {str(e)}"}
+        )
 
 
 async def handle_task_cancel(
     request_id: str,
     params: dict[str, Any],
-    task_manager: BaseTaskManager,
+    task_service: TaskService,
 ) -> CancelTaskResponse:
     """Handle tasks/cancel RPC method."""
     try:
-        cancel_request = CancelTaskRequest(
-            id=request_id, params=TaskIdParams(id=params.get("id", ""))
+        task_id = UUID(params.get("id", ""))
+        success = await task_service.cancel_task(task_id)
+        
+        return CancelTaskResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            result={"success": success, "message": "Task cancelled" if success else "Task not found or already completed"}
         )
-        return await task_manager.on_cancel_task(cancel_request)
+    
     except Exception as e:
-        logger.error(f"Error in tasks/cancel: {e}", exc_info=True)
-        return CancelTaskResponse(id=request_id, error=InternalError(message=str(e)))
+        logger.error(f"Error in handle_task_cancel: {e}")
+        return CancelTaskResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            error={"code": -32603, "message": f"Task cancel failed: {str(e)}"}
+        )
 
 
 async def handle_agent_card(
     request_id: str,
     params: dict[str, Any],
-    agent: Agent,
-    base_url: str,
-) -> JSONRPCResponse:
-    """Handle agent/authenticatedExtendedCard RPC method for specific agent."""
-    # Convert database agent to A2A AgentCard
-    agent_card = AgentCard(
-        name=agent.name,
-        description=agent.description,
-        url=f"{base_url}/v1/agents/{agent.id}/rpc",
-        version="1.0.0",
-        documentation_url=f"{base_url}/v1/agents/{agent.id}/.well-known/a2a-info.json",
-        capabilities=AgentCapabilities(
-            streaming=True, push_notifications=False, state_transition_history=True
-        ),
-        provider=AgentProvider(organization="AgentArea"),
-        skills=[
-            AgentSkill(
-                id="text-processing",
-                name="Text Processing",
-                description=f"Process and respond to text messages using {agent.name}",
-                inputModes=["text"],
-                outputModes=["text"],
-            )
-        ],
-    )
-
-    return JSONRPCResponse(id=request_id, result=agent_card)
-
-
-@router.post("/stream")
-async def stream_agent_communication(
+    agent_service: AgentService,
     agent_id: UUID,
-    request: Request,
-    auth_context: A2AAuthContext = Depends(require_a2a_stream_auth),
-) -> StreamingResponse:
-    """Stream real-time communication with agent via Server-Sent Events.
-
-    This endpoint provides A2A-compatible streaming for real-time agent interaction.
-    """
+    base_url: str,
+) -> AgentAuthenticatedExtendedCardResponse:
+    """Handle agent/authenticatedExtendedCard RPC method."""
     try:
-        # Get agent info from auth context
-        agent_name = auth_context.metadata.get("agent_name", f"Agent {agent_id}")
-
-        # Parse JSON-RPC request from body
-        body = await request.json()
-
-        async def stream_response():
-            """Generate Server-Sent Events for streaming response."""
-            try:
-                # Send initial connection event
-                yield f"data: {json.dumps({'type': 'connection', 'status': 'connected', 'agent_id': str(agent_id)})}\n\n"
-
-                # Process the request (simplified for now)
-                if body.get("method") == "message/stream":
-                    # Simulate streaming response
-                    message_text = (
-                        body.get("params", {})
-                        .get("message", {})
-                        .get("parts", [{}])[0]
-                        .get("text", "")
-                    )
-
-                    # Stream response in chunks
-                    response_text = f"{agent_name} received: {message_text}"
-                    words = response_text.split()
-
-                    for i, word in enumerate(words):
-                        chunk_data = {
-                            "type": "text_chunk",
-                            "content": word + " ",
-                            "chunk_index": i,
-                            "total_chunks": len(words),
-                            "agent_id": str(agent_id),
-                        }
-                        yield f"data: {json.dumps(chunk_data)}\n\n"
-                        await asyncio.sleep(0.1)  # Simulate typing delay
-
-                    # Send completion event
-                    completion_data = {
-                        "type": "completion",
-                        "status": "completed",
-                        "agent_id": str(agent_id),
-                        "total_chunks": len(words),
-                    }
-                    yield f"data: {json.dumps(completion_data)}\n\n"
-
-            except Exception as e:
-                error_data = {"type": "error", "error": str(e), "agent_id": str(agent_id)}
-                yield f"data: {json.dumps(error_data)}\n\n"
-
-        return StreamingResponse(
-            stream_response(),
-            media_type="text/plain",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Content-Type": "text/event-stream",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control",
+        # Get agent from service
+        agent = await agent_service.get_agent(agent_id)
+        if not agent:
+            return AgentAuthenticatedExtendedCardResponse(
+                jsonrpc="2.0",
+                id=request_id,
+                error={"code": -32602, "message": f"Agent not found: {agent_id}"}
+            )
+        
+        # Create A2A agent card
+        agent_card = AgentCard(
+            id=str(agent.id),
+            name=agent.name,
+            description=agent.description or "",
+            capabilities=AgentCapabilities(
+                can_send_messages=True,
+                can_receive_messages=True,
+                can_execute_tasks=True,
+                supports_streaming=True,
+            ),
+            endpoints={
+                "a2a_rpc": f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc",
+                "well_known": f"{base_url}/api/v1/agents/{agent_id}/a2a/well-known",
             },
         )
-
-    except HTTPException:
-        raise
+        
+        return AgentAuthenticatedExtendedCardResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            result=agent_card
+        )
+    
     except Exception as e:
-        logger.error(f"Error in streaming endpoint for agent {agent_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Streaming failed")
+        logger.error(f"Error in handle_agent_card: {e}")
+        return AgentAuthenticatedExtendedCardResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            error={"code": -32603, "message": f"Agent card failed: {str(e)}"}
+        )
+
+
+@router.get("/well-known")
+async def get_agent_well_known(
+    agent_id: UUID,
+    auth_context: A2AAuthContext = Depends(allow_public_access),
+    agent_service: AgentService = Depends(get_agent_service),
+) -> AgentCard:
+    """Get agent well-known information (public endpoint)."""
+    try:
+        # Get agent from service
+        agent = await agent_service.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+        
+        # Create A2A agent card
+        agent_card = AgentCard(
+            id=str(agent.id),
+            name=agent.name,
+            description=agent.description or "",
+            capabilities=AgentCapabilities(
+                can_send_messages=True,
+                can_receive_messages=True,
+                can_execute_tasks=True,
+                supports_streaming=True,
+            ),
+            endpoints={
+                "a2a_rpc": f"/api/v1/agents/{agent_id}/a2a/rpc",
+                "well_known": f"/api/v1/agents/{agent_id}/a2a/well-known",
+            },
+        )
+        
+        return agent_card
+    
+    except Exception as e:
+        logger.error(f"Error in get_agent_well_known: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get agent info: {str(e)}")

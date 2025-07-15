@@ -13,7 +13,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Key, Globe, Server, Brain, CheckCircle2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Key, Globe, Brain, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, Search, Check } from 'lucide-react';
+import { getProviderIconUrl, getDefaultProviderIconUrl } from '@/lib/provider-icons';
+import { cn } from '@/lib/utils';
 
 type ProviderSpec = components['schemas']['ProviderSpecResponse'];
 type ModelSpec = {
@@ -53,15 +58,7 @@ export default function ProviderConfigForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
-
-  // Handle case where data is not loaded
-  if (!providerSpecs || !modelSpecs) {
-    return (
-      <div className="text-center py-10">
-        <p className="text-muted-foreground">Loading provider specifications...</p>
-      </div>
-    );
-  }
+  const [open, setOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     provider_spec_id: preselectedProviderId || initialData?.provider_spec_id || '',
@@ -94,6 +91,15 @@ export default function ProviderConfigForm({
       setSelectedModels(allModels);
     }
   }, [selectedProvider, availableModels, isEdit]);
+
+  // Handle case where data is not loaded
+  if (!providerSpecs || !modelSpecs) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-muted-foreground">Loading provider specifications...</p>
+      </div>
+    );
+  }
 
   const handleProviderChange = (providerId: string) => {
     setFormData(prev => ({ ...prev, provider_spec_id: providerId }));
@@ -164,7 +170,7 @@ export default function ProviderConfigForm({
       }
 
       if (providerError || !providerConfig) {
-        const errorMessage = (providerError as any)?.detail?.[0]?.msg || (providerError as any)?.message || 'Unknown error';
+        const errorMessage = (providerError as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg || (providerError as { message?: string })?.message || 'Unknown error';
         throw new Error(`Failed to ${isEdit ? 'update' : 'create'} provider configuration: ${errorMessage}`);
       }
 
@@ -180,7 +186,7 @@ export default function ProviderConfigForm({
           });
           
           if (error || !data) {
-            throw new Error(`Failed to create model instance "${model.instanceName}": ${(error as any)?.message || 'Unknown error'}`);
+            throw new Error(`Failed to create model instance "${model.instanceName}": ${(error as { message?: string })?.message || 'Unknown error'}`);
           }
           
           return data;
@@ -246,21 +252,75 @@ export default function ProviderConfigForm({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="provider">Provider</Label>
-            <select
-              id="provider"
-              value={formData.provider_spec_id}
-              onChange={(e) => handleProviderChange(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-              required
-              disabled={!!preselectedProviderId && !isEdit}
-            >
-              <option value="">Select a provider</option>
-              {providerSpecs.map((provider) => (
-                <option key={provider.id} value={provider.id}>
-                  {provider.name}
-                </option>
-              ))}
-            </select>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={open}
+                  className="w-full justify-between"
+                  disabled={!!preselectedProviderId && !isEdit}
+                >
+                  {selectedProvider ? (
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={getProviderIconUrl(selectedProvider.name) || getDefaultProviderIconUrl()}
+                        alt={selectedProvider.name}
+                        className="w-5 h-5 rounded"
+                        onError={(e) => {
+                          e.currentTarget.src = getDefaultProviderIconUrl();
+                        }}
+                      />
+                      <span>{selectedProvider.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Search providers...</span>
+                    </div>
+                  )}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0">
+                <Command>
+                  <CommandInput placeholder="Search providers..." />
+                  <CommandList>
+                    <CommandEmpty>No providers found.</CommandEmpty>
+                    <CommandGroup>
+                      {providerSpecs.map((provider) => (
+                        <CommandItem
+                          key={provider.id}
+                          value={provider.name}
+                          onSelect={() => {
+                            handleProviderChange(provider.id);
+                            setOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={getProviderIconUrl(provider.name) || getDefaultProviderIconUrl()}
+                              alt={provider.name}
+                              className="w-5 h-5 rounded"
+                              onError={(e) => {
+                                e.currentTarget.src = getDefaultProviderIconUrl();
+                              }}
+                            />
+                            <span>{provider.name}</span>
+                          </div>
+                          <Check
+                            className={cn(
+                              "ml-auto h-4 w-4",
+                              formData.provider_spec_id === provider.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             {preselectedProviderId && !isEdit && (
               <p className="text-sm text-muted-foreground">
                 Provider is pre-selected for this configuration.

@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
 from agentarea_common.events.router import get_event_router
-from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
+from agentarea_secrets import get_real_secret_manager
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import v1_router
 from agentarea_api.api.v1.well_known import router as well_known_router

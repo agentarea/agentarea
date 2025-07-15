@@ -117,7 +117,7 @@ class E2ETemporalTest:
 
     async def _setup_activity_dependencies(self):
         from agentarea_common.events.router import get_event_router
-        from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
+        from agentarea_secrets import get_real_secret_manager
         self.activity_dependencies = ActivityDependencies(
             settings=self.settings,
             event_broker=get_event_router(self.settings.broker),

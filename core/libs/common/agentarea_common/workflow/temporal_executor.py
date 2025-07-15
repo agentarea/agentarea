@@ -171,20 +171,46 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             from agentarea_tasks.workflows.agent_task_workflow import AgentTaskWorkflow
 
             workflow_class = AgentTaskWorkflow.run
+        elif workflow_name == "AgentExecutionWorkflow":
+            from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+
+            workflow_class = AgentExecutionWorkflow.run
         else:
             raise ValueError(f"Unknown workflow: {workflow_name}")
 
         try:
-            # Convert args dict to positional arguments in the correct order
-            # Based on AgentTaskWorkflow.run signature: agent_id, task_id, query, user_id, task_parameters, metadata
-            workflow_args = [
-                args.get("agent_id"),
-                args.get("task_id"),
-                args.get("query"),
-                args.get("user_id", "system"),
-                args.get("task_parameters", {}),
-                args.get("metadata", {}),
-            ]
+            # Convert args dict to positional arguments based on workflow type
+            if workflow_name == "AgentTaskWorkflow":
+                # Based on AgentTaskWorkflow.run signature: agent_id, task_id, query, user_id, task_parameters, metadata
+                workflow_args = [
+                    args.get("agent_id"),
+                    args.get("task_id"),
+                    args.get("query"),
+                    args.get("user_id"),
+                    args.get("task_parameters", {}),
+                    args.get("metadata", {}),
+                ]
+            elif workflow_name == "AgentExecutionWorkflow":
+                # Based on AgentExecutionWorkflow.run signature: takes AgentExecutionRequest
+                from agentarea_execution.models import AgentExecutionRequest
+                from uuid import UUID
+                
+                # Convert string UUIDs back to UUID objects
+                execution_request = AgentExecutionRequest(
+                    task_id=UUID(args["task_id"]),
+                    agent_id=UUID(args["agent_id"]),
+                    user_id=args["user_id"],
+                    task_query=args["task_query"],
+                    task_parameters=args.get("task_parameters", {}),
+                    timeout_seconds=args.get("timeout_seconds", 300),
+                    max_reasoning_iterations=args.get("max_reasoning_iterations", 10),
+                    enable_agent_communication=args.get("enable_agent_communication", False),
+                    requires_human_approval=args.get("requires_human_approval", False),
+                    workflow_metadata=args.get("workflow_metadata", {})
+                )
+                workflow_args = [execution_request]
+            else:
+                workflow_args = [args]
 
             # Add workflow ID reuse policy to handle duplicates gracefully
             temporal_params["id_reuse_policy"] = WorkflowIDReusePolicy.ALLOW_DUPLICATE
