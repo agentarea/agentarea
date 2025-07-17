@@ -72,6 +72,22 @@ class ExecutionService(ExecutionServiceInterface):
         except Exception as e:
             logger.error(f"Failed to cancel execution: {e}")
             return False
+    
+    async def pause_execution(self, execution_id: str) -> bool:
+        """Pause execution via workflow orchestrator."""
+        try:
+            return await self._workflow_orchestrator.pause_workflow(execution_id)
+        except Exception as e:
+            logger.error(f"Failed to pause execution: {e}")
+            return False
+    
+    async def resume_execution(self, execution_id: str) -> bool:
+        """Resume execution via workflow orchestrator."""
+        try:
+            return await self._workflow_orchestrator.resume_workflow(execution_id)
+        except Exception as e:
+            logger.error(f"Failed to resume execution: {e}")
+            return False
 
 
 # Interface for workflow orchestrators
@@ -93,4 +109,14 @@ class WorkflowOrchestratorInterface(ABC):
     @abstractmethod
     async def cancel_workflow(self, execution_id: str) -> bool:
         """Cancel workflow."""
+        pass
+    
+    @abstractmethod
+    async def pause_workflow(self, execution_id: str) -> bool:
+        """Pause workflow execution."""
+        pass
+    
+    @abstractmethod
+    async def resume_workflow(self, execution_id: str) -> bool:
+        """Resume paused workflow execution."""
         pass 

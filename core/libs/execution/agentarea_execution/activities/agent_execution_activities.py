@@ -18,8 +18,8 @@ import litellm
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.config import get_database
-from agentarea_llm.application.service import LLMModelInstanceService
-from agentarea_llm.infrastructure.llm_model_instance_repository import LLMModelInstanceRepository
+from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
 from temporalio import activity
@@ -136,88 +136,88 @@ def make_agent_activities(dependencies: ActivityDependencies):
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Call LLM with messages and optional tools."""
-        # Create fresh session for this activity
-        database = get_database()
-        async with database.async_session_factory() as session:
-            # Create services with this session
-            llm_model_instance_repository = LLMModelInstanceRepository(session)
-            llm_model_instance_service = LLMModelInstanceService(
-                repository=llm_model_instance_repository,
-                event_broker=dependencies.event_broker,
-                secret_manager=dependencies.secret_manager
-            )
-
+        try:
+            # Handle both UUID model instance IDs and direct model names
+            provider_type = None
+            model_type = None
+            api_key = None
+            endpoint_url = None
+            
+            # Try to treat model_id as a UUID first (model instance ID)
             try:
-                # Get model instance
-                model_instance = await llm_model_instance_service.get(UUID(model_id))
-                if not model_instance:
-                    raise ValueError(f"Model instance {model_id} not found")
+                model_uuid = UUID(model_id)
+                # Extract all needed data from model instance before closing session
+                async with get_database().async_session_factory() as session:
+                    model_instance_service = ModelInstanceService(
+                        repository=ModelInstanceRepository(session),
+                        event_broker=dependencies.event_broker,
+                        secret_manager=dependencies.secret_manager
+                    )
+                    model_instance = await model_instance_service.get(model_uuid)
+                    if model_instance:
+                        # Access the new model structure
+                        provider_type = model_instance.provider_config.provider_spec.provider_type
+                        model_type = model_instance.model_spec.model_name
+                        api_key = getattr(model_instance.provider_config, 'api_key', None)
+                        endpoint_url = getattr(model_instance.model_spec, 'endpoint_url', None)
+                    else:
+                        raise ValueError(f"Model instance with ID {model_id} not found")
+            except ValueError:
+                # Not a UUID, treat as direct model name (e.g., "gpt-4", "claude-3")
+                model_type = model_id
+                # For direct model names, we'll let litellm handle the provider detection
+                # This is common for well-known models like gpt-4, claude-3, etc.
 
-                # Construct proper model string for LiteLLM
-                # For legacy models, we need to construct: provider_type/model_type
-                provider_type = model_instance.model.provider.provider_type
-                model_type = model_instance.model.model_type
-
-                # Construct LiteLLM model string
+            # Build litellm parameters with extracted data
+            if provider_type:
                 litellm_model = f"{provider_type}/{model_type}"
+            else:
+                # Direct model name (e.g., "gpt-4", "claude-3")
+                litellm_model = model_type
+            
+            litellm_params = {
+                "model": litellm_model,
+                "messages": messages,
+            }
+            if api_key:
+                litellm_params["api_key"] = api_key
+            if endpoint_url:
+                url = endpoint_url
+                if not url.startswith("http"):
+                    url = f"http://{url}"
+                litellm_params["base_url"] = url
+            if tools:
+                litellm_params["tools"] = tools
+                litellm_params["tool_choice"] = "auto"
+            logger.info(f"Calling LLM with model {litellm_model}")
 
-                # Prepare LiteLLM call parameters
-                litellm_params = {
-                    "model": litellm_model,
-                    "messages": messages,
-                }
+            # TODO: Fix this
+            litellm_params["base_url"] = "http://host.docker.internal:11434"
 
-                # Add API key if available
-                if hasattr(model_instance, 'api_key') and model_instance.api_key:
-                    litellm_params["api_key"] = model_instance.api_key
-
-                # Add endpoint URL if available
-                if model_instance.model.endpoint_url:
-                    url = model_instance.model.endpoint_url
-                    if not url.startswith("http"):
-                        url = f"http://{url}"
-                    litellm_params["base_url"] = url
-
-                # Add tools if provided
-                if tools:
-                    litellm_params["tools"] = tools
-                    litellm_params["tool_choice"] = "auto"
-
-                # Make LLM call
-                logger.info(f"Calling LLM with model {litellm_model}")
-
-
-                # TODO: it's very dirty hack that we need to remove
-                litellm_params["base_url"] = "http://host.docker.internal:11434"
-                response = await litellm.acompletion(**litellm_params)
-
-                # Extract response content
-                message = response.choices[0].message
-                result = {
-                    "content": message.content or "",
-                    "role": message.role,
-                }
-
-                # Handle tool calls if present
-                if hasattr(message, 'tool_calls') and message.tool_calls:
-                    result["tool_calls"] = [
-                        {
-                            "id": tool_call.id,
-                            "type": tool_call.type,
-                            "function": {
-                                "name": tool_call.function.name,
-                                "arguments": tool_call.function.arguments,
-                            }
+            response = await litellm.acompletion(**litellm_params)
+            message = response.choices[0].message
+            result = {
+                "content": message.content or "",
+                "role": message.role,
+            }
+            if hasattr(message, 'tool_calls') and message.tool_calls:
+                result["tool_calls"] = [
+                    {
+                        "id": tool_call.id,
+                        "type": tool_call.type,
+                        "function": {
+                            "name": tool_call.function.name,
+                            "arguments": tool_call.function.arguments,
                         }
-                        for tool_call in message.tool_calls
-                    ]
+                    }
+                    for tool_call in message.tool_calls
+                ]
+            logger.info("LLM call completed successfully")
+            return result
 
-                logger.info("LLM call completed successfully")
-                return result
-
-            except Exception as e:
-                logger.error(f"LLM call failed: {e!s}")
-                raise
+        except Exception as e:
+            logger.error(f"LLM call failed: {e!s}")
+            raise
 
     @activity.defn
     async def execute_mcp_tool_activity(

@@ -71,6 +71,20 @@ export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
   return { data, error };
 };
 
+export const pauseAgentTask = async (agentId: string, taskId: string) => {
+  const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/{task_id}/pause", {
+    params: { path: { agent_id: agentId, task_id: taskId } },
+  });
+  return { data, error };
+};
+
+export const resumeAgentTask = async (agentId: string, taskId: string) => {
+  const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/{task_id}/resume", {
+    params: { path: { agent_id: agentId, task_id: taskId } },
+  });
+  return { data, error };
+};
+
 // Get all tasks across all agents
 export const getAllTasks = async () => {
   try {

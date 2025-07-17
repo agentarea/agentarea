@@ -19,7 +19,7 @@
     "overview": "Overview and quick access to all admin sections",
     "llms": "LLM Models",
     "providers": "Providers",
-    "providerConfigs": "Provider Configs",
+    "providerConfigs": "Models",
     "modelSpecs": "Model Specs",
     "modelInstances": "Model Instances",
     "providerSpecifications": "Provider Specifications",
@@ -35,7 +35,7 @@
         "description": "View AI provider specifications and available models"
       },
       "providerConfigs": {
-        "title": "Provider Configs", 
+        "title": "Models", 
         "description": "Manage API configurations and credentials for AI providers"
       },
       "modelSpecs": {
@@ -48,14 +48,14 @@
     "admin": "Admin",
     "workplace": "Workplace",
     "agents": "Agents",
-    "browse": "Browse",
+    "browse": "Agents",
     "tasks": "Tasks",
     "llms": "LLM Models",
     "llmBrowse": "Browse",
     "mcp": "MCP Servers",
     "connections": "Connections",
     "providers": "Providers",
-    "providerConfigs": "Provider Configs",
+    "providerConfigs": "Models",
     "modelSpecs": "Model Specs",
     "settings": "Settings",
     "logout": "Logout"

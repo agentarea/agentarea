@@ -64,6 +64,16 @@ class ExecutionServiceInterface(ABC):
     async def cancel_execution(self, execution_id: str) -> bool:
         """Cancel execution."""
         pass
+    
+    @abstractmethod
+    async def pause_execution(self, execution_id: str) -> bool:
+        """Pause execution."""
+        pass
+    
+    @abstractmethod
+    async def resume_execution(self, execution_id: str) -> bool:
+        """Resume execution."""
+        pass
 
 
 class WorkflowServiceInterface(ABC):

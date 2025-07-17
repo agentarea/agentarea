@@ -1,7 +1,7 @@
 from uuid import UUID
+from logging import getLogger
 
 from agentarea_common.base.service import BaseCrudService
-from agentarea_common.config import get_database
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
@@ -13,6 +13,7 @@ from agentarea_llm.domain.events import (
 from agentarea_llm.domain.models import LLMModelInstance
 from agentarea_llm.infrastructure.llm_model_instance_repository import LLMModelInstanceRepository
 
+logger = getLogger(__name__)
 
 class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
     def __init__(
@@ -24,7 +25,6 @@ class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
         self.repository = repository
         self.event_broker = event_broker
         self.secret_manager = secret_manager
-        self.db = get_database()  # Add database access
 
     async def create_llm_model_instance(
         self,
@@ -104,6 +104,6 @@ class LLMModelInstanceService(BaseCrudService[LLMModelInstance]):
 
     async def get(self, id: UUID) -> LLMModelInstance | None:
         """Get LLM model instance with separate session to avoid transaction conflicts."""
-        async with self.db.get_db() as session:
-            repo = LLMModelInstanceRepository(session)
-            return await repo.get(id)
+        model_instance = await self.repository.get(id)
+        logger.info(f"Model instance: {model_instance}")
+        return model_instance

@@ -11,7 +11,7 @@ export default function AdminDashboard() {
       color: 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
     },
     {
-      title: 'Provider Configs',
+      title: 'Models',
       description: 'Manage API configurations and credentials for AI providers',
       href: '/admin/provider-configs',
       icon: Key,

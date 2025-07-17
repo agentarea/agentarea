@@ -19,6 +19,11 @@ from pytz import UTC
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_api.api.deps.services import get_agent_service, get_temporal_workflow_service
+from agentarea_api.api.deps.events import EventBrokerDep
+from agentarea_tasks.domain.events import TaskCreated
+from agentarea_tasks.domain.models import TaskCreate
+from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_common.config import get_database
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
@@ -64,6 +69,7 @@ class AgentResponse(BaseModel):
 @router.post("/messages", response_model=ChatResponse)
 async def send_message(
     request: ChatMessageRequest,
+    event_broker: EventBrokerDep,
     agent_service: AgentService = Depends(get_agent_service),
     workflow_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
@@ -84,31 +90,144 @@ async def send_message(
 
         # Generate task and session IDs
         task_id = uuid4()
+        task_id_str = str(task_id)
         session_id = request.session_id or f"chat-{uuid4()}"
 
-        # Start execution via Temporal workflow service - returns immediately!
-        workflow_result = await workflow_service.execute_agent_task_async(
-            agent_id=agent_uuid,
-            task_query=request.content,
-            user_id=request.user_id or "anonymous",
+        # Create task record immediately - this ensures the task is visible in tasks API
+        # Status starts as "pending" to indicate workflow hasn't started yet
+        task_parameters = {
+            "context": request.context or {},
+            "task_type": "chat",
+            "session_id": session_id
+        }
+
+        # Store task in database first
+        database = get_database()
+        async with database.async_session_factory() as session:
+            task_repository = TaskRepository(session)
+            
+            # Create task in database with our specific task_id
+            # We need to modify the repository to accept a specific ID
+            task_create = TaskCreate(
+                agent_id=agent_uuid,
+                description=request.content,
+                parameters=task_parameters,
+                user_id=request.user_id or "anonymous",
+                metadata={
+                    "created_via": "chat",
+                    "agent_name": agent.name,
+                    "session_id": session_id,
+                    "status": "created",
+                    "task_id": task_id_str,  # Store the task ID in metadata for now
+                }
+            )
+            
+            # Store in database
+            stored_task = await task_repository.create(task_create)
+            
+            logger.info(f"Chat task {task_id_str} stored in database for agent {agent_uuid} (DB ID: {stored_task.id})")
+
+        # Create and publish TaskCreated event (for compatibility with existing event listeners)
+        task_created_event = TaskCreated(
+            task_id=task_id_str,
+            agent_id=str(agent_uuid),
+            description=request.content,
+            parameters=task_parameters,
             session_id=session_id,
-            task_parameters={
-                "context": request.context or {},
-                "task_type": "chat"
+            metadata={
+                "created_via": "chat",
+                "agent_name": agent.name,
+                "created_at": datetime.now(UTC).isoformat(),
+                "user_id": request.user_id or "anonymous",
+                "session_id": session_id,
+                "status": "created",  # Initial status
             },
-            timeout_seconds=300,
         )
+
+        # Publish the event to the event broker
+        await event_broker.publish(task_created_event)
+
+        logger.info(f"Chat task {task_id_str} created for agent {agent_uuid}")
+
+        # Now try to execute the workflow - if this fails, the task still exists
+        execution_id = None
+        status = "pending"
         
-        execution_id = workflow_result.get("execution_id", f"task-{task_id}")
+        try:
+            # Start execution via Temporal workflow service - returns immediately!
+            workflow_result = await workflow_service.execute_agent_task_async(
+                agent_id=agent_uuid,
+                task_query=request.content,
+                user_id=request.user_id or "anonymous",
+                session_id=session_id,
+                task_parameters=task_parameters,
+                timeout_seconds=300,
+            )
+            
+            execution_id = workflow_result.get("execution_id", f"agent-task-{task_id}")
+            status = "processing"  # Update status to processing
+
+            logger.info(
+                f"Chat task {task_id_str} started with workflow execution ID "
+                f"{execution_id} for agent {agent_uuid}"
+            )
+
+            # Publish workflow started event
+            workflow_started_event = TaskCreated(
+                task_id=task_id_str,
+                agent_id=str(agent_uuid),
+                description=request.content,
+                parameters=task_parameters,
+                session_id=session_id,
+                metadata={
+                    "created_via": "chat",
+                    "agent_name": agent.name,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "user_id": request.user_id or "anonymous",
+                    "session_id": session_id,
+                    "execution_id": execution_id,
+                    "status": "processing",
+                    "workflow_started": True,
+                },
+            )
+            await event_broker.publish(workflow_started_event)
+
+        except Exception as e:
+            logger.error(f"Failed to start chat task workflow for agent {agent_uuid}: {e}")
+            
+            # Update task status to failed, but still return the task
+            status = "failed"
+            
+            # Publish workflow failed event
+            workflow_failed_event = TaskCreated(
+                task_id=task_id_str,
+                agent_id=str(agent_uuid),
+                description=request.content,
+                parameters=task_parameters,
+                session_id=session_id,
+                metadata={
+                    "created_via": "chat",
+                    "agent_name": agent.name,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "user_id": request.user_id or "anonymous",
+                    "session_id": session_id,
+                    "status": "failed",
+                    "error": str(e),
+                    "workflow_failed": True,
+                },
+            )
+            await event_broker.publish(workflow_failed_event)
+            
+            logger.info(f"Chat task {task_id_str} created but workflow failed to start: {e}")
 
         # Return immediately with task_id - execution happens in background
         return ChatResponse(
-            task_id=str(task_id),
+            task_id=task_id_str,
             content="Message received. Processing...", # Will be updated when complete
             role="assistant", 
             session_id=session_id,
             agent_id=request.agent_id,
-            status="processing", # Frontend will poll for completion
+            status=status, # Will be "processing" or "failed"
             timestamp=datetime.now(UTC).isoformat(),
             execution_id=execution_id, # For tracking workflow
         )

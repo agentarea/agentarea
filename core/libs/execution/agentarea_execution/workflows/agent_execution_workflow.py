@@ -14,7 +14,7 @@ from ..models import AgentExecutionRequest, AgentExecutionResult
 
 class Activities:
     """Activity function references to avoid hardcoded strings."""
-    
+
     build_agent_config = "build_agent_config_activity"
     discover_available_tools = "discover_available_tools_activity" 
     call_llm = "call_llm_activity"
@@ -98,6 +98,8 @@ class AgentExecutionWorkflow:
 
     def __init__(self) -> None:
         self._state: AgentExecutionState | None = None
+        self._is_paused: bool = False
+        self._pause_reason: str = ""
 
     @workflow.run
     async def run(self, request: AgentExecutionRequest) -> AgentExecutionResult:
@@ -139,6 +141,21 @@ class AgentExecutionWorkflow:
 
             # Main execution loop with enhanced control flow
             while not self._should_terminate():
+                # Check if workflow is paused
+                if self._is_paused:
+                    if self._state:
+                        self._state["status"] = "paused"
+                    
+                    # Wait for resume signal
+                    def is_resumed() -> bool:
+                        return not self._is_paused
+                    
+                    await workflow.wait_condition(is_resumed)
+                    
+                    # Update status when resumed
+                    if self._state:
+                        self._state["status"] = ExecutionStatus.EXECUTING.value
+                
                 try:
                     await self._execute_iteration()
                 except ApplicationError:
@@ -628,6 +645,20 @@ Remember to work systematically toward the goal and ask for human approval when 
         }
         self._state["messages"].append(feedback_message)
 
+    @workflow.signal
+    async def pause_execution(self, reason: str = "") -> None:
+        """Handle execution pause signal."""
+        self._is_paused = True
+        self._pause_reason = reason
+        workflow.logger.info(f"Workflow paused: {reason}")
+
+    @workflow.signal
+    async def resume_execution(self, reason: str = "") -> None:
+        """Handle execution resume signal."""
+        self._is_paused = False
+        self._pause_reason = ""
+        workflow.logger.info(f"Workflow resumed: {reason}")
+
     # Query handlers for monitoring
     @workflow.query
     def get_execution_status(self) -> dict[str, Any]:
@@ -647,6 +678,8 @@ Remember to work systematically toward the goal and ask for human approval when 
             "goal_description": self._state["goal"]["description"],
             "requires_approval": self._state["approval_required"],
             "pending_approval": self._state["pending_approval"] is not None,
+            "is_paused": self._is_paused,
+            "pause_reason": self._pause_reason,
         }
 
     @workflow.query

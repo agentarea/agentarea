@@ -66,3 +66,17 @@ class TemporalWorkflowService:
         except Exception as e:
             logger.error(f"Failed to cancel task: {e}")
             return False
+
+    async def pause_task(self, execution_id: str) -> bool:
+        try:
+            return await self._execution_service.pause_execution(execution_id)
+        except Exception as e:
+            logger.error(f"Failed to pause task: {e}")
+            return False
+
+    async def resume_task(self, execution_id: str) -> bool:
+        try:
+            return await self._execution_service.resume_execution(execution_id)
+        except Exception as e:
+            logger.error(f"Failed to resume task: {e}")
+            return False

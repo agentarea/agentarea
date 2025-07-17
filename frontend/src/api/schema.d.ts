@@ -4,95 +4,6 @@
  */
 
 export interface paths {
-    "/v1/protocol/rpc": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Handle Jsonrpc
-         * @description Unified A2A JSON-RPC endpoint.
-         *
-         *     Handles all A2A protocol methods:
-         *     - message/send
-         *     - message/stream
-         *     - tasks/get
-         *     - tasks/cancel
-         *     - agent/authenticatedExtendedCard
-         */
-        post: operations["handle_jsonrpc_v1_protocol_rpc_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/protocol/agents/{agent_id}/card": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Card
-         * @description Get agent card for discovery using real agent service.
-         */
-        get: operations["get_agent_card_v1_protocol_agents__agent_id__card_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/protocol/ag-ui": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Handle Ag Ui Request
-         * @description AG-UI endpoint for CopilotKit integration.
-         *
-         *     Converts A2A protocol events to AG-UI events for frontend consumption.
-         */
-        post: operations["handle_ag_ui_request_v1_protocol_ag_ui_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/protocol/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Health Check
-         * @description Health check for the protocol endpoint.
-         */
-        get: operations["health_check_v1_protocol_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/chat/messages": {
         parameters: {
             query?: never;
@@ -104,9 +15,9 @@ export interface paths {
         put?: never;
         /**
          * Send Message
-         * @description Send a chat message to an agent.
+         * @description Send a chat message to a real agent.
          *
-         *     Unified endpoint that handles both A2A protocol and REST API.
+         *     Returns task_id immediately, executes via Temporal workflow asynchronously.
          */
         post: operations["send_message_v1_chat_messages_post"];
         delete?: never;
@@ -115,60 +26,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/chat/messages/stream": {
+    "/v1/chat/messages/{task_id}/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Stream Message
-         * @description Stream a chat message response from an agent.
+         * Get Message Status
+         * @description Get the status of a chat message task.
          *
-         *     Returns Server-Sent Events (SSE) compatible with A2A protocol.
+         *     Used for long polling - frontend calls this to check if message is complete.
          */
-        post: operations["stream_message_v1_chat_messages_stream_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/chat/conversations/{session_id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Conversation History
-         * @description Get conversation history for a session.
-         */
-        get: operations["get_conversation_history_v1_chat_conversations__session_id__messages_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/chat/conversations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Conversations
-         * @description List all conversations for a user.
-         */
-        get: operations["list_conversations_v1_chat_conversations_get"];
+        get: operations["get_message_status_v1_chat_messages__task_id__status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -186,7 +57,7 @@ export interface paths {
         };
         /**
          * Get Available Agents
-         * @description Get list of available agents.
+         * @description Get list of real agents from database.
          */
         get: operations["get_available_agents_v1_chat_agents_get"];
         put?: never;
@@ -209,26 +80,6 @@ export interface paths {
          * @description Get details for a specific agent.
          */
         get: operations["get_agent_v1_chat_agents__agent_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/chat/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Health Check
-         * @description Health check endpoint.
-         */
-        get: operations["health_check_v1_chat_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -287,6 +138,123 @@ export interface paths {
          * @description Update an agent.
          */
         patch: operations["update_agent_v1_agents__agent_id__patch"];
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/rpc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Handle Agent Jsonrpc
+         * @description A2A JSON-RPC endpoint for agent-specific communication.
+         *
+         *     Handles all A2A protocol methods for a specific agent:
+         *     - message/send
+         *     - message/stream
+         *     - tasks/get
+         *     - tasks/cancel
+         *     - tasks/send
+         *     - agent/authenticatedExtendedCard
+         */
+        post: operations["handle_agent_jsonrpc_v1_agents__agent_id__rpc_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/well-known": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Well Known
+         * @description Get agent well-known information (public endpoint).
+         */
+        get: operations["get_agent_well_known_v1_agents__agent_id__well_known_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/.well-known/agent.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Well Known Card
+         * @description Agent-specific well-known discovery endpoint.
+         *
+         *     Returns the agent card for this specific agent.
+         *     This endpoint can be accessed at: /v1/agents/{agent_id}/.well-known/agent.json
+         *
+         *     This allows each agent to have its own well-known endpoint, which is A2A compliant.
+         *     Later, this can be proxied to subdomains:
+         *     - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+         */
+        get: operations["get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/.well-known/a2a-info.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent A2A Info
+         * @description Agent-specific A2A protocol information.
+         *
+         *     Provides A2A protocol information specific to this agent.
+         */
+        get: operations["get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/.well-known/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Well Known Index
+         * @description Agent-specific well-known endpoints index.
+         */
+        get: operations["get_agent_well_known_index_v1_agents__agent_id___well_known__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/agents/{agent_id}/tasks/": {
@@ -357,6 +325,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agent_id}/tasks/{task_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause Agent Task
+         * @description Pause a specific task workflow for the specified agent.
+         */
+        post: operations["pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/tasks/{task_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Agent Task
+         * @description Resume a paused task workflow for the specified agent.
+         */
+        post: operations["resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/tasks/{task_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Task Events
+         * @description Get paginated task execution events for the specified task.
+         */
+        get: operations["get_task_events_v1_agents__agent_id__tasks__task_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/tasks/{task_id}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Task Events
+         * @description Stream real-time task execution events via Server-Sent Events.
+         */
+        get: operations["stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-servers/": {
         parameters: {
             query?: never;
@@ -369,42 +417,6 @@ export interface paths {
         put?: never;
         /** Create Mcp Server */
         post: operations["create_mcp_server_v1_mcp_servers__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/{server_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Mcp Server */
-        get: operations["get_mcp_server_v1_mcp_servers__server_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Mcp Server */
-        delete: operations["delete_mcp_server_v1_mcp_servers__server_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Mcp Server */
-        patch: operations["update_mcp_server_v1_mcp_servers__server_id__patch"];
-        trace?: never;
-    };
-    "/v1/mcp-servers/{server_id}/deploy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Deploy Mcp Server */
-        post: operations["deploy_mcp_server_v1_mcp_servers__server_id__deploy_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -471,6 +483,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp-servers/{server_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mcp Server */
+        get: operations["get_mcp_server_v1_mcp_servers__server_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Mcp Server */
+        delete: operations["delete_mcp_server_v1_mcp_servers__server_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Mcp Server */
+        patch: operations["update_mcp_server_v1_mcp_servers__server_id__patch"];
+        trace?: never;
+    };
+    "/v1/mcp-servers/{server_id}/deploy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deploy Mcp Server */
+        post: operations["deploy_mcp_server_v1_mcp_servers__server_id__deploy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp-server-instances/": {
         parameters: {
             query?: never;
@@ -483,6 +531,26 @@ export interface paths {
         put?: never;
         /** Create Mcp Server Instance */
         post: operations["create_mcp_server_instance_v1_mcp_server_instances__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Mcp Server Instance Configuration
+         * @description Check if an MCP server instance configuration is valid by validating it through the golang manager.
+         */
+        post: operations["check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -558,6 +626,26 @@ export interface paths {
         put?: never;
         /** Stop Mcp Server Instance */
         post: operations["stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/health/containers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Containers Health
+         * @description Get health status of all MCP containers by proxying to the golang manager.
+         */
+        get: operations["get_containers_health_v1_mcp_server_instances_health_containers_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -878,6 +966,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/.well-known/agent.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Card By Subdomain
+         * @description Standard A2A agent discovery endpoint (RFC 8615).
+         *
+         *     Per A2A specification:
+         *     - Each agent should have its own domain/subdomain (e.g., agent1.yourapp.com)
+         *     - /.well-known/agent.json should return the agent card for that specific domain
+         *     - Multi-agent discovery should be done via external registries, not well-known URIs
+         *
+         *     This implementation supports:
+         *     1. Subdomain-based discovery (recommended)
+         *     2. Query parameter fallback (for development)
+         *     3. Default agent fallback (for single-agent deployments)
+         */
+        get: operations["get_agent_card_by_subdomain__well_known_agent_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/agents.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Registry
+         * @description Multi-agent discovery endpoint (NON-STANDARD EXTENSION).
+         *
+         *     ⚠️  WARNING: This is NOT part of the A2A protocol specification.
+         *     The A2A standard defines /.well-known/agent.json for single-agent discovery.
+         *     Multi-agent discovery should be done via external registries/catalogs.
+         *
+         *     This endpoint is provided for convenience but may not be compatible with
+         *     standard A2A tooling. Use at your own risk.
+         */
+        get: operations["get_agent_registry__well_known_agents_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/a2a-info.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get A2A Info
+         * @description A2A protocol information endpoint.
+         *
+         *     Provides information about A2A protocol support and compliance details.
+         */
+        get: operations["get_a2a_info__well_known_a2a_info_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Well Known Index
+         * @description Index of available well-known endpoints.
+         */
+        get: operations["well_known_index__well_known__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -976,48 +1163,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * AGUIRequest
-         * @description AG-UI request format.
-         */
-        AGUIRequest: {
-            /** Thread Id */
-            thread_id: string;
-            /** Run Id */
-            run_id?: string | null;
-            /** Messages */
-            messages: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Tools
-             * @default []
-             */
-            tools: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Context
-             * @default []
-             */
-            context: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Forwarded Props
-             * @default {}
-             */
-            forwarded_props: {
-                [key: string]: unknown;
-            };
-            /**
-             * State
-             * @default {}
-             */
-            state: {
-                [key: string]: unknown;
-            };
-        };
         /** AgentAuthentication */
         AgentAuthentication: {
             /** Schemes */
@@ -1096,6 +1241,28 @@ export interface components {
             organization: string;
             /** Url */
             url?: string | null;
+        };
+        /**
+         * AgentRegistry
+         * @description Registry of all available agents (NON-STANDARD EXTENSION).
+         */
+        AgentRegistry: {
+            /** Agents */
+            agents: components["schemas"]["AgentCard"][];
+            /** Total Count */
+            total_count: number;
+            /** Discovery Url */
+            discovery_url: string;
+            /**
+             * Version
+             * @default 1.0.0
+             */
+            version: string;
+            /**
+             * Warning
+             * @default This is a non-standard extension to A2A protocol
+             */
+            warning: string;
         };
         /** AgentSkill */
         AgentSkill: {
@@ -1204,34 +1371,11 @@ export interface components {
              * @description Message timestamp
              */
             timestamp: string;
-        };
-        /**
-         * ConversationResponse
-         * @description Response model for conversation history.
-         */
-        ConversationResponse: {
             /**
-             * Session Id
-             * @description Session/conversation ID
+             * Execution Id
+             * @description Temporal execution ID
              */
-            session_id: string;
-            /**
-             * Messages
-             * @description List of messages
-             */
-            messages: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Agent Id
-             * @description Primary agent ID
-             */
-            agent_id?: string | null;
-            /**
-             * Message Count
-             * @description Number of messages
-             */
-            message_count: number;
+            execution_id?: string | null;
         };
         /** EventsConfig */
         EventsConfig: {
@@ -1710,6 +1854,52 @@ export interface components {
              */
             enable_agent_communication: boolean | null;
         };
+        /**
+         * TaskEvent
+         * @description Model for task execution events.
+         */
+        TaskEvent: {
+            /** Id */
+            id: string;
+            /** Task Id */
+            task_id: string;
+            /** Agent Id */
+            agent_id: string;
+            /** Execution Id */
+            execution_id: string;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp: string;
+            /** Event Type */
+            event_type: string;
+            /** Message */
+            message: string;
+            /**
+             * Metadata
+             * @default {}
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * TaskEventResponse
+         * @description Response model for paginated task events.
+         */
+        TaskEventResponse: {
+            /** Events */
+            events: components["schemas"]["TaskEvent"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+        };
         /** TaskResponse */
         TaskResponse: {
             /**
@@ -1879,110 +2069,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    handle_jsonrpc_v1_protocol_rpc_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONRPCResponse"];
-                };
-            };
-        };
-    };
-    get_agent_card_v1_protocol_agents__agent_id__card_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentCard"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_ag_ui_request_v1_protocol_ag_ui_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AGUIRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    health_check_v1_protocol_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     send_message_v1_chat_messages_post: {
         parameters: {
             query?: never;
@@ -2016,78 +2102,13 @@ export interface operations {
             };
         };
     };
-    stream_message_v1_chat_messages_stream_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatMessageRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_conversation_history_v1_chat_conversations__session_id__messages_get: {
+    get_message_status_v1_chat_messages__task_id__status_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                session_id: string;
+                task_id: string;
             };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_conversations_v1_chat_conversations_get: {
-        parameters: {
-            query?: {
-                /** @description Filter by user ID */
-                user_id?: string | null;
-            };
-            header?: never;
-            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -2159,26 +2180,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    health_check_v1_chat_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -2320,6 +2321,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_agent_jsonrpc_v1_agents__agent_id__rpc_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JSONRPCResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_well_known_v1_agents__agent_id__well_known_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_well_known_index_v1_agents__agent_id___well_known__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -2495,6 +2655,141 @@ export interface operations {
             };
         };
     };
+    pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_events_v1_agents__agent_id__tasks__task_id__events_get: {
+        parameters: {
+            query?: {
+                /** @description Page number */
+                page?: number;
+                /** @description Number of events per page */
+                page_size?: number;
+                /** @description Filter by event type */
+                event_type?: string | null;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskEventResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_mcp_servers_v1_mcp_servers__get: {
         parameters: {
             query?: {
@@ -2540,6 +2835,96 @@ export interface operations {
                 "application/json": components["schemas"]["MCPServerCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPServerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mcp_server_templates_v1_mcp_servers_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
+    get_mcp_server_template_v1_mcp_servers_templates__template_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post: {
+        parameters: {
+            query: {
+                server_name: string;
+                server_description?: string;
+                version?: string;
+            };
+            header?: never;
+            path: {
+                template_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -2689,96 +3074,6 @@ export interface operations {
             };
         };
     };
-    get_mcp_server_templates_v1_mcp_servers_templates_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-        };
-    };
-    get_mcp_server_template_v1_mcp_servers_templates__template_key__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post: {
-        parameters: {
-            query: {
-                server_name: string;
-                server_description?: string;
-                version?: string;
-            };
-            header?: never;
-            path: {
-                template_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_mcp_server_instances_v1_mcp_server_instances__get: {
         parameters: {
             query?: never;
@@ -2819,6 +3114,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPServerInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -3018,6 +3348,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_containers_health_v1_mcp_server_instances_health_containers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -3723,6 +4073,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_card_by_subdomain__well_known_agent_json_get: {
+        parameters: {
+            query?: {
+                /** @description Specific agent ID to discover */
+                agent_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_registry__well_known_agents_json_get: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of agents to return */
+                limit?: number;
+                /** @description Number of agents to skip */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRegistry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_a2a_info__well_known_a2a_info_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    well_known_index__well_known__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

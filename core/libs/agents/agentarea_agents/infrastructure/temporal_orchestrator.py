@@ -205,6 +205,42 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             logger.error(f"Failed to cancel workflow: {e}")
             return False
     
+    async def pause_workflow(self, execution_id: str) -> bool:
+        """Pause Temporal workflow using signals."""
+        client = await self._get_client()
+        
+        if not client:
+            logger.info(f"Simulated pause of workflow: {execution_id}")
+            return await self._simulate_workflow_pause(execution_id)
+        
+        try:
+            handle = client.get_workflow_handle(execution_id)
+            await handle.signal("pause_execution", "User requested pause")
+            logger.info(f"Paused Temporal workflow: {execution_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to pause workflow: {e}")
+            return False
+    
+    async def resume_workflow(self, execution_id: str) -> bool:
+        """Resume Temporal workflow using signals."""
+        client = await self._get_client()
+        
+        if not client:
+            logger.info(f"Simulated resume of workflow: {execution_id}")
+            return await self._simulate_workflow_resume(execution_id)
+        
+        try:
+            handle = client.get_workflow_handle(execution_id)
+            await handle.signal("resume_execution", "User requested resume")
+            logger.info(f"Resumed Temporal workflow: {execution_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to resume workflow: {e}")
+            return False
+    
     async def _simulate_workflow_start(self, execution_id: str, request: ExecutionRequest) -> Dict[str, Any]:
         """Simulate workflow start when Temporal is not available."""
         logger.info(f"Simulating workflow start: {execution_id}")
@@ -274,4 +310,64 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             "status": "running",
             "success": None,
             "result": None,
-        } 
+        }
+    
+    async def _simulate_workflow_pause(self, execution_id: str) -> bool:
+        """Simulate workflow pause."""
+        import os
+        import json
+        
+        state_file = f"/tmp/agentarea_workflows/{execution_id}.json"
+        
+        if not os.path.exists(state_file):
+            logger.warning(f"Cannot pause workflow {execution_id}: state file not found")
+            return False
+        
+        try:
+            with open(state_file, 'r') as f:
+                state_data = json.load(f)
+            
+            state_data["status"] = "paused"
+            state_data["paused_at"] = datetime.now().isoformat()
+            
+            with open(state_file, 'w') as f:
+                json.dump(state_data, f)
+            
+            logger.info(f"Simulated pause of workflow: {execution_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to simulate workflow pause: {e}")
+            return False
+    
+    async def _simulate_workflow_resume(self, execution_id: str) -> bool:
+        """Simulate workflow resume."""
+        import os
+        import json
+        
+        state_file = f"/tmp/agentarea_workflows/{execution_id}.json"
+        
+        if not os.path.exists(state_file):
+            logger.warning(f"Cannot resume workflow {execution_id}: state file not found")
+            return False
+        
+        try:
+            with open(state_file, 'r') as f:
+                state_data = json.load(f)
+            
+            if state_data.get("status") != "paused":
+                logger.warning(f"Cannot resume workflow {execution_id}: not in paused state")
+                return False
+            
+            state_data["status"] = "running"
+            state_data["resumed_at"] = datetime.now().isoformat()
+            
+            with open(state_file, 'w') as f:
+                json.dump(state_data, f)
+            
+            logger.info(f"Simulated resume of workflow: {execution_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to simulate workflow resume: {e}")
+            return False 

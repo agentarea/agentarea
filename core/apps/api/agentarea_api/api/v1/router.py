@@ -24,6 +24,7 @@ v1_router.include_router(chat.router)
 # Include core API routers
 v1_router.include_router(agents.router)
 v1_router.include_router(agents_tasks.router)
+v1_router.include_router(agents_tasks.global_tasks_router)
 v1_router.include_router(mcp_servers_specifications.router)
 v1_router.include_router(mcp_server_instances.router)
 

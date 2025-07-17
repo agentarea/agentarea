@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import {
@@ -13,6 +13,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
+  Search,
+  Filter,
+  X,
 } from "lucide-react";
 import {
   Table,
@@ -24,12 +27,20 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getAllTasks, type TaskResponse } from "@/lib/api";
 
 // Enhanced task type with agent information
 interface TaskWithAgent extends TaskResponse {
   agent_name?: string;
-  agent_description?: string;
+  agent_description?: string | null;
 }
 
 const statusIcons = {
@@ -42,17 +53,44 @@ const statusIcons = {
   paused: <AlertTriangle className="h-5 w-5 text-yellow-500" />
 };
 
+// Define all possible task statuses
+const TASK_STATUSES = [
+  "running",
+  "completed", 
+  "success",
+  "failed",
+  "error",
+  "paused",
+  "pending",
+  "cancelled"
+] as const;
+
 export default function TasksPage() {
   const [activeTab, setActiveTab] = useState("active");
   const [tasks, setTasks] = useState<TaskWithAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Filter states with URL persistence
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
 
   // Load tasks on mount
   useEffect(() => {
     loadTasks();
   }, []);
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("search", searchQuery);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    
+    const newUrl = params.toString() ? `?${params.toString()}` : "";
+    router.replace(`/agents/tasks${newUrl}`, { scroll: false });
+  }, [searchQuery, statusFilter, router]);
 
   const loadTasks = async () => {
     try {
@@ -65,7 +103,7 @@ export default function TasksPage() {
       } else {
         setTasks(tasksData || []);
       }
-    } catch (err) {
+    } catch {
       setError("Failed to load tasks");
     } finally {
       setLoading(false);
@@ -80,14 +118,44 @@ export default function TasksPage() {
     router.push(`/agents/tasks/${id}`);
   };
 
-  // Filter tasks by status
-  const activeTasks = tasks.filter(task => 
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+  };
+
+  // Filter tasks based on search query and status filter
+  const filteredTasks = useMemo(() => {
+    let filtered = tasks;
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(task => 
+        task.description.toLowerCase().includes(query) ||
+        (task.agent_name && task.agent_name.toLowerCase().includes(query))
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(task => task.status === statusFilter);
+    }
+
+    return filtered;
+  }, [tasks, searchQuery, statusFilter]);
+
+  // Filter tasks by tab (active vs completed) from the filtered results
+  const activeTasks = filteredTasks.filter(task => 
     task.status === "running" || task.status === "paused" || task.status === "error"
   );
   
-  const completedTasks = tasks.filter(task => 
+  const completedTasks = filteredTasks.filter(task => 
     task.status === "completed" || task.status === "success" || task.status === "failed"
   );
+
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery.trim() !== "" || statusFilter !== "all";
 
   return (
     <ContentBlock
@@ -132,10 +200,64 @@ export default function TasksPage() {
       }}
     >
       <>
+      {/* Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tasks by description or agent name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {TASK_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              className="gap-1"
+            >
+              <X className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
+        </div>
+      </div>
+
       <Tabs defaultValue="active" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-6">
-          <TabsTrigger value="active">Active Tasks</TabsTrigger>
-          <TabsTrigger value="completed">Completed Tasks</TabsTrigger>
+          <TabsTrigger value="active">
+            Active Tasks
+            {activeTasks.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {activeTasks.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="completed">
+            Completed Tasks
+            {completedTasks.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {completedTasks.length}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="active">
@@ -154,14 +276,29 @@ export default function TasksPage() {
             </div>
           ) : activeTasks.length === 0 ? (
             <div className="text-center py-10">
-              <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">No active tasks</h3>
-              <p className="text-muted-foreground mb-4">
-                There are currently no active tasks running. Create a new task to get started.
-              </p>
-              <Button onClick={() => router.push('/agents/create')}>
-                Deploy New Agent
-              </Button>
+              {hasActiveFilters ? (
+                <>
+                  <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No matching active tasks</h3>
+                  <p className="text-muted-foreground mb-4">
+                    No active tasks match your current filters. Try adjusting your search or status filter.
+                  </p>
+                  <Button onClick={clearFilters} variant="outline">
+                    Clear Filters
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No active tasks</h3>
+                  <p className="text-muted-foreground mb-4">
+                    There are currently no active tasks running. Create a new task to get started.
+                  </p>
+                  <Button onClick={() => router.push('/agents/create')}>
+                    Deploy New Agent
+                  </Button>
+                </>
+              )}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -243,11 +380,26 @@ export default function TasksPage() {
             </div>
           ) : completedTasks.length === 0 ? (
             <div className="text-center py-10">
-              <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">No completed tasks</h3>
-              <p className="text-muted-foreground">
-                Completed tasks will appear here once they finish execution.
-              </p>
+              {hasActiveFilters ? (
+                <>
+                  <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No matching completed tasks</h3>
+                  <p className="text-muted-foreground mb-4">
+                    No completed tasks match your current filters. Try adjusting your search or status filter.
+                  </p>
+                  <Button onClick={clearFilters} variant="outline">
+                    Clear Filters
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No completed tasks</h3>
+                  <p className="text-muted-foreground">
+                    Completed tasks will appear here once they finish execution.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="rounded-md border">
