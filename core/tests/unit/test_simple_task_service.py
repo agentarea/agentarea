@@ -42,17 +42,30 @@ class MockEventBroker:
         self.published_events.append(event)
 
 
-class MockAgentRunnerService:
-    """Mock agent runner service for testing."""
+class MockTaskManager:
+    """Mock task manager for testing."""
     
     def __init__(self):
-        self.execution_calls = []
+        self.submitted_tasks = []
+        self.cancelled_tasks = []
     
-    async def run_agent_task(self, **kwargs):
-        self.execution_calls.append(kwargs)
-        # Simulate successful execution
-        yield {"event_type": "TaskStatusChanged", "new_status": "working"}
-        yield {"event_type": "TaskCompleted", "result": {"answer": "Task completed successfully"}}
+    async def submit_task(self, task: SimpleTask) -> SimpleTask:
+        self.submitted_tasks.append(task)
+        task.status = "running"
+        return task
+    
+    async def cancel_task(self, task_id) -> bool:
+        self.cancelled_tasks.append(task_id)
+        return True
+    
+    async def get_task_status(self, task_id) -> str:
+        return "running"
+    
+    async def get_task_result(self, task_id):
+        return {"answer": "Task completed successfully"}
+    
+    async def list_tasks(self, **filters) -> list[SimpleTask]:
+        return self.submitted_tasks
 
 
 @pytest.fixture
@@ -60,12 +73,12 @@ def task_service():
     """Create a TaskService instance with mocked dependencies."""
     repository = MockTaskRepository()
     event_broker = MockEventBroker()
-    agent_runner = MockAgentRunnerService()
+    task_manager = MockTaskManager()
     
     return TaskService(
         task_repository=repository,
         event_broker=event_broker,
-        agent_runner_service=agent_runner,
+        task_manager=task_manager,
     )
 
 
@@ -74,7 +87,7 @@ async def test_create_task(task_service):
     """Test creating a simple task."""
     agent_id = uuid4()
     
-    task = await task_service.create_task(
+    task = await task_service.create_task_from_params(
         title="Test Task",
         description="This is a test task",
         query="What is 2+2?",
@@ -99,7 +112,7 @@ async def test_get_task(task_service):
     agent_id = uuid4()
     
     # Create a task
-    created_task = await task_service.create_task(
+    created_task = await task_service.create_task_from_params(
         title="Test Task",
         description="Test description",
         query="Test query",
@@ -121,7 +134,7 @@ async def test_get_user_tasks(task_service):
     agent_id = uuid4()
     
     # Create tasks for different users
-    await task_service.create_task(
+    await task_service.create_task_from_params(
         title="User 1 Task 1",
         description="Description 1",
         query="Query 1",
@@ -129,7 +142,7 @@ async def test_get_user_tasks(task_service):
         agent_id=agent_id,
     )
     
-    await task_service.create_task(
+    await task_service.create_task_from_params(
         title="User 1 Task 2",
         description="Description 2",
         query="Query 2",
@@ -137,7 +150,7 @@ async def test_get_user_tasks(task_service):
         agent_id=agent_id,
     )
     
-    await task_service.create_task(
+    await task_service.create_task_from_params(
         title="User 2 Task 1",
         description="Description 3",
         query="Query 3",
@@ -159,7 +172,7 @@ async def test_get_agent_tasks(task_service):
     agent2_id = uuid4()
     
     # Create tasks for different agents
-    await task_service.create_task(
+    await task_service.create_task_from_params(
         title="Agent 1 Task 1",
         description="Description 1",
         query="Query 1",
@@ -167,7 +180,7 @@ async def test_get_agent_tasks(task_service):
         agent_id=agent1_id,
     )
     
-    await task_service.create_task(
+    await task_service.create_task_from_params(
         title="Agent 1 Task 2",
         description="Description 2",
         query="Query 2",
@@ -175,7 +188,7 @@ async def test_get_agent_tasks(task_service):
         agent_id=agent1_id,
     )
     
-    await task_service.create_task(
+    await task_service.create_task_from_params(
         title="Agent 2 Task 1",
         description="Description 3",
         query="Query 3",
@@ -206,16 +219,14 @@ async def test_create_and_execute_task(task_service):
         events.append(event)
     
     # Check that we received the expected events
-    assert len(events) == 2
-    assert events[0]["event_type"] == "TaskStatusChanged"
-    assert events[0]["new_status"] == "working"
-    assert events[1]["event_type"] == "TaskCompleted"
-    assert events[1]["result"]["answer"] == "Task completed successfully"
+    assert len(events) >= 1
+    assert events[0]["event_type"] == "TaskStarted"
+    assert "task_id" in events[0]
     
-    # Check that the agent runner was called correctly
-    mock_agent_runner = task_service.agent_runner_service
-    assert len(mock_agent_runner.execution_calls) == 1
-    call = mock_agent_runner.execution_calls[0]
-    assert call["agent_id"] == agent_id
-    assert call["user_id"] == "user123"
-    assert call["query"] == "Execute this test" 
+    # Check that the task manager was called correctly
+    mock_task_manager = task_service.task_manager
+    assert len(mock_task_manager.submitted_tasks) >= 1
+    submitted_task = mock_task_manager.submitted_tasks[-1]
+    assert submitted_task.agent_id == agent_id
+    assert submitted_task.user_id == "user123"
+    assert submitted_task.query == "Execute this test" 

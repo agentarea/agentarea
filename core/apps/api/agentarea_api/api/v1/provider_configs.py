@@ -36,7 +36,7 @@ class ProviderConfigResponse(BaseModel):
     is_public: bool
     created_at: datetime
     updated_at: datetime
-    
+
     # Related data
     provider_spec_name: str | None = None
     provider_spec_key: str | None = None
@@ -140,19 +140,20 @@ async def get_provider_logo(
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Get provider logo via admin route pattern."""
-    from fastapi.responses import FileResponse
     import os
-    
+
+    from fastapi.responses import FileResponse
+
     # Map provider key to icon file
     icon_path = f"core/static/icons/providers/{provider_key.lower()}.svg"
-    
+
     if os.path.exists(icon_path):
         return FileResponse(
             icon_path,
             media_type="image/svg+xml",
             headers={"Cache-Control": "public, max-age=3600"}
         )
-    
+
     # Return default icon if specific one doesn't exist
     default_path = "core/static/icons/providers/default.svg"
     if os.path.exists(default_path):
@@ -161,5 +162,5 @@ async def get_provider_logo(
             media_type="image/svg+xml",
             headers={"Cache-Control": "public, max-age=3600"}
         )
-    
-    raise HTTPException(status_code=404, detail="Provider logo not found") 
+
+    raise HTTPException(status_code=404, detail="Provider logo not found")

@@ -140,7 +140,7 @@ export interface paths {
         patch: operations["update_agent_v1_agents__agent_id__patch"];
         trace?: never;
     };
-    "/v1/agents/{agent_id}/rpc": {
+    "/v1/agents/{agent_id}/a2a/rpc": {
         parameters: {
             query?: never;
             header?: never;
@@ -161,14 +161,14 @@ export interface paths {
          *     - tasks/send
          *     - agent/authenticatedExtendedCard
          */
-        post: operations["handle_agent_jsonrpc_v1_agents__agent_id__rpc_post"];
+        post: operations["handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/agents/{agent_id}/well-known": {
+    "/v1/agents/{agent_id}/a2a/well-known": {
         parameters: {
             query?: never;
             header?: never;
@@ -179,7 +179,7 @@ export interface paths {
          * Get Agent Well Known
          * @description Get agent well-known information (public endpoint).
          */
-        get: operations["get_agent_well_known_v1_agents__agent_id__well_known_get"];
+        get: operations["get_agent_well_known_v1_agents__agent_id__a2a_well_known_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -397,6 +397,26 @@ export interface paths {
          * @description Stream real-time task execution events via Server-Sent Events.
          */
         get: operations["stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get All Tasks
+         * @description Get all tasks across all agents with optional filtering.
+         */
+        get: operations["get_all_tasks_v1_tasks__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -966,105 +986,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/.well-known/agent.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Card By Subdomain
-         * @description Standard A2A agent discovery endpoint (RFC 8615).
-         *
-         *     Per A2A specification:
-         *     - Each agent should have its own domain/subdomain (e.g., agent1.yourapp.com)
-         *     - /.well-known/agent.json should return the agent card for that specific domain
-         *     - Multi-agent discovery should be done via external registries, not well-known URIs
-         *
-         *     This implementation supports:
-         *     1. Subdomain-based discovery (recommended)
-         *     2. Query parameter fallback (for development)
-         *     3. Default agent fallback (for single-agent deployments)
-         */
-        get: operations["get_agent_card_by_subdomain__well_known_agent_json_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/.well-known/agents.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Registry
-         * @description Multi-agent discovery endpoint (NON-STANDARD EXTENSION).
-         *
-         *     ⚠️  WARNING: This is NOT part of the A2A protocol specification.
-         *     The A2A standard defines /.well-known/agent.json for single-agent discovery.
-         *     Multi-agent discovery should be done via external registries/catalogs.
-         *
-         *     This endpoint is provided for convenience but may not be compatible with
-         *     standard A2A tooling. Use at your own risk.
-         */
-        get: operations["get_agent_registry__well_known_agents_json_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/.well-known/a2a-info.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get A2A Info
-         * @description A2A protocol information endpoint.
-         *
-         *     Provides information about A2A protocol support and compliance details.
-         */
-        get: operations["get_a2a_info__well_known_a2a_info_json_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/.well-known/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Well Known Index
-         * @description Index of available well-known endpoints.
-         */
-        get: operations["well_known_index__well_known__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/": {
         parameters: {
             query?: never;
@@ -1241,28 +1162,6 @@ export interface components {
             organization: string;
             /** Url */
             url?: string | null;
-        };
-        /**
-         * AgentRegistry
-         * @description Registry of all available agents (NON-STANDARD EXTENSION).
-         */
-        AgentRegistry: {
-            /** Agents */
-            agents: components["schemas"]["AgentCard"][];
-            /** Total Count */
-            total_count: number;
-            /** Discovery Url */
-            discovery_url: string;
-            /**
-             * Version
-             * @default 1.0.0
-             */
-            version: string;
-            /**
-             * Warning
-             * @default This is a non-standard extension to A2A protocol
-             */
-            warning: string;
         };
         /** AgentSkill */
         AgentSkill: {
@@ -1932,6 +1831,43 @@ export interface components {
             /** Execution Id */
             execution_id?: string | null;
         };
+        /**
+         * TaskWithAgent
+         * @description Task response with agent information for global task listing.
+         */
+        TaskWithAgent: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Name */
+            agent_name: string;
+            /** Description */
+            description: string;
+            /** Parameters */
+            parameters: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Execution Id */
+            execution_id?: string | null;
+        };
         /** ToolsConfig */
         ToolsConfig: {
             /** Mcp Server Configs */
@@ -2334,7 +2270,7 @@ export interface operations {
             };
         };
     };
-    handle_agent_jsonrpc_v1_agents__agent_id__rpc_post: {
+    handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2365,7 +2301,7 @@ export interface operations {
             };
         };
     };
-    get_agent_well_known_v1_agents__agent_id__well_known_get: {
+    get_agent_well_known_v1_agents__agent_id__a2a_well_known_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2495,7 +2431,14 @@ export interface operations {
     };
     list_agent_tasks_v1_agents__agent_id__tasks__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by task status */
+                status?: string | null;
+                /** @description Maximum number of tasks to return */
+                limit?: number;
+                /** @description Number of tasks to skip */
+                offset?: number;
+            };
             header?: never;
             path: {
                 agent_id: string;
@@ -2777,6 +2720,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_all_tasks_v1_tasks__get: {
+        parameters: {
+            query?: {
+                /** @description Filter by task status */
+                status?: string | null;
+                /** @description Maximum number of tasks to return */
+                limit?: number;
+                /** @description Number of tasks to skip */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskWithAgent"][];
                 };
             };
             /** @description Validation Error */
@@ -4073,116 +4052,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_card_by_subdomain__well_known_agent_json_get: {
-        parameters: {
-            query?: {
-                /** @description Specific agent ID to discover */
-                agent_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentCard"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_registry__well_known_agents_json_get: {
-        parameters: {
-            query?: {
-                /** @description Maximum number of agents to return */
-                limit?: number;
-                /** @description Number of agents to skip */
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentRegistry"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_a2a_info__well_known_a2a_info_json_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    well_known_index__well_known__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
         };

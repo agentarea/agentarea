@@ -3,19 +3,17 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from agentarea_common.di.container import DIContainer, register_singleton, get_container
+from agentarea_common.di.container import DIContainer, get_container, register_singleton
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.events.router import get_event_router
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_secrets import get_real_secret_manager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
-from agentarea_common.events.router import get_event_router
-from agentarea_secrets import get_real_secret_manager
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import v1_router
-from agentarea_api.api.v1.well_known import router as well_known_router
-from agentarea_api.startup import startup_event
 
 container = DIContainer()
 
@@ -23,9 +21,9 @@ container = DIContainer()
 async def initialize_services():
     """Initialize real services instead of test mocks."""
     try:
-        from agentarea_common.events.router import create_event_broker_from_router
         from agentarea_common.config import get_settings
-        
+        from agentarea_common.events.router import create_event_broker_from_router
+
         settings = get_settings()
         event_router = get_event_router(settings.broker)
         event_broker = create_event_broker_from_router(event_router)
@@ -88,9 +86,6 @@ def create_app() -> FastAPI:
     # Include API router
     app.include_router(v1_router)
     app.include_router(events_router)
-    
-    # Include well-known endpoints for A2A agent discovery (at root level)
-    app.include_router(well_known_router)
 
     return app
 

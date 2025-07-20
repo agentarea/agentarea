@@ -6,7 +6,6 @@ delegates to the TaskService for actual task management.
 """
 
 import logging
-from typing import Any, Dict
 from uuid import UUID
 
 from a2a.types import (
@@ -21,19 +20,19 @@ from a2a.types import (
     TextPart,
 )
 
-from agentarea_tasks.task_service import TaskService
 from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.task_service import TaskService
 
 logger = logging.getLogger(__name__)
 
 
 class A2ATaskBridge:
     """Bridge between A2A protocol and internal TaskService."""
-    
+
     def __init__(self, task_service: TaskService):
         """Initialize with TaskService dependency."""
         self.task_service = task_service
-    
+
     async def on_send_task(self, request: SendMessageRequest) -> SendMessageResponse:
         """Handle A2A task send request."""
         try:
@@ -43,21 +42,21 @@ class A2ATaskBridge:
             session_id = params.session_id
             message = params.message
             metadata = params.metadata or {}
-            
+
             # Extract agent_id from metadata
             agent_id_str = metadata.get("agent_id")
             if not agent_id_str:
                 raise ValueError("agent_id is required in metadata")
-            
+
             agent_id = UUID(agent_id_str)
-            
+
             # Extract text from message parts
             text_content = ""
             if message.parts:
                 for part in message.parts:
                     if isinstance(part, TextPart):
                         text_content += part.text
-            
+
             # Create internal task
             task = SimpleTask(
                 title=f"A2A Task {task_id}",
@@ -72,10 +71,10 @@ class A2ATaskBridge:
                 },
                 status="submitted",
             )
-            
+
             # Submit task through TaskService
             submitted_task = await self.task_service.submit_task(task)
-            
+
             # Create A2A response
             task_result = TaskResult(
                 id=str(submitted_task.id),
@@ -85,31 +84,31 @@ class A2ATaskBridge:
                 artifacts=[],
                 usage_metadata={},
             )
-            
+
             return SendMessageResponse(
                 id=request.id,
                 result=task_result,
             )
-            
+
         except Exception as e:
             logger.error(f"Error in A2A task send: {e}", exc_info=True)
             return SendMessageResponse(
                 id=request.id,
                 error={
                     "code": -32603,
-                    "message": f"Internal error: {str(e)}",
+                    "message": f"Internal error: {e!s}",
                     "data": None,
                 },
             )
-    
+
     async def on_get_task(self, request: GetTaskRequest) -> GetTaskResponse:
         """Handle A2A task get request."""
         try:
             task_id = UUID(request.params.id)
-            
+
             # Get task from TaskService
             task = await self.task_service.get_task(task_id)
-            
+
             if not task:
                 return GetTaskResponse(
                     id=request.id,
@@ -119,7 +118,7 @@ class A2ATaskBridge:
                         "data": None,
                     },
                 )
-            
+
             # Convert to A2A Task format
             a2a_task = Task(
                 id=str(task.id),
@@ -129,31 +128,31 @@ class A2ATaskBridge:
                 artifacts=task.result.get("artifacts", []) if task.result else [],
                 usage_metadata=task.result.get("usage_metadata", {}) if task.result else {},
             )
-            
+
             return GetTaskResponse(
                 id=request.id,
                 result=a2a_task,
             )
-            
+
         except Exception as e:
             logger.error(f"Error in A2A task get: {e}", exc_info=True)
             return GetTaskResponse(
                 id=request.id,
                 error={
                     "code": -32603,
-                    "message": f"Internal error: {str(e)}",
+                    "message": f"Internal error: {e!s}",
                     "data": None,
                 },
             )
-    
+
     async def on_cancel_task(self, request: CancelTaskRequest) -> CancelTaskResponse:
         """Handle A2A task cancel request."""
         try:
             task_id = UUID(request.params.id)
-            
+
             # Cancel task through TaskService
             success = await self.task_service.cancel_task(task_id)
-            
+
             if success:
                 return CancelTaskResponse(
                     id=request.id,
@@ -168,14 +167,14 @@ class A2ATaskBridge:
                         "data": None,
                     },
                 )
-                
+
         except Exception as e:
             logger.error(f"Error in A2A task cancel: {e}", exc_info=True)
             return CancelTaskResponse(
                 id=request.id,
                 error={
                     "code": -32603,
-                    "message": f"Internal error: {str(e)}",
+                    "message": f"Internal error: {e!s}",
                     "data": None,
                 },
-            ) 
+            )

@@ -52,7 +52,7 @@ from fastapi.responses import StreamingResponse
 logger = logging.getLogger(__name__)
 
 # Create subrouter for A2A protocol endpoints
-router = APIRouter()
+router = APIRouter(prefix="/a2a")
 
 
 @router.post("/rpc")
@@ -128,7 +128,7 @@ async def handle_agent_jsonrpc(
 
 # A2A Protocol Helper Functions
 
-def convert_a2a_message_to_task(message_params: MessageSendParams, agent_id: UUID) -> SimpleTask:
+def convert_a2a_message_to_task(message_params: MessageSendParams, agent_id: UUID, task_id: str = None) -> SimpleTask:
     """Convert A2A message parameters to internal SimpleTask format."""
     # Extract message content
     message_content = ""
@@ -139,7 +139,7 @@ def convert_a2a_message_to_task(message_params: MessageSendParams, agent_id: UUI
     
     # Create task from A2A message
     task = SimpleTask(
-        id=UUID(message_params.id) if message_params.id else uuid4(),
+        id=UUID(task_id) if task_id else uuid4(),
         title=f"A2A Message Task",
         description=f"Task created from A2A message",
         query=message_content,
@@ -228,12 +228,25 @@ async def handle_message_send(
         
         # Create MessageSendParams
         message_params = MessageSendParams(
-            id=params.get("id", str(uuid4())),
             message=message
         )
         
-        # Use the same logic as handle_task_send
-        return await handle_task_send(request_id, message_params.dict(), task_service, agent_id)
+        # Convert A2A message to internal task with a new UUID
+        task = convert_a2a_message_to_task(message_params, agent_id)
+        
+        # Submit task through task service
+        created_task = await task_service.submit_task(task)
+        
+        # Return A2A response
+        return SendMessageResponse(
+            jsonrpc="2.0",
+            id=request_id,
+            result={
+                "id": str(created_task.id),
+                "status": created_task.status,
+                "message": "Task submitted successfully"
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error in handle_message_send: {e}")
@@ -403,7 +416,7 @@ async def handle_agent_card(
     """Handle agent/authenticatedExtendedCard RPC method."""
     try:
         # Get agent from service
-        agent = await agent_service.get_agent(agent_id)
+        agent = await agent_service.get(agent_id)
         if not agent:
             return AgentAuthenticatedExtendedCardResponse(
                 jsonrpc="2.0",
@@ -412,20 +425,28 @@ async def handle_agent_card(
             )
         
         # Create A2A agent card
+        from agentarea_common.utils.types import AgentProvider, AgentSkill
+        
         agent_card = AgentCard(
-            id=str(agent.id),
             name=agent.name,
             description=agent.description or "",
+            url=f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc",
+            version="1.0.0",
+            provider=AgentProvider(organization="AgentArea"),
             capabilities=AgentCapabilities(
-                can_send_messages=True,
-                can_receive_messages=True,
-                can_execute_tasks=True,
-                supports_streaming=True,
+                streaming=True,
+                push_notifications=False,
+                state_transition_history=True,
             ),
-            endpoints={
-                "a2a_rpc": f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc",
-                "well_known": f"{base_url}/api/v1/agents/{agent_id}/a2a/well-known",
-            },
+            skills=[
+                AgentSkill(
+                    id="text-processing",
+                    name="Text Processing",
+                    description=f"Process and respond to text messages using {agent.name}",
+                    input_modes=["text"],
+                    output_modes=["text"],
+                )
+            ],
         )
         
         return AgentAuthenticatedExtendedCardResponse(
@@ -452,25 +473,33 @@ async def get_agent_well_known(
     """Get agent well-known information (public endpoint)."""
     try:
         # Get agent from service
-        agent = await agent_service.get_agent(agent_id)
+        agent = await agent_service.get(agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
         
         # Create A2A agent card
+        from agentarea_common.utils.types import AgentProvider, AgentSkill
+        
         agent_card = AgentCard(
-            id=str(agent.id),
             name=agent.name,
             description=agent.description or "",
+            url=f"/api/v1/agents/{agent_id}/a2a/rpc",
+            version="1.0.0",
+            provider=AgentProvider(organization="AgentArea"),
             capabilities=AgentCapabilities(
-                can_send_messages=True,
-                can_receive_messages=True,
-                can_execute_tasks=True,
-                supports_streaming=True,
+                streaming=True,
+                push_notifications=False,
+                state_transition_history=True,
             ),
-            endpoints={
-                "a2a_rpc": f"/api/v1/agents/{agent_id}/a2a/rpc",
-                "well_known": f"/api/v1/agents/{agent_id}/a2a/well-known",
-            },
+            skills=[
+                AgentSkill(
+                    id="text-processing",
+                    name="Text Processing",
+                    description=f"Process and respond to text messages using {agent.name}",
+                    input_modes=["text"],
+                    output_modes=["text"],
+                )
+            ],
         )
         
         return agent_card

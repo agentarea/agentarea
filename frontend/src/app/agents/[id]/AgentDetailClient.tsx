@@ -19,6 +19,7 @@ import {
   User
 } from "lucide-react";
 import Link from "next/link";
+import { sendMessage as sendChatMessage, getChatMessageStatus } from "@/lib/api";
 
 interface Agent {
   id: string;
@@ -85,21 +86,23 @@ export default function AgentDetailClient({ agent }: Props) {
 
     try {
       // Send to chat API
-      const response = await fetch("/api/v1/chat/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: userMessage.content,
-          agent_id: agent.id,
-          user_id: "frontend_user",
-        }),
+      const { data: responseData, error } = await sendChatMessage({
+        content: userMessage.content,
+        agent_id: agent.id,
+        user_id: "frontend_user",
       });
 
-      if (response.ok) {
-        const responseData = await response.json();
-        
+      if (error) {
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: `Sorry, I encountered an error: ${error}`,
+          role: "assistant",
+          timestamp: new Date().toISOString(),
+          agent_id: agent.id,
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        setIsLoading(false);
+      } else if (responseData) {
         // Add placeholder message while agent processes
         const placeholderMessage: Message = {
           id: responseData.task_id || (Date.now() + 1).toString(),
@@ -122,17 +125,6 @@ export default function AgentDetailClient({ agent }: Props) {
           ));
           setIsLoading(false);
         }
-      } else {
-        const errorText = await response.text();
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: `Sorry, I encountered an error: ${errorText}`,
-          role: "assistant",
-          timestamp: new Date().toISOString(),
-          agent_id: agent.id,
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-        setIsLoading(false);
       }
     } catch (error) {
       const errorMessage: Message = {
@@ -153,22 +145,20 @@ export default function AgentDetailClient({ agent }: Props) {
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/v1/chat/messages/${taskId}/status`);
+        const { data: status, error } = await getChatMessageStatus(taskId);
         
-        if (!response.ok) {
+        if (error) {
           throw new Error("Failed to check message status");
         }
-
-        const status = await response.json();
         
-        if (status.status === "completed") {
+        if (status?.status === "completed") {
           setMessages((prev) => prev.map(msg => 
             msg.id === taskId 
               ? { ...msg, content: status.content, timestamp: status.timestamp }
               : msg
           ));
           setIsLoading(false);
-        } else if (status.status === "failed") {
+        } else if (status?.status === "failed") {
           setMessages((prev) => prev.map(msg => 
             msg.id === taskId 
               ? { ...msg, content: `I apologize, but I encountered an error: ${status.error || "Unknown error"}` }

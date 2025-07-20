@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
+import { getChatAgents, sendMessage as sendChatMessage } from "@/lib/api";
 
 interface Message {
   id: string;
@@ -67,37 +68,28 @@ export default function HomePage() {
     
     try {
       // Get available agents first
-      const agentsResponse = await fetch('/api/v1/chat/agents');
-      const agents = await agentsResponse.json();
+      const { data: agents, error: agentsError } = await getChatAgents();
       
-      if (agents.length === 0) {
+      if (agentsError || !agents || agents.length === 0) {
         throw new Error('No agents available');
       }
       
       // Send message to first available agent
-      const response = await fetch('/api/v1/chat/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: messageContent,
-          agent_id: agents[0].id,
-          user_id: 'home_user',
-          session_id: 'home_session',
-        }),
+      const { data: result, error } = await sendChatMessage({
+        content: messageContent,
+        agent_id: agents[0].id,
+        user_id: 'home_user',
+        session_id: 'home_session',
       });
       
-      if (!response.ok) {
+      if (error) {
         throw new Error('Failed to send message');
       }
       
-      const result = await response.json();
-      
       // Add agent response
       const agentMessage: Message = {
-        id: result.task_id || (Date.now() + 1).toString(),
-        content: result.content || "Message received and processing...",
+        id: result?.task_id || (Date.now() + 1).toString(),
+        content: result?.content || "Message received and processing...",
         sender: "agent",
         timestamp: new Date(),
       };

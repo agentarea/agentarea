@@ -89,7 +89,7 @@ export default function TasksPage() {
     if (statusFilter !== "all") params.set("status", statusFilter);
     
     const newUrl = params.toString() ? `?${params.toString()}` : "";
-    router.replace(`/agents/tasks${newUrl}`, { scroll: false });
+    router.replace(`/tasks${newUrl}`, { scroll: false });
   }, [searchQuery, statusFilter, router]);
 
   const loadTasks = async () => {

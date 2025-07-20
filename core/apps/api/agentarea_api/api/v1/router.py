@@ -3,7 +3,9 @@ from fastapi import APIRouter
 # Import core API modules
 from . import (
     agents,
+    agents_a2a,
     agents_tasks,
+    agents_well_known,
     chat,
     mcp_server_instances,
     mcp_servers_specifications,
@@ -11,7 +13,6 @@ from . import (
     model_specs,
     provider_configs,
     provider_specs,
-    well_known,
 )
 
 v1_router = APIRouter(prefix="/v1")
@@ -25,6 +26,10 @@ v1_router.include_router(chat.router)
 v1_router.include_router(agents.router)
 v1_router.include_router(agents_tasks.router)
 v1_router.include_router(agents_tasks.global_tasks_router)
+
+# Include A2A protocol routers
+v1_router.include_router(agents_a2a.router, prefix="/agents/{agent_id}")
+v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
 v1_router.include_router(mcp_servers_specifications.router)
 v1_router.include_router(mcp_server_instances.router)
 

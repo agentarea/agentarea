@@ -152,6 +152,13 @@ export const getChatAgent = async (agentId: string) => {
   return { data, error };
 };
 
+export const getChatMessageStatus = async (taskId: string) => {
+  const { data, error } = await client.GET("/v1/chat/messages/{task_id}/status", {
+    params: { path: { task_id: taskId } },
+  });
+  return { data, error };
+};
+
 // Protocol API
 export const handleJsonRpc = async (request: any) => {
   const { data, error } = await client.POST("/v1/protocol/rpc", { body: request });

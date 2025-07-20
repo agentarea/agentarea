@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Bot, Send, User, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getChatAgents, sendMessage as sendChatMessage, getChatMessageStatus } from "@/lib/api";
 
 // Types
 interface Agent {
@@ -68,17 +69,16 @@ export default function ChatPage() {
   const loadAgents = async () => {
     try {
       setIsLoadingAgents(true);
-      const response = await fetch("/api/v1/chat/agents");
-      if (response.ok) {
-        const agentData = await response.json();
+      const { data: agentData, error } = await getChatAgents();
+      if (error) {
+        console.error("Failed to load agents:", error);
+      } else if (agentData) {
         setAgents(agentData);
         
         // Auto-select first agent if available
         if (agentData.length > 0) {
           setSelectedAgent(agentData[0]);
         }
-      } else {
-        console.error("Failed to load agents:", await response.text());
       }
     } catch (error) {
       console.error("Error loading agents:", error);
@@ -105,21 +105,23 @@ export default function ChatPage() {
 
     try {
       // Send to chat API - returns immediately with task_id
-      const response = await fetch("/api/v1/chat/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: userMessage.content,
-          agent_id: selectedAgent.id,
-          user_id: "frontend_user",
-        }),
+      const { data: responseData, error } = await sendChatMessage({
+        content: userMessage.content,
+        agent_id: selectedAgent.id,
+        user_id: "frontend_user",
       });
 
-      if (response.ok) {
-        const responseData = await response.json();
-        
+      if (error) {
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: `Sorry, I encountered an error: ${error}`,
+          role: "assistant",
+          timestamp: new Date().toISOString(),
+          agent_id: selectedAgent.id,
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        setIsLoading(false);
+      } else if (responseData) {
         // Add placeholder message while agent processes
         const placeholderMessage: Message = {
           id: responseData.task_id || (Date.now() + 1).toString(),
@@ -143,17 +145,6 @@ export default function ChatPage() {
           ));
           setIsLoading(false);
         }
-      } else {
-        const errorText = await response.text();
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: `Sorry, I encountered an error: ${errorText}`,
-          role: "assistant",
-          timestamp: new Date().toISOString(),
-          agent_id: selectedAgent.id,
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-        setIsLoading(false);
       }
     } catch (error) {
       const errorMessage: Message = {
@@ -174,15 +165,13 @@ export default function ChatPage() {
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/v1/chat/messages/${taskId}/status`);
+        const { data: status, error } = await getChatMessageStatus(taskId);
         
-        if (!response.ok) {
+        if (error) {
           throw new Error("Failed to check message status");
         }
-
-        const status = await response.json();
         
-        if (status.status === "completed") {
+        if (status?.status === "completed") {
           // Update placeholder with real response
           setMessages((prev) => prev.map(msg => 
             msg.id === taskId 
@@ -190,7 +179,7 @@ export default function ChatPage() {
               : msg
           ));
           setIsLoading(false);
-        } else if (status.status === "failed") {
+        } else if (status?.status === "failed") {
           // Update with error message
           setMessages((prev) => prev.map(msg => 
             msg.id === taskId 

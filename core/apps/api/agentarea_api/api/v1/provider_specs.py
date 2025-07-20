@@ -3,7 +3,7 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import get_provider_service
 from agentarea_llm.application.provider_service import ProviderService
-from agentarea_llm.domain.models import ProviderSpec, ModelSpec
+from agentarea_llm.domain.models import ModelSpec, ProviderSpec
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
@@ -24,12 +24,14 @@ class ProviderSpecResponse(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, provider_spec: ProviderSpec, request: Request | None = None) -> "ProviderSpecResponse":
+    def from_domain(
+        cls, provider_spec: ProviderSpec, request: Request | None = None
+    ) -> "ProviderSpecResponse":
         icon_url = None
         if provider_spec.icon and request:
-            base_url = str(request.base_url).rstrip('/')
+            base_url = str(request.base_url).rstrip("/")
             icon_url = f"{base_url}/static/icons/providers/{provider_spec.icon}.svg"
-        
+
         return cls(
             id=str(provider_spec.id),
             provider_key=provider_spec.provider_key,
@@ -84,12 +86,14 @@ class ProviderSpecWithModelsResponse(BaseModel):
     models: list[ModelSpecResponse]
 
     @classmethod
-    def from_domain(cls, provider_spec: ProviderSpec, request: Request | None = None) -> "ProviderSpecWithModelsResponse":
+    def from_domain(
+        cls, provider_spec: ProviderSpec, request: Request | None = None
+    ) -> "ProviderSpecWithModelsResponse":
         icon_url = None
         if provider_spec.icon and request:
-            base_url = str(request.base_url).rstrip('/')
+            base_url = str(request.base_url).rstrip("/")
             icon_url = f"{base_url}/static/icons/providers/{provider_spec.icon}.svg"
-        
+
         return cls(
             id=str(provider_spec.id),
             provider_key=provider_spec.provider_key,
@@ -152,6 +156,3 @@ async def get_provider_spec_by_key(
     if not provider_spec:
         raise HTTPException(status_code=404, detail="Provider specification not found")
     return ProviderSpecWithModelsResponse.from_domain(provider_spec, request)
-
-
- 

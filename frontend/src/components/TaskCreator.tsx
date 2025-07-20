@@ -98,12 +98,12 @@ export default function TaskCreator() {
 
   const handleViewTask = () => {
     if (result?.taskId) {
-      window.open(`/agents/tasks/${result.taskId}`, '_blank');
+      window.open(`/tasks/${result.taskId}`, '_blank');
     }
   };
 
   const handleViewAllTasks = () => {
-    window.open('/agents/tasks', '_blank');
+    window.open('/tasks', '_blank');
   };
 
   if (loadingAgents) {

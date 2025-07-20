@@ -73,12 +73,11 @@ class TaskRepository(BaseRepository[Task]):
     async def create_from_data(self, task_data: TaskCreate) -> Task:
         """Create a new task from TaskCreate data."""
         task_orm = TaskORM(
-            id=uuid4(),
+            # BaseModel automatically provides: id, created_at, updated_at
             agent_id=task_data.agent_id,
             description=task_data.description,
             parameters=task_data.parameters,
             status="pending",
-            created_at=datetime.utcnow(),
             user_id=task_data.user_id,
             task_metadata=task_data.metadata,
         )
@@ -122,6 +121,68 @@ class TaskRepository(BaseRepository[Task]):
         
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
     
+    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> List[Task]:
+        """Get tasks by agent ID with pagination."""
+        stmt = (
+            select(TaskORM)
+            .where(TaskORM.agent_id == agent_id)
+            .order_by(TaskORM.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        task_orms = result.scalars().all()
+        
+        return [self._orm_to_domain(task_orm) for task_orm in task_orms]
+    
+    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+        """Get tasks by user ID with pagination."""
+        stmt = (
+            select(TaskORM)
+            .where(TaskORM.user_id == user_id)
+            .order_by(TaskORM.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        task_orms = result.scalars().all()
+        
+        return [self._orm_to_domain(task_orm) for task_orm in task_orms]
+    
+    async def get_by_status(self, status: str) -> List[Task]:
+        """Get tasks by status."""
+        stmt = (
+            select(TaskORM)
+            .where(TaskORM.status == status)
+            .order_by(TaskORM.created_at.desc())
+        )
+        result = await self.session.execute(stmt)
+        task_orms = result.scalars().all()
+        
+        return [self._orm_to_domain(task_orm) for task_orm in task_orms]
+    
+    async def update_status(self, task_id: UUID, status: str, **additional_fields) -> Task | None:
+        """Update task status atomically with optional additional fields."""
+        from datetime import datetime
+        
+        update_data = {"status": status, "updated_at": datetime.utcnow()}
+        
+        # Add any additional fields provided
+        for field, value in additional_fields.items():
+            if field == "metadata":
+                update_data["task_metadata"] = value
+            else:
+                update_data[field] = value
+        
+        stmt = update(TaskORM).where(TaskORM.id == task_id).values(**update_data)
+        result = await self.session.execute(stmt)
+        
+        if result.rowcount == 0:
+            return None
+        
+        await self.session.flush()
+        return await self.get(task_id)
+    
     def _orm_to_domain(self, task_orm: TaskORM) -> Task:
         """Convert ORM model to domain model."""
         return Task(
@@ -133,6 +194,7 @@ class TaskRepository(BaseRepository[Task]):
             result=task_orm.result,
             error=task_orm.error,
             created_at=task_orm.created_at,
+            updated_at=task_orm.updated_at,  # Added to match BaseModel
             started_at=task_orm.started_at,
             completed_at=task_orm.completed_at,
             execution_id=task_orm.execution_id,
@@ -140,17 +202,31 @@ class TaskRepository(BaseRepository[Task]):
             metadata=task_orm.task_metadata or {},
         )
     
-    def _domain_to_orm(self, task: Task) -> TaskORM:
-        """Convert domain model to ORM model."""
+    def _domain_to_orm(self, task) -> TaskORM:
+        """Convert domain model to ORM model.
+        
+        Handles both Task and SimpleTask domain models.
+        """
+        # Handle different domain model types
+        if hasattr(task, 'task_parameters'):
+            # SimpleTask model
+            parameters = task.task_parameters
+            error = task.error_message
+        else:
+            # Task model
+            parameters = task.parameters
+            error = task.error
+            
         return TaskORM(
             id=task.id,
             agent_id=task.agent_id,
             description=task.description,
-            parameters=task.parameters,
+            parameters=parameters,
             status=task.status,
             result=task.result,
-            error=task.error,
+            error=error,
             created_at=task.created_at,
+            updated_at=task.updated_at,
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,

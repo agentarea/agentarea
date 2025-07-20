@@ -18,8 +18,13 @@ from pytz import UTC
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
-from agentarea_api.api.deps.services import get_agent_service, get_temporal_workflow_service
+from agentarea_api.api.deps.services import (
+    get_agent_service,
+    get_temporal_workflow_service,
+    get_task_service,
+)
 from agentarea_api.api.deps.events import EventBrokerDep
+from agentarea_tasks.task_service import TaskService
 from agentarea_tasks.domain.events import TaskCreated
 from agentarea_tasks.domain.models import TaskCreate
 from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -72,6 +77,7 @@ async def send_message(
     event_broker: EventBrokerDep,
     agent_service: AgentService = Depends(get_agent_service),
     workflow_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+    task_service: TaskService = Depends(get_task_service),
 ):
     """Send a chat message to a real agent.
 
@@ -83,7 +89,7 @@ async def send_message(
             agent_uuid = UUID(request.agent_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid agent ID format")
-        
+
         agent = await agent_service.get(agent_uuid)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
@@ -93,22 +99,39 @@ async def send_message(
         task_id_str = str(task_id)
         session_id = request.session_id or f"chat-{uuid4()}"
 
+        logger.info(f"Generated new task ID: {task_id_str} for agent {agent_uuid}")
+
         # Create task record immediately - this ensures the task is visible in tasks API
         # Status starts as "pending" to indicate workflow hasn't started yet
         task_parameters = {
             "context": request.context or {},
             "task_type": "chat",
-            "session_id": session_id
+            "session_id": session_id,
         }
 
-        # Store task in database first
+        task_create = TaskCreate(
+            agent_id=agent_uuid,
+            description=request.content,
+            parameters=task_parameters,
+            user_id=request.user_id or "anonymous",
+            metadata={
+                "created_via": "chat",
+                "agent_name": agent.name,
+                "session_id": session_id,
+                "status": "created",
+                "task_id": task_id_str,  # Store the task ID in metadata for now
+            },
+        )
+
+        # Store task in database first using the same approach as the agents_tasks endpoint
         database = get_database()
         async with database.async_session_factory() as session:
             task_repository = TaskRepository(session)
-            
-            # Create task in database with our specific task_id
-            # We need to modify the repository to accept a specific ID
-            task_create = TaskCreate(
+
+            # Create task in database
+            from agentarea_tasks.domain.models import TaskCreate as DomainTaskCreate
+
+            task_create = DomainTaskCreate(
                 agent_id=agent_uuid,
                 description=request.content,
                 parameters=task_parameters,
@@ -118,41 +141,20 @@ async def send_message(
                     "agent_name": agent.name,
                     "session_id": session_id,
                     "status": "created",
-                    "task_id": task_id_str,  # Store the task ID in metadata for now
-                }
+                    "task_id": task_id_str,  # Store the task ID in metadata
+                },
             )
-            
+
             # Store in database
-            stored_task = await task_repository.create(task_create)
-            
-            logger.info(f"Chat task {task_id_str} stored in database for agent {agent_uuid} (DB ID: {stored_task.id})")
-
-        # Create and publish TaskCreated event (for compatibility with existing event listeners)
-        task_created_event = TaskCreated(
-            task_id=task_id_str,
-            agent_id=str(agent_uuid),
-            description=request.content,
-            parameters=task_parameters,
-            session_id=session_id,
-            metadata={
-                "created_via": "chat",
-                "agent_name": agent.name,
-                "created_at": datetime.now(UTC).isoformat(),
-                "user_id": request.user_id or "anonymous",
-                "session_id": session_id,
-                "status": "created",  # Initial status
-            },
-        )
-
-        # Publish the event to the event broker
-        await event_broker.publish(task_created_event)
+            task = await task_repository.create_from_data(task_create)
+            await session.commit()  # Ensure the task is committed to the database
 
         logger.info(f"Chat task {task_id_str} created for agent {agent_uuid}")
 
         # Now try to execute the workflow - if this fails, the task still exists
         execution_id = None
         status = "pending"
-        
+
         try:
             # Start execution via Temporal workflow service - returns immediately!
             workflow_result = await workflow_service.execute_agent_task_async(
@@ -163,41 +165,33 @@ async def send_message(
                 task_parameters=task_parameters,
                 timeout_seconds=300,
             )
-            
+
             execution_id = workflow_result.get("execution_id", f"agent-task-{task_id}")
             status = "processing"  # Update status to processing
+
+            # Update the task in database with execution_id
+            async with database.async_session_factory() as session:
+                task_repository = TaskRepository(session)
+                # Update the task with execution_id and status
+                task.execution_id = execution_id
+                task.status = "processing"
+                await task_repository.update(task)
+                await session.commit()  # Ensure the update is committed
 
             logger.info(
                 f"Chat task {task_id_str} started with workflow execution ID "
                 f"{execution_id} for agent {agent_uuid}"
             )
 
-            # Publish workflow started event
-            workflow_started_event = TaskCreated(
-                task_id=task_id_str,
-                agent_id=str(agent_uuid),
-                description=request.content,
-                parameters=task_parameters,
-                session_id=session_id,
-                metadata={
-                    "created_via": "chat",
-                    "agent_name": agent.name,
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "user_id": request.user_id or "anonymous",
-                    "session_id": session_id,
-                    "execution_id": execution_id,
-                    "status": "processing",
-                    "workflow_started": True,
-                },
-            )
-            await event_broker.publish(workflow_started_event)
+            # Workflow started successfully - no need to publish event
 
         except Exception as e:
             logger.error(f"Failed to start chat task workflow for agent {agent_uuid}: {e}")
-            
+
             # Update task status to failed, but still return the task
             status = "failed"
-            
+
+            # TODO: some strange behaviour. Fix it
             # Publish workflow failed event
             workflow_failed_event = TaskCreated(
                 task_id=task_id_str,
@@ -217,19 +211,19 @@ async def send_message(
                 },
             )
             await event_broker.publish(workflow_failed_event)
-            
+
             logger.info(f"Chat task {task_id_str} created but workflow failed to start: {e}")
 
         # Return immediately with task_id - execution happens in background
         return ChatResponse(
             task_id=task_id_str,
-            content="Message received. Processing...", # Will be updated when complete
-            role="assistant", 
+            content="Message received. Processing...",  # Will be updated when complete
+            role="assistant",
             session_id=session_id,
             agent_id=request.agent_id,
-            status=status, # Will be "processing" or "failed"
+            status=status,  # Will be "processing" or "failed"
             timestamp=datetime.now(UTC).isoformat(),
-            execution_id=execution_id, # For tracking workflow
+            execution_id=execution_id,  # For tracking workflow
         )
 
     except HTTPException:
@@ -245,14 +239,14 @@ async def get_message_status(
     workflow_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get the status of a chat message task.
-    
+
     Used for long polling - frontend calls this to check if message is complete.
     """
     try:
         # Get workflow status using execution_id pattern
         execution_id = f"agent-task-{task_id}"
         status = await workflow_service.get_workflow_status(execution_id)
-        
+
         # Extract the actual response content if completed
         response_content = "Processing..."
         if status.get("status") == "completed":
@@ -289,7 +283,7 @@ async def get_available_agents(
     """Get list of real agents from database."""
     try:
         agents = await agent_service.list()
-        
+
         return [
             AgentResponse(
                 id=str(agent.id),
@@ -306,10 +300,7 @@ async def get_available_agents(
 
 
 @router.get("/agents/{agent_id}", response_model=AgentResponse)
-async def get_agent(
-    agent_id: str, 
-    agent_service: AgentService = Depends(get_agent_service)
-):
+async def get_agent(agent_id: str, agent_service: AgentService = Depends(get_agent_service)):
     """Get details for a specific agent."""
     try:
         # Convert to UUID and get agent
@@ -320,10 +311,7 @@ async def get_agent(
             raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
         return AgentResponse(
-            id=str(agent.id), 
-            name=agent.name, 
-            description=agent.description, 
-            status="active"
+            id=str(agent.id), name=agent.name, description=agent.description, status="active"
         )
 
     except ValueError:
@@ -360,12 +348,11 @@ async def websocket_endpoint(
                 try:
                     agent_id = message_data.get("agent_id")
                     content = message_data.get("content", "")
-                    
+
                     if not agent_id or not content:
-                        await websocket.send_text(json.dumps({
-                            "type": "error", 
-                            "message": "Missing agent_id or content"
-                        }))
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": "Missing agent_id or content"})
+                        )
                         continue
 
                     # Validate agent exists
@@ -375,31 +362,31 @@ async def websocket_endpoint(
                         if not agent:
                             raise HTTPException(status_code=404, detail="Agent not found")
                     except ValueError:
-                        await websocket.send_text(json.dumps({
-                            "type": "error", 
-                            "message": "Invalid agent ID format"
-                        }))
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": "Invalid agent ID format"})
+                        )
                         continue
 
                     # Send acknowledgment immediately
-                    await websocket.send_text(json.dumps({
-                        "type": "message",
-                        "content": "Message received. Processing...",
-                        "role": "assistant",
-                        "session_id": session_id,
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "status": "processing"
-                    }))
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "message",
+                                "content": "Message received. Processing...",
+                                "role": "assistant",
+                                "session_id": session_id,
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "status": "processing",
+                            }
+                        )
+                    )
 
                     # Start background task via Temporal (WebSocket will close, but that's okay)
                     # For real-time responses, consider implementing WebSocket-specific streaming
                     logger.info(f"WebSocket message received for agent {agent_id}: {content}")
 
                 except Exception as e:
-                    await websocket.send_text(json.dumps({
-                        "type": "error", 
-                        "message": str(e)
-                    }))
+                    await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for session {session_id}")
