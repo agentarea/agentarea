@@ -41,12 +41,12 @@ services:
       - REDIS_URL=redis://redis:6379
       - PYTHONPATH=/app
       - ENV=development
-      # Temporal configuration
-      - TEMPORAL_SERVER_URL=temporal:7233
-      - TEMPORAL_NAMESPACE=default
-      - TEMPORAL_TASK_QUEUE=agent-task-queue
-      - TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
-      - TEMPORAL_MAX_CONCURRENT_WORKFLOWS=10
+      # Temporal configuration - with WORKFLOW__ prefix for WorkflowSettings
+      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
+      - WORKFLOW__TEMPORAL_NAMESPACE=default
+      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
+      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
+      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
     depends_on:
       db:
         condition: service_healthy

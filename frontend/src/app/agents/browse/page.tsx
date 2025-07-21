@@ -1,7 +1,9 @@
-import React from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Bot, Search, Filter, ArrowUpDown, Zap } from "lucide-react";
+import { Bot, Search, Filter, ArrowUpDown, Zap, Edit } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,22 +11,45 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { listAgents } from "@/lib/api";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { useRouter } from "next/navigation";
 
 const categories = ["All"];
 
-interface AgentsBrowsePageProps {
-  searchParams?: { search?: string; category?: string };
+interface Agent {
+  id: string;
+  name: string;
+  description?: string | null;
+  status: string;
 }
 
-export default async function AgentsBrowsePage({ searchParams: searchParamsPromise }: AgentsBrowsePageProps) {
-  // Fetch agents server-side
-  const { data: agents = [], error } = await listAgents();
+export default function AgentsBrowsePage() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory] = useState("All");
+  const router = useRouter();
 
-  const searchParams = await searchParamsPromise;
+  // Fetch agents on mount
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        setLoading(true);
+        const { data: agentsData = [], error: apiError } = await listAgents();
+        if (apiError) {
+          setError("Failed to load agents");
+        } else {
+          setAgents(agentsData);
+        }
+      } catch (err) {
+        setError("Failed to load agents");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Get search query and category from searchParams (URL)
-  const searchQuery = searchParams?.search || "";
-  const selectedCategory = searchParams?.category || "All";
+    fetchAgents();
+  }, []);
 
   // Filter by search query
   const filteredAgents = agents.filter(agent =>
@@ -52,20 +77,18 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
             <div className="grid grid-cols-1 lg:grid-cols-[1fr,auto,auto] gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <form action="" method="get">
-                  <Input
-                    name="search"
-                    placeholder="Search agents by name or capability..."
-                    className="pl-10 h-11"
-                    defaultValue={searchQuery}
-                  />
-                </form>
+                <Input
+                  placeholder="Search agents by name or capability..."
+                  className="pl-10 h-11"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
-              <Button variant="outline" className="h-11 gap-2" aria-label="Filter agents">
+              <Button variant="outline" className="h-11 gap-2" aria-label="Filter agents" disabled>
                 <Filter className="h-4 w-4" />
                 <span className="hidden sm:inline">Filter</span>
               </Button>
-              <Button variant="outline" className="h-11 gap-2" aria-label="Sort agents">
+              <Button variant="outline" className="h-11 gap-2" aria-label="Sort agents" disabled>
                 <ArrowUpDown className="h-4 w-4" />
                 <span className="hidden sm:inline">Sort</span>
               </Button>
@@ -90,7 +113,12 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
             </Tabs>
           </div>
 
-          {error ? (
+          {loading ? (
+            <div className="text-center py-10">
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent"></div>
+              <p className="mt-2 text-muted-foreground">Loading agents...</p>
+            </div>
+          ) : error ? (
             <div className="text-center py-10 text-destructive">Failed to load agents</div>
           ) : filteredAgents.length === 0 ? (
             <EmptyState
@@ -107,34 +135,67 @@ export default async function AgentsBrowsePage({ searchParams: searchParamsPromi
               {filteredAgents.map((agent) => (
                 <Card 
                   key={agent.id} 
-                  className="p-6 hover:shadow-md transition-all border border-border/40 hover:border-border group"
+                  className="p-6 hover:shadow-lg transition-all border border-border/40 hover:border-primary/20 group cursor-pointer"
+                  onClick={() => router.push(`/agents/${agent.id}`)}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                      <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                         <Bot className="h-6 w-6 text-primary" />
                       </div>
-                      <div>
-                        <h3 className="font-medium text-lg group-hover:text-primary transition-colors">{agent.name}</h3>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {/* {agent.capabilities.map((cap, i) => (
-                            <Badge key={i} variant="secondary" className="font-normal">{cap}</Badge>
-                          ))} */}
-                        </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">{agent.name}</h3>
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                          {agent.description || "A versatile automation agent ready to help with your tasks"}
+                        </p>
                       </div>
                     </div>
                     <Badge variant={
-                      agent.status === "running" ? "default" :
-                      agent.status === "stopped" ? "destructive" : "outline"
+                      agent.status === "active" ? "default" :
+                      agent.status === "inactive" ? "destructive" : "outline"
                     }>
-                      {agent.status === "running" && <Zap className="h-3 w-3 mr-1" />}
+                      {agent.status === "active" && <Zap className="h-3 w-3 mr-1" />}
                       {agent.status}
                     </Badge>
                   </div>
-                  <div className="flex justify-end items-center mt-auto">
-                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary font-normal">
-                      View Details
-                    </Button>
+                  
+                  {/* Agent capabilities/features */}
+                  <div className="mb-4">
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary" className="text-xs">
+                        Chat Enabled
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        Task Automation
+                      </Badge>
+                      {agent.status === "active" && (
+                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                          Ready
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mt-auto gap-2">
+                    <div className="flex gap-2">
+                      <Link href={`/agents/${agent.id}`} onClick={(e) => e.stopPropagation()}>
+                        <Button variant="default" size="sm" className="gap-2">
+                          <Bot className="h-4 w-4" />
+                          Chat Now
+                        </Button>
+                      </Link>
+                      <Link href={`/agents/${agent.id}`} onClick={(e) => e.stopPropagation()}>
+                        <Button variant="outline" size="sm" className="gap-2">
+                          View Details
+                        </Button>
+                      </Link>
+                    </div>
+                    <Link href={`/agents/${agent.id}/edit`} onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
+                        <Edit className="h-3 w-3" />
+                        Edit
+                      </Button>
+                    </Link>
                   </div>
                 </Card>
               ))}

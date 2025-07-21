@@ -81,7 +81,7 @@ class YAMLLLMModelRepository(BaseRepository[LLMModel]):
                     id=uuid4(),  # Generate a random ID
                     name=model_data.get("name", ""),
                     description=model_data.get("description", ""),
-                    provider=provider_id,
+                    provider_id=provider_id,  # Use provider_id instead of provider
                     model_type=model_data.get("name", ""),  # Using name as model_type
                     endpoint_url="",  # Default empty endpoint URL
                     context_window=str(model_data.get("context_window", 0)),

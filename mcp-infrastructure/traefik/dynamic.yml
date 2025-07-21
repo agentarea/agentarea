@@ -1,21 +1,14 @@
 http:
     routers:
-        mcp-echo-e2e-test-a1956c3a:
-            rule: PathPrefix(`/mcp/echo-e2e-test-a1956c3a`)
-            service: mcp-echo-e2e-test-a1956c3a-service
-            entryPoints:
-                - web
-            middlewares:
-                - mcp-echo-e2e-test-a1956c3a-stripprefix
-        mcp-final-slug-test-19804c9e:
-            rule: PathPrefix(`/mcp/final-slug-test-19804c9e`)
-            service: mcp-final-slug-test-19804c9e-service
-            entryPoints:
-                - web
-            middlewares:
-                - mcp-final-slug-test-19804c9e-stripprefix
         mcp-manager-api:
-            rule: PathPrefix(`/containers`) || PathPrefix(`/templates`)
+            rule: PathPrefix(`/api/mcp`)
+            service: mcp-manager-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-api-stripprefix
+        mcp-manager-catchall:
+            rule: '!PathPrefix(`/mcp/`) && !PathPrefix(`/api/mcp`)'
             service: mcp-manager-service
             entryPoints:
                 - web
@@ -24,129 +17,99 @@ http:
             service: mcp-manager-service
             entryPoints:
                 - web
-        mcp-mcp-endpoint-test-865abe18:
-            rule: PathPrefix(`/mcp/mcp-endpoint-test-865abe18`)
-            service: mcp-mcp-endpoint-test-865abe18-service
+        mcp-nginx-704e5037:
+            rule: PathPrefix(`/mcp/nginx-704e5037`)
+            service: mcp-nginx-704e5037-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-mcp-endpoint-test-865abe18-stripprefix
-        mcp-mcp-final-test-eae90053:
-            rule: PathPrefix(`/mcp/mcp-final-test-eae90053`)
-            service: mcp-mcp-final-test-eae90053-service
+                - mcp-nginx-704e5037-stripprefix
+        mcp-nginx-e68fb249:
+            rule: PathPrefix(`/mcp/nginx-e68fb249`)
+            service: mcp-nginx-e68fb249-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-mcp-final-test-eae90053-stripprefix
-        mcp-mcp-port-test-fa204bb9:
-            rule: PathPrefix(`/mcp/mcp-port-test-fa204bb9`)
-            service: mcp-mcp-port-test-fa204bb9-service
+                - mcp-nginx-e68fb249-stripprefix
+        mcp-nginx-test-server-instance-d86883d1:
+            rule: PathPrefix(`/mcp/nginx-test-server-instance-d86883d1`)
+            service: mcp-nginx-test-server-instance-d86883d1-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-mcp-port-test-fa204bb9-stripprefix
-        mcp-mcp-working-test-9bf0dc98:
-            rule: PathPrefix(`/mcp/mcp-working-test-9bf0dc98`)
-            service: mcp-mcp-working-test-9bf0dc98-service
+                - mcp-nginx-test-server-instance-d86883d1-stripprefix
+        mcp-nginx-test-server-instance-fac991fe:
+            rule: PathPrefix(`/mcp/nginx-test-server-instance-fac991fe`)
+            service: mcp-nginx-test-server-instance-fac991fe-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-mcp-working-test-9bf0dc98-stripprefix
-        mcp-nginx-routing-test-1618586d:
-            rule: PathPrefix(`/mcp/nginx-routing-test-1618586d`)
-            service: mcp-nginx-routing-test-1618586d-service
+                - mcp-nginx-test-server-instance-fac991fe-stripprefix
+        mcp-test-nginx-server-cb3bd69f:
+            rule: PathPrefix(`/mcp/test-nginx-server-cb3bd69f`)
+            service: mcp-test-nginx-server-cb3bd69f-service
             entryPoints:
                 - web
             middlewares:
-                - mcp-nginx-routing-test-1618586d-stripprefix
-        mcp-routing-test-50115a38:
-            rule: PathPrefix(`/mcp/routing-test-50115a38`)
-            service: mcp-routing-test-50115a38-service
-            entryPoints:
-                - web
-            middlewares:
-                - mcp-routing-test-50115a38-stripprefix
+                - mcp-test-nginx-server-cb3bd69f-stripprefix
     services:
-        mcp-echo-e2e-test-a1956c3a-service:
-            loadBalancer:
-                servers:
-                    - url: http://10.88.0.9:3333
-        mcp-final-slug-test-19804c9e-service:
-            loadBalancer:
-                servers:
-                    - url: http://10.88.0.2:3000
         mcp-manager-service:
             loadBalancer:
                 servers:
-                    - url: http://127.0.0.1:8000
-        mcp-mcp-endpoint-test-865abe18-service:
+                    - url: http://mcp-manager:8000
+        mcp-nginx-704e5037-service:
             loadBalancer:
                 servers:
-                    - url: http://10.88.0.4:3000
-        mcp-mcp-final-test-eae90053-service:
+                    - url: http://10.88.0.2:8000
+        mcp-nginx-e68fb249-service:
             loadBalancer:
                 servers:
-                    - url: http://10.88.0.8:3333
-        mcp-mcp-port-test-fa204bb9-service:
+                    - url: http://10.88.0.2:8000
+        mcp-nginx-test-server-instance-d86883d1-service:
             loadBalancer:
                 servers:
-                    - url: http://10.88.0.6:3333
-        mcp-mcp-working-test-9bf0dc98-service:
+                    - url: http://10.88.0.2:8000
+        mcp-nginx-test-server-instance-fac991fe-service:
             loadBalancer:
                 servers:
-                    - url: http://10.88.0.7:3333
-        mcp-nginx-routing-test-1618586d-service:
+                    - url: http://10.88.0.2:8000
+        mcp-test-nginx-server-cb3bd69f-service:
             loadBalancer:
                 servers:
-                    - url: http://10.88.0.3:80
-        mcp-routing-test-50115a38-service:
-            loadBalancer:
-                servers:
-                    - url: http://10.88.0.5:80
+                    - url: http://10.88.0.2:80
     middlewares:
-        cors: {}
-        mcp-echo-e2e-test-a1956c3a-stripprefix:
+        mcp-api-stripprefix:
             stripPrefix:
                 prefixes:
-                    - /mcp/echo-e2e-test-a1956c3a
+                    - /api/mcp
                 forceSlash: false
-        mcp-final-slug-test-19804c9e-stripprefix:
+        mcp-nginx-704e5037-stripprefix:
             stripPrefix:
                 prefixes:
-                    - /mcp/final-slug-test-19804c9e
+                    - /mcp/nginx-704e5037
                 forceSlash: false
-        mcp-mcp-endpoint-test-865abe18-stripprefix:
+        mcp-nginx-e68fb249-stripprefix:
             stripPrefix:
                 prefixes:
-                    - /mcp/mcp-endpoint-test-865abe18
+                    - /mcp/nginx-e68fb249
                 forceSlash: false
-        mcp-mcp-final-test-eae90053-stripprefix:
+        mcp-nginx-test-server-instance-d86883d1-stripprefix:
             stripPrefix:
                 prefixes:
-                    - /mcp/mcp-final-test-eae90053
+                    - /mcp/nginx-test-server-instance-d86883d1
                 forceSlash: false
-        mcp-mcp-port-test-fa204bb9-stripprefix:
+        mcp-nginx-test-server-instance-fac991fe-stripprefix:
             stripPrefix:
                 prefixes:
-                    - /mcp/mcp-port-test-fa204bb9
-                forceSlash: false
-        mcp-mcp-working-test-9bf0dc98-stripprefix:
-            stripPrefix:
-                prefixes:
-                    - /mcp/mcp-working-test-9bf0dc98
-                forceSlash: false
-        mcp-nginx-routing-test-1618586d-stripprefix:
-            stripPrefix:
-                prefixes:
-                    - /mcp/nginx-routing-test-1618586d
-                forceSlash: false
-        mcp-routing-test-50115a38-stripprefix:
-            stripPrefix:
-                prefixes:
-                    - /mcp/routing-test-50115a38
+                    - /mcp/nginx-test-server-instance-fac991fe
                 forceSlash: false
         mcp-stripprefix:
             stripPrefix:
                 prefixes:
                     - /mcp
+                forceSlash: false
+        mcp-test-nginx-server-cb3bd69f-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/test-nginx-server-cb3bd69f
                 forceSlash: false

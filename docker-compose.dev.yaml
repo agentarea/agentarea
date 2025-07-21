@@ -1,6 +1,7 @@
 version: "3.8"
 services:
   app:
+    image: agentarea-backend:latest
     container_name: agentarea-backend
     build:
       context: core
@@ -22,7 +23,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
-      - MCP_MANAGER_URL=http://mcp-manager:8000
+      - MCP_MANAGER_URL=http://mcp-manager:80/api/mcp
+      - MCP_PROXY_HOST=http://localhost:7999
       - REDIS_URL=redis://redis:6379
       - MCP_CLIENT_TIMEOUT=30
       # Server settings
@@ -56,6 +58,7 @@ services:
     command: ["python", "-m", "agentarea_api.cli", "serve", "--reload", "--log-level=info"]
 
   app_migrations:
+    image: agentarea-backend:latest
     build:
       context: core
       dockerfile: apps/api/Dockerfile
@@ -72,13 +75,14 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
-      - ./core/apps/api/alembic:/app/apps/api/alembic
+      - ./core/apps/api/alembic:/app/alembic
     depends_on:
       db:
         condition: service_healthy
     command: ["python", "-m", "agentarea_api.cli", "migrate"]
 
   bootstrap:
+    image: agentarea-bootstrap:latest
     build:
       context: bootstrap
       dockerfile: Dockerfile
@@ -111,7 +115,7 @@ services:
         condition: service_started
 
   minio:
-    image: minio/minio
+    image: minio/minio:latest
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -147,6 +151,7 @@ services:
       - temporal-network
 
   infisical:
+    image: infisical/infisical:latest-postgres
     container_name: infisical-backend
     restart: always
     depends_on:
@@ -154,12 +159,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    image: infisical/infisical:latest-postgres
     env_file: .env
     ports:
       - 3333:8080
     environment:
       - NODE_ENV=production
+      - POSTGRES_DB=infisical
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/infisical
 
   redis:
@@ -178,44 +183,41 @@ services:
       - mcp-network
     command: ["redis-server", "--save", "", "--appendonly", "no"]  # Disable persistence for dev
 
-  # MCP Infrastructure Services
-  # mcp-manager:
-  #   build:
-  #     context: mcp-infrastructure/go-mcp-manager
-  #     dockerfile: Dockerfile.dev
-  #     target: development
-  #   container_name: mcp-manager
-  #   restart: unless-stopped
-  #   privileged: true
-  #   ports:
-  #     - "7999:8000"  # MCP Manager API
-  #     - "81:80"      # Traefik HTTP (different port to avoid conflict with main app)
-  #     - "8443:443"   # Traefik HTTPS (different port to avoid conflict)
-  #     - "8081:8080"  # Traefik dashboard
-  #   expose:
-  #     - "8000"
-  #     - "80"
-  #     - "443"
-  #     - "8080"
-  #   tmpfs:
-  #     - /tmp
-  #     - /run
-  #   volumes:
-  #     - mcp_containers:/var/lib/containers/storage
-  #     - ./mcp-infrastructure/docker/templates:/app/templates:ro
-  #     - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
-  #     - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:rw
-  #     - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro  # Access to Infisical bootstrap token
-  #   networks:
-  #     - mcp-network
-  #   environment:
-  #     - LOG_LEVEL=INFO
-  #     - TRAEFIK_NETWORK=podman
-  #     - REDIS_URL=redis://redis:6379
+  mcp-manager:
+    image: mcp-manager:latest
+    build:
+      context: mcp-infrastructure/go-mcp-manager
+      dockerfile: Dockerfile.dev
+      target: development
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    container_name: mcp-manager
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "7999:80"   # Traefik proxy (unified entry point)
+    tmpfs:
+      - /tmp
+      - /run
+    volumes:
+      - mcp_containers:/var/lib/containers/storage
+      - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
+      - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro  # Access to Infisical bootstrap token
+    networks:
+      - mcp-network
+    environment:
+      LOG_LEVEL: INFO
+      TRAEFIK_NETWORK: podman
+      REDIS_URL: redis://redis:6379
+      MCP_PROXY_HOST: http://localhost:7999
+      CORE_API_URL: http://agentarea-backend:8000
 
   # Temporal Infrastructure Services
   temporal:
+    image: temporalio/auto-setup:1.27
     container_name: agentarea-temporal
     restart: unless-stopped
     depends_on:
@@ -234,7 +236,6 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CLI_ADDRESS=temporal:7233
       - BIND_ON_IP=0.0.0.0
-    image: temporalio/auto-setup:1.27
     networks:
       - temporal-network
       - default

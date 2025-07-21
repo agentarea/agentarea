@@ -7,32 +7,29 @@ and activities. It registers all necessary workflows and activities with Tempora
 
 import asyncio
 import logging
-import os
 import signal
 import sys
+from typing import Any
 
 import dotenv
 from agentarea_common.config import get_settings
+from agentarea_common.events.router import get_event_router
+from agentarea_secrets import get_real_secret_manager
 
-# Import workflow and activity definitions from the tasks library
-from agentarea_tasks.workflows.agent_task_workflow import (
-    AgentTaskWorkflow,
-    execute_agent_activity,
-    execute_agent_communication_activity,
-    execute_custom_tool_activity,
-    execute_dynamic_activity,
-    execute_mcp_tool_activity,
-    validate_agent_activity,
+# Initialize DI container with proper config injection
+from agentarea_agents.infrastructure.di_container import initialize_di_container
+
+# Import workflow and activity definitions from the execution library
+from agentarea_execution.workflows.agent_execution_workflow import (
+    AgentExecutionWorkflow,
 )
+from agentarea_execution import create_activities_for_worker
+from agentarea_execution.interfaces import ActivityDependencies
 from temporalio.client import Client
 from temporalio.worker import Worker
 
 # Load environment variables
 dotenv.load_dotenv()
-
-# Set database host to localhost for local development if not set
-if not os.getenv("POSTGRES_HOST"):
-    os.environ["POSTGRES_HOST"] = "localhost"
 
 # Configure logging
 logging.basicConfig(
@@ -41,169 +38,141 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def create_activity_dependencies() -> ActivityDependencies:
+    """Create basic dependencies needed by activities.
+    
+    Activities will create their own database sessions and services
+    using these basic dependencies for better retryability.
+    """
+    # Get settings for configuration
+    settings = get_settings()
+    
+    # Get event broker
+    event_broker = get_event_router(settings.broker)
+    
+    # Get secret manager
+    secret_manager = get_real_secret_manager()
+    
+    # Create dependency container
+    return ActivityDependencies(
+        settings=settings,
+        event_broker=event_broker,
+        secret_manager=secret_manager
+    )
+
+
 class AgentAreaWorker:
-    """Temporal worker for AgentArea workflows."""
+    """Temporal worker for AgentArea workflows and activities."""
 
     def __init__(self):
-        self.settings = get_settings()
-        self.client: Client | None = None
-        self.worker: Worker | None = None
-        self.should_stop = False
+        self.client = None
+        self.worker = None
+        self.worker_shutdown_event = asyncio.Event()
 
-        # Setup signal handlers for graceful shutdown
-        signal.signal(
-            signal.SIGINT,
-            lambda signum, frame: asyncio.create_task(self._signal_handler(signum, frame)),
-        )
-        signal.signal(
-            signal.SIGTERM,
-            lambda signum, frame: asyncio.create_task(self._signal_handler(signum, frame)),
-        )
-
-    async def _signal_handler(self, signum: int, frame) -> None:
+    async def signal_handler(self, signum: int, frame: Any) -> None:
         """Handle shutdown signals gracefully."""
         logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-        self.should_stop = True
-        await self.shutdown()
+        self.worker_shutdown_event.set()
 
     async def connect(self) -> None:
         """Connect to Temporal server."""
-        temporal_url = self.settings.workflow.TEMPORAL_SERVER_URL
-        namespace = self.settings.workflow.TEMPORAL_NAMESPACE
-
-        logger.info(f"Connecting to Temporal server at {temporal_url}, namespace: {namespace}")
-
-        try:
-            self.client = await Client.connect(temporal_url, namespace=namespace)
-            logger.info("Successfully connected to Temporal server")
-
-        except Exception as e:
-            logger.error(f"Failed to connect to Temporal server: {e}")
-            raise
+        settings = get_settings()
+        self.client = await Client.connect(
+            settings.workflow.TEMPORAL_SERVER_URL,
+            namespace=settings.workflow.TEMPORAL_NAMESPACE,
+        )
+        logger.info("Connected to Temporal server")
 
     async def create_worker(self) -> None:
-        """Create and configure Temporal worker."""
+        """Create and configure the Temporal worker."""
         if not self.client:
             raise RuntimeError("Client not connected. Call connect() first.")
 
-        task_queue = self.settings.workflow.TEMPORAL_TASK_QUEUE
-        max_concurrent_activities = self.settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES
-        max_concurrent_workflows = self.settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS
+        settings = get_settings()
+        
+        # Create basic dependencies for activities
+        dependencies = create_activity_dependencies()
+        
+        # Create activities using the new factory pattern
+        activities = create_activities_for_worker(dependencies)
 
-        logger.info(f"Creating worker for task queue: {task_queue}")
-        logger.info(f"Max concurrent activities: {max_concurrent_activities}")
-        logger.info(f"Max concurrent workflows: {max_concurrent_workflows}")
+        # Initialize DI container for workflows
+        initialize_di_container(settings.workflow)
 
-        # Create worker with our workflows and activities
         self.worker = Worker(
             self.client,
-            task_queue=task_queue,
-            workflows=[AgentTaskWorkflow],
-            activities=[
-                validate_agent_activity,
-                execute_agent_activity,
-                execute_dynamic_activity,
-                execute_mcp_tool_activity,
-                execute_custom_tool_activity,
-                execute_agent_communication_activity,
-            ],
-            max_concurrent_activities=max_concurrent_activities,
-            max_concurrent_workflow_tasks=max_concurrent_workflows,
+            task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
+            workflows=[AgentExecutionWorkflow],
+            activities=activities,
+            max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
+            max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
         )
-
-        logger.info("Worker created successfully")
+        logger.info("Worker created and configured")
 
     async def run(self) -> None:
-        """Run the worker (blocking)."""
+        """Run the worker until shutdown signal."""
         if not self.worker:
             raise RuntimeError("Worker not created. Call create_worker() first.")
 
-        logger.info("Starting Temporal worker...")
-        logger.info("Worker is ready to process workflows and activities")
-
+        logger.info("Worker starting...")
+        
+        # Start worker in background
+        worker_task = asyncio.create_task(self.worker.run())
+        
+        # Wait for shutdown signal
+        await self.worker_shutdown_event.wait()
+        
+        logger.info("Shutdown signal received, stopping worker...")
+        worker_task.cancel()
+        
         try:
-            # Run worker until shutdown signal
-            await self.worker.run()
-
+            await worker_task
         except asyncio.CancelledError:
-            logger.info("Worker was cancelled")
-        except Exception as e:
-            logger.error(f"Worker error: {e}")
-            raise
-        finally:
-            logger.info("Worker stopped")
+            logger.info("Worker task cancelled successfully")
 
     async def start(self) -> None:
-        """Start the worker (full initialization and run)."""
+        """Start the worker with proper initialization."""
         try:
             await self.connect()
             await self.create_worker()
             await self.run()
-
-        except KeyboardInterrupt:
-            logger.info("Received keyboard interrupt")
         except Exception as e:
-            logger.error(f"Worker startup failed: {e}")
+            logger.error(f"Worker failed to start: {e}")
             raise
         finally:
             await self.shutdown()
 
     async def shutdown(self) -> None:
-        """Graceful shutdown."""
+        """Shutdown the worker and cleanup resources."""
         logger.info("Shutting down worker...")
-
+        
         if self.worker:
-            try:
-                # Cancel worker tasks
-                await self.worker.shutdown()
-                logger.info("Worker shutdown initiated")
-            except Exception as e:
-                logger.error(f"Error during worker shutdown: {e}")
-
+            # Worker cleanup is handled in run() method
+            self.worker = None
+            
         if self.client:
-            try:
-                # Close client connection
-                await self.client.close()
-                logger.info("Client connection closed")
-            except Exception as e:
-                logger.error(f"Error closing client: {e}")
+            # Temporal client doesn't have explicit close method
+            self.client = None
+            
+        logger.info("Worker shutdown complete")
 
 
 async def main() -> None:
-    """Main entry point for starting the Temporal worker."""
-    logger.info("🚀 Starting AgentArea Temporal Worker")
-
-    # Validate settings
-    settings = get_settings()
-
-    # Log configuration
-    logger.info(f"Database Host: {settings.database.POSTGRES_HOST}")
-    logger.info(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
-    logger.info(f"Namespace: {settings.workflow.TEMPORAL_NAMESPACE}")
-    logger.info(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    logger.info(
-        f"Max Concurrent Activities: {settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES}"
-    )
-    logger.info(f"Max Concurrent Workflows: {settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS}")
-
-    # Start worker
+    """Main entry point for the worker application."""
     worker = AgentAreaWorker()
-
+    
+    # Setup signal handlers
+    for sig in [signal.SIGTERM, signal.SIGINT]:
+        signal.signal(sig, lambda s, f: asyncio.create_task(worker.signal_handler(s, f)))
+    
     try:
         await worker.start()
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt")
     except Exception as e:
-        logger.error(f"Worker failed: {e}")
+        logger.error(f"Worker error: {e}")
         sys.exit(1)
-
-    logger.info("✅ AgentArea Temporal Worker stopped")
 
 
 if __name__ == "__main__":
-    """Run worker when script is executed directly."""
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Worker interrupted by user")
-    except Exception as e:
-        logger.error(f"Worker failed: {e}")
-        sys.exit(1)
+    asyncio.run(main())

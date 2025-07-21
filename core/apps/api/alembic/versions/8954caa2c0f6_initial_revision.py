@@ -102,9 +102,29 @@ def upgrade() -> None:
         ),
     )
 
+    # Create Tasks table
+    op.create_table(
+        "tasks",
+        sa.Column("id", UUID(), primary_key=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column("agent_id", UUID(), nullable=False),
+        sa.Column("description", sa.Text(), nullable=False),
+        sa.Column("parameters", sa.JSON(), nullable=True),
+        sa.Column("status", sa.String(50), nullable=False, default="pending"),
+        sa.Column("result", sa.JSON(), nullable=True),
+        sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("started_at", sa.DateTime(), nullable=True),
+        sa.Column("completed_at", sa.DateTime(), nullable=True),
+        sa.Column("execution_id", sa.String(255), nullable=True),
+        sa.Column("user_id", sa.String(255), nullable=True),
+        sa.Column("task_metadata", sa.JSON(), nullable=True),
+    )
+
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_table("tasks")
     op.drop_table("agents")
     op.drop_table("llm_model_instances")
     op.drop_table("llm_models")

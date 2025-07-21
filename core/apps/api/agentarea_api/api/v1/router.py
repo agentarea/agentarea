@@ -1,35 +1,40 @@
 from fastapi import APIRouter
 
-# Unified protocol endpoint (A2A compliant + REST API)
-# Unified chat interface (consolidates A2A and REST chat functionality)
-# Core API modules
+# Import core API modules
 from . import (
     agents,
+    agents_a2a,
     agents_tasks,
+    agents_well_known,
     chat,
-    llm_model_instances,
-    llm_models_specifications,
     mcp_server_instances,
     mcp_servers_specifications,
-    protocol,
+    model_instances_new,
+    model_specs,
+    provider_configs,
+    provider_specs,
 )
-
-# Removed unified LLM router - using proper service patterns instead
 
 v1_router = APIRouter(prefix="/v1")
 
-# Include unified protocol router first (primary A2A interface)
-v1_router.include_router(protocol.router)
+# Well-known endpoints are included at the root level in main.py
 
-# Include unified chat router (consolidates all chat functionality)
+# Include chat router (unified chat interface)
 v1_router.include_router(chat.router)
 
 # Include core API routers
 v1_router.include_router(agents.router)
 v1_router.include_router(agents_tasks.router)
-v1_router.include_router(llm_models_specifications.router)
-v1_router.include_router(llm_model_instances.router)
+v1_router.include_router(agents_tasks.global_tasks_router)
+
+# Include A2A protocol routers
+v1_router.include_router(agents_a2a.router, prefix="/agents/{agent_id}")
+v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
 v1_router.include_router(mcp_servers_specifications.router)
 v1_router.include_router(mcp_server_instances.router)
 
-# LLM execution now properly integrated through existing services
+# Include LLM architecture routers (4-entity system)
+v1_router.include_router(provider_specs.router)
+v1_router.include_router(provider_configs.router)
+v1_router.include_router(model_specs.router)
+v1_router.include_router(model_instances_new.router)

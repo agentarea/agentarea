@@ -1,12 +1,17 @@
+import logging
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+import httpx
 from agentarea_api.api.deps.services import get_mcp_server_instance_service
+from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mcp-server-instances", tags=["mcp-server-instances"])
 
@@ -77,6 +82,60 @@ async def create_mcp_server_instance(
         raise HTTPException(status_code=500, detail=f"Failed to create instance: {e!s}") from e
 
 
+@router.post("/check")
+async def check_mcp_server_instance_configuration(
+    data: dict[str, Any],
+    mcp_server_instance_service: MCPServerInstanceService = Depends(
+        get_mcp_server_instance_service
+    ),
+):
+    """Check if an MCP server instance configuration is valid by validating it through the golang manager."""
+    try:
+        settings = get_settings()
+        
+        # Extract json_spec from the request (the frontend sends { json_spec: {...} })
+        json_spec = data.get("json_spec", data)
+        
+        # Format the request for the golang manager
+        validation_request = {
+            "instance_id": "validation-check",  # Temporary ID for validation
+            "name": "validation-test",          # Temporary name for validation
+            "json_spec": json_spec,
+            "dry_run": True
+        }
+        
+        # Validate the configuration through the golang manager
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{settings.mcp.MCP_MANAGER_URL}/containers/validate",
+                json=validation_request,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                return {
+                    "valid": True,
+                    "message": "Configuration is valid",
+                    "details": response.json()
+                }
+            else:
+                return {
+                    "valid": False,
+                    "message": f"Configuration validation failed: {response.text}",
+                    "status_code": response.status_code
+                }
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Unable to connect to container manager for validation: {str(e)}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to validate configuration: {str(e)}"
+        ) from e
+
+
 @router.get("/{instance_id}/environment")
 async def get_instance_environment(
     instance_id: UUID,
@@ -107,8 +166,41 @@ async def list_mcp_server_instances(
         get_mcp_server_instance_service
     ),
 ):
+    # Get instances from database (configuration/metadata)
     instances = await mcp_server_instance_service.list()
-    return [MCPServerInstanceResponse.from_domain(instance) for instance in instances]
+    
+    # Get real-time status from golang manager
+    try:
+        settings = get_settings()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
+            if response.status_code == 200:
+                health_data = response.json()
+                health_lookup = {check["service_name"]: check for check in health_data.get("health_checks", [])}
+            else:
+                health_lookup = {}
+    except Exception as e:
+        logger.warning(f"Failed to get real-time status from container manager: {e}")
+        health_lookup = {}
+    
+    # Merge database config with real-time status
+    response_instances = []
+    for instance in instances:
+        response_instance = MCPServerInstanceResponse.from_domain(instance)
+        
+        # Override status with real-time data if available
+        if instance.name in health_lookup:
+            health_check = health_lookup[instance.name]
+            if health_check["container_status"] == "running" and health_check["healthy"]:
+                response_instance.status = "running"
+            elif health_check["container_status"] == "running" and not health_check["healthy"]:
+                response_instance.status = "unhealthy"
+            elif health_check["container_status"] == "stopped":
+                response_instance.status = "stopped"
+        
+        response_instances.append(response_instance)
+    
+    return response_instances
 
 
 @router.get("/{instance_id}", response_model=MCPServerInstanceResponse)
@@ -118,10 +210,36 @@ async def get_mcp_server_instance(
         get_mcp_server_instance_service
     ),
 ):
+    # Get instance from database (configuration/metadata)
     instance = await mcp_server_instance_service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
-    return MCPServerInstanceResponse.from_domain(instance)
+    
+    response_instance = MCPServerInstanceResponse.from_domain(instance)
+    
+    # Get real-time status from golang manager
+    try:
+        settings = get_settings()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
+            if response.status_code == 200:
+                health_data = response.json()
+                health_lookup = {check["service_name"]: check for check in health_data.get("health_checks", [])}
+                
+                # Override status with real-time data if available
+                if instance.name in health_lookup:
+                    health_check = health_lookup[instance.name]
+                    if health_check["container_status"] == "running" and health_check["healthy"]:
+                        response_instance.status = "running"
+                    elif health_check["container_status"] == "running" and not health_check["healthy"]:
+                        response_instance.status = "unhealthy"
+                    elif health_check["container_status"] == "stopped":
+                        response_instance.status = "stopped"
+    except Exception as e:
+        logger.warning(f"Failed to get real-time status from container manager: {e}")
+        # Fall back to database status
+    
+    return response_instance
 
 
 @router.patch("/{instance_id}", response_model=MCPServerInstanceResponse)
@@ -185,3 +303,31 @@ async def stop_mcp_server_instance(
 
 # REMOVED: Insecure endpoint that exposed secrets via HTTP
 # Secrets are now resolved directly in the Go service using Infisical SDK
+
+@router.get("/health/containers")
+async def get_containers_health():
+    """Get health status of all MCP containers by proxying to the golang manager."""
+    try:
+        settings = get_settings()
+        # Proxy request to golang manager
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Failed to get container health: {response.text}"
+                )
+            
+            # No URL transformation needed - Go manager returns correct external URLs
+            return response.json()
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Unable to connect to container manager: {str(e)}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get container health: {str(e)}"
+        ) from e

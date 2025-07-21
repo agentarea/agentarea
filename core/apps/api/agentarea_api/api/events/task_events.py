@@ -83,26 +83,25 @@ async def _start_temporal_workflow_for_task(
 ):
     """Start a Temporal workflow for the agent task."""
     try:
-        # Import the workflow task execution service
-        from agentarea_agents.application.workflow_task_execution_service import (
-            WorkflowTaskExecutionService,
+        # Import the temporal workflow service
+        from agentarea_agents.application.temporal_workflow_service import (
+            TemporalWorkflowService,
         )
 
-        # Create workflow task executor
-        workflow_service = WorkflowTaskExecutionService()
+        # Create workflow service
+        workflow_service = TemporalWorkflowService()
 
         # Get user_id from metadata
         user_id = metadata.get("user_id", "system")
 
         # Start the Temporal workflow - this returns immediately
-        execution_id = await workflow_service.execute_task_async(
-            task_id=task_id,
+        result = await workflow_service.execute_agent_task_async(
             agent_id=agent_id,
-            description=description,
+            task_query=description,
             user_id=user_id,
             task_parameters=parameters,
-            metadata=metadata,
         )
+        execution_id = result.get("execution_id")
 
         logger.info(f"Started Temporal workflow for task {task_id} with execution ID: {execution_id}")
 

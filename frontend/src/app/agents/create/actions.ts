@@ -145,11 +145,11 @@ export async function addAgent(
   }
 
   try {
-    // Call backend API to create agent - combine instruction into description
+    // Call backend API to create agent - send both description and instruction
     const { data, error } = await createAgent({
       name: validatedFields.data.name,
-      // Use instruction as description if description is empty
-      description: validatedFields.data.description || validatedFields.data.instruction,
+      description: validatedFields.data.description || '',
+      instruction: validatedFields.data.instruction,
       model_id: validatedFields.data.model_id,
       tools_config: validatedFields.data.tools_config,
       events_config: validatedFields.data.events_config,

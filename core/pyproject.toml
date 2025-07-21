@@ -13,32 +13,34 @@ description = "AgentArea workspace with API, Worker and shared libraries"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "a2a-sdk>=0.2.8",
     "python-dotenv>=1.1.0",
+    "pytz>=2025.2",
     "watchfiles>=1.1.0",
 ]
 
 [tool.uv.workspace]
 members = [
     "apps/api",
-    "apps/worker", 
+    "apps/worker",
     "apps/cli",
     "libs/common",
     "libs/agents",
-    "libs/chat",
     "libs/llm",
     "libs/mcp",
     "libs/tasks",
-    "libs/secrets"
+    "libs/secrets",
+    "libs/execution"
 ]
 
 [tool.uv.sources]
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
-agentarea-chat = { workspace = true }
 agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
+agentarea-execution = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
 agentarea-cli = { workspace = true }
@@ -55,13 +57,14 @@ dev = [
     "coverage[toml]>=7.6.0",
     "agentarea-common",
     "agentarea-agents",
-    "agentarea-chat",
     "agentarea-llm",
     "agentarea-mcp",
     "agentarea-tasks",
     "agentarea-secrets",
+    "agentarea-execution",
     "agentarea-api",
     "agentarea-worker",
+    "pytest-env>=1.1.5",
 ]
 
 test = [
@@ -136,7 +139,6 @@ addopts = [
     "--strict-config",
     "--cov=agentarea_common",
     "--cov=agentarea_agents", 
-    "--cov=agentarea_chat",
     "--cov=agentarea_llm",
     "--cov=agentarea_mcp",
     "--cov=agentarea_tasks",
@@ -153,15 +155,38 @@ markers = [
 ]
 asyncio_mode = "auto"
 
+# Test environment isolation - override env vars for docker-compose services
+env = [
+    # Database (docker-compose postgres service mapped to localhost:5432)
+    "POSTGRES_HOST=localhost",
+    "POSTGRES_PORT=5432", 
+    "POSTGRES_USER=postgres",
+    "POSTGRES_PASSWORD=postgres",
+    "POSTGRES_DB=aiagents",
+    
+    # Redis (docker-compose redis service mapped to localhost:6379) 
+    "REDIS_URL=redis://localhost:6379",
+    
+    # Temporal (docker-compose temporal service mapped to localhost:7233)
+    "TEMPORAL_SERVER_URL=localhost:7233",
+    "TEMPORAL_NAMESPACE=default",
+    
+    # Test-specific settings to prevent production interference
+    "APP_ENV=test",
+    "DEBUG=false",
+    "SECRET_MANAGER_TYPE=local",
+    "USE_LEGACY_TASK_EXECUTION=true",
+]
+
 [tool.coverage.run]
 source = [
     "libs/common/agentarea_common",
     "libs/agents/agentarea_agents",
-    "libs/chat/agentarea_chat", 
     "libs/llm/agentarea_llm",
     "libs/mcp/agentarea_mcp",
     "libs/tasks/agentarea_tasks",
     "libs/secrets/agentarea_secrets",
+    "libs/execution/agentarea_execution",
     "apps/api/agentarea_api",
     "apps/worker/agentarea_worker",
 ]

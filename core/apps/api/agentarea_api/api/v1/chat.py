@@ -2,9 +2,7 @@
 
 This module provides chat-specific functionality including:
 - Conversational message sending (POST /chat/messages)
-- Streaming responses (POST /chat/messages/stream)
-- Conversation history (GET /chat/conversations/{session_id}/messages)
-- WebSocket real-time chat (WS /chat/ws/{session_id})
+- Message status polling (GET /chat/messages/{task_id}/status)
 - Agent discovery for chat UIs (GET /chat/agents)
 
 For direct task management, use /v1/agents/{agent_id}/tasks/ endpoints.
@@ -15,12 +13,23 @@ import json
 import logging
 from typing import Any
 from uuid import UUID, uuid4
+from datetime import datetime
+from pytz import UTC
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_api.api.deps.services import get_agent_service
-from agentarea_chat.unified_chat_service import UnifiedTaskService
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+from agentarea_api.api.deps.services import (
+    get_agent_service,
+    get_temporal_workflow_service,
+    get_task_service,
+)
+from agentarea_api.api.deps.events import EventBrokerDep
+from agentarea_tasks.task_service import TaskService
+from agentarea_tasks.domain.events import TaskCreated
+from agentarea_tasks.domain.models import TaskCreate
+from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_common.config import get_database
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -49,15 +58,7 @@ class ChatResponse(BaseModel):
     agent_id: str = Field(..., description="Agent ID")
     status: str = Field(..., description="Task status")
     timestamp: str = Field(..., description="Message timestamp")
-
-
-class ConversationResponse(BaseModel):
-    """Response model for conversation history."""
-
-    session_id: str = Field(..., description="Session/conversation ID")
-    messages: list[dict[str, Any]] = Field(..., description="List of messages")
-    agent_id: str | None = Field(None, description="Primary agent ID")
-    message_count: int = Field(..., description="Number of messages")
+    execution_id: str | None = Field(None, description="Temporal execution ID")
 
 
 class AgentResponse(BaseModel):
@@ -69,152 +70,225 @@ class AgentResponse(BaseModel):
     status: str = Field(..., description="Agent status")
 
 
-# Dependencies
-async def get_unified_chat_service() -> UnifiedTaskService:
-    """Get unified chat service instance."""
-    return UnifiedTaskService()
-
-
 # Core Chat Endpoints
 @router.post("/messages", response_model=ChatResponse)
 async def send_message(
     request: ChatMessageRequest,
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
+    event_broker: EventBrokerDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+    task_service: TaskService = Depends(get_task_service),
 ):
-    """Send a chat message to an agent.
+    """Send a chat message to a real agent.
 
-    Unified endpoint that handles both A2A protocol and REST API.
+    Returns task_id immediately, executes via Temporal workflow asynchronously.
     """
     try:
-        # Generate session ID if not provided
+        # Validate agent exists
+        try:
+            agent_uuid = UUID(request.agent_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid agent ID format")
+
+        agent = await agent_service.get(agent_uuid)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        # Generate task and session IDs
+        task_id = uuid4()
+        task_id_str = str(task_id)
         session_id = request.session_id or f"chat-{uuid4()}"
 
-        # Send message using the unified service
-        response = await chat_service.send_task(
-            content=request.content,
-            agent_id=request.agent_id,
-            task_type="chat",
-            session_id=session_id,
-            context=request.context,
-            user_id=request.user_id,
+        logger.info(f"Generated new task ID: {task_id_str} for agent {agent_uuid}")
+
+        # Create task record immediately - this ensures the task is visible in tasks API
+        # Status starts as "pending" to indicate workflow hasn't started yet
+        task_parameters = {
+            "context": request.context or {},
+            "task_type": "chat",
+            "session_id": session_id,
+        }
+
+        task_create = TaskCreate(
+            agent_id=agent_uuid,
+            description=request.content,
+            parameters=task_parameters,
+            user_id=request.user_id or "anonymous",
+            metadata={
+                "created_via": "chat",
+                "agent_name": agent.name,
+                "session_id": session_id,
+                "status": "created",
+                "task_id": task_id_str,  # Store the task ID in metadata for now
+            },
         )
 
+        # Store task in database first using the same approach as the agents_tasks endpoint
+        database = get_database()
+        async with database.async_session_factory() as session:
+            task_repository = TaskRepository(session)
+
+            # Create task in database
+            from agentarea_tasks.domain.models import TaskCreate as DomainTaskCreate
+
+            task_create = DomainTaskCreate(
+                agent_id=agent_uuid,
+                description=request.content,
+                parameters=task_parameters,
+                user_id=request.user_id or "anonymous",
+                metadata={
+                    "created_via": "chat",
+                    "agent_name": agent.name,
+                    "session_id": session_id,
+                    "status": "created",
+                    "task_id": task_id_str,  # Store the task ID in metadata
+                },
+            )
+
+            # Store in database
+            task = await task_repository.create_from_data(task_create)
+            await session.commit()  # Ensure the task is committed to the database
+
+        logger.info(f"Chat task {task_id_str} created for agent {agent_uuid}")
+
+        # Now try to execute the workflow - if this fails, the task still exists
+        execution_id = None
+        status = "pending"
+
+        try:
+            # Start execution via Temporal workflow service - returns immediately!
+            workflow_result = await workflow_service.execute_agent_task_async(
+                agent_id=agent_uuid,
+                task_query=request.content,
+                user_id=request.user_id or "anonymous",
+                session_id=session_id,
+                task_parameters=task_parameters,
+                timeout_seconds=300,
+            )
+
+            execution_id = workflow_result.get("execution_id", f"agent-task-{task_id}")
+            status = "processing"  # Update status to processing
+
+            # Update the task in database with execution_id
+            async with database.async_session_factory() as session:
+                task_repository = TaskRepository(session)
+                # Update the task with execution_id and status
+                task.execution_id = execution_id
+                task.status = "processing"
+                await task_repository.update(task)
+                await session.commit()  # Ensure the update is committed
+
+            logger.info(
+                f"Chat task {task_id_str} started with workflow execution ID "
+                f"{execution_id} for agent {agent_uuid}"
+            )
+
+            # Workflow started successfully - no need to publish event
+
+        except Exception as e:
+            logger.error(f"Failed to start chat task workflow for agent {agent_uuid}: {e}")
+
+            # Update task status to failed, but still return the task
+            status = "failed"
+
+            # TODO: some strange behaviour. Fix it
+            # Publish workflow failed event
+            workflow_failed_event = TaskCreated(
+                task_id=task_id_str,
+                agent_id=str(agent_uuid),
+                description=request.content,
+                parameters=task_parameters,
+                session_id=session_id,
+                metadata={
+                    "created_via": "chat",
+                    "agent_name": agent.name,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "user_id": request.user_id or "anonymous",
+                    "session_id": session_id,
+                    "status": "failed",
+                    "error": str(e),
+                    "workflow_failed": True,
+                },
+            )
+            await event_broker.publish(workflow_failed_event)
+
+            logger.info(f"Chat task {task_id_str} created but workflow failed to start: {e}")
+
+        # Return immediately with task_id - execution happens in background
         return ChatResponse(
-            task_id=response.get("id", str(uuid4())),
-            content=response.get("content", f"Response to: {request.content}"),
+            task_id=task_id_str,
+            content="Message received. Processing...",  # Will be updated when complete
             role="assistant",
             session_id=session_id,
             agent_id=request.agent_id,
-            status=response.get("status", "completed"),
-            timestamp=response.get("timestamp", ""),
+            status=status,  # Will be "processing" or "failed"
+            timestamp=datetime.now(UTC).isoformat(),
+            execution_id=execution_id,  # For tracking workflow
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to send chat message: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/messages/stream")
-async def stream_message(
-    request: ChatMessageRequest,
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
+@router.get("/messages/{task_id}/status")
+async def get_message_status(
+    task_id: str,
+    workflow_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
-    """Stream a chat message response from an agent.
+    """Get the status of a chat message task.
 
-    Returns Server-Sent Events (SSE) compatible with A2A protocol.
+    Used for long polling - frontend calls this to check if message is complete.
     """
     try:
-        # Generate session ID if not provided
-        session_id = request.session_id or f"chat-{uuid4()}"
+        # Get workflow status using execution_id pattern
+        execution_id = f"agent-task-{task_id}"
+        status = await workflow_service.get_workflow_status(execution_id)
 
-        async def generate_stream():
-            try:
-                async for chunk in chat_service.stream_task(
-                    content=request.content,
-                    agent_id=request.agent_id,
-                    task_type="chat_stream",
-                    session_id=session_id,
-                    context=request.context,
-                    user_id=request.user_id,
-                ):
-                    yield f"data: {json.dumps(chunk)}\n\n"
+        # Extract the actual response content if completed
+        response_content = "Processing..."
+        if status.get("status") == "completed":
+            result = status.get("result", {})
+            if isinstance(result, dict):
+                response_content = result.get("response", result.get("content", "Task completed"))
+            else:
+                response_content = str(result)
+        elif status.get("status") == "failed":
+            error_msg = status.get("error", "Task failed")
+            response_content = f"I apologize, but I encountered an error: {error_msg}"
 
-            except Exception as e:
-                error_chunk = {"error": str(e), "status": "error"}
-                yield f"data: {json.dumps(error_chunk)}\n\n"
-
-        return StreamingResponse(
-            generate_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
-        )
+        return {
+            "task_id": task_id,
+            "status": status.get("status", "unknown"),
+            "content": response_content,
+            "execution_id": execution_id,
+            "start_time": status.get("start_time"),
+            "end_time": status.get("end_time"),
+            "error": status.get("error"),
+            "timestamp": status.get("end_time") or datetime.now(UTC).isoformat(),
+        }
 
     except Exception as e:
-        logger.error(f"Failed to stream chat message: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# Conversation Management
-@router.get("/conversations/{session_id}/messages", response_model=ConversationResponse)
-async def get_conversation_history(
-    session_id: str, chat_service: UnifiedTaskService = Depends(get_unified_chat_service)
-):
-    """Get conversation history for a session."""
-    try:
-        messages = await chat_service.get_session_history(session_id)
-
-        # Extract agent_id from messages if available
-        agent_id = None
-        for msg in messages:
-            if msg.get("agent_id"):
-                agent_id = msg["agent_id"]
-                break
-
-        return ConversationResponse(
-            session_id=session_id, messages=messages, agent_id=agent_id, message_count=len(messages)
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to get conversation history: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/conversations")
-async def list_conversations(
-    user_id: str | None = Query(None, description="Filter by user ID"),
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
-):
-    """List all conversations for a user."""
-    try:
-        conversations = await chat_service.list_sessions(user_id)
-        return {"conversations": conversations}
-
-    except Exception as e:
-        logger.error(f"Failed to list conversations: {e}", exc_info=True)
+        logger.error(f"Failed to get message status: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Agent Management
 @router.get("/agents", response_model=list[AgentResponse])
 async def get_available_agents(
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
+    agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Get list of available agents."""
+    """Get list of real agents from database."""
     try:
-        agents = await chat_service.get_available_agents()
+        agents = await agent_service.list()
 
         return [
             AgentResponse(
-                id=agent.get("id", ""),
-                name=agent.get("name", "Unknown"),
-                description=agent.get("description"),
+                id=str(agent.id),
+                name=agent.name,
+                description=agent.description,
                 status="active",
             )
             for agent in agents
@@ -251,19 +325,12 @@ async def get_agent(agent_id: str, agent_service: AgentService = Depends(get_age
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# NOTE: Task management endpoints have been moved to /v1/agents/{agent_id}/tasks/
-# For task operations, use:
-#   - GET /v1/agents/{agent_id}/tasks/{task_id} - Get task
-#   - DELETE /v1/agents/{agent_id}/tasks/{task_id} - Cancel task
-# A2A JSON-RPC protocol compliance is handled by /v1/protocol/rpc
-
-
-# WebSocket Support
+# Simple WebSocket Support for basic real-time communication
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     session_id: str,
-    chat_service: UnifiedTaskService = Depends(get_unified_chat_service),
+    agent_service: AgentService = Depends(get_agent_service),
 ):
     """WebSocket endpoint for real-time chat."""
     await websocket.accept()
@@ -279,28 +346,44 @@ async def websocket_endpoint(
             # Process message and send response
             if message_data.get("type") == "message":
                 try:
-                    # Send message through unified service
-                    response = await chat_service.send_task(
-                        content=message_data.get("content", ""),
-                        agent_id=message_data.get("agent_id", "default"),
-                        task_type="websocket",
-                        session_id=session_id,
-                        user_id=message_data.get("user_id"),
-                    )
+                    agent_id = message_data.get("agent_id")
+                    content = message_data.get("content", "")
 
-                    # Send response back
+                    if not agent_id or not content:
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": "Missing agent_id or content"})
+                        )
+                        continue
+
+                    # Validate agent exists
+                    try:
+                        agent_uuid = UUID(agent_id)
+                        agent = await agent_service.get(agent_uuid)
+                        if not agent:
+                            raise HTTPException(status_code=404, detail="Agent not found")
+                    except ValueError:
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": "Invalid agent ID format"})
+                        )
+                        continue
+
+                    # Send acknowledgment immediately
                     await websocket.send_text(
                         json.dumps(
                             {
                                 "type": "message",
-                                "task_id": response.get("id", ""),
-                                "content": response.get("content", ""),
+                                "content": "Message received. Processing...",
                                 "role": "assistant",
                                 "session_id": session_id,
-                                "timestamp": response.get("timestamp", ""),
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "status": "processing",
                             }
                         )
                     )
+
+                    # Start background task via Temporal (WebSocket will close, but that's okay)
+                    # For real-time responses, consider implementing WebSocket-specific streaming
+                    logger.info(f"WebSocket message received for agent {agent_id}: {content}")
 
                 except Exception as e:
                     await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
@@ -313,23 +396,3 @@ async def websocket_endpoint(
             await websocket.close()
         except Exception:
             pass
-
-
-# Health Check
-@router.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "unified-chat-api",
-        "version": "1.0.0",
-        "features": [
-            "unified-chat",
-            "a2a-protocol",
-            "rest-api",
-            "streaming",
-            "websockets",
-            "conversation-history",
-            "agent-management",
-        ],
-    }

@@ -10,12 +10,14 @@ import asyncio
 import sys
 
 import httpx
+import pytest
 
 # Test configuration
 BASE_URL = "http://localhost:8000/v1/protocol"
 TIMEOUT = 30.0
 
 
+@pytest.mark.asyncio
 async def test_health_check():
     """Test the health check endpoint."""
     print("🏥 Testing health check...")
@@ -36,6 +38,7 @@ async def test_health_check():
         return False
 
 
+@pytest.mark.asyncio
 async def test_agent_card():
     """Test agent card discovery."""
     print("🃏 Testing agent card discovery...")
@@ -56,6 +59,7 @@ async def test_agent_card():
         return False
 
 
+@pytest.mark.asyncio
 async def test_rest_message():
     """Test REST message endpoint."""
     print("💬 Testing REST message endpoint...")
@@ -88,6 +92,7 @@ async def test_rest_message():
         return False
 
 
+@pytest.mark.asyncio
 async def test_jsonrpc_message():
     """Test JSON-RPC message/send endpoint."""
     print("🔗 Testing JSON-RPC message/send...")
@@ -128,6 +133,7 @@ async def test_jsonrpc_message():
         return False
 
 
+@pytest.mark.asyncio
 async def test_jsonrpc_agent_card():
     """Test JSON-RPC agent/authenticatedExtendedCard endpoint."""
     print("🎭 Testing JSON-RPC agent card...")
@@ -159,6 +165,7 @@ async def test_jsonrpc_agent_card():
         return False
 
 
+@pytest.mark.asyncio
 async def test_streaming():
     """Test streaming endpoint."""
     print("🌊 Testing streaming endpoint...")

@@ -26,7 +26,7 @@ export default function GridAndTableViews({
 
     const t = useTranslations("Common");
 
-    const tab = searchParams.tab;
+    const tab = searchParams?.tab;
     const activeTab = (typeof tab === 'string' && (tab === 'grid' || tab === 'table')) 
         ? tab 
         : 'grid';

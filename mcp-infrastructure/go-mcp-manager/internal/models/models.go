@@ -8,12 +8,31 @@ import (
 type ContainerStatus string
 
 const (
-	StatusStopped  ContainerStatus = "stopped"
-	StatusStarting ContainerStatus = "starting"
-	StatusRunning  ContainerStatus = "running"
-	StatusStopping ContainerStatus = "stopping"
-	StatusError    ContainerStatus = "error"
+	StatusValidating ContainerStatus = "validating"
+	StatusPulling    ContainerStatus = "pulling"
+	StatusStopped    ContainerStatus = "stopped"
+	StatusStarting   ContainerStatus = "starting"
+	StatusRunning    ContainerStatus = "running"
+	StatusStopping   ContainerStatus = "stopping"
+	StatusError      ContainerStatus = "error"
+	StatusHealthy    ContainerStatus = "healthy"
+	StatusUnhealthy  ContainerStatus = "unhealthy"
 )
+
+// DetailedContainerStatus represents detailed container status information
+type DetailedContainerStatus struct {
+	Status     string `json:"status"`
+	Running    bool   `json:"running"`
+	Paused     bool   `json:"paused"`
+	Restarting bool   `json:"restarting"`
+	OOMKilled  bool   `json:"oom_killed"`
+	Dead       bool   `json:"dead"`
+	Pid        int    `json:"pid"`
+	ExitCode   int    `json:"exit_code"`
+	Error      string `json:"error"`
+	StartedAt  string `json:"started_at"`
+	FinishedAt string `json:"finished_at"`
+}
 
 // Container represents a managed container
 type Container struct {
@@ -31,20 +50,6 @@ type Container struct {
 	Labels      map[string]string `json:"labels,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 	Command     []string          `json:"command,omitempty"`
-}
-
-// Template represents a container template
-type Template struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Image       string            `json:"image"`
-	Port        int               `json:"port"`
-	Environment map[string]string `json:"environment,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Command     []string          `json:"command,omitempty"`
-	Volumes     []VolumeMount     `json:"volumes,omitempty"`
-	MemoryLimit string            `json:"memory_limit,omitempty"`
-	CPULimit    string            `json:"cpu_limit,omitempty"`
 }
 
 // VolumeMount represents a volume mount
@@ -80,12 +85,6 @@ type HealthResponse struct {
 type ListContainersResponse struct {
 	Containers []Container `json:"containers"`
 	Total      int         `json:"total"`
-}
-
-// ListTemplatesResponse represents the response for listing templates
-type ListTemplatesResponse struct {
-	Templates []Template `json:"templates"`
-	Total     int        `json:"total"`
 }
 
 // ErrorResponse represents an error response

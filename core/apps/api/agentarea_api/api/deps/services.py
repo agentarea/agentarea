@@ -7,39 +7,36 @@ used across the AgentArea API endpoints.
 import logging
 from typing import Annotated
 
-from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.application.workflow_task_execution_service import (
-    WorkflowTaskExecutionService,
-)
-from agentarea_agents.infrastructure.repository import AgentRepository
-
-# from agentarea_tasks.database_task_manager import DatabaseTaskManager
-# TODO: Fix implementation
-from agentarea_chat.unified_chat_service import UnifiedTaskService
-from agentarea_common.config import get_settings
-from agentarea_common.events.broker import EventBroker
-from agentarea_common.events.router import create_event_broker_from_router, get_event_router
-from agentarea_common.infrastructure.database import get_db_session
-from agentarea_common.infrastructure.infisical_factory import get_real_secret_manager
-from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_llm.application.llm_model_service import LLMModelService
-from agentarea_llm.application.service import LLMModelInstanceService
-from agentarea_llm.infrastructure.llm_model_instance_repository import (
-    LLMModelInstanceRepository,
-)
-from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
-
-# LLM execution happens in agent_runner_service via Google ADK, not here
-from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
-from agentarea_mcp.infrastructure.repository import (
-    MCPServerInstanceRepository,
-    MCPServerRepository,
-)
-from agentarea_tasks.infrastructure.repository import SQLAlchemyTaskRepository
-from agentarea_tasks.task_manager import BaseTaskManager
-from agentarea_tasks.task_service import TaskService
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from agentarea_tasks.task_service import TaskService
+from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+
+from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.execution_service import ExecutionService
+from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+from agentarea_agents.domain.interfaces import ExecutionServiceInterface
+from agentarea_agents.infrastructure.repository import AgentRepository
+
+from agentarea_common.config import get_settings
+from agentarea_common.events.broker import EventBroker
+from agentarea_common.events.router import get_event_router
+from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_secrets import get_real_secret_manager
+
+from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.application.provider_service import ProviderService
+from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
+from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
+
+from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
+from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
+
+from agentarea_tasks.infrastructure.repository import TaskRepository
 
 logger = logging.getLogger(__name__)
 
@@ -48,171 +45,174 @@ async def get_event_broker() -> EventBroker:
     """Get EventBroker instance - real Redis implementation."""
     try:
         settings = get_settings()
+        from agentarea_common.events.router import create_event_broker_from_router
+
         router = get_event_router(settings.broker)
         event_broker = create_event_broker_from_router(router)
         logger.info(f"Created Redis event broker: {type(event_broker).__name__}")
         return event_broker
     except Exception as e:
-        logger.warning(
-            f"Failed to create Redis event broker: {e}. Falling back to in-memory implementation."
-        )
-        # Fallback to in-memory implementation for development
-        from agentarea_common.testing.mocks import TestEventBroker
+        logger.error(f"Failed to create Redis event broker: {e}")
+        raise e
 
-        test_broker = TestEventBroker()
-        logger.info(f"Using TestEventBroker fallback: {type(test_broker).__name__}")
-        return test_broker
+
+# Common database dependency
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+
+# Common event broker dependency
+EventBrokerDep = Annotated[EventBroker, Depends(get_event_broker)]
+
+# Secret Manager dependencies
+BaseSecretManagerDep = Annotated[BaseSecretManager, Depends(get_real_secret_manager)]
+
+
+# Agent Service dependencies
+async def get_agent_service(
+    db_session: DatabaseSessionDep,
+    event_broker: EventBrokerDep,
+) -> AgentService:
+    """Get an AgentService instance for the current request."""
+    repository = AgentRepository(db_session)
+    return AgentService(repository, event_broker)
+
+
+# LLM Service dependencies
+async def get_provider_service(
+    db_session: DatabaseSessionDep,
+    secret_manager: BaseSecretManagerDep,
+    event_broker: EventBrokerDep,
+) -> ProviderService:
+    """Get a ProviderService instance for the current request."""
+    provider_config_repository = ProviderConfigRepository(db_session)
+    provider_spec_repository = ProviderSpecRepository(db_session)
+    model_spec_repository = ModelSpecRepository(db_session)
+    model_instance_repository = ModelInstanceRepository(db_session)
+    return ProviderService(
+        provider_spec_repo=provider_spec_repository,
+        provider_config_repo=provider_config_repository,
+        model_spec_repo=model_spec_repository,
+        model_instance_repo=model_instance_repository,
+        event_broker=event_broker,
+        secret_manager=secret_manager,
+    )
+
+
+async def get_model_instance_service(
+    db_session: DatabaseSessionDep,
+    secret_manager: BaseSecretManagerDep,
+    event_broker: EventBrokerDep,
+) -> ModelInstanceService:
+    """Get a ModelInstanceService instance for the current request."""
+    model_instance_repository = ModelInstanceRepository(db_session)
+    return ModelInstanceService(
+        repository=model_instance_repository,
+        event_broker=event_broker,
+        secret_manager=secret_manager,
+    )
+
+
+# Task Service dependencies
+async def get_task_repository(db_session: DatabaseSessionDep) -> TaskRepository:
+    """Get a TaskRepository instance for the current request."""
+    return TaskRepository(db_session)
+
+
+async def get_agent_repository(db_session: DatabaseSessionDep) -> AgentRepository:
+    """Get an AgentRepository instance for the current request."""
+    return AgentRepository(db_session)
+
+
+async def get_task_service(
+    db_session: DatabaseSessionDep,
+    event_broker: EventBrokerDep,
+) -> TaskService:
+    from agentarea_tasks.task_service import TaskService
+    from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+
+    task_repository = await get_task_repository(db_session)
+    agent_repository = await get_agent_repository(db_session)
+    task_manager = TemporalTaskManager(task_repository)
+    workflow_service = await get_temporal_workflow_service()
+    return TaskService(
+        task_repository=task_repository,
+        event_broker=event_broker,
+        task_manager=task_manager,
+        agent_repository=agent_repository,
+        workflow_service=workflow_service,
+    )
+
+
+async def get_task_manager(db_session: DatabaseSessionDep):
+    task_repository = await get_task_repository(db_session)
+    return TemporalTaskManager(task_repository)
+
+
+async def get_temporal_workflow_service() -> TemporalWorkflowService:
+    """Get a TemporalWorkflowService instance for the current request.
+
+    This service uses Temporal workflows for non-blocking task execution.
+    """
+    execution_service = await get_execution_service()
+    return TemporalWorkflowService(execution_service)
+
+
+async def get_execution_service() -> ExecutionServiceInterface:
+    settings = get_settings()
+    from agentarea_agents.infrastructure.temporal_orchestrator import TemporalWorkflowOrchestrator
+
+    temporal_orchestrator = TemporalWorkflowOrchestrator(
+        temporal_address=settings.workflow.TEMPORAL_SERVER_URL,
+        task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
+        max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
+        max_concurrent_workflows=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
+    )
+    execution_service = ExecutionService(temporal_orchestrator)
+    """Get an execution service instance for the current request."""
+    return execution_service
+
+
+# MCP Service dependencies
+async def get_mcp_server_service(
+    db_session: DatabaseSessionDep,
+    secret_manager: BaseSecretManagerDep,
+) -> MCPServerService:
+    """Get a MCPServerService instance for the current request."""
+    repository = MCPServerRepository(db_session)
+    return MCPServerService(repository, secret_manager)
+
+
+async def get_mcp_server_instance_service(
+    db_session: DatabaseSessionDep,
+    secret_manager: BaseSecretManagerDep,
+) -> MCPServerInstanceService:
+    """Get a MCPServerInstanceService instance for the current request."""
+    repository = MCPServerInstanceRepository(db_session)
+    return MCPServerInstanceService(repository, secret_manager)
+
+
+# Common service type hints for easier use
+AgentServiceDep = Annotated[AgentService, Depends(get_agent_service)]
+AgentRepositoryDep = Annotated[AgentRepository, Depends(get_agent_repository)]
+ProviderServiceDep = Annotated[ProviderService, Depends(get_provider_service)]
+ModelInstanceServiceDep = Annotated[ModelInstanceService, Depends(get_model_instance_service)]
+TaskRepositoryDep = Annotated[TaskRepository, Depends(get_task_repository)]
+TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
+TaskManagerDep = Annotated[TemporalTaskManager, Depends(get_task_manager)]
+TemporalWorkflowServiceDep = Annotated[
+    TemporalWorkflowService, Depends(get_temporal_workflow_service)
+]
+MCPServerServiceDep = Annotated[MCPServerService, Depends(get_mcp_server_service)]
+MCPServerInstanceServiceDep = Annotated[
+    MCPServerInstanceService, Depends(get_mcp_server_instance_service)
+]
+
+
+# Additional backward compatibility functions
+async def get_model_spec_repository(db_session: DatabaseSessionDep) -> ModelSpecRepository:
+    """Get a ModelSpecRepository instance for the current request."""
+    return ModelSpecRepository(db_session)
 
 
 async def get_secret_manager() -> BaseSecretManager:
     """Get SecretManager instance - real Infisical implementation."""
     return get_real_secret_manager()
-
-
-async def get_task_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get a TaskRepository instance for the current request.
-
-    Uses a new database session for each request to ensure transaction isolation.
-    """
-    return SQLAlchemyTaskRepository(db)
-
-
-# Shared task manager instance
-_task_manager_instance: BaseTaskManager | None = None
-
-
-async def get_database_task_manager(
-    task_repository: Annotated[SQLAlchemyTaskRepository, Depends(get_task_repository)],
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-) -> BaseTaskManager:
-    """Get a real database-backed TaskManager instance.
-
-    This replaces the in-memory task manager with real persistence.
-    Note: DatabaseTaskManager is still under development.
-    """
-    global _task_manager_instance
-
-    # Use a shared instance to maintain task state across requests
-    if _task_manager_instance is None:
-        from agentarea_tasks.in_memory_task_manager import InMemoryTaskManager
-
-        _task_manager_instance = InMemoryTaskManager()
-        logger.info("Created shared InMemoryTaskManager instance")
-
-    return _task_manager_instance
-
-
-async def get_task_service(
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    task_repository: Annotated[SQLAlchemyTaskRepository, Depends(get_task_repository)],
-):
-    """Get a TaskService instance for the current request.
-
-    Combines the global EventBroker singleton with a request-scoped TaskRepository.
-    """
-    return TaskService(event_broker=event_broker, task_repository=task_repository)
-
-
-async def get_unified_chat_service():
-    """Get a UnifiedTaskService instance for the current request.
-
-    Returns a new instance for each request with protocol adapters.
-    """
-    return UnifiedTaskService()
-
-
-async def get_agent_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get an AgentRepository instance for the current request."""
-    return AgentRepository(db)
-
-
-async def get_agent_service(
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    agent_repository: Annotated[AgentRepository, Depends(get_agent_repository)],
-):
-    """Get an AgentService instance for the current request.
-
-    Returns a new instance for each request.
-    """
-    return AgentService(repository=agent_repository, event_broker=event_broker)
-
-
-async def get_workflow_task_execution_service():
-    """Get a WorkflowTaskExecutionService instance for the current request.
-
-    This service uses Temporal workflows for non-blocking task execution.
-    """
-    return WorkflowTaskExecutionService()
-
-
-# LLM Services
-async def get_llm_model_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get a LLMModelRepository instance for the current request."""
-    return LLMModelRepository(db)
-
-
-async def get_llm_model_service(
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    llm_model_repository: Annotated[LLMModelRepository, Depends(get_llm_model_repository)],
-):
-    """Get a LLMModelService instance for the current request."""
-    return LLMModelService(repository=llm_model_repository, event_broker=event_broker)
-
-
-async def get_llm_model_instance_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get a LLMModelInstanceRepository instance for the current request."""
-    return LLMModelInstanceRepository(db)
-
-
-async def get_llm_model_instance_service(
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    llm_model_instance_repository: Annotated[
-        LLMModelInstanceRepository, Depends(get_llm_model_instance_repository)
-    ],
-    secret_manager: Annotated[BaseSecretManager, Depends(get_secret_manager)],
-):
-    """Get a LLMModelInstanceService instance for the current request."""
-    return LLMModelInstanceService(
-        repository=llm_model_instance_repository,
-        event_broker=event_broker,
-        secret_manager=secret_manager,
-    )
-
-
-# LLM execution removed - handled by agent_runner_service via Google ADK
-
-
-# MCP Services
-async def get_mcp_server_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get a MCPServerRepository instance for the current request."""
-    return MCPServerRepository(db)
-
-
-async def get_mcp_server_service(
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    mcp_server_repository: Annotated[MCPServerRepository, Depends(get_mcp_server_repository)],
-):
-    """Get a MCPServerService instance for the current request."""
-    return MCPServerService(repository=mcp_server_repository, event_broker=event_broker)
-
-
-async def get_mcp_server_instance_repository(db: Annotated[AsyncSession, Depends(get_db_session)]):
-    """Get a MCPServerInstanceRepository instance for the current request."""
-    return MCPServerInstanceRepository(db)
-
-
-async def get_mcp_server_instance_service(
-    event_broker: Annotated[EventBroker, Depends(get_event_broker)],
-    mcp_server_instance_repository: Annotated[
-        MCPServerInstanceRepository, Depends(get_mcp_server_instance_repository)
-    ],
-    mcp_server_repository: Annotated[MCPServerRepository, Depends(get_mcp_server_repository)],
-    secret_manager: Annotated[BaseSecretManager, Depends(get_secret_manager)],
-):
-    """Get a MCPServerInstanceService instance for the current request."""
-    return MCPServerInstanceService(
-        repository=mcp_server_instance_repository,
-        event_broker=event_broker,
-        mcp_server_repository=mcp_server_repository,
-        secret_manager=secret_manager,
-    )

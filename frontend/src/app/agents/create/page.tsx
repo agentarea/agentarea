@@ -1,4 +1,4 @@
-import { listMCPServers, MCPServer, listLLMModelInstances } from "@/lib/api";
+import { listMCPServers, MCPServer, listModelInstances } from "@/lib/api";
 import CreateAgentClient from "./CreateAgentClient";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 
@@ -23,7 +23,7 @@ export default async function CreateAgentPage() {
   );
 
   // Fetch LLM model instances
-  const llmResponse = await listLLMModelInstances();
+  const llmResponse = await listModelInstances();
   const llmModelInstances = llmResponse.data || [];
 
   // return <CreateAgentClient mcpServers={[mcpServers]} />;

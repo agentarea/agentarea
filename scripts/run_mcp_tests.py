@@ -17,12 +17,62 @@ Usage:
 import asyncio
 import argparse
 import sys
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import httpx
 
 # Add tests to path
 sys.path.append(str(Path(__file__).parent.parent))
+
+
+async def get_or_create_model(client: httpx.AsyncClient, api_base: str) -> str:
+    """Get existing or create new Ollama model."""
+    # Try to find existing model
+    response = await client.get(f"{api_base}/v1/llm-models/")
+    if response.status_code == 200:
+        models = response.json()
+        for model in models:
+            if "ollama" in str(model.get("provider", "")).lower():
+                return str(model.get("id"))
+
+    # Create new model
+    model_data = {
+        "name": "qwen2.5:latest",
+        "description": "Qwen2.5 model via Ollama",
+        "provider": "ollama",
+        "model_type": "chat",
+        "endpoint_url": "http://host.docker.internal:11434",
+        "context_window": "32768",
+        "is_public": True,
+    }
+
+    response = await client.post(f"{api_base}/v1/llm-models/", json=model_data)
+    assert response.status_code in [200, 201], (
+        f"Failed to create model: {response.status_code} - {response.text}"
+    )
+
+    model = response.json()
+    return str(model.get("id"))
+
+
+async def create_model_instance(client: httpx.AsyncClient, api_base: str, model_id: str) -> str:
+    """Create model instance."""
+    instance_data = {
+        "model_id": model_id,
+        "api_key": "not-needed-for-ollama",
+        "name": f"test-instance-{uuid.uuid4().hex[:8]}",
+        "description": "Test instance for MCP testing",
+        "is_public": True,
+    }
+
+    response = await client.post(f"{api_base}/v1/llm-models/instances/", json=instance_data)
+    assert response.status_code in [200, 201], (
+        f"Failed to create instance: {response.status_code} - {response.text}"
+    )
+
+    instance = response.json()
+    return str(instance.get("id"))
 
 
 async def run_custom_mcp_test(
@@ -49,13 +99,22 @@ async def run_custom_mcp_test(
     client = httpx.AsyncClient(timeout=60)
 
     try:
-        # Step 1: Create agent
+        # Step 1: Create or get Ollama model and instance
+        print("📋 Getting or creating Ollama model...")
+        model_id = await get_or_create_model(client, api_base)
+        assert model_id, "Failed to get or create model"
+
+        print("🔧 Creating model instance...")
+        instance_id = await create_model_instance(client, api_base, model_id)
+        assert instance_id, "Failed to create model instance"
+
+        # Step 2: Create agent
         print("📝 Creating agent...")
         agent_data = {
             "name": f"MCP Test Agent - {server_name}",
             "description": f"Agent for testing {server_name} MCP integration",
             "instruction": "You are a helpful assistant that uses MCP tools to help users.",
-            "model_id": "test-model",
+            "model_id": instance_id,
         }
 
         response = await client.post(f"{api_base}/v1/agents/", json=agent_data)

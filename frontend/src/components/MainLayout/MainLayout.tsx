@@ -3,11 +3,9 @@ import {
   Bot,
   Home,
   Settings,
-  Server,
-  Cpu,
-  Package,
   Plug,
   ClipboardList,
+  Key,
 } from "lucide-react";
 import { LucideProps } from "lucide-react";
 import Header from "./components/Header";
@@ -54,7 +52,7 @@ export const navContent: NavSection[] = [
       {
         label: "Tasks",
         labelKey: "tasks",
-        href: "/agents/tasks",
+        href: "/tasks",
         icon: <ClipboardList />,
       },
       {
@@ -73,10 +71,10 @@ export const navContent: NavSection[] = [
     isCollapsed: true,
     items: [
       {
-        label: "LLM Models",
-        labelKey: "llms",
-        href: "/admin/llms",
-        icon: <Cpu />,
+        label: "Models",
+        labelKey: "providerConfigs",
+        href: "/admin/provider-configs",
+        icon: <Key />,
       },
     ],
   },

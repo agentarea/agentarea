@@ -29,6 +29,7 @@ from agentarea_mcp.infrastructure.repository import (
 from agentarea_mcp.schemas import MCPServerStatus
 
 from .mcp_env_service import MCPEnvironmentService
+from .validation_service import MCPConfigurationValidator, MCPValidationError
 
 
 class MCPServerService(BaseCrudService[MCPServer]):
@@ -214,6 +215,11 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
     ) -> MCPServerInstance | None:
         spec = json_spec or {}
 
+        # Validate the JSON specification
+        validation_errors = MCPConfigurationValidator.validate_json_spec(spec)
+        if validation_errors:
+            raise MCPValidationError(validation_errors)
+
         # Create instance - mcp-infrastructure will determine how to handle it based on json_spec
         instance = MCPServerInstance(
             name=name,
@@ -298,7 +304,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
 
         # Publish event for Go MCP Manager to handle container deletion
         await self.event_broker.publish(
-            MCPServerInstanceDeleted(instance_id=str(instance.id), name=instance.name)
+            MCPServerInstanceDeleted(instance_id=instance.id)
         )
 
         # Delete the instance from the database
