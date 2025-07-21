@@ -52,7 +52,7 @@ export const navContent: NavSection[] = [
       {
         label: "Tasks",
         labelKey: "tasks",
-        href: "/agents/tasks",
+        href: "/tasks",
         icon: <ClipboardList />,
       },
       {

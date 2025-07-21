@@ -305,7 +305,7 @@ export default function TaskDetailsPage() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => router.push("/agents/tasks")}
+            onClick={() => router.push("/tasks")}
             className="gap-1"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -330,7 +330,7 @@ export default function TaskDetailsPage() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => router.push("/agents/tasks")}
+            onClick={() => router.push("/tasks")}
             className="gap-1"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -345,7 +345,7 @@ export default function TaskDetailsPage() {
               {error || "The requested task could not be found."}
             </p>
             <div className="flex gap-2 justify-center">
-              <Button onClick={() => router.push("/agents/tasks")} variant="outline">
+              <Button onClick={() => router.push("/tasks")} variant="outline">
                 Back to Tasks
               </Button>
               <Button onClick={handleRefresh} variant="default">
@@ -374,7 +374,7 @@ export default function TaskDetailsPage() {
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => router.push("/agents/tasks")}
+          onClick={() => router.push("/tasks")}
           className="gap-1"
         >
           <ArrowLeft className="h-4 w-4" />
