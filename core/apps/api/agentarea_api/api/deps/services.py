@@ -174,20 +174,27 @@ async def get_execution_service() -> ExecutionServiceInterface:
 # MCP Service dependencies
 async def get_mcp_server_service(
     db_session: DatabaseSessionDep,
-    secret_manager: BaseSecretManagerDep,
+    event_broker: EventBrokerDep,
 ) -> MCPServerService:
     """Get a MCPServerService instance for the current request."""
     repository = MCPServerRepository(db_session)
-    return MCPServerService(repository, secret_manager)
+    return MCPServerService(repository, event_broker)
 
 
 async def get_mcp_server_instance_service(
     db_session: DatabaseSessionDep,
     secret_manager: BaseSecretManagerDep,
+    event_broker: EventBrokerDep,
 ) -> MCPServerInstanceService:
     """Get a MCPServerInstanceService instance for the current request."""
     repository = MCPServerInstanceRepository(db_session)
-    return MCPServerInstanceService(repository, secret_manager)
+    mcp_server_repository = MCPServerRepository(db_session)
+    return MCPServerInstanceService(
+        repository=repository,
+        event_broker=event_broker,
+        mcp_server_repository=mcp_server_repository,
+        secret_manager=secret_manager,
+    )
 
 
 # Common service type hints for easier use
