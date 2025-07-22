@@ -9,8 +9,9 @@ import ModelsList from "./ModelsList";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { setCookie, getCookie } from "@/utils/cookies";
 
 import EmptyState from "@/components/EmptyState/EmptyState";
 
@@ -28,10 +29,34 @@ export default function MainContent({
     const commonT = useTranslations("Common");
     const router = useRouter();
     const searchParams = useSearchParams();
+    const pathname = usePathname();
     
     const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
     const [isSearching, setIsSearching] = useState(false);
+    
+    // Get saved tab from cookies or URL (only on client)
+    const [savedTab, setSavedTab] = useState<string | null>(null);
+    const [isTabLoaded, setIsTabLoaded] = useState(false);
+    const urlTab = searchParams.get("tab");
+    
+    // Generate unique cookie key based on current path
+    const generateCookieKey = (path: string) => {
+        // Remove leading slash and replace slashes with underscores
+        const cleanPath = path.replace(/^\/+/, '').replace(/\//g, '_');
+        return `tab_${cleanPath}`;
+    };
+    
+    const cookieKey = generateCookieKey(pathname);
+    
+    // Read cookie only on client side
+    useEffect(() => {
+        const cookieTab = getCookie(cookieKey);
+        setSavedTab(cookieTab);
+        setIsTabLoaded(true);
+    }, []);
+    
+    const initialTab = urlTab || savedTab || "grid";
 
     // Debounce effect - wait 500ms after user stops typing
     useEffect(() => {
@@ -54,9 +79,23 @@ export default function MainContent({
             params.delete("search");
         }
         
+        // Preserve the tab parameter
+        const tab = searchParams.get("tab");
+        if (tab) {
+            params.set("tab", tab);
+        }
+        
         const newUrl = params.toString() ? `?${params.toString()}` : "";
         router.replace(`/admin/provider-configs${newUrl}`, { scroll: false });
     }, [debouncedSearchQuery, router, searchParams]);
+
+    // Save tab to cookies when it changes
+    useEffect(() => {
+        const currentTab = searchParams.get("tab");
+        if (currentTab && (currentTab === "grid" || currentTab === "table")) {
+            setCookie(cookieKey, currentTab);
+        }
+    }, [searchParams, cookieKey]);
 
     // Handle search input change
     const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,9 +193,24 @@ export default function MainContent({
         },
     ];
 
+    // Don't render until tab is loaded to prevent flashing
+    if (!isTabLoaded && !urlTab) {
+        return (
+            <div className="content-section">
+                <div className="flex items-center justify-center h-32">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="content-section">
-            <GridAndTableSectionsViews searchParams={resolvedSearchParams}
+            <GridAndTableSectionsViews 
+                searchParams={{
+                    ...Object.fromEntries(searchParams.entries()),
+                    tab: initialTab
+                }}
                     data={[
                         {
                             sectionId: "configured",
