@@ -58,7 +58,7 @@ export default async function ProviderConfigsPage({
     }
 
     const providerSpecs = specsResponse.data || [];
-    const providerConfigs = [] || [];
+    const providerConfigs = configsResponse.data || [];
 
     // Create a map of provider specs for easy lookup
     const specsMap = new Map(providerSpecs.map(spec => [spec.id, spec]));
