@@ -119,6 +119,10 @@ body {
     @apply font-montserrat font-semibold text-lg md:text-xl;
   }
 
+  .content-section {
+    @apply pb-[20px] md:pb-[20px] lg:pb-[25px] space-y-4;
+  }
+
   .card {
     @apply bg-white dark:bg-zinc-800 rounded-[16px];
     @apply p-[16px] md:p-[20px] lg:p-[24px] cursor-pointer;
@@ -141,5 +145,11 @@ body {
 
   .note {
     @apply text-xs text-zinc-400;
+  }
+
+  .small-link {
+    @apply text-primary dark:text-accent-foreground text-xs;
+    @apply flex items-center gap-2;
+    @apply hover:text-accent transition-all duration-300;
   }
 }

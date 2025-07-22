@@ -25,7 +25,10 @@
     "settings": "Настройки",
     "logout": "Выйти",
     "admin": "Админ",
-    "connections": "Соединения"
+    "connections": "Соединения",
+    "providers": "Провайдеры",
+    "providerConfigs": "Модели",
+    "modelSpecs": "Спецификации моделей"
   },
 
   "LlmBrowsePage": {
@@ -99,6 +102,24 @@
       "selected": "Выбрано",
       "added": "Добавлено",
       "remove": "Удалить"
+    }
+  },
+
+  "Models": {
+    "title": "Модели",
+    "description": "Управление конфигурациями моделей и обнаружение доступных поставщиков",
+    "createButton": "Добавить конфигурацию",
+    "editConfiguration": "Редактировать конфигурацию",
+    "configureProvider": "Настроить провайдер",
+    "availableProviders": "Доступные провайдеры",
+    "table": {
+      "provider": "Провайдер",
+      "description": "Описание",
+      "models": "Модели"
+    },
+    "emptyState": {
+      "title": "Нет конфигураций",
+      "description": "Создайте свою первую конфигурацию провайдера, чтобы начать работу"
     }
   }
 }
