@@ -14,7 +14,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Key, Globe, Brain, CheckCircle2, AlertCircle, ChevronRight, ChevronDown, Bot } from 'lucide-react';
+import { Key, Brain, CheckCircle2, AlertCircle, ChevronRight, ChevronDown, Bot, Settings, Link, Users, Lock, Server } from 'lucide-react';
+import FormLabel from '@/components/FormLabel/FormLabel';
 
 import { cn } from '@/lib/utils';
 import { getProviderIconUrl } from '@/lib/provider-icons';
@@ -237,19 +238,9 @@ export default function ProviderConfigForm({
       )}
 
       {/* Step 1: Provider Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5" />
-            {isEdit ? 'Edit Provider Configuration' : 'Provider Configuration'}
-          </CardTitle>
-          <CardDescription>
-            {isEdit ? 'Update your AI provider configuration' : 'Configure API access to an AI provider'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Card className="grid grid-cols-1 gap-6">
           <div className="space-y-2">
-            <Label htmlFor="provider">Provider</Label>
+            <FormLabel htmlFor="provider" icon={Server}>Provider</FormLabel>
             <SearchableSelect
               options={providerSpecs.map(spec => ({
                 id: spec.id,
@@ -270,14 +261,14 @@ export default function ProviderConfigForm({
               }
             />
             {preselectedProviderId && !isEdit && (
-              <p className="text-sm text-muted-foreground">
+              <p className="note">
                 Provider is pre-selected for this configuration.
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name">Configuration Name</Label>
+            <FormLabel htmlFor="name" icon={Settings}>Configuration Name</FormLabel>
             <Input
               id="name"
               type="text"
@@ -289,7 +280,7 @@ export default function ProviderConfigForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="api_key">API Key</Label>
+            <FormLabel htmlFor="api_key" icon={Key}>API Key</FormLabel>
             <Input
               id="api_key"
               type="password"
@@ -301,7 +292,8 @@ export default function ProviderConfigForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="endpoint_url">Custom Endpoint URL (Optional)</Label>
+            
+            <FormLabel htmlFor="endpoint_url" icon={Link} optional>Custom Endpoint URL</FormLabel>
             <Input
               id="endpoint_url"
               type="url"
@@ -317,12 +309,10 @@ export default function ProviderConfigForm({
               checked={formData.is_public}
               onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_public: checked }))}
             />
-            <Label htmlFor="is_public" className="flex items-center gap-2">
-              {formData.is_public ? <Globe className="h-4 w-4" /> : <Key className="h-4 w-4" />}
+            <FormLabel htmlFor="is_public" className="flex items-center gap-2" icon={formData.is_public ? Users : Lock}>
               {formData.is_public ? 'Public Configuration' : 'Private Configuration'}
-            </Label>
+            </FormLabel>
           </div>
-        </CardContent>
       </Card>
 
       {/* Step 2: Model Selection (only for create mode) */}

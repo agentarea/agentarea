@@ -9,6 +9,7 @@ import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
 import type { components } from '@/api/schema';
+import FormLabel from "@/components/FormLabel/FormLabel";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
@@ -26,9 +27,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
     </h2> */}
     <div className="grid grid-cols-1 gap-6">
       <div className="space-y-2">
-        <Label htmlFor="name" className="label">
-            <Bot className="label-icon" style={{ strokeWidth: 1.5 }} />Agent Name
-        </Label>
+        <FormLabel htmlFor="name" icon={Bot}>Agent Name</FormLabel>
         <Input
           id="name"
           {...register('name', { required: "Agent name is required" })}
@@ -39,9 +38,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
         {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="description" className="label">
-          <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description / Goal <span className="text-xs font-light text-zinc-400">(Optional)</span>
-        </Label>
+        <FormLabel htmlFor="description" icon={FileText} optional>Description / Goal</FormLabel>
         <Textarea
           id="description"
           {...register('description')}
@@ -53,9 +50,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
         {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="instruction" className="label">
-          <MessageSquare className="label-icon" style={{ strokeWidth: 1.5 }} /> Instruction <span className="text-sm text-red-500">*</span>
-        </Label>
+        <FormLabel htmlFor="instruction" icon={MessageSquare} required>Instruction</FormLabel>
         <Textarea
           id="instruction"
           {...register('instruction', { required: "Instruction is required" })}
@@ -67,9 +62,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
         {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="model_id" className="label">
-          <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> LLM Model
-        </Label>
+        <FormLabel htmlFor="model_id" icon={Cpu}>LLM Model</FormLabel>
          <Controller
             name="model_id"
             control={control}

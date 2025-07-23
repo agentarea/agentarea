@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { listProviderSpecs, listProviderSpecsWithModels } from '@/lib/api';
 import ProviderConfigForm from './ProviderConfigForm';
+import ContentBlock from '@/components/ContentBlock/ContentBlock';
 
 export default async function CreateProviderConfigPage({
   searchParams,
@@ -50,37 +51,23 @@ export default async function CreateProviderConfigPage({
   );
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-6">
-        <Link 
-          href="/admin/provider-configs" 
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Provider Management
-        </Link>
-        
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold">
-            {preselectedProviderId 
-              ? `Configure ${providerSpecs.find(p => p.id === preselectedProviderId)?.name || 'Provider'}`
-              : 'Add Provider Configuration'
-            }
-          </h1>
-          <p className="text-muted-foreground">
-            {preselectedProviderId 
-              ? `Set up API access for ${providerSpecs.find(p => p.id === preselectedProviderId)?.name || 'this provider'} and optionally create model instances.`
-              : 'Configure API access to an AI provider and optionally create model instances.'
-            }
-          </p>
-        </div>
+    <ContentBlock 
+      header={{
+        title: preselectedProviderId 
+          ? `Configure ${providerSpecs.find(p => p.id === preselectedProviderId)?.name || 'Provider'}`
+          : 'Add Provider Configuration',
+        backLink: {
+          label: "Back to Provider Management",
+          href: "/admin/provider-configs"
+        }
+    }}>
+      <div className="max-w-4xl mx-auto">
+        <ProviderConfigForm 
+          providerSpecs={providerSpecs}
+          modelSpecs={modelSpecs}
+          preselectedProviderId={preselectedProviderId}
+        />
       </div>
-
-      <ProviderConfigForm 
-        providerSpecs={providerSpecs}
-        modelSpecs={modelSpecs}
-        preselectedProviderId={preselectedProviderId}
-      />
-    </div>
+  </ContentBlock>
   );
 } 

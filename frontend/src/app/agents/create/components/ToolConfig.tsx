@@ -13,6 +13,7 @@ import { Accordion } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { SelectableList } from "./SelectableList";
 import { useTranslations } from "next-intl";
+import FormLabel from "@/components/FormLabel/FormLabel";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -33,7 +34,7 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
   const t = useTranslations('AgentsPage');
   const title = (
     <div className="flex items-center gap-2">
-      <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> Tools (MCP Servers)
+      <FormLabel icon={Cpu} className="cursor-pointer">Tools (MCP Servers)</FormLabel>
     </div>
   );
   const note = (

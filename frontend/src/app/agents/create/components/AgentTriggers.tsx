@@ -9,6 +9,7 @@ import { Accordion } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SelectableList } from "./SelectableList";
 import { Button } from "@/components/ui/button";
+import FormLabel from "@/components/FormLabel/FormLabel";
 
 // Define event trigger types
 const eventOptions = [
@@ -63,7 +64,7 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
 
   const title = useMemo(() => (
     <div className="flex items-center gap-2">
-      <Zap className="label-icon" style={{ strokeWidth: 1.5 }} /> Agent Triggers
+      <FormLabel icon={Zap} className="cursor-pointer">Agent Triggers</FormLabel>
     </div>
   ), []);
 
