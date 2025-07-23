@@ -152,4 +152,28 @@ body {
     @apply flex items-center gap-2;
     @apply hover:text-accent transition-all duration-300;
   }
+  
+  /* Force select content to match trigger width */
+  [data-radix-select-content] {
+    width: var(--radix-select-trigger-width) !important;
+    min-width: var(--radix-select-trigger-width) !important;
+  }
+  
+  /* Force popover content to match trigger width */
+  [data-radix-popover-content] {
+    width: var(--radix-popover-trigger-width) !important;
+    min-width: var(--radix-popover-trigger-width) !important;
+  }
+  
+  /* Additional popover width fixes */
+  [data-radix-popper-content-wrapper] {
+    width: var(--radix-popover-trigger-width) !important;
+    min-width: var(--radix-popover-trigger-width) !important;
+  }
+  
+  /* Force all popover content to match trigger */
+  .popover-content-match-trigger {
+    width: var(--radix-popover-trigger-width) !important;
+    min-width: var(--radix-popover-trigger-width) !important;
+  }
 }

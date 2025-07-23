@@ -13,12 +13,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Key, Globe, Brain, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, Search, Check } from 'lucide-react';
-import { getProviderIconUrl, getDefaultProviderIconUrl } from '@/lib/provider-icons';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Key, Globe, Brain, CheckCircle2, AlertCircle, ChevronRight, ChevronDown, Bot } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
+import { getProviderIconUrl } from '@/lib/provider-icons';
 
 type ProviderSpec = components['schemas']['ProviderSpecResponse'];
 type ModelSpec = {
@@ -58,7 +57,6 @@ export default function ProviderConfigForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
-  const [open, setOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     provider_spec_id: preselectedProviderId || initialData?.provider_spec_id || '',
@@ -101,8 +99,8 @@ export default function ProviderConfigForm({
     );
   }
 
-  const handleProviderChange = (providerId: string) => {
-    setFormData(prev => ({ ...prev, provider_spec_id: providerId }));
+  const handleProviderChange = (providerId: string | number) => {
+    setFormData(prev => ({ ...prev, provider_spec_id: providerId.toString() }));
     setSelectedModels([]); // Reset selected models when provider changes
   };
 
@@ -252,75 +250,25 @@ export default function ProviderConfigForm({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="provider">Provider</Label>
-            <Popover open={open} onOpenChange={setOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={open}
-                  className="w-full justify-between"
-                  disabled={!!preselectedProviderId && !isEdit}
-                >
-                  {selectedProvider ? (
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={getProviderIconUrl(selectedProvider.name) || getDefaultProviderIconUrl()}
-                        alt={selectedProvider.name}
-                        className="w-5 h-5 rounded"
-                        onError={(e) => {
-                          e.currentTarget.src = getDefaultProviderIconUrl();
-                        }}
-                      />
-                      <span>{selectedProvider.name}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Search className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Search providers...</span>
-                    </div>
-                  )}
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <Command>
-                  <CommandInput placeholder="Search providers..." />
-                  <CommandList>
-                    <CommandEmpty>No providers found.</CommandEmpty>
-                    <CommandGroup>
-                      {providerSpecs.map((provider) => (
-                        <CommandItem
-                          key={provider.id}
-                          value={provider.name}
-                          onSelect={() => {
-                            handleProviderChange(provider.id);
-                            setOpen(false);
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={getProviderIconUrl(provider.name) || getDefaultProviderIconUrl()}
-                              alt={provider.name}
-                              className="w-5 h-5 rounded"
-                              onError={(e) => {
-                                e.currentTarget.src = getDefaultProviderIconUrl();
-                              }}
-                            />
-                            <span>{provider.name}</span>
-                          </div>
-                          <Check
-                            className={cn(
-                              "ml-auto h-4 w-4",
-                              formData.provider_spec_id === provider.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <SearchableSelect
+              options={providerSpecs.map(spec => ({
+                id: spec.id,
+                label: spec.name,
+                icon: spec.icon_url || getProviderIconUrl(spec.name)
+              }))}
+              value={formData.provider_spec_id}
+              onValueChange={handleProviderChange}
+              placeholder="Select provider"
+              disabled={!!preselectedProviderId && !isEdit}
+              emptyMessage={
+                <div className="flex flex-col items-center justify-center h-full gap-1">
+                  <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
+                      <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
+                  </div>
+                  <span className="text-muted-foreground">No providers found</span>
+                </div>
+              }
+            />
             {preselectedProviderId && !isEdit && (
               <p className="text-sm text-muted-foreground">
                 Provider is pre-selected for this configuration.
