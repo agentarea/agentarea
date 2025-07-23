@@ -7,8 +7,10 @@ High-level service that orchestrates task management by:
 4. Validating agent existence before task submission
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
@@ -44,10 +46,10 @@ class TaskService(BaseTaskService):
 
     async def _validate_agent_exists(self, agent_id: UUID) -> None:
         """Validate that the agent exists before processing tasks.
-        
+
         Args:
             agent_id: The agent ID to validate
-            
+
         Raises:
             ValueError: If agent doesn't exist or agent_repository is not available
         """
@@ -82,7 +84,7 @@ class TaskService(BaseTaskService):
 
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
         """Submit a task for execution through the task manager.
-        
+
         This method validates the agent exists before submitting to avoid
         failures later in the Temporal workflow.
         """
@@ -130,17 +132,17 @@ class TaskService(BaseTaskService):
         error: str | None = None,
     ) -> SimpleTask | None:
         """Update task status and related fields.
-        
+
         This method provides compatibility with the application layer TaskService
         that was removed during refactoring.
-        
+
         Args:
             task_id: The task ID to update
             status: The new status
             execution_id: Optional execution ID
             result: Optional task result
             error: Optional error message
-            
+
         Returns:
             The updated task if found, None otherwise
         """
@@ -161,14 +163,14 @@ class TaskService(BaseTaskService):
 
     async def list_agent_tasks(self, agent_id: UUID, limit: int = 100) -> list[SimpleTask]:
         """List tasks for an agent.
-        
+
         This method provides compatibility with the application layer TaskService
         that was removed during refactoring.
-        
+
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
-            
+
         Returns:
             List of tasks for the agent
         """
@@ -176,11 +178,11 @@ class TaskService(BaseTaskService):
 
     async def list_agent_tasks_with_workflow_status(self, agent_id: UUID, limit: int = 100) -> list[SimpleTask]:
         """List tasks for an agent enriched with workflow status.
-        
+
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
-            
+
         Returns:
             List of tasks for the agent with current workflow status
         """
@@ -200,10 +202,10 @@ class TaskService(BaseTaskService):
 
     async def get_task_with_workflow_status(self, task_id: UUID) -> SimpleTask | None:
         """Get a task enriched with workflow status.
-        
+
         Args:
             task_id: The task ID to get
-            
+
         Returns:
             Task with current workflow status if found, None otherwise
         """
@@ -219,10 +221,10 @@ class TaskService(BaseTaskService):
 
     async def _enrich_task_with_workflow_status(self, task: SimpleTask) -> SimpleTask:
         """Enrich a task with current workflow status.
-        
+
         Args:
             task: The task to enrich
-            
+
         Returns:
             Task with updated status and result from workflow
         """
@@ -285,14 +287,14 @@ class TaskService(BaseTaskService):
         enable_agent_communication: bool = True,
     ) -> SimpleTask:
         """Create a task and execute it using workflow.
-        
+
         Args:
             agent_id: The agent to execute the task
             description: Task description
             parameters: Task parameters
             user_id: User ID (defaults to "api_user")
             enable_agent_communication: Whether to enable agent communication
-            
+
         Returns:
             Created task with workflow execution info
         """
@@ -322,7 +324,7 @@ class TaskService(BaseTaskService):
             query=description,
             user_id=user_id or "api_user",
             agent_id=agent_id,
-            status="created",
+            status="pending",
             task_parameters=parameters or {},
             metadata={
                 "created_via": "api",
@@ -334,23 +336,15 @@ class TaskService(BaseTaskService):
         # Store task
         stored_task = await self.create_task(task)
 
-        # Publish TaskCreated event
-        from .domain.events import TaskCreated
-        task_created_event = TaskCreated(
-            task_id=str(task_id),
-            agent_id=agent_id,
-            description=description,
-            parameters=parameters or {},
-            metadata={
-                "created_via": "api",
-                "agent_name": agent_name,
-                "created_at": stored_task.created_at.isoformat(),
-                "user_id": user_id,
-                "enable_agent_communication": enable_agent_communication,
-                "status": "created",
-            },
-        )
-        await self._publish_task_event(task_created_event)
+        # Publish TaskCreated event - temporarily disabled due to event creation issue
+        # from .domain.events import TaskCreated
+        # task_created_event = TaskCreated(
+        #     task_id=str(task_id),
+        #     agent_id=str(agent_id),
+        #     description=description,
+        #     parameters=parameters or {},
+        # )
+        # await self._publish_task_event(task_created_event)
 
         # Set initial status
         stored_task.status = "pending"
@@ -370,24 +364,14 @@ class TaskService(BaseTaskService):
                 stored_task.execution_id = execution_id
                 stored_task.status = "running"
 
-                # Publish workflow started event
-                workflow_started_event = TaskCreated(
-                    task_id=str(task_id),
-                    agent_id=agent_id,
-                    description=description,
-                    parameters=parameters or {},
-                    metadata={
-                        "created_via": "api",
-                        "agent_name": agent_name,
-                        "created_at": stored_task.created_at.isoformat(),
-                        "user_id": user_id,
-                        "enable_agent_communication": enable_agent_communication,
-                        "execution_id": execution_id,
-                        "status": "running",
-                        "workflow_started": True,
-                    },
-                )
-                await self._publish_task_event(workflow_started_event)
+                # Publish workflow started event - temporarily disabled
+                # workflow_started_event = TaskCreated(
+                #     task_id=str(task_id),
+                #     agent_id=str(agent_id),
+                #     description=description,
+                #     parameters=parameters or {},
+                # )
+                # await self._publish_task_event(workflow_started_event)
 
                 logger.info(f"Task {task_id} started with workflow execution ID {execution_id}")
 
@@ -396,24 +380,14 @@ class TaskService(BaseTaskService):
                 stored_task.status = "failed"
                 stored_task.result = {"error": str(e), "error_type": "workflow_start_failed"}
 
-                # Publish workflow failed event
-                workflow_failed_event = TaskCreated(
-                    task_id=str(task_id),
-                    agent_id=agent_id,
-                    description=description,
-                    parameters=parameters or {},
-                    metadata={
-                        "created_via": "api",
-                        "agent_name": agent_name,
-                        "created_at": stored_task.created_at.isoformat(),
-                        "user_id": user_id,
-                        "enable_agent_communication": enable_agent_communication,
-                        "status": "failed",
-                        "error": str(e),
-                        "workflow_failed": True,
-                    },
-                )
-                await self._publish_task_event(workflow_failed_event)
+                # Publish workflow failed event - temporarily disabled
+                # workflow_failed_event = TaskCreated(
+                #     task_id=str(task_id),
+                #     agent_id=str(agent_id),
+                #     description=description,
+                #     parameters=parameters or {},
+                # )
+                # await self._publish_task_event(workflow_failed_event)
         else:
             logger.warning("Workflow service not available - task created but not executed")
 
@@ -443,3 +417,220 @@ class TaskService(BaseTaskService):
         # Execute it
         async for event in self.execute_task(task.id, enable_agent_communication):
             yield event
+
+    async def stream_task_events(self, task_id: UUID, include_history: bool = True) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream real-time events for a task using the injected EventBroker.
+
+        This provides a clean interface for SSE endpoints to consume events
+        without knowing about specific broker implementations.
+
+        Args:
+            task_id: The task to stream events for
+            include_history: Whether to include past events before streaming new ones
+
+        Yields:
+            dict: Event data in a consistent format
+        """
+        # Set up event listener for this task
+        task_events = asyncio.Queue()
+        listener_task = None
+
+        async def event_listener():
+            """Listen for workflow events using direct Redis pubsub."""
+            import json
+            
+            pubsub = None
+            try:
+                logger.info(f"Started event listener for task {task_id} using Redis pubsub")
+
+                # Access the underlying Redis broker from the EventBroker
+                if not hasattr(self.event_broker, 'redis_broker'):
+                    raise AttributeError("EventBroker does not have redis_broker attribute")
+                
+                redis_broker = self.event_broker.redis_broker
+                
+                # Ensure Redis broker is connected
+                if not hasattr(redis_broker, '_connection') or redis_broker._connection is None:
+                    await redis_broker.connect()
+                
+                # Get the underlying Redis connection
+                # For FastStream RedisBroker, try different possible connection attributes
+                redis_connection = None
+                for attr in ['_connection', 'connection', 'client', '_client', 'redis']:
+                    if hasattr(redis_broker, attr):
+                        redis_connection = getattr(redis_broker, attr)
+                        if redis_connection is not None:
+                            break
+                
+                if redis_connection is None:
+                    raise AttributeError("Could not access underlying Redis connection from FastStream RedisBroker")
+                
+                # Create pubsub connection
+                pubsub = redis_connection.pubsub()
+                
+                # Subscribe to workflow patterns
+                await pubsub.psubscribe("workflow.*")
+                
+                logger.info(f"Subscribed to workflow.* patterns for task {task_id}")
+                
+                # Listen for messages
+                async for message in pubsub.listen():
+                    try:
+                        if message['type'] == 'pmessage':
+                            # Parse the JSON event data
+                            channel = message['channel'].decode('utf-8') if isinstance(message['channel'], bytes) else message['channel']
+                            data = message['data']
+                            
+                            if isinstance(data, bytes):
+                                data = data.decode('utf-8')
+                            
+                            if isinstance(data, str):
+                                try:
+                                    event_data = json.loads(data)
+                                except json.JSONDecodeError:
+                                    logger.warning(f"Failed to parse JSON event data: {data}")
+                                    continue
+                            else:
+                                event_data = data
+                            
+                            # Handle FastStream message structure: {"data": "JSON_STRING", "headers": {...}}
+                            actual_event_data = event_data
+                            if isinstance(event_data, dict) and "data" in event_data and isinstance(event_data["data"], str):
+                                # The actual event is a JSON string inside the "data" field
+                                try:
+                                    actual_event_data = json.loads(event_data["data"])
+                                except json.JSONDecodeError:
+                                    logger.warning(f"Failed to parse inner JSON event data: {event_data['data']}")
+                                    continue
+                            
+                            # Filter events for this specific task
+                            task_id_str = str(task_id)
+                            if (isinstance(actual_event_data, dict) and 
+                                actual_event_data.get('data', {}).get('aggregate_id') == task_id_str):
+                                
+                                # Convert to DomainEvent-like format for compatibility
+                                domain_event = {
+                                    'event_type': channel,
+                                    'event_data': actual_event_data,
+                                    'timestamp': datetime.now(UTC)
+                                }
+                                
+                                await task_events.put(domain_event)
+                                logger.debug(f"Queued event for task {task_id}: {channel}")
+                                
+                    except Exception as e:
+                        logger.warning(f"Failed to process Redis message: {e}")
+                        continue
+                            
+            except Exception as e:
+                logger.error(f"Event listener failed for task {task_id}: {e}")
+                # Send error to the queue
+                await task_events.put({
+                    "error": str(e),
+                    "task_id": str(task_id),
+                    "agent_id": "unknown",
+                    "execution_id": "unknown",
+                    "timestamp": datetime.now(UTC).isoformat()
+                })
+            finally:
+                # Clean up pubsub connection
+                if pubsub:
+                    try:
+                        await pubsub.punsubscribe("workflow.*")
+                        await pubsub.close()
+                        logger.debug(f"Cleaned up pubsub connection for task {task_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to cleanup pubsub connection: {e}")
+
+        # Start the event listener task
+        listener_task = asyncio.create_task(event_listener())
+
+        try:
+            # Send historical events first if requested
+            if include_history:
+                historical_events = await self._get_historical_events(task_id)
+                for event in historical_events:
+                    yield event
+
+            # Stream real-time events
+            while True:
+                try:
+                    # Wait for event with timeout to allow cleanup
+                    event = await asyncio.wait_for(task_events.get(), timeout=30.0)
+                    
+                    # Check if this is an error event (dict format)
+                    if isinstance(event, dict) and "error" in event:
+                        yield {
+                            "event_type": "listener_error",
+                            "timestamp": event.get("timestamp"),
+                            "data": {
+                                "error": event["error"],
+                                "task_id": event.get("task_id", str(task_id)),
+                                "agent_id": event.get("agent_id", "unknown"),
+                                "execution_id": event.get("execution_id", "unknown"),
+                            }
+                        }
+                        break  # Stop streaming on listener error
+                    
+                    # Transform and yield the event (both old DomainEvent format and new dict format)
+                    if hasattr(event, 'event_type'):
+                        # Old DomainEvent format
+                        event_data = event.event_data if hasattr(event, 'event_data') else {}
+                        # Handle nested data structure where actual data is in 'data' dict
+                        actual_data = event_data.get('data', event_data) if isinstance(event_data, dict) else event_data
+                        yield {
+                            "event_type": event.event_type.replace("workflow.", ""),  # Remove prefix
+                            "timestamp": event.timestamp.isoformat() if hasattr(event, 'timestamp') else datetime.now(UTC).isoformat(),
+                            "data": actual_data
+                        }
+                    elif isinstance(event, dict) and 'event_type' in event:
+                        # New dict format from Redis pubsub
+                        event_data = event.get('event_data', {})
+                        # Handle nested data structure where actual data is in 'data' dict
+                        actual_data = event_data.get('data', event_data) if isinstance(event_data, dict) else event_data
+                        yield {
+                            "event_type": event['event_type'].replace("workflow.", "") if event['event_type'].startswith("workflow.") else event['event_type'],
+                            "timestamp": event['timestamp'].isoformat() if hasattr(event['timestamp'], 'isoformat') else datetime.now(UTC).isoformat(),
+                            "data": actual_data
+                        }
+                    else:
+                        logger.warning(f"Received unexpected event format: {type(event)}")
+                    
+                except asyncio.TimeoutError:
+                    # Send heartbeat to keep connection alive
+                    yield {
+                        "event_type": "heartbeat",
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "data": {"task_id": str(task_id)}
+                    }
+                    continue
+                except Exception as e:
+                    logger.error(f"Error streaming task events for {task_id}: {e}")
+                    break
+
+        finally:
+            # Clean up the listener task
+            if listener_task and not listener_task.done():
+                listener_task.cancel()
+                try:
+                    await listener_task
+                except asyncio.CancelledError:
+                    pass
+
+    async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
+        """Get historical events for a task.
+
+        This could be implemented by:
+        1. Querying workflow events via Temporal
+        2. Reading from an event store/database
+        3. Reconstructing from task state changes
+        """
+        # Placeholder implementation
+        return [
+            {
+                "event_type": "task_created",
+                "task_id": str(task_id),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "data": {"status": "pending"}
+            }
+        ]

@@ -191,13 +191,135 @@ class TaskSSEEvent(BaseModel):
 # Note: Old task manager approach has been replaced with Temporal workflows
 
 
-@router.post("/", response_model=TaskResponse)
-async def create_task_for_agent(
+@router.post("/")
+async def create_task_for_agent_with_stream(
+    agent_id: UUID,
+    data: TaskCreate,
+    task_service: TaskService = Depends(get_task_service),
+    agent_service: AgentService = Depends(get_agent_service),
+):
+    """Create and execute a task for the specified agent with real-time SSE stream."""
+    # Verify agent exists
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    async def task_creation_stream() -> AsyncGenerator[str, None]:
+        """Generate Server-Sent Events for task creation and execution."""
+        task = None
+        try:
+            # Send initial connection event
+            yield _format_sse_event(
+                "connected",
+                {
+                    "agent_id": str(agent_id),
+                    "agent_name": agent.name,
+                    "message": "Starting task creation",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+
+            # Create and execute task using service layer
+            task = await task_service.create_and_execute_task_with_workflow(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=data.parameters,
+                user_id=data.user_id,
+                enable_agent_communication=data.enable_agent_communication or True,
+            )
+
+            # Send task created event
+            yield _format_sse_event(
+                "task_created",
+                {
+                    "task_id": str(task.id),
+                    "agent_id": str(agent_id),
+                    "description": task.description,
+                    "status": task.status,
+                    "execution_id": task.execution_id,
+                    "created_at": task.created_at.isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+
+            # If workflow started successfully, stream events from task service
+            if task.execution_id and task.status in ["running", "pending"]:
+                async for event in task_service.stream_task_events(task.id, include_history=False):
+                    # Convert task service event to SSE format
+                    event_type = event.get("event_type", "task_event")
+
+                    # Add execution context
+                    event_data = event.get("data", {})
+                    event_data.update({
+                        "task_id": str(task.id),
+                        "agent_id": str(agent_id),
+                        "execution_id": task.execution_id,
+                        "timestamp": event.get("timestamp", datetime.now(UTC).isoformat()),
+                    })
+
+                    yield _format_sse_event(event_type, event_data)
+
+                    # Check for terminal states
+                    if event_type in ["task_completed", "task_failed", "task_cancelled", "workflow_completed", "workflow_failed"]:
+                        logger.info(f"Task {task.id} reached terminal state: {event_type}")
+                        break
+            else:
+                # Task failed to start
+                yield _format_sse_event(
+                    "task_failed",
+                    {
+                        "task_id": str(task.id),
+                        "agent_id": str(agent_id),
+                        "error": "Task failed to start workflow",
+                        "status": task.status,
+                        "result": task.result,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    },
+                )
+
+        except ValueError as e:
+            # Agent validation errors
+            yield _format_sse_event(
+                "error",
+                {
+                    "agent_id": str(agent_id),
+                    "error": f"Agent validation error: {e!s}",
+                    "error_type": "agent_not_found",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+        except Exception as e:
+            logger.error(f"Failed to create task for agent {agent_id}: {e}")
+            yield _format_sse_event(
+                "error",
+                {
+                    "task_id": str(task.id) if task else None,
+                    "agent_id": str(agent_id),
+                    "error": f"Task creation failed: {e!s}",
+                    "error_type": "creation_failed",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+
+    return StreamingResponse(
+        task_creation_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control",
+        },
+    )
+
+
+@router.post("/sync", response_model=TaskResponse)
+async def create_task_for_agent_sync(
     agent_id: UUID,
     data: TaskCreate,
     task_service: TaskService = Depends(get_task_service),
 ):
-    """Create and execute a task for the specified agent using Temporal workflows."""
+    """Create and execute a task for the specified agent (synchronous response)."""
     try:
         # Create and execute task using service layer
         task = await task_service.create_and_execute_task_with_workflow(
@@ -559,7 +681,7 @@ async def stream_task_events(
     agent_id: UUID,
     task_id: UUID,
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+    task_service: TaskService = Depends(get_task_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""
     # Verify agent exists
@@ -568,15 +690,12 @@ async def stream_task_events(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        # Get workflow status to verify task exists
-        execution_id = f"agent-task-{task_id}"
-        status = await workflow_task_service.get_workflow_status(execution_id)
-
-        # Check if task exists
-        if status.get("status") == "unknown":
+        # Verify task exists
+        task = await task_service.get_task(task_id)
+        if not task:
             raise HTTPException(status_code=404, detail="Task not found")
 
-        # Create SSE stream
+        # Create SSE stream using the task service's event streaming
         async def event_stream() -> AsyncGenerator[str, None]:
             """Generate Server-Sent Events for task updates."""
             try:
@@ -586,70 +705,31 @@ async def stream_task_events(
                     {
                         "task_id": str(task_id),
                         "agent_id": str(agent_id),
-                        "execution_id": execution_id,
+                        "execution_id": task.execution_id,
                         "message": "Connected to task event stream",
+                        "timestamp": datetime.now(UTC).isoformat(),
                     },
                 )
 
-                # In a real implementation, this would listen to actual workflow events
-                # For now, we'll simulate periodic status updates
-                import asyncio
+                # Stream events from task service
+                async for event in task_service.stream_task_events(task_id, include_history=True):
+                    # Convert task service event to SSE format
+                    event_type = event.get("event_type", "task_event")
 
-                last_status = None
+                    # Add execution context if available
+                    event_data = event.get("data", {})
+                    event_data.update({
+                        "task_id": str(task_id),
+                        "agent_id": str(agent_id),
+                        "execution_id": task.execution_id,
+                        "timestamp": event.get("timestamp", datetime.now(UTC).isoformat()),
+                    })
 
-                while True:
-                    try:
-                        # Get current workflow status
-                        current_status = await workflow_task_service.get_workflow_status(
-                            execution_id
-                        )
-                        current_status_value = current_status.get("status", "unknown")
+                    yield _format_sse_event(event_type, event_data)
 
-                        # Send status update if changed
-                        if current_status_value != last_status:
-                            yield _format_sse_event(
-                                "task_status_changed",
-                                {
-                                    "task_id": str(task_id),
-                                    "agent_id": str(agent_id),
-                                    "execution_id": execution_id,
-                                    "status": current_status_value,
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                    "message": f"Task status changed to {current_status_value}",
-                                },
-                            )
-                            last_status = current_status_value
-
-                        # Break if task is in terminal state
-                        if current_status_value in ["completed", "failed", "cancelled"]:
-                            yield _format_sse_event(
-                                "task_finished",
-                                {
-                                    "task_id": str(task_id),
-                                    "agent_id": str(agent_id),
-                                    "execution_id": execution_id,
-                                    "status": current_status_value,
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                    "message": f"Task finished with status {current_status_value}",
-                                },
-                            )
-                            break
-
-                        # Wait before next check
-                        await asyncio.sleep(2)
-
-                    except Exception as e:
-                        logger.error(f"Error in SSE stream for task {task_id}: {e}")
-                        yield _format_sse_event(
-                            "error",
-                            {
-                                "task_id": str(task_id),
-                                "agent_id": str(agent_id),
-                                "execution_id": execution_id,
-                                "error": str(e),
-                                "timestamp": datetime.now(UTC).isoformat(),
-                            },
-                        )
+                    # Check for terminal states
+                    if event_type in ["task_completed", "task_failed", "task_cancelled", "workflow_completed", "workflow_failed"]:
+                        logger.info(f"Task {task_id} reached terminal state: {event_type}")
                         break
 
             except Exception as e:
@@ -659,7 +739,7 @@ async def stream_task_events(
                     {
                         "task_id": str(task_id),
                         "agent_id": str(agent_id),
-                        "execution_id": execution_id,
+                        "execution_id": task.execution_id,
                         "error": f"Stream error: {e!s}",
                         "timestamp": datetime.now(UTC).isoformat(),
                     },

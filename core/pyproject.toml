@@ -30,7 +30,9 @@ members = [
     "libs/mcp",
     "libs/tasks",
     "libs/secrets",
-    "libs/execution"
+    "libs/execution",
+    "libs/context",
+    "libs/triggers"
 ]
 
 [tool.uv.sources]
@@ -41,6 +43,8 @@ agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
 agentarea-execution = { workspace = true }
+agentarea-context = { workspace = true }
+agentarea-triggers = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
 agentarea-cli = { workspace = true }
@@ -62,6 +66,8 @@ dev = [
     "agentarea-tasks",
     "agentarea-secrets",
     "agentarea-execution",
+    "agentarea-context",
+    "agentarea-triggers",
     "agentarea-api",
     "agentarea-worker",
     "pytest-env>=1.1.5",
@@ -143,6 +149,8 @@ addopts = [
     "--cov=agentarea_mcp",
     "--cov=agentarea_tasks",
     "--cov=agentarea_secrets",
+    "--cov=agentarea_context",
+    "--cov=agentarea_triggers",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
@@ -187,6 +195,8 @@ source = [
     "libs/tasks/agentarea_tasks",
     "libs/secrets/agentarea_secrets",
     "libs/execution/agentarea_execution",
+    "libs/context/agentarea_context",
+    "libs/triggers/agentarea_triggers",
     "apps/api/agentarea_api",
     "apps/worker/agentarea_worker",
 ]

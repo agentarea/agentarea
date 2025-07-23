@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-context"
+version = "0.1.0"
+description = "Context management system for AgentArea"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "agentarea-common",
+    "agentarea-llm",
+    "pydantic>=2.4.2",
+    "faiss-cpu>=1.7.4",
+    "numpy>=1.24.0",
+]
+
+[dependency-groups]
+dev = [
+    "sentence-transformers>=2.2.2",  # Optional fallback for development
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+agentarea-llm = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_context"]

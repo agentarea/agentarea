@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)
 
 def make_agent_activities(dependencies: ActivityDependencies):
     """Factory function to create agent activities with injected dependencies.
-    
+
     Args:
         dependencies: Basic dependencies needed to create services
-        
+
     Returns:
         List of activity functions ready for worker registration
     """
@@ -53,8 +53,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # Create services with this session
             agent_repository = AgentRepository(session)
             agent_service = AgentService(
-                repository=agent_repository,
-                event_broker=dependencies.event_broker
+                repository=agent_repository, event_broker=dependencies.event_broker
             )
 
             # Get agent from database
@@ -94,8 +93,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # Create services with this session
             agent_repository = AgentRepository(session)
             agent_service = AgentService(
-                repository=agent_repository,
-                event_broker=dependencies.event_broker
+                repository=agent_repository, event_broker=dependencies.event_broker
             )
 
             mcp_server_repository = MCPServerRepository(session)
@@ -104,7 +102,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 repository=mcp_server_instance_repository,
                 event_broker=dependencies.event_broker,
                 mcp_server_repository=mcp_server_repository,
-                secret_manager=dependencies.secret_manager
+                secret_manager=dependencies.secret_manager,
             )
 
             # Get agent configuration
@@ -142,7 +140,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_type = None
             api_key = None
             endpoint_url = None
-            
+
             # Try to treat model_id as a UUID first (model instance ID)
             try:
                 model_uuid = UUID(model_id)
@@ -151,15 +149,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     model_instance_service = ModelInstanceService(
                         repository=ModelInstanceRepository(session),
                         event_broker=dependencies.event_broker,
-                        secret_manager=dependencies.secret_manager
+                        secret_manager=dependencies.secret_manager,
                     )
                     model_instance = await model_instance_service.get(model_uuid)
                     if model_instance:
                         # Access the new model structure
                         provider_type = model_instance.provider_config.provider_spec.provider_type
                         model_type = model_instance.model_spec.model_name
-                        api_key = getattr(model_instance.provider_config, 'api_key', None)
-                        endpoint_url = getattr(model_instance.model_spec, 'endpoint_url', None)
+                        api_key = getattr(model_instance.provider_config, "api_key", None)
+                        endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
                     else:
                         raise ValueError(f"Model instance with ID {model_id} not found")
             except ValueError:
@@ -174,7 +172,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             else:
                 # Direct model name (e.g., "gpt-4", "claude-3")
                 litellm_model = model_type
-            
+
             litellm_params = {
                 "model": litellm_model,
                 "messages": messages,
@@ -200,7 +198,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 "content": message.content or "",
                 "role": message.role,
             }
-            if hasattr(message, 'tool_calls') and message.tool_calls:
+            if hasattr(message, "tool_calls") and message.tool_calls:
                 result["tool_calls"] = [
                     {
                         "id": tool_call.id,
@@ -208,11 +206,34 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         "function": {
                             "name": tool_call.function.name,
                             "arguments": tool_call.function.arguments,
-                        }
+                        },
                     }
                     for tool_call in message.tool_calls
                 ]
-            logger.info("LLM call completed successfully")
+
+            # Extract cost information from response usage
+            cost = 0.0
+            if hasattr(response, 'usage') and response.usage:
+                usage = response.usage
+                # litellm includes cost calculation in some cases
+                if hasattr(usage, 'completion_tokens_cost'):
+                    cost += getattr(usage, 'completion_tokens_cost', 0.0)
+                if hasattr(usage, 'prompt_tokens_cost'):
+                    cost += getattr(usage, 'prompt_tokens_cost', 0.0)
+                # Fallback: calculate cost using token counts if available
+                elif hasattr(usage, 'total_tokens'):
+                    # This is a rough estimate - actual costs vary by model
+                    # For production, should use model-specific pricing
+                    cost = getattr(usage, 'total_tokens', 0) * 0.00001  # $0.01 per 1K tokens estimate
+
+            result["cost"] = cost
+            result["usage"] = {
+                "prompt_tokens": getattr(response.usage, 'prompt_tokens', 0) if hasattr(response, 'usage') and response.usage else 0,
+                "completion_tokens": getattr(response.usage, 'completion_tokens', 0) if hasattr(response, 'usage') and response.usage else 0,
+                "total_tokens": getattr(response.usage, 'total_tokens', 0) if hasattr(response, 'usage') and response.usage else 0,
+            }
+
+            logger.info(f"LLM call completed successfully, cost: ${cost:.6f}")
             return result
 
         except Exception as e:
@@ -236,7 +257,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 repository=mcp_server_instance_repository,
                 event_broker=dependencies.event_broker,
                 mcp_server_repository=mcp_server_repository,
-                secret_manager=dependencies.secret_manager
+                secret_manager=dependencies.secret_manager,
             )
 
             try:
@@ -255,7 +276,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 return {
                     "tool_name": tool_name,
                     "result": f"Tool {tool_name} executed successfully (placeholder)",
-                    "success": True
+                    "success": True,
                 }
 
             except Exception as e:
@@ -263,49 +284,43 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 return {
                     "tool_name": tool_name,
                     "result": f"Tool execution failed: {e!s}",
-                    "success": False
+                    "success": False,
                 }
 
-    @activity.defn
-    async def check_task_completion_activity(
-        messages: list[dict[str, Any]],
-        current_iteration: int,
-        max_iterations: int,
-    ) -> dict[str, Any]:
-        """Check if the task is complete based on the conversation."""
-        # This activity doesn't need database access, just logic
+    # @activity.defn
+    # async def check_task_completion_activity(
+    #     messages: list[dict[str, Any]],
+    #     current_iteration: int,
+    #     max_iterations: int,
+    # ) -> dict[str, Any]:
+    #     """Check if the task is complete based on the conversation."""
+    #     # This activity doesn't need database access, just logic
 
-        # Simple completion check logic
-        if current_iteration >= max_iterations:
-            return {
-                "is_complete": True,
-                "reason": f"Maximum iterations ({max_iterations}) reached"
-            }
+    #     # Simple completion check logic
+    #     if current_iteration >= max_iterations:
+    #         return {"is_complete": True, "reason": f"Maximum iterations ({max_iterations}) reached"}
 
-        # Check if the last message indicates completion
-        if messages:
-            last_message = messages[-1]
-            content = last_message.get("content", "").lower()
+    #     # Check if the last message indicates completion
+    #     if messages:
+    #         last_message = messages[-1]
+    #         content = last_message.get("content", "").lower()
 
-            # Simple heuristics for completion
-            completion_indicators = [
-                "task completed",
-                "finished",
-                "done",
-                "completed successfully",
-                "task is complete"
-            ]
+    #         # Simple heuristics for completion
+    #         completion_indicators = [
+    #             "task completed",
+    #             "finished",
+    #             "done",
+    #             "completed successfully",
+    #             "task is complete",
+    #         ]
 
-            if any(indicator in content for indicator in completion_indicators):
-                return {
-                    "is_complete": True,
-                    "reason": "Task completion detected in response"
-                }
+    #         if any(indicator in content for indicator in completion_indicators):
+    #             return {"is_complete": True, "reason": "Task completion detected in response"}
 
-        return {
-            "is_complete": False,
-            "reason": f"Task not complete, iteration {current_iteration}/{max_iterations}"
-        }
+    #     return {
+    #         "is_complete": False,
+    #         "reason": f"Task not complete, iteration {current_iteration}/{max_iterations}",
+    #     }
 
     @activity.defn
     async def create_execution_plan_activity(
@@ -321,10 +336,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     "role": "system",
                     "content": f"""You are an AI planning assistant. Create a step-by-step execution plan to achieve the given goal.
 
-GOAL: {goal.get('description', 'No description provided')}
+GOAL: {goal.get("description", "No description provided")}
 
 SUCCESS CRITERIA:
-{chr(10).join(f"- {criteria}" for criteria in goal.get('success_criteria', []))}
+{chr(10).join(f"- {criteria}" for criteria in goal.get("success_criteria", []))}
 
 AVAILABLE TOOLS:
 {chr(10).join(f"- {tool.get('name', 'Unknown')}: {tool.get('description', 'No description')}" for tool in available_tools)}
@@ -333,31 +348,35 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
 - "plan": string describing the step-by-step approach
 - "estimated_steps": integer number of expected steps
 - "key_tools": list of tool names that will likely be needed
-- "risk_factors": list of potential challenges or risks"""
+- "risk_factors": list of potential challenges or risks""",
                 },
                 {
-                    "role": "user", 
-                    "content": f"Create an execution plan for: {goal.get('description', 'Unknown goal')}"
-                }
+                    "role": "user",
+                    "content": f"Create an execution plan for: {goal.get('description', 'Unknown goal')}",
+                },
             ]
-            
+
             # For now, return a simple plan - could be enhanced with actual LLM call
             tool_names = [tool.get("name", "unknown") for tool in available_tools]
-            
+
             return {
                 "plan": f"Execute the task '{goal.get('description', 'Unknown')}' systematically using available tools",
                 "estimated_steps": min(max(len(available_tools), 3), 8),  # Between 3-8 steps
                 "key_tools": tool_names[:3],  # First 3 tools
-                "risk_factors": ["Tool execution failures", "LLM response issues", "External API timeouts"]
+                "risk_factors": [
+                    "Tool execution failures",
+                    "LLM response issues",
+                    "External API timeouts",
+                ],
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to create execution plan: {e}")
             return {
                 "plan": f"Execute the task '{goal.get('description', 'Unknown')}' step by step",
                 "estimated_steps": 5,
                 "key_tools": [],
-                "risk_factors": ["Planning failed - proceeding with default approach"]
+                "risk_factors": ["Planning failed - proceeding with default approach"],
             }
 
     @activity.defn
@@ -371,15 +390,15 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
             # Analyze the conversation to determine if goal is achieved
             goal_achieved = False
             final_response = None
-            
+
             if messages:
                 # Check if the last few messages indicate task completion
                 recent_messages = messages[-3:]  # Look at last 3 messages
-                
+
                 for message in reversed(recent_messages):
                     if message.get("role") == "assistant":
                         content = message.get("content", "").lower()
-                        
+
                         # Check for completion indicators
                         completion_indicators = [
                             "task completed",
@@ -390,29 +409,41 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
                             "final answer",
                             "here is the result",
                             "i have completed",
-                            "task is finished"
+                            "task is finished",
                         ]
-                        
+
                         if any(indicator in content for indicator in completion_indicators):
                             goal_achieved = True
                             final_response = message.get("content", "Task completed")
                             break
-                
+
                 # Also check if we have successful tool executions that might indicate completion
                 if not goal_achieved:
-                    tool_successes = sum(1 for msg in recent_messages 
-                                       if msg.get("role") == "tool" and "error" not in str(msg.get("content", "")).lower())
-                    
-                    if tool_successes >= 2:  # Multiple successful tool calls might indicate progress
+                    tool_successes = sum(
+                        1
+                        for msg in recent_messages
+                        if msg.get("role") == "tool"
+                        and "error" not in str(msg.get("content", "")).lower()
+                    )
+
+                    if (
+                        tool_successes >= 2
+                    ):  # Multiple successful tool calls might indicate progress
                         # Check if assistant is providing a summary or conclusion
                         for message in reversed(recent_messages):
-                            if message.get("role") == "assistant" and len(message.get("content", "")) > 50:
+                            if (
+                                message.get("role") == "assistant"
+                                and len(message.get("content", "")) > 50
+                            ):
                                 content = message.get("content", "")
-                                if any(word in content.lower() for word in ["summary", "result", "conclusion", "completed"]):
+                                if any(
+                                    word in content.lower()
+                                    for word in ["summary", "result", "conclusion", "completed"]
+                                ):
                                     goal_achieved = True
                                     final_response = content
                                     break
-            
+
             # Evaluate against success criteria if available
             success_criteria_met = []
             if goal.get("success_criteria"):
@@ -423,11 +454,8 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
                         keyword in " ".join(msg.get("content", "") for msg in messages[-5:]).lower()
                         for keyword in criteria.lower().split()[:3]  # First 3 words of criteria
                     )
-                    success_criteria_met.append({
-                        "criteria": criteria,
-                        "met": criteria_met
-                    })
-            
+                    success_criteria_met.append({"criteria": criteria, "met": criteria_met})
+
             return {
                 "goal_achieved": goal_achieved,
                 "final_response": final_response,
@@ -435,19 +463,66 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
                 "progress_indicators": {
                     "message_count": len(messages),
                     "tool_calls": sum(1 for msg in messages if msg.get("role") == "tool"),
-                    "assistant_responses": sum(1 for msg in messages if msg.get("role") == "assistant"),
-                    "iteration": current_iteration
-                }
+                    "assistant_responses": sum(
+                        1 for msg in messages if msg.get("role") == "assistant"
+                    ),
+                    "iteration": current_iteration,
+                },
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to evaluate goal progress: {e}")
             return {
                 "goal_achieved": False,
                 "final_response": None,
                 "success_criteria_met": [],
-                "progress_indicators": {"error": str(e)}
+                "progress_indicators": {"error": str(e)},
             }
+
+    @activity.defn
+    async def publish_workflow_events_activity(events_json: list[str]) -> bool:
+        """Publish workflow events using the EventBroker infrastructure."""
+        if not events_json:
+            return True
+
+        try:
+            import json
+            from datetime import datetime
+            from uuid import uuid4
+
+            from agentarea_common.events.base_events import DomainEvent
+
+            logger.info(f"Publishing {len(events_json)} workflow events via EventBroker")
+
+            # Use the event broker from dependencies
+            event_broker = dependencies.event_broker
+
+            for event_json in events_json:
+                event = json.loads(event_json)
+                task_id = event.get('data', {}).get('task_id', 'unknown')
+
+                # Create proper domain event with correct parameters
+                domain_event = DomainEvent(
+                    event_id=event.get("event_id", str(uuid4())),
+                    event_type=f"workflow.{event['event_type']}",  # Prefix for workflow events
+                    timestamp=datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")),
+                    # All other data goes into the data dict
+                    aggregate_id=task_id,
+                    aggregate_type="task",
+                    original_event_type=event["event_type"],
+                    original_timestamp=event["timestamp"],
+                    original_data=event["data"]
+                )
+
+                # Publish via EventBroker (uses FastStream infrastructure)
+                await event_broker.publish(domain_event)
+                logger.debug(f"Published workflow event: {event['event_type']} for task {task_id}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to publish workflow events: {e}")
+            return False
 
     # Return all activity functions
     return [
@@ -455,7 +530,8 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
         discover_available_tools_activity,
         call_llm_activity,
         execute_mcp_tool_activity,
-        check_task_completion_activity,
+        # check_task_completion_activity,
         create_execution_plan_activity,
         evaluate_goal_progress_activity,
+        publish_workflow_events_activity,
     ]

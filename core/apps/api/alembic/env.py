@@ -1,19 +1,24 @@
 from logging.config import fileConfig
 
 from agentarea_common.config import get_db_settings
+from agentarea_common.base.models import BaseModel
 from sqlalchemy import engine_from_config, pool
-from sqlalchemy.ext.declarative import declarative_base
 
 from alembic import context
 
-Base = declarative_base()
+# Import all ORM models to ensure they're registered with metadata
+try:
+    from agentarea_triggers.infrastructure.orm import TriggerORM, TriggerExecutionORM  # noqa: F401
+except ImportError:
+    # Triggers library not yet installed - skip for now
+    pass
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = BaseModel.metadata
 
 
 def get_url():

@@ -11,6 +11,8 @@ dependencies = [
     "agentarea-common",
     "agentarea-agents", 
     "agentarea-tasks",
+    "agentarea-execution",
+    "agentarea-triggers",
     "temporalio>=1.0.0",
     "python-dotenv>=1.0.0",
     "watchfiles>=0.21.0",
@@ -21,6 +23,8 @@ dependencies = [
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
 agentarea-tasks = { workspace = true }
+agentarea-execution = { workspace = true }
+agentarea-triggers = { workspace = true }
 
 [project.scripts]
 agentarea-worker = "agentarea_worker.main:app"

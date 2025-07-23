@@ -13,6 +13,8 @@ from . import (
     model_specs,
     provider_configs,
     provider_specs,
+    triggers,
+    webhooks,
 )
 
 v1_router = APIRouter(prefix="/v1")
@@ -27,6 +29,8 @@ v1_router.include_router(agents.router)
 v1_router.include_router(agents_tasks.router)
 v1_router.include_router(agents_tasks.global_tasks_router)
 
+# Task event streaming is handled by agents_tasks router
+
 # Include A2A protocol routers
 v1_router.include_router(agents_a2a.router, prefix="/agents/{agent_id}")
 v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
@@ -38,3 +42,9 @@ v1_router.include_router(provider_specs.router)
 v1_router.include_router(provider_configs.router)
 v1_router.include_router(model_specs.router)
 v1_router.include_router(model_instances_new.router)
+
+# Include webhook router
+v1_router.include_router(webhooks.router)
+
+# Include triggers router
+v1_router.include_router(triggers.router)

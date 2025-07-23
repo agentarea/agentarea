@@ -1,0 +1,1 @@
+"""Trigger infrastructure components."""

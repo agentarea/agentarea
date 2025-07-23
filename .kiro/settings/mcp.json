@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena.git@v0.1.0",
+        "serena-mcp-server"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "get_symbols_overview",
+        "activate_project",
+        "search_for_pattern",
+        "search_for_pattern",
+        "read_file",
+        "read_file",
+        "find_file",
+        "list_dir",
+        "replace_symbol_body",
+        "create_text_file",
+        "think_about_collected_information",
+        "replace_regex",
+        "execute_shell_command",
+        "replace_lines"
+      ]
+    }
+  }
+}

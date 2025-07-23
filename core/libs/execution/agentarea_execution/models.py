@@ -26,6 +26,7 @@ class AgentExecutionRequest:
     max_reasoning_iterations: int = 10
     enable_agent_communication: bool = False
     requires_human_approval: bool = False
+    budget_usd: float | None = None  # Optional budget limit in USD
 
     # Additional workflow metadata
     workflow_metadata: dict[str, Any] = field(default_factory=dict)
@@ -48,6 +49,7 @@ class AgentExecutionResult:
     reasoning_iterations_used: int = 0
     total_tool_calls: int = 0
     execution_duration_seconds: float | None = None
+    total_cost: float = 0.0
 
     # Error handling
     error_message: str | None = None

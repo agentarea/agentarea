@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-triggers"
+version = "0.1.0"
+description = "Trigger system functionality for AgentArea"
+requires-python = ">=3.12"
+dependencies = [
+    "agentarea-common",
+    "pydantic>=2.4.2",
+    "temporalio>=1.0.0",
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_triggers"] 

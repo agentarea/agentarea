@@ -14,5 +14,6 @@ class DomainEvent:
     def __init__(self, **kwargs: Any) -> None:
         self.event_id = kwargs.get("event_id", uuid4())
         self.timestamp = kwargs.get("timestamp", datetime.now(UTC))
-        self.event_type = self.__class__.__name__
+        # Use provided event_type or fallback to class name
+        self.event_type = kwargs.get("event_type", self.__class__.__name__)
         self.data = kwargs

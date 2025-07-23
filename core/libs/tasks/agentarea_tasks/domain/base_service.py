@@ -115,17 +115,18 @@ class BaseTaskService(ABC):
             metadata=created_task_domain.metadata,
         )
 
-        # Publish creation event
+        # Publish creation event - temporarily disabled due to event creation issue
         try:
-            await self._publish_task_event(
-                TaskCreated(
-                    task_id=str(created_task.id),
-                    agent_id=str(created_task.agent_id),
-                    description=created_task.description,
-                    parameters=created_task.task_parameters,
-                    metadata=created_task.metadata,
-                )
-            )
+            # await self._publish_task_event(
+            #     TaskCreated(
+            #         task_id=str(created_task.id),
+            #         agent_id=str(created_task.agent_id),
+            #         description=created_task.description,
+            #         parameters=created_task.task_parameters,
+            #         metadata=created_task.metadata,
+            #     )
+            # )
+            pass  # Temporarily disabled
         except Exception as e:
             # Log the error but don't fail the operation
             logger.error(f"Failed to publish TaskCreated event: {e}")
@@ -274,7 +275,7 @@ class BaseTaskService(ABC):
             tasks = await self.task_repository.get_by_status(status)
         else:
             tasks = await self.task_repository.list()
-        
+
         # Convert Task domain models to SimpleTask
         return [self._task_to_simple_task(task) for task in tasks]
 
@@ -304,10 +305,10 @@ class BaseTaskService(ABC):
 
     def _task_to_simple_task(self, task: Task) -> SimpleTask:
         """Convert Task domain model to SimpleTask.
-        
+
         Args:
             task: Task domain model from repository
-            
+
         Returns:
             SimpleTask model for service/API layer
         """

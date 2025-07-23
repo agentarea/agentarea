@@ -15,6 +15,7 @@ dependencies = [
     "agentarea-mcp",
     "agentarea-tasks",
     "agentarea-secrets",
+    "agentarea-triggers",
     "a2a-sdk>=0.2.8",
     "alembic>=1.15.2",
     "uvicorn>=0.34.0",
@@ -38,6 +39,7 @@ agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
+agentarea-triggers = { workspace = true }
 
 [project.scripts]
 agentarea-api = "agentarea_api.main:app"

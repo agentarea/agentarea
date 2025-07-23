@@ -26,8 +26,8 @@ This architecture allows for:
 - Integration with existing AgentArea services
 """
 
-from agentarea_execution.interfaces import ActivityDependencies, ActivityServicesInterface
-from agentarea_execution.models import (
+from .interfaces import ActivityDependencies, ActivityServicesInterface
+from .models import (
     AgentExecutionRequest,
     AgentExecutionResult,
     ToolExecutionRequest,
@@ -46,10 +46,15 @@ def create_activities_for_worker(dependencies: ActivityDependencies):
     Returns:
         List of activity functions ready for worker registration
     """
-    from agentarea_execution.activities.agent_execution_activities import make_agent_activities
+    from .activities.agent_execution_activities import make_agent_activities
+    from .activities.trigger_execution_activities import make_trigger_activities
     
     # Create activities using the factory pattern
-    return make_agent_activities(dependencies)
+    agent_activities = make_agent_activities(dependencies)
+    trigger_activities = make_trigger_activities(dependencies)
+    
+    # Return combined list of all activities
+    return agent_activities + trigger_activities
 
 
 __all__ = [

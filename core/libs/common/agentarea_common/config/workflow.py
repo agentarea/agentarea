@@ -39,4 +39,10 @@ class TaskExecutionSettings(BaseSettings):
     ENABLE_DYNAMIC_ACTIVITY_DISCOVERY: bool = True
     MAX_DISCOVERED_ACTIVITIES_PER_TASK: int = 10
 
+    # Budget and cost management
+    DEFAULT_TASK_BUDGET_USD: float = 1.0  # Default $1 per task
+    ENABLE_BUDGET_ENFORCEMENT: bool = True
+    BUDGET_PAUSE_ON_EXCEEDED: bool = True
+    BUDGET_SAFETY_MARGIN: float = 0.1  # 10% safety margin before pause
+
     model_config = SettingsConfigDict(env_prefix="TASK__") 

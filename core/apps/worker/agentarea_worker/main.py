@@ -12,19 +12,19 @@ import sys
 from typing import Any
 
 import dotenv
-from agentarea_common.config import get_settings
-from agentarea_common.events.router import get_event_router
-from agentarea_secrets import get_real_secret_manager
 
 # Initialize DI container with proper config injection
 from agentarea_agents.infrastructure.di_container import initialize_di_container
+from agentarea_common.config import get_settings
+from agentarea_common.events.router import get_event_router
+from agentarea_execution import create_activities_for_worker
+from agentarea_execution.interfaces import ActivityDependencies
 
 # Import workflow and activity definitions from the execution library
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
-from agentarea_execution import create_activities_for_worker
-from agentarea_execution.interfaces import ActivityDependencies
+from agentarea_secrets import get_real_secret_manager
 from temporalio.client import Client
 from temporalio.worker import Worker
 
@@ -46,13 +46,13 @@ def create_activity_dependencies() -> ActivityDependencies:
     """
     # Get settings for configuration
     settings = get_settings()
-    
+
     # Get event broker
     event_broker = get_event_router(settings.broker)
-    
+
     # Get secret manager
     secret_manager = get_real_secret_manager()
-    
+
     # Create dependency container
     return ActivityDependencies(
         settings=settings,
@@ -89,10 +89,10 @@ class AgentAreaWorker:
             raise RuntimeError("Client not connected. Call connect() first.")
 
         settings = get_settings()
-        
+
         # Create basic dependencies for activities
         dependencies = create_activity_dependencies()
-        
+
         # Create activities using the new factory pattern
         activities = create_activities_for_worker(dependencies)
 
@@ -115,16 +115,16 @@ class AgentAreaWorker:
             raise RuntimeError("Worker not created. Call create_worker() first.")
 
         logger.info("Worker starting...")
-        
+
         # Start worker in background
         worker_task = asyncio.create_task(self.worker.run())
-        
+
         # Wait for shutdown signal
         await self.worker_shutdown_event.wait()
-        
+
         logger.info("Shutdown signal received, stopping worker...")
         worker_task.cancel()
-        
+
         try:
             await worker_task
         except asyncio.CancelledError:
@@ -145,26 +145,26 @@ class AgentAreaWorker:
     async def shutdown(self) -> None:
         """Shutdown the worker and cleanup resources."""
         logger.info("Shutting down worker...")
-        
+
         if self.worker:
             # Worker cleanup is handled in run() method
             self.worker = None
-            
+
         if self.client:
             # Temporal client doesn't have explicit close method
             self.client = None
-            
+
         logger.info("Worker shutdown complete")
 
 
 async def main() -> None:
     """Main entry point for the worker application."""
     worker = AgentAreaWorker()
-    
+
     # Setup signal handlers
     for sig in [signal.SIGTERM, signal.SIGINT]:
         signal.signal(sig, lambda s, f: asyncio.create_task(worker.signal_handler(s, f)))
-    
+
     try:
         await worker.start()
     except KeyboardInterrupt:

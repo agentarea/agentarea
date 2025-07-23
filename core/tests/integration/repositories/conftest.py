@@ -34,7 +34,7 @@ from agentarea_mcp.infrastructure.repository import (
 )
 from agentarea_tasks.domain.models import SimpleTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
-from agentarea_tasks.infrastructure.models import Task as TaskORM
+from agentarea_tasks.infrastructure.orm import TaskORM
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
