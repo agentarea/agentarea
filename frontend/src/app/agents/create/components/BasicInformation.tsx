@@ -3,8 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, FileText, MessageSquare, Cpu } from "lucide-react";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Bot, FileText, MessageSquare, Cpu, Brain } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
@@ -68,29 +68,20 @@ const BasicInformation = ({ register, control, errors, llmModelInstances }: Basi
             control={control}
             rules={{ required: "Model is required" }}
             render={({ field }) => (
-              <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {llmModelInstances.length > 0 ? (
-                    llmModelInstances.map((instance) => (
-                      <SelectItem key={instance.id} value={instance.id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{instance.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {instance.provider_name} - {instance.model_display_name}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="null" disabled>
-                      No LLM models configured. Please add models in Admin → Model Instances
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={llmModelInstances.length > 0 ? 
+                  llmModelInstances.map((instance) => ({
+                    id: instance.id,
+                    label: instance.name,
+                    description: `${instance.provider_name} - ${instance.model_display_name}`,
+                  })) : []
+                }
+                value={field.value}
+                onValueChange={field.onChange}
+                placeholder="Select a model"
+                emptyMessage="No LLM models configured. Please add models in Admin → Model Instances"
+                defaultIcon={<Brain className="w-5 h-5" />}
+              />
             )}
           />
         {getNestedErrorMessage(errors, 'model_id') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'model_id')}</p>}

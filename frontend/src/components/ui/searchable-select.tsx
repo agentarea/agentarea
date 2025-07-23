@@ -84,12 +84,12 @@ export function SearchableSelect({
   }
 
   const renderOptionContent = (option: SelectOption | SimpleSelectOption) => (
-    <div className="flex items-center gap-3">
+    <div className="flex gap-3">
       {'icon' in option && renderIcon(option as SelectOption)}
-      <div className="flex flex-col">
+      <div className="flex flex-col items-start">
         <span>{option.label}</span>
         {'description' in option && option.description && (
-          <span className="text-xs text-muted-foreground">{option.description}</span>
+          <span className="note">{option.description}</span>
         )}
       </div>
     </div>
