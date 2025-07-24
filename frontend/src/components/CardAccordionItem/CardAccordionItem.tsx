@@ -69,7 +69,7 @@ export function CardAccordionItem({
       value={value}
       id={htmlId}
       className={cn(
-        "border border-border rounded-md transition-colors pr-[7px] data-[state=open]:border-accent",
+        "card-item data-[state=open]:border-accent",
         className
       )}
     >

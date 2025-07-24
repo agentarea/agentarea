@@ -176,4 +176,8 @@ body {
     width: var(--radix-popover-trigger-width) !important;
     min-width: var(--radix-popover-trigger-width) !important;
   }
+
+  .card-item {
+    @apply border border-border dark:border-zinc-700 rounded-md transition-colors pr-[7px];
+  }
 }

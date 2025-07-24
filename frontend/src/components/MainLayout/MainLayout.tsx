@@ -234,10 +234,9 @@ export default function MainLayout({
           </div>
         </main> */}
         <main className="
-          flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto 
-          bg-[url('/bg-p.svg')] dark:bg-[url('/bg-p-dark.svg')] bg-no-repeat bg-[right_top_10px]
-          bg-[length:90%_auto] sm:bg-[length:60%_auto] md:bg-[length:60%_auto] lg:bg-[length:auto]
-        "
+          flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto "
+          // bg-[url('/bg-p.svg')] dark:bg-[url('/bg-p-dark.svg')] bg-no-repeat bg-[right_top_10px]
+          // bg-[length:90%_auto] sm:bg-[length:60%_auto] md:bg-[length:60%_auto] lg:bg-[length:auto]"
         >
           {/* <div className="bg-[#fafbfc] dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto"> */}
             {children}

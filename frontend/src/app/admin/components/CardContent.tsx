@@ -27,7 +27,7 @@ export default function CardContent({ item }: CardContentProps) {
                 )}
                 <div className="flex-1">
                     <div className="font-[500] text-[16px] font-montserrat">
-                        {itemData.name}
+                        {item.name}
                     </div>
                     <div className="text-xs text-muted-foreground">{itemData.provider_key}</div>
                 </div>

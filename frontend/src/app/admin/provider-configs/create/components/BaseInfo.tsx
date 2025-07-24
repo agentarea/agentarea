@@ -15,37 +15,13 @@ export default function BaseInfo({ control, errors, providerSpecId }: BaseInfoPr
         <AnimatePresence>
             {providerSpecId && (
               <motion.div
-                initial={{ 
-                  height: 0, 
-                  opacity: 0,
-                  scale: 0.95,
-                  overflow: "hidden"
-                }}
-                animate={{ 
-                  height: "auto", 
-                  opacity: 1,
-                  scale: 1,
-                  overflow: "visible"
-                }}
-                exit={{ 
-                  height: 0, 
-                  opacity: 0,
-                  scale: 0.95,
-                  overflow: "hidden"
-                }}
-                transition={{ 
-                  duration: 0.6, 
-                  ease: [0.4, 0, 0.2, 1],
-                  opacity: { duration: 0.4, delay: 0.2 }
-                }}
+                initial={{ height: 0, opacity: 0, overflow: "hidden"}}
+                animate={{ height: "auto", opacity: 1, overflow: "visible"}}
+                exit={{ height: 0, opacity: 0, overflow: "hidden"}}
+                transition={{ duration: 0.4, ease: "easeOut"}}
                 className="space-y-6"
               >
-                <motion.div 
-                  className="space-y-2"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.3 }}
-                >
+                <div className="space-y-2">
                   <FormLabel htmlFor="name" icon={Settings} required>Configuration Name</FormLabel>
                   <Controller
                     name="name"
@@ -62,23 +38,13 @@ export default function BaseInfo({ control, errors, providerSpecId }: BaseInfoPr
                     )}
                   />
                   {errors.name && (
-                    <motion.p 
-                      className="text-sm text-red-600"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.2 }}
-                    >
+                    <p className="text-sm text-red-600">
                       {String(errors.name.message)}
-                    </motion.p>
+                    </p>
                   )}
-                </motion.div>
+                </div>
 
-                <motion.div 
-                  className="space-y-2"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.4 }}
-                >
+                <div className="space-y-2">
                   <FormLabel htmlFor="api_key" required icon={Key}>API Key</FormLabel>
                   <Controller
                     name="api_key"
@@ -95,23 +61,13 @@ export default function BaseInfo({ control, errors, providerSpecId }: BaseInfoPr
                     )}
                   />
                   {errors.api_key && (
-                    <motion.p 
-                      className="text-sm text-red-600"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.2 }}
-                    >
+                    <p className="text-sm text-red-600">
                       {String(errors.api_key.message)}
-                    </motion.p>
+                    </p>
                   )}
-                </motion.div>
+                </div>
 
-                <motion.div 
-                  className="space-y-2"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.5 }}
-                >
+                <div className="space-y-2">
                   <FormLabel htmlFor="endpoint_url" icon={Link} optional>Custom Endpoint URL</FormLabel>
                   <Controller
                     name="endpoint_url"
@@ -127,16 +83,11 @@ export default function BaseInfo({ control, errors, providerSpecId }: BaseInfoPr
                     )}
                   />
                   {errors.endpoint_url && (
-                    <motion.p 
-                      className="text-sm text-red-600"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.2 }}
-                    >
+                    <p className="text-sm text-red-600">
                       {String(errors.endpoint_url.message)}
-                    </motion.p>
+                    </p>
                   )}
-                </motion.div>
+                </div>
               </motion.div>
             )}
         </AnimatePresence>

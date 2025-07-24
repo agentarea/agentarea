@@ -9,20 +9,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createProviderConfig, createModelInstance, updateProviderConfig } from '@/lib/api';
 import { components } from '@/api/schema';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Brain, CheckCircle2, AlertCircle, ChevronRight, ChevronDown, Bot, Server } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Bot, Server } from 'lucide-react';
 import FormLabel from '@/components/FormLabel/FormLabel';
 import BaseInfo from './components/BaseInfo';
 import ModelInstances from './components/ModelInstances';
 import { getProviderIconUrl } from '@/lib/provider-icons';
+import { cn } from '@/lib/utils';
 
 
 type ProviderSpec = components['schemas']['ProviderSpecResponse'];
@@ -149,18 +144,6 @@ export default function ProviderConfigForm({
     ));
   };
 
-  const toggleModelExpanded = (modelId: string) => {
-    setExpandedModels(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(modelId)) {
-        newSet.delete(modelId);
-      } else {
-        newSet.add(modelId);
-      }
-      return newSet;
-    });
-  };
-
   const onSubmit = async (data: ProviderConfigFormData) => {
     setIsSubmitting(true);
     setError(null);
@@ -276,7 +259,11 @@ export default function ProviderConfigForm({
           </motion.div>
         )}
       </AnimatePresence>
-
+      <div className={cn(
+        "mx-auto grid lg:gap-x-[12px] gap-[12px] items-start transition-all duration-300 ",
+        // "max-w-6xl grid-cols-1 lg:grid-cols-2"
+        // watchedProviderId ? "max-w-6xl grid-cols-1 lg:grid-cols-2" : "grid-cols-1 max-w-4xl"
+      )}>
       {/* Step 1: Provider Configuration */}
       <Card className="grid grid-cols-1 gap-6">
           <div className="space-y-2">
@@ -320,6 +307,7 @@ export default function ProviderConfigForm({
 
           {/* <div className="flex items-center space-x-2">
             <Controller
+
               name="is_public"
               control={control}
               render={({ field }) => (
@@ -340,34 +328,16 @@ export default function ProviderConfigForm({
       <AnimatePresence>
         {!isEdit && selectedProvider && (
           <motion.div
-            initial={{ 
-              height: 0, 
-              opacity: 0,
-              scale: 0.95,
-              overflow: "hidden"
-            }}
-            animate={{ 
-              height: "auto", 
-              opacity: 1,
-              scale: 1,
-              overflow: "visible"
-            }}
-            exit={{ 
-              height: 0, 
-              opacity: 0,
-              scale: 0.95,
-              overflow: "hidden"
-            }}
-            transition={{ 
-              duration: 0.6, 
-              ease: [0.4, 0, 0.2, 1],
-              opacity: { duration: 0.4, delay: 0.2 }
-            }}
+            initial={{ height: 0, opacity: 0,scale: 0.95, overflow: "hidden" }}
+            animate={{ height: "auto", opacity: 1,scale: 1, overflow: "visible" }}
+            exit={{ height: 0, opacity: 0,scale: 0.95, overflow: "hidden" }}
+            transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1], opacity: { duration: 0.4, delay: 0.2 }}}
           >
             <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} />
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
       {/* Submit Button */}
       <div className="flex justify-end space-x-4">

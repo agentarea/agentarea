@@ -64,6 +64,8 @@ export default async function ProviderConfigsPage({
         spec: specsMap.get(config.provider_spec_id)
     }));
 
+    console.log(enhancedConfigs);
+
 
     return (
         <ContentBlock 
