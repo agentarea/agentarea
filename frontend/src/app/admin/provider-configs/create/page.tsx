@@ -1,5 +1,3 @@
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { listProviderSpecs, listProviderSpecsWithModels } from '@/lib/api';
 import ProviderConfigForm from './ProviderConfigForm';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';

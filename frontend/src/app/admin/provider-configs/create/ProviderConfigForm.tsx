@@ -2,6 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createProviderConfig, createModelInstance, updateProviderConfig } from '@/lib/api';
 import { components } from '@/api/schema';
 import { Button } from '@/components/ui/button';
@@ -9,19 +13,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Key, Brain, CheckCircle2, AlertCircle, ChevronRight, ChevronDown, Bot, Settings, Link, Users, Lock, Server } from 'lucide-react';
+import { Brain, CheckCircle2, AlertCircle, ChevronRight, ChevronDown, Bot, Server } from 'lucide-react';
 import FormLabel from '@/components/FormLabel/FormLabel';
-
-import { cn } from '@/lib/utils';
+import BaseInfo from './components/BaseInfo';
+import ModelInstances from './components/ModelInstances';
 import { getProviderIconUrl } from '@/lib/provider-icons';
 
+
 type ProviderSpec = components['schemas']['ProviderSpecResponse'];
-type ModelSpec = {
+export type ModelSpec = {
   id: string;
   provider_spec_id: string;
   model_name: string;
@@ -31,7 +36,7 @@ type ModelSpec = {
   is_active: boolean;
 };
 
-interface ProviderConfigFormProps {
+export interface ProviderConfigFormProps {
   providerSpecs: ProviderSpec[];
   modelSpecs: ModelSpec[];
   initialData?: components['schemas']['ProviderConfigResponse'];
@@ -46,6 +51,17 @@ interface SelectedModel {
   isPublic: boolean;
 }
 
+// Form validation schema
+const providerConfigSchema = z.object({
+  provider_spec_id: z.string().min(1, 'Provider is required'),
+  name: z.string().min(1, 'Name is required').max(255, 'Name must be less than 255 characters'),
+  api_key: z.string().min(1, 'API key is required'),
+  endpoint_url: z.string().optional(),
+  is_public: z.boolean(),
+});
+
+type ProviderConfigFormData = z.infer<typeof providerConfigSchema>;
+
 export default function ProviderConfigForm({ 
   providerSpecs, 
   modelSpecs, 
@@ -58,18 +74,32 @@ export default function ProviderConfigForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
-  
-  const [formData, setFormData] = useState({
-    provider_spec_id: preselectedProviderId || initialData?.provider_spec_id || '',
-    name: initialData?.name || '',
-    api_key: '', // API key is not returned in responses for security
-    endpoint_url: initialData?.endpoint_url || '',
-    is_public: initialData?.is_public || false,
-  });
-
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
 
-  const selectedProvider = providerSpecs?.find?.(spec => spec.id === formData.provider_spec_id);
+  // Initialize react-hook-form
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isValid },
+    reset
+  } = useForm<ProviderConfigFormData>({
+    resolver: zodResolver(providerConfigSchema),
+    defaultValues: {
+      provider_spec_id: preselectedProviderId || initialData?.provider_spec_id || '',
+      name: initialData?.name || '',
+      api_key: '', // API key is not returned in responses for security
+      endpoint_url: initialData?.endpoint_url || '',
+      is_public: initialData?.is_public || false,
+    },
+    mode: 'onChange',
+  });
+
+  const watchedProviderId = watch('provider_spec_id');
+  const watchedName = watch('name');
+
+  const selectedProvider = providerSpecs?.find?.(spec => spec.id === watchedProviderId);
   
   // Memoize availableModels to prevent infinite re-renders
   const availableModels = useMemo(() => {
@@ -101,22 +131,17 @@ export default function ProviderConfigForm({
   }
 
   const handleProviderChange = (providerId: string | number) => {
-    setFormData(prev => ({ ...prev, provider_spec_id: providerId.toString() }));
+    const selectedProvider = providerSpecs.find(spec => spec.id === providerId);
+    const providerName = selectedProvider?.name || '';
+    const randomNumber = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
+    
+    setValue('provider_spec_id', providerId.toString());
+    setValue('name', `${providerName} Config - ${randomNumber}`);
+
     setSelectedModels([]); // Reset selected models when provider changes
   };
 
-  const handleModelToggle = (modelSpec: ModelSpec, checked: boolean) => {
-    if (checked) {
-      setSelectedModels(prev => [...prev, {
-        modelSpecId: modelSpec.id,
-        instanceName: `${selectedProvider?.name} ${modelSpec.display_name}`,
-        description: modelSpec.description || '',
-        isPublic: false
-      }]);
-    } else {
-      setSelectedModels(prev => prev.filter(m => m.modelSpecId !== modelSpec.id));
-    }
-  };
+
 
   const updateSelectedModel = (modelSpecId: string, updates: Partial<SelectedModel>) => {
     setSelectedModels(prev => prev.map(model => 
@@ -136,8 +161,7 @@ export default function ProviderConfigForm({
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: ProviderConfigFormData) => {
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
@@ -149,20 +173,20 @@ export default function ProviderConfigForm({
 
       if (isEdit && initialData) {
         const result = await updateProviderConfig(initialData.id, {
-          name: formData.name,
-          api_key: formData.api_key,
-          endpoint_url: formData.endpoint_url || undefined,
-          is_active: formData.is_public, // Note: backend uses is_active, frontend uses is_public
+          name: data.name,
+          api_key: data.api_key,
+          endpoint_url: data.endpoint_url || undefined,
+          is_active: data.is_public, // Note: backend uses is_active, frontend uses is_public
         });
         providerConfig = result.data;
         providerError = result.error;
       } else {
         const result = await createProviderConfig({
-          provider_spec_id: formData.provider_spec_id,
-          name: formData.name,
-          api_key: formData.api_key,
-          endpoint_url: formData.endpoint_url || undefined,
-          is_public: formData.is_public,
+          provider_spec_id: data.provider_spec_id,
+          name: data.name,
+          api_key: data.api_key,
+          endpoint_url: data.endpoint_url || undefined,
+          is_public: data.is_public,
         });
         providerConfig = result.data;
         providerError = result.error;
@@ -199,7 +223,7 @@ export default function ProviderConfigForm({
 
       // Reset form only if creating
       if (!isEdit) {
-        setFormData({
+        reset({
           provider_spec_id: '',
           name: '',
           api_key: '',
@@ -222,44 +246,69 @@ export default function ProviderConfigForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, scale: 0.95 }}
+            animate={{ opacity: 1, height: "auto", scale: 1 }}
+            exit={{ opacity: 0, height: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
 
-      {success && (
-        <Alert className="border-green-200 bg-green-50">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">{success}</AlertDescription>
-        </Alert>
-      )}
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, scale: 0.95 }}
+            animate={{ opacity: 1, height: "auto", scale: 1 }}
+            exit={{ opacity: 0, height: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">{success}</AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Step 1: Provider Configuration */}
       <Card className="grid grid-cols-1 gap-6">
           <div className="space-y-2">
             <FormLabel htmlFor="provider" icon={Server}>Provider</FormLabel>
-            <SearchableSelect
-              options={providerSpecs.map(spec => ({
-                id: spec.id,
-                label: spec.name,
-                icon: spec.icon_url || getProviderIconUrl(spec.name)
-              }))}
-              value={formData.provider_spec_id}
-              onValueChange={handleProviderChange}
-              placeholder="Select provider"
-              disabled={!!preselectedProviderId && !isEdit}
-              emptyMessage={
-                <div className="flex flex-col items-center justify-center h-full gap-1">
-                  <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
-                      <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
-                  </div>
-                  <span className="text-muted-foreground">No providers found</span>
-                </div>
-              }
+            <Controller
+              name="provider_spec_id"
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={providerSpecs.map(spec => ({
+                    id: spec.id,
+                    label: spec.name,
+                    icon: spec.icon_url || getProviderIconUrl(spec.name)
+                  }))}
+                  value={field.value}
+                  onValueChange={handleProviderChange}
+                  placeholder="Select provider"
+                  disabled={!!preselectedProviderId && !isEdit}
+                  emptyMessage={
+                    <div className="flex flex-col items-center justify-center h-full gap-1">
+                      <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
+                          <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
+                      </div>
+                      <span className="text-muted-foreground">No providers found</span>
+                    </div>
+                  }
+                />
+              )}
             />
+            {errors.provider_spec_id && (
+              <p className="text-sm text-red-600">{errors.provider_spec_id.message}</p>
+            )}
             {preselectedProviderId && !isEdit && (
               <p className="note">
                 Provider is pre-selected for this configuration.
@@ -267,219 +316,58 @@ export default function ProviderConfigForm({
             )}
           </div>
 
-          <div className="space-y-2">
-            <FormLabel htmlFor="name" icon={Settings}>Configuration Name</FormLabel>
-            <Input
-              id="name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="e.g., Production OpenAI Config"
-              required
-            />
-          </div>
+          <BaseInfo control={control} errors={errors} providerSpecId={watchedProviderId} />
 
-          <div className="space-y-2">
-            <FormLabel htmlFor="api_key" icon={Key}>API Key</FormLabel>
-            <Input
-              id="api_key"
-              type="password"
-              value={formData.api_key}
-              onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-              placeholder="Enter your API key"
-              required
+          {/* <div className="flex items-center space-x-2">
+            <Controller
+              name="is_public"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  id="is_public"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
             />
-          </div>
-
-          <div className="space-y-2">
-            
-            <FormLabel htmlFor="endpoint_url" icon={Link} optional>Custom Endpoint URL</FormLabel>
-            <Input
-              id="endpoint_url"
-              type="url"
-              value={formData.endpoint_url}
-              onChange={(e) => setFormData(prev => ({ ...prev, endpoint_url: e.target.value }))}
-              placeholder="https://api.example.com/v1"
-            />
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="is_public"
-              checked={formData.is_public}
-              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_public: checked }))}
-            />
-            <FormLabel htmlFor="is_public" className="flex items-center gap-2" icon={formData.is_public ? Users : Lock}>
-              {formData.is_public ? 'Public Configuration' : 'Private Configuration'}
+            <FormLabel htmlFor="is_public" className="flex items-center gap-2" icon={watch('is_public') ? Users : Lock}>
+              {watch('is_public') ? 'Public Configuration' : 'Private Configuration'}
             </FormLabel>
-          </div>
+          </div> */}
       </Card>
 
       {/* Step 2: Model Selection (only for create mode) */}
-      {!isEdit && selectedProvider && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5" />
-              Model Instances
-            </CardTitle>
-            <CardDescription>
-              Select models to create instances for this provider configuration
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">
-                  Available Models for {selectedProvider.name}:
-                </div>
-                {availableModels.length > 0 && (
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        // Select all models
-                        const allModels = availableModels.map(model => ({
-                          modelSpecId: model.id,
-                          instanceName: `${selectedProvider?.name} ${model.display_name}`,
-                          description: model.description || '',
-                          isPublic: false
-                        }));
-                        setSelectedModels(allModels);
-                      }}
-                      disabled={selectedModels.length === availableModels.length}
-                    >
-                      Select All
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedModels([])}
-                      disabled={selectedModels.length === 0}
-                    >
-                      Clear All
-                    </Button>
-                  </div>
-                )}
-              </div>
-              
-              {availableModels.length === 0 ? (
-                <div className="text-sm text-muted-foreground bg-gray-50 p-4 rounded-lg text-center">
-                  No models available for this provider.
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {availableModels.map((model) => {
-                    const isSelected = selectedModels.some(m => m.modelSpecId === model.id);
-                    const selectedModel = selectedModels.find(m => m.modelSpecId === model.id);
-                    const isExpanded = expandedModels.has(model.id);
-                    
-                    return (
-                      <div key={model.id} className="border rounded-lg p-4 space-y-3 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-start space-x-3">
-                          <Checkbox
-                            id={`model-${model.id}`}
-                            checked={isSelected}
-                            onCheckedChange={(checked) => handleModelToggle(model, checked as boolean)}
-                          />
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor={`model-${model.id}`} className="font-medium cursor-pointer">
-                                {model.display_name}
-                              </Label>
-                              {model.context_window && (
-                                <Badge variant="outline">
-                                  {model.context_window.toLocaleString()} tokens
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {model.description || 'No description available'}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Model: {model.model_name}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {isSelected && selectedModel && (
-                          <>
-                            <Button 
-                              type="button"
-                              variant="ghost" 
-                              size="sm" 
-                              className="ml-6 w-full justify-start"
-                              onClick={() => toggleModelExpanded(model.id)}
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 mr-2" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 mr-2" />
-                              )}
-                              Configure Instance Settings
-                            </Button>
-                            
-                            {isExpanded && (
-                              <div className="ml-6 space-y-3 bg-blue-50 p-3 rounded border-l-2 border-blue-200 mt-2">
-                                <div className="text-sm font-medium text-blue-900">
-                                  Instance Configuration
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor={`name-${model.id}`}>Instance Name</Label>
-                                  <Input
-                                    id={`name-${model.id}`}
-                                    value={selectedModel.instanceName}
-                                    onChange={(e) => updateSelectedModel(model.id, { instanceName: e.target.value })}
-                                    placeholder="Model instance name"
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor={`desc-${model.id}`}>Description (Optional)</Label>
-                                  <Textarea
-                                    id={`desc-${model.id}`}
-                                    value={selectedModel.description}
-                                    onChange={(e) => updateSelectedModel(model.id, { description: e.target.value })}
-                                    placeholder="Describe this model instance..."
-                                    rows={2}
-                                  />
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Switch
-                                    id={`public-${model.id}`}
-                                    checked={selectedModel.isPublic}
-                                    onCheckedChange={(checked) => updateSelectedModel(model.id, { isPublic: checked })}
-                                  />
-                                  <Label htmlFor={`public-${model.id}`}>
-                                    Make this instance public
-                                  </Label>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              
-              {selectedModels.length > 0 && (
-                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                  <div className="text-sm font-medium text-green-900">
-                    {selectedModels.length} model{selectedModels.length === 1 ? '' : 's'} selected
-                  </div>
-                  <div className="text-xs text-green-700 mt-1">
-                    These model instances will be created along with your provider configuration.
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <AnimatePresence>
+        {!isEdit && selectedProvider && (
+          <motion.div
+            initial={{ 
+              height: 0, 
+              opacity: 0,
+              scale: 0.95,
+              overflow: "hidden"
+            }}
+            animate={{ 
+              height: "auto", 
+              opacity: 1,
+              scale: 1,
+              overflow: "visible"
+            }}
+            exit={{ 
+              height: 0, 
+              opacity: 0,
+              scale: 0.95,
+              overflow: "hidden"
+            }}
+            transition={{ 
+              duration: 0.6, 
+              ease: [0.4, 0, 0.2, 1],
+              opacity: { duration: 0.4, delay: 0.2 }
+            }}
+          >
+            <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Submit Button */}
       <div className="flex justify-end space-x-4">
@@ -490,7 +378,7 @@ export default function ProviderConfigForm({
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || !isValid}>
           {isSubmitting 
             ? (isEdit ? 'Updating...' : 'Creating...') 
             : (isEdit 
