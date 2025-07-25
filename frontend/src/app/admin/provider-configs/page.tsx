@@ -69,19 +69,6 @@ export default async function ProviderConfigsPage({
 
     return (
         <ContentBlock 
-                // header={{
-                //     title: t("title"),
-                //     description: t("description"),
-                //     controls: (
-                //         <Link href="/admin/provider-configs/create">
-                //             <Button className="shrink-0 gap-2 shadow-sm" data-test="new-config-button">
-                //                 <Settings className="mr-2 h-4 w-4" />
-                //                 {t("createButton")}
-                //             </Button>
-                //         </Link>
-                //     )
-                // }}
-
                 header={{
                     breadcrumb: [
                         {label: t("title"), href: "/admin/provider-configs"},

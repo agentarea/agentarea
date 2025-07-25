@@ -214,6 +214,7 @@ export default function MainContent({
                     data={[
                         {
                             sectionId: "configured",
+                            itemLink: ((item) => `/admin/provider-configs/create?provider_spec_id=${item.id}&isEdit=true`),
                             cardClassName: "border-primary/50 dark:border-accent-foreground",
                             data: filteredConfigs,
                             emptyState: (
@@ -229,6 +230,7 @@ export default function MainContent({
                             )
                         },
                         {
+                            itemLink: ((item) => `/admin/provider-configs/create?provider_spec_id=${item.id}`),
                             sectionId: "available",
                             sectioName: t("availableProviders"),
                             data: filteredSpecs
@@ -236,7 +238,6 @@ export default function MainContent({
                     ]}
                     columns={configColumns}
                     routeChange="/admin/provider-configs"
-                    itemLink={(item: ProviderConfig) => `/admin/provider-configs/create?provider_spec_id=${item.provider_spec_id || item.id}`}
                     cardContent={(item: any) => {
                         return (
                             <CardContent item={item}/>

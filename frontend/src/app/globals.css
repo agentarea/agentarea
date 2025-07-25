@@ -181,3 +181,117 @@ body {
     @apply border border-border dark:border-zinc-700 rounded-md transition-colors pr-[7px];
   }
 }
+
+/* Sonner Toast Styles */
+[data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Alternative approach using data-state attributes */
+[data-sonner-toast][data-state="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-state="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-state="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* More specific selectors for Sonner */
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Direct class-based approach */
+.toaster [data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+.toaster [data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+.toaster [data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Override any existing styles with higher specificity */
+div[data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+div[data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+div[data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Force override with maximum specificity */
+body div[data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+body div[data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+body div[data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}

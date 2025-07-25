@@ -15,9 +15,14 @@ interface SelectedModel {
   isPublic: boolean;
 }
 
-export default function ModelInstances({ selectedProvider, availableModels }: { selectedProvider: any, availableModels: ModelSpec[] }) {
-    const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
+type ModelInstancesProps = {    
+  selectedProvider: any;
+  availableModels: ModelSpec[];
+  selectedModels: SelectedModel[];
+  setSelectedModels: (models: SelectedModel[]) => void;
+}
 
+export default function ModelInstances({ selectedProvider, availableModels, selectedModels, setSelectedModels }: ModelInstancesProps) {
     // Auto-select all models when component loads or availableModels changes
     useEffect(() => {
         if (selectedProvider && availableModels.length > 0) {
@@ -33,14 +38,15 @@ export default function ModelInstances({ selectedProvider, availableModels }: { 
 
     const handleModelToggle = (modelSpec: ModelSpec, checked: boolean) => {
         if (checked) {
-          setSelectedModels(prev => [...prev, {
+          const newModel: SelectedModel = {
             modelSpecId: modelSpec.id,
             instanceName: `${selectedProvider?.name} ${modelSpec.display_name}`,
             description: modelSpec.description || '',
             isPublic: false
-          }]);
+          };
+          setSelectedModels([...selectedModels, newModel]);
         } else {
-          setSelectedModels(prev => prev.filter(m => m.modelSpecId !== modelSpec.id));
+          setSelectedModels(selectedModels.filter((m: SelectedModel) => m.modelSpecId !== modelSpec.id));
         }
       };
 

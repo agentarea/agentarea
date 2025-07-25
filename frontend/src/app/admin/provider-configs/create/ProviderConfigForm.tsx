@@ -12,12 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { CheckCircle2, AlertCircle, Bot, Server } from 'lucide-react';
+import { AlertCircle, Bot, Server } from 'lucide-react';
 import FormLabel from '@/components/FormLabel/FormLabel';
 import BaseInfo from './components/BaseInfo';
 import ModelInstances from './components/ModelInstances';
 import { getProviderIconUrl } from '@/lib/provider-icons';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 
 type ProviderSpec = components['schemas']['ProviderSpecResponse'];
@@ -67,7 +68,6 @@ export default function ProviderConfigForm({
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
 
@@ -116,6 +116,15 @@ export default function ProviderConfigForm({
     }
   }, [selectedProvider, availableModels, isEdit]);
 
+  // Set initial values when initialData is loaded
+  useEffect(() => {
+    if (initialData && isEdit) {
+      setValue('provider_spec_id', initialData.provider_spec_id);
+      setValue('name', initialData.name);
+      setValue('endpoint_url', initialData.endpoint_url || '');
+    }
+  }, [initialData, isEdit, setValue]);
+
   // Handle case where data is not loaded
   if (!providerSpecs || !modelSpecs) {
     return (
@@ -145,9 +154,9 @@ export default function ProviderConfigForm({
   };
 
   const onSubmit = async (data: ProviderConfigFormData) => {
+    console.log("onSubmit", data);
     setIsSubmitting(true);
     setError(null);
-    setSuccess(null);
 
     try {
       // Step 1: Create or update the provider configuration
@@ -199,9 +208,9 @@ export default function ProviderConfigForm({
         });
 
         await Promise.all(modelCreationPromises);
-        setSuccess(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully with ${selectedModels.length} model instances!`);
+        toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully with ${selectedModels.length} model instances!`);
       } else {
-        setSuccess(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully!`);
+        toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully!`);
       }
 
       // Reset form only if creating
@@ -216,13 +225,14 @@ export default function ProviderConfigForm({
         setSelectedModels([]);
       }
 
-      // Redirect after a short delay
-      setTimeout(() => {
-        router.push('/admin/provider-configs');
-      }, 2000);
+      // Redirect immediately
+      router.push('/admin/provider-configs');
+      router.refresh();
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -241,20 +251,6 @@ export default function ProviderConfigForm({
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          </motion.div>
-        )}
-
-        {success && (
-          <motion.div
-            initial={{ opacity: 0, height: 0, scale: 0.95 }}
-            animate={{ opacity: 1, height: "auto", scale: 1 }}
-            exit={{ opacity: 0, height: 0, scale: 0.95 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Alert className="border-green-200 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">{success}</AlertDescription>
             </Alert>
           </motion.div>
         )}
@@ -281,7 +277,7 @@ export default function ProviderConfigForm({
                   value={field.value}
                   onValueChange={handleProviderChange}
                   placeholder="Select provider"
-                  disabled={!!preselectedProviderId && !isEdit}
+                  disabled={!!preselectedProviderId && !isEdit && !initialData}
                   emptyMessage={
                     <div className="flex flex-col items-center justify-center h-full gap-1">
                       <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
@@ -296,7 +292,7 @@ export default function ProviderConfigForm({
             {errors.provider_spec_id && (
               <p className="text-sm text-red-600">{errors.provider_spec_id.message}</p>
             )}
-            {preselectedProviderId && !isEdit && (
+            {preselectedProviderId && !isEdit && !initialData && (
               <p className="note">
                 Provider is pre-selected for this configuration.
               </p>
@@ -326,14 +322,14 @@ export default function ProviderConfigForm({
 
       {/* Step 2: Model Selection (only for create mode) */}
       <AnimatePresence>
-        {!isEdit && selectedProvider && (
+        {selectedProvider && (
           <motion.div
             initial={{ height: 0, opacity: 0,scale: 0.95, overflow: "hidden" }}
             animate={{ height: "auto", opacity: 1,scale: 1, overflow: "visible" }}
             exit={{ height: 0, opacity: 0,scale: 0.95, overflow: "hidden" }}
             transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1], opacity: { duration: 0.4, delay: 0.2 }}}
           >
-            <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} />
+            <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} selectedModels={selectedModels} setSelectedModels={setSelectedModels} />
           </motion.div>
         )}
       </AnimatePresence>

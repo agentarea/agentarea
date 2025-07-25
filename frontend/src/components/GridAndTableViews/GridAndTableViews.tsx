@@ -90,8 +90,8 @@ export default function GridAndTableViews({
                         <TabsContent value="grid">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]">
                                 {data.map((item) => (
-                                    itemLink ? (
-                                        <Link key={item.id} href={itemLink(item)} className={cn("card card-shadow group", cardClassName)}>
+                                    (item.itemLink || itemLink) ? (
+                                        <Link key={item.id} href={(item.itemLink || itemLink)(item)} className={cn("card card-shadow group", cardClassName)}>
                                             {cardContent(item)}
                                         </Link>
                                     ) : (
@@ -128,7 +128,7 @@ export function GridAndTableSectionsViews({
     emptyState?: React.ReactNode;
     leftComponent?: React.ReactNode;
     routeChange: string;
-    data: { sectionId: string, sectioName?: string, cardClassName?: string, data: any[], emptyState?: React.ReactNode }[];
+    data: { sectionId: string, sectioName?: string, cardClassName?: string, data: any[], emptyState?: React.ReactNode, itemLink?: (item: any) => string }[];
     columns: any[];
     cardContent: (item: any) => React.ReactNode;
     itemLink?: (item: any) => string;
@@ -163,17 +163,18 @@ export function GridAndTableSectionsViews({
                                             <>
                                             <TabsContent value="grid">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]">
-                                                    {sectionData.data.map((item) => (
-                                                        itemLink ? (
-                                                            <Link key={item.id} href={itemLink(item)} className={cn("card card-shadow group", cardClassName, sectionData.cardClassName)}>
+                                                    {sectionData.data.map((item) => {
+                                                        const linkFunction = sectionData.itemLink || itemLink;
+                                                        return linkFunction ? (
+                                                            <Link key={item.id} href={linkFunction(item)} className={cn("card card-shadow group", cardClassName, sectionData.cardClassName)}>
                                                                 {cardContent(item)}
                                                             </Link>
                                                         ) : (
                                                             <div key={item.id} className={cn("card card-shadow group", cardClassName, sectionData.cardClassName)}>
                                                                 {cardContent(item)}
                                                             </div>
-                                                        )
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </TabsContent>
                                             <TabsContent value="table">

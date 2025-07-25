@@ -10,7 +10,10 @@ const NotFound = () => {
   return (
     <ContentBlock
       header={{
-        title: t("title")
+        breadcrumb: [
+          {label: "Home", href: "/workplace"},
+          {label: t("title")}
+        ]
       }}
     >
       <EmptyState 
