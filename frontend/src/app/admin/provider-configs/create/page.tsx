@@ -51,13 +51,10 @@ export default async function CreateProviderConfigPage({
   return (
     <ContentBlock 
       header={{
-        title: preselectedProviderId 
-          ? `Configure ${providerSpecs.find(p => p.id === preselectedProviderId)?.name || 'Provider'}`
-          : 'Add Provider Configuration',
-        backLink: {
-          label: "Back to Provider Management",
-          href: "/admin/provider-configs"
-        }
+        breadcrumb: [
+          {label: "Provider Management", href: "/admin/provider-configs"},
+          {label: "Add Provider Configuration"},
+        ],
     }}>
       <div className="max-w-4xl mx-auto">
         <ProviderConfigForm 

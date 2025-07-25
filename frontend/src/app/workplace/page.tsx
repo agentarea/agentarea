@@ -199,7 +199,10 @@ export default function WorkplacePage() {
   return (
     <ContentBlock
       header={{
-        title: "Workplace",
+        // title: "Workplace",
+        breadcrumb: [
+          {label: "Workplace", href: "/workplace"},
+        ],
         description: "Your command center for managing agents and tasks",
         controls: (
           <div className="flex items-center gap-2">

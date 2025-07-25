@@ -225,7 +225,10 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
   return (
     <ContentBlock
       header={{
-        title: "Agent Workflows",
+        // title: "Agent Workflows",
+        breadcrumb: [
+          {label: "Agent Workflow"},
+        ],
         description: "Monitor, manage, and review your agent workflows",
         controls: (
           <div className="flex gap-4">
