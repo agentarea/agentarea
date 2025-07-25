@@ -31,6 +31,8 @@ interface SearchableSelectProps {
   defaultIcon?: React.ReactNode
   renderOption?: (option: SelectOption | SimpleSelectOption) => React.ReactNode
   renderTrigger?: (selectedOption: SelectOption | SimpleSelectOption | undefined) => React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export function SearchableSelect({
@@ -43,7 +45,9 @@ export function SearchableSelect({
   emptyMessage = "No items found.",
   defaultIcon,
   renderOption,
-  renderTrigger
+  renderTrigger,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen
 }: SearchableSelectProps) {
   const [popoverWidth, setPopoverWidth] = React.useState<string>('auto')
   const [popoverOpen, setPopoverOpen] = React.useState(false)
@@ -51,8 +55,17 @@ export function SearchableSelect({
 
   const selectedOption = options.find(option => option.id === value)
 
+  // Use controlled state if provided, otherwise use internal state
+  const isControlled = controlledOpen !== undefined
+  const isOpen = isControlled ? controlledOpen : popoverOpen
+
   const handlePopoverOpenChange = (open: boolean) => {
-    setPopoverOpen(open)
+    if (isControlled) {
+      setControlledOpen?.(open)
+    } else {
+      setPopoverOpen(open)
+    }
+    
     if (open && triggerRef.current) {
       const width = triggerRef.current.offsetWidth
       setPopoverWidth(`${width}px`)
@@ -61,7 +74,7 @@ export function SearchableSelect({
 
   const handleOptionChange = (optionId: string | number) => {
     onValueChange(optionId)
-    setPopoverOpen(false)
+    handlePopoverOpenChange(false)
   }
 
   const renderIcon = (option: SelectOption) => {
@@ -124,7 +137,7 @@ export function SearchableSelect({
   }
 
   return (
-    <Popover open={popoverOpen} onOpenChange={handlePopoverOpenChange}>
+    <Popover open={isOpen} onOpenChange={handlePopoverOpenChange}>
       <PopoverTrigger asChild>
         <Button
           ref={triggerRef}
