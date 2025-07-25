@@ -6,46 +6,20 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createProviderConfig, createModelInstance, updateProviderConfig } from '@/lib/api';
+import { createProviderConfig, createModelInstance, updateProviderConfig, listProviderSpecs, listProviderSpecsWithModels } from '@/lib/api';
 import { components } from '@/api/schema';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { AlertCircle, Bot, Server } from 'lucide-react';
+import { AlertCircle, Bot, Server, Loader2 } from 'lucide-react';
 import FormLabel from '@/components/FormLabel/FormLabel';
 import BaseInfo from './components/BaseInfo';
 import ModelInstances from './components/ModelInstances';
 import { getProviderIconUrl } from '@/lib/provider-icons';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-
-
-type ProviderSpec = components['schemas']['ProviderSpecResponse'];
-export type ModelSpec = {
-  id: string;
-  provider_spec_id: string;
-  model_name: string;
-  display_name: string;
-  description: string;
-  context_window: number;
-  is_active: boolean;
-};
-
-export interface ProviderConfigFormProps {
-  providerSpecs: ProviderSpec[];
-  modelSpecs: ModelSpec[];
-  initialData?: components['schemas']['ProviderConfigResponse'];
-  isEdit?: boolean;
-  preselectedProviderId?: string;
-}
-
-interface SelectedModel {
-  modelSpecId: string;
-  instanceName: string;
-  description: string;
-  isPublic: boolean;
-}
+import { ProviderSpec, ModelSpec, SelectedModel, ProviderConfigFormProps } from '@/types/provider';
 
 // Form validation schema
 const providerConfigSchema = z.object({
@@ -59,17 +33,76 @@ const providerConfigSchema = z.object({
 type ProviderConfigFormData = z.infer<typeof providerConfigSchema>;
 
 export default function ProviderConfigForm({ 
-  providerSpecs, 
-  modelSpecs, 
   initialData, 
+  className,
   isEdit = false,
-  preselectedProviderId 
+  preselectedProviderId,
+  isClear = false,
+  onAfterSubmit,
+  onCancel,
+  submitButtonText,
+  cancelButtonText,
+  showModelSelection = true,
+  autoRedirect = true,
 }: ProviderConfigFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
+  const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
+  const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
+
+  // Load provider specs and model specs on component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const [providerSpecsResponse, providerSpecsWithModelsResponse] = await Promise.all([
+          listProviderSpecs(),
+          listProviderSpecsWithModels()
+        ]);
+
+        if (providerSpecsResponse.error || providerSpecsWithModelsResponse.error) {
+          throw new Error(
+            providerSpecsResponse.error?.detail?.[0]?.msg || 
+            providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
+            'Failed to load provider specifications'
+          );
+        }
+
+        const specs = providerSpecsResponse.data || [];
+        const specsWithModels = providerSpecsWithModelsResponse.data || [];
+        
+        // Extract and flatten model specs from the provider specs with models
+        const models = specsWithModels.flatMap(spec => 
+          spec.models.map(model => ({
+            id: model.id,
+            provider_spec_id: spec.id,
+            model_name: model.model_name,
+            display_name: model.display_name,
+            description: model.description,
+            context_window: model.context_window,
+            is_active: model.is_active,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+          }))
+        );
+
+        setProviderSpecs(specs);
+        setModelSpecs(models);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+        setError(errorMessage);
+        toast.error(errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   // Initialize react-hook-form
   const {
@@ -111,7 +144,7 @@ export default function ProviderConfigForm({
 
   // Auto-select all models when provider changes
   useEffect(() => {
-    if (selectedProvider && availableModels.length > 0 && !isEdit) {
+    if (selectedProvider && availableModels.length > 0 && !isEdit && showModelSelection) {
       const allModels = availableModels.map(model => ({
         modelSpecId: model.id,
         instanceName: `${selectedProvider.name} ${model.display_name}`,
@@ -120,7 +153,16 @@ export default function ProviderConfigForm({
       }));
       setSelectedModels(allModels);
     }
-  }, [selectedProvider, availableModels, isEdit]);
+  }, [selectedProvider, availableModels, isEdit, showModelSelection]);
+
+  // Generate name for preselected provider
+  useEffect(() => {
+    if (preselectedProviderId && selectedProvider && !isEdit && !initialData && !watchedName) {
+      const providerName = selectedProvider.name || '';
+      const randomNumber = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
+      setValue('name', `${providerName} Config - ${randomNumber}`);
+    }
+  }, [preselectedProviderId, selectedProvider, isEdit, initialData, watchedName, setValue]);
 
   // Set initial values when initialData is loaded
   useEffect(() => {
@@ -131,12 +173,25 @@ export default function ProviderConfigForm({
     }
   }, [initialData, isEdit, setValue]);
 
-  // Handle case where data is not loaded
-  if (!providerSpecs || !modelSpecs) {
+  // Handle loading state
+  if (isLoading) {
     return (
-      <div className="text-center py-10">
-        <p className="text-muted-foreground">Loading provider specifications...</p>
+      <div className="flex items-center justify-center py-10">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-muted-foreground">Loading provider specifications...</span>
+        </div>
       </div>
+    );
+  }
+
+  // Handle error state
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
     );
   }
 
@@ -150,8 +205,6 @@ export default function ProviderConfigForm({
 
     setSelectedModels([]); // Reset selected models when provider changes
   };
-
-
 
   const updateSelectedModel = (modelSpecId: string, updates: Partial<SelectedModel>) => {
     setSelectedModels(prev => prev.map(model => 
@@ -203,8 +256,8 @@ export default function ProviderConfigForm({
         throw new Error(`Failed to ${isEdit ? 'update' : 'create'} provider configuration: ${errorMessage}`);
       }
 
-      // Step 2: Create model instances if any are selected (only for create mode)
-      if (!isEdit && selectedModels.length > 0) {
+      // Step 2: Create model instances if any are selected (only for create mode and if model selection is enabled)
+      if (!isEdit && selectedModels.length > 0 && showModelSelection) {
         const modelCreationPromises = selectedModels.map(async (model) => {
           const { data, error } = await createModelInstance({
             provider_config_id: providerConfig.id,
@@ -227,8 +280,13 @@ export default function ProviderConfigForm({
         toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully!`);
       }
 
-      // Reset form only if creating
-      if (!isEdit) {
+      // Call custom after submit handler if provided
+      if (onAfterSubmit) {
+        await onAfterSubmit(providerConfig);
+      }
+
+      // Reset form only if creating and no custom handler
+      if (!isEdit && !onAfterSubmit) {
         reset({
           provider_spec_id: '',
           name: '',
@@ -239,9 +297,11 @@ export default function ProviderConfigForm({
         setSelectedModels([]);
       }
 
-      // Redirect immediately
-      router.push('/admin/provider-configs');
-      router.refresh();
+      // Redirect if autoRedirect is enabled and no custom handler
+      if (autoRedirect && !onAfterSubmit) {
+        router.push('/admin/provider-configs');
+        router.refresh();
+      }
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
@@ -252,8 +312,20 @@ export default function ProviderConfigForm({
     }
   };
 
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else if (autoRedirect) {
+      router.push('/admin/provider-configs');
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSubmit(onSubmit)(e);
+    }} className={cn("space-y-6", className)}>
       <AnimatePresence>
         {error && (
           <motion.div
@@ -275,7 +347,10 @@ export default function ProviderConfigForm({
         // watchedProviderId ? "max-w-6xl grid-cols-1 lg:grid-cols-2" : "grid-cols-1 max-w-4xl"
       )}>
       {/* Step 1: Provider Configuration */}
-      <Card className="grid grid-cols-1 gap-6">
+      <div className={cn(
+        "grid grid-cols-1 gap-6",
+        isClear ? "p-0" : "card card-shadow"
+      )}>
           <div className="space-y-2">
             <FormLabel htmlFor="provider" icon={Server}>Provider</FormLabel>
             <Controller
@@ -314,6 +389,21 @@ export default function ProviderConfigForm({
           </div>
 
           <BaseInfo control={control} errors={errors} providerSpecId={watchedProviderId} isEdit={isEdit} />
+          
+          <AnimatePresence>
+          {
+            selectedProvider && showModelSelection && (
+              <motion.div
+                initial={{ height: 0, opacity: 0, overflow: "hidden"}}
+                animate={{ height: "auto", opacity: 1, overflow: "visible"}}
+                exit={{ height: 0, opacity: 0, overflow: "hidden"}}
+                transition={{ duration: 0.4, ease: "easeOut"}}
+              >
+                <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} selectedModels={selectedModels} setSelectedModels={setSelectedModels} />
+              </motion.div>
+            )
+          }
+          </AnimatePresence>
 
           {/* <div className="flex items-center space-x-2">
             <Controller
@@ -332,21 +422,10 @@ export default function ProviderConfigForm({
               {watch('is_public') ? 'Public Configuration' : 'Private Configuration'}
             </FormLabel>
           </div> */}
-      </Card>
+      </div>
 
       {/* Step 2: Model Selection (only for create mode) */}
-      <AnimatePresence>
-        {selectedProvider && (
-          <motion.div
-            initial={{ height: 0, opacity: 0,scale: 0.95, overflow: "hidden" }}
-            animate={{ height: "auto", opacity: 1,scale: 1, overflow: "visible" }}
-            exit={{ height: 0, opacity: 0,scale: 0.95, overflow: "hidden" }}
-            transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1], opacity: { duration: 0.4, delay: 0.2 }}}
-          >
-            <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} selectedModels={selectedModels} setSelectedModels={setSelectedModels} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+
       </div>
 
       {/* Submit Button */}
@@ -354,17 +433,27 @@ export default function ProviderConfigForm({
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push('/admin/provider-configs')}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleCancel();
+          }}
         >
-          Cancel
+          {cancelButtonText || 'Cancel'}
         </Button>
-        <Button type="submit" disabled={isSubmitting || !isValid}>
+        <Button 
+          type="submit" 
+          disabled={isSubmitting || !isValid}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
           {isSubmitting 
             ? (isEdit ? 'Updating...' : 'Creating...') 
-            : (isEdit 
+            : (submitButtonText || (isEdit 
                 ? 'Update Configuration' 
-                : `Create Configuration${selectedModels.length > 0 ? ` + ${selectedModels.length} Models` : ''}`
-              )
+                : `Create Configuration${selectedModels.length > 0 && showModelSelection ? ` + ${selectedModels.length} Models` : ''}`
+              ))
           }
         </Button>
       </div>

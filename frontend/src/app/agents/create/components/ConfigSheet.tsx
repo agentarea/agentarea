@@ -13,6 +13,7 @@ type ConfigSheetProps = {
   triggerComponent?: ReactNode;
   triggerClassName?: string;
   className?: string;
+  open?: boolean; // External control of open state
   onOpenChange?: (open: boolean) => void; // Optional callback for parent component
   triggerRef?: React.RefObject<HTMLButtonElement | null>; // Optional ref to trigger button
 };
@@ -26,13 +27,19 @@ const ConfigSheet = ({
   children, 
   triggerText = "Add",
   triggerIcon = <Plus className="h-4 w-4" />,
+  open,
   onOpenChange,
   triggerRef
 }: ConfigSheetProps) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  
+  // Use external open state if provided, otherwise use internal state
+  const isOpen = open !== undefined ? open : internalIsOpen;
 
   const handleOpenChange = (open: boolean) => {
-    setIsOpen(open);
+    if (open !== undefined) {
+      setInternalIsOpen(open);
+    }
     onOpenChange?.(open); // Call parent callback if provided
   };
 

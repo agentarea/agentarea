@@ -11,6 +11,7 @@ import type { components } from '@/api/schema';
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
 import ConfigSheet from "./ConfigSheet";
+import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
@@ -20,13 +21,17 @@ type BasicInformationProps = {
   errors: FieldErrors<AgentFormValues>;
   llmModelInstances: LLMModelInstance[];
   onOpenConfigSheet: () => void;
+  onRefreshModels?: () => void;
 };
 
-const BasicInformation = ({ register, control, errors, llmModelInstances, onOpenConfigSheet }: BasicInformationProps) => {
+const BasicInformation = ({ register, control, errors, llmModelInstances, onOpenConfigSheet, onRefreshModels }: BasicInformationProps) => {
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
+  const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
 
   const handleConfigSheetOpenChange = (open: boolean) => {
+    console.log('ConfigSheet open change:', open);
+    setConfigSheetOpen(open);
     if (open) {
       // Close SearchableSelect when ConfigSheet opens
       setSearchableSelectOpen(false);
@@ -127,10 +132,25 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
         className="md:min-w-[500px]"
         description=""
         triggerClassName="hidden"
+        open={configSheetOpen}
         onOpenChange={handleConfigSheetOpenChange}
         triggerRef={configSheetTriggerRef}
       >
-        TEST
+        <ProviderConfigForm 
+          className="overflow-y-auto pb-6"
+          onAfterSubmit={(config) => {
+            // Обновить список моделей после создания конфигурации
+            onRefreshModels?.();
+            // Закрыть sheet после успешного создания
+            setConfigSheetOpen(false);
+          }}
+          onCancel={() => {
+            // Закрыть sheet при отмене
+            setConfigSheetOpen(false);
+          }}
+          isClear={true}
+          autoRedirect={false}
+        />
       </ConfigSheet>
     </Card>
   );

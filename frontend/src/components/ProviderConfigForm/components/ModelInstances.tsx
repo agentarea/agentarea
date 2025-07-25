@@ -4,7 +4,7 @@ import { Brain } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ModelSpec } from "../ProviderConfigForm";  
+import { ModelSpec } from "@/types/provider";  
 import { ModelItemControl } from "./ModelItemControl";
 import { Label } from "@/components/ui/label";
 
@@ -69,12 +69,7 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
     const isAllSelected = selectedModels.length === availableModels.length && availableModels.length > 0;
 
     return (
-        <motion.div
-          initial={{ height: 0, opacity: 0, overflow: "hidden"}}
-          animate={{ height: "auto", opacity: 1, overflow: "visible"}}
-          transition={{ duration: 0.4, ease: "easeOut"}}
-        >
-          <Card className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-4" >
             <div className="space-y-1">
               <FormLabel icon={Brain}>Model Instances</FormLabel>
               <p className="note">
@@ -124,7 +119,6 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
                 </div>
               )}
             </div>
-          </Card>
-        </motion.div>
+        </div>
     )
 }

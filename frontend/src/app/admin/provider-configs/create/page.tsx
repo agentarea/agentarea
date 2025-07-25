@@ -1,7 +1,7 @@
-import { listProviderSpecs, listProviderSpecsWithModels, getProviderConfig } from '@/lib/api';
-import ProviderConfigForm from './ProviderConfigForm';
+import { getProviderConfig } from '@/lib/api';
+import ProviderConfigForm from '@/components/ProviderConfigForm';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
-import DeleteButton from './DeleteButton';
+import DeleteButton from './components/DeleteButton';
 
 export default async function CreateProviderConfigPage({
   searchParams,
@@ -36,42 +36,6 @@ export default async function CreateProviderConfigPage({
     }
   }
 
-  // Fetch both provider specs and model specs
-  const [providerSpecsResponse, providerSpecsWithModelsResponse] = await Promise.all([
-    listProviderSpecs(),
-    listProviderSpecsWithModels()
-  ]);
-
-  if (providerSpecsResponse.error || providerSpecsWithModelsResponse.error) {
-    return (
-      <div className="text-center py-10">
-        <p className="text-red-500">
-          Error loading provider specifications: {
-            providerSpecsResponse.error?.detail?.[0]?.msg || 
-            providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
-            'Unknown error occurred'
-          }
-        </p>
-      </div>
-    );
-  }
-
-  const providerSpecs = providerSpecsResponse.data || [];
-  const providerSpecsWithModels = providerSpecsWithModelsResponse.data || [];
-  
-  // Extract and flatten model specs from the provider specs with models
-  const modelSpecs = providerSpecsWithModels.flatMap(spec => 
-    spec.models.map(model => ({
-      id: model.id,
-      provider_spec_id: spec.id,
-      model_name: model.model_name,
-      display_name: model.display_name,
-      description: model.description || '',
-      context_window: model.context_window,
-      is_active: model.is_active,
-    }))
-  );
-
   return (
     <ContentBlock 
       header={{
@@ -93,8 +57,6 @@ export default async function CreateProviderConfigPage({
     }}>
       <div className="max-w-4xl mx-auto">
         <ProviderConfigForm 
-          providerSpecs={providerSpecs}
-          modelSpecs={modelSpecs}
           preselectedProviderId={preselectedProviderId}
           isEdit={isEdit}
           initialData={initialData}
