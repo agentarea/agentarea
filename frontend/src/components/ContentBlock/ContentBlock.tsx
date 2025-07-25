@@ -70,7 +70,11 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
                                                     index === header.breadcrumb.length - 1 ? (
                                                         <BreadcrumbPage className="font-semibold">{item.label}</BreadcrumbPage>
                                                     ) : (
-                                                        <BreadcrumbLink href={item.href || ""}>{item.label}</BreadcrumbLink>
+                                                        item.href ? (
+                                                            <BreadcrumbLink href={item.href || ""}>{item.label}</BreadcrumbLink>
+                                                        ) : (
+                                                            <BreadcrumbPage className="text-muted-foreground">{item.label}</BreadcrumbPage>
+                                                        )
                                                     )
                                                 }
                                             </BreadcrumbItem>

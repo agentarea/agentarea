@@ -55,9 +55,9 @@ export default function DeleteButton({ configId, configName }: DeleteButtonProps
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive" size="sm">
+        <Button variant="destructiveOutline" size="sm">
           <Trash2 className="h-4 w-4" />
-          Delete Configuration
+          Delete
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-[400px] overflow-hidden">

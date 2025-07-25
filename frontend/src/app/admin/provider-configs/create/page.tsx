@@ -75,9 +75,14 @@ export default async function CreateProviderConfigPage({
   return (
     <ContentBlock 
       header={{
-        breadcrumb: [
+        breadcrumb: isEdit ? [
           {label: "Provider Management", href: "/admin/provider-configs"},
-          {label: isEdit ? `Edit ${initialData?.name}` : "Add Provider Configuration"},
+          {label: "Edit"},
+          {label:  `${initialData?.name}`}
+        ] : [
+          {label: "Provider Management", href: "/admin/provider-configs"},
+          {label: "Create"},
+          {label:  "Provider Configuration"}
         ],
         controls: isEdit && initialData ? (
           <DeleteButton 

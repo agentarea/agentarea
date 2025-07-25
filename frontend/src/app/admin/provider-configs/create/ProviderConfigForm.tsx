@@ -51,7 +51,7 @@ interface SelectedModel {
 const providerConfigSchema = z.object({
   provider_spec_id: z.string().min(1, 'Provider is required'),
   name: z.string().min(1, 'Name is required').max(255, 'Name must be less than 255 characters'),
-  api_key: z.string().min(1, 'API key is required'),
+  api_key: z.string().optional(),
   endpoint_url: z.string().optional(),
   is_public: z.boolean(),
 });
@@ -80,7 +80,13 @@ export default function ProviderConfigForm({
     formState: { errors, isValid },
     reset
   } = useForm<ProviderConfigFormData>({
-    resolver: zodResolver(providerConfigSchema),
+    resolver: zodResolver(
+      isEdit 
+        ? providerConfigSchema 
+        : providerConfigSchema.extend({
+            api_key: z.string().min(1, 'API key is required')
+          })
+    ),
     defaultValues: {
       provider_spec_id: preselectedProviderId || initialData?.provider_spec_id || '',
       name: initialData?.name || '',
@@ -155,6 +161,8 @@ export default function ProviderConfigForm({
 
   const onSubmit = async (data: ProviderConfigFormData) => {
     console.log("onSubmit", data);
+    console.log("endpoint_url value:", data.endpoint_url);
+    console.log("endpoint_url type:", typeof data.endpoint_url);
     setIsSubmitting(true);
     setError(null);
 
@@ -164,20 +172,26 @@ export default function ProviderConfigForm({
       let providerError;
 
       if (isEdit && initialData) {
-        const result = await updateProviderConfig(initialData.id, {
+        const updateData: any = {
           name: data.name,
-          api_key: data.api_key,
-          endpoint_url: data.endpoint_url || undefined,
+          endpoint_url: data.endpoint_url === '' ? null : data.endpoint_url,
           is_active: data.is_public, // Note: backend uses is_active, frontend uses is_public
-        });
+        };
+        
+        // Only include api_key if it's provided (not empty)
+        if (data.api_key && data.api_key.trim() !== '') {
+          updateData.api_key = data.api_key;
+        }
+        console.log("Update data:", updateData);
+        const result = await updateProviderConfig(initialData.id, updateData);
         providerConfig = result.data;
         providerError = result.error;
       } else {
         const result = await createProviderConfig({
           provider_spec_id: data.provider_spec_id,
           name: data.name,
-          api_key: data.api_key,
-          endpoint_url: data.endpoint_url || undefined,
+          api_key: data.api_key || '', // API key is required for creation, so this should never be undefined
+          endpoint_url: data.endpoint_url === '' ? null : data.endpoint_url,
           is_public: data.is_public,
         });
         providerConfig = result.data;
@@ -299,7 +313,7 @@ export default function ProviderConfigForm({
             )}
           </div>
 
-          <BaseInfo control={control} errors={errors} providerSpecId={watchedProviderId} />
+          <BaseInfo control={control} errors={errors} providerSpecId={watchedProviderId} isEdit={isEdit} />
 
           {/* <div className="flex items-center space-x-2">
             <Controller

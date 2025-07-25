@@ -3,14 +3,16 @@ import FormLabel from "@/components/FormLabel/FormLabel";
 import { Key, Settings, Link } from "lucide-react";
 import { Controller, Control, FieldErrors } from "react-hook-form";
 import { motion, AnimatePresence } from "framer-motion";
+import ApiKeyEditInput from "./ApiKeyEditInput";
 
 interface BaseInfoProps {
   control: Control<any>;
   errors: FieldErrors<any>;
   providerSpecId?: string;
+  isEdit?: boolean;
 }
 
-export default function BaseInfo({ control, errors, providerSpecId }: BaseInfoProps) {
+export default function BaseInfo({ control, errors, providerSpecId, isEdit }: BaseInfoProps) {
     return (
         <AnimatePresence>
             {providerSpecId && (
@@ -33,7 +35,6 @@ export default function BaseInfo({ control, errors, providerSpecId }: BaseInfoPr
                         value={field.value}
                         onChange={field.onChange}
                         placeholder="e.g., Production OpenAI Config"
-                        required
                       />
                     )}
                   />
@@ -50,14 +51,17 @@ export default function BaseInfo({ control, errors, providerSpecId }: BaseInfoPr
                     name="api_key"
                     control={control}
                     render={({ field }) => (
-                      <Input
-                        id="api_key"
-                        type="password"
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Enter your API key"
-                        required
-                      />
+                        isEdit ? (
+                            <ApiKeyEditInput field={field} />
+                        ) : (
+                            <Input
+                                id="api_key"
+                                type="password"
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="Enter your API key"
+                            />
+                        )
                     )}
                   />
                   {errors.api_key && (
