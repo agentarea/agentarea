@@ -119,6 +119,10 @@ body {
     @apply font-montserrat font-semibold text-lg md:text-xl;
   }
 
+  .content-section {
+    @apply pb-[20px] md:pb-[20px] lg:pb-[25px] space-y-4;
+  }
+
   .card {
     @apply bg-white dark:bg-zinc-800 rounded-[16px];
     @apply p-[16px] md:p-[20px] lg:p-[24px] cursor-pointer;
@@ -142,4 +146,152 @@ body {
   .note {
     @apply text-xs text-zinc-400;
   }
+
+  .small-link {
+    @apply text-primary dark:text-accent-foreground text-xs;
+    @apply flex items-center gap-2;
+    @apply hover:text-accent transition-all duration-300;
+  }
+  
+  /* Force select content to match trigger width */
+  [data-radix-select-content] {
+    width: var(--radix-select-trigger-width) !important;
+    min-width: var(--radix-select-trigger-width) !important;
+  }
+  
+  /* Force popover content to match trigger width */
+  [data-radix-popover-content] {
+    width: var(--radix-popover-trigger-width) !important;
+    min-width: var(--radix-popover-trigger-width) !important;
+  }
+  
+  /* Additional popover width fixes */
+  [data-radix-popper-content-wrapper] {
+    width: var(--radix-popover-trigger-width) !important;
+    min-width: var(--radix-popover-trigger-width) !important;
+  }
+  
+  /* Force all popover content to match trigger */
+  .popover-content-match-trigger {
+    width: var(--radix-popover-trigger-width) !important;
+    min-width: var(--radix-popover-trigger-width) !important;
+  }
+
+  .card-item {
+    @apply border border-border dark:border-zinc-700 rounded-md transition-colors pr-[7px];
+  }
+}
+
+/* Sonner Toast Styles */
+[data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Alternative approach using data-state attributes */
+[data-sonner-toast][data-state="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-state="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+[data-sonner-toast][data-state="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* More specific selectors for Sonner */
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Direct class-based approach */
+.toaster [data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+.toaster [data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+.toaster [data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Override any existing styles with higher specificity */
+div[data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+div[data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+div[data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
+}
+
+/* Force override with maximum specificity */
+body div[data-sonner-toast][data-type="error"] {
+  background-color: rgba(254, 226, 226, 0.95) !important;
+  color: #dc2626 !important;
+  border: none !important;
+}
+
+body div[data-sonner-toast][data-type="success"] {
+  background-color: rgba(220, 252, 231, 0.95) !important;
+  color: #16a34a !important;
+  border: none !important;
+}
+
+body div[data-sonner-toast][data-type="warning"] {
+  background-color: rgba(255, 237, 213, 0.95) !important;
+  color: #ea580c !important;
+  border: none !important;
 }

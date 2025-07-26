@@ -5,14 +5,13 @@ import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../types";
 import type { components } from '@/api/schema';
 import AccordionControl from "./AccordionControl";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { useState, useEffect } from "react";
 import { TriggerControl } from "./TriggerControl";
 import { Accordion } from "@/components/ui/accordion";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { SelectableList } from "./SelectableList";
 import { useTranslations } from "next-intl";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import ConfigSheet from "./ConfigSheet";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -33,7 +32,7 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
   const t = useTranslations('AgentsPage');
   const title = (
     <div className="flex items-center gap-2">
-      <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> Tools (MCP Servers)
+      <FormLabel icon={Cpu} className="cursor-pointer">Tools (MCP Servers)</FormLabel>
     </div>
   );
   const note = (
@@ -87,49 +86,11 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
       title={title}
       note={note}
       mainControl={
-        <Sheet modal={false} open={isSheetOpen} onOpenChange={(open:boolean)=>{
-          setIsSheetOpen(open);
-          if(!open) {
-            setScrollToolId(null);
-          }
-        }}>
-        <SheetTrigger asChild>
-          <Button size="xs">
-            <Plus className="h-4 w-4" />
-            Tool
-          </Button>
-        </SheetTrigger>
-        <SheetContent 
-            className="w-full flex flex-col sm:w-[540px] overflow-y-hidden pb-0" 
-            hideOverlay
-            onPointerDownOutside={(e)=>{
-              const target = e.target as HTMLElement;
-              if (
-                target.closest('button, input, select, textarea, a, [role="button"], label') ||
-                target.closest('[data-radix-select-content]') ||
-                target.closest('[data-radix-scroll-area]')
-              ) {
-                e.preventDefault();
-              }
-            }}
-            onInteractOutside={(e) => {
-              const target = e.target as HTMLElement;
-              // If click is on an interactive element (inputs, buttons, selects, links), keep sheet open
-              if (
-                target.closest('button, input, select, textarea, a, [role="button"], label') ||
-                target.closest('[data-radix-select-content]') ||
-                target.closest('[data-radix-scroll-area]')
-              ) {
-                e.preventDefault();
-              }
-            }}
-         >
-          <SheetHeader className="mb-[12px] md:mb-[24px]">
-            <SheetTitle>{t('create.toolsMcp')}</SheetTitle>
-            <SheetDescription className="text-xs">
-              {t('create.toolsMcpDescription')}
-            </SheetDescription>
-          </SheetHeader>
+        <ConfigSheet
+          title={t('create.toolsMcp')}
+          description={t('create.toolsMcpDescription')}
+          triggerText="Tool"
+        >
           <SelectableList
             items={mcpServers}
             prefix="mcp"
@@ -142,8 +103,7 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
               <div className="p-4 text-sm text-muted-foreground">TEST</div>
             )}
           />
-        </SheetContent>
-      </Sheet>
+        </ConfigSheet>
       }
     >
           <div className="space-y-6">

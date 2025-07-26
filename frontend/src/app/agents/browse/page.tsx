@@ -59,7 +59,10 @@ export default function AgentsBrowsePage() {
   return (
     <ContentBlock 
       header={{
-        title: "Browse Agents",
+        // title: "Browse Agents",
+        breadcrumb: [
+          {label: "Browse Agents"},
+        ],
         description: "Discover and deploy automation agents for your workflow needs",
         controls: (
           <Link href="/agents/create">

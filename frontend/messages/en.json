@@ -174,5 +174,23 @@
       "added": "Added",
       "remove": "Remove"
     }
+  },
+
+  "Models": {
+    "title": "Provider Management",
+    "description": "Manage AI provider configurations and discover available providers",
+    "createButton": "Add Configuration",
+    "editConfiguration": "Edit Configuration",
+    "configureProvider": "Configure Provider",
+    "availableProviders": "Available Providers",
+    "table": {
+      "provider": "Provider",
+      "description": "Description",
+      "models": "Models"
+    },
+    "emptyState": {
+      "title": "No configurations yet",
+      "description": "Create your first provider configuration to get started"
+    }
   }
 }

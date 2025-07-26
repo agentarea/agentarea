@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Wand2, Zap, Clock, Plus } from "lucide-react";
+import { Wand2, Zap, Clock } from "lucide-react";
 import { FieldErrors, UseFieldArrayReturn, Control } from 'react-hook-form';
 import AccordionControl from "./AccordionControl";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues, EventConfig } from "../types";
 import { TriggerControl } from "./TriggerControl";
 import { Accordion } from "@/components/ui/accordion";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SelectableList } from "./SelectableList";
-import { Button } from "@/components/ui/button";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import ConfigSheet from "./ConfigSheet";
 
 // Define event trigger types
 const eventOptions = [
@@ -39,12 +39,6 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollTriggerId, setScrollTriggerId] = useState<string | null>(null);
 
-  // Helper to determine if outside click should be ignored (e.g., when interacting with controls)
-  const shouldIgnoreOutsideClick = (target: HTMLElement) =>
-    !!target.closest(
-      'button, input, select, textarea, a, [role="button"], label, [data-radix-select-content], [data-radix-scroll-area]'
-    );
-
   // Precompute map for quick lookup of trigger option by id
   const triggerMap = useMemo(() => {
     const map: Record<string, typeof eventOptions[number]> = {};
@@ -63,7 +57,7 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
 
   const title = useMemo(() => (
     <div className="flex items-center gap-2">
-      <Zap className="label-icon" style={{ strokeWidth: 1.5 }} /> Agent Triggers
+      <FormLabel icon={Zap} className="cursor-pointer">Agent Triggers</FormLabel>
     </div>
   ), []);
 
@@ -86,53 +80,27 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
         title={title}
         note={note}
         mainControl={
-          <Sheet modal={false} open={isSheetOpen} onOpenChange={(open:boolean)=>{
-            setIsSheetOpen(open);
-            if(!open) setScrollTriggerId(null);
-          }}>
-            <SheetTrigger asChild>
-              <Button size="xs">
-                <Plus className="h-4 w-4" />
-                Trigger
-              </Button>
-            </SheetTrigger>
-            <SheetContent
-              className="w-full flex flex-col sm:w-[540px] overflow-y-hidden pb-0"
-              hideOverlay
-              onPointerDownOutside={(e)=>{
-                const target = e.target as HTMLElement;
-                if (shouldIgnoreOutsideClick(target)) {
-                  e.preventDefault();
-                }
+          <ConfigSheet
+            title="Agent Triggers"
+            description="Select triggers for your agent"
+            triggerText="Trigger"
+          >
+            <SelectableList
+              items={eventOptions}
+              prefix="trigger"
+              extractTitle={(opt) => opt.label}
+              onAdd={(opt) => appendEvent({ event_type: opt.id })}
+              onRemove={(opt) => {
+                const idx = eventFields.findIndex((f) => f.event_type === opt.id);
+                if (idx !== -1) removeEvent(idx);
               }}
-              onInteractOutside={(e)=>{
-                const target = e.target as HTMLElement;
-                if (shouldIgnoreOutsideClick(target)) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              <SheetHeader className="mb-[12px] md:mb-[24px]">
-                <SheetTitle>Agent Triggers</SheetTitle>
-                <SheetDescription className="text-xs">Select triggers for your agent</SheetDescription>
-              </SheetHeader>
-              <SelectableList
-                items={eventOptions}
-                prefix="trigger"
-                extractTitle={(opt) => opt.label}
-                onAdd={(opt) => appendEvent({ event_type: opt.id })}
-                onRemove={(opt) => {
-                  const idx = eventFields.findIndex((f) => f.event_type === opt.id);
-                  if (idx !== -1) removeEvent(idx);
-                }}
-                selectedIds={eventFields.map((f) => f.event_type)}
-                openItemId={scrollTriggerId}
-                renderContent={(opt) => (
-                  <div className="p-4 text-sm text-muted-foreground">{opt.description || "Description"}</div>
-                )}
-              />
-            </SheetContent>
-          </Sheet>
+              selectedIds={eventFields.map((f) => f.event_type)}
+              openItemId={scrollTriggerId}
+              renderContent={(opt) => (
+                <div className="p-4 text-sm text-muted-foreground">{opt.description || "Description"}</div>
+              )}
+            />
+          </ConfigSheet>
         }
       >
         <div className="space-y-1">

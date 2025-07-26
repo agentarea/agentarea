@@ -1,14 +1,17 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, FileText, MessageSquare, Cpu } from "lucide-react";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Bot, FileText, MessageSquare, Cpu, Brain } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
 import type { components } from '@/api/schema';
+import FormLabel from "@/components/FormLabel/FormLabel";
+import { Button } from "@/components/ui/button";
+import ConfigSheet from "./ConfigSheet";
+import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
@@ -17,93 +20,140 @@ type BasicInformationProps = {
   control: any;
   errors: FieldErrors<AgentFormValues>;
   llmModelInstances: LLMModelInstance[];
+  onOpenConfigSheet: () => void;
+  onRefreshModels?: () => void;
 };
 
-const BasicInformation = ({ register, control, errors, llmModelInstances }: BasicInformationProps) => (
-  <Card className="">
-    {/* <h2 className="mb-6 label">
-      <Sparkles className="h-5 w-5 text-accent" /> Basic Information
-    </h2> */}
-    <div className="grid grid-cols-1 gap-6">
-      <div className="space-y-2">
-        <Label htmlFor="name" className="label">
-            <Bot className="label-icon" style={{ strokeWidth: 1.5 }} />Agent Name
-        </Label>
-        <Input
-          id="name"
-          {...register('name', { required: "Agent name is required" })}
-          placeholder="Enter agent name"
-          // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors"
-          aria-invalid={!!getNestedErrorMessage(errors, 'name')}
-        />
-        {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="description" className="label">
-          <FileText className="label-icon" style={{ strokeWidth: 1.5 }} /> Description / Goal <span className="text-xs font-light text-zinc-400">(Optional)</span>
-        </Label>
-        <Textarea
-          id="description"
-          {...register('description')}
-          placeholder="Describe the agent's purpose, personality, and main goal..."
-          className="resize-none h-[100px]"
-          // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
-          aria-invalid={!!getNestedErrorMessage(errors, 'description')}
-        />
-        {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="instruction" className="label">
-          <MessageSquare className="label-icon" style={{ strokeWidth: 1.5 }} /> Instruction <span className="text-sm text-red-500">*</span>
-        </Label>
-        <Textarea
-          id="instruction"
-          {...register('instruction', { required: "Instruction is required" })}
-          placeholder="Provide specific instructions for this agent..."
-          className="resize-none h-[100px]"
-          // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
-          aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
-        />
-        {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="model_id" className="label">
-          <Cpu className="label-icon" style={{ strokeWidth: 1.5 }} /> LLM Model
-        </Label>
-         <Controller
-            name="model_id"
-            control={control}
-            rules={{ required: "Model is required" }}
-            render={({ field }) => (
-              <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {llmModelInstances.length > 0 ? (
-                    llmModelInstances.map((instance) => (
-                      <SelectItem key={instance.id} value={instance.id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{instance.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {instance.provider_name} - {instance.model_display_name}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="null" disabled>
-                      No LLM models configured. Please add models in Admin → Model Instances
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            )}
+const BasicInformation = ({ register, control, errors, llmModelInstances, onOpenConfigSheet, onRefreshModels }: BasicInformationProps) => {
+  const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
+  const [configSheetOpen, setConfigSheetOpen] = useState(false);
+  const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
+
+  const handleConfigSheetOpenChange = (open: boolean) => {
+    console.log('ConfigSheet open change:', open);
+    setConfigSheetOpen(open);
+    if (open) {
+      // Close SearchableSelect when ConfigSheet opens
+      setSearchableSelectOpen(false);
+    }
+  };
+
+  const handleCreateConfigClick = () => {
+    // Programmatically click the ConfigSheet trigger button
+    configSheetTriggerRef.current?.click();
+    setSearchableSelectOpen(false);
+  };
+
+  return (
+    <Card className="">
+      {/* <h2 className="mb-6 label">
+        <Sparkles className="h-5 w-5 text-accent" /> Basic Information
+      </h2> */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="space-y-2">
+          <FormLabel htmlFor="name" icon={Bot}>Agent Name</FormLabel>
+          <Input
+            id="name"
+            {...register('name', { required: "Agent name is required" })}
+            placeholder="Enter agent name"
+            // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors"
+            aria-invalid={!!getNestedErrorMessage(errors, 'name')}
           />
-        {getNestedErrorMessage(errors, 'model_id') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'model_id')}</p>}
+          {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
+        </div>
+        <div className="space-y-2">
+          <FormLabel htmlFor="description" icon={FileText} optional>Description / Goal</FormLabel>
+          <Textarea
+            id="description"
+            {...register('description')}
+            placeholder="Describe the agent's purpose, personality, and main goal..."
+            className="resize-none h-[100px]"
+            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
+            aria-invalid={!!getNestedErrorMessage(errors, 'description')}
+          />
+          {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
+        </div>
+        <div className="space-y-2">
+          <FormLabel htmlFor="instruction" icon={MessageSquare} required>Instruction</FormLabel>
+          <Textarea
+            id="instruction"
+            {...register('instruction', { required: "Instruction is required" })}
+            placeholder="Provide specific instructions for this agent..."
+            className="resize-none h-[100px]"
+            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
+            aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
+          />
+          {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
+        </div>
+        <div className="space-y-2">
+          <FormLabel htmlFor="model_id" icon={Cpu}>LLM Model</FormLabel>
+           <Controller
+              name="model_id"
+              control={control}
+              rules={{ required: "Model is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={llmModelInstances.length > 0 ? 
+                    llmModelInstances.map((instance) => ({
+                      id: instance.id,
+                      label: instance.name,
+                      description: `${instance.provider_name} - ${instance.model_display_name}`,
+                    })) : []
+                  }
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select a model"
+                  open={searchableSelectOpen}
+                  onOpenChange={setSearchableSelectOpen}
+                  emptyMessage={
+                    <div className="flex flex-col items-center gap-2 px-6">
+                      <div>No configurations yet</div>
+                      <div className="note">Create and use a provider configuration</div>
+                      <Button 
+                        size="sm" 
+                        onClick={handleCreateConfigClick}
+                        className="mt-2"
+                      >
+                        Create Configuration
+                      </Button>
+                    </div>
+                  }
+                  defaultIcon={<Brain className="w-5 h-5" />}
+                />
+              )}
+            />
+          {getNestedErrorMessage(errors, 'model_id') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'model_id')}</p>}
+        </div>
       </div>
-    </div>
-  </Card>
-);
+
+      {/* ConfigSheet rendered outside of SearchableSelect */}
+      <ConfigSheet
+        title="Create Configuration"
+        className="md:min-w-[500px]"
+        description=""
+        triggerClassName="hidden"
+        open={configSheetOpen}
+        onOpenChange={handleConfigSheetOpenChange}
+        triggerRef={configSheetTriggerRef}
+      >
+        <ProviderConfigForm 
+          className="overflow-y-auto pb-6"
+          onAfterSubmit={(config) => {
+            // Обновить список моделей после создания конфигурации
+            onRefreshModels?.();
+            // Закрыть sheet после успешного создания
+            setConfigSheetOpen(false);
+          }}
+          onCancel={() => {
+            // Закрыть sheet при отмене
+            setConfigSheetOpen(false);
+          }}
+          isClear={true}
+          autoRedirect={false}
+        />
+      </ConfigSheet>
+    </Card>
+  );
+};
 
 export default BasicInformation; 

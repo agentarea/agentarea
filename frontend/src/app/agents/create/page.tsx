@@ -31,11 +31,11 @@ export default async function CreateAgentPage() {
   return (
     <ContentBlock 
       header={{
-        title: "Create Agent",
-        backLink: {
-          label: "Back to Browse Agents",
-          href: "/agents/browse"
-        }
+        // title: "Create Agent",
+        breadcrumb: [
+          {label: "Browse Agents", href: "/agents/browse"},
+          {label: "Create Agent"},
+        ],
     }}>
       <CreateAgentClient mcpServers={mcpServers} llmModelInstances={llmModelInstances} />
     </ContentBlock>

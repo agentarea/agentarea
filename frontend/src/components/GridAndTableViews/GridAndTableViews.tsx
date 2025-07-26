@@ -2,35 +2,31 @@ import { TabsWithNavigation } from "./components/TabsWithNavigation";
 import { TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LayoutDashboardIcon, TablePropertiesIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import Table from "@/components/Table/Table";
+import Link from "next/link";
+import React from "react";
 
-export default function GridAndTableViews({
+const TabsView = ({
     searchParams,
-    emptyState,
     leftComponent,
     routeChange,
-    data,
-    columns,
-    cardContent,
+    children,
 }: {
     searchParams: { [key: string]: string | string[] | undefined }
-    isEmpty?: boolean;
     emptyState?: React.ReactNode;
     leftComponent?: React.ReactNode;
     routeChange: string;
-    data: any[];
-    columns: any[];
-    cardContent: (item: any) => React.ReactNode;
-}) {
-
+    children: React.ReactNode;
+}) => {
     const t = useTranslations("Common");
 
     const tab = searchParams?.tab;
     const activeTab = (typeof tab === 'string' && (tab === 'grid' || tab === 'table')) 
-        ? tab 
-        : 'grid';
-
+            ? tab 
+            : 'grid';
+    
     return (
         <TabsWithNavigation activeTab={activeTab} routeChange={routeChange}>
             <div className="mb-3 flex flex-row items-center justify-between gap-[10px]">
@@ -52,6 +48,37 @@ export default function GridAndTableViews({
                 </div>
             </div>
 
+            {children}
+        </TabsWithNavigation>
+    );
+}
+
+export default function GridAndTableViews({
+    searchParams,
+    emptyState,
+    leftComponent,
+    routeChange,
+    data,
+    columns,
+    cardContent,
+    itemLink,
+    cardClassName,
+}: {
+    searchParams: { [key: string]: string | string[] | undefined }
+    isEmpty?: boolean;
+    emptyState?: React.ReactNode;
+    leftComponent?: React.ReactNode;
+    routeChange: string;
+    data: any[];
+    columns: any[];
+    cardContent: (item: any) => React.ReactNode;
+    itemLink?: (item: any) => string;
+    cardClassName?: string;
+}) {
+    const t = useTranslations("Common");
+
+    return (
+        <TabsView routeChange={routeChange} searchParams={searchParams} leftComponent={leftComponent}>
             {!data.length ? (
                 emptyState || (<EmptyState
                     title={t('emptyState.title')}
@@ -63,9 +90,15 @@ export default function GridAndTableViews({
                         <TabsContent value="grid">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]">
                                 {data.map((item) => (
-                                    <div key={item.id} className="card card-shadow group">
-                                        {cardContent(item)}
-                                    </div>
+                                    (item.itemLink || itemLink) ? (
+                                        <Link key={item.id} href={(item.itemLink || itemLink)(item)} className={cn("card card-shadow group", cardClassName)}>
+                                            {cardContent(item)}
+                                        </Link>
+                                    ) : (
+                                        <div key={item.id} className={cn("card card-shadow group", cardClassName)}>
+                                            {cardContent(item)}
+                                        </div>
+                                    )
                                 ))}
                             </div>
                         </TabsContent>
@@ -75,6 +108,94 @@ export default function GridAndTableViews({
                     </>
                 )
             }
-        </TabsWithNavigation>
+        </TabsView>
+    );
+}
+
+export function GridAndTableSectionsViews({
+    searchParams,
+    emptyState,
+    leftComponent,
+    routeChange,
+    data,
+    columns,
+    cardContent,
+    itemLink,
+    cardClassName,
+}: {
+    searchParams: { [key: string]: string | string[] | undefined }
+    isEmpty?: boolean;
+    emptyState?: React.ReactNode;
+    leftComponent?: React.ReactNode;
+    routeChange: string;
+    data: { sectionId: string, sectioName?: string, cardClassName?: string, data: any[], emptyState?: React.ReactNode, itemLink?: (item: any) => string }[];
+    columns: any[];
+    cardContent: (item: any) => React.ReactNode;
+    itemLink?: (item: any) => string;
+    cardClassName?: string;
+}) {
+    const t = useTranslations("Common");
+
+    return (
+        <TabsView routeChange={routeChange} searchParams={searchParams} leftComponent={leftComponent}>
+
+            {!data.length ? (
+                emptyState || (<EmptyState
+                    title={t('emptyState.title')}
+                    description={t('emptyState.description')}
+                    iconsType="agent"
+                />)
+                ) : (
+                    <>
+                        {
+                            data.map((sectionData, key) => (
+                                <React.Fragment key={`tabs-section-${key}`}>
+                                    {
+                                        sectionData.sectioName && (
+                                            <div className="my-5 flex flex-row items-center gap-[10px]">
+                                                <h2 className="text-lg font-medium whitespace-nowrap text-zinc-400">{sectionData.sectioName}</h2>
+                                                <div className="h-[1px] w-full bg-zinc-200 dark:bg-zinc-600 "/>
+                                            </div>
+                                        )
+                                    }
+                                    {
+                                        sectionData.data.length > 0 ? (
+                                            <>
+                                            <TabsContent value="grid">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]">
+                                                    {sectionData.data.map((item) => {
+                                                        const linkFunction = sectionData.itemLink || itemLink;
+                                                        return linkFunction ? (
+                                                            <Link key={item.id} href={linkFunction(item)} className={cn("card card-shadow group", cardClassName, sectionData.cardClassName)}>
+                                                                {cardContent(item)}
+                                                            </Link>
+                                                        ) : (
+                                                            <div key={item.id} className={cn("card card-shadow group", cardClassName, sectionData.cardClassName)}>
+                                                                {cardContent(item)}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </TabsContent>
+                                            <TabsContent value="table">
+                                                <Table data={sectionData.data} columns={columns} />
+                                            </TabsContent>
+                                            </>
+                                        ) : (
+                                            sectionData.emptyState || (<EmptyState
+                                                title={t('emptyState.title')}
+                                                description={t('emptyState.description')}
+                                                iconsType="agent"
+                                            />)
+                                        )
+                                    }
+                                    
+                                </React.Fragment>
+                            ))
+                        }
+                    </>
+                )
+            }
+        </TabsView>
     );
 }
