@@ -1,9 +1,7 @@
-import { Card } from "@/components/ui/card";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Brain } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useEffect } from "react";
 import { ModelSpec } from "@/types/provider";  
 import { ModelItemControl } from "./ModelItemControl";
 import { Label } from "@/components/ui/label";
@@ -51,7 +49,16 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
       };
 
     const handleSelectAllToggle = (checked: boolean) => {
-        if (checked) {
+        // If indeterminate state, always select all
+        if (isIndeterminate) {
+            const allModels = availableModels.map((model: ModelSpec) => ({
+                modelSpecId: model.id,
+                instanceName: `${selectedProvider?.name} ${model.display_name}`,
+                description: model.description || '',
+                isPublic: false
+            }));
+            setSelectedModels(allModels);
+        } else if (checked) {
             // Select all models
             const allModels = availableModels.map((model: ModelSpec) => ({
                 modelSpecId: model.id,
@@ -67,6 +74,7 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
     };
 
     const isAllSelected = selectedModels.length === availableModels.length && availableModels.length > 0;
+    const isIndeterminate = selectedModels.length > 0 && selectedModels.length < availableModels.length;
 
     return (
         <div className="grid grid-cols-1 gap-4" >
@@ -84,9 +92,9 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
                 </div> */}
                 {availableModels.length > 0 && (
                   <div className="flex items-center space-x-2 mx-3">
-                    <Switch
-                      size="xs"
+                    <Checkbox
                       checked={isAllSelected}
+                      indeterminate={isIndeterminate}
                       onCheckedChange={handleSelectAllToggle}
                       aria-label="Select all models"
                       id="select-all-models"
