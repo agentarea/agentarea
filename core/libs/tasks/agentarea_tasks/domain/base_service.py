@@ -9,6 +9,7 @@ hierarchy and eliminating code duplication.
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import List
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
@@ -89,6 +90,7 @@ class BaseTaskService(ABC):
             completed_at=task.completed_at,
             execution_id=task.execution_id,
             user_id=task.user_id,
+            workspace_id=task.workspace_id,
             metadata=task.metadata,
         )
 
@@ -112,6 +114,7 @@ class BaseTaskService(ABC):
             started_at=created_task_domain.started_at,
             completed_at=created_task_domain.completed_at,
             execution_id=created_task_domain.execution_id,
+            workspace_id=created_task_domain.workspace_id,
             metadata=created_task_domain.metadata,
         )
 
@@ -194,6 +197,7 @@ class BaseTaskService(ABC):
             completed_at=task.completed_at,
             execution_id=task.execution_id,
             user_id=task.user_id,
+            workspace_id=task.workspace_id,
             metadata=task.metadata,
         )
 
@@ -217,6 +221,7 @@ class BaseTaskService(ABC):
             started_at=updated_task_domain.started_at,
             completed_at=updated_task_domain.completed_at,
             execution_id=updated_task_domain.execution_id,
+            workspace_id=updated_task_domain.workspace_id,
             metadata=updated_task_domain.metadata,
         )
 
@@ -251,15 +256,17 @@ class BaseTaskService(ABC):
         self,
         agent_id: UUID | None = None,
         user_id: str | None = None,
+        workspace_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[SimpleTask]:
+    ) -> List[SimpleTask]:
         """List tasks with optional filtering.
 
         Args:
             agent_id: Filter by agent ID
             user_id: Filter by user ID
+            workspace_id: Filter by workspace ID
             status: Filter by task status
             limit: Maximum number of tasks to return
             offset: Number of tasks to skip
@@ -267,7 +274,11 @@ class BaseTaskService(ABC):
         Returns:
             List of tasks matching the criteria
         """
-        if agent_id:
+        if workspace_id and user_id:
+            tasks = await self.task_repository.get_by_user_and_workspace(user_id, workspace_id, limit, offset)
+        elif workspace_id:
+            tasks = await self.task_repository.get_by_workspace_id(workspace_id, limit, offset)
+        elif agent_id:
             tasks = await self.task_repository.get_by_agent_id(agent_id, limit, offset)
         elif user_id:
             tasks = await self.task_repository.get_by_user_id(user_id, limit, offset)
@@ -328,6 +339,7 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
+            workspace_id=task.workspace_id,
             metadata=task.metadata,
         )
 

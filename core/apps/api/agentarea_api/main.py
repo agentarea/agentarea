@@ -6,6 +6,7 @@ from pathlib import Path
 from agentarea_common.di.container import DIContainer, get_container, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.events.router import get_event_router
+from agentarea_common.exceptions.registration import register_workspace_error_handlers
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets import get_real_secret_manager
 from fastapi import FastAPI
@@ -14,6 +15,8 @@ from starlette.middleware.cors import CORSMiddleware
 
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import v1_router
+# from agentarea_api.api.jwt_middleware import JWTMiddleware
+from agentarea_common.auth.middleware import AuthMiddleware
 
 container = DIContainer()
 
@@ -70,6 +73,20 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Get settings for JWT configuration
+    from agentarea_common.config import get_settings
+    settings = get_settings()
+
+    # Add Clerk authentication middleware
+    app.add_middleware(
+        AuthMiddleware,
+        provider_name="clerk",
+        config={
+            "jwks_url": f"{settings.app.CLERK_ISSUER}/.well-known/jwks.json",
+            "issuer": settings.app.CLERK_ISSUER,
+        }
+    )
+
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -82,6 +99,9 @@ def create_app() -> FastAPI:
     # Add static file serving for provider icons
     static_path = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
+    # Register workspace error handlers
+    register_workspace_error_handlers(app)
 
     # Include API router
     app.include_router(v1_router)

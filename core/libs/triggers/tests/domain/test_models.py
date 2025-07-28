@@ -44,7 +44,6 @@ class TestTrigger:
         assert isinstance(trigger.created_at, datetime)
         assert isinstance(trigger.updated_at, datetime)
         assert trigger.created_by == "test_user"
-        assert trigger.max_executions_per_hour == 60
         assert trigger.failure_threshold == 5
         assert trigger.consecutive_failures == 0
         assert trigger.last_execution_at is None
@@ -69,7 +68,6 @@ class TestTrigger:
             created_at=created_at,
             updated_at=updated_at,
             created_by="custom_user",
-            max_executions_per_hour=120,
             failure_threshold=10,
             consecutive_failures=3,
             last_execution_at=last_execution
@@ -83,7 +81,6 @@ class TestTrigger:
         assert trigger.conditions == {"condition1": "value1"}
         assert trigger.created_at == created_at
         assert trigger.updated_at == updated_at
-        assert trigger.max_executions_per_hour == 120
         assert trigger.failure_threshold == 10
         assert trigger.consecutive_failures == 3
         assert trigger.last_execution_at == last_execution
@@ -138,27 +135,8 @@ class TestTrigger:
             )
         assert "updated_at cannot be before created_at" in str(exc_info.value)
 
-    def test_trigger_rate_limiting(self):
-        """Test rate limiting logic."""
-        agent_id = uuid4()
-        trigger = Trigger(
-            name="Test Trigger",
-            agent_id=agent_id,
-            trigger_type=TriggerType.CRON,
-            created_by="test_user",
-            max_executions_per_hour=60
-        )
-
-        # No last execution - not rate limited
-        assert not trigger.is_rate_limited()
-
-        # Recent execution - should be rate limited
-        trigger.last_execution_at = datetime.utcnow() - timedelta(seconds=30)
-        assert trigger.is_rate_limited()
-
-        # Old execution - not rate limited
-        trigger.last_execution_at = datetime.utcnow() - timedelta(minutes=5)
-        assert not trigger.is_rate_limited()
+    # Rate limiting has been moved to infrastructure layer (ingress/load balancer/API gateway)
+    # No application-level rate limiting tests needed
 
     def test_trigger_failure_threshold(self):
         """Test failure threshold logic."""
@@ -320,7 +298,6 @@ class TestWebhookTrigger:
         assert trigger.allowed_methods == ["POST", "PUT"]
         assert trigger.webhook_type == WebhookType.TELEGRAM
         assert trigger.validation_rules == {}
-        assert trigger.telegram_config is None
 
     def test_webhook_id_validation(self):
         """Test webhook ID validation."""
@@ -533,14 +510,12 @@ class TestTriggerUpdate:
         update_model = TriggerUpdate(
             name="Updated Name",
             description="Updated description",
-            is_active=False,
-            max_executions_per_hour=120
+            is_active=False
         )
 
         assert update_model.name == "Updated Name"
         assert update_model.description == "Updated description"
         assert update_model.is_active is False
-        assert update_model.max_executions_per_hour == 120
 
     def test_trigger_update_optional_fields(self):
         """Test that all fields in TriggerUpdate are optional."""

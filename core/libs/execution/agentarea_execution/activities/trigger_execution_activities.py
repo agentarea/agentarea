@@ -14,7 +14,16 @@ from temporalio import activity
 
 from ..interfaces import ActivityDependencies
 
-logger = logging.getLogger(__name__)
+# Import trigger logging utilities
+try:
+    from agentarea_triggers.logging_utils import (
+        TriggerLogger, TriggerExecutionError, DependencyUnavailableError,
+        set_correlation_id, generate_correlation_id
+    )
+    logger = TriggerLogger(__name__)
+except ImportError:
+    # Fallback to standard logging if trigger logging not available
+    logger = logging.getLogger(__name__)
 
 
 def make_trigger_activities(dependencies: ActivityDependencies):
@@ -39,17 +48,34 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             Dictionary containing execution result and metadata
             
         Raises:
-            TriggerNotFoundError: If trigger doesn't exist
-            TriggerValidationError: If trigger configuration is invalid
+            TriggerExecutionError: If trigger execution fails
         """
+        correlation_id = generate_correlation_id()
+        set_correlation_id(correlation_id)
         start_time = datetime.utcnow()
 
         try:
+            logger.info(
+                "Starting trigger execution",
+                trigger_id=trigger_id,
+                execution_source=execution_data.get('source', 'unknown')
+            )
+            
             from agentarea_triggers.domain.enums import ExecutionStatus
             from agentarea_triggers.infrastructure.repository import TriggerExecutionRepository, TriggerRepository
-            from agentarea_triggers.trigger_service import TriggerNotFoundError, TriggerService, TriggerValidationError
+            from agentarea_triggers.logging_utils import TriggerNotFoundError
+            from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
+            if not database:
+                error_msg = "Database connection not available"
+                logger.error(error_msg, trigger_id=trigger_id)
+                raise DependencyUnavailableError(
+                    error_msg,
+                    dependency="database",
+                    trigger_id=str(trigger_id)
+                )
+
             async with database.async_session_factory() as session:
                 trigger_repository = TriggerRepository(session)
                 trigger_execution_repository = TriggerExecutionRepository(session)
@@ -60,15 +86,38 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     event_broker=dependencies.event_broker,
                     agent_repository=None,
                     task_service=None,
-                    llm_service=None
+                    llm_condition_evaluator=None,
+                    temporal_schedule_manager=None
                 )
 
-                trigger = await trigger_service.get_trigger(trigger_id)
-                if not trigger:
-                    raise TriggerNotFoundError(f"Trigger {trigger_id} not found")
+                # Get trigger with error handling
+                try:
+                    trigger = await trigger_service.get_trigger(trigger_id)
+                    if not trigger:
+                        error_msg = f"Trigger {trigger_id} not found"
+                        logger.error(error_msg, trigger_id=trigger_id)
+                        raise TriggerNotFoundError(
+                            error_msg,
+                            trigger_id=str(trigger_id)
+                        )
+                except Exception as e:
+                    if isinstance(e, TriggerNotFoundError):
+                        raise
+                    error_msg = f"Error retrieving trigger: {e}"
+                    logger.error(error_msg, trigger_id=trigger_id)
+                    raise TriggerExecutionError(
+                        error_msg,
+                        trigger_id=str(trigger_id),
+                        original_error=str(e)
+                    )
 
+                # Check if trigger is active
                 if not trigger.is_active:
-                    logger.info(f"Trigger {trigger_id} is inactive, skipping execution")
+                    logger.info(
+                        "Trigger is inactive, skipping execution",
+                        trigger_id=trigger_id,
+                        trigger_name=trigger.name
+                    )
                     return {
                         "trigger_id": str(trigger_id),
                         "status": "skipped",
@@ -76,31 +125,37 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         "execution_time_ms": 0
                     }
 
-                if trigger.is_rate_limited():
-                    logger.info(f"Trigger {trigger_id} is rate limited, skipping execution")
-                    return {
-                        "trigger_id": str(trigger_id),
-                        "status": "skipped",
-                        "reason": "rate_limited",
-                        "execution_time_ms": 0
-                    }
-
-                conditions_met = True
-
-                # Evaluate trigger conditions
+                # Evaluate trigger conditions with error handling
                 conditions_met = True
                 if trigger.conditions:
                     try:
+                        logger.debug(
+                            "Evaluating trigger conditions",
+                            trigger_id=trigger_id,
+                            conditions_count=len(trigger.conditions)
+                        )
+                        
                         # Use LLM service for condition evaluation if available
-                        if trigger_service.llm_service:
+                        if trigger_service.llm_condition_evaluator:
                             # TODO: Implement LLM-based condition evaluation
                             # For now, assume conditions are met
                             conditions_met = True
+                            logger.debug(
+                                "LLM condition evaluation not yet implemented, assuming conditions met",
+                                trigger_id=trigger_id
+                            )
                         else:
                             # Simple rule-based condition evaluation
                             conditions_met = await trigger_service.evaluate_trigger_conditions(trigger, execution_data)
+                            logger.debug(
+                                f"Rule-based condition evaluation result: {conditions_met}",
+                                trigger_id=trigger_id
+                            )
                     except Exception as condition_error:
-                        logger.warning(f"Error evaluating conditions for trigger {trigger_id}: {condition_error}")
+                        logger.warning(
+                            f"Error evaluating conditions, defaulting to conditions met: {condition_error}",
+                            trigger_id=trigger_id
+                        )
                         # Default to conditions met to avoid blocking execution
                         conditions_met = True
 

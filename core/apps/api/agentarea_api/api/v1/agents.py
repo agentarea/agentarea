@@ -7,7 +7,7 @@ from agentarea_api.api.deps.services import get_agent_service
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_common.config import get_database
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 # Import A2A protocol subroutes
@@ -73,10 +73,14 @@ async def validate_model_id(model_id: str) -> None:
         )
 
 
+class MCPToolConfig(BaseModel):
+    tool_name: str
+    requires_user_confirmation: bool = False
+
 class MCPConfig(BaseModel):
     mcp_server_id: str
-    requires_user_confirmation: bool | None = None
     config: dict | None = None
+    allowed_tools: list[MCPToolConfig] | None = None
 
 
 class ToolsConfig(BaseModel):
@@ -163,9 +167,15 @@ async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_ag
 
 
 @router.get("/", response_model=list[AgentResponse])
-async def list_agents(agent_service: AgentService = Depends(get_agent_service)):
-    """List all agents."""
-    agents = await agent_service.list()
+async def list_agents(
+    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's agents only"),
+    agent_service: AgentService = Depends(get_agent_service)
+):
+    """List all workspace agents with optional filtering by creator."""
+    # Determine if we should filter by creator
+    creator_scoped = created_by == "me"
+    
+    agents = await agent_service.list(creator_scoped=creator_scoped)
     return [AgentResponse.from_domain(agent) for agent in agents]
 
 

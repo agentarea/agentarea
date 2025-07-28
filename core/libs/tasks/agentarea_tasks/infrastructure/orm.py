@@ -4,14 +4,14 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from agentarea_common.base.models import BaseModel
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin, SoftDeleteMixin
 from sqlalchemy import JSON, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class TaskORM(BaseModel):
-    """Task ORM model."""
+class TaskORM(BaseModel, WorkspaceScopedMixin, SoftDeleteMixin):
+    """Task ORM model with workspace awareness and soft delete capability."""
 
     __tablename__ = "tasks"
 
@@ -24,5 +24,4 @@ class TaskORM(BaseModel):
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     execution_id: Mapped[str] = mapped_column(String(255), nullable=True)
-    user_id: Mapped[str] = mapped_column(String(255), nullable=True)
     task_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)

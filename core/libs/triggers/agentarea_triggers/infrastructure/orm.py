@@ -4,14 +4,14 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from agentarea_common.base.models import BaseModel
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin, AuditMixin
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
-class TriggerORM(BaseModel):
-    """Trigger ORM model."""
+class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
+    """Trigger ORM model with workspace awareness and audit trail."""
 
     __tablename__ = "triggers"
 
@@ -23,7 +23,6 @@ class TriggerORM(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     task_parameters: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     conditions: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Business logic safety
     failure_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
@@ -57,8 +56,8 @@ class TriggerORM(BaseModel):
         return f"<TriggerORM {self.id}: {self.name} ({self.trigger_type})>"
 
 
-class TriggerExecutionORM(BaseModel):
-    """Trigger execution ORM model."""
+class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
+    """Trigger execution ORM model with workspace awareness."""
 
     __tablename__ = "trigger_executions"
 

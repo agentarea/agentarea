@@ -489,12 +489,28 @@ export const deleteModelInstance = async (instanceId: string) => {
 
 // Health Check API
 export const healthCheck = async () => {
-  const { data, error } = await client.GET("/health");
+  const { data, error } = await client.GET("/health", {});
   return { data, error };
 };
 
 export const rootEndpoint = async () => {
-  const { data, error } = await client.GET("/");
+  const { data, error } = await client.GET("/", {});
+  return { data, error };
+};
+
+// Authentication API
+export const getCurrentUser = async () => {
+  const { data, error } = await client.GET("/v1/auth/users/me", {});
+  return { data, error };
+};
+
+export const testPublicEndpoint = async () => {
+  const { data, error } = await client.GET("/health", {});
+  return { data, error };
+};
+
+export const testProtectedEndpoint = async () => {
+  const { data, error } = await client.GET("/v1/protected/test", {});
   return { data, error };
 };
 

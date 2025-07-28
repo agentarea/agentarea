@@ -50,7 +50,6 @@ def upsert_mcp_server(
                 "env_schema": json.dumps(env_schema),  # Store as JSON string
             },
         )
-        print(f"✓ Updated MCP server: {server_name}")
         return server_id
 
     # Check if server exists by name (for migration purposes)
@@ -75,15 +74,14 @@ def upsert_mcp_server(
                     "env_schema": json.dumps(env_schema),
                 },
             )
-        print(f"✓ Migrated MCP server: {server_name}")
         return server_id
 
     # Insert new server
     conn.execute(
         text("""INSERT INTO mcp_servers 
-                (id, name, description, docker_image_url, version, tags, status, is_public, env_schema, created_at, updated_at) 
+                (id, name, description, docker_image_url, version, tags, status, is_public, env_schema, created_by, workspace_id, created_at, updated_at) 
                 VALUES 
-                (:id, :name, :description, :docker_image_url, :version, :tags, :status, :is_public, :env_schema, now(), now())"""),
+                (:id, :name, :description, :docker_image_url, :version, :tags, :status, :is_public, :env_schema, :created_by, :workspace_id, now(), now())"""),
         {
             "id": server_id,
             "name": server_name,
@@ -94,9 +92,10 @@ def upsert_mcp_server(
             "status": "active",
             "is_public": True,
             "env_schema": json.dumps(env_schema),
+            "created_by": "system",
+            "workspace_id": "default",
         },
     )
-    print(f"✓ Created MCP server: {server_name}")
     return server_id
 
 
@@ -142,7 +141,6 @@ def main() -> None:
     try:
         with engine.begin() as conn:
             for provider_key, provider_data in providers.items():
-                print(f"Processing MCP provider: {provider_key}")
                 upsert_mcp_server(conn, provider_key, provider_data)
 
         print(f"✅ Successfully populated {len(providers)} MCP server specifications")

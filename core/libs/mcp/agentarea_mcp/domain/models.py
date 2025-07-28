@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from agentarea_common.base.models import BaseModel
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin, AuditMixin
 from sqlalchemy import JSON, Boolean, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
@@ -10,10 +10,10 @@ from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 Base = declarative_base()
 
 
-class MCPServer(BaseModel):
+class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
+    """MCP Server model with workspace awareness and audit trail."""
     __tablename__ = "mcp_servers"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
     docker_image_url: Mapped[str] = mapped_column(String, nullable=False)
@@ -37,10 +37,10 @@ class MCPServer(BaseModel):
         is_public: bool = False,
         env_schema: list[dict[str, Any]] | None = None,
         cmd: list[str] | None = None,
-        id: UUID | None = None,
-        updated_at: datetime | None = None,
+        # Note: user_id and workspace_id are now handled by BaseModel
+        **kwargs
     ):
-        self.id = id or uuid4()
+        super().__init__(**kwargs)  # Let BaseModel handle id, timestamps, user_id, workspace_id
         self.name = name
         self.description = description
         self.docker_image_url = docker_image_url
@@ -50,4 +50,3 @@ class MCPServer(BaseModel):
         self.is_public = is_public
         self.env_schema = env_schema or []
         self.cmd = cmd
-        self.updated_at = updated_at or datetime.now()

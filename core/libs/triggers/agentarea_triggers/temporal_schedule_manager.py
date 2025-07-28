@@ -15,7 +15,12 @@ from temporalio.client import (
 )
 from temporalio.exceptions import TemporalError
 
-logger = logging.getLogger(__name__)
+from .logging_utils import (
+    TriggerLogger, TriggerExecutionError, DependencyUnavailableError,
+    set_correlation_id, generate_correlation_id
+)
+
+logger = TriggerLogger(__name__)
 
 
 class TemporalScheduleManager:
@@ -46,11 +51,31 @@ class TemporalScheduleManager:
             The schedule ID that was created
             
         Raises:
-            Exception: If schedule creation fails
+            TriggerExecutionError: If schedule creation fails
+            DependencyUnavailableError: If Temporal client is unavailable
         """
+        correlation_id = generate_correlation_id()
+        set_correlation_id(correlation_id)
         schedule_id = f"cron-trigger-{trigger_id}"
         
+        if not self.client:
+            error_msg = "Temporal client not available"
+            logger.error(error_msg, trigger_id=trigger_id)
+            raise DependencyUnavailableError(
+                error_msg,
+                dependency="temporal_client",
+                trigger_id=str(trigger_id)
+            )
+        
         try:
+            logger.info(
+                "Creating Temporal schedule for cron trigger",
+                trigger_id=trigger_id,
+                schedule_id=schedule_id,
+                cron_expression=cron_expression,
+                timezone=timezone
+            )
+            
             # Create the schedule
             schedule = Schedule(
                 action=ScheduleActionStartWorkflow(
@@ -82,12 +107,42 @@ class TemporalScheduleManager:
                 schedule=schedule
             )
             
-            logger.info(f"Created Temporal schedule {schedule_id} for trigger {trigger_id}")
+            logger.info(
+                "Successfully created Temporal schedule",
+                trigger_id=trigger_id,
+                schedule_id=schedule_id,
+                cron_expression=cron_expression
+            )
             return schedule_id
             
+        except TemporalError as e:
+            error_msg = f"Temporal error creating schedule: {e}"
+            logger.error(
+                error_msg,
+                trigger_id=trigger_id,
+                schedule_id=schedule_id,
+                cron_expression=cron_expression
+            )
+            raise TriggerExecutionError(
+                error_msg,
+                trigger_id=str(trigger_id),
+                schedule_id=schedule_id,
+                original_error=str(e)
+            )
         except Exception as e:
-            logger.error(f"Failed to create schedule for trigger {trigger_id}: {e}")
-            raise
+            error_msg = f"Unexpected error creating schedule: {e}"
+            logger.error(
+                error_msg,
+                trigger_id=trigger_id,
+                schedule_id=schedule_id,
+                cron_expression=cron_expression
+            )
+            raise TriggerExecutionError(
+                error_msg,
+                trigger_id=str(trigger_id),
+                schedule_id=schedule_id,
+                original_error=str(e)
+            )
 
     async def update_cron_schedule(
         self,

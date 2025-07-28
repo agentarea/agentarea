@@ -1,0 +1,33 @@
+Thank you for installing AgentArea!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+This umbrella chart deploys the complete AgentArea platform including:
+
+1. Backend API Service (agentarea-backend)
+2. Frontend Service (agentarea-frontend)
+3. Database Service (Bitnami PostgreSQL)
+4. Redis Service (Bitnami Redis)
+5. Worker Service (agentarea-worker)
+6. MCP Manager Service (agentarea-mcp-manager)
+7. Secrets Manager Service (agentarea-secrets-manager)
+8. Temporal Service (agentarea-temporal)
+
+Each component is managed by its own subchart with independent configurations.
+
+To access the application, you'll need to create an Ingress or use port forwarding:
+
+  $ kubectl port-forward service/agentarea-frontend 3000:3000
+
+Then visit http://localhost:3000 to view the application.
+
+For production deployments, consider:
+1. Setting up proper Ingress with TLS
+2. Configuring persistent storage for the database
+3. Setting up proper resource limits and requests
+4. Configuring health checks and monitoring

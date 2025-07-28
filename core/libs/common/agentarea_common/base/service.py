@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Generic, List, TypeVar
 from uuid import UUID
 
 from ..base.repository import BaseRepository
@@ -14,9 +14,14 @@ class BaseCrudService(Generic[T]):
         """Get an entity by ID."""
         return await self.repository.get(id)
 
-    async def list(self) -> list[T]:
-        """List all entities."""
-        return await self.repository.list()
+    async def list(self, creator_scoped: bool = False) -> List[T]:
+        """List all entities with optional creator filtering."""
+        # Check if repository supports creator_scoped (WorkspaceScopedRepository)
+        if hasattr(self.repository, 'list_all'):
+            return await self.repository.list_all(creator_scoped=creator_scoped)
+        else:
+            # Fallback for repositories that don't support workspace scoping
+            return await self.repository.list()
 
     async def create(self, entity: T) -> T:
         """Create a new entity."""

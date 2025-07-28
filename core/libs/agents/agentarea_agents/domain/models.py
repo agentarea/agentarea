@@ -1,22 +1,18 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from agentarea_common.base.models import BaseModel
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin, AuditMixin
 from sqlalchemy import JSON, Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class Agent(BaseModel):
+class Agent(BaseModel, WorkspaceScopedMixin, AuditMixin):
+    """Agent model with workspace awareness and audit trail."""
     __tablename__ = "agents"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
     description: Mapped[str] = mapped_column(String, nullable=True)
     instruction: Mapped[str] = mapped_column(String, nullable=True)
     model_id: Mapped[str] = mapped_column(String, nullable=True)

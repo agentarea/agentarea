@@ -11,22 +11,23 @@ from uuid import UUID, uuid4
 import pytest_asyncio
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_llm.domain.models import (
     ProviderSpec, ProviderConfig, ModelSpec, ModelInstance,
     # Legacy models - still needed for some tests
     LLMModel, LLMModelInstance, LLMProvider
 )
-from agentarea_llm.infrastructure.llm_model_instance_repository import (
-    LLMModelInstanceRepository,
-)
-from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
+# from agentarea_llm.infrastructure.llm_model_instance_repository import (
+#     LLMModelInstanceRepository,
+# )
+# from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_mcp.domain.models import MCPServer
-from agentarea_mcp.domain.mpc_server_instance_model import Base as MCPBase
+# from agentarea_mcp.domain.mpc_server_instance_model import Base as MCPBase
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
@@ -60,10 +61,9 @@ async def test_engine():
         echo=True,  # Enable SQL logging for debugging
     )
 
-    # Create all tables from both metadata objects
+    # Create all tables from BaseModel metadata
     async with engine.begin() as conn:
         await conn.run_sync(BaseModel.metadata.create_all)
-        await conn.run_sync(MCPBase.metadata.create_all)
 
     yield engine
 
@@ -425,6 +425,16 @@ async def model_factory():
     return ModelFactory
 
 
+@pytest_asyncio.fixture
+def user_context():
+    """Create a test user context."""
+    return UserContext(
+        user_id="test-user-123",
+        workspace_id="test-workspace-456",
+        roles=["user"]
+    )
+
+
 # Repository Fixtures
 @pytest_asyncio.fixture
 async def agent_repository(db_session):
@@ -457,16 +467,16 @@ async def model_instance_repository(db_session):
 
 
 # Legacy repository fixtures - still needed for some tests
-@pytest_asyncio.fixture
-async def llm_model_repository(db_session):
-    """Provide an LLMModelRepository instance."""
-    return LLMModelRepository(db_session)
+# @pytest_asyncio.fixture
+# async def llm_model_repository(db_session):
+#     """Provide an LLMModelRepository instance."""
+#     return LLMModelRepository(db_session)
 
 
-@pytest_asyncio.fixture
-async def llm_model_instance_repository(db_session):
-    """Provide an LLMModelInstanceRepository instance."""
-    return LLMModelInstanceRepository(db_session)
+# @pytest_asyncio.fixture
+# async def llm_model_instance_repository(db_session):
+#     """Provide an LLMModelInstanceRepository instance."""
+#     return LLMModelInstanceRepository(db_session)
 
 
 @pytest_asyncio.fixture
@@ -476,9 +486,9 @@ async def mcp_server_repository(db_session):
 
 
 @pytest_asyncio.fixture
-async def mcp_server_instance_repository(db_session):
+async def mcp_server_instance_repository(db_session, user_context):
     """Provide an MCPServerInstanceRepository instance."""
-    return MCPServerInstanceRepository(db_session)
+    return MCPServerInstanceRepository(db_session, user_context)
 
 
 @pytest_asyncio.fixture

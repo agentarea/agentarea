@@ -491,11 +491,17 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
             from uuid import uuid4
 
             from agentarea_common.events.base_events import DomainEvent
+            from agentarea_common.events.router import create_event_broker_from_router
 
             logger.info(f"Publishing {len(events_json)} workflow events via EventBroker")
 
-            # Use the event broker from dependencies
-            event_broker = dependencies.event_broker
+            # Convert RedisRouter to RedisEventBroker for publishing
+            # dependencies.event_broker is a RedisRouter, we need RedisEventBroker to publish
+            if not hasattr(dependencies.event_broker, 'broker'):
+                logger.error(f"Event broker {type(dependencies.event_broker)} does not have 'broker' attribute")
+                return False
+
+            redis_event_broker = create_event_broker_from_router(dependencies.event_broker)  # type: ignore
 
             for event_json in events_json:
                 event = json.loads(event_json)
@@ -514,8 +520,8 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
                     original_data=event["data"]
                 )
 
-                # Publish via EventBroker (uses FastStream infrastructure)
-                await event_broker.publish(domain_event)
+                # Publish via RedisEventBroker (uses FastStream infrastructure)
+                await redis_event_broker.publish(domain_event)
                 logger.debug(f"Published workflow event: {event['event_type']} for task {task_id}")
 
             return True

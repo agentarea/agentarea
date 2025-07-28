@@ -1,6 +1,8 @@
+from typing import List
 from uuid import UUID
 
-from agentarea_common.base.repository import BaseRepository
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.auth.context import UserContext
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -8,11 +10,17 @@ from sqlalchemy.orm import joinedload, selectinload
 from agentarea_llm.domain.models import ProviderConfig
 
 
-class ProviderConfigRepository(BaseRepository[ProviderConfig]):
-    def __init__(self, session: AsyncSession):
-        self.session = session
+class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
+    def __init__(self, session: AsyncSession, user_context: UserContext):
+        super().__init__(session, ProviderConfig, user_context)
 
-    async def get(self, id: UUID) -> ProviderConfig | None:
+    async def get_with_relations(self, id: UUID) -> ProviderConfig | None:
+        """Get provider config by ID with relationships loaded."""
+        config = await self.get_by_id(id)
+        if not config:
+            return None
+        
+        # Reload with relationships
         result = await self.session.execute(
             select(ProviderConfig)
             .options(
@@ -23,51 +31,102 @@ class ProviderConfigRepository(BaseRepository[ProviderConfig]):
         )
         return result.scalar_one_or_none()
 
-    async def list(
+    async def list_configs(
         self,
         provider_spec_id: UUID | None = None,
-        user_id: UUID | None = None,
         is_active: bool | None = None,
         is_public: bool | None = None,
-    ) -> list[ProviderConfig]:
-        query = select(ProviderConfig).options(
-            joinedload(ProviderConfig.provider_spec),
-            selectinload(ProviderConfig.model_instances)
-        )
-
-        conditions = []
+        limit: int = 100,
+        offset: int = 0,
+        creator_scoped: bool = False,
+    ) -> List[ProviderConfig]:
+        """List provider configs with filtering and relationships."""
+        filters = {}
         if provider_spec_id is not None:
-            conditions.append(ProviderConfig.provider_spec_id == provider_spec_id)
-        if user_id is not None:
-            conditions.append(ProviderConfig.user_id == user_id)
+            filters['provider_spec_id'] = provider_spec_id
         if is_active is not None:
-            conditions.append(ProviderConfig.is_active == is_active)
+            filters['is_active'] = is_active
         if is_public is not None:
-            conditions.append(ProviderConfig.is_public == is_public)
+            filters['is_public'] = is_public
 
-        if conditions:
-            query = query.where(and_(*conditions))
+        configs = await self.list_all(
+            creator_scoped=creator_scoped,
+            limit=limit,
+            offset=offset,
+            **filters
+        )
+        
+        # Load relationships for each config
+        config_ids = [config.id for config in configs]
+        if config_ids:
+            result = await self.session.execute(
+                select(ProviderConfig)
+                .options(
+                    joinedload(ProviderConfig.provider_spec),
+                    selectinload(ProviderConfig.model_instances)
+                )
+                .where(ProviderConfig.id.in_(config_ids))
+            )
+            configs_with_relations = result.scalars().all()
+            return list(configs_with_relations)
+        
+        return configs
 
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[ProviderConfig]:
+        """Get provider configs by workspace ID with pagination.
+        
+        Note: This method is deprecated. Use list_configs() instead which automatically
+        filters by the current workspace from user context.
+        """
+        # For backward compatibility, but this should be replaced with list_configs()
+        if workspace_id != self.user_context.workspace_id:
+            return []  # Don't allow cross-workspace access
+        
+        return await self.list_configs(limit=limit, offset=offset)
 
-    async def create(self, entity: ProviderConfig) -> ProviderConfig:
-        self.session.add(entity)
-        await self.session.flush()
-        # Reload with relationships
-        result = await self.get(UUID(str(entity.id)))
-        return result if result else entity
+    async def create_config(self, entity: ProviderConfig) -> ProviderConfig:
+        """Create a new provider config from domain entity.
+        
+        Note: This method is deprecated. Use create() with field parameters instead.
+        """
+        # Extract fields from the config entity
+        config_data = {
+            'id': entity.id,
+            'provider_spec_id': entity.provider_spec_id,
+            'name': entity.name,
+            'description': entity.description,
+            'is_active': entity.is_active,
+            'is_public': entity.is_public,
+            'config': getattr(entity, 'config', None),
+            'created_at': entity.created_at,
+            'updated_at': entity.updated_at,
+        }
+        
+        # Remove None values and system fields that will be auto-populated
+        config_data = {k: v for k, v in config_data.items() if v is not None}
+        config_data.pop('created_at', None)
+        config_data.pop('updated_at', None)
+        
+        created_config = await self.create(**config_data)
+        return await self.get_with_relations(created_config.id) or created_config
 
-    async def update(self, entity: ProviderConfig) -> ProviderConfig:
-        await self.session.merge(entity)
-        await self.session.flush()
-        return entity
-
-    async def delete(self, id: UUID) -> bool:
-        result = await self.session.execute(select(ProviderConfig).where(ProviderConfig.id == id))
-        config = result.scalar_one_or_none()
-        if config:
-            await self.session.delete(config)
-            await self.session.flush()
-            return True
-        return False 
+    async def update_config(self, entity: ProviderConfig) -> ProviderConfig:
+        """Update an existing provider config from domain entity.
+        
+        Note: This method is deprecated. Use update() with field parameters instead.
+        """
+        # Extract fields from the config entity
+        config_data = {
+            'provider_spec_id': entity.provider_spec_id,
+            'name': entity.name,
+            'description': entity.description,
+            'is_active': entity.is_active,
+            'is_public': entity.is_public,
+            'config': getattr(entity, 'config', None),
+        }
+        
+        # Remove None values
+        config_data = {k: v for k, v in config_data.items() if v is not None}
+        
+        updated_config = await self.update(entity.id, **config_data)
+        return updated_config or entity 

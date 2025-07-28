@@ -8,6 +8,10 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/infisical/go-sdk v0.5.96
 	gopkg.in/yaml.v3 v3.0.1
+	k8s.io/api v0.31.0
+	k8s.io/apimachinery v0.31.0
+	k8s.io/client-go v0.31.0
+	sigs.k8s.io/controller-runtime v0.19.0
 )
 
 require (

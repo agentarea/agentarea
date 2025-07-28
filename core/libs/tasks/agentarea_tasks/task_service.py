@@ -11,7 +11,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
@@ -23,6 +23,7 @@ from .infrastructure.repository import TaskRepository
 
 if TYPE_CHECKING:
     from agentarea_agents.infrastructure.repository import AgentRepository
+    from agentarea_common.base import RepositoryFactory
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +33,28 @@ class TaskService(BaseTaskService):
 
     def __init__(
         self,
-        task_repository: TaskRepository,
+        repository_factory: "RepositoryFactory",
         event_broker: EventBroker,
         task_manager: BaseTaskManager,
-        agent_repository: Optional["AgentRepository"] = None,
         workflow_service: Any | None = None,
     ):
-        """Initialize with repository, event broker, task manager, and optional dependencies."""
+        """Initialize with repository factory, event broker, task manager, and optional dependencies."""
+        from agentarea_common.base import RepositoryFactory
+        
+        # Create repositories using factory
+        task_repository = repository_factory.create_repository(TaskRepository)
         super().__init__(task_repository, event_broker)
+        
+        self.repository_factory = repository_factory
         self.task_manager = task_manager
-        self.agent_repository = agent_repository
         self.workflow_service = workflow_service
+        
+        # Create agent repository using factory for validation
+        try:
+            from agentarea_agents.infrastructure.repository import AgentRepository
+            self.agent_repository = repository_factory.create_repository(AgentRepository)
+        except ImportError:
+            self.agent_repository = None
 
     async def _validate_agent_exists(self, agent_id: UUID) -> None:
         """Validate that the agent exists before processing tasks.
@@ -68,6 +80,7 @@ class TaskService(BaseTaskService):
         query: str,
         user_id: str,
         agent_id: UUID,
+        workspace_id: str | None = None,
         task_parameters: dict[str, Any] | None = None,
     ) -> SimpleTask:
         """Create a new task from parameters."""
@@ -76,6 +89,7 @@ class TaskService(BaseTaskService):
             description=description,
             query=query,
             user_id=user_id,
+            workspace_id=workspace_id,
             agent_id=agent_id,
             task_parameters=task_parameters or {},
             status="submitted",
@@ -103,15 +117,25 @@ class TaskService(BaseTaskService):
 
     async def get_user_tasks(
         self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> list[SimpleTask]:
+    ) -> List[SimpleTask]:
         """Get tasks for a specific user."""
         return await self.list_tasks(user_id=user_id, limit=limit, offset=offset)
 
     async def get_agent_tasks(
-        self, agent_id: UUID, limit: int = 100, offset: int = 0
-    ) -> list[SimpleTask]:
+        self, agent_id: UUID, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+    ) -> List[SimpleTask]:
         """Get tasks for a specific agent."""
-        return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
+        # Use the repository's list_all method with creator_scoped parameter
+        if hasattr(self.task_repository, 'list_all'):
+            return await self.task_repository.list_all(
+                creator_scoped=creator_scoped,
+                limit=limit,
+                offset=offset,
+                agent_id=agent_id
+            )
+        else:
+            # Fallback for repositories that don't support workspace scoping
+            return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
 
     async def get_task_status(self, task_id: UUID) -> str | None:
         """Get task status."""
@@ -161,7 +185,7 @@ class TaskService(BaseTaskService):
         # Persist the update
         return await self.update_task(task)
 
-    async def list_agent_tasks(self, agent_id: UUID, limit: int = 100) -> list[SimpleTask]:
+    async def list_agent_tasks(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> List[SimpleTask]:
         """List tasks for an agent.
 
         This method provides compatibility with the application layer TaskService
@@ -170,23 +194,25 @@ class TaskService(BaseTaskService):
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
+            creator_scoped: If True, only return tasks created by current user
 
         Returns:
             List of tasks for the agent
         """
-        return await self.get_agent_tasks(agent_id, limit=limit)
+        return await self.get_agent_tasks(agent_id, limit=limit, creator_scoped=creator_scoped)
 
-    async def list_agent_tasks_with_workflow_status(self, agent_id: UUID, limit: int = 100) -> list[SimpleTask]:
+    async def list_agent_tasks_with_workflow_status(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> List[SimpleTask]:
         """List tasks for an agent enriched with workflow status.
 
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
+            creator_scoped: If True, only return tasks created by current user
 
         Returns:
             List of tasks for the agent with current workflow status
         """
-        tasks = await self.list_agent_tasks(agent_id, limit)
+        tasks = await self.list_agent_tasks(agent_id, limit, creator_scoped=creator_scoped)
 
         if not self.workflow_service:
             logger.warning("Workflow service not available - returning tasks without workflow enrichment")
@@ -617,7 +643,7 @@ class TaskService(BaseTaskService):
                 except asyncio.CancelledError:
                     pass
 
-    async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
+    async def _get_historical_events(self, task_id: UUID) -> List[dict[str, Any]]:
         """Get historical events for a task.
 
         This could be implemented by:

@@ -30,6 +30,29 @@ def mock_auth_context():
     return context
 
 
+def create_mock_trigger():
+    """Create a mock trigger object without rate limiting fields."""
+    mock_trigger = MagicMock()
+    mock_trigger.id = uuid4()
+    mock_trigger.name = "Test Trigger"
+    mock_trigger.trigger_type = "cron"
+    mock_trigger.is_active = True
+    mock_trigger.cron_expression = "0 9 * * *"
+    mock_trigger.agent_id = uuid4()
+    mock_trigger.description = "A test trigger"
+    mock_trigger.task_parameters = {"param1": "value1"}
+    mock_trigger.conditions = {"condition1": "value1"}
+    mock_trigger.created_at = datetime.utcnow()
+    mock_trigger.updated_at = datetime.utcnow()
+    mock_trigger.created_by = "test_user"
+    mock_trigger.failure_threshold = 5
+    mock_trigger.consecutive_failures = 0
+    mock_trigger.last_execution_at = None
+    mock_trigger.timezone = "UTC"
+    mock_trigger.next_run_time = None
+    return mock_trigger
+
+
 class TestTriggersAPISimple:
     """Simple test class for triggers API endpoints."""
 
@@ -49,26 +72,7 @@ class TestTriggersAPISimple:
         mock_get_service.return_value = mock_trigger_service
         
         # Mock trigger object
-        mock_trigger = MagicMock()
-        mock_trigger.id = uuid4()
-        mock_trigger.name = "Test Trigger"
-        mock_trigger.trigger_type = "cron"
-        mock_trigger.is_active = True
-        mock_trigger.cron_expression = "0 9 * * *"
-        mock_trigger.agent_id = uuid4()
-        mock_trigger.description = "A test trigger"
-        mock_trigger.task_parameters = {"param1": "value1"}
-        mock_trigger.conditions = {"condition1": "value1"}
-        mock_trigger.created_at = datetime.utcnow()
-        mock_trigger.updated_at = datetime.utcnow()
-        mock_trigger.created_by = "test_user"
-        mock_trigger.max_executions_per_hour = 60
-        mock_trigger.failure_threshold = 5
-        mock_trigger.consecutive_failures = 0
-        mock_trigger.last_execution_at = None
-        mock_trigger.timezone = "UTC"
-        mock_trigger.next_run_time = None
-        
+        mock_trigger = create_mock_trigger()
         mock_trigger_service.create_trigger.return_value = mock_trigger
         
         # Test data
@@ -113,26 +117,7 @@ class TestTriggersAPISimple:
         mock_get_service.return_value = mock_trigger_service
         
         # Mock trigger objects
-        mock_trigger = MagicMock()
-        mock_trigger.id = uuid4()
-        mock_trigger.name = "Test Trigger"
-        mock_trigger.trigger_type = "cron"
-        mock_trigger.is_active = True
-        mock_trigger.agent_id = uuid4()
-        mock_trigger.description = "A test trigger"
-        mock_trigger.task_parameters = {"param1": "value1"}
-        mock_trigger.conditions = {"condition1": "value1"}
-        mock_trigger.created_at = datetime.utcnow()
-        mock_trigger.updated_at = datetime.utcnow()
-        mock_trigger.created_by = "test_user"
-        mock_trigger.max_executions_per_hour = 60
-        mock_trigger.failure_threshold = 5
-        mock_trigger.consecutive_failures = 0
-        mock_trigger.last_execution_at = None
-        mock_trigger.cron_expression = "0 9 * * *"
-        mock_trigger.timezone = "UTC"
-        mock_trigger.next_run_time = None
-        
+        mock_trigger = create_mock_trigger()
         triggers = [mock_trigger]
         mock_trigger_service.list_triggers.return_value = triggers
         
@@ -160,27 +145,8 @@ class TestTriggersAPISimple:
         mock_auth.return_value = mock_auth_context
         mock_get_service.return_value = mock_trigger_service
         
-        trigger_id = uuid4()
-        mock_trigger = MagicMock()
-        mock_trigger.id = trigger_id
-        mock_trigger.name = "Test Trigger"
-        mock_trigger.trigger_type = "cron"
-        mock_trigger.is_active = True
-        mock_trigger.agent_id = uuid4()
-        mock_trigger.description = "A test trigger"
-        mock_trigger.task_parameters = {"param1": "value1"}
-        mock_trigger.conditions = {"condition1": "value1"}
-        mock_trigger.created_at = datetime.utcnow()
-        mock_trigger.updated_at = datetime.utcnow()
-        mock_trigger.created_by = "test_user"
-        mock_trigger.max_executions_per_hour = 60
-        mock_trigger.failure_threshold = 5
-        mock_trigger.consecutive_failures = 0
-        mock_trigger.last_execution_at = None
-        mock_trigger.cron_expression = "0 9 * * *"
-        mock_trigger.timezone = "UTC"
-        mock_trigger.next_run_time = None
-        
+        mock_trigger = create_mock_trigger()
+        trigger_id = mock_trigger.id
         mock_trigger_service.get_trigger.return_value = mock_trigger
         
         # Make request

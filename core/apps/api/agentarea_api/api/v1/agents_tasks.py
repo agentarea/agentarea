@@ -96,15 +96,19 @@ class TaskWithAgent(BaseModel):
 @global_tasks_router.get("/", response_model=list[TaskWithAgent])
 async def get_all_tasks(
     status: str | None = Query(None, description="Filter by task status"),
+    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's tasks only"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_agent_service),
     task_service: TaskService = Depends(get_task_service),
 ):
-    """Get all tasks across all agents with optional filtering."""
+    """Get all workspace tasks across all agents with optional filtering."""
     try:
-        # Get all agents first
-        agents = await agent_service.list()
+        # Determine if we should filter by creator
+        creator_scoped = created_by == "me"
+        
+        # Get all workspace agents (or user's agents if creator_scoped)
+        agents = await agent_service.list(creator_scoped=creator_scoped)
 
         all_tasks: list[TaskWithAgent] = []
 
@@ -112,7 +116,10 @@ async def get_all_tasks(
         for agent in agents:
             try:
                 # Get tasks with workflow status from service
-                agent_tasks = await task_service.list_agent_tasks_with_workflow_status(agent.id, limit=limit)
+                # Note: task filtering by creator is handled at the agent level
+                agent_tasks = await task_service.list_agent_tasks_with_workflow_status(
+                    agent.id, limit=limit, creator_scoped=creator_scoped
+                )
 
                 logger.info(f"Found {len(agent_tasks)} tasks for agent {agent.id} ({agent.name})")
 
@@ -356,6 +363,7 @@ async def create_task_for_agent_sync(
 async def list_agent_tasks(
     agent_id: UUID,
     status: str | None = Query(None, description="Filter by task status"),
+    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's tasks only"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_agent_service),
@@ -368,8 +376,13 @@ async def list_agent_tasks(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
+        # Determine if we should filter by creator
+        creator_scoped = created_by == "me"
+        
         # Get tasks with workflow status from service
-        agent_tasks = await task_service.list_agent_tasks_with_workflow_status(agent_id, limit=limit)
+        agent_tasks = await task_service.list_agent_tasks_with_workflow_status(
+            agent_id, limit=limit, creator_scoped=creator_scoped
+        )
 
         logger.info(f"Found {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
 

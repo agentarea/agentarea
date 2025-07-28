@@ -1,5 +1,5 @@
 import builtins
-from typing import Any
+from typing import Any, List
 from uuid import UUID
 
 from agentarea_common.base.service import BaseCrudService
@@ -33,8 +33,11 @@ from .validation_service import MCPConfigurationValidator, MCPValidationError
 
 
 class MCPServerService(BaseCrudService[MCPServer]):
-    def __init__(self, repository: MCPServerRepository, event_broker: EventBroker | None = None):
+    def __init__(self, repository_factory: Any, event_broker: EventBroker | None = None):
+        # Create repository using factory
+        repository = repository_factory.create_repository(MCPServerRepository)
         super().__init__(repository)
+        self.repository_factory = repository_factory
         self.event_broker = event_broker
 
     async def create_mcp_server(
@@ -147,7 +150,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         status: str | None = None,
         is_public: bool | None = None,
         tag: str | None = None,
-    ) -> list[MCPServer]:
+    ) -> List[MCPServer]:
         # Use repository directly since we need custom filtering
         return await self.repository.list(status=status, is_public=is_public, tag=tag)
 
@@ -155,17 +158,19 @@ class MCPServerService(BaseCrudService[MCPServer]):
         return await self.repository.get(id)
 
 
-class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
+class MCPServerInstanceService:
     def __init__(
         self,
-        repository: MCPServerInstanceRepository,
+        repository_factory: Any,  # RepositoryFactory type
         event_broker: EventBroker,
-        mcp_server_repository: MCPServerRepository,
         secret_manager: BaseSecretManager,
     ):
-        super().__init__(repository)
+        # Create repositories using factory
+        self.repository = repository_factory.create_repository(MCPServerInstanceRepository)
+        self.mcp_server_repository = repository_factory.create_repository(MCPServerRepository)
+        
+        self.repository_factory = repository_factory
         self.event_broker = event_broker
-        self.mcp_server_repository = mcp_server_repository
         self.secret_manager = secret_manager
         self.env_service = MCPEnvironmentService(secret_manager)
         self.db = get_database()
@@ -177,14 +182,13 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         server_spec_id: UUID,
         description: str | None = None,
     ) -> MCPServerInstance:
-        instance = MCPServerInstance(
+        instance = await self.repository.create(
             name=name,
             description=description,
             server_spec_id=str(server_spec_id),
             json_spec=json_spec,
             status=MCPServerStatus.REQUESTED.value,
         )
-        instance = await self.repository.create(instance)
 
         # Publish event for Go MCP Manager to handle container creation
         await self.event_broker.publish(
@@ -220,17 +224,14 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         if validation_errors:
             raise MCPValidationError(validation_errors)
 
-        # Create instance - mcp-infrastructure will determine how to handle it based on json_spec
-        instance = MCPServerInstance(
+        # Create instance using workspace-scoped repository
+        instance = await self.repository.create(
             name=name,
             description=description,
             server_spec_id=server_spec_id,
             json_spec=spec,
             status="pending",  # Will be updated by mcp-infrastructure
         )
-
-        # Save to database
-        instance = await self.create(instance)
 
         # Publish event for MCP Infrastructure to handle deployment
         await self.event_broker.publish(
@@ -252,20 +253,20 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         json_spec: dict[str, Any] | None = None,
         status: str | None = None,
     ) -> MCPServerInstance | None:
-        instance = await self.get(id)
+        # Build update kwargs
+        update_kwargs = {}
+        if name is not None:
+            update_kwargs['name'] = name
+        if description is not None:
+            update_kwargs['description'] = description
+        if json_spec is not None:
+            update_kwargs['json_spec'] = json_spec
+        if status is not None:
+            update_kwargs['status'] = status
+
+        instance = await self.repository.update(id, **update_kwargs)
         if not instance:
             return None
-
-        if name is not None:
-            instance.name = name
-        if description is not None:
-            instance.description = description
-        if json_spec is not None:
-            instance.json_spec = json_spec
-        if status is not None:
-            instance.status = status
-
-        instance = await self.repository.update(instance)
 
         await self.event_broker.publish(
             MCPServerInstanceUpdated(
@@ -287,7 +288,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         Returns:
             Dictionary of environment variable names and values
         """
-        instance = await self.get(instance_id)
+        instance = await self.repository.get_by_id(instance_id)
         if not instance:
             return {}
 
@@ -298,7 +299,7 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         return await self.env_service.get_instance_environment(instance_id, env_var_names)
 
     async def delete_instance(self, id: UUID) -> bool:
-        instance = await self.get(id)
+        instance = await self.repository.get_by_id(id)
         if not instance:
             return False
 
@@ -308,10 +309,10 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         )
 
         # Delete the instance from the database
-        return await super().delete(id)
+        return await self.repository.delete(id)
 
     async def start_instance(self, id: UUID) -> bool:
-        instance = await self.get(id)
+        instance = await self.repository.get_by_id(id)
         if not instance:
             return False
 
@@ -325,38 +326,52 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
         env_vars = await self.get_instance_environment(id)
         print(f"Starting instance {id} with {len(env_vars)} environment variables")
 
-        instance.status = "running"
-        await self.repository.update(instance)
+        updated_instance = await self.repository.update(id, status="running")
+        if not updated_instance:
+            return False
 
         await self.event_broker.publish(
             MCPServerInstanceStarted(
-                instance_id=instance.id, server_spec_id=instance.server_spec_id, name=instance.name
+                instance_id=updated_instance.id, server_spec_id=updated_instance.server_spec_id, name=updated_instance.name
             )
         )
 
         return True
 
     async def stop_instance(self, id: UUID) -> bool:
-        instance = await self.get(id)
+        instance = await self.repository.get_by_id(id)
         if not instance:
             return False
 
         # TODO: Implement actual stop logic
-        instance.status = "stopped"
-        await self.repository.update(instance)
+        updated_instance = await self.repository.update(id, status="stopped")
+        if not updated_instance:
+            return False
 
         await self.event_broker.publish(
             MCPServerInstanceStopped(
-                instance_id=instance.id, server_spec_id=instance.server_spec_id, name=instance.name
+                instance_id=updated_instance.id, server_spec_id=updated_instance.server_spec_id, name=updated_instance.name
             )
         )
 
         return True
 
+    async def get(self, id: UUID) -> MCPServerInstance | None:
+        """Get an MCP server instance by ID."""
+        return await self.repository.get_by_id(id)
+
     async def list(
-        self, server_spec_id: str | None = None, status: str | None = None
-    ) -> list[MCPServerInstance]:
-        return await self.repository.list(server_spec_id=server_spec_id, status=status)
+        self, server_spec_id: str | None = None, status: str | None = None, creator_scoped: bool = False
+    ) -> List[MCPServerInstance]:
+        # Build filters for the repository
+        filters = {}
+        if server_spec_id:
+            filters['server_spec_id'] = server_spec_id
+        if status:
+            filters['status'] = status
+        
+        # Use the repository's list_all method with creator_scoped parameter
+        return await self.repository.list_all(creator_scoped=creator_scoped, **filters)
 
     async def _validate_env_vars(
         self, env_vars: dict[str, str], env_schema: builtins.list[dict[str, Any]]
@@ -399,3 +414,36 @@ class MCPServerInstanceService(BaseCrudService[MCPServerInstance]):
                     )
 
         return errors
+
+    async def discover_and_store_tools(self, instance_id: UUID) -> bool:
+        """Discover available tools from MCP server instance and store them.
+        
+        Args:
+            instance_id: The MCP server instance ID
+            
+        Returns:
+            True if tools were successfully discovered and stored, False otherwise
+        """
+        instance = await self.repository.get_by_id(instance_id)
+        if not instance:
+            return False
+            
+        try:
+            # TODO: Implement actual MCP server connection and tool discovery
+            # This would involve:
+            # 1. Connecting to the MCP server instance (stdio/http/sse)
+            # 2. Calling list_tools() on the MCP session
+            # 3. Extracting tool metadata (name, description, inputSchema)
+            
+            # For now, storing empty list as placeholder
+            discovered_tools = []
+            
+            # Store the discovered tools in the instance
+            instance.set_available_tools(discovered_tools)
+            updated_instance = await self.repository.update(instance_id, json_spec=instance.json_spec)
+            
+            return updated_instance is not None
+            
+        except Exception as e:
+            print(f"Error discovering tools for instance {instance_id}: {e}")
+            return False

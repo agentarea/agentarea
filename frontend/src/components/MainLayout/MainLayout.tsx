@@ -26,7 +26,7 @@ export type NavSection = {
 };
 
 export type BottomNavContent = {
-  user: {
+  user?: {
     name: string;
     email: string;
     avatar: string;
@@ -206,11 +206,7 @@ const bottomNavContent: BottomNavContent = {
       icon: <Settings />,
     },
   ],
-  user: {
-    name: "Admin",
-    email: "admin@admin.com",
-    avatar: "https://github.com/shadcn.png",
-  },
+  // User data will be provided by Clerk authentication
 };
 
 export default function MainLayout({

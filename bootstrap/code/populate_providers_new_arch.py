@@ -73,8 +73,8 @@ def upsert_provider_spec(
     conn.execute(
         text("""
             INSERT INTO provider_specs 
-            (id, provider_key, name, description, provider_type, icon, is_builtin, created_at, updated_at) 
-            VALUES (:id, :provider_key, :name, :description, :provider_type, :icon, :is_builtin, now(), now())
+            (id, provider_key, name, description, provider_type, icon, is_builtin, created_by, workspace_id, created_at, updated_at) 
+            VALUES (:id, :provider_key, :name, :description, :provider_type, :icon, :is_builtin, :created_by, :workspace_id, now(), now())
         """),
         {
             "id": provider_id,
@@ -84,6 +84,8 @@ def upsert_provider_spec(
             "provider_type": provider_type,
             "icon": icon,
             "is_builtin": is_builtin,
+            "created_by": "system",
+            "workspace_id": "default",
         },
     )
     return provider_id
@@ -134,9 +136,9 @@ def upsert_model_spec(
         text("""
             INSERT INTO model_specs
             (id, provider_spec_id, model_name, display_name, description, context_window, 
-             is_active, created_at, updated_at)
+             is_active, created_by, workspace_id, created_at, updated_at)
             VALUES (:id, :provider_spec_id, :model_name, :display_name, :description, 
-                    :context_window, true, now(), now())
+                    :context_window, true, :created_by, :workspace_id, now(), now())
         """),
         {
             "id": model_spec_id,
@@ -145,6 +147,8 @@ def upsert_model_spec(
             "display_name": display_name,
             "description": description,
             "context_window": context_window,
+            "created_by": "system",
+            "workspace_id": "default",
         },
     )
     return model_spec_id
@@ -159,15 +163,12 @@ def main() -> None:
     
     with engine.begin() as conn:
         for provider_key, provider_data in providers.items():
-            print(f"Processing provider: {provider_key}")
-            
             # Create/update provider spec
             provider_spec_id = upsert_provider_spec(conn, provider_key, provider_data)
             
             # Create/update model specs for this provider
             for model in provider_data.get("models", []):
-                model_spec_id = upsert_model_spec(conn, model, provider_spec_id)
-                print(f"  - Model: {model['name']} ({model_spec_id})")
+                upsert_model_spec(conn, model, provider_spec_id)
     
     print("Provider specs and model specs populated successfully.")
 

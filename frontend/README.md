@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AgentArea Frontend
 
-## Getting Started
+This is the frontend application for the AgentArea platform, built with Next.js.
 
-First, run the development server:
+## Features
+
+- Modern React-based user interface
+- Authentication with NextAuth.js and multiple OIDC providers
+- Real-time communication with the backend API
+- Responsive design with Tailwind CSS
+- Internationalization support
+
+## Authentication
+
+The frontend uses NextAuth.js for authentication with multiple OIDC (OpenID Connect) providers:
+- Generic OIDC (fallback)
+- WorkOS
+- Keycloak
+
+### Configuration
+
+To configure authentication, set the following environment variables in `.env.local`:
+
+```env
+# NextAuth.js Configuration
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secret-key-change-in-production
+
+# API Configuration
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Generic OIDC Configuration (fallback)
+OIDC_ISSUER=https://your-oidc-provider.com
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+
+# WorkOS Configuration
+WORKOS_ISSUER=https://your-workos-issuer.com
+WORKOS_CLIENT_ID=your-workos-client-id
+WORKOS_CLIENT_SECRET=your-workos-client-secret
+
+# Keycloak Configuration
+KEYCLOAK_ISSUER=https://your-keycloak-server.com/realms/your-realm
+KEYCLOAK_CLIENT_ID=your-keycloak-client-id
+KEYCLOAK_CLIENT_SECRET=your-keycloak-client-secret
+```
+
+### How It Works
+
+1. **NextAuth.js**: Handles the authentication flow and session management
+2. **Multiple OIDC Providers**: Supports authentication with WorkOS, Keycloak, or any generic OIDC provider
+3. **API Client**: Automatically includes the access token in API requests
+4. **Middleware**: Protects routes that require authentication
+
+### Protected Routes
+
+Routes are protected using Next.js middleware. Unauthenticated users are redirected to the sign-in page.
+
+### Session Management
+
+NextAuth.js manages user sessions using JWT tokens stored in HTTP-only cookies for security.
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- npm, yarn, or pnpm
+
+### Installation
+
+```bash
+cd frontend
+npm install
+```
+
+### Running the Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The application will be available at http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+frontend/
+├── src/
+│   ├── app/              # App Router pages
+│   │   ├── api/          # API routes
+│   │   ├── auth/         # Authentication pages
+│   │   └── ...           # Other pages
+│   ├── components/       # React components
+│   ├── lib/              # Utility functions and API client
+│   └── pages/            # Pages Router (for NextAuth.js)
+│       └── api/
+│           └── auth/     # NextAuth.js API routes
+├── public/               # Static assets
+├── middleware.ts         # Next.js middleware
+└── next.config.ts        # Next.js configuration
+```
 
-## Learn More
+## Testing Authentication
 
-To learn more about Next.js, take a look at the following resources:
+To test the authentication system:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Navigate to http://localhost:3000/test-auth
+2. Click "Sign In with OIDC", "Sign In with WorkOS", or "Sign In with Keycloak"
+3. Complete the authentication flow with your chosen provider
+4. Verify that user information and access token are displayed
+5. Test API calls to protected endpoints
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Dependencies
 
-## Deploy on Vercel
+Key dependencies include:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Next.js 14+ - React framework
+- NextAuth.js - Authentication library
+- Tailwind CSS - Styling framework
+- React - UI library
+- openapi-fetch - Type-safe API client
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `package.json` for the complete list of dependencies.

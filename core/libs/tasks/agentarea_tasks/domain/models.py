@@ -23,6 +23,7 @@ class Task(BaseModel):
     completed_at: datetime | None = None
     execution_id: str | None = None  # Temporal workflow execution ID
     user_id: str | None = None
+    workspace_id: str | None = None
     metadata: dict[str, Any] = {}
 
     class Config:
@@ -36,6 +37,7 @@ class TaskCreate(BaseModel):
     description: str
     parameters: dict[str, Any] = {}
     user_id: str | None = None
+    workspace_id: str | None = None
     metadata: dict[str, Any] = {}
 
 
@@ -65,6 +67,7 @@ class SimpleTask(BaseModel):
     description: str
     query: str
     user_id: str
+    workspace_id: str | None = None
     agent_id: UUID
     status: str = "submitted"
     task_parameters: dict[str, Any] = {}

@@ -36,7 +36,7 @@ class TestTriggerExecutionEngine:
             'event_broker': event_broker,
             'agent_repository': agent_repository,
             'task_service': task_service,
-            'llm_service': llm_service,
+            'llm_condition_evaluator': llm_service,
             'temporal_schedule_manager': temporal_schedule_manager
         }
 
@@ -159,31 +159,7 @@ class TestTriggerExecutionEngine:
         # Verify task was not created
         trigger_service.task_service.create_task_from_params.assert_not_called()
 
-    async def test_execute_trigger_rate_limited(self, trigger_service, sample_cron_trigger, mock_repositories):
-        """Test trigger execution when trigger is rate limited."""
-        trigger_repo, execution_repo = mock_repositories
-        
-        # Make trigger rate limited
-        sample_cron_trigger.last_execution_at = datetime.utcnow() - timedelta(seconds=30)
-        sample_cron_trigger.max_executions_per_hour = 1
-        trigger_repo.get.return_value = sample_cron_trigger
-        
-        # Mock execution recording
-        mock_execution = TriggerExecution(
-            trigger_id=sample_cron_trigger.id,
-            status=ExecutionStatus.FAILED,
-            execution_time_ms=0,
-            error_message="Trigger is rate limited"
-        )
-        execution_repo.create.return_value = mock_execution
-        
-        # Execute trigger
-        execution_data = {"execution_time": datetime.utcnow().isoformat()}
-        result = await trigger_service.execute_trigger(sample_cron_trigger.id, execution_data)
-        
-        # Verify results
-        assert result.status == ExecutionStatus.FAILED
-        assert result.error_message == "Trigger is rate limited"
+    # Rate limiting test removed - rate limiting moved to infrastructure layer
 
     async def test_execute_trigger_task_creation_failure(self, trigger_service, sample_cron_trigger, mock_repositories):
         """Test trigger execution when task creation fails."""
