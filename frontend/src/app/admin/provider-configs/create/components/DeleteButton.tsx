@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { deleteProviderConfig } from '@/lib/api';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import BaseModal from '@/components/BaseModal';
 
 interface DeleteButtonProps {
   configId?: string;
@@ -15,8 +14,6 @@ interface DeleteButtonProps {
 
 export default function DeleteButton({ configId, configName }: DeleteButtonProps) {
   const router = useRouter();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
 
   const handleDelete = async () => {
     if (!configId) {
@@ -25,7 +22,6 @@ export default function DeleteButton({ configId, configName }: DeleteButtonProps
       return;
     }
 
-    setIsDeleting(true);
     try {
       const { error } = await deleteProviderConfig(configId);
       
@@ -44,49 +40,20 @@ export default function DeleteButton({ configId, configName }: DeleteButtonProps
       console.error('Error deleting provider config:', err);
       toast.error('An unexpected error occurred while deleting the configuration');
     } finally {
-      setIsDeleting(false);
-      setIsOpen(false);
     }
   };
 
-
-  
-
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="destructiveOutline" size="sm">
-          <Trash2 className="h-4 w-4" />
-          Delete
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-[400px] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="pb-2">Delete Provider Configuration</DialogTitle>
-          <DialogDescription>
-            Are you sure you want to delete <span className="font-bold">{configName ? `"${configName}"` : 'this provider configuration'}</span>? 
-            This action cannot be undone and will permanently remove the configuration.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setIsOpen(false)} 
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button 
-            size="sm"
-            onClick={handleDelete} 
-            disabled={isDeleting}
-            variant="destructive"
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <BaseModal
+      title="Delete Provider Configuration"
+      description={`Are you sure you want to delete ${configName ? `"${configName}"` : 'this provider configuration'}? This action cannot be undone and will permanently remove the configuration.`}
+      onConfirm={handleDelete}
+      type="delete"
+    >
+      <Button variant="destructiveOutline" size="sm">
+        <Trash2 className="h-4 w-4" />
+        Delete
+      </Button>
+    </BaseModal>
   );
 } 
