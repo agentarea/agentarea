@@ -8,13 +8,12 @@ import { ProviderSpec, ProviderConfig } from "../provider-configs/page";
 import ModelsList from "./ModelsList";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { setCookie, getCookie } from "@/utils/cookies";
 
 import EmptyState from "@/components/EmptyState/EmptyState";
-
+import { useSearchWithDebounce, useTabState, useFilteredData } from "./hooks";
 
 export default function MainContent({
     resolvedSearchParams,
@@ -31,91 +30,66 @@ export default function MainContent({
     const searchParams = useSearchParams();
     const pathname = usePathname();
     
-    const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
-    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
-    const [isSearching, setIsSearching] = useState(false);
-    
-    // Get saved tab from cookies or URL (only on client)
-    const [savedTab, setSavedTab] = useState<string | null>(null);
-    const [isTabLoaded, setIsTabLoaded] = useState(false);
     const urlTab = searchParams.get("tab");
+    const initialSearchQuery = searchParams.get("search") || "";
     
-    // Generate unique cookie key based on current path
-    const generateCookieKey = (path: string) => {
-        // Remove leading slash and replace slashes with underscores
-        const cleanPath = path.replace(/^\/+/, '').replace(/\//g, '_');
-        return `tab_${cleanPath}`;
-    };
-    
-    const cookieKey = generateCookieKey(pathname);
-    
-    // Read cookie only on client side
-    useEffect(() => {
-        const cookieTab = getCookie(cookieKey);
-        setSavedTab(cookieTab);
-        setIsTabLoaded(true);
-    }, []);
-    
-    const initialTab = urlTab || savedTab || "grid";
+    // Используем кастомные хуки
+    const {
+        query: searchQuery,
+        debouncedQuery,
+        isSearching,
+        updateQuery,
+        forceUpdate
+    } = useSearchWithDebounce(initialSearchQuery);
 
-    // Debounce effect - wait 500ms after user stops typing
-    useEffect(() => {
-        setIsSearching(true);
-        const timer = setTimeout(() => {
-            setDebouncedSearchQuery(searchQuery);
-            setIsSearching(false);
-        }, 1000);
+    const {
+        currentTab,
+        isTabLoaded,
+        updateTab
+    } = useTabState(pathname, urlTab);
 
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
-
-    // Update URL when debounced search changes
+    // Обновляем URL при изменении поиска
     useEffect(() => {
         const params = new URLSearchParams(searchParams.toString());
         
-        if (debouncedSearchQuery.trim()) {
-            params.set("search", debouncedSearchQuery);
+        if (debouncedQuery.trim()) {
+            params.set("search", debouncedQuery);
         } else {
             params.delete("search");
         }
         
-        // Preserve the tab parameter
-        const tab = searchParams.get("tab");
-        if (tab) {
-            params.set("tab", tab);
+        // Сохраняем параметр таба
+        if (urlTab) {
+            params.set("tab", urlTab);
         }
         
         const newUrl = params.toString() ? `?${params.toString()}` : "";
         router.replace(`/admin/provider-configs${newUrl}`, { scroll: false });
-    }, [debouncedSearchQuery, router, searchParams]);
+    }, [debouncedQuery, router, searchParams, urlTab]);
 
-    // Save tab to cookies when it changes
+    // Сохраняем таб в куки при изменении
     useEffect(() => {
-        const currentTab = searchParams.get("tab");
-        if (currentTab && (currentTab === "grid" || currentTab === "table")) {
-            setCookie(cookieKey, currentTab);
+        if (urlTab) {
+            updateTab(urlTab);
         }
-    }, [searchParams, cookieKey]);
+    }, [urlTab, updateTab]);
 
-    // Handle search input change
+    // Обработчики поиска
     const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchQuery(e.target.value);
-    }, []);
+        updateQuery(e.target.value);
+    }, [updateQuery]);
 
-    // Handle Enter key press
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
-            setIsSearching(true);
-            setDebouncedSearchQuery(searchQuery);
-            setIsSearching(false);
+            forceUpdate();
         }
-    }, [searchQuery]);
+    }, [forceUpdate]);
 
-    // Filter data based on search query
+    // Фильтрация данных с использованием кастомного хука
     const filterData = useCallback((data: any[]) => {
-        if (!debouncedSearchQuery.trim()) return data;
+        if (!debouncedQuery.trim()) return data;
         
-        const query = debouncedSearchQuery.toLowerCase();
+        const query = debouncedQuery.toLowerCase();
         return data.filter(item => {
             const spec = item.spec || item;
             return (
@@ -125,18 +99,18 @@ export default function MainContent({
                 spec?.description?.toLowerCase().includes(query)
             );
         });
-    }, [debouncedSearchQuery]);
+    }, [debouncedQuery]);
 
-    const filteredConfigs = filterData(enhancedConfigs);
-    const filteredSpecs = filterData(providerSpecs);
+    const filteredConfigs = useMemo(() => filterData(enhancedConfigs), [filterData, enhancedConfigs]);
+    const filteredSpecs = useMemo(() => filterData(providerSpecs), [filterData, providerSpecs]);
 
-     // Columns for configured providers
-     const configColumns = [
+    // Колонки для настроенных провайдеров
+    const configColumns = useMemo(() => [
         {
             header: t("table.provider"),
             accessor: "name",
             render: (value: string, row: any) => {
-                const spec = row.spec|| row;
+                const spec = row.spec || row;
 
                 return (
                     <div className="flex items-center gap-3">
@@ -166,13 +140,12 @@ export default function MainContent({
                     </div>
                 );
             },
-
         },
         {
             header: t("table.models"),
             accessor: "models",
             render: (value: string, row: any) => {
-                const spec = row.spec|| row;
+                const spec = row.spec || row;
                 return (
                     <ModelsList models={spec.models} />
                 );
@@ -191,9 +164,9 @@ export default function MainContent({
                 );
             },
         },
-    ];
+    ], [t]);
 
-    // Don't render until tab is loaded to prevent flashing
+    // Не рендерим до загрузки таба для предотвращения мерцания
     if (!isTabLoaded && !urlTab) {
         return (
             <div className="content-section">
@@ -209,58 +182,58 @@ export default function MainContent({
             <GridAndTableSectionsViews 
                 searchParams={{
                     ...Object.fromEntries(searchParams.entries()),
-                    tab: initialTab
+                    tab: currentTab
                 }}
-                    data={[
-                        {
-                            sectionId: "configured",
-                            itemLink: ((item) => `/admin/provider-configs/create?provider_spec_id=${item.id}&isEdit=true`),
-                            cardClassName: "border-primary/50 dark:border-accent-foreground",
-                            data: filteredConfigs,
-                            emptyState: (
-                                <EmptyState
-                                    title={t("emptyState.title")}
-                                    description={t("emptyState.description")}
-                                    iconsType="llm"
-                                    action={{
-                                        label: t("createButton"),
-                                        href: "/admin/provider-configs/create"
-                                    }}
-                                />
-                            )
-                        },
-                        {
-                            itemLink: ((item) => `/admin/provider-configs/create?provider_spec_id=${item.id}`),
-                            sectionId: "available",
-                            sectioName: t("availableProviders"),
-                            data: filteredSpecs
-                        }
-                    ]}
-                    columns={configColumns}
-                    routeChange="/admin/provider-configs"
-                    cardContent={(item: any) => {
-                        return (
-                            <CardContent item={item}/>
-                        );
-                    }}
-                    leftComponent={
-                        <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
-                            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-                                {isSearching ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <SearchIcon className="h-4 w-4" />
-                                )}
-                            </div>
-                            <Input 
-                                placeholder={commonT("search")}
-                                className="pl-9 w-full" 
-                                value={searchQuery}
-                                onChange={handleSearchChange}
-                                onKeyDown={handleKeyDown}
+                data={[
+                    {
+                        sectionId: "configured",
+                        itemLink: ((item) => `/admin/provider-configs/create?provider_spec_id=${item.id}&isEdit=true`),
+                        cardClassName: "border-primary/50 dark:border-accent-foreground",
+                        data: filteredConfigs,
+                        emptyState: (
+                            <EmptyState
+                                title={t("emptyState.title")}
+                                description={t("emptyState.description")}
+                                iconsType="llm"
+                                action={{
+                                    label: t("createButton"),
+                                    href: "/admin/provider-configs/create"
+                                }}
                             />
-                        </div>
+                        )
+                    },
+                    {
+                        itemLink: ((item) => `/admin/provider-configs/create?provider_spec_id=${item.id}`),
+                        sectionId: "available",
+                        sectioName: t("availableProviders"),
+                        data: filteredSpecs
                     }
+                ]}
+                columns={configColumns}
+                routeChange="/admin/provider-configs"
+                cardContent={(item: any) => {
+                    return (
+                        <CardContent item={item}/>
+                    );
+                }}
+                leftComponent={
+                    <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                            {isSearching ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <SearchIcon className="h-4 w-4" />
+                            )}
+                        </div>
+                        <Input 
+                            placeholder={commonT("search")}
+                            className="pl-9 w-full" 
+                            value={searchQuery}
+                            onChange={handleSearchChange}
+                            onKeyDown={handleKeyDown}
+                        />
+                    </div>
+                }
             />
         </div>
     );
