@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 import os
 
 from ..interfaces import AuthProviderInterface
-from .clerk import ClerkAuthProvider
+from .simple_jwt import SimpleJWTProvider
 
 
 class AuthProviderFactory:
@@ -35,7 +35,8 @@ class AuthProviderFactory:
         if provider_name.lower() == "clerk":
             # Get Clerk configuration from environment or config
             clerk_config = {
-                "jwks_url": config.get("jwks_url") or os.getenv("CLERK_JWKS_URL"),
+                "secret_key": config.get("secret_key") or os.getenv("CLERK_SECRET_KEY"),
+                "algorithm": config.get("algorithm") or os.getenv("JWT_ALGORITHM", "HS256"),
                 "issuer": config.get("issuer") or os.getenv("CLERK_ISSUER"),
                 "audience": config.get("audience") or os.getenv("CLERK_AUDIENCE"),
             }
@@ -43,7 +44,7 @@ class AuthProviderFactory:
             # Remove None values
             clerk_config = {k: v for k, v in clerk_config.items() if v is not None}
             
-            return ClerkAuthProvider(clerk_config)
+            return SimpleJWTProvider(clerk_config)
         
         # Add other providers here as needed
         # elif provider_name.lower() == "auth0":

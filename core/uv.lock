@@ -134,14 +134,18 @@ name = "agentarea-cli"
 version = "0.1.0"
 source = { editable = "apps/cli" }
 dependencies = [
+    { name = "agentarea-common" },
     { name = "click" },
     { name = "httpx" },
+    { name = "pyjwt" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "agentarea-common", editable = "libs/common" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "httpx", specifier = ">=0.24.0" },
+    { name = "pyjwt", specifier = ">=2.8.0" },
 ]
 
 [[package]]

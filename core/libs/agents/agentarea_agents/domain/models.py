@@ -1,13 +1,9 @@
-from datetime import datetime
-from uuid import UUID, uuid4
-
-from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin, AuditMixin
-from sqlalchemy import JSON, Boolean, DateTime, String
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
+from sqlalchemy import JSON, Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class Agent(BaseModel, WorkspaceScopedMixin, AuditMixin):
+class Agent(BaseModel, WorkspaceScopedMixin):
     """Agent model with workspace awareness and audit trail."""
     __tablename__ = "agents"
 
@@ -16,8 +12,8 @@ class Agent(BaseModel, WorkspaceScopedMixin, AuditMixin):
     description: Mapped[str] = mapped_column(String, nullable=True)
     instruction: Mapped[str] = mapped_column(String, nullable=True)
     model_id: Mapped[str] = mapped_column(String, nullable=True)
-    tools_config: Mapped[dict] = mapped_column(JSON, nullable=True)
-    events_config: Mapped[dict] = mapped_column(JSON, nullable=True)
+    tools_config: Mapped[dict[str, any] | None] = mapped_column(JSON, nullable=True)
+    events_config: Mapped[dict[str, any] | None] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
     # Relationships

@@ -10,6 +10,7 @@ class AppSettings(BaseAppSettings):
 
     APP_NAME: str = "AI Agent Service"
     DEBUG: bool = False
+    DEV_MODE: bool = False  # Enable development mode for easier testing
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -21,6 +22,7 @@ class AppSettings(BaseAppSettings):
     OIDC_AUDIENCE: str = ""
     
     # Clerk Configuration
+    CLERK_SECRET_KEY: str = ""
     CLERK_ISSUER: str = ""
     CLERK_JWKS_URL: str = ""
     CLERK_AUDIENCE: str = ""

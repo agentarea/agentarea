@@ -2,11 +2,14 @@ package backends
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/agentarea/mcp-manager/internal/config"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -78,9 +81,24 @@ func (k *KubernetesBackend) createSecret(ctx context.Context, instanceName strin
 func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName string, spec *InstanceSpec) error {
 	labels := k.getCommonLabels(instanceName)
 	
+	// Convert ResourceList to config.ResourceRequirements
+	var configRequests, configLimits *config.ResourceRequirements
+	if spec.Resources.Requests.CPU != "" || spec.Resources.Requests.Memory != "" {
+		configRequests = &config.ResourceRequirements{
+			CPU:    spec.Resources.Requests.CPU,
+			Memory: spec.Resources.Requests.Memory,
+		}
+	}
+	if spec.Resources.Limits.CPU != "" || spec.Resources.Limits.Memory != "" {
+		configLimits = &config.ResourceRequirements{
+			CPU:    spec.Resources.Limits.CPU,
+			Memory: spec.Resources.Limits.Memory,
+		}
+	}
+
 	// Resource requirements
-	requests := k.k8sConfig.GetResourceRequirements(&spec.Resources.Requests, nil)
-	limits := k.k8sConfig.GetResourceLimits(&spec.Resources.Limits)
+	requests := k.k8sConfig.GetResourceRequirements(configRequests, nil)
+	limits := k.k8sConfig.GetResourceLimits(configLimits)
 	
 	resourceRequirements := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{},
@@ -302,16 +320,18 @@ func (k *KubernetesBackend) createIngress(ctx context.Context, instanceName stri
 			Rules: []networkingv1.IngressRule{
 				{
 					Host: k.k8sConfig.Domain,
-					HTTP: &networkingv1.HTTPIngressRuleValue{
-						Paths: []networkingv1.HTTPIngressPath{
-							{
-								Path:     fmt.Sprintf("/mcp/%s(/|$)(.*)", instanceName),
-								PathType: &pathType,
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: fmt.Sprintf("mcp-%s", instanceName),
-										Port: networkingv1.ServiceBackendPort{
-											Number: 80,
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     fmt.Sprintf("/mcp/%s(/|$)(.*)", instanceName),
+									PathType: &pathType,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: fmt.Sprintf("mcp-%s", instanceName),
+											Port: networkingv1.ServiceBackendPort{
+												Number: 80,
+											},
 										},
 									},
 								},
@@ -481,9 +501,24 @@ func (k *KubernetesBackend) updateDeployment(ctx context.Context, instanceName s
 			container.Command = spec.Command
 		}
 
+		// Convert ResourceList to config.ResourceRequirements
+		var configRequests, configLimits *config.ResourceRequirements
+		if spec.Resources.Requests.CPU != "" || spec.Resources.Requests.Memory != "" {
+			configRequests = &config.ResourceRequirements{
+				CPU:    spec.Resources.Requests.CPU,
+				Memory: spec.Resources.Requests.Memory,
+			}
+		}
+		if spec.Resources.Limits.CPU != "" || spec.Resources.Limits.Memory != "" {
+			configLimits = &config.ResourceRequirements{
+				CPU:    spec.Resources.Limits.CPU,
+				Memory: spec.Resources.Limits.Memory,
+			}
+		}
+
 		// Update resource requirements
-		requests := k.k8sConfig.GetResourceRequirements(&spec.Resources.Requests, nil)
-		limits := k.k8sConfig.GetResourceLimits(&spec.Resources.Limits)
+		requests := k.k8sConfig.GetResourceRequirements(configRequests, nil)
+		limits := k.k8sConfig.GetResourceLimits(configLimits)
 		
 		if requests.CPU != "" {
 			container.Resources.Requests[corev1.ResourceCPU] = resource.MustParse(requests.CPU)

@@ -29,17 +29,6 @@ __all__ = [
 ]
 
 try:
-  from .vertex_ai_code_executor import VertexAiCodeExecutor
-
-  __all__.append('VertexAiCodeExecutor')
-except ImportError:
-  logger.debug(
-      'The Vertex sdk is not installed. If you want to use the Vertex Code'
-      ' Interpreter with agents, please install it. If not, you can ignore this'
-      ' warning.'
-  )
-
-try:
   from .container_code_executor import ContainerCodeExecutor
 
   __all__.append('ContainerCodeExecutor')

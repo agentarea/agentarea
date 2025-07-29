@@ -93,7 +93,7 @@ def upsert_mcp_server(
             "is_public": True,
             "env_schema": json.dumps(env_schema),
             "created_by": "system",
-            "workspace_id": "default",
+            "workspace_id": "system",
         },
     )
     return server_id

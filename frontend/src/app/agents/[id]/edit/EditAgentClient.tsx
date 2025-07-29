@@ -67,8 +67,7 @@ export default function EditAgentClient({
       if (Array.isArray(state.fieldValues.tools_config?.mcp_server_configs)) {
         const configs = state.fieldValues.tools_config.mcp_server_configs.map(config => ({
           mcp_server_id: config.mcp_server_id,
-          api_key: '',
-          config: config.config
+          allowed_tools: config.allowed_tools || []
         }));
         setValue("tools_config.mcp_server_configs", configs);
       }
@@ -91,9 +90,11 @@ export default function EditAgentClient({
     // Add tools config
     data.tools_config.mcp_server_configs.forEach((config, index) => {
       formData.append(`tools_config.mcp_server_configs[${index}].mcp_server_id`, config.mcp_server_id);
-      formData.append(`tools_config.mcp_server_configs[${index}].api_key`, config.api_key);
-      if (config.config) {
-        formData.append(`tools_config.mcp_server_configs[${index}].config`, JSON.stringify(config.config));
+      if (config.allowed_tools) {
+        config.allowed_tools.forEach((tool, toolIndex) => {
+          formData.append(`tools_config.mcp_server_configs[${index}].allowed_tools[${toolIndex}].tool_name`, tool.tool_name);
+          formData.append(`tools_config.mcp_server_configs[${index}].allowed_tools[${toolIndex}].requires_user_confirmation`, (tool.requires_user_confirmation ?? false).toString());
+        });
       }
     });
 
@@ -103,6 +104,7 @@ export default function EditAgentClient({
       if (event.config) {
         formData.append(`events_config.events[${index}].config`, JSON.stringify(event.config));
       }
+      formData.append(`events_config.events[${index}].enabled`, (event.enabled ?? true).toString());
     });
 
     // Call server action

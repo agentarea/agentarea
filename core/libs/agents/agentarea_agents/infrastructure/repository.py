@@ -1,9 +1,8 @@
-from typing import List
+from typing import List, Union
 from uuid import UUID
 
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.domain.models import Agent
@@ -12,6 +11,10 @@ from agentarea_agents.domain.models import Agent
 class AgentRepository(WorkspaceScopedRepository[Agent]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, Agent, user_context)
+
+    async def get(self, id: Union[UUID, str]) -> Agent | None:
+        """Get an agent by ID. Delegates to get_by_id for compatibility."""
+        return await self.get_by_id(id)
 
     async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[Agent]:
         """Get agents by workspace ID with pagination.
@@ -64,5 +67,5 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
         # Remove None values
         agent_data = {k: v for k, v in agent_data.items() if v is not None}
         
-        updated_agent = await self.update(agent.id, **agent_data)
+        updated_agent = await self.update(str(agent.id), creator_scoped=False, **agent_data)
         return updated_agent or agent

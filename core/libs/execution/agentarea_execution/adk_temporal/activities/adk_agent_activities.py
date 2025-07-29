@@ -353,3 +353,44 @@ async def validate_adk_agent_config(agent_config: Dict[str, Any]) -> Dict[str, A
             "errors": [f"Validation failed: {str(e)}"],
             "warnings": warnings
         }
+
+@activity.defn
+async def execute_llm_call(
+    agent_config: Dict[str, Any],
+    session_data: Dict[str, Any],
+    llm_request: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Execute LLM call as a Temporal activity."""
+    logger.info("Executing LLM call activity")
+    from ..utils.agent_builder import build_adk_agent_from_config
+    agent = build_adk_agent_from_config(agent_config)
+    model = agent.canonical_model
+    request = types.GenerateContentRequest(
+        contents=llm_request['contents'],
+        system_instruction=types.Content(parts=[types.Part(text=llm_request['system_instruction'])]),
+        tools=[types.Tool(function_declarations=t) for t in llm_request['tools']],
+        generation_config=types.GenerationConfig(**llm_request['generation_config'])
+    )
+    response = await model.generate_content_async(request)
+    # Convert to dict or serialize appropriately
+    return EventSerializer.serialize_llm_response(response)
+
+@activity.defn
+async def execute_tool_call(
+    agent_config: Dict[str, Any],
+    session_data: Dict[str, Any],
+    tool_request: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Execute tool call as a Temporal activity."""
+    logger.info("Executing tool call activity")
+    from ..utils.agent_builder import build_adk_agent_from_config
+    agent = build_adk_agent_from_config(agent_config)
+    tools = await agent.canonical_tools()
+    tool_name = tool_request['name']
+    tool_args = tool_request['args']
+    tool = next((t for t in tools if t.name == tool_name), None)
+    if not tool:
+        raise ValueError(f"Tool {tool_name} not found")
+    tool_context = ToolContext(session_state=session_data.get('state', {}))
+    result = await tool.execute(tool_args, tool_context)
+    return EventSerializer.serialize_tool_result(result)

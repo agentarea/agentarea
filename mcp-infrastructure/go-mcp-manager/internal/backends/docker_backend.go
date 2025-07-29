@@ -29,6 +29,11 @@ func NewDockerBackend(cfg *config.Config, logger *slog.Logger) *DockerBackend {
 	}
 }
 
+// GetManager returns the underlying container manager for backward compatibility
+func (d *DockerBackend) GetManager() *container.Manager {
+	return d.manager
+}
+
 // Initialize initializes the Docker backend
 func (d *DockerBackend) Initialize(ctx context.Context) error {
 	d.logger.Info("Initializing Docker backend")

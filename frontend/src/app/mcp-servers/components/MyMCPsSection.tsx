@@ -4,7 +4,31 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertCircle, Settings, Trash2, ExternalLink, Grid, List, AlertTriangle, Loader2, Copy } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  CheckCircle, 
+  AlertCircle, 
+  Settings, 
+  Trash2, 
+  ExternalLink, 
+  Grid, 
+  List, 
+  AlertTriangle, 
+  Loader2, 
+  Copy, 
+  FileText, 
+  Brain,
+  Wrench, 
+  GitBranch, 
+  Globe, 
+  Database, 
+  MessageSquare, 
+  Bot, 
+  Tool,
+  Activity,
+  Zap,
+  Clock
+} from "lucide-react";
 import Link from "next/link";
 import { getMCPHealthStatus } from "@/lib/api";
 
@@ -38,14 +62,14 @@ interface MyMCPsSectionProps {
 // Helper function to get category icon based on name or type
 const getCategoryIcon = (instance: MCPInstance) => {
   const name = instance.name.toLowerCase();
-  if (name.includes('filesystem') || name.includes('file')) return '📁';
-  if (name.includes('memory') || name.includes('knowledge')) return '🧠';
-  if (name.includes('git') || name.includes('github')) return '🐙';
-  if (name.includes('web') || name.includes('fetch') || name.includes('browser')) return '🌐';
-  if (name.includes('database') || name.includes('sql')) return '📊';
-  if (name.includes('slack') || name.includes('gmail') || name.includes('message')) return '💬';
-  if (name.includes('puppeteer') || name.includes('automation')) return '🤖';
-  return '🔧';
+  if (name.includes('filesystem') || name.includes('file')) return FileText;
+  if (name.includes('memory') || name.includes('knowledge')) return Brain;
+  if (name.includes('git') || name.includes('github')) return GitBranch;
+  if (name.includes('web') || name.includes('fetch') || name.includes('browser')) return Globe;
+  if (name.includes('database') || name.includes('sql')) return Database;
+  if (name.includes('slack') || name.includes('gmail') || name.includes('message')) return MessageSquare;
+  if (name.includes('puppeteer') || name.includes('automation')) return Bot;
+  return Tool;
 };
 
 // Helper function to get category from instance name
@@ -61,25 +85,28 @@ const getCategory = (instance: MCPInstance) => {
   return 'Tools';
 };
 
-// Helper function to get status display with health information
+// Enhanced status display with better visual design
 const getStatusDisplay = (status: string, healthCheck?: HealthCheck) => {
-  // If we have health information, use it to determine actual status
   if (healthCheck) {
     if (healthCheck.container_status === 'running' && healthCheck.healthy) {
       return { 
-        text: 'Healthy', 
+        text: 'Active', 
         variant: 'default' as const, 
         icon: CheckCircle, 
         color: 'text-green-500',
-        detail: `${healthCheck.response_time_ms}ms`
+        bgColor: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800',
+        detail: `${healthCheck.response_time_ms}ms`,
+        tooltip: 'Server is running and responding normally'
       };
     } else if (healthCheck.container_status === 'running' && !healthCheck.healthy) {
       return { 
-        text: 'Unhealthy', 
+        text: 'Error', 
         variant: 'destructive' as const, 
         icon: AlertTriangle, 
         color: 'text-red-500',
-        detail: healthCheck.error || 'Health check failed'
+        bgColor: 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800',
+        detail: 'Connection failed',
+        tooltip: healthCheck.error || 'Health check failed'
       };
     } else if (healthCheck.container_status === 'stopped') {
       return { 
@@ -87,21 +114,51 @@ const getStatusDisplay = (status: string, healthCheck?: HealthCheck) => {
         variant: 'secondary' as const, 
         icon: AlertCircle, 
         color: 'text-gray-500',
-        detail: 'Container not running'
+        bgColor: 'bg-gray-50 border-gray-200 dark:bg-gray-950/30 dark:border-gray-800',
+        detail: 'Not running',
+        tooltip: 'Container is not running'
       };
     }
   }
   
-  // Fallback to original status logic
   switch (status) {
     case 'running':
-      return { text: 'Available', variant: 'default' as const, icon: CheckCircle, color: 'text-green-500' };
+      return { 
+        text: 'Active', 
+        variant: 'default' as const, 
+        icon: CheckCircle, 
+        color: 'text-green-500',
+        bgColor: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800',
+        tooltip: 'Server is running' 
+      };
     case 'stopped':
-      return { text: 'Stopped', variant: 'secondary' as const, icon: AlertCircle, color: 'text-red-500' };
+      return { 
+        text: 'Stopped', 
+        variant: 'secondary' as const, 
+        icon: AlertCircle, 
+        color: 'text-gray-500',
+        bgColor: 'bg-gray-50 border-gray-200 dark:bg-gray-950/30 dark:border-gray-800',
+        tooltip: 'Server is stopped' 
+      };
     case 'pending':
-      return { text: 'Starting', variant: 'secondary' as const, icon: Loader2, color: 'text-amber-500' };
+      return { 
+        text: 'Starting', 
+        variant: 'secondary' as const, 
+        icon: Loader2, 
+        color: 'text-amber-500',
+        bgColor: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800',
+        detail: '~30s', 
+        tooltip: 'Server is starting up' 
+      };
     default:
-      return { text: 'Needs Setup', variant: 'outline' as const, icon: AlertCircle, color: 'text-amber-500' };
+      return { 
+        text: 'Setup', 
+        variant: 'outline' as const, 
+        icon: Settings, 
+        color: 'text-amber-500',
+        bgColor: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800',
+        tooltip: 'Configuration required' 
+      };
   }
 };
 
@@ -111,19 +168,17 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
   const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
   const [healthLoading, setHealthLoading] = useState(true);
 
-  // Helper function to copy URL to clipboard
+  // Copy to clipboard helper
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      // Could add a toast notification here
     } catch (err) {
       console.error('Failed to copy: ', err);
     }
   };
 
-  // Helper function to get display URL info
+  // Get URL info helper
   const getUrlInfo = (instance: MCPInstance, healthCheck?: HealthCheck) => {
-    // Don't show any URL while health checks are still loading and we don't have health data
     if (healthLoading && !healthCheck) {
       return { url: null, displayText: null };
     }
@@ -140,7 +195,7 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     return { url, displayText };
   };
 
-  // Fetch health status on component mount and set up polling
+  // Health status polling
   useEffect(() => {
     const fetchHealthStatus = async () => {
       try {
@@ -148,29 +203,20 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
         setHealthChecks(healthData.health_checks);
       } catch (error) {
         console.error('Failed to fetch health status:', error);
-        // Don't set error state, just keep loading false
       } finally {
         setHealthLoading(false);
       }
     };
 
-    // Initial fetch
     fetchHealthStatus();
-
-    // Set up polling every 60 seconds (reduced from 30 seconds)
-    const interval = setInterval(() => {
-      fetchHealthStatus();
-    }, 60000);
-
+    const interval = setInterval(fetchHealthStatus, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  // Helper function to get health check for an instance
+  // Get health check for instance
   const getHealthCheck = (instanceName: string): HealthCheck | undefined => {
-    // Try exact match first
     let healthCheck = healthChecks.find(check => check.service_name === instanceName);
     
-    // If no exact match, try to match by converting instance name to service name format
     if (!healthCheck) {
       const normalizedInstanceName = instanceName
         .toLowerCase()
@@ -187,172 +233,179 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     return healthCheck;
   };
 
-  const displayedInstances = showAll ? mcpInstances : mcpInstances.slice(0, 3);
+  const displayedInstances = showAll ? mcpInstances : mcpInstances.slice(0, 6);
 
+  // Enhanced List Item Component
   const renderInstanceCard = (instance: MCPInstance) => {
     const healthCheck = getHealthCheck(instance.name);
     const statusInfo = getStatusDisplay(instance.status, healthCheck);
     const StatusIcon = statusInfo.icon;
     const urlInfo = getUrlInfo(instance, healthCheck);
+    const IconComponent = getCategoryIcon(instance);
 
     return (
-      <div key={instance.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-secondary/50 transition-colors">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            {getCategoryIcon(instance)}
+      <div 
+        key={instance.id} 
+        className={`group relative p-4 border-2 rounded-xl transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${statusInfo.bgColor}`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Enhanced Icon */}
+            <div className="relative">
+              <div className="h-12 w-12 rounded-xl bg-white dark:bg-slate-800 border-2 border-white dark:border-slate-700 shadow-sm flex items-center justify-center group-hover:scale-105 transition-transform">
+                <IconComponent className="h-6 w-6 text-primary" />
+              </div>
+              {/* Status indicator overlay */}
+              <div className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white dark:border-slate-800 flex items-center justify-center ${statusInfo.color === 'text-green-500' ? 'bg-green-500' : statusInfo.color === 'text-red-500' ? 'bg-red-500' : statusInfo.color === 'text-amber-500' ? 'bg-amber-500' : 'bg-gray-500'}`}>
+                {StatusIcon === Loader2 ? (
+                  <Loader2 className="h-2 w-2 text-white animate-spin" />
+                ) : (
+                  <div className="h-2 w-2 bg-white rounded-full" />
+                )}
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-slate-900 dark:text-white truncate">
+                  {instance.name}
+                </h3>
+                {healthLoading && !healthCheck && (
+                  <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                )}
+              </div>
+              
+              <p className="text-sm text-muted-foreground mb-2 line-clamp-1">
+                {instance.description || `${getCategory(instance)} server instance`}
+              </p>
+
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="text-xs">
+                  {getCategory(instance)}
+                </Badge>
+                <div className="flex items-center gap-2">
+                  <StatusIcon className={`h-3 w-3 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
+                  <span className={`text-xs font-medium ${statusInfo.color}`}>
+                    {statusInfo.text}
+                  </span>
+                  {statusInfo.detail && (
+                    <span className="text-xs text-muted-foreground">
+                      • {statusInfo.detail}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* URL info */}
+              {urlInfo.url && urlInfo.displayText && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Globe className="h-3 w-3 text-blue-500" />
+                  <span className="text-xs text-blue-600 truncate max-w-48">
+                    {urlInfo.displayText}
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(urlInfo.url!)}
+                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                    title="Copy URL"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium">{instance.name}</h3>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+            {urlInfo.url && (
+              <Button size="sm" variant="outline" asChild className="h-8">
+                <a href={urlInfo.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
+            <Button size="sm" variant="outline" asChild className="h-8">
+              <Link href={`/mcp-servers/${instance.id}/edit`}>
+                <Settings className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 text-destructive hover:text-destructive">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Enhanced Grid Item Component  
+  const renderInstanceGrid = (instance: MCPInstance) => {
+    const healthCheck = getHealthCheck(instance.name);
+    const statusInfo = getStatusDisplay(instance.status, healthCheck);
+    const StatusIcon = statusInfo.icon;
+    const urlInfo = getUrlInfo(instance, healthCheck);
+    const IconComponent = getCategoryIcon(instance);
+
+    return (
+      <Card key={instance.id} className={`group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-2 ${statusInfo.bgColor}`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between mb-3">
+            <div className="h-10 w-10 rounded-xl bg-white dark:bg-slate-800 border-2 border-white dark:border-slate-700 shadow-sm flex items-center justify-center">
+              <IconComponent className="h-5 w-5 text-primary" />
+            </div>
+            
+            <div className="flex items-center gap-1">
               <StatusIcon className={`h-4 w-4 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
-              {/* Show health loading spinner only when actually loading health data */}
               {healthLoading && !healthCheck && (
                 <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              {instance.description || `${getCategory(instance)} instance`}
-            </p>
-            {/* Show health details if available */}
-            {healthCheck && statusInfo.detail && (
-              <p className={`text-xs ${healthCheck.healthy ? 'text-green-600' : 'text-red-600'}`}>
-                {statusInfo.detail}
-              </p>
-            )}
-            {/* Show endpoint URL with copy functionality */}
-            {urlInfo.url && urlInfo.displayText && (
-              <div className="flex items-center gap-1 mt-1">
-                <p className="text-xs text-blue-600 truncate max-w-xs">
-                  🔗 {urlInfo.displayText}
-                </p>
-                <button
-                  onClick={() => copyToClipboard(urlInfo.url!)}
-                  className="text-gray-400 hover:text-blue-600 transition-colors"
-                  title="Copy URL to clipboard"
-                >
-                  <Copy className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-1 mt-1">
+          </div>
+          
+          <div>
+            <h3 className="font-semibold mb-1 line-clamp-1">{instance.name}</h3>
+            <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs">
                 {getCategory(instance)}
               </Badge>
               <Badge variant={statusInfo.variant} className="text-xs">
                 {statusInfo.text}
               </Badge>
-              {healthCheck?.healthy && healthCheck.http_reachable && (
-                <Badge variant="outline" className="text-xs">
-                  🌐 Reachable
-                </Badge>
-              )}
-              {healthCheck && !healthCheck.healthy && (
-                <Badge variant="destructive" className="text-xs">
-                  ⚠️ Warning
-                </Badge>
-              )}
             </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Show Access button if we have any URL, regardless of health status */}
-          {urlInfo.url && (
-            <Button size="sm" variant="outline" asChild>
-              <a href={urlInfo.url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-1" />
-                Access
-              </a>
-            </Button>
-          )}
-          <Button size="sm" variant="outline" asChild>
-            <Link href={`/mcp-servers/${instance.id}/edit`}>
-              <Settings className="h-4 w-4 mr-1" />
-              Configure
-            </Link>
-          </Button>
-          <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderInstanceGrid = (instance: MCPInstance) => {
-    const healthCheck = getHealthCheck(instance.name);
-    const statusInfo = getStatusDisplay(instance.status, healthCheck);
-    const StatusIcon = statusInfo.icon;
-    const urlInfo = getUrlInfo(instance, healthCheck);
-
-    return (
-      <Card key={instance.id} className="hover:shadow-md transition-shadow">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                {getCategoryIcon(instance)}
-              </div>
-              <div>
-                <h3 className="font-medium">{instance.name}</h3>
-                <div className="flex items-center gap-1 mt-1">
-                  <Badge variant="secondary" className="text-xs">
-                    {getCategory(instance)}
-                  </Badge>
-                  <StatusIcon className={`h-3 w-3 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
-                  {/* Show health loading spinner only when actually loading health data */}
-                  {healthLoading && !healthCheck && (
-                    <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
-                  )}
-                </div>
-              </div>
-            </div>
-            <Badge variant={statusInfo.variant} className="text-xs">
-              {statusInfo.text}
-            </Badge>
           </div>
         </CardHeader>
+
         <CardContent className="pt-0">
-          <p className="text-sm text-muted-foreground mb-3">
-            {instance.description || `${getCategory(instance)} instance`}
+          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+            {instance.description || `${getCategory(instance)} server instance`}
           </p>
-          {/* Show health details if available */}
-          {healthCheck && statusInfo.detail && (
-            <p className={`text-xs mb-2 ${healthCheck.healthy ? 'text-green-600' : 'text-red-600'}`}>
-              {statusInfo.detail}
-            </p>
+
+          {statusInfo.detail && (
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="h-3 w-3 text-muted-foreground" />
+              <span className={`text-xs ${statusInfo.color}`}>
+                {statusInfo.detail}
+              </span>
+            </div>
           )}
-          {/* Show endpoint URL with copy functionality */}
+
           {urlInfo.url && urlInfo.displayText && (
-            <div className="flex items-center gap-1 mb-2">
-              <p className="text-xs text-blue-600 truncate">
-                🔗 {urlInfo.displayText}
-              </p>
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="h-3 w-3 text-blue-500" />
+              <span className="text-xs text-blue-600 truncate">
+                {urlInfo.displayText}
+              </span>
               <button
                 onClick={() => copyToClipboard(urlInfo.url!)}
-                className="text-gray-400 hover:text-blue-600 transition-colors"
-                title="Copy URL to clipboard"
+                className="text-gray-400 hover:text-blue-600 transition-colors ml-auto"
               >
                 <Copy className="h-3 w-3" />
               </button>
             </div>
           )}
-          <div className="flex flex-wrap gap-1 mb-3">
-            <Badge variant="outline" className="text-xs">
-              {getCategory(instance)}
-            </Badge>
-            {healthCheck?.healthy && healthCheck.http_reachable && (
-              <Badge variant="outline" className="text-xs">
-                🌐 Reachable
-              </Badge>
-            )}
-            {healthCheck && !healthCheck.healthy && (
-              <Badge variant="destructive" className="text-xs">
-                ⚠️ Warning
-              </Badge>
-            )}
-          </div>
+
           <div className="flex gap-2">
-            {/* Show Access button if we have any URL, regardless of health status */}
             {urlInfo.url && (
               <Button size="sm" className="flex-1" asChild>
                 <a href={urlInfo.url} target="_blank" rel="noopener noreferrer">
@@ -361,14 +414,10 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                 </a>
               </Button>
             )}
-            <Button size="sm" className="flex-1" asChild>
+            <Button size="sm" variant="outline" asChild>
               <Link href={`/mcp-servers/${instance.id}/edit`}>
-                <Settings className="h-4 w-4 mr-1" />
-                Configure
+                <Settings className="h-4 w-4" />
               </Link>
-            </Button>
-            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
-              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </CardContent>
@@ -376,22 +425,47 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     );
   };
 
+  // Enhanced Empty State
   if (mcpInstances.length === 0) {
     return (
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">📋 My MCPs (0)</h2>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/mcp-servers/manage">📋 Manage All</Link>
-          </Button>
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+            <Activity className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">My Active Servers</h2>
+            <p className="text-muted-foreground">No servers configured yet</p>
+          </div>
         </div>
         
-        <Card>
-          <CardContent className="py-12 text-center">
-            <div className="text-muted-foreground mb-4">
-              <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">No MCPs configured</h3>
-              <p>Get started by creating your first MCP instance using the actions above.</p>
+        <Card className="border-dashed border-2 border-slate-200 dark:border-slate-700">
+          <CardContent className="py-16 text-center">
+            <div className="max-w-md mx-auto space-y-4">
+              <div className="h-20 w-20 mx-auto rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
+                <Zap className="h-10 w-10 text-slate-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold mb-2">Ready to connect your first server?</h3>
+                <p className="text-muted-foreground mb-6">
+                  MCP servers provide powerful tools and context to your AI agents. Get started with our quick actions above.
+                </p>
+              </div>
+              <div className="flex gap-3 justify-center">
+                <Button asChild>
+                  <Link href="/mcp-servers/add">
+                    <Globe className="h-4 w-4 mr-2" />
+                    Connect by URL
+                  </Link>
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => document.getElementById('specs-section')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  <Wrench className="h-4 w-4 mr-2" />
+                  Browse Templates
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -400,17 +474,22 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
   }
 
   return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">📋 My MCPs ({mcpInstances.length})</h2>
-        <div className="flex gap-2">
-          <Button 
-            variant={viewMode === 'grid' ? 'default' : 'outline'} 
-            size="sm"
-            onClick={() => setViewMode('grid')}
-          >
-            <Grid className="h-4 w-4" />
-          </Button>
+    <div className="space-y-6">
+      {/* Enhanced Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+            <Activity className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">My Active Servers</h2>
+            <p className="text-muted-foreground">
+              {mcpInstances.length} {mcpInstances.length === 1 ? 'server' : 'servers'} configured
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
           <Button 
             variant={viewMode === 'list' ? 'default' : 'outline'} 
             size="sm"
@@ -418,45 +497,90 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
           >
             <List className="h-4 w-4" />
           </Button>
+          <Button 
+            variant={viewMode === 'grid' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid className="h-4 w-4" />
+          </Button>
           <Button variant="outline" size="sm" asChild>
-            <Link href="/mcp-servers/manage">📋 Manage All</Link>
+            <Link href="/mcp-servers/manage">
+              <Settings className="h-4 w-4 mr-2" />
+              Manage All
+            </Link>
           </Button>
         </div>
       </div>
       
-      <Card>
-        <CardContent className="p-4">
-          <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
-            {displayedInstances.map(instance => 
-              viewMode === 'grid' ? renderInstanceGrid(instance) : renderInstanceCard(instance)
-            )}
+      {/* Loading Skeletons */}
+      {healthLoading && mcpInstances.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Checking server health...</span>
           </div>
           
-          {mcpInstances.length > 3 && !showAll && (
-            <div className="mt-4 text-center">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowAll(true)}
-              >
-                Show {mcpInstances.length - 3} more instances
-              </Button>
-            </div>
-          )}
-          
-          {showAll && mcpInstances.length > 3 && (
-            <div className="mt-4 text-center">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowAll(false)}
-              >
-                Show fewer
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          {/* Skeleton loading cards */}
+          <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
+            {Array.from({ length: Math.min(3, mcpInstances.length) }).map((_, i) => (
+              <div key={i} className={viewMode === 'grid' ? "p-4 border-2 rounded-xl space-y-3" : "p-4 border-2 rounded-xl"}>
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-12 w-12 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-5 w-16" />
+                      <Skeleton className="h-5 w-20" />
+                    </div>
+                  </div>
+                  {viewMode === 'list' && (
+                    <div className="flex gap-2">
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-8 w-8" />
+                    </div>
+                  )}
+                </div>
+                {viewMode === 'grid' && (
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Instances Display */}
+      <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
+        {displayedInstances.map(instance => 
+          viewMode === 'grid' ? renderInstanceGrid(instance) : renderInstanceCard(instance)
+        )}
+      </div>
+      
+      {/* Show More/Less */}
+      {mcpInstances.length > 6 && (
+        <div className="text-center">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowAll(!showAll)}
+            className="min-w-48"
+          >
+            {showAll ? (
+              <>Show fewer</>
+            ) : (
+              <>
+                <Clock className="h-4 w-4 mr-2" />
+                Show {mcpInstances.length - 6} more servers
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
-} 
+}

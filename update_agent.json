@@ -1,0 +1,16 @@
+{
+  "events_config": {
+    "events": [
+      {
+        "event_type": "webhook",
+        "enabled": false,
+        "config": {"url": "https://updated.example.com/webhook"}
+      },
+      {
+        "event_type": "cron",
+        "enabled": true,
+        "config": {"schedule": "0 0 * * *"}
+      }
+    ]
+  }
+}

@@ -15,8 +15,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/agentarea/mcp-manager/internal/api"
+	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/container"
+	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/secrets"
@@ -35,21 +37,60 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initialize components
-	containerManager := container.NewManager(cfg, logger)
+	// Detect environment and initialize appropriate backend
+	var backend backends.Backend
+	var containerManager *container.Manager
+	
+	if cfg.Environment != "" {
+		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
+	}
+	
+	envType := environment.DetectEnvironment(cfg.Environment, logger)
+	logger.Info("Environment detected", slog.String("type", envType))
 
-	// Initialize container manager
-	if err := containerManager.Initialize(ctx); err != nil {
-		logger.Error("Failed to initialize container manager", slog.String("error", err.Error()))
+	switch envType {
+	case "kubernetes":
+		logger.Info("Initializing Kubernetes backend")
+		k8sBackend, err := backends.NewKubernetesBackend(cfg, logger)
+		if err != nil {
+			logger.Error("Failed to create Kubernetes backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		backend = k8sBackend
+		
+		// Initialize Kubernetes backend
+		if err := backend.Initialize(ctx); err != nil {
+			logger.Error("Failed to initialize Kubernetes backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		
+	case "docker":
+		logger.Info("Initializing Docker backend")
+		dockerBackend := backends.NewDockerBackend(cfg, logger)
+		backend = dockerBackend
+		
+		// Get the container manager from the docker backend for compatibility
+		containerManager = dockerBackend.GetManager()
+		
+		// Initialize Docker backend
+		if err := backend.Initialize(ctx); err != nil {
+			logger.Error("Failed to initialize Docker backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		
+	default:
+		logger.Error("Unsupported environment type", slog.String("type", envType))
 		os.Exit(1)
 	}
 
-	// Start Traefik in background
-	go func() {
-		if err := startTraefik(logger); err != nil {
-			logger.Error("Failed to start Traefik", slog.String("error", err.Error()))
-		}
-	}()
+	// Start Traefik in background only for Docker environments
+	if envType == "docker" {
+		go func() {
+			if err := startTraefik(logger); err != nil {
+				logger.Error("Failed to start Traefik", slog.String("error", err.Error()))
+			}
+		}()
+	}
 
 	// Initialize secret resolver with Infisical SDK
 	secretResolver, err := secrets.NewSecretResolver(logger)
@@ -59,9 +100,17 @@ func main() {
 	}
 	defer secretResolver.Close()
 
-	dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
-	urlProvider := providers.NewURLProvider(logger)
-	providerManager := providers.NewProviderManager(dockerProvider, urlProvider)
+	// Initialize providers based on environment
+	var providerManager *providers.ProviderManager
+	if envType == "docker" && containerManager != nil {
+		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
+		urlProvider := providers.NewURLProvider(logger)
+		providerManager = providers.NewProviderManager(dockerProvider, urlProvider)
+	} else {
+		// For Kubernetes, we'll use the backend directly through the API
+		urlProvider := providers.NewURLProvider(logger)
+		providerManager = providers.NewProviderManager(nil, urlProvider)
+	}
 
 	// Initialize event subscriber
 	eventSubscriber := events.NewEventSubscriber(cfg.Redis.URL, providerManager, logger)
@@ -75,7 +124,7 @@ func main() {
 
 	// Setup HTTP router
 	router := setupRouter(cfg, logger)
-	handler := api.NewHandler(containerManager, version)
+	handler := api.NewHandler(backend, containerManager, logger, version)
 	handler.SetupRoutes(router)
 
 	// Start HTTP server
@@ -118,9 +167,16 @@ func main() {
 		logger.Error("Failed to close event subscriber", slog.String("error", err.Error()))
 	}
 
-	// Shutdown container manager
-	if err := containerManager.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Failed to shutdown container manager", slog.String("error", err.Error()))
+	// Shutdown backend
+	if err := backend.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Failed to shutdown backend", slog.String("error", err.Error()))
+	}
+
+	// Shutdown container manager if it exists (Docker environment)
+	if containerManager != nil {
+		if err := containerManager.Shutdown(shutdownCtx); err != nil {
+			logger.Error("Failed to shutdown container manager", slog.String("error", err.Error()))
+		}
 	}
 
 	logger.Info("Server shutdown complete")

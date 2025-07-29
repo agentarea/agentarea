@@ -170,3 +170,18 @@ func (d *Detector) GetEnvironmentInfo() map[string]interface{} {
 
 	return info
 }
+
+// DetectEnvironment is a simple function that matches the main.go interface
+func DetectEnvironment(forceEnv string, logger *slog.Logger) string {
+	detector := NewDetector(logger)
+	
+	// Check for forced environment override
+	if forceEnv != "" {
+		env := detector.ForceEnvironment(forceEnv)
+		return string(env)
+	}
+
+	// Auto-detect environment
+	env := detector.DetectEnvironment()
+	return string(env)
+}

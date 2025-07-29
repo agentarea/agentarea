@@ -85,7 +85,7 @@ def upsert_provider_spec(
             "icon": icon,
             "is_builtin": is_builtin,
             "created_by": "system",
-            "workspace_id": "default",
+            "workspace_id": "system",
         },
     )
     return provider_id
@@ -148,7 +148,7 @@ def upsert_model_spec(
             "description": description,
             "context_window": context_window,
             "created_by": "system",
-            "workspace_id": "default",
+            "workspace_id": "system",
         },
     )
     return model_spec_id

@@ -15,6 +15,7 @@ from .providers.factory import AuthProviderFactory
 from .interfaces import AuthResult
 from .context_manager import ContextManager
 from .context import UserContext
+from agentarea_common.config.app import get_app_settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         """
         super().__init__(app)
         self.auth_provider = AuthProviderFactory.create_provider(provider_name, config)
+        self.settings = get_app_settings()
 
     async def dispatch(self, request: Request, call_next):
         """
@@ -49,6 +51,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self._is_public_route(request):
             return await call_next(request)
 
+        # Development mode: bypass authentication with default values
+        if self.settings.DEV_MODE:
+            dev_user_id = "dev-user"
+            workspace_id = "default"
+            
+            # Set user context for development
+            user_context = UserContext(
+                user_id=dev_user_id,
+                workspace_id=workspace_id,
+                roles=["dev"]
+            )
+            ContextManager.set_context(user_context)
+            
+            try:
+                response = await call_next(request)
+                return response
+            finally:
+                # Clear context after request
+                ContextManager.clear_context()
+
+        # Production mode: require proper authentication
         # Extract authorization header
         auth_header = request.headers.get("Authorization")
         if not auth_header:
@@ -76,11 +99,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     content={"detail": auth_result.error or "Invalid token"}
                 )
             
+            # Extract workspace_id from header if not in token
+            workspace_id = request.headers.get("X-Workspace-ID", "default")
+            
             # Set user context
             if auth_result.token:
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
-                    workspace_id="default",  # In a real implementation, this would come from the token or database
+                    workspace_id=workspace_id,
                     roles=[]  # In a real implementation, this would come from the token or database
                 )
                 ContextManager.set_context(user_context)
@@ -117,6 +143,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/docs",
             "/redoc",
             "/openapi.json",
+            "/dev/token",  # Development endpoint
         ]
         
         # Check if the request path is in the public routes

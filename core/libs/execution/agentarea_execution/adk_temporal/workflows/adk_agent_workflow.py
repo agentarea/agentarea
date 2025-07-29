@@ -90,7 +90,7 @@ class ADKAgentWorkflow:
                 ),
             )
     
-            result = await self._execute_adk_agent()
+            result = await self._execute_granular_agent()
 
             return await self._finalize_execution(result)
 
@@ -163,6 +163,53 @@ class ADKAgentWorkflow:
         except Exception as e:
             self._logger.error(f"Configuration validation failed: {e}")
             raise
+
+    async def _execute_granular_agent(self) -> Dict[str, Any]:
+        self._logger.info("Executing ADK agent with granular activities")
+        history = []  # Maintain conversation history
+        final_response = None
+        while True:
+            # Prepare LLM request based on history and user message
+            llm_request = self._prepare_llm_request(history, self.user_message)
+            # Execute LLM activity
+            llm_response = await workflow.execute_activity(
+                execute_llm_call,
+                args=[self.agent_config, self.session_data, llm_request],
+                start_to_close_timeout=timedelta(minutes=5),
+            )
+            history.append(llm_response)
+            self.events.append(llm_response)
+            # Check if response has tool calls
+            tool_calls = self._extract_tool_calls(llm_response)
+            if tool_calls:
+                for tool_call in tool_calls:
+                    tool_result = await workflow.execute_activity(
+                        execute_tool_call,
+                        args=[self.agent_config, self.session_data, tool_call],
+                        start_to_close_timeout=timedelta(minutes=5),
+                    )
+                    history.append(tool_result)
+                    self.events.append(tool_result)
+            else:
+                final_response = self._extract_final_response([llm_response])
+                if final_response:
+                    break
+        self.success = True
+        return {
+            "event_count": len(self.events),
+            "final_response": final_response,
+            "success": self.success,
+        }
+
+            return await self._finalize_execution(result)
+
+        except Exception as e:
+            self._logger.error(f"ADK agent workflow failed: {str(e)}")
+            await self._handle_workflow_error(e)
+            raise
+        finally:
+            self.end_time = time.time()
+            self._log_metrics()
 
     async def _execute_adk_agent(self) -> Dict[str, Any]:
         self._logger.info("Starting ADK agent execution")
@@ -263,20 +310,36 @@ class ADKAgentWorkflow:
             "success": self.success,
         }
 
-    def _extract_final_response(self, events: List[Dict[str, Any]]) -> Optional[str]:
-        if not events:
-            return None
+    async def _prepare_llm_request(self, history: List[Dict[str, Any]], user_message: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare LLM request from history and user message."""
+        request = {
+            'contents': history + [user_message],
+            'system_instruction': self.agent_config.get('instructions', ''),
+            'tools': self.agent_config.get('tools', []),
+            'generation_config': self.agent_config.get('generate_content_config', {})
+        }
+        return request
 
-        for event_dict in reversed(events):
-            try:
-                event = EventSerializer.dict_to_event(event_dict)
-                if event.is_final_response():
-                    response = EventSerializer.extract_final_response(event)
-                    if response:
-                        return response
-            except Exception as e:
-                self._logger.warning(f"Failed to process event for final response: {e}")
+    def _extract_tool_calls(self, llm_response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract tool calls from LLM response."""
+        # Assuming llm_response has 'candidates' with tool calls
+        candidates = llm_response.get('candidates', [])
+        if candidates and 'content' in candidates[0] and 'parts' in candidates[0]['content']:
+            parts = candidates[0]['content']['parts']
+            tool_calls = [part for part in parts if 'function_call' in part]
+            return [{'name': tc['function_call']['name'], 'args': tc['function_call']['args']} for tc in tool_calls]
+        return []
 
+    def _extract_final_response(self, llm_responses: List[Dict[str, Any]]) -> Optional[str]:
+        """Extract final response from LLM responses."""
+        # Simple extraction, assuming last response's text
+        if llm_responses:
+            last = llm_responses[-1]
+            candidates = last.get('candidates', [])
+            if candidates and 'content' in candidates[0] and 'parts' in candidates[0]['content']:
+                parts = candidates[0]['content']['parts']
+                text_parts = [part['text'] for part in parts if 'text' in part]
+                return ''.join(text_parts)
         return None
 
     def _is_final_event(self, event_dict: Dict[str, Any]) -> bool:

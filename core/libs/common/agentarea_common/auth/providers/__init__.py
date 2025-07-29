@@ -5,9 +5,9 @@ This module contains implementations of different authentication providers.
 """
 
 from .base import BaseAuthProvider
-from .clerk import ClerkAuthProvider
+from .simple_jwt import SimpleJWTProvider
 
 __all__ = [
     "BaseAuthProvider",
-    "ClerkAuthProvider",
+    "SimpleJWTProvider",
 ]

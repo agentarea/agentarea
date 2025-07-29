@@ -49,7 +49,37 @@ class AuditEvent:
         self.resource_type = resource_type
         self.user_id = user_context.user_id
         self.workspace_id = user_context.workspace_id
-        self.resource_id = str(resource_id) if resource_id else None
+        
+        # Handle resource_id conversion safely to avoid async database queries
+        if resource_id is None:
+            self.resource_id = None
+        elif hasattr(resource_id, 'id') and hasattr(resource_id, '_sa_instance_state'):
+            # For SQLAlchemy model objects, get the ID safely
+            try:
+                # Try to get the ID without triggering lazy loading
+                state = resource_id._sa_instance_state
+                if state.key is not None:
+                    # Object is loaded, get the ID from the key
+                    self.resource_id = str(state.key[1])
+                else:
+                    # Object is not loaded, use None to avoid triggering queries
+                    self.resource_id = None
+            except Exception:
+                # If we can't get the ID safely, use None
+                self.resource_id = None
+        elif hasattr(resource_id, 'id'):
+            # For objects with id attribute but not SQLAlchemy models
+            try:
+                self.resource_id = str(resource_id.id)
+            except Exception:
+                self.resource_id = None
+        else:
+            # For other objects (str, UUID, etc.), try to convert to string
+            try:
+                self.resource_id = str(resource_id)
+            except Exception:
+                self.resource_id = None
+        
         self.resource_data = resource_data or {}
         self.error = error
         self.additional_context = additional_context or {}

@@ -95,7 +95,7 @@ class BaseTaskService(ABC):
         )
 
         # Persist the task
-        created_task_domain = await self.task_repository.create(task_domain)
+        created_task_domain = await self.task_repository.create(**task_domain.model_dump())
 
         # Convert back to SimpleTask for return
         created_task = SimpleTask(

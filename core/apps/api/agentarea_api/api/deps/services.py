@@ -102,14 +102,15 @@ async def get_agent_service(
 # LLM Service dependencies
 async def get_provider_service(
     db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
     secret_manager: BaseSecretManagerDep,
     event_broker: EventBrokerDep,
 ) -> ProviderService:
     """Get a ProviderService instance for the current request."""
-    provider_config_repository = ProviderConfigRepository(db_session)
-    provider_spec_repository = ProviderSpecRepository(db_session)
-    model_spec_repository = ModelSpecRepository(db_session)
-    model_instance_repository = ModelInstanceRepository(db_session)
+    provider_config_repository = ProviderConfigRepository(db_session, user_context)
+    provider_spec_repository = ProviderSpecRepository(db_session, user_context)
+    model_spec_repository = ModelSpecRepository(db_session, user_context)
+    model_instance_repository = ModelInstanceRepository(db_session, user_context)
     return ProviderService(
         provider_spec_repo=provider_spec_repository,
         provider_config_repo=provider_config_repository,
@@ -122,11 +123,12 @@ async def get_provider_service(
 
 async def get_model_instance_service(
     db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
     secret_manager: BaseSecretManagerDep,
     event_broker: EventBrokerDep,
 ) -> ModelInstanceService:
     """Get a ModelInstanceService instance for the current request."""
-    model_instance_repository = ModelInstanceRepository(db_session)
+    model_instance_repository = ModelInstanceRepository(db_session, user_context)
     return ModelInstanceService(
         repository=model_instance_repository,
         event_broker=event_broker,
@@ -225,9 +227,9 @@ MCPServerInstanceServiceDep = Annotated[
 
 
 # Additional backward compatibility functions
-async def get_model_spec_repository(db_session: DatabaseSessionDep) -> ModelSpecRepository:
+async def get_model_spec_repository(db_session: DatabaseSessionDep, user_context: UserContextDep) -> ModelSpecRepository:
     """Get a ModelSpecRepository instance for the current request."""
-    return ModelSpecRepository(db_session)
+    return ModelSpecRepository(db_session, user_context)
 
 
 async def get_secret_manager() -> BaseSecretManager:
@@ -301,7 +303,7 @@ async def get_trigger_service(
         try:
             from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluator
             model_instance_service = await get_model_instance_service(
-                repository_factory.session, secret_manager, event_broker
+                repository_factory.session, repository_factory.user_context, secret_manager, event_broker
             )
             llm_condition_evaluator = LLMConditionEvaluator(
                 model_instance_service=model_instance_service,

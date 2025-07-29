@@ -16,6 +16,28 @@ logger = logging.getLogger(__name__)
 DEFAULT_USER_ID = "test-user-123"
 
 
+async def get_workspace_id(
+    x_workspace_id: str | None = Header(
+        None, 
+        description="Workspace ID for data isolation. Required for most endpoints.",
+        alias="X-Workspace-ID"
+    )
+) -> str:
+    """Get the workspace ID from the request header.
+    
+    Args:
+        x_workspace_id: Workspace ID provided in X-Workspace-ID header
+        
+    Returns:
+        str: The workspace ID, defaults to "default" if not provided
+    """
+    return x_workspace_id or "default"
+
+
+# Type alias for workspace dependency
+WorkspaceDep = Annotated[str, Depends(get_workspace_id)]
+
+
 async def get_current_user_id(
     request: Request,
     x_user_id: str | None = Header(None, description="User ID header (for testing)"),

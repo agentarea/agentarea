@@ -25,6 +25,15 @@ client.use({
       }
     }
     
+    // Add workspace header
+    // For now, use a default workspace. In a real implementation,
+    // this would come from user preferences, URL parameters, or context
+    const workspaceId = typeof window !== "undefined" 
+      ? localStorage.getItem("selectedWorkspace") || "default"
+      : "default";
+    
+    request.headers.set("X-Workspace-ID", workspaceId);
+    
     return request;
   },
   async onResponse({ response }) {

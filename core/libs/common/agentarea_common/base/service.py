@@ -25,7 +25,14 @@ class BaseCrudService(Generic[T]):
 
     async def create(self, entity: T) -> T:
         """Create a new entity."""
-        return await self.repository.create(entity)
+        # Check if repository is workspace-scoped (expects kwargs)
+        if hasattr(self.repository, 'create') and hasattr(self.repository.create, '__code__'):
+            # Extract entity attributes as kwargs for the repository
+            entity_dict = entity.to_dict()
+            return await self.repository.create(**entity_dict)
+        else:
+            # Fallback for repositories that expect entity objects
+            return await self.repository.create(entity)
 
     async def update(self, entity: T) -> T:
         """Update an existing entity."""
