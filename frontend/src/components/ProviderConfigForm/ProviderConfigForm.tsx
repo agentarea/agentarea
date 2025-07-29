@@ -6,10 +6,8 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createProviderConfig, createModelInstance, updateProviderConfig, listProviderSpecs, listProviderSpecsWithModels } from '@/lib/api';
-import { components } from '@/api/schema';
+import { createProviderConfig, createModelInstance, updateProviderConfig, listProviderSpecs, listProviderSpecsWithModels, deleteModelInstance } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { AlertCircle, Bot, Server, Loader2 } from 'lucide-react';
@@ -44,12 +42,13 @@ export default function ProviderConfigForm({
   cancelButtonText,
   showModelSelection = true,
   autoRedirect = true,
+  existingModelInstances = [],
 }: ProviderConfigFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+//   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
@@ -173,6 +172,25 @@ export default function ProviderConfigForm({
     }
   }, [initialData, isEdit, setValue]);
 
+  // Initialize selected models from existing model instances when in edit mode
+  useEffect(() => {
+    if (isEdit && existingModelInstances.length > 0 && modelSpecs.length > 0) {
+      const existingModels = existingModelInstances.map(instance => {
+        // Find the corresponding model spec
+        const modelSpec = modelSpecs.find(spec => spec.id === instance.model_spec_id);
+        
+        return {
+          modelSpecId: instance.model_spec_id,
+          instanceName: instance.name,
+          description: instance.description || '',
+          isPublic: instance.is_public
+        };
+      });
+      
+      setSelectedModels(existingModels);
+    }
+  }, [isEdit, existingModelInstances, modelSpecs]);
+
   // Handle loading state
   if (isLoading) {
     return (
@@ -276,6 +294,64 @@ export default function ProviderConfigForm({
 
         await Promise.all(modelCreationPromises);
         toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully with ${selectedModels.length} model instances!`);
+      } else if (isEdit && showModelSelection) {
+        // Handle model instances for edit mode
+        const existingModelSpecIds = existingModelInstances.map(instance => instance.model_spec_id);
+        const selectedModelSpecIds = selectedModels.map(model => model.modelSpecId);
+        
+        // Find models to create (new selections)
+        const modelsToCreate = selectedModels.filter(model => 
+          !existingModelSpecIds.includes(model.modelSpecId)
+        );
+        
+        // Find models to delete (removed selections)
+        const modelsToDelete = existingModelInstances.filter(instance => 
+          !selectedModelSpecIds.includes(instance.model_spec_id)
+        );
+        
+        // Create new model instances
+        if (modelsToCreate.length > 0) {
+          const createPromises = modelsToCreate.map(async (model) => {
+            const { data, error } = await createModelInstance({
+              provider_config_id: providerConfig.id,
+              model_spec_id: model.modelSpecId,
+              name: model.instanceName,
+              description: model.description,
+              is_public: model.isPublic,
+            });
+            
+            if (error || !data) {
+              throw new Error(`Failed to create model instance "${model.instanceName}": ${(error as { message?: string })?.message || 'Unknown error'}`);
+            }
+            
+            return data;
+          });
+          
+          await Promise.all(createPromises);
+        }
+        
+        // Delete removed model instances
+        if (modelsToDelete.length > 0) {
+          const deletePromises = modelsToDelete.map(async (instance) => {
+            const { error } = await deleteModelInstance(instance.id);
+            
+            if (error) {
+              throw new Error(`Failed to delete model instance "${instance.name}": ${(error as { message?: string })?.message || 'Unknown error'}`);
+            }
+          });
+          
+          await Promise.all(deletePromises);
+        }
+        
+        const changes = [];
+        if (modelsToCreate.length > 0) changes.push(`+${modelsToCreate.length} added`);
+        if (modelsToDelete.length > 0) changes.push(`-${modelsToDelete.length} removed`);
+        
+        if (changes.length > 0) {
+          toast.success(`Provider configuration updated successfully! Model instances: ${changes.join(', ')}`);
+        } else {
+          toast.success(`Provider configuration updated successfully!`);
+        }
       } else {
         toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully!`);
       }
@@ -399,7 +475,13 @@ export default function ProviderConfigForm({
                 exit={{ height: 0, opacity: 0, overflow: "hidden"}}
                 transition={{ duration: 0.4, ease: "easeOut"}}
               >
-                <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} selectedModels={selectedModels} setSelectedModels={setSelectedModels} />
+                <ModelInstances 
+                  selectedProvider={selectedProvider} 
+                  availableModels={availableModels} 
+                  selectedModels={selectedModels} 
+                  setSelectedModels={setSelectedModels}
+                  isEdit={isEdit}
+                />
               </motion.div>
             )
           }

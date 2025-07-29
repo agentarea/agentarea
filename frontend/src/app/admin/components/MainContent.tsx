@@ -1,7 +1,7 @@
 "use client";
 import { GridAndTableSectionsViews } from "@/components/GridAndTableViews/GridAndTableViews";
 import CardContent from "./CardContent";
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useTranslations } from "next-intl";
 import { ProviderSpec, ProviderConfig } from "../provider-configs/page";
@@ -11,6 +11,7 @@ import { ArrowRight } from "lucide-react";
 import { useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 import EmptyState from "@/components/EmptyState/EmptyState";
 import { useSearchWithDebounce, useTabState, useFilteredData } from "./hooks";
@@ -146,9 +147,41 @@ export default function MainContent({
             accessor: "models",
             render: (value: string, row: any) => {
                 const spec = row.spec || row;
-                return (
-                    <ModelsList models={spec.models} />
-                );
+                // For provider configs, show model instances instead of all available models
+                if (row.model_instances !== undefined) {
+                    // This is a provider config
+                    const modelInstances = row.model_instances || [];
+                    if (modelInstances.length === 0) {
+                        return (
+                            <Badge variant="yellow" className="w-fit">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                {t("noInstancesConfigured")}
+                            </Badge>
+                        );
+                    }
+                    
+                    return (
+                        <div className="space-y-1">
+                            {modelInstances.slice(0, 3).map((instance: any) => (
+                                <div key={instance.id} className="flex items-center gap-2 text-xs">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                    <span className="font-medium">{instance.name}</span>
+                                    <span className="text-muted-foreground">({instance.model_display_name || instance.model_name})</span>
+                                </div>
+                            ))}
+                            {modelInstances.length > 3 && (
+                                <div className="text-xs text-muted-foreground">
+                                    +{modelInstances.length - 3} more
+                                </div>
+                            )}
+                        </div>
+                    );
+                } else {
+                    // This is a provider spec, show all available models
+                    return (
+                        <ModelsList models={spec.models} />
+                    );
+                }
             },
         },
         {

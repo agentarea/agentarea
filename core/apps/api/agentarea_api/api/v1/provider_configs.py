@@ -58,6 +58,78 @@ class ProviderConfigResponse(BaseModel):
         )
 
 
+class ModelInstanceResponse(BaseModel):
+    id: str
+    provider_config_id: str
+    model_spec_id: str
+    name: str
+    description: str | None
+    is_active: bool
+    is_public: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    # Related data
+    provider_name: str | None = None
+    provider_key: str | None = None
+    model_name: str | None = None
+    model_display_name: str | None = None
+    config_name: str | None = None
+
+    @classmethod
+    def from_domain(cls, model_instance) -> "ModelInstanceResponse":
+        return cls(
+            id=str(model_instance.id),
+            provider_config_id=str(model_instance.provider_config_id),
+            model_spec_id=str(model_instance.model_spec_id),
+            name=model_instance.name,
+            description=model_instance.description,
+            is_active=model_instance.is_active,
+            is_public=model_instance.is_public,
+            created_at=model_instance.created_at,
+            updated_at=model_instance.updated_at,
+            provider_name=model_instance.provider_config.provider_spec.name if model_instance.provider_config and model_instance.provider_config.provider_spec else None,
+            provider_key=model_instance.provider_config.provider_spec.provider_key if model_instance.provider_config and model_instance.provider_config.provider_spec else None,
+            model_name=model_instance.model_spec.model_name if model_instance.model_spec else None,
+            model_display_name=model_instance.model_spec.display_name if model_instance.model_spec else None,
+            config_name=model_instance.provider_config.name if model_instance.provider_config else None,
+        )
+
+
+class ProviderConfigWithInstancesResponse(BaseModel):
+    id: str
+    provider_spec_id: str
+    name: str
+    endpoint_url: str | None
+    user_id: str | None
+    is_active: bool
+    is_public: bool
+    created_at: datetime
+    updated_at: datetime
+
+    # Related data
+    provider_spec_name: str | None = None
+    provider_spec_key: str | None = None
+    model_instances: list[ModelInstanceResponse] = []
+
+    @classmethod
+    def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigWithInstancesResponse":
+        return cls(
+            id=str(provider_config.id),
+            provider_spec_id=str(provider_config.provider_spec_id),
+            name=provider_config.name,
+            endpoint_url=provider_config.endpoint_url,
+            user_id=str(provider_config.user_id) if provider_config.user_id else None,
+            is_active=provider_config.is_active,
+            is_public=provider_config.is_public,
+            created_at=provider_config.created_at,
+            updated_at=provider_config.updated_at,
+            provider_spec_name=provider_config.provider_spec.name if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
+            provider_spec_key=provider_config.provider_spec.provider_key if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
+            model_instances=[ModelInstanceResponse.from_domain(instance) for instance in provider_config.model_instances] if hasattr(provider_config, 'model_instances') and provider_config.model_instances else [],
+        )
+
+
 # Provider Config endpoints
 
 @router.post("/", response_model=ProviderConfigResponse)
@@ -83,6 +155,20 @@ async def list_provider_configs(
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """List provider configurations."""
+    configs = await provider_service.list_provider_configs(
+        provider_spec_id=provider_spec_id,
+        is_active=is_active,
+    )
+    return [ProviderConfigResponse.from_domain(config) for config in configs]
+
+
+@router.get("/with-instances", response_model=list[ProviderConfigResponse])
+async def list_provider_configs_with_instances(
+    provider_spec_id: UUID | None = None,
+    is_active: bool | None = None,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """List provider configurations with their model instances."""
     configs = await provider_service.list_provider_configs(
         provider_spec_id=provider_spec_id,
         is_active=is_active,

@@ -1,4 +1,4 @@
-import { getProviderConfig } from '@/lib/api';
+import { getProviderConfig, listModelInstances } from '@/lib/api';
 import ProviderConfigForm from '@/components/ProviderConfigForm';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
 import DeleteButton from './components/DeleteButton';
@@ -20,9 +20,22 @@ export default async function CreateProviderConfigPage({
 
   // Load initial data if in edit mode
   let initialData = undefined;
+  let existingModelInstances: any[] = [];
+  
   if (isEdit && preselectedProviderId) {
     try {
+      // Load provider config
       initialData = await getProviderConfig(preselectedProviderId);
+      
+      // Load existing model instances for this provider config
+      const instancesResponse = await listModelInstances({
+        provider_config_id: preselectedProviderId,
+        is_active: true
+      });
+      
+      if (instancesResponse.data) {
+        existingModelInstances = instancesResponse.data;
+      }
     } catch (error) {
       console.error('Failed to load provider config for editing:', error);
       // If we can't load the data, redirect back to the list
@@ -60,6 +73,7 @@ export default async function CreateProviderConfigPage({
           preselectedProviderId={preselectedProviderId}
           isEdit={isEdit}
           initialData={initialData}
+          existingModelInstances={existingModelInstances}
         />
       </div>
   </ContentBlock>

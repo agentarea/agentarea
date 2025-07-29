@@ -18,12 +18,13 @@ type ModelInstancesProps = {
   availableModels: ModelSpec[];
   selectedModels: SelectedModel[];
   setSelectedModels: (models: SelectedModel[]) => void;
+  isEdit?: boolean;
 }
 
-export default function ModelInstances({ selectedProvider, availableModels, selectedModels, setSelectedModels }: ModelInstancesProps) {
-    // Auto-select all models when component loads or availableModels changes
+export default function ModelInstances({ selectedProvider, availableModels, selectedModels, setSelectedModels, isEdit = false }: ModelInstancesProps) {
+    // Auto-select all models when component loads or availableModels changes (only for new configs)
     useEffect(() => {
-        if (selectedProvider && availableModels.length > 0) {
+        if (selectedProvider && availableModels.length > 0 && !isEdit) {
             const allModels = availableModels.map((model: ModelSpec) => ({
                 modelSpecId: model.id,
                 instanceName: `${selectedProvider?.name} ${model.display_name}`,
@@ -32,7 +33,7 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
             }));
             setSelectedModels(allModels);
         }
-    }, [selectedProvider, availableModels]);
+    }, [selectedProvider, availableModels, isEdit]);
 
     const handleModelToggle = (modelSpec: ModelSpec, checked: boolean) => {
         if (checked) {
@@ -87,9 +88,6 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
             
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                {/* <div className="text-sm font-medium">
-                  Available Models for {selectedProvider.name}:
-                </div> */}
                 {availableModels.length > 0 && (
                   <div className="flex items-center space-x-2 mx-3">
                     <Checkbox

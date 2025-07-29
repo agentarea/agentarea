@@ -1,4 +1,4 @@
-import { listProviderConfigs, listProviderSpecsWithModels } from "@/lib/api";
+import { listProviderConfigsWithModelInstances, listProviderSpecsWithModels } from "@/lib/api";
 import { Settings, ArrowRight } from "lucide-react";
 import { getTranslations } from 'next-intl/server';
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,23 @@ export interface ProviderSpec {
     models: any[];
 }
 
+export interface ModelInstance {
+    id: string;
+    provider_config_id: string;
+    model_spec_id: string;
+    name: string;
+    description: string | null;
+    is_active: boolean;
+    is_public: boolean;
+    created_at: string;
+    updated_at: string;
+    provider_name: string | null;
+    provider_key: string | null;
+    model_name: string | null;
+    model_display_name: string | null;
+    config_name: string | null;
+}
+
 export interface ProviderConfig {
     id: string;
     provider_spec_id: string;
@@ -28,6 +45,7 @@ export interface ProviderConfig {
     provider_spec_name: string | null;
     provider_spec_key: string | null;
     spec: ProviderSpec;
+    model_instances?: ModelInstance[];
 }
 
 export default async function ProviderConfigsPage({
@@ -38,22 +56,31 @@ export default async function ProviderConfigsPage({
     const t = await getTranslations("Models");
     const resolvedSearchParams = await searchParams;
 
-    // Fetch both provider specs and configs
+    // Fetch provider specs and configs with model instances
     const [specsResponse, configsResponse] = await Promise.all([
         listProviderSpecsWithModels(),
-        listProviderConfigs()
+        listProviderConfigsWithModelInstances()
     ]);
 
     if (specsResponse.error || configsResponse.error) {
+        const specsError = specsResponse.error as any;
+        const configsError = configsResponse.error as any;
+        
         return (
             <div className="text-center py-10">
-                <p className="text-red-500">Error loading data: {specsResponse.error?.message || configsResponse.error?.message}</p>
+                <p className="text-red-500">
+                    Error loading data: {
+                        specsError?.detail?.[0]?.msg || 
+                        configsError?.detail?.[0]?.msg ||
+                        'Unknown error occurred'
+                    }
+                </p>
             </div>
         );
     }
 
     const providerSpecs = specsResponse.data || [];
-    const providerConfigs = configsResponse.data || [];
+    const providerConfigs = (configsResponse.data || []) as any[];
 
     // Create a map of provider specs for easy lookup
     const specsMap = new Map(providerSpecs.map(spec => [spec.id, spec]));

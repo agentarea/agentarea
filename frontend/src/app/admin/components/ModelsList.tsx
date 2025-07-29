@@ -9,7 +9,7 @@ export default function ModelsList({ models }: { models: any[] }) {
                     {models.slice(0, 2).map((model, index) => (
                         <Badge key={index} variant="default" className={cn(models.length === 1 ? 'max-w-full' : 'max-w-[110px]')}>
                             <span className="block overflow-hidden text-ellipsis whitespace-nowrap">
-                                {model.display_name || model.model_name || model.name || 'Unknown'}
+                                {model.display_name || model.model_name || model.name|| 'Unknown'}
                             </span>
                         </Badge>
                     ))}

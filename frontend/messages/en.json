@@ -188,6 +188,7 @@
       "description": "Description",
       "models": "Models"
     },
+    "noInstancesConfigured": "No instances configured",
     "emptyState": {
       "title": "No configurations yet",
       "description": "Create your first provider configuration to get started"
