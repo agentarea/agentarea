@@ -188,13 +188,25 @@ export default function MainContent({
             header: "",
             accessor: "id",
             render: (value: string, row: any) => {
-                return (
-                    <Link href={`/admin/provider-configs/create?provider_spec_id=${row.provider_spec_id || row.id}`} 
-                        className="flex justify-end small-link opacity-50 hover:opacity-100 transition-all duration-300">
-                        {row.spec ? t("editConfiguration") : t("configureProvider")}
-                        <ArrowRight className="h-4 w-4" />
-                    </Link>
-                );
+                // Если это ProviderConfig (есть spec), то редактируем конфигурацию
+                if (row.spec) {
+                    return (
+                        <Link href={`/admin/provider-configs/create?provider_spec_id=${row.id}&isEdit=true`} 
+                            className="flex justify-end small-link opacity-50 hover:opacity-100 transition-all duration-300">
+                            {t("editConfiguration")}
+                            <ArrowRight className="h-4 w-4" />
+                        </Link>
+                    );
+                } else {
+                    // Если это ProviderSpec, то создаем новую конфигурацию
+                    return (
+                        <Link href={`/admin/provider-configs/create?provider_spec_id=${row.id}`} 
+                            className="flex justify-end small-link opacity-50 hover:opacity-100 transition-all duration-300">
+                            {t("configureProvider")}
+                            <ArrowRight className="h-4 w-4" />
+                        </Link>
+                    );
+                }
             },
         },
     ], [t]);
