@@ -83,7 +83,7 @@ export function SearchableSelect({
         <img
           src={option.icon}
           alt={option.label}
-          className="w-5 h-5 rounded dark:invert"
+          className="w-5 h-5 rounded dark:invert flex-shrink-0"
           onError={(e) => {
             if (defaultIcon) {
               e.currentTarget.style.display = 'none'
@@ -93,11 +93,11 @@ export function SearchableSelect({
       )
     }
     
-    return defaultIcon || <Bot className="w-5 h-5 text-muted-foreground" />
+    return defaultIcon || <Bot className="w-5 h-5 text-muted-foreground flex-shrink-0" />
   }
 
   const renderOptionContent = (option: SelectOption | SimpleSelectOption) => (
-    <div className="flex gap-3">
+    <div className="flex gap-3 items-center">
       {'icon' in option && renderIcon(option as SelectOption)}
       <div className="flex flex-col items-start">
         <span>{option.label}</span>
@@ -165,7 +165,7 @@ export function SearchableSelect({
               {options.map((option) => (
                 <CommandItem
                   key={option.id}
-                  value={option.label}
+                  value={`${option.label} ${'description' in option && option.description ? option.description : ''}`}
                   onSelect={() => {
                     handleOptionChange(option.id)
                   }}

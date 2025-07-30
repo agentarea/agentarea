@@ -278,7 +278,10 @@
       "configurationDeleted": "Provider configuration deleted successfully!",
       "modelInstancesUpdated": "Model instances updated successfully!",
       "modelInstancesCreated": "Model instances created successfully!",
-      "modelInstancesDeleted": "Model instances deleted successfully!"
+      "modelInstancesDeleted": "Model instances deleted successfully!",
+      "added": "added",
+      "removed": "removed",
+      "configurationUpdatedSuccessfully": "Provider configuration updated successfully!"
     },
     "error": {
       "failedTo": "Failed to",
@@ -292,6 +295,12 @@
   "Agent": {
     "browseAgents": "Browse Agents",
     "newAgent": "New Agent",
+    "description": "Browse and manage your agents",
+    "deployNewAgent": "Deploy New Agent",
+    "deployNewAgentDescription": "Deploy a new agent to get started.",
+    "noAgentsYet": "No agents yet",
+    "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
+    "addYourFirstAgent": "Add your first agent",
     "create": {
       "agentName": "Agent Name",
       "agentNamePlaceholder": "Enter agent name",

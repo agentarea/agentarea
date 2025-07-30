@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import ConfigSheet from "./ConfigSheet";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { useTranslations } from "next-intl";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
@@ -21,7 +22,7 @@ type BasicInformationProps = {
   control: any;
   errors: FieldErrors<AgentFormValues>;
   llmModelInstances: LLMModelInstance[];
-  onOpenConfigSheet: () => void;
+  onOpenConfigSheet?: () => void;
   onRefreshModels?: () => void;
 };
 
@@ -44,6 +45,18 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
     // Programmatically click the ConfigSheet trigger button
     configSheetTriggerRef.current?.click();
     setSearchableSelectOpen(false);
+  };
+
+  const handleAfterSubmit = (config: any) => {
+    // Обновить список моделей после создания конфигурации
+    onRefreshModels?.();
+    // Закрыть sheet после успешного создания
+    setConfigSheetOpen(false);
+  };
+
+  const handleCancel = () => {
+    // Закрыть sheet при отмене
+    setConfigSheetOpen(false);
   };
 
   return (
@@ -97,13 +110,32 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
                 <SearchableSelect
                   options={llmModelInstances.length > 0 ? 
                     llmModelInstances.map((instance) => ({
-                      id: instance.id,
-                      label: instance.name,
-                      description: `${instance.provider_name} - ${instance.model_display_name}`,
+                      // Используем составной ключ: provider_config_id + instance_id
+                      id: `${instance.provider_config_id}:${instance.id}`,
+                      label: `${instance.name}`,
+                      description: instance.config_name || instance.provider_name,
+                      icon: getProviderIconUrl(instance.provider_name || ''),
                     })) : []
                   }
-                  value={field.value}
-                  onValueChange={field.onChange}
+                  value={(() => {
+                    // Если у нас есть выбранное значение, находим соответствующий инстанс и создаем составной ключ
+                    if (field.value && llmModelInstances.length > 0) {
+                      const selectedInstance = llmModelInstances.find(instance => instance.id === field.value);
+                      if (selectedInstance) {
+                        return `${selectedInstance.provider_config_id}:${selectedInstance.id}`;
+                      }
+                    }
+                    return field.value;
+                  })()}
+                  onValueChange={(value) => {
+                    // При выборе значения извлекаем только instance.id для сохранения в форме
+                    if (typeof value === 'string' && value.includes(':')) {
+                      const instanceId = value.split(':')[1];
+                      field.onChange(instanceId);
+                    } else {
+                      field.onChange(value);
+                    }
+                  }}
                   placeholder={t("selectModel")}
                   open={searchableSelectOpen}
                   onOpenChange={setSearchableSelectOpen}
@@ -140,16 +172,8 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
       >
         <ProviderConfigForm 
           className="overflow-y-auto pb-6"
-          onAfterSubmit={(config) => {
-            // Обновить список моделей после создания конфигурации
-            onRefreshModels?.();
-            // Закрыть sheet после успешного создания
-            setConfigSheetOpen(false);
-          }}
-          onCancel={() => {
-            // Закрыть sheet при отмене
-            setConfigSheetOpen(false);
-          }}
+          onAfterSubmit={handleAfterSubmit}
+          onCancel={handleCancel}
           isClear={true}
           autoRedirect={false}
         />

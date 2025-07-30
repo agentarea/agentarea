@@ -241,7 +241,10 @@
       "configurationDeleted": "Конфигурация провайдера успешно удалена!",
       "modelInstancesUpdated": "Экземпляры моделей успешно обновлены!",
       "modelInstancesCreated": "Экземпляры моделей успешно созданы!",
-      "modelInstancesDeleted": "Экземпляры моделей успешно удалены!"
+      "modelInstancesDeleted": "Экземпляры моделей успешно удалены!",
+      "added": "добавлено",
+      "removed": "удалено",
+      "configurationUpdatedSuccessfully": "Конфигурация провайдера успешно обновлена!"
     },
     "error": {
       "failedTo": "Не удалось",
@@ -255,6 +258,13 @@
   "Agent": {
     "browseAgents": "Обзор агентов",
     "newAgent": "Новый агент",
+    "description": "Обзор и управление вашими агентами",
+    "deployNewAgent": "Создать нового агента",
+    "deployNewAgentDescription": "Создайте нового агента, чтобы начать работу.",
+    "deployNewAgentButton": "Создать агента",
+    "noAgentsYet": "Нет агентов",
+    "getStartedByAddingYourFirstAgent": "Начните работу, добавив своего первого агента.",
+    "addYourFirstAgent": "Добавьте своего первого агента",
     "create": {
       "agentName": "Имя агента",
       "agentNamePlaceholder": "Введите имя агента",

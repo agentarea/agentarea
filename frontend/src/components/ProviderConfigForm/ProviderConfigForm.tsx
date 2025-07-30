@@ -342,13 +342,13 @@ export default function ProviderConfigForm({
         }
         
         const changes = [];
-        if (modelsToCreate.length > 0) changes.push(`+${modelsToCreate.length} added`);
-        if (modelsToDelete.length > 0) changes.push(`-${modelsToDelete.length} removed`);
+        if (modelsToCreate.length > 0) changes.push(`+${modelsToCreate.length} ${t("toast.added")}`);
+        if (modelsToDelete.length > 0) changes.push(`-${modelsToDelete.length} ${t("toast.removed")}`);
         
         if (changes.length > 0) {
           toast.success(t("toast.modelInstancesUpdated") + `: ${changes.join(', ')}`);
         } else {
-          toast.success(t("toast.configurationUpdated"));    
+          toast.success(t("toast.configurationUpdatedSuccessfully"));    
         }
       } else {
         toast.success(
