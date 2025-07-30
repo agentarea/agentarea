@@ -1,12 +1,11 @@
-import { Card } from "@/components/ui/card";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Brain } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useEffect } from "react";
 import { ModelSpec } from "@/types/provider";  
 import { ModelItemControl } from "./ModelItemControl";
 import { Label } from "@/components/ui/label";
+import { useTranslations } from "next-intl";
 
 interface SelectedModel {
   modelSpecId: string;
@@ -20,12 +19,14 @@ type ModelInstancesProps = {
   availableModels: ModelSpec[];
   selectedModels: SelectedModel[];
   setSelectedModels: (models: SelectedModel[]) => void;
+  isEdit?: boolean;
 }
 
-export default function ModelInstances({ selectedProvider, availableModels, selectedModels, setSelectedModels }: ModelInstancesProps) {
-    // Auto-select all models when component loads or availableModels changes
+export default function ModelInstances({ selectedProvider, availableModels, selectedModels, setSelectedModels, isEdit = false }: ModelInstancesProps) {
+    const t = useTranslations("ProviderConfigForm");
+    // Auto-select all models when component loads or availableModels changes (only for new configs)
     useEffect(() => {
-        if (selectedProvider && availableModels.length > 0) {
+        if (selectedProvider && availableModels.length > 0 && !isEdit) {
             const allModels = availableModels.map((model: ModelSpec) => ({
                 modelSpecId: model.id,
                 instanceName: `${selectedProvider?.name} ${model.display_name}`,
@@ -34,7 +35,7 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
             }));
             setSelectedModels(allModels);
         }
-    }, [selectedProvider, availableModels]);
+    }, [selectedProvider, availableModels, isEdit]);
 
     const handleModelToggle = (modelSpec: ModelSpec, checked: boolean) => {
         if (checked) {
@@ -51,7 +52,16 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
       };
 
     const handleSelectAllToggle = (checked: boolean) => {
-        if (checked) {
+        // If indeterminate state, always select all
+        if (isIndeterminate) {
+            const allModels = availableModels.map((model: ModelSpec) => ({
+                modelSpecId: model.id,
+                instanceName: `${selectedProvider?.name} ${model.display_name}`,
+                description: model.description || '',
+                isPublic: false
+            }));
+            setSelectedModels(allModels);
+        } else if (checked) {
             // Select all models
             const allModels = availableModels.map((model: ModelSpec) => ({
                 modelSpecId: model.id,
@@ -67,34 +77,33 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
     };
 
     const isAllSelected = selectedModels.length === availableModels.length && availableModels.length > 0;
+    const isIndeterminate = selectedModels.length > 0 && selectedModels.length < availableModels.length;
 
     return (
         <div className="grid grid-cols-1 gap-4" >
             <div className="space-y-1">
-              <FormLabel icon={Brain}>Model Instances</FormLabel>
+              <FormLabel icon={Brain}>{t("modelInstances")}</FormLabel>
               <p className="note">
-                Select models to create instances for this <span className="font-semibold">{selectedProvider.name}</span> configuration
+                {t("selectModelsToCreateInstances", { providerName: selectedProvider.name })}
               </p>
             </div>
             
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                {/* <div className="text-sm font-medium">
-                  Available Models for {selectedProvider.name}:
-                </div> */}
                 {availableModels.length > 0 && (
                   <div className="flex items-center space-x-2 mx-3">
-                    <Switch
-                      size="xs"
+                    <Checkbox
                       checked={isAllSelected}
+                      indeterminate={isIndeterminate}
                       onCheckedChange={handleSelectAllToggle}
-                      aria-label="Select all models"
+                      aria-label={t("selectAllModels")}
                       id="select-all-models"
                     />
                     <Label className="note font-normal text-xs cursor-pointer" htmlFor="select-all-models">
-                        selected{" "}
-                        <span className="text-sm">{selectedModels.length}</span>
-                        {" "}of {availableModels.length}
+                        {t("selectedModelsCount", { 
+                            selectedCount: selectedModels.length, 
+                            totalCount: availableModels.length 
+                        })}
                     </Label>
                   </div>
                 )}
@@ -102,7 +111,7 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
               
               {availableModels.length === 0 ? (
                 <div className="text-sm text-muted-foreground bg-gray-50 p-4 rounded-lg text-center">
-                  No models available for this provider.
+                  {t("noModelsAvailableForThisProvider")}
                 </div>
               ) : (
                 <div className="space-y-3 overflow-y-auto">

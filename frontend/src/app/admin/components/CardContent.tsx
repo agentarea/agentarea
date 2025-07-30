@@ -1,7 +1,8 @@
-import { ArrowRight } from "lucide-react";
-import { ProviderConfig, ProviderSpec } from "../provider-configs/page";
+import { ArrowRight, AlertCircle } from "lucide-react";
+import { ProviderConfig, ProviderSpec, ModelInstance } from "../provider-configs/page";
 import ModelsList from "./ModelsList";
 import { useTranslations } from "next-intl";
+import { Badge } from "@/components/ui/badge";
 
 type CardContentProps = {
     item: ProviderSpec | ProviderConfig;
@@ -13,6 +14,7 @@ export default function CardContent({ item }: CardContentProps) {
     // Determine if item is ProviderSpec or ProviderConfig
     const isProviderSpec = 'provider_key' in item;
     const itemData: ProviderSpec = isProviderSpec ? item as ProviderSpec : (item as ProviderConfig).spec;
+    const providerConfig = isProviderSpec ? null : item as ProviderConfig;
 
     return (
         <div className="flex flex-col justify-between h-full group">
@@ -34,8 +36,22 @@ export default function CardContent({ item }: CardContentProps) {
             </div>
             <div className="text-[14px] opacity-50 line-clamp-2">
                 {itemData.description || 'No description'}
-            </div>
-            {itemData.models && <ModelsList models={itemData.models} />}
+            </div>            
+            {/* Display Model Instances for Provider Configs */}
+            {providerConfig ? (
+                // For provider configs, show only the actual model instances
+                providerConfig.model_instances && providerConfig.model_instances.length > 0 ? (
+                    <ModelsList models={providerConfig.model_instances} />
+                ) : (
+                    <Badge variant="yellow" className="w-fit">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {t("noInstancesConfigured")}
+                    </Badge>
+                )
+            ) : (
+                // For provider specs, show all available models
+                <ModelsList models={itemData.models} />
+            )}
         </div>
         <div className="flex gap-2 -mr-2 -mb-3 mt-2 justify-end">
             <div className="small-link opacity-0 group-hover:opacity-100">

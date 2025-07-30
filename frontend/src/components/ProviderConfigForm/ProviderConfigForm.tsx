@@ -6,19 +6,19 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createProviderConfig, createModelInstance, updateProviderConfig, listProviderSpecs, listProviderSpecsWithModels } from '@/lib/api';
-import { components } from '@/api/schema';
+import { createProviderConfig, createModelInstance, updateProviderConfig, listProviderSpecs, listProviderSpecsWithModels, deleteModelInstance } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { AlertCircle, Bot, Server, Loader2 } from 'lucide-react';
+import { AlertCircle, Bot, Server } from 'lucide-react';
 import FormLabel from '@/components/FormLabel/FormLabel';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import BaseInfo from './components/BaseInfo';
 import ModelInstances from './components/ModelInstances';
 import { getProviderIconUrl } from '@/lib/provider-icons';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { ProviderSpec, ModelSpec, SelectedModel, ProviderConfigFormProps } from '@/types/provider';
 
 // Form validation schema
@@ -44,12 +44,14 @@ export default function ProviderConfigForm({
   cancelButtonText,
   showModelSelection = true,
   autoRedirect = true,
+  existingModelInstances = [],
 }: ProviderConfigFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+  const t = useTranslations("ProviderConfigForm");
+  const tCommon = useTranslations("Common");
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
@@ -93,7 +95,7 @@ export default function ProviderConfigForm({
         setProviderSpecs(specs);
         setModelSpecs(models);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+        const errorMessage = err instanceof Error ? err.message : t("error.failedToLoadData");
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -173,16 +175,28 @@ export default function ProviderConfigForm({
     }
   }, [initialData, isEdit, setValue]);
 
+  // Initialize selected models from existing model instances when in edit mode
+  useEffect(() => {
+    if (isEdit && existingModelInstances.length > 0 && modelSpecs.length > 0) {
+      const existingModels = existingModelInstances.map(instance => {
+        // Find the corresponding model spec
+        const modelSpec = modelSpecs.find(spec => spec.id === instance.model_spec_id);
+        
+        return {
+          modelSpecId: instance.model_spec_id,
+          instanceName: instance.name,
+          description: instance.description || '',
+          isPublic: instance.is_public
+        };
+      });
+      
+      setSelectedModels(existingModels);
+    }
+  }, [isEdit, existingModelInstances, modelSpecs]);
+
   // Handle loading state
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-10">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-muted-foreground">Loading provider specifications...</span>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   // Handle error state
@@ -252,8 +266,8 @@ export default function ProviderConfigForm({
       }
 
       if (providerError || !providerConfig) {
-        const errorMessage = (providerError as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg || (providerError as { message?: string })?.message || 'Unknown error';
-        throw new Error(`Failed to ${isEdit ? 'update' : 'create'} provider configuration: ${errorMessage}`);
+        const errorMessage = (providerError as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg || (providerError as { message?: string })?.message || t("error.unknownError");
+        throw new Error(`${t("error.failedTo")} ${isEdit ? tCommon("update") : tCommon("create")} ${t("providerConfiguration")}: ${errorMessage}`);
       }
 
       // Step 2: Create model instances if any are selected (only for create mode and if model selection is enabled)
@@ -275,9 +289,71 @@ export default function ProviderConfigForm({
         });
 
         await Promise.all(modelCreationPromises);
-        toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully with ${selectedModels.length} model instances!`);
+        toast.success(t(isEdit ? "toast.configurationUpdated" : "toast.configurationCreated", { 
+          modelCount: selectedModels.length 
+        }));
+      } else if (isEdit && showModelSelection) {
+        // Handle model instances for edit mode
+        const existingModelSpecIds = existingModelInstances.map(instance => instance.model_spec_id);
+        const selectedModelSpecIds = selectedModels.map(model => model.modelSpecId);
+        
+        // Find models to create (new selections)
+        const modelsToCreate = selectedModels.filter(model => 
+          !existingModelSpecIds.includes(model.modelSpecId)
+        );
+        
+        // Find models to delete (removed selections)
+        const modelsToDelete = existingModelInstances.filter(instance => 
+          !selectedModelSpecIds.includes(instance.model_spec_id)
+        );
+        
+        // Create new model instances
+        if (modelsToCreate.length > 0) {
+          const createPromises = modelsToCreate.map(async (model) => {
+            const { data, error } = await createModelInstance({
+              provider_config_id: providerConfig.id,
+              model_spec_id: model.modelSpecId,
+              name: model.instanceName,
+              description: model.description,
+              is_public: model.isPublic,
+            });
+            
+            if (error || !data) {
+              throw new Error(`Failed to create model instance "${model.instanceName}": ${(error as { message?: string })?.message || 'Unknown error'}`);
+            }
+            
+            return data;
+          });
+          
+          await Promise.all(createPromises);
+        }
+        
+        // Delete removed model instances
+        if (modelsToDelete.length > 0) {
+          const deletePromises = modelsToDelete.map(async (instance) => {
+            const { error } = await deleteModelInstance(instance.id);
+            
+            if (error) {
+              throw new Error(`Failed to delete model instance "${instance.name}": ${(error as { message?: string })?.message || 'Unknown error'}`);
+            }
+          });
+          
+          await Promise.all(deletePromises);
+        }
+        
+        const changes = [];
+        if (modelsToCreate.length > 0) changes.push(`+${modelsToCreate.length} ${t("toast.added")}`);
+        if (modelsToDelete.length > 0) changes.push(`-${modelsToDelete.length} ${t("toast.removed")}`);
+        
+        if (changes.length > 0) {
+          toast.success(t("toast.modelInstancesUpdated") + `: ${changes.join(', ')}`);
+        } else {
+          toast.success(t("toast.configurationUpdatedSuccessfully"));    
+        }
       } else {
-        toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully!`);
+        toast.success(
+            isEdit ? t("toast.configurationUpdated") : t("toast.configurationCreated")
+        );
       }
 
       // Call custom after submit handler if provided
@@ -304,9 +380,9 @@ export default function ProviderConfigForm({
       }
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
-      setError(errorMessage);
-      toast.error(errorMessage);
+              const errorMessage = err instanceof Error ? err.message : t("error.unexpectedError");
+        setError(errorMessage);
+        toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -341,18 +417,13 @@ export default function ProviderConfigForm({
           </motion.div>
         )}
       </AnimatePresence>
-      <div className={cn(
-        "mx-auto grid lg:gap-x-[12px] gap-[12px] items-start transition-all duration-300 ",
-        // "max-w-6xl grid-cols-1 lg:grid-cols-2"
-        // watchedProviderId ? "max-w-6xl grid-cols-1 lg:grid-cols-2" : "grid-cols-1 max-w-4xl"
-      )}>
-      {/* Step 1: Provider Configuration */}
-      <div className={cn(
-        "grid grid-cols-1 gap-6",
-        isClear ? "p-0" : "card card-shadow"
-      )}>
+      <div className="mx-auto max-w-4xl">
+        <div className={cn(
+          "grid grid-cols-1 gap-6",
+          isClear ? "p-0" : "card card-shadow"
+        )}>
           <div className="space-y-2">
-            <FormLabel htmlFor="provider" icon={Server}>Provider</FormLabel>
+            <FormLabel htmlFor="provider" icon={Server}>{t("provider")}</FormLabel>
             <Controller
               name="provider_spec_id"
               control={control}
@@ -365,14 +436,14 @@ export default function ProviderConfigForm({
                   }))}
                   value={field.value}
                   onValueChange={handleProviderChange}
-                  placeholder="Select provider"
+                  placeholder={t("selectProvider")}
                   disabled={!!preselectedProviderId && !isEdit && !initialData}
                   emptyMessage={
                     <div className="flex flex-col items-center justify-center h-full gap-1">
                       <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
                           <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
                       </div>
-                      <span className="text-muted-foreground">No providers found</span>
+                      <span className="text-muted-foreground">{t("noProvidersFound")}</span>
                     </div>
                   }
                 />
@@ -383,49 +454,39 @@ export default function ProviderConfigForm({
             )}
             {preselectedProviderId && !isEdit && !initialData && (
               <p className="note">
-                Provider is pre-selected for this configuration.
+                {t("providerIsPreSelected")}
               </p>
             )}
           </div>
 
           <BaseInfo control={control} errors={errors} providerSpecId={watchedProviderId} isEdit={isEdit} />
           
-          <AnimatePresence>
-          {
-            selectedProvider && showModelSelection && (
+          {selectedProvider && showModelSelection && (
+            <AnimatePresence>
               <motion.div
-                initial={{ height: 0, opacity: 0, overflow: "hidden"}}
-                animate={{ height: "auto", opacity: 1, overflow: "visible"}}
-                exit={{ height: 0, opacity: 0, overflow: "hidden"}}
-                transition={{ duration: 0.4, ease: "easeOut"}}
+                key="model-instances"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ 
+                  height: { duration: 0.3, ease: "easeOut" },
+                  opacity: { duration: 0.2, ease: "easeOut" }
+                }}
+                style={{ overflow: "hidden" }}
               >
-                <ModelInstances selectedProvider={selectedProvider} availableModels={availableModels} selectedModels={selectedModels} setSelectedModels={setSelectedModels} />
-              </motion.div>
-            )
-          }
-          </AnimatePresence>
-
-          {/* <div className="flex items-center space-x-2">
-            <Controller
-
-              name="is_public"
-              control={control}
-              render={({ field }) => (
-                <Switch
-                  id="is_public"
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
+                <ModelInstances 
+                  selectedProvider={selectedProvider} 
+                  availableModels={availableModels} 
+                  selectedModels={selectedModels} 
+                  setSelectedModels={setSelectedModels}
+                  isEdit={isEdit}
                 />
-              )}
-            />
-            <FormLabel htmlFor="is_public" className="flex items-center gap-2" icon={watch('is_public') ? Users : Lock}>
-              {watch('is_public') ? 'Public Configuration' : 'Private Configuration'}
-            </FormLabel>
-          </div> */}
-      </div>
+              </motion.div>
+            </AnimatePresence>
+          )}
 
-      {/* Step 2: Model Selection (only for create mode) */}
 
+        </div>
       </div>
 
       {/* Submit Button */}
@@ -439,7 +500,7 @@ export default function ProviderConfigForm({
             handleCancel();
           }}
         >
-          {cancelButtonText || 'Cancel'}
+          {cancelButtonText || tCommon("cancel")}
         </Button>
         <Button 
           type="submit" 
@@ -449,10 +510,10 @@ export default function ProviderConfigForm({
           }}
         >
           {isSubmitting 
-            ? (isEdit ? 'Updating...' : 'Creating...') 
+            ? (isEdit ? t("loading.updating") : t("loading.creating")) 
             : (submitButtonText || (isEdit 
-                ? 'Update Configuration' 
-                : `Create Configuration${selectedModels.length > 0 && showModelSelection ? ` + ${selectedModels.length} Models` : ''}`
+                ? t("updateConfiguration")
+                : t("createConfigurationWithModels", { modelCount: selectedModels.length })
               ))
           }
         </Button>

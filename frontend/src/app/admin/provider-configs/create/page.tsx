@@ -1,7 +1,8 @@
-import { getProviderConfig } from '@/lib/api';
+import { getProviderConfig, listModelInstances } from '@/lib/api';
 import ProviderConfigForm from '@/components/ProviderConfigForm';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
 import DeleteButton from './components/DeleteButton';
+import { getTranslations } from 'next-intl/server';
 
 export default async function CreateProviderConfigPage({
   searchParams,
@@ -9,6 +10,8 @@ export default async function CreateProviderConfigPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const resolvedSearchParams = await searchParams;
+  const t = await getTranslations("Models");  
+  const tCommon = await getTranslations("Common");  
   
   // Get the provider_spec_id from query params if provided
   const preselectedProviderId = typeof resolvedSearchParams.provider_spec_id === 'string' 
@@ -20,16 +23,26 @@ export default async function CreateProviderConfigPage({
 
   // Load initial data if in edit mode
   let initialData = undefined;
+  let existingModelInstances: any[] = [];
+  
   if (isEdit && preselectedProviderId) {
     try {
-      initialData = await getProviderConfig(preselectedProviderId);
+      const [configResponse, instancesResponse] = await Promise.all([
+        getProviderConfig(preselectedProviderId),
+        listModelInstances({
+          provider_config_id: preselectedProviderId,
+          is_active: true
+        })
+      ]);
+      
+      initialData = configResponse;
+      existingModelInstances = instancesResponse.data || [];
     } catch (error) {
       console.error('Failed to load provider config for editing:', error);
-      // If we can't load the data, redirect back to the list
       return (
         <div className="text-center py-10">
           <p className="text-red-500">
-            Failed to load provider configuration for editing. Please try again.
+            {t("error.loadingDataEdit")}
           </p>
         </div>
       );
@@ -40,13 +53,13 @@ export default async function CreateProviderConfigPage({
     <ContentBlock 
       header={{
         breadcrumb: isEdit ? [
-          {label: "Provider Management", href: "/admin/provider-configs"},
-          {label: "Edit"},
+          {label: t("title"), href: "/admin/provider-configs"},
+          {label: tCommon("edit")},
           {label:  `${initialData?.name}`}
         ] : [
-          {label: "Provider Management", href: "/admin/provider-configs"},
-          {label: "Create"},
-          {label:  "Provider Configuration"}
+          {label: t("title"), href: "/admin/provider-configs"},
+          {label: tCommon("create")},
+          {label:  t("configureProvider")}
         ],
         controls: isEdit && initialData ? (
           <DeleteButton 
@@ -60,6 +73,7 @@ export default async function CreateProviderConfigPage({
           preselectedProviderId={preselectedProviderId}
           isEdit={isEdit}
           initialData={initialData}
+          existingModelInstances={existingModelInstances}
         />
       </div>
   </ContentBlock>

@@ -12,6 +12,7 @@ import { listAgents } from "@/lib/api";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 const categories = ["All"];
 
@@ -23,6 +24,7 @@ interface Agent {
 }
 
 export default function AgentsBrowsePage() {
+  const t = useTranslations("Agent");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,14 +63,14 @@ export default function AgentsBrowsePage() {
       header={{
         // title: "Browse Agents",
         breadcrumb: [
-          {label: "Browse Agents"},
+          {label: t("browseAgents")},
         ],
-        description: "Discover and deploy automation agents for your workflow needs",
+        description: t("description"),
         controls: (
           <Link href="/agents/create">
             <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
               <Bot className="h-5 w-5" />
-              Deploy New Agent
+              {t("deployNewAgent")}
             </Button>
           </Link>
         )
@@ -126,10 +128,10 @@ export default function AgentsBrowsePage() {
           ) : filteredAgents.length === 0 ? (
             <EmptyState
               iconsType="agent"
-              title="No agents yet"
-              description="Get started by adding your first agent."
+              title={t("noAgentsYet")}
+              description={t("getStartedByAddingYourFirstAgent")}
               action={{
-                label: "Add your first agent",
+                label: t("addYourFirstAgent"),
                 href: "/agents/create",
               }}
             />

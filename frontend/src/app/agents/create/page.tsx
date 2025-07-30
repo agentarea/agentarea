@@ -1,8 +1,12 @@
 import { listMCPServers, MCPServer, listModelInstances } from "@/lib/api";
 import CreateAgentClient from "./CreateAgentClient";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { getTranslations } from "next-intl/server";
 
 export default async function CreateAgentPage() {
+  const t = await getTranslations("Agent");
+  const tCommon = await getTranslations("Common");
+
   // Fetch MCP servers on the server
   const response = await listMCPServers();
   const mcpServers: MCPServer[] = (response.data || []).map(
@@ -33,8 +37,9 @@ export default async function CreateAgentPage() {
       header={{
         // title: "Create Agent",
         breadcrumb: [
-          {label: "Browse Agents", href: "/agents/browse"},
-          {label: "Create Agent"},
+          {label: t("browseAgents"), href: "/agents/browse"},
+          {label: tCommon("create")},
+          {label: t("newAgent")},
         ],
     }}>
       <CreateAgentClient mcpServers={mcpServers} llmModelInstances={llmModelInstances} />

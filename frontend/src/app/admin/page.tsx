@@ -1,25 +1,28 @@
 import Link from 'next/link';
-import { Server, Cpu, Brain, Key, Settings, Users, BarChart3 } from 'lucide-react';
+import { Server, Brain, Key, BarChart3 } from 'lucide-react';
+import { getTranslations } from 'next-intl/server';
 
-export default function AdminDashboard() {
+export default async function AdminDashboard() {
+  const t = await getTranslations("admin");
+  
   const adminSections = [
     {
-      title: 'Providers',
-      description: 'View AI provider specifications and available models',
+      title: t("sections.providers.title"),
+      description: t("sections.providers.description"),
       href: '/admin/providers',
       icon: Server,
       color: 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
     },
     {
-      title: 'Models',
-      description: 'Manage API configurations and credentials for AI providers',
+      title: t("sections.providerConfigs.title"),
+      description: t("sections.providerConfigs.description"),
       href: '/admin/provider-configs',
       icon: Key,
       color: 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
     },
     {
-      title: 'Model Specs',
-      description: 'Manage AI model specifications and capabilities',
+      title: t("sections.modelSpecs.title"),
+      description: t("sections.modelSpecs.description"),
       href: '/admin/model-specs',
       icon: Brain,
       color: 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100'
@@ -29,9 +32,9 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("title")}</h1>
         <p className="text-gray-600 mt-2">
-          Overview and quick access to all admin sections
+          {t("overview")}
         </p>
       </div>
 
@@ -59,24 +62,24 @@ export default function AdminDashboard() {
       <div className="mt-12 p-6 bg-gray-50 rounded-lg border">
         <div className="flex items-center space-x-3 mb-3">
           <BarChart3 className="h-6 w-6 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Quick Stats</h3>
+          <h3 className="text-lg font-semibold text-gray-900">{t("quickStats.title")}</h3>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold text-blue-600">54+</div>
-            <div className="text-sm text-gray-600">AI Providers</div>
+            <div className="text-sm text-gray-600">{t("quickStats.aiProviders")}</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-green-600">Active</div>
-            <div className="text-sm text-gray-600">System Status</div>
+            <div className="text-sm text-gray-600">{t("quickStats.systemStatus")}</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-purple-600">Ready</div>
-            <div className="text-sm text-gray-600">For Production</div>
+            <div className="text-sm text-gray-600">{t("quickStats.forProduction")}</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-orange-600">24/7</div>
-            <div className="text-sm text-gray-600">Support</div>
+            <div className="text-sm text-gray-600">{t("quickStats.support")}</div>
           </div>
         </div>
       </div>

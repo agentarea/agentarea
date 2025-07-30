@@ -3,6 +3,14 @@
     "search": "Search",
     "grid": "Grid",
     "table": "Table",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "back": "Back",
+    "create": "Create",
     "emptyState": {
       "title": "Empty data",
       "description": "Sorry, we couldn't find any data"
@@ -25,7 +33,18 @@
     "providerSpecifications": "Provider Specifications",
     "providerConfigurations": "Provider Configurations",
     "modelSpecifications": "Model Specifications",
+    "quickStats": {
+      "title": "Quick Stats",
+      "aiProviders": "AI Providers",
+      "systemStatus": "System Status",
+      "forProduction": "For Production",
+      "support": "Support"
+    },
     "sections": {
+      "agents": {
+        "title": "Agents",
+        "description": "Manage agents and their configurations"
+      },
       "modelInstances": {
         "title": "Model Instances",
         "description": "Manage configured AI model instances ready for use by agents"
@@ -96,9 +115,21 @@
 
   "ProvidersPage": {
     "title": "Providers",
+    "description": "Manage AI provider specifications and their available models",
     "noProviders": "No providers found",
     "addProvider": "Add Provider",
-    "emptyDescription": "No AI providers are currently available."
+    "emptyDescription": "No AI providers are currently available.",
+    "table": {
+      "provider": "Provider",
+      "description": "Description",
+      "noDescription": "No description",
+      "type": "Type",
+      "models": "Models",
+      "modelsCount": "models",
+      "status": "Status",
+      "builtIn": "Built-in",
+      "custom": "Custom"
+    }
   },
 
   "ProviderConfigsPage": {
@@ -183,14 +214,105 @@
     "editConfiguration": "Edit Configuration",
     "configureProvider": "Configure Provider",
     "availableProviders": "Available Providers",
+    "deleteProviderConfiguration": "Delete Provider Configuration",
+    "deleteProviderConfigurationDescription": "Are you sure you want to delete the provider configuration \"{configName}\"? This action cannot be undone and will permanently remove the configuration.",
+    "thisProviderConfiguration": "this provider configuration",
     "table": {
       "provider": "Provider",
       "description": "Description",
       "models": "Models"
     },
+    "noInstancesConfigured": "No instances configured",
     "emptyState": {
       "title": "No configurations yet",
       "description": "Create your first provider configuration to get started"
+    },
+    "error": {
+      "loadingData": "Error loading data",
+      "loadingDataEdit": "Failed to load provider configuration for editing. Please try again.",
+      "noConfigIdProvided": "No configuration ID provided for deletion",
+      "failedToDeleteConfiguration": "Failed to delete configuration",
+      "unknownError": "Unknown error",
+      "unexpectedErrorWhileDeleting": "An unexpected error occurred while deleting the configuration"
+    }
+  },
+
+  "ProviderConfigForm": {
+    "title": "Provider Configuration",
+    "description": "Configure your provider",
+    "provider": "Provider",
+    "createConfiguration": "Create Configuration",
+    "createConfigurationWithModels": "Create Configuration{modelCount, plural, =0 {} one { + # Model} other { + # Models}}",
+    "modelCount": "{count, plural, =0 {} one {+ # Model} other {+ # Models}}",
+    "endpointUrl": "Endpoint URL",
+    "apiKey": "API Key",
+    "modelInstances": "model instances",
+    "providerConfigurationUpdatedSuccessfully": "Provider configuration updated successfully",
+    "providerConfigurationCreatedSuccessfully": "Provider configuration created successfully",
+    "providerConfigurationDeletedSuccessfully": "Provider configuration deleted successfully",
+    "modelInstancesUpdatedSuccessfully": "Model instances updated successfully",
+    "modelInstancesCreatedSuccessfully": "Model instances created successfully",
+    "modelInstancesDeletedSuccessfully": "Model instances deleted successfully",
+    "noProvidersFound": "No providers found",
+    "selectProvider": "Select provider",
+    "providerIsPreSelected": "Provider is pre-selected for this configuration.",
+    "configurationName": "Configuration Name",
+    "configurationNamePlaceholder": "e.g., Production OpenAI Config",
+    "apiKeyPlaceholder": "Enter your API key",
+    "customEndpointUrl": "Custom Endpoint URL",
+    "customEndpointUrlPlaceholder": "https://api.example.com/v1",
+    "updateConfiguration": "Update Configuration",
+    "selectAllModels": "Select all models",
+    "selected": "selected",
+    "of": "of",
+    "selectedModelsCount": "{selectedCount, plural, =0 {No models selected} one {# model selected} other {# models selected}} of {totalCount}",
+    "noModelsAvailableForThisProvider": "No models available for this provider.",
+    "selectModelsToCreateInstances": "Select models to create instances for this {providerName} configuration",
+    "loading": {
+      "updating": "Updating...",
+      "creating": "Creating..."
+    },
+    "toast": {
+      "configurationCreated": "Provider configuration created successfully with {modelCount, plural, =0 {no model instances} one {# model instance} other {# model instances}}!",
+      "configurationUpdated": "Provider configuration updated successfully with {modelCount, plural, =0 {no model instances} one {# model instance} other {# model instances}}!",
+      "configurationDeleted": "Provider configuration deleted successfully!",
+      "modelInstancesUpdated": "Model instances updated successfully!",
+      "modelInstancesCreated": "Model instances created successfully!",
+      "modelInstancesDeleted": "Model instances deleted successfully!",
+      "added": "added",
+      "removed": "removed",
+      "configurationUpdatedSuccessfully": "Provider configuration updated successfully!"
+    },
+    "error": {
+      "failedTo": "Failed to",
+      "unknownError": "Unknown error",
+      "failedToLoadProviderSpecs": "Failed to load provider specifications",
+      "failedToLoadData": "Failed to load data",
+      "unexpectedError": "An unexpected error occurred"
+    }
+  },
+
+  "Agent": {
+    "browseAgents": "Browse Agents",
+    "newAgent": "New Agent",
+    "description": "Browse and manage your agents",
+    "deployNewAgent": "Deploy New Agent",
+    "deployNewAgentDescription": "Deploy a new agent to get started.",
+    "noAgentsYet": "No agents yet",
+    "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
+    "addYourFirstAgent": "Add your first agent",
+    "create": {
+      "agentName": "Agent Name",
+      "agentNamePlaceholder": "Enter agent name",
+      "description": "Description / Goal",
+      "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
+      "instruction": "Instruction",
+      "instructionPlaceholder": "Provide specific instructions for this agent...",
+      "llmModel": "LLM Model",
+      "selectModel": "Select a model",
+      "noConfigurationsYet": "No configurations yet",
+      "createAndUseProviderConfiguration": "Create and use a provider configuration",
+      "createConfiguration": "Create Configuration"
     }
   }
 }

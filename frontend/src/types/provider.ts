@@ -36,4 +36,5 @@ export interface ProviderConfigFormProps {
   cancelButtonText?: string;
   showModelSelection?: boolean;
   autoRedirect?: boolean;
+  existingModelInstances?: ModelInstance[];
 } 

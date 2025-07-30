@@ -1,5 +1,4 @@
-import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import type { ModelSpec } from "@/types/provider";
 
@@ -14,12 +13,11 @@ type ModelItemControlProps = {
 export const ModelItemControl = ({ model, isSelected, onSelect }: ModelItemControlProps) => {
     return (
         <div className="card-item px-3 py-2 flex gap-2">
-            <Switch
-                size="xs"
+            <Checkbox
                 checked={isSelected}
                 onCheckedChange={onSelect}
                 aria-label="Toggle model"
-                className="mt-1 min-w-[28px]"
+                className="mt-1 min-w-[16px]"
                 id={`model-${model.id}`}
             />
             <Label className="
