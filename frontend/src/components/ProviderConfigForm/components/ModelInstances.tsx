@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { ModelSpec } from "@/types/provider";  
 import { ModelItemControl } from "./ModelItemControl";
 import { Label } from "@/components/ui/label";
+import { useTranslations } from "next-intl";
 
 interface SelectedModel {
   modelSpecId: string;
@@ -22,6 +23,7 @@ type ModelInstancesProps = {
 }
 
 export default function ModelInstances({ selectedProvider, availableModels, selectedModels, setSelectedModels, isEdit = false }: ModelInstancesProps) {
+    const t = useTranslations("ProviderConfigForm");
     // Auto-select all models when component loads or availableModels changes (only for new configs)
     useEffect(() => {
         if (selectedProvider && availableModels.length > 0 && !isEdit) {
@@ -80,9 +82,9 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
     return (
         <div className="grid grid-cols-1 gap-4" >
             <div className="space-y-1">
-              <FormLabel icon={Brain}>Model Instances</FormLabel>
+              <FormLabel icon={Brain}>{t("modelInstances")}</FormLabel>
               <p className="note">
-                Select models to create instances for this <span className="font-semibold">{selectedProvider.name}</span> configuration
+                {t("selectModelsToCreateInstances", { providerName: selectedProvider.name })}
               </p>
             </div>
             
@@ -94,13 +96,14 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
                       checked={isAllSelected}
                       indeterminate={isIndeterminate}
                       onCheckedChange={handleSelectAllToggle}
-                      aria-label="Select all models"
+                      aria-label={t("selectAllModels")}
                       id="select-all-models"
                     />
                     <Label className="note font-normal text-xs cursor-pointer" htmlFor="select-all-models">
-                        selected{" "}
-                        <span className="text-sm">{selectedModels.length}</span>
-                        {" "}of {availableModels.length}
+                        {t("selectedModelsCount", { 
+                            selectedCount: selectedModels.length, 
+                            totalCount: availableModels.length 
+                        })}
                     </Label>
                   </div>
                 )}
@@ -108,7 +111,7 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
               
               {availableModels.length === 0 ? (
                 <div className="text-sm text-muted-foreground bg-gray-50 p-4 rounded-lg text-center">
-                  No models available for this provider.
+                  {t("noModelsAvailableForThisProvider")}
                 </div>
               ) : (
                 <div className="space-y-3 overflow-y-auto">

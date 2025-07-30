@@ -3,6 +3,14 @@
     "search": "Поиск",
     "grid": "Сетка",
     "table": "Таблица",
+    "delete": "Удалить",
+    "edit": "Редактирование",
+    "add": "Добавить",
+    "cancel": "Отменить",
+    "save": "Сохранить",
+    "close": "Закрыть",
+    "back": "Назад",
+    "create": "Создание",
     "emptyState": {
       "title": "Пустые данные",
       "description": "Извините, мы не смогли найти данные"
@@ -13,6 +21,44 @@
     "description": "Страница, которую вы ищете, не существует.",
     "goHome": "Вернуться на главную"
   },
+  "admin": {
+    "title": "Панель администратора",
+    "overview": "Обзор и быстрый доступ ко всем разделам администратора",
+    "llms": "Модели LLM",
+    "providers": "Провайдеры",
+    "providerConfigs": "Модели",
+    "modelSpecs": "Спецификации моделей",
+    "modelInstances": "Экземпляры моделей",
+    "providerSpecifications": "Спецификации провайдеров",
+    "providerConfigurations": "Конфигурации провайдеров",
+    "modelSpecifications": "Спецификации моделей",
+    "quickStats": {
+      "title": "Быстрая статистика",
+      "aiProviders": "AI Провайдеры",
+      "systemStatus": "Статус системы",
+      "forProduction": "Для продакшена",
+      "support": "Поддержка"
+    },
+    "sections": {
+      "modelInstances": {
+        "title": "Экземпляры моделей",
+        "description": "Управление настроенными экземплярами AI моделей, готовыми к использованию агентами"
+      },
+      "providers": {
+        "title": "Провайдеры",
+        "description": "Просмотр спецификаций AI провайдеров и доступных моделей"
+      },
+      "providerConfigs": {
+        "title": "Модели",
+        "description": "Управление API конфигурациями и учетными данными для AI провайдеров"
+      },
+      "modelSpecs": {
+        "title": "Спецификации моделей",
+        "description": "Управление спецификациями AI моделей и их возможностями"
+      }
+    }
+  },
+
   "Sidebar": {
     "workplace": "Рабочее место",
     "agents": "Агенты",
@@ -107,20 +153,102 @@
 
   "Models": {
     "title": "Модели",
-    "description": "Управление конфигурациями моделей и обнаружение доступных поставщиков",
+    "description": "Управление конфигурациями моделей и обнаружение доступных провайдеров",
     "createButton": "Добавить конфигурацию",
     "editConfiguration": "Редактировать конфигурацию",
     "configureProvider": "Настроить провайдер",
     "availableProviders": "Доступные провайдеры",
+    "deleteProviderConfiguration": "Удалить конфигурацию провайдера",
+    "deleteProviderConfigurationDescription": "Вы уверены, что хотите удалить конфигурацию провайдера \"{configName}\"? Это действие не может быть отменено и приведет к удалению конфигурации.",
+    "thisProviderConfiguration": "эту конфигурацию провайдера",
     "table": {
       "provider": "Провайдер",
       "description": "Описание",
       "models": "Модели"
     },
-    "noInstancesConfigured": "Нет настроенных экземпляров",
+    "noInstancesConfigured": "Нет настроенных моделей",
     "emptyState": {
       "title": "Нет конфигураций",
       "description": "Создайте свою первую конфигурацию провайдера, чтобы начать работу"
+    },
+    "error": {
+      "loadingData": "Ошибка загрузки данных",
+      "loadingDataEdit": "Ошибка загрузки данных для редактирования. Пожалуйста, попробуйте снова.",
+      "noConfigIdProvided": "ID конфигурации не предоставлен для удаления",
+      "failedToDeleteConfiguration": "Не удалось удалить конфигурацию",
+      "unknownError": "Неизвестная ошибка",
+      "unexpectedErrorWhileDeleting": "Произошла непредвиденная ошибка при удалении конфигурации"
+    }
+  },
+
+  "ProvidersPage": {
+    "title": "Провайдеры",
+    "description": "Управление спецификациями AI провайдеров и их доступными моделями",
+    "noProviders": "Провайдеры не найдены",
+    "addProvider": "Добавить провайдера",
+    "emptyDescription": "В настоящее время нет доступных AI провайдеров.",
+    "table": {
+      "provider": "Провайдер",
+      "description": "Описание",
+      "noDescription": "Нет описания",
+      "type": "Тип",
+      "models": "Модели",
+      "modelsCount": "моделей",
+      "status": "Статус",
+      "builtIn": "Встроенный",
+      "custom": "Пользовательский"
+    }
+  },
+
+  "ProviderConfigForm": {
+    "title": "Конфигурация провайдера",
+    "description": "Настройте ваш провайдер",
+    "provider": "Провайдер",
+    "createConfiguration": "Создать конфигурацию",
+    "createConfigurationWithModels": "Создать конфигурацию{modelCount, plural, =0 {} one { + # модель} few { + # модели} many { + # моделей} other { + # модели}}",
+    "modelCount": "{count, plural, =0 {} one {+ # модель} few {+ # модели} many {+ # моделей} other {+ # модели}}",
+    "endpointUrl": "URL-адрес конечной точки",
+    "apiKey": "Ключ API", 
+    "modelInstances": "Экземпляры моделей",
+    "providerConfigurationUpdatedSuccessfully": "Конфигурация провайдера успешно обновлена",
+    "providerConfigurationCreatedSuccessfully": "Конфигурация провайдера успешно создана",
+    "providerConfigurationDeletedSuccessfully": "Конфигурация провайдера успешно удалена",
+    "modelInstancesUpdatedSuccessfully": "Экземпляры моделей успешно обновлены",
+    "modelInstancesCreatedSuccessfully": "Экземпляры моделей успешно созданы",
+    "modelInstancesDeletedSuccessfully": "Экземпляры моделей успешно удалены",
+    "noProvidersFound": "Провайдеры не найдены",
+    "selectProvider": "Выберите провайдера",
+    "providerIsPreSelected": "Провайдер предварительно выбран для этой конфигурации.",
+    "configurationName": "Имя конфигурации",
+    "configurationNamePlaceholder": "e.g., Production OpenAI Config",
+    "apiKeyPlaceholder": "Введите ваш ключ API",
+    "customEndpointUrl": "URL-адрес конечной точки",
+    "customEndpointUrlPlaceholder": "https://api.example.com/v1",
+    "updateConfiguration": "Обновить конфигурацию",
+    "selectAllModels": "Выбрать все модели",
+    "selected": "выбрано",
+    "of": "из",
+    "selectedModelsCount": "{selectedCount, plural, =0 {Модели не выбраны} one {# модель выбрана} few {# модели выбраны} many {# моделей выбрано} other {# модели выбраны}} из {totalCount}",
+    "noModelsAvailableForThisProvider": "Модели не найдены для этого провайдера.",
+    "selectModelsToCreateInstances": "Выберите модели для создания экземпляров для этой конфигурации {providerName}",
+    "loading": {
+      "updating": "Обновление...",
+      "creating": "Создание..."
+    },
+    "toast": {
+      "configurationCreated": "Конфигурация провайдера успешно создана с {modelCount, plural, =0 {без экземпляров моделей} one {# экземпляром модели} few {# экземплярами моделей} many {# экземплярами моделей} other {# экземплярами моделей}}!",
+      "configurationUpdated": "Конфигурация провайдера успешно обновлена с {modelCount, plural, =0 {без экземпляров моделей} one {# экземпляром модели} few {# экземплярами моделей} many {# экземплярами моделей} other {# экземплярами моделей}}!",
+      "configurationDeleted": "Конфигурация провайдера успешно удалена!",
+      "modelInstancesUpdated": "Экземпляры моделей успешно обновлены!",
+      "modelInstancesCreated": "Экземпляры моделей успешно созданы!",
+      "modelInstancesDeleted": "Экземпляры моделей успешно удалены!"
+    },
+    "error": {
+      "failedTo": "Не удалось",
+      "unknownError": "Неизвестная ошибка",
+      "failedToLoadProviderSpecs": "Не удалось загрузить спецификации провайдеров",
+      "failedToLoadData": "Не удалось загрузить данные",
+      "unexpectedError": "Произошла непредвиденная ошибка"
     }
   }
 }

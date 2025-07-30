@@ -69,7 +69,7 @@ export default async function ProviderConfigsPage({
         return (
             <div className="text-center py-10">
                 <p className="text-red-500">
-                    Error loading data: {
+                    {t("error.loadingData")}: {
                         specsError?.detail?.[0]?.msg || 
                         configsError?.detail?.[0]?.msg ||
                         'Unknown error occurred'

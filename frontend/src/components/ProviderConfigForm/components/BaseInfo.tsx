@@ -4,6 +4,7 @@ import { Key, Settings, Link } from "lucide-react";
 import { Controller, Control, FieldErrors } from "react-hook-form";
 import { motion, AnimatePresence } from "framer-motion";
 import ApiKeyEditInput from "./ApiKeyEditInput";
+import { useTranslations } from "next-intl";
 
 interface BaseInfoProps {
   control: Control<any>;
@@ -13,6 +14,7 @@ interface BaseInfoProps {
 }
 
 export default function BaseInfo({ control, errors, providerSpecId, isEdit }: BaseInfoProps) {
+    const t = useTranslations("ProviderConfigForm");
     return (
         <AnimatePresence>
             {providerSpecId && (
@@ -24,7 +26,7 @@ export default function BaseInfo({ control, errors, providerSpecId, isEdit }: Ba
                 className="space-y-6"
               >
                 <div className="space-y-2">
-                  <FormLabel htmlFor="name" icon={Settings} required>Configuration Name</FormLabel>
+                  <FormLabel htmlFor="name" icon={Settings} required>{t("configurationName")}</FormLabel>
                   <Controller
                     name="name"
                     control={control}
@@ -34,7 +36,7 @@ export default function BaseInfo({ control, errors, providerSpecId, isEdit }: Ba
                         type="text"
                         value={field.value}
                         onChange={field.onChange}
-                        placeholder="e.g., Production OpenAI Config"
+                        placeholder={t("configurationNamePlaceholder")}
                       />
                     )}
                   />
@@ -46,7 +48,7 @@ export default function BaseInfo({ control, errors, providerSpecId, isEdit }: Ba
                 </div>
 
                 <div className="space-y-2">
-                  <FormLabel htmlFor="api_key" required icon={Key}>API Key</FormLabel>
+                  <FormLabel htmlFor="api_key" required icon={Key}>{t("apiKey")}</FormLabel>
                   <Controller
                     name="api_key"
                     control={control}
@@ -59,7 +61,7 @@ export default function BaseInfo({ control, errors, providerSpecId, isEdit }: Ba
                                 type="password"
                                 value={field.value}
                                 onChange={field.onChange}
-                                placeholder="Enter your API key"
+                                placeholder={t("apiKeyPlaceholder")}
                             />
                         )
                     )}
@@ -72,7 +74,7 @@ export default function BaseInfo({ control, errors, providerSpecId, isEdit }: Ba
                 </div>
 
                 <div className="space-y-2">
-                  <FormLabel htmlFor="endpoint_url" icon={Link} optional>Custom Endpoint URL</FormLabel>
+                  <FormLabel htmlFor="endpoint_url" icon={Link} optional>{t("customEndpointUrl")}</FormLabel>
                   <Controller
                     name="endpoint_url"
                     control={control}
@@ -82,7 +84,7 @@ export default function BaseInfo({ control, errors, providerSpecId, isEdit }: Ba
                         type="url"
                         value={field.value || ''}
                         onChange={field.onChange}
-                        placeholder="https://api.example.com/v1"
+                        placeholder={t("customEndpointUrlPlaceholder")}
                       />
                     )}
                   />

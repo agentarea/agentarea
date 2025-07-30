@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Loader2, Trash2, CheckCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface BaseModalProps {
   title: string | React.ReactNode;
@@ -16,6 +17,7 @@ interface BaseModalProps {
 export default function BaseModal({ title, description, children, onConfirm, type }: BaseModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const tCommon = useTranslations("Common");
 
   const handleConfirm = async () => {
     setIsLoading(true);
@@ -77,7 +79,7 @@ export default function BaseModal({ title, description, children, onConfirm, typ
             onClick={() => setIsOpen(false)} 
             disabled={isLoading}
           >
-            Cancel
+            {tCommon("cancel")}
           </Button>
           <Button 
             size="sm"
@@ -85,7 +87,7 @@ export default function BaseModal({ title, description, children, onConfirm, typ
             disabled={isLoading}
             variant={type === 'delete' ? 'destructive' : 'default'}
           >
-            {type === 'delete' ? 'Delete' : 'Confirm'}
+            {type === 'delete' ? tCommon("delete") : tCommon("confirm")}
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           </Button>
         </DialogFooter>

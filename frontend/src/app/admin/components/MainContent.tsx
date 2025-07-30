@@ -10,8 +10,8 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 import EmptyState from "@/components/EmptyState/EmptyState";
 import { useSearchWithDebounce, useTabState, useFilteredData } from "./hooks";
@@ -216,7 +216,7 @@ export default function MainContent({
         return (
             <div className="content-section">
                 <div className="flex items-center justify-center h-32">
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <LoadingSpinner />
                 </div>
             </div>
         );
@@ -265,7 +265,7 @@ export default function MainContent({
                     <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
                         <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
                             {isSearching ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                             ) : (
                                 <SearchIcon className="h-4 w-4" />
                             )}

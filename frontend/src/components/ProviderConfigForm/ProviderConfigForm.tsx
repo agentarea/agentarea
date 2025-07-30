@@ -10,13 +10,15 @@ import { createProviderConfig, createModelInstance, updateProviderConfig, listPr
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { AlertCircle, Bot, Server, Loader2 } from 'lucide-react';
+import { AlertCircle, Bot, Server } from 'lucide-react';
 import FormLabel from '@/components/FormLabel/FormLabel';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import BaseInfo from './components/BaseInfo';
 import ModelInstances from './components/ModelInstances';
 import { getProviderIconUrl } from '@/lib/provider-icons';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { ProviderSpec, ModelSpec, SelectedModel, ProviderConfigFormProps } from '@/types/provider';
 
 // Form validation schema
@@ -48,6 +50,8 @@ export default function ProviderConfigForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const t = useTranslations("ProviderConfigForm");
+  const tCommon = useTranslations("Common");
 //   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
@@ -92,7 +96,7 @@ export default function ProviderConfigForm({
         setProviderSpecs(specs);
         setModelSpecs(models);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
+        const errorMessage = err instanceof Error ? err.message : t("error.failedToLoadData");
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -193,14 +197,7 @@ export default function ProviderConfigForm({
 
   // Handle loading state
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-10">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-muted-foreground">Loading provider specifications...</span>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   // Handle error state
@@ -270,8 +267,8 @@ export default function ProviderConfigForm({
       }
 
       if (providerError || !providerConfig) {
-        const errorMessage = (providerError as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg || (providerError as { message?: string })?.message || 'Unknown error';
-        throw new Error(`Failed to ${isEdit ? 'update' : 'create'} provider configuration: ${errorMessage}`);
+        const errorMessage = (providerError as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg || (providerError as { message?: string })?.message || t("error.unknownError");
+        throw new Error(`${t("error.failedTo")} ${isEdit ? tCommon("update") : tCommon("create")} ${t("providerConfiguration")}: ${errorMessage}`);
       }
 
       // Step 2: Create model instances if any are selected (only for create mode and if model selection is enabled)
@@ -293,7 +290,9 @@ export default function ProviderConfigForm({
         });
 
         await Promise.all(modelCreationPromises);
-        toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully with ${selectedModels.length} model instances!`);
+        toast.success(t(isEdit ? "toast.configurationUpdated" : "toast.configurationCreated", { 
+          modelCount: selectedModels.length 
+        }));
       } else if (isEdit && showModelSelection) {
         // Handle model instances for edit mode
         const existingModelSpecIds = existingModelInstances.map(instance => instance.model_spec_id);
@@ -348,12 +347,14 @@ export default function ProviderConfigForm({
         if (modelsToDelete.length > 0) changes.push(`-${modelsToDelete.length} removed`);
         
         if (changes.length > 0) {
-          toast.success(`Provider configuration updated successfully! Model instances: ${changes.join(', ')}`);
+          toast.success(t("toast.modelInstancesUpdated") + `: ${changes.join(', ')}`);
         } else {
-          toast.success(`Provider configuration updated successfully!`);
+          toast.success(t("toast.configurationUpdated"));    
         }
       } else {
-        toast.success(`Provider configuration ${isEdit ? 'updated' : 'created'} successfully!`);
+        toast.success(
+            isEdit ? t("toast.configurationUpdated") : t("toast.configurationCreated")
+        );
       }
 
       // Call custom after submit handler if provided
@@ -380,9 +381,9 @@ export default function ProviderConfigForm({
       }
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
-      setError(errorMessage);
-      toast.error(errorMessage);
+              const errorMessage = err instanceof Error ? err.message : t("error.unexpectedError");
+        setError(errorMessage);
+        toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -428,7 +429,7 @@ export default function ProviderConfigForm({
         isClear ? "p-0" : "card card-shadow"
       )}>
           <div className="space-y-2">
-            <FormLabel htmlFor="provider" icon={Server}>Provider</FormLabel>
+            <FormLabel htmlFor="provider" icon={Server}>{t("provider")}</FormLabel>
             <Controller
               name="provider_spec_id"
               control={control}
@@ -441,14 +442,14 @@ export default function ProviderConfigForm({
                   }))}
                   value={field.value}
                   onValueChange={handleProviderChange}
-                  placeholder="Select provider"
+                  placeholder={t("selectProvider")}
                   disabled={!!preselectedProviderId && !isEdit && !initialData}
                   emptyMessage={
                     <div className="flex flex-col items-center justify-center h-full gap-1">
                       <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
                           <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
                       </div>
-                      <span className="text-muted-foreground">No providers found</span>
+                      <span className="text-muted-foreground">{t("noProvidersFound")}</span>
                     </div>
                   }
                 />
@@ -459,21 +460,25 @@ export default function ProviderConfigForm({
             )}
             {preselectedProviderId && !isEdit && !initialData && (
               <p className="note">
-                Provider is pre-selected for this configuration.
+                {t("providerIsPreSelected")}
               </p>
             )}
           </div>
 
           <BaseInfo control={control} errors={errors} providerSpecId={watchedProviderId} isEdit={isEdit} />
           
-          <AnimatePresence>
-          {
-            selectedProvider && showModelSelection && (
+          {selectedProvider && showModelSelection && (
+            <AnimatePresence>
               <motion.div
-                initial={{ height: 0, opacity: 0, overflow: "hidden"}}
-                animate={{ height: "auto", opacity: 1, overflow: "visible"}}
-                exit={{ height: 0, opacity: 0, overflow: "hidden"}}
-                transition={{ duration: 0.4, ease: "easeOut"}}
+                key="model-instances"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ 
+                  height: { duration: 0.3, ease: "easeOut" },
+                  opacity: { duration: 0.2, ease: "easeOut" }
+                }}
+                style={{ overflow: "hidden" }}
               >
                 <ModelInstances 
                   selectedProvider={selectedProvider} 
@@ -483,9 +488,8 @@ export default function ProviderConfigForm({
                   isEdit={isEdit}
                 />
               </motion.div>
-            )
-          }
-          </AnimatePresence>
+            </AnimatePresence>
+          )}
 
           {/* <div className="flex items-center space-x-2">
             <Controller
@@ -521,7 +525,7 @@ export default function ProviderConfigForm({
             handleCancel();
           }}
         >
-          {cancelButtonText || 'Cancel'}
+          {cancelButtonText || tCommon("cancel")}
         </Button>
         <Button 
           type="submit" 
@@ -531,10 +535,10 @@ export default function ProviderConfigForm({
           }}
         >
           {isSubmitting 
-            ? (isEdit ? 'Updating...' : 'Creating...') 
+            ? (isEdit ? t("loading.updating") : t("loading.creating")) 
             : (submitButtonText || (isEdit 
-                ? 'Update Configuration' 
-                : `Create Configuration${selectedModels.length > 0 && showModelSelection ? ` + ${selectedModels.length} Models` : ''}`
+                ? t("updateConfiguration")
+                : t("createConfigurationWithModels", { modelCount: selectedModels.length })
               ))
           }
         </Button>
