@@ -20,8 +20,15 @@ export interface SimpleSelectOption {
   label: string
 }
 
+export interface SelectGroup {
+  label: string
+  icon?: string
+  options: (SelectOption | SimpleSelectOption)[]
+}
+
 interface SearchableSelectProps {
   options: (SelectOption | SimpleSelectOption)[]
+  groups?: SelectGroup[]
   value?: string | number
   onValueChange: (value: string | number) => void
   placeholder?: string
@@ -37,6 +44,7 @@ interface SearchableSelectProps {
 
 export function SearchableSelect({
   options,
+  groups,
   value,
   onValueChange,
   placeholder = "Search...",
@@ -53,7 +61,17 @@ export function SearchableSelect({
   const [popoverOpen, setPopoverOpen] = React.useState(false)
   const triggerRef = React.useRef<HTMLButtonElement>(null)
 
-  const selectedOption = options.find(option => option.id === value)
+  const selectedOption = (() => {
+    // Сначала ищем в группах
+    if (groups) {
+      for (const group of groups) {
+        const found = group.options.find(option => option.id === value);
+        if (found) return found;
+      }
+    }
+    // Затем ищем в обычных опциях
+    return options.find(option => option.id === value);
+  })();
 
   // Use controlled state if provided, otherwise use internal state
   const isControlled = controlledOpen !== undefined
@@ -83,7 +101,7 @@ export function SearchableSelect({
         <img
           src={option.icon}
           alt={option.label}
-          className="w-5 h-5 rounded dark:invert flex-shrink-0"
+          className="w-5 h-5 rounded dark:invert"
           onError={(e) => {
             if (defaultIcon) {
               e.currentTarget.style.display = 'none'
@@ -93,12 +111,14 @@ export function SearchableSelect({
       )
     }
     
-    return defaultIcon || <Bot className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+    return defaultIcon || <Bot className="w-5 h-5 text-muted-foreground" />
   }
 
   const renderOptionContent = (option: SelectOption | SimpleSelectOption) => (
     <div className="flex gap-3 items-center">
-      {'icon' in option && renderIcon(option as SelectOption)}
+      <div className="flex items-center justify-center w-5 h-5 flex-shrink-0">
+        {'icon' in option && renderIcon(option as SelectOption)}
+      </div>
       <div className="flex flex-col items-start">
         <span>{option.label}</span>
         {'description' in option && option.description && (
@@ -161,19 +181,39 @@ export function SearchableSelect({
           <CommandInput placeholder={placeholder} />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.id}
-                  value={`${option.label} ${'description' in option && option.description ? option.description : ''}`}
-                  onSelect={() => {
-                    handleOptionChange(option.id)
-                  }}
-                >
-                  {renderOption ? renderOption(option) : renderDefaultOption(option)}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {groups ? (
+              // Рендерим группы
+              groups.map((group, groupIndex) => (
+                <CommandGroup key={groupIndex} heading={group.label}>
+                  {group.options.map((option) => (
+                    <CommandItem
+                      key={option.id}
+                      value={`${group.label} ${option.label} ${'description' in option && option.description ? option.description : ''}`}
+                      onSelect={() => {
+                        handleOptionChange(option.id)
+                      }}
+                    >
+                      {renderOption ? renderOption(option) : renderDefaultOption(option)}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))
+            ) : (
+              // Рендерим обычные опции
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option.id}
+                    value={`${option.label} ${'description' in option && option.description ? option.description : ''}`}
+                    onSelect={() => {
+                      handleOptionChange(option.id)
+                    }}
+                  >
+                    {renderOption ? renderOption(option) : renderDefaultOption(option)}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

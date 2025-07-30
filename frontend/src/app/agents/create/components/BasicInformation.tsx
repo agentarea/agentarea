@@ -17,6 +17,24 @@ import { getProviderIconUrl } from "@/lib/provider-icons";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
+// Функция для группировки моделей по конфигурациям
+const groupModelsByConfig = (instances: LLMModelInstance[]) => {
+  const grouped = instances.reduce((acc, instance) => {
+    const configName = instance.config_name || 'Unknown Config';
+    if (!acc[configName]) {
+      acc[configName] = [];
+    }
+    acc[configName].push(instance);
+    return acc;
+  }, {} as Record<string, LLMModelInstance[]>);
+
+  return Object.entries(grouped).map(([configName, instances]) => ({
+    configName,
+    instances,
+    icon: getProviderIconUrl(instances[0]?.provider_name || '')
+  }));
+};
+
 type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
   control: any;
@@ -108,13 +126,17 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
               rules={{ required: "Model is required" }}
               render={({ field }) => (
                 <SearchableSelect
-                  options={llmModelInstances.length > 0 ? 
-                    llmModelInstances.map((instance) => ({
-                      // Используем составной ключ: provider_config_id + instance_id
-                      id: `${instance.provider_config_id}:${instance.id}`,
-                      label: `${instance.name}`,
-                      description: instance.config_name || instance.provider_name,
-                      icon: getProviderIconUrl(instance.provider_name || ''),
+                  options={[]} // Пустой массив, так как используем группы
+                  groups={llmModelInstances.length > 0 ? 
+                    groupModelsByConfig(llmModelInstances).map((group) => ({
+                      label: group.configName,
+                      icon: group.icon || undefined,
+                      options: group.instances.map((instance) => ({
+                        id: `${instance.provider_config_id}:${instance.id}`,
+                        label: instance.name,
+                        description: instance.config_name || instance.provider_name,
+                        icon: getProviderIconUrl(instance.provider_name || '') || undefined,
+                      }))
                     })) : []
                   }
                   value={(() => {
