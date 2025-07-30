@@ -41,6 +41,10 @@
       "support": "Support"
     },
     "sections": {
+      "agents": {
+        "title": "Agents",
+        "description": "Manage agents and their configurations"
+      },
       "modelInstances": {
         "title": "Model Instances",
         "description": "Manage configured AI model instances ready for use by agents"
@@ -282,6 +286,24 @@
       "failedToLoadProviderSpecs": "Failed to load provider specifications",
       "failedToLoadData": "Failed to load data",
       "unexpectedError": "An unexpected error occurred"
+    }
+  },
+
+  "Agent": {
+    "browseAgents": "Browse Agents",
+    "newAgent": "New Agent",
+    "create": {
+      "agentName": "Agent Name",
+      "agentNamePlaceholder": "Enter agent name",
+      "description": "Description / Goal",
+      "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
+      "instruction": "Instruction",
+      "instructionPlaceholder": "Provide specific instructions for this agent...",
+      "llmModel": "LLM Model",
+      "selectModel": "Select a model",
+      "noConfigurationsYet": "No configurations yet",
+      "createAndUseProviderConfiguration": "Create and use a provider configuration",
+      "createConfiguration": "Create Configuration"
     }
   }
 }

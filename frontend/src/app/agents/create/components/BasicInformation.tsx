@@ -12,6 +12,7 @@ import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
 import ConfigSheet from "./ConfigSheet";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
+import { useTranslations } from "next-intl";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
@@ -28,6 +29,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
+  const t = useTranslations("Agent.create");
 
   const handleConfigSheetOpenChange = (open: boolean) => {
     console.log('ConfigSheet open change:', open);
@@ -51,22 +53,22 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
       </h2> */}
       <div className="grid grid-cols-1 gap-6">
         <div className="space-y-2">
-          <FormLabel htmlFor="name" icon={Bot}>Agent Name</FormLabel>
+          <FormLabel htmlFor="name" icon={Bot}>{t("agentName")}</FormLabel>
           <Input
             id="name"
             {...register('name', { required: "Agent name is required" })}
-            placeholder="Enter agent name"
+            placeholder={t("agentNamePlaceholder")}
             // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors"
             aria-invalid={!!getNestedErrorMessage(errors, 'name')}
           />
           {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="description" icon={FileText} optional>Description / Goal</FormLabel>
+          <FormLabel htmlFor="description" icon={FileText} optional>{t("description")}</FormLabel>
           <Textarea
             id="description"
             {...register('description')}
-            placeholder="Describe the agent's purpose, personality, and main goal..."
+            placeholder={t("descriptionPlaceholder")}
             className="resize-none h-[100px]"
             // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
             aria-invalid={!!getNestedErrorMessage(errors, 'description')}
@@ -74,11 +76,11 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
           {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="instruction" icon={MessageSquare} required>Instruction</FormLabel>
+          <FormLabel htmlFor="instruction" icon={MessageSquare} required>{t("instruction")}</FormLabel>
           <Textarea
             id="instruction"
             {...register('instruction', { required: "Instruction is required" })}
-            placeholder="Provide specific instructions for this agent..."
+            placeholder={t("instructionPlaceholder")}
             className="resize-none h-[100px]"
             // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
             aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
@@ -86,7 +88,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
           {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="model_id" icon={Cpu}>LLM Model</FormLabel>
+          <FormLabel htmlFor="model_id" icon={Cpu}>{t("llmModel")}</FormLabel>
            <Controller
               name="model_id"
               control={control}
@@ -102,19 +104,19 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
                   }
                   value={field.value}
                   onValueChange={field.onChange}
-                  placeholder="Select a model"
+                  placeholder={t("selectModel")}
                   open={searchableSelectOpen}
                   onOpenChange={setSearchableSelectOpen}
                   emptyMessage={
                     <div className="flex flex-col items-center gap-2 px-6">
-                      <div>No configurations yet</div>
-                      <div className="note">Create and use a provider configuration</div>
+                      <div>{t("noConfigurationsYet")}</div>
+                      <div className="note">{t("createAndUseProviderConfiguration")}</div>
                       <Button 
                         size="sm" 
                         onClick={handleCreateConfigClick}
                         className="mt-2"
                       >
-                        Create Configuration
+                        {t("createConfiguration")}
                       </Button>
                     </div>
                   }
@@ -128,7 +130,7 @@ const BasicInformation = ({ register, control, errors, llmModelInstances, onOpen
 
       {/* ConfigSheet rendered outside of SearchableSelect */}
       <ConfigSheet
-        title="Create Configuration"
+        title={t("createConfiguration")}
         className="md:min-w-[500px]"
         description=""
         triggerClassName="hidden"

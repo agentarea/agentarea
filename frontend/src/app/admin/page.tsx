@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Server, Cpu, Brain, Key, Settings, Users, BarChart3 } from 'lucide-react';
+import { Server, Brain, Key, BarChart3 } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
 export default async function AdminDashboard() {

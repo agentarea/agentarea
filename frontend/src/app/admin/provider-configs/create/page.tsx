@@ -27,21 +27,18 @@ export default async function CreateProviderConfigPage({
   
   if (isEdit && preselectedProviderId) {
     try {
-      // Load provider config
-      initialData = await getProviderConfig(preselectedProviderId);
+      const [configResponse, instancesResponse] = await Promise.all([
+        getProviderConfig(preselectedProviderId),
+        listModelInstances({
+          provider_config_id: preselectedProviderId,
+          is_active: true
+        })
+      ]);
       
-      // Load existing model instances for this provider config
-      const instancesResponse = await listModelInstances({
-        provider_config_id: preselectedProviderId,
-        is_active: true
-      });
-      
-      if (instancesResponse.data) {
-        existingModelInstances = instancesResponse.data;
-      }
+      initialData = configResponse;
+      existingModelInstances = instancesResponse.data || [];
     } catch (error) {
       console.error('Failed to load provider config for editing:', error);
-      // If we can't load the data, redirect back to the list
       return (
         <div className="text-center py-10">
           <p className="text-red-500">

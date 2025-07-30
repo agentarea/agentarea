@@ -52,7 +52,6 @@ export default function ProviderConfigForm({
   const [error, setError] = useState<string | null>(null);
   const t = useTranslations("ProviderConfigForm");
   const tCommon = useTranslations("Common");
-//   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
@@ -418,16 +417,11 @@ export default function ProviderConfigForm({
           </motion.div>
         )}
       </AnimatePresence>
-      <div className={cn(
-        "mx-auto grid lg:gap-x-[12px] gap-[12px] items-start transition-all duration-300 ",
-        // "max-w-6xl grid-cols-1 lg:grid-cols-2"
-        // watchedProviderId ? "max-w-6xl grid-cols-1 lg:grid-cols-2" : "grid-cols-1 max-w-4xl"
-      )}>
-      {/* Step 1: Provider Configuration */}
-      <div className={cn(
-        "grid grid-cols-1 gap-6",
-        isClear ? "p-0" : "card card-shadow"
-      )}>
+      <div className="mx-auto max-w-4xl">
+        <div className={cn(
+          "grid grid-cols-1 gap-6",
+          isClear ? "p-0" : "card card-shadow"
+        )}>
           <div className="space-y-2">
             <FormLabel htmlFor="provider" icon={Server}>{t("provider")}</FormLabel>
             <Controller
@@ -491,27 +485,8 @@ export default function ProviderConfigForm({
             </AnimatePresence>
           )}
 
-          {/* <div className="flex items-center space-x-2">
-            <Controller
 
-              name="is_public"
-              control={control}
-              render={({ field }) => (
-                <Switch
-                  id="is_public"
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              )}
-            />
-            <FormLabel htmlFor="is_public" className="flex items-center gap-2" icon={watch('is_public') ? Users : Lock}>
-              {watch('is_public') ? 'Public Configuration' : 'Private Configuration'}
-            </FormLabel>
-          </div> */}
-      </div>
-
-      {/* Step 2: Model Selection (only for create mode) */}
-
+        </div>
       </div>
 
       {/* Submit Button */}

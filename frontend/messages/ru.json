@@ -250,5 +250,23 @@
       "failedToLoadData": "Не удалось загрузить данные",
       "unexpectedError": "Произошла непредвиденная ошибка"
     }
+  },
+
+  "Agent": {
+    "browseAgents": "Обзор агентов",
+    "newAgent": "Новый агент",
+    "create": {
+      "agentName": "Имя агента",
+      "agentNamePlaceholder": "Введите имя агента",
+      "description": "Описание / Цель",
+      "descriptionPlaceholder": "Опишите цель и задачи агента...",
+      "instruction": "Инструкция",
+      "instructionPlaceholder": "Укажите конкретные инструкции для этого агента...",
+      "llmModel": "Модель LLM",
+      "selectModel": "Выберите модель",
+      "noConfigurationsYet": "Нет конфигураций",
+      "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
+      "createConfiguration": "Создать конфигурацию"
+    }
   }
 }
