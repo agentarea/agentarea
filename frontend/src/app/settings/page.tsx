@@ -1,104 +1,143 @@
+"use client";
+
 import { useTranslations } from 'next-intl';
-import { User, Globe, LogOut } from 'lucide-react';
-import SettingsCard from './components/SettingsCard';
+import { User as UserIcon, Globe, LogOut, Shield } from 'lucide-react';
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import LanguageSelect from './components/LanguageSelect';
 import ProfileForm from './components/ProfileForm';
-import RowControl from './components/RowControl';
 import { Button } from '@/components/ui/button';
-import ContentBlock from '@/components/ContentBlock/ContentBlock';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function SettingsPage() {
     const t = useTranslations('SettingsPage');
+    const { user, isLoaded, signOut } = useAuth();
 
-    // TODO: get user from backend
-    const user = {
-        name: 'John Doe',
-        email: 'john.doe@example.com',
-        avatar: 'https://github.com/shadcn.png'
+    // Loading state
+    if (!isLoaded) {
+        return (
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                <div className="max-w-6xl mx-auto px-4 py-8">
+                    <div className="flex items-center justify-center py-16">
+                        <div className="text-center">
+                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                            <p className="mt-2 text-gray-600 dark:text-gray-400">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
+    // Transform user data for ProfileForm component
+    const userForProfile = user ? {
+        name: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        email: user.email,
+        avatar: user.imageUrl || 'https://github.com/shadcn.png'
+    } : null;
+
+    const handleLogout = async () => {
+        await signOut();
+    };
+
     return (
-        <ContentBlock 
-            header={{
-                title: t('title'),
-                controls: (
-                    <Button><LogOut className="w-4 h-4" />{t('logout')}</Button>
-                )
-            }}
-        >
-            <div className="mx-auto space-y-5 max-w-4xl">
-                {/* Profile Section */}
-                <SettingsCard
-                    title={t('profile.title')}
-                    description={t('profile.description')}
-                    icon={User}
-                >
-                    <ProfileForm {...user} />
-                </SettingsCard>
-
-                {/* Preferences Section */}
-                <SettingsCard
-                    title={t('preferences.title')}
-                    description={t('preferences.description')}
-                    icon={Globe}
-                >
-                    <>
-                        {/* LANGUAGE SECTION */}
-                        <RowControl title={t('preferences.language')} description={t('preferences.languageDescription')}>
-                            <LanguageSelect />
-                        </RowControl>
-
-                        {/* THEME SECTION */}
-                        <RowControl title={t('preferences.theme')} description={t('preferences.themeDescription')}>
-                            <ThemeToggle />
-                        </RowControl>
-                    </>
-                </SettingsCard>
-
-                {/* Subscription Section */}
-                {/* <SettingsCard
-                    title={t('subscription.title')}
-                    description={t('subscription.description')}
-                    icon={CreditCard}
-                >
-                    <>
-                        <div className="flex items-center justify-between p-4 rounded-lg bg-primary/5 dark:bg-zinc-700/50">
-                            <div className="space-y-0.5">
-                                <Label className="text-base text-primary dark:text-zinc-200">Current Plan</Label>
-                                <p className="text-sm text-muted-foreground">Manage your subscription</p>
-                            </div>
-                            <Badge variant="default" className="px-4 py-1.5 text-base bg-primary/90">Premium</Badge>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            {/* Header */}
+            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <div className="max-w-6xl mx-auto px-4 py-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+                                {t('title')}
+                            </h1>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                Manage your account settings and preferences
+                            </p>
                         </div>
-                        <div className="grid gap-4 p-4 rounded-lg bg-primary/5 dark:bg-zinc-700/50">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Calendar className="w-4 h-4 text-primary/60 dark:text-zinc-400" />
-                                    <span className="text-sm">Next Billing Date</span>
-                                </div>
-                                <span className="text-sm font-medium">January 1, 2024</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <CreditCard className="w-4 h-4 text-primary/60 dark:text-zinc-400" />
-                                    <span className="text-sm">Payment Method</span>
-                                </div>
-                                <span className="text-sm font-medium">•••• 4242</span>
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-4">
-                            <Button variant="outline" className="gap-2 hover:bg-primary/5">
-                                <CreditCard className="w-4 h-4" />
-                                Change Plan
-                            </Button>
-                            <Button variant="outline" className="gap-2 hover:bg-primary/5">
-                                <CreditCard className="w-4 h-4" />
-                                Update Payment
-                            </Button>
-                        </div>
-                    </>
-                </SettingsCard> */}
+                        <Button onClick={handleLogout} variant="outline" className="gap-2">
+                            <LogOut className="w-4 h-4" />
+                            {t('logout')}
+                        </Button>
+                    </div>
+                </div>
             </div>
-        </ContentBlock>
+
+            {/* Main Content */}
+            <div className="max-w-4xl mx-auto px-4 py-8">
+                <div className="space-y-8">
+                        {/* Profile Section */}
+                        <section id="profile" className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                                            {t('profile.title')}
+                                        </h2>
+                                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                            {t('profile.description')}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-full text-xs font-medium">
+                                        <Shield className="w-3 h-3" />
+                                        Auth Provider Managed
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-6">
+                                {userForProfile ? (
+                                    <ProfileForm {...userForProfile} />
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <UserIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                        <p className="text-gray-500 dark:text-gray-400">No user data available</p>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+
+                        {/* Preferences Section */}
+                        <section id="preferences" className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                                <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                                    {t('preferences.title')}
+                                </h2>
+                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                    {t('preferences.description')}
+                                </p>
+                            </div>
+                            <div className="p-6 space-y-6">
+                                {/* Language Setting */}
+                                <div className="flex items-center justify-between py-4 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                    <div className="flex-1">
+                                        <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                                            {t('preferences.language')}
+                                        </h3>
+                                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                            {t('preferences.languageDescription')}
+                                        </p>
+                                    </div>
+                                    <div className="ml-6">
+                                        <LanguageSelect />
+                                    </div>
+                                </div>
+
+                                {/* Theme Setting */}
+                                <div className="flex items-center justify-between py-4">
+                                    <div className="flex-1">
+                                        <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                                            {t('preferences.theme')}
+                                        </h3>
+                                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                            {t('preferences.themeDescription')}
+                                        </p>
+                                    </div>
+                                    <div className="ml-6">
+                                        <ThemeToggle />
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                </div>
+            </div>
+        </div>
     )
-}   
+}

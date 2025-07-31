@@ -25,13 +25,70 @@ class TemporalTaskManager(BaseTaskManager):
 
     def __init__(self, task_repository: TaskRepository):
         """Initialize with TaskRepository dependency."""
+        from agentarea_common.config import get_settings
+        
         self.task_repository = task_repository
-        self.temporal_executor = TemporalWorkflowExecutor()
+        
+        # Get settings and configure Temporal executor properly
+        settings = get_settings()
+        self.temporal_executor = TemporalWorkflowExecutor(
+            namespace=settings.workflow.TEMPORAL_NAMESPACE,
+            server_url=settings.workflow.TEMPORAL_SERVER_URL
+        )
+
+    def _task_to_simple_task(self, task) -> SimpleTask:
+        """Convert Task domain model to SimpleTask."""
+        from .domain.models import SimpleTask
+        
+        return SimpleTask(
+            id=task.id,
+            title=task.description,  # Use description as title
+            description=task.description,
+            query=task.description,  # Use description as query
+            user_id=task.user_id or "system",
+            workspace_id=task.workspace_id,
+            agent_id=task.agent_id,
+            status=task.status,
+            task_parameters=task.parameters or {},
+            result=task.result,
+            error_message=task.error,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+            started_at=task.started_at,
+            completed_at=task.completed_at,
+            execution_id=task.execution_id,
+            metadata=task.metadata or {}
+        )
+
+    def _simple_task_to_task(self, simple_task: SimpleTask):
+        """Convert SimpleTask to Task domain model."""
+        from .domain.models import Task
+        
+        return Task(
+            id=simple_task.id,
+            agent_id=simple_task.agent_id,
+            description=simple_task.description,
+            parameters=simple_task.task_parameters,
+            status=simple_task.status,
+            result=simple_task.result,
+            error=simple_task.error_message,
+            created_at=simple_task.created_at,
+            updated_at=simple_task.updated_at or simple_task.created_at,
+            started_at=simple_task.started_at,
+            completed_at=simple_task.completed_at,
+            execution_id=simple_task.execution_id,
+            user_id=simple_task.user_id,
+            workspace_id=simple_task.workspace_id,
+            metadata=simple_task.metadata
+        )
 
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
         """Submit a task for execution."""
         try:
             logger.info(f"Submitting task {task.id} for execution")
+
+            # Convert SimpleTask to Task for repository operations
+            task_domain = self._simple_task_to_task(task)
 
             # Start temporal workflow for task execution
             workflow_id = f"task-{task.id}"
@@ -74,23 +131,31 @@ class TemporalTaskManager(BaseTaskManager):
             )
 
             # Update task status to submitted
-            task.status = "submitted"
-            updated_task = await self.task_repository.update(task)
-
-            logger.info(f"Task {task.id} submitted successfully")
-            return updated_task
+            updated_task_domain = await self.task_repository.update_status(task.id, "submitted")
+            
+            if updated_task_domain:
+                updated_simple_task = self._task_to_simple_task(updated_task_domain)
+                logger.info(f"Task {task.id} submitted successfully")
+                return updated_simple_task
+            else:
+                raise Exception(f"Failed to update task {task.id} status")
 
         except Exception as e:
             logger.error(f"Error submitting task {task.id}: {e}", exc_info=True)
             # Update task status to failed
             task.status = "failed"
             task.error_message = str(e)
-            await self.task_repository.update(task)
+            # Convert and update in repository
+            task_domain = self._simple_task_to_task(task)
+            await self.task_repository.update_task(task_domain)
             raise
 
     async def get_task(self, task_id: UUID) -> SimpleTask | None:
         """Get task by ID."""
-        return await self.task_repository.get(task_id)
+        task_domain = await self.task_repository.get_task(task_id)
+        if task_domain:
+            return self._task_to_simple_task(task_domain)
+        return None
 
     async def cancel_task(self, task_id: UUID) -> bool:
         """Cancel a task."""
@@ -98,8 +163,8 @@ class TemporalTaskManager(BaseTaskManager):
             logger.info(f"Cancelling task {task_id}")
 
             # Get task from database
-            task = await self.task_repository.get(task_id)
-            if not task:
+            task_domain = await self.task_repository.get_task(task_id)
+            if not task_domain:
                 logger.warning(f"Task {task_id} not found")
                 return False
 
@@ -108,8 +173,7 @@ class TemporalTaskManager(BaseTaskManager):
             await self.temporal_executor.cancel_workflow(workflow_id)
 
             # Update task status
-            task.status = "cancelled"
-            await self.task_repository.update(task)
+            await self.task_repository.update_status(task_id, "cancelled")
 
             logger.info(f"Task {task_id} cancelled successfully")
             return True
@@ -127,15 +191,16 @@ class TemporalTaskManager(BaseTaskManager):
         offset: int = 0
     ) -> list[SimpleTask]:
         """List tasks with optional filtering."""
-        # For now, return all tasks since repository doesn't support filtering
-        return await self.task_repository.list()
+        # Get tasks from repository and convert to SimpleTask
+        tasks_domain = await self.task_repository.list_tasks(limit=limit, offset=offset)
+        return [self._task_to_simple_task(task) for task in tasks_domain]
 
     async def get_task_status(self, task_id: UUID) -> str | None:
         """Get task status."""
-        task = await self.task_repository.get(task_id)
-        return task.status if task else None
+        task_domain = await self.task_repository.get_task(task_id)
+        return task_domain.status if task_domain else None
 
     async def get_task_result(self, task_id: UUID) -> Any | None:
         """Get task result."""
-        task = await self.task_repository.get(task_id)
-        return task.result if task else None
+        task_domain = await self.task_repository.get_task(task_id)
+        return task_domain.result if task_domain else None

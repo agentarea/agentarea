@@ -29,23 +29,3 @@ class APIError(AgentAreaError):
 class ValidationError(AgentAreaError):
     """Raised when input validation fails."""
     pass
-
-
-class AgentAreaAPIError(AgentAreaError):
-    """Raised when API request fails."""
-    pass
-
-
-class ConnectionError(AgentAreaError):
-    """Raised when connection to API fails."""
-    pass
-
-
-class NotFoundError(AgentAreaError):
-    """Raised when requested resource is not found."""
-    pass
-
-
-class ServerError(AgentAreaError):
-    """Raised when server returns an error."""
-    pass

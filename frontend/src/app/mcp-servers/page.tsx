@@ -2,6 +2,7 @@ import { listMCPServers, listMCPServerInstances } from "@/lib/api";
 import { MCPSpecsSection } from "./components/MCPSpecsSection";
 import { ActionCards } from "./components/ActionCards";
 import { MyMCPsSection } from "./components/MyMCPsSection";
+import ClientWrapper from "./ClientWrapper";
 
 export default async function MCPServersPage({
   searchParams,
@@ -18,7 +19,8 @@ export default async function MCPServersPage({
   const mcpInstanceList = mcpInstances.data || [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <ClientWrapper>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Enhanced Header Section */}
         <div className="mb-12 text-center lg:text-left">
@@ -70,5 +72,6 @@ export default async function MCPServersPage({
         </div>
       </div>
     </div>
+    </ClientWrapper>
   );
 }

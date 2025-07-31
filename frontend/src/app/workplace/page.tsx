@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import AuthGuard from "@/components/auth/AuthGuard";
 import { Card } from "@/components/ui/card";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { 
@@ -211,7 +212,8 @@ export default function WorkplacePage() {
   };
 
   return (
-    <ContentBlock
+    <AuthGuard>
+      <ContentBlock
       header={{
         title: "Workplace",
         description: "Your command center for managing agents and tasks",
@@ -429,5 +431,6 @@ export default function WorkplacePage() {
           </div>
         </div>
     </ContentBlock>
+    </AuthGuard>
   );
 } 

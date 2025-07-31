@@ -45,7 +45,7 @@ class JWTTokenHandler:
         if dev_mode:
             # Development mode: use default values
             dev_user_id = "dev-user"
-            workspace_id = "default"
+            workspace_id = "system"  # Use "system" workspace for built-in resources
             
             self.logger.info(f"Development mode: using user_id={dev_user_id}, workspace_id={workspace_id}")
             return UserContext(

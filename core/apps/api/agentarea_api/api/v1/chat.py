@@ -123,96 +123,29 @@ async def send_message(
             },
         )
 
-        # Store task in database first using the same approach as the agents_tasks endpoint
-        database = get_database()
-        async with database.async_session_factory() as session:
-            task_repository = TaskRepository(session)
-
-            # Create task in database
-            from agentarea_tasks.domain.models import TaskCreate as DomainTaskCreate
-
-            task_create = DomainTaskCreate(
-                agent_id=agent_uuid,
-                description=request.content,
-                parameters=task_parameters,
-                user_id=request.user_id or "anonymous",
-                metadata={
-                    "created_via": "chat",
-                    "agent_name": agent.name,
-                    "session_id": session_id,
-                    "status": "created",
-                    "task_id": task_id_str,  # Store the task ID in metadata
-                },
-            )
-
-            # Store in database
-            task = await task_repository.create_from_data(task_create)
-            await session.commit()  # Ensure the task is committed to the database
-
-        logger.info(f"Chat task {task_id_str} created for agent {agent_uuid}")
-
-        # Now try to execute the workflow - if this fails, the task still exists
-        execution_id = None
-        status = "pending"
-
+        # Create task using the task service (which handles repository creation properly)
         try:
-            # Start execution via Temporal workflow service - returns immediately!
-            workflow_result = await workflow_service.execute_agent_task_async(
+            task = await task_service.create_and_execute_task_with_workflow(
                 agent_id=agent_uuid,
-                task_query=request.content,
-                user_id=request.user_id or "anonymous",
-                session_id=session_id,
-                task_parameters=task_parameters,
-                timeout_seconds=300,
-            )
-
-            execution_id = workflow_result.get("execution_id", f"agent-task-{task_id}")
-            status = "processing"  # Update status to processing
-
-            # Update the task in database with execution_id
-            async with database.async_session_factory() as session:
-                task_repository = TaskRepository(session)
-                # Update the task with execution_id and status
-                task.execution_id = execution_id
-                task.status = "processing"
-                await task_repository.update(task)
-                await session.commit()  # Ensure the update is committed
-
-            logger.info(
-                f"Chat task {task_id_str} started with workflow execution ID "
-                f"{execution_id} for agent {agent_uuid}"
-            )
-
-            # Workflow started successfully - no need to publish event
-
-        except Exception as e:
-            logger.error(f"Failed to start chat task workflow for agent {agent_uuid}: {e}")
-
-            # Update task status to failed, but still return the task
-            status = "failed"
-
-            # TODO: some strange behaviour. Fix it
-            # Publish workflow failed event
-            workflow_failed_event = TaskCreated(
-                task_id=task_id_str,
-                agent_id=str(agent_uuid),
                 description=request.content,
                 parameters=task_parameters,
-                session_id=session_id,
-                metadata={
-                    "created_via": "chat",
-                    "agent_name": agent.name,
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "user_id": request.user_id or "anonymous",
-                    "session_id": session_id,
-                    "status": "failed",
-                    "error": str(e),
-                    "workflow_failed": True,
-                },
+                user_id=request.user_id or "anonymous",
+                enable_agent_communication=True,
             )
-            await event_broker.publish(workflow_failed_event)
+            logger.info(f"Chat task {task.id} created and submitted for agent {agent_uuid}")
+        except Exception as e:
+            logger.error(f"Failed to create chat task: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to create chat task: {e}")
 
-            logger.info(f"Chat task {task_id_str} created but workflow failed to start: {e}")
+        # The task service already handles workflow execution, so we can use the task directly
+        execution_id = task.execution_id
+        status = task.status
+        
+        # Update task_id_str to match the actual task ID created
+        task_id_str = str(task.id)
+
+        # Task service handles workflow execution and event publishing, so we're done
+        logger.info(f"Chat task {task_id_str} created with status {status} for agent {agent_uuid}")
 
         # Return immediately with task_id - execution happens in background
         return ChatResponse(

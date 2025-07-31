@@ -50,6 +50,9 @@ type InstanceSpec struct {
 	// Networking
 	ExposedPort int `json:"exposed_port,omitempty"`
 	
+	// Volume mounts for writable directories (security sandbox)
+	WritablePaths []string `json:"writable_paths,omitempty"`
+	
 	// Metadata
 	InstanceID   string `json:"instance_id"`
 	WorkspaceID  string `json:"workspace_id,omitempty"`

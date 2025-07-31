@@ -64,25 +64,25 @@ passed_tests=0
 # Test basic CLI import
 echo -e "\n${YELLOW}=== Testing Basic CLI Import ===${NC}"
 total_tests=$((total_tests + 1))
-if test_command "uv run python -c 'import agentarea_cli.main; print(\"CLI imports working\")'"; then
+if test_command "python -c 'import agentarea_cli.main; print(\"CLI imports working\")'"; then
     passed_tests=$((passed_tests + 1))
 fi
 
 # Test main CLI help
 echo -e "\n${YELLOW}=== Testing Main CLI Help ===${NC}"
 total_tests=$((total_tests + 1))
-if test_command_with_output "uv run python -m apps.cli.agentarea_cli.main --help" "Main CLI help"; then
+if test_command_with_output "python -m agentarea_cli.main --help" "Main CLI help"; then
     passed_tests=$((passed_tests + 1))
 fi
 
 # Test authentication commands
 echo -e "\n${YELLOW}=== Testing Authentication Commands ===${NC}"
 auth_commands=(
-    "uv run python -m apps.cli.agentarea_cli.main auth --help"
-    "uv run python -m apps.cli.agentarea_cli.main auth config --help"
-    "uv run python -m apps.cli.agentarea_cli.main auth login --help"
-    "uv run python -m apps.cli.agentarea_cli.main auth logout --help"
-    "uv run python -m apps.cli.agentarea_cli.main auth status --help"
+    "python -m agentarea_cli.main auth --help"
+    "python -m agentarea_cli.main auth config --help"
+    "python -m agentarea_cli.main auth login --help"
+    "python -m agentarea_cli.main auth logout --help"
+    "python -m agentarea_cli.main auth status --help"
 )
 
 for cmd in "${auth_commands[@]}"; do
@@ -95,12 +95,12 @@ done
 # Test agent commands
 echo -e "\n${YELLOW}=== Testing Agent Commands ===${NC}"
 agent_commands=(
-    "uv run python -m apps.cli.agentarea_cli.main agent --help"
-    "uv run python -m apps.cli.agentarea_cli.main agent create --help"
-    "uv run python -m apps.cli.agentarea_cli.main agent list --help"
-    "uv run python -m apps.cli.agentarea_cli.main agent show --help"
-    "uv run python -m apps.cli.agentarea_cli.main agent update --help"
-    "uv run python -m apps.cli.agentarea_cli.main agent delete --help"
+    "python -m agentarea_cli.main agent --help"
+    "python -m agentarea_cli.main agent create --help"
+    "python -m agentarea_cli.main agent list --help"
+    "python -m agentarea_cli.main agent show --help"
+    "python -m agentarea_cli.main agent update --help"
+    "python -m agentarea_cli.main agent delete --help"
 )
 
 for cmd in "${agent_commands[@]}"; do
@@ -113,14 +113,14 @@ done
 # Test LLM commands
 echo -e "\n${YELLOW}=== Testing LLM Commands ===${NC}"
 llm_commands=(
-    "uv run python -m apps.cli.agentarea_cli.main llm --help"
-    "uv run python -m apps.cli.agentarea_cli.main llm create --help"
-    "uv run python -m apps.cli.agentarea_cli.main llm list --help"
-    "uv run python -m apps.cli.agentarea_cli.main llm show --help"
-    "uv run python -m apps.cli.agentarea_cli.main llm update --help"
-    "uv run python -m apps.cli.agentarea_cli.main llm delete --help"
-    "uv run python -m apps.cli.agentarea_cli.main llm providers --help"
-    "uv run python -m apps.cli.agentarea_cli.main llm test --help"
+    "python -m agentarea_cli.main llm --help"
+    "python -m agentarea_cli.main llm create --help"
+    "python -m agentarea_cli.main llm list --help"
+    "python -m agentarea_cli.main llm show --help"
+    "python -m agentarea_cli.main llm update --help"
+    "python -m agentarea_cli.main llm delete --help"
+    "python -m agentarea_cli.main llm providers --help"
+    "python -m agentarea_cli.main llm test --help"
 )
 
 for cmd in "${llm_commands[@]}"; do
@@ -133,11 +133,11 @@ done
 # Test chat commands
 echo -e "\n${YELLOW}=== Testing Chat Commands ===${NC}"
 chat_commands=(
-    "uv run python -m apps.cli.agentarea_cli.main chat --help"
-    "uv run python -m apps.cli.agentarea_cli.main chat agents --help"
-    "uv run python -m apps.cli.agentarea_cli.main chat send --help"
-    "uv run python -m apps.cli.agentarea_cli.main chat history --help"
-    "uv run python -m apps.cli.agentarea_cli.main chat clear --help"
+    "python -m agentarea_cli.main chat --help"
+    "python -m agentarea_cli.main chat agents --help"
+    "python -m agentarea_cli.main chat send --help"
+    "python -m agentarea_cli.main chat history --help"
+    "python -m agentarea_cli.main chat clear --help"
 )
 
 for cmd in "${chat_commands[@]}"; do
@@ -150,13 +150,13 @@ done
 # Test system commands
 echo -e "\n${YELLOW}=== Testing System Commands ===${NC}"
 system_commands=(
-    "uv run python -m apps.cli.agentarea_cli.main system --help"
-    "uv run python -m apps.cli.agentarea_cli.main system info --help"
-    "uv run python -m apps.cli.agentarea_cli.main system status --help"
-    "uv run python -m apps.cli.agentarea_cli.main system components --help"
-    "uv run python -m apps.cli.agentarea_cli.main system logs --help"
-    "uv run python -m apps.cli.agentarea_cli.main system metrics --help"
-    "uv run python -m apps.cli.agentarea_cli.main system restart --help"
+    "python -m agentarea_cli.main system --help"
+    "python -m agentarea_cli.main system info --help"
+    "python -m agentarea_cli.main system status --help"
+    "python -m agentarea_cli.main system components --help"
+    "python -m agentarea_cli.main system logs --help"
+    "python -m agentarea_cli.main system metrics --help"
+    "python -m agentarea_cli.main system restart --help"
 )
 
 for cmd in "${system_commands[@]}"; do
@@ -169,17 +169,17 @@ done
 # Test workspace imports specifically
 echo -e "\n${YELLOW}=== Testing Workspace Imports ===${NC}"
 import_tests=(
-    "uv run python -c 'from agentarea_cli.client import AgentAreaClient; print(\"Client import OK\")'"
-    "uv run python -c 'from agentarea_cli.config import Config, AuthConfig; print(\"Config import OK\")'"
-    "uv run python -c 'from agentarea_cli.exceptions import AgentAreaError; print(\"Exceptions import OK\")'"
-    "uv run python -c 'from agentarea_cli.utils import format_table; print(\"Utils import OK\")'"
-    "uv run python -c 'from agentarea_common.auth import UserContext; print(\"Common auth import OK\")'"
-    "uv run python -c 'from agentarea_common.exceptions import WorkspaceError; print(\"Common exceptions import OK\")'"
+    "python -c 'from agentarea_cli.client import AgentAreaClient; print(\"Client import OK\")'"
+    "python -c 'from agentarea_cli.config import Config, AuthConfig; print(\"Config import OK\")'"
+    "python -c 'from agentarea_cli.exceptions import AgentAreaError; print(\"Exceptions import OK\")'"
+    "python -c 'from agentarea_cli.utils import format_table; print(\"Utils import OK\")'"
+    "python -c 'from agentarea_common.auth import UserContext; print(\"Common auth import OK\")'"
+    "python -c 'from agentarea_common.exceptions import WorkspaceError; print(\"Common exceptions import OK\")'"
 )
 
 for cmd in "${import_tests[@]}"; do
     total_tests=$((total_tests + 1))
-    if test_command "$cmd" "Import test"; then
+    if test_command "$cmd" "Import test: $(echo $cmd | cut -d\"'\" -f2 | cut -d';' -f1)"; then
         passed_tests=$((passed_tests + 1))
     fi
 done

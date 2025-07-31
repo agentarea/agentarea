@@ -195,3 +195,71 @@ def create_simple_agent_config(
         config["tools"] = tools
     
     return config
+
+
+def build_temporal_enhanced_agent(
+    agent_config: Dict[str, Any], 
+    session_data: Dict[str, Any]
+) -> BaseAgent:
+    """Build an ADK agent with Temporal-backed services for tool and LLM execution.
+    
+    This function creates an ADK agent but replaces its LLM and tool services
+    with Temporal-backed implementations, making Temporal the execution backbone.
+    
+    Args:
+        agent_config: Dictionary containing agent configuration
+        session_data: Dictionary containing session information
+        
+    Returns:
+        ADK agent with Temporal-enhanced services
+    """
+    logger.info(f"Building Temporal-enhanced agent: {agent_config.get('name', 'unknown')}")
+    
+    try:
+        # First, register Temporal services with ADK
+        from ..services.temporal_llm_service import TemporalLlmServiceFactory
+        TemporalLlmServiceFactory.register_with_adk()
+        
+        # Build base agent configuration
+        enhanced_config = agent_config.copy()
+        
+        # Ensure we have a model configuration that will use Temporal LLM service
+        model_id = enhanced_config.get("model_id", enhanced_config.get("model", "gpt-4"))
+        enhanced_config["model"] = model_id  # ADK expects 'model' field
+        
+        # Create the agent using standard builder
+        agent = build_adk_agent_from_config(enhanced_config)
+        
+        # If this is an LLM agent, enhance it with Temporal services
+        if isinstance(agent, LlmAgent):
+            # Replace the model with our Temporal-backed service
+            temporal_llm = TemporalLlmServiceFactory.create_llm_service(
+                model=model_id,
+                agent_config=agent_config,
+                session_data=session_data
+            )
+            
+            # Replace the agent's model (this is the key integration point)
+            # ADK LlmAgent stores model in the 'model' attribute
+            agent.model = temporal_llm
+            
+            logger.info(f"Enhanced agent {agent.name} with Temporal LLM service")
+        
+        # Enhance tools with Temporal routing
+        # Create tool registry for this agent
+        from ..services.temporal_tool_service import TemporalToolRegistry
+        tool_registry = TemporalToolRegistry(agent_config, session_data)
+        
+        # Store registry on agent for later use
+        agent._temporal_tool_registry = tool_registry
+        
+        logger.info(f"Enhanced agent {agent.name} with Temporal tool registry")
+        
+        logger.info(f"Successfully built Temporal-enhanced agent: {agent.name}")
+        return agent
+        
+    except Exception as e:
+        logger.error(f"Failed to build Temporal-enhanced agent: {e}")
+        # Fallback to standard agent
+        logger.warning("Falling back to standard ADK agent")
+        return build_adk_agent_from_config(agent_config)

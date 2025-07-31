@@ -1,5 +1,12 @@
 http:
     routers:
+        mcp-filesystem-instance-cb93dd87:
+            rule: PathPrefix(`/mcp/filesystem-instance-cb93dd87`)
+            service: mcp-filesystem-instance-cb93dd87-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-filesystem-instance-cb93dd87-stripprefix
         mcp-manager-api:
             rule: PathPrefix(`/api/mcp`)
             service: mcp-manager-service
@@ -81,6 +88,10 @@ http:
             middlewares:
                 - mcp-test-service-test-581aa3be-1b99e0e1-stripprefix
     services:
+        mcp-filesystem-instance-cb93dd87-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.4:8000
         mcp-manager-service:
             loadBalancer:
                 servers:
@@ -126,6 +137,11 @@ http:
             stripPrefix:
                 prefixes:
                     - /api/mcp
+                forceSlash: false
+        mcp-filesystem-instance-cb93dd87-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/filesystem-instance-cb93dd87
                 forceSlash: false
         mcp-mcp-echo-http-d43c2606-stripprefix:
             stripPrefix:

@@ -31,7 +31,7 @@ def status(ctx, output_format: str, detailed: bool):
         
         try:
             # Get basic health check
-            health_result = await client.get("/v1/health")
+            health_result = await client.get("/api/v1/health")
             
             if output_format == "json":
                 result = {"health": health_result}
@@ -39,7 +39,7 @@ def status(ctx, output_format: str, detailed: bool):
                 if detailed:
                     # Get additional system info
                     try:
-                        stats_result = await client.get("/v1/system/stats")
+                        stats_result = await client.get("/api/v1/system/stats")
                         result["stats"] = stats_result
                     except AgentAreaAPIError:
                         result["stats"] = {"error": "Stats not available"}
@@ -63,7 +63,7 @@ def status(ctx, output_format: str, detailed: bool):
                 click.echo("📊 System Statistics:")
                 
                 try:
-                    stats_result = await client.get("/v1/system/stats")
+                    stats_result = await client.get("/api/v1/system/stats")
                     
                     # Display stats
                     if "agents" in stats_result:
@@ -113,7 +113,7 @@ def info(ctx, output_format: str):
         client: "AgentAreaClient" = ctx.obj["client"]
         
         try:
-            result = await client.get("/v1/system/info")
+            result = await client.get("/api/v1/system/info")
             
             if output_format == "json":
                 click.echo(json.dumps(result, indent=2))
@@ -187,7 +187,7 @@ def logs(ctx, output_format: str, limit: int, level: str, component: str):
             params["component"] = component
         
         try:
-            result = await client.get("/v1/system/logs", params=params)
+            result = await client.get("/api/v1/system/logs", params=params)
             
             logs_list = result.get("logs", [])
             if not logs_list:
@@ -237,7 +237,7 @@ def metrics(ctx, output_format: str):
         client: "AgentAreaClient" = ctx.obj["client"]
         
         try:
-            result = await client.get("/v1/system/metrics")
+            result = await client.get("/api/v1/system/metrics")
             
             if output_format == "json":
                 click.echo(json.dumps(result, indent=2))
@@ -317,7 +317,7 @@ def restart(ctx, component: str, force: bool):
             if component:
                 payload["component"] = component
             
-            await client.post("/v1/system/restart", payload)
+            await client.post("/api/v1/system/restart", payload)
             
             if component:
                 click.echo(f"✅ Component '{component}' restart initiated")
@@ -343,7 +343,7 @@ def components(ctx, output_format: str):
         client: "AgentAreaClient" = ctx.obj["client"]
         
         try:
-            result = await client.get("/v1/system/components")
+            result = await client.get("/api/v1/system/components")
             
             components_list = result.get("components", [])
             if not components_list:

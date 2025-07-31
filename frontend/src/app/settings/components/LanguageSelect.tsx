@@ -20,26 +20,20 @@ export default function LanguageSelect() {
     <button
       onClick={onSelectChange}
       className={cn(
-        "w-full max-w-[200px] bg-white dark:bg-zinc-900",
-        "text-foreground hover:border-primary/70 dark:hover:bg-zinc-800/50",
-        "relative flex items-center justify-between",
-        "py-2 px-3 rounded-md",
-        "group transition-all duration-200",
-        "border border-zinc-200 dark:border-zinc-800"
+        "flex items-center justify-between gap-3 px-4 py-2.5 min-w-[140px]",
+        "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700",
+        "text-gray-900 dark:text-gray-100 hover:border-blue-300 dark:hover:border-blue-600",
+        "rounded-lg transition-all duration-200 group",
+        "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
       )}
     >
       <div className="flex items-center gap-2">
-        {/* <GlobeIcon className="h-4 w-4 text-zinc-500 dark:text-zinc-400" /> */}
-        <span className="text-sm text-zinc-700 dark:text-zinc-300">
-          {t('preferences.switchLanguage')}
+        <GlobeIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+        <span className="text-sm font-medium">
+          {locale === 'en' ? 'English' : 'Русский'}
         </span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          {locale.toUpperCase()}
-        </span>
-        <ChevronRight className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
-      </div>
+      <ChevronRight className="h-4 w-4 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
     </button>
   );
 } 

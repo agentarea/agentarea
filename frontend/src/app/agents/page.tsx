@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import AuthGuard from "@/components/auth/AuthGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -561,7 +562,8 @@ export default function TaskCreationPage() {
   };
 
   return (
-    <TooltipProvider>
+    <AuthGuard>
+      <TooltipProvider>
       <ContentBlock
         header={{
           title: "AI Task Assistant",
@@ -1213,5 +1215,6 @@ export default function TaskCreationPage() {
         </div>
       </ContentBlock>
     </TooltipProvider>
+    </AuthGuard>
   );
 }

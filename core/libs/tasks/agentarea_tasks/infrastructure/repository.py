@@ -214,7 +214,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             return None
 
         await self.session.flush()
-        return await self.get(task_id)
+        return await self.get_by_id(task_id)
 
     def _orm_to_domain(self, task_orm: TaskORM) -> Task:
         """Convert ORM model to domain model."""
@@ -231,7 +231,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             started_at=task_orm.started_at,
             completed_at=task_orm.completed_at,
             execution_id=task_orm.execution_id,
-            user_id=task_orm.user_id,
+            user_id=task_orm.created_by,
             workspace_id=task_orm.workspace_id,
             metadata=task_orm.task_metadata or {},
         )

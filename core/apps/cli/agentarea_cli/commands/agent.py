@@ -18,17 +18,17 @@ def agent():
     pass
 
 
-@agent.command(name="list")
+@agent.command()
 @click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
 @click.pass_context
-def list_agents(ctx, output_format: str):
+def list(ctx, output_format: str):
     """List all agents."""
     
     async def _list_agents():
         client: "AgentAreaClient" = ctx.obj["client"]
         
         try:
-            data = await client.get("/v1/agents/")
+            data = await client.get("/v1/agents")
             
             if not data or not isinstance(data, list):
                 click.echo("📭 No agents found")
@@ -95,13 +95,13 @@ def create(ctx, name: str, description: str, instruction: str, model_id: str, pl
             "name": name.strip(),
             "description": description.strip(),
             "instruction": instruction.strip(),
-            "model_id": model_id,
+            "llm_model_instance_id": model_id,
             "planning_enabled": planning,
             "is_public": public
         }
         
         try:
-            result = await client.post("/v1/agents/", data)
+            result = await client.post("/v1/agents", data)
             click.echo(f"✅ Agent '{name}' created successfully")
             click.echo(f"   ID: {result.get('id', 'N/A')}")
             click.echo(f"   Status: {result.get('status', 'Unknown')}")
@@ -230,53 +230,3 @@ def delete(ctx, agent_id: str, force: bool):
             raise click.Abort()
     
     run_async(_delete_agent())
-
-
-@agent.command()
-@click.argument("agent_id")
-@click.argument("task_text")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--stream/--no-stream", default=True, help="Stream response in real-time")
-@click.pass_context
-def task(ctx, agent_id: str, task_text: str, output_format: str, stream: bool):
-    """Send a task to an agent."""
-    
-    if len(task_text.strip()) < 3:
-        click.echo("❌ Task text must be at least 3 characters long")
-        raise click.Abort()
-    
-    async def _send_task():
-        client: "AgentAreaClient" = ctx.obj["client"]
-        
-        data = {
-            "description": task_text.strip(),
-            "stream": stream
-        }
-        
-        try:
-            if stream and output_format == "text":
-                click.echo(f"🚀 Sending task to agent '{agent_id}': {task_text}")
-                click.echo("📝 Response:")
-                click.echo()
-                
-                # Use streaming method for real-time response
-                await client.post_stream(f"/v1/agents/{agent_id}/tasks/", data)
-            else:
-                result = await client.post(f"/v1/agents/{agent_id}/tasks/", data)
-                
-                if output_format == "json":
-                    import json
-                    click.echo(json.dumps(result, indent=2))
-                else:
-                    click.echo(f"🚀 Task sent to agent '{agent_id}': {task_text}")
-                    if "response" in result:
-                        click.echo("📝 Response:")
-                        click.echo(result["response"])
-                    else:
-                        click.echo("✅ Task completed successfully")
-            
-        except AgentAreaAPIError as e:
-            click.echo(f"❌ Failed to send task: {e}")
-            raise click.Abort()
-    
-    run_async(_send_task())

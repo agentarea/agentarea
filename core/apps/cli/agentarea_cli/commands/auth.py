@@ -48,7 +48,7 @@ def login(ctx, user_id: str, admin: bool):
             # Test the token by calling /auth/users/me
             client: "AgentAreaClient" = ctx.obj["client"]
             try:
-                result = await client.get("/v1/auth/users/me")
+                result = await client.get("/api/v1/auth/users/me")
                 click.echo(f"   Token verified: {result.get('user_id', 'Unknown')}")
             except AgentAreaAPIError as e:
                 click.echo(f"   Warning: Could not verify token: {e}")
@@ -97,7 +97,7 @@ def status(ctx):
         # Try to get user info
         client: "AgentAreaClient" = ctx.obj["client"]
         try:
-            result = await client.get("/v1/auth/users/me")
+            result = await client.get("/api/v1/auth/users/me")
             click.echo(f"   User ID: {result.get('user_id', 'Unknown')}")
             
             # Handle both single role and multiple roles

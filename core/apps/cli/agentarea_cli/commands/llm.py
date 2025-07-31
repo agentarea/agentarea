@@ -38,7 +38,7 @@ def list(ctx, output_format: str, provider: Optional[str], status: Optional[str]
             params["status"] = status
         
         try:
-            result = await client.get("/v1/llm/models", params=params)
+            result = await client.get("/api/v1/llm/models", params=params)
             
             models = result.get("models", [])
             if not models:
@@ -128,7 +128,7 @@ def create(ctx, name: str, provider: str, model_type: str, config: Optional[str]
             if base_url:
                 payload["base_url"] = base_url
             
-            result = await client.post("/v1/llm/models", payload)
+            result = await client.post("/api/v1/llm/models", payload)
             
             if output_format == "json":
                 click.echo(json.dumps(result, indent=2))
@@ -164,7 +164,7 @@ def show(ctx, model_id: str, output_format: str):
         client: "AgentAreaClient" = ctx.obj["client"]
         
         try:
-            result = await client.get(f"/v1/llm/models/{model_id}")
+            result = await client.get(f"/api/v1/llm/models/{model_id}")
             
             if output_format == "json":
                 click.echo(json.dumps(result, indent=2))
@@ -248,7 +248,7 @@ def update(ctx, model_id: str, name: Optional[str], description: Optional[str],
                 click.echo("❌ No fields provided to update")
                 raise click.Abort()
             
-            result = await client.put(f"/v1/llm/models/{model_id}", payload)
+            result = await client.put(f"/api/v1/llm/models/{model_id}", payload)
             
             if output_format == "json":
                 click.echo(json.dumps(result, indent=2))
@@ -296,7 +296,7 @@ def delete(ctx, model_id: str, force: bool):
             raise click.Abort()
         
         try:
-            await client.delete(f"/v1/llm/models/{model_id}")
+            await client.delete(f"/api/v1/llm/models/{model_id}")
             click.echo(f"✅ Model '{model_id}' deleted successfully")
             
         except AuthenticationError:
@@ -339,7 +339,7 @@ def test(ctx, model_id: str, prompt: str, max_tokens: Optional[int],
             if temperature is not None:
                 payload["temperature"] = temperature
             
-            result = await client.post(f"/v1/llm/models/{model_id}/test", payload)
+            result = await client.post(f"/api/v1/llm/models/{model_id}/test", payload)
             
             if output_format == "json":
                 click.echo(json.dumps(result, indent=2))
@@ -378,7 +378,7 @@ def providers(ctx, output_format: str):
         client: "AgentAreaClient" = ctx.obj["client"]
         
         try:
-            result = await client.get("/v1/llm/providers")
+            result = await client.get("/api/v1/llm/providers")
             
             providers = result.get("providers", [])
             if not providers:

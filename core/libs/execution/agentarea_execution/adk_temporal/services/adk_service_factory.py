@@ -11,7 +11,10 @@ from ...ag.adk.auth.credential_service.in_memory_credential_service import InMem
 from .temporal_session_service import TemporalSessionService
 from .temporal_artifact_service import TemporalArtifactService
 from .temporal_memory_service import TemporalMemoryService
-from ..utils.agent_builder import build_adk_agent_from_config
+from .temporal_llm_service import TemporalLlmServiceFactory
+from .temporal_tool_service import TemporalToolRegistry
+from ..utils.agent_builder import build_adk_agent_from_config, build_temporal_enhanced_agent
+from ..interceptors import enable_temporal_backbone, disable_temporal_backbone, is_temporal_backbone_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +22,8 @@ logger = logging.getLogger(__name__)
 def create_adk_runner(
     agent_config: Dict[str, Any],
     session_data: Dict[str, Any],
-    use_temporal_services: bool = False  # Default to in-memory services for simplicity
+    use_temporal_services: bool = False,  # Default to in-memory services for simplicity
+    use_temporal_backbone: bool = True   # NEW: Use Temporal for tool/LLM execution
 ) -> Runner:
     """Create an ADK Runner with appropriate service implementations.
     
@@ -27,6 +31,7 @@ def create_adk_runner(
         agent_config: Dictionary containing agent configuration
         session_data: Dictionary containing session information
         use_temporal_services: Whether to use Temporal-aware service implementations
+        use_temporal_backbone: Whether to route tool/LLM calls through Temporal
         
     Returns:
         Configured ADK Runner instance
@@ -34,8 +39,23 @@ def create_adk_runner(
     logger.info(f"Creating ADK runner for agent: {agent_config.get('name', 'unknown')}")
     
     try:
+        # Enable/disable Temporal backbone based on configuration
+        if use_temporal_backbone and not is_temporal_backbone_enabled():
+            logger.info("🔧 Enabling Temporal backbone - ALL tool and LLM calls will be Temporal activities")
+            enable_temporal_backbone()
+        elif not use_temporal_backbone and is_temporal_backbone_enabled():
+            logger.info("🔧 Disabling Temporal backbone - using standard ADK execution")
+            disable_temporal_backbone()
+        
         # Build the ADK agent from configuration
-        agent = build_adk_agent_from_config(agent_config)
+        if use_temporal_backbone:
+            # Use enhanced agent builder that integrates Temporal services
+            agent = build_temporal_enhanced_agent(agent_config, session_data)
+            logger.info("Created Temporal-enhanced ADK agent with interceptors enabled")
+        else:
+            # Use standard ADK agent
+            agent = build_adk_agent_from_config(agent_config)
+            logger.info("Created standard ADK agent")
         
         # Use ADK's built-in in-memory services for simplicity
         # These handle all the serialization and state management automatically
@@ -61,7 +81,8 @@ def create_adk_runner(
             credential_service=credential_service,
         )
         
-        logger.info(f"Successfully created ADK runner with {'temporal session' if use_temporal_services else 'default'} services")
+        service_type = "temporal-enhanced" if use_temporal_backbone else ("temporal session" if use_temporal_services else "default")
+        logger.info(f"Successfully created ADK runner with {service_type} services")
         return runner
         
     except Exception as e:

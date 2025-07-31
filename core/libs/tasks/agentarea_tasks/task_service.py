@@ -375,47 +375,21 @@ class TaskService(BaseTaskService):
         # Set initial status
         stored_task.status = "pending"
 
-        # Try to execute with workflow if available
-        if self.workflow_service:
-            try:
-                result = await self.workflow_service.execute_agent_task_async(
-                    agent_id=agent_id,
-                    task_query=description,
-                    user_id=user_id or "api_user",
-                    task_parameters=parameters or {},
-                )
-                execution_id = result.get("execution_id")
+        # Execute task using the task manager (which uses AgentExecutionWorkflow)
+        try:
+            # Submit task through task manager
+            executed_task = await self.task_manager.submit_task(stored_task)
+            
+            # Update stored task with execution info
+            stored_task.status = executed_task.status
+            stored_task.execution_id = executed_task.execution_id
+            
+            logger.info(f"Task {task_id} submitted successfully with status {executed_task.status}")
 
-                # Update task with execution info
-                stored_task.execution_id = execution_id
-                stored_task.status = "running"
-
-                # Publish workflow started event - temporarily disabled
-                # workflow_started_event = TaskCreated(
-                #     task_id=str(task_id),
-                #     agent_id=str(agent_id),
-                #     description=description,
-                #     parameters=parameters or {},
-                # )
-                # await self._publish_task_event(workflow_started_event)
-
-                logger.info(f"Task {task_id} started with workflow execution ID {execution_id}")
-
-            except Exception as e:
-                logger.error(f"Failed to start task workflow: {e}")
-                stored_task.status = "failed"
-                stored_task.result = {"error": str(e), "error_type": "workflow_start_failed"}
-
-                # Publish workflow failed event - temporarily disabled
-                # workflow_failed_event = TaskCreated(
-                #     task_id=str(task_id),
-                #     agent_id=str(agent_id),
-                #     description=description,
-                #     parameters=parameters or {},
-                # )
-                # await self._publish_task_event(workflow_failed_event)
-        else:
-            logger.warning("Workflow service not available - task created but not executed")
+        except Exception as e:
+            logger.error(f"Failed to submit task: {e}")
+            stored_task.status = "failed"
+            stored_task.result = {"error": str(e), "error_type": "task_submission_failed"}
 
         return stored_task
 

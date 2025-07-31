@@ -14,7 +14,7 @@ from typing import Dict, Any, List
 # ADK-Temporal integration imports
 sys.path.append('libs/execution')
 
-from agentarea_execution.adk_temporal.activities.adk_agent_activities import execute_adk_agent_activity
+from agentarea_execution.adk_temporal.activities.adk_agent_activities import execute_agent_step
 from agentarea_execution.adk_temporal.utils.event_serializer import EventSerializer
 
 logging.basicConfig(level=logging.INFO)
@@ -57,7 +57,7 @@ async def test_adk_activity_directly():
     try:
         # Execute activity directly (simulating Temporal activity context)
         print("Executing ADK agent activity...")
-        events = await execute_adk_agent_activity(
+        events = await execute_agent_step(
             agent_config,
             session_data,
             user_message_data

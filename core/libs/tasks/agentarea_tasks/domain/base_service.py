@@ -89,13 +89,12 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
-            user_id=task.user_id,
-            workspace_id=task.workspace_id,
+            # user_id and workspace_id will be set automatically by WorkspaceScopedRepository
             metadata=task.metadata,
         )
 
         # Persist the task
-        created_task_domain = await self.task_repository.create(**task_domain.model_dump())
+        created_task_domain = await self.task_repository.create_task(task_domain)
 
         # Convert back to SimpleTask for return
         created_task = SimpleTask(

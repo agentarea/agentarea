@@ -57,7 +57,15 @@ services:
       - default
       - mcp-network
       - temporal-network
-    command: ["python", "-m", "agentarea_api.cli", "serve", "--reload", "--log-level=info"]
+    command:
+      [
+        "python",
+        "-m",
+        "agentarea_api.cli",
+        "serve",
+        "--reload",
+        "--log-level=info",
+      ]
 
   app_migrations:
     image: agentarea-backend:latest
@@ -65,8 +73,8 @@ services:
       context: core
       dockerfile: apps/api/Dockerfile
     environment:
-    ## Have to add it for now
-          # S3 settings
+      ## Have to add it for now
+      # S3 settings
       - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
       - AWS_REGION=${MINIO_REGION}
@@ -183,7 +191,7 @@ services:
     networks:
       - default
       - mcp-network
-    command: ["redis-server", "--save", "", "--appendonly", "no"]  # Disable persistence for dev
+    command: ["redis-server", "--save", "", "--appendonly", "no"] # Disable persistence for dev
 
   mcp-manager:
     image: mcp-manager:latest
@@ -198,16 +206,16 @@ services:
     restart: unless-stopped
     privileged: true
     ports:
-      - "7999:80"   # Traefik proxy (unified entry point)
+      - "7999:80" # Traefik proxy (unified entry point)
     tmpfs:
       - /tmp
       - /run
     volumes:
       - mcp_containers:/var/lib/containers/storage
-      - ./mcp-infrastructure/go-mcp-manager:/app:rw  # Mount source code for live reload
-      - ./mcp-infrastructure/traefik:/etc/traefik:rw  # Traefik configuration
+      - ./mcp-infrastructure/go-mcp-manager:/app:rw # Mount source code for live reload
+      - ./mcp-infrastructure/traefik:/etc/traefik:rw # Traefik configuration
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro  # Access to Infisical bootstrap token
+      - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/bootstrap/data:ro # Access to Infisical bootstrap token
     networks:
       - mcp-network
     environment:
@@ -300,10 +308,10 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      
+
       # Redis
       - REDIS_URL=redis://redis:6379
-      
+
       # Workflow settings
       - WORKFLOW__USE_WORKFLOW_EXECUTION=true
       - WORKFLOW__WORKFLOW_ENGINE=temporal
@@ -312,10 +320,10 @@ services:
       - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
       - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
       - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
-      
+
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
-      
+
       # Development
       - DEBUG=true
       - ENVIRONMENT=development
@@ -330,7 +338,7 @@ services:
 
 volumes:
   postgres_data:
-  minio_data: 
+  minio_data:
   redis_data:
   infisical_bootstrap:
   mcp_containers:
@@ -343,4 +351,3 @@ networks:
     driver: bridge
   temporal-network:
     driver: bridge
-

@@ -48,6 +48,7 @@ class AgentExecutionState:
     execution_id: str = ""
     agent_id: str = ""
     task_id: str = ""
+    user_id: str = ""  # Add user_id field for user context
     goal: AgentGoal | None = None
     status: str = ExecutionStatus.INITIALIZING
     current_iteration: int = 0
@@ -96,6 +97,7 @@ class AgentExecutionWorkflow:
         self.state.execution_id = workflow.info().workflow_id
         self.state.agent_id = str(request.agent_id)
         self.state.task_id = str(request.task_id)
+        self.state.user_id = request.user_id  # Add user_id from request
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         self.state.budget_usd = request.budget_usd
@@ -125,10 +127,16 @@ class AgentExecutionWorkflow:
         """Initialize agent configuration and available tools."""
         workflow.logger.info("Initializing agent configuration")
 
+        # Prepare user context data for activities (simplified - no roles)
+        self.state.user_context_data = {
+            "user_id": "dev-user",  # Use dev-user as set by JWT handler in dev mode
+            "workspace_id": "system"  # Use system workspace where agents are created
+        }
+        
         # Build agent config
         self.state.agent_config = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
-            UUID(self.state.agent_id),
+            args=[UUID(self.state.agent_id), self.state.user_context_data],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
         )
@@ -140,7 +148,7 @@ class AgentExecutionWorkflow:
         # Discover available tools
         self.state.available_tools = await workflow.execute_activity(
             Activities.DISCOVER_AVAILABLE_TOOLS,
-            UUID(self.state.agent_id),
+            args=[UUID(self.state.agent_id), self.state.user_context_data],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
         )
@@ -228,29 +236,13 @@ class AgentExecutionWorkflow:
         await self._publish_events_immediately()
 
         try:
-            # Build system prompt with current context
-            if self.state.goal:
-                system_prompt = MessageBuilder.build_system_prompt(
-                    goal_description=self.state.goal.description,
-                    success_criteria=self.state.goal.success_criteria,
-                    available_tools=self.state.available_tools,
-                    current_iteration=iteration,
-                    max_iterations=self.state.goal.max_iterations,
-                    budget_remaining=self.budget_tracker.get_remaining()
-                )
-
-                # Add system message if first iteration
-                if iteration == 1:
-                    self.state.messages.append({
-                        "role": "system",
-                        "content": system_prompt
-                    })
-
-            # Call LLM
-            llm_response = await self._call_llm()
-
-            # Process LLM response
-            await self._process_llm_response(llm_response)
+            # Check if we should use ADK Temporal backbone (default to True)
+            use_adk_backbone = self.state.agent_config.get("use_adk_temporal_backbone", True)
+            
+            if use_adk_backbone:
+                await self._execute_adk_iteration()
+            else:
+                await self._execute_traditional_iteration()
 
             # Check budget warnings
             await self._check_budget_status()
@@ -268,6 +260,191 @@ class AgentExecutionWorkflow:
                 "error": str(e)
             })
             raise
+
+    async def _execute_adk_iteration(self) -> None:
+        """Execute iteration using ADK Temporal backbone."""
+        iteration = self.state.current_iteration
+        
+        workflow.logger.info(f"Executing ADK iteration {iteration} with Temporal backbone")
+        
+        # Prepare agent configuration for ADK
+        adk_agent_config = {
+            "name": self.state.agent_config.get("name", f"agent_{self.state.agent_id}"),
+            "model": self.state.agent_config.get("model_id", "ollama_chat/qwen2.5"),
+            "instructions": self._build_adk_instructions(),
+            "description": self.state.agent_config.get("description", "AgentArea task execution agent"),
+            "tools": self._convert_tools_to_adk_format()
+        }
+        
+        # Prepare session data
+        session_data = {
+            "user_id": "agentarea_user",
+            "session_id": f"task_{self.state.task_id}_{iteration}",
+            "app_name": "agentarea_workflow",
+            "state": {
+                "iteration": iteration,
+                "goal": self.state.goal.description if self.state.goal else "Complete the task",
+                "budget_remaining": self.budget_tracker.get_remaining()
+            },
+            "created_time": workflow.now().timestamp()
+        }
+        
+        # Prepare user message
+        user_message = self._build_user_message_for_adk()
+        
+        # Execute ADK agent with Temporal backbone
+        self.event_manager.add_event(EventTypes.LLM_CALL_STARTED, {
+            "iteration": iteration,
+            "message_count": len(self.state.messages),
+            "execution_type": "adk_temporal_backbone"
+        })
+        await self._publish_events_immediately()
+        
+        try:
+            events = await workflow.execute_activity(
+                Activities.EXECUTE_ADK_AGENT_WITH_TEMPORAL_BACKBONE,
+                args=[adk_agent_config, session_data, user_message, self.state.user_context_data],
+                start_to_close_timeout=LLM_CALL_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
+            )
+            
+            # Process ADK events and convert to workflow messages
+            await self._process_adk_events(events)
+            
+            self.event_manager.add_event(EventTypes.LLM_CALL_COMPLETED, {
+                "iteration": iteration,
+                "events_processed": len(events),
+                "execution_type": "adk_temporal_backbone"
+            })
+            await self._publish_events_immediately()
+            
+        except Exception as e:
+            self.event_manager.add_event(EventTypes.LLM_CALL_FAILED, {
+                "iteration": iteration,
+                "error": str(e),
+                "execution_type": "adk_temporal_backbone"
+            })
+            await self._publish_events_immediately()
+            raise
+
+    async def _execute_traditional_iteration(self) -> None:
+        """Execute iteration using traditional LLM + tool approach."""
+        iteration = self.state.current_iteration
+        
+        # Build system prompt with current context
+        if self.state.goal:
+            system_prompt = MessageBuilder.build_system_prompt(
+                goal_description=self.state.goal.description,
+                success_criteria=self.state.goal.success_criteria,
+                available_tools=self.state.available_tools,
+                current_iteration=iteration,
+                max_iterations=self.state.goal.max_iterations,
+                budget_remaining=self.budget_tracker.get_remaining()
+            )
+
+            # Add system message if first iteration
+            if iteration == 1:
+                self.state.messages.append({
+                    "role": "system",
+                    "content": system_prompt
+                })
+
+        # Call LLM
+        llm_response = await self._call_llm()
+
+        # Process LLM response
+        await self._process_llm_response(llm_response)
+
+    def _build_adk_instructions(self) -> str:
+        """Build instructions for ADK agent."""
+        if not self.state.goal:
+            return "Complete the assigned task efficiently."
+            
+        instructions = f"""You are an AI agent working on a specific task.
+
+GOAL: {self.state.goal.description}
+
+SUCCESS CRITERIA:
+{chr(10).join(f"- {criteria}" for criteria in self.state.goal.success_criteria)}
+
+INSTRUCTIONS:
+1. Work systematically towards the goal
+2. Use available tools when needed
+3. Provide clear, actionable responses
+4. Ask for clarification if the goal is unclear
+5. Stop when you've successfully completed the task
+
+Current iteration: {self.state.current_iteration}/{self.state.goal.max_iterations}
+Budget remaining: ${self.budget_tracker.get_remaining():.2f}
+"""
+        return instructions
+
+    def _convert_tools_to_adk_format(self) -> list[dict[str, Any]]:
+        """Convert workflow tools to ADK format."""
+        # For now, return empty list - tools will be handled by MCP integration
+        # This can be enhanced later to convert MCP tools to ADK tool format
+        return []
+
+    def _build_user_message_for_adk(self) -> dict[str, Any]:
+        """Build user message for ADK agent."""
+        if not self.state.messages:
+            # First iteration - use goal as user message
+            content = self.state.goal.description if self.state.goal else "Please complete the assigned task."
+        else:
+            # Subsequent iterations - provide context from conversation
+            recent_messages = self.state.messages[-3:]  # Last 3 messages for context
+            context_summary = "\n".join([
+                f"{msg.get('role', 'unknown')}: {str(msg.get('content', ''))[:200]}..."
+                for msg in recent_messages
+            ])
+            content = f"Continue working on the task. Recent context:\n{context_summary}\n\nPlease proceed with the next step."
+        
+        return {
+            "role": "user",
+            "content": content
+        }
+
+    async def _process_adk_events(self, events: list[dict[str, Any]]) -> None:
+        """Process ADK events and convert to workflow messages."""
+        for event in events:
+            # Extract content from ADK event
+            content_data = event.get("content", {})
+            
+            if isinstance(content_data, dict) and "parts" in content_data:
+                # Extract text from parts
+                text_parts = []
+                for part in content_data.get("parts", []):
+                    if isinstance(part, dict) and "text" in part:
+                        text_parts.append(part["text"])
+                
+                if text_parts:
+                    # Add as assistant message
+                    message_content = " ".join(text_parts)
+                    self.state.messages.append({
+                        "role": "assistant",
+                        "content": message_content
+                    })
+                    
+                    # Check if this looks like a final response
+                    if any(indicator in message_content.lower() for indicator in [
+                        "task completed", "finished", "done", "complete", "successfully"
+                    ]):
+                        self.state.final_response = message_content
+                        self.state.success = True
+            
+            elif isinstance(content_data, str):
+                # Simple string content
+                self.state.messages.append({
+                    "role": "assistant", 
+                    "content": content_data
+                })
+                
+                # Check for completion indicators
+                if any(indicator in content_data.lower() for indicator in [
+                    "task completed", "finished", "done", "complete", "successfully"
+                ]):
+                    self.state.final_response = content_data
+                    self.state.success = True
 
     async def _call_llm(self) -> dict[str, Any]:
         """Call LLM with current messages."""

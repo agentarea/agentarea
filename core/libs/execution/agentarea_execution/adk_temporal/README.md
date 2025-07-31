@@ -1,143 +1,179 @@
-# ADK-Temporal Integration
+# ADK-Temporal Integration: Temporal as Execution Backbone
 
-This package provides seamless integration between Google's Agent Development Kit (ADK) and Temporal workflows, enabling ADK agents to run with Temporal's durability, scalability, and workflow capabilities while preserving all ADK interfaces.
+This module provides seamless integration between Google's Agent Development Kit (ADK) and Temporal workflows, making Temporal the backbone for tool and LLM execution while keeping the ADK library mostly untouched.
 
-## Overview
-
-The ADK-Temporal integration allows you to:
-
-- **Run ADK agents as Temporal activities**: Every LLM call and tool execution becomes a Temporal activity
-- **Preserve all ADK interfaces**: Existing ADK code works without modification  
-- **Gain workflow durability**: Pause, resume, and inspect agent execution at any point
-- **Stream events in real-time**: Maintain ADK's event streaming for live UI updates
-- **Scale reliably**: Leverage Temporal's distributed execution capabilities
-
-## Architecture
+## Architecture Overview
 
 ```
-┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│   ADK Agent         │    │  Temporal Workflow  │    │  Temporal Activity  │
-│                     │    │                     │    │                     │
-│  ┌─────────────┐    │    │  ┌─────────────┐    │    │  ┌─────────────┐    │
-│  │ LlmAgent    │────┼────┼──│ ADKAgent    │────┼────┼──│ execute_adk │    │
-│  │             │    │    │  │ Workflow    │    │    │  │ _agent      │    │
-│  └─────────────┘    │    │  └─────────────┘    │    │  └─────────────┘    │
-│                     │    │                     │    │                     │
-│  ┌─────────────┐    │    │  Event Streaming    │    │  Service Bridges    │
-│  │ Tools       │    │    │  State Management   │    │  Event Serialization│
-│  │ Memory      │    │    │  Pause/Resume       │    │  Error Handling     │
-│  │ Sessions    │    │    │  Observability      │    │                     │
-│  └─────────────┘    │    │                     │    │                     │
-└─────────────────────┘    └─────────────────────┘    └─────────────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   ADK Agent     │    │  Temporal        │    │   Activities    │
+│                 │    │  Workflow        │    │                 │
+│  ┌───────────┐  │    │                  │    │  ┌───────────┐  │
+│  │ LLM Calls │──┼────┼──────────────────┼────┼──│ LLM       │  │
+│  └───────────┘  │    │                  │    │  │ Activity  │  │
+│                 │    │                  │    │  └───────────┘  │
+│  ┌───────────┐  │    │                  │    │                 │
+│  │Tool Calls │──┼────┼──────────────────┼────┼──┌───────────┐  │
+│  └───────────┘  │    │                  │    │  │ Tool      │  │
+│                 │    │                  │    │  │ Activity  │  │
+└─────────────────┘    └──────────────────┘    │  └───────────┘  │
+                                               └─────────────────┘
 ```
 
 ## Key Components
 
-### 1. Workflows
-- **`ADKAgentWorkflow`**: Main workflow that orchestrates agent execution
-- Handles initialization, validation, execution, and finalization
-- Supports pause/resume, state queries, and event streaming
+### 1. Temporal LLM Service (`temporal_llm_service.py`)
 
-### 2. Activities  
-- **`execute_adk_agent_activity`**: Executes complete ADK agent runs
-- **`validate_adk_agent_config`**: Validates agent configurations
-- **`stream_adk_agent_activity`**: Streaming variant for real-time execution
-
-### 3. Service Bridges
-- **`TemporalSessionService`**: Session management within workflow state
-- Uses ADK's in-memory services by default for simplicity
-- Extensible for external storage integration
-
-### 4. Utilities
-- **`EventSerializer`**: Converts ADK Events to/from Temporal-serializable dicts
-- **`AgentBuilder`**: Creates ADK agents from configuration dictionaries
-
-## Quick Start
-
-### 1. Basic Agent Execution
+Intercepts ADK LLM calls and routes them through Temporal activities:
 
 ```python
-from adk_temporal import execute_adk_agent_activity
-from adk_temporal.utils.agent_builder import create_simple_agent_config
-from adk_temporal.services.adk_service_factory import create_default_session_data
+from agentarea_execution.adk_temporal.services.temporal_llm_service import TemporalLlmService
 
-# Create agent configuration
-agent_config = create_simple_agent_config(
-    name="my_agent",
-    model="gpt-4", 
-    instructions="You are a helpful assistant",
-    description="My test agent"
-)
-
-# Create session data
-session_data = create_default_session_data(user_id="test_user")
-
-# Create user message
-user_message = {
-    "content": "Hello, please help me with a task",
-    "role": "user"
-}
-
-# Execute agent
-events = await execute_adk_agent_activity(
-    agent_config,
-    session_data, 
-    user_message
-)
-
-print(f"Agent generated {len(events)} events")
+# LLM calls automatically routed through Temporal
+llm_service = TemporalLlmService(model="gpt-4", agent_config=config, session_data=session)
 ```
 
-### 2. Workflow Execution
+**Features:**
+- ✅ Transparent LLM call interception
+- ✅ OpenAI-compatible message format conversion
+- ✅ Tool call support
+- ✅ Usage tracking and cost calculation
+- ✅ Error handling with fallback responses
+
+### 2. Temporal Tool Service (`temporal_tool_service.py`)
+
+Routes ADK tool calls through Temporal activities:
 
 ```python
-from temporalio.client import Client
-from adk_temporal.workflows.adk_agent_workflow import ADKAgentWorkflow
-from agentarea_execution.models import AgentExecutionRequest
+from agentarea_execution.adk_temporal.services.temporal_tool_service import TemporalTool
 
-# Connect to Temporal
-client = await Client.connect("localhost:7233")
-
-# Create execution request  
-request = AgentExecutionRequest(
-    task_id=uuid4(),
-    agent_id=uuid4(),
-    task_query="Explain quantum computing",
-    task_parameters={},
-    requires_human_approval=False,
-    budget_usd=10.0
-)
-
-# Start workflow
-workflow_handle = await client.start_workflow(
-    ADKAgentWorkflow.run,
-    request,
-    id=f"agent-{request.task_id}",
-    task_queue="agent-queue"
-)
-
-# Wait for result
-result = await workflow_handle.result()
-print(f"Success: {result.success}")
-print(f"Response: {result.final_response}")
+# Tool calls automatically routed through Temporal
+tool = TemporalTool(name="calculator", description="Math tool", server_instance_id=server_id)
 ```
 
-### 3. Workflow Control
+**Features:**
+- ✅ MCP tool integration
+- ✅ Function declaration support
+- ✅ Long-running tool support
+- ✅ Tool discovery from agent configuration
+- ✅ Error handling and retry logic
+
+### 3. Enhanced Service Factory (`adk_service_factory.py`)
+
+Creates ADK runners with Temporal backbone:
 
 ```python
-# Pause workflow
-await workflow_handle.signal(ADKAgentWorkflow.pause, "Manual pause")
+from agentarea_execution.adk_temporal.services.adk_service_factory import create_adk_runner
 
-# Query current state
-state = await workflow_handle.query(ADKAgentWorkflow.get_current_state)
-print(f"Events: {state['event_count']}, Paused: {state['paused']}")
-
-# Resume workflow  
-await workflow_handle.signal(ADKAgentWorkflow.resume, "Continue processing")
-
-# Get events
-events = await workflow_handle.query(ADKAgentWorkflow.get_events, 10)
+# Create runner with Temporal backbone enabled
+runner = create_adk_runner(
+    agent_config=config,
+    session_data=session,
+    use_temporal_backbone=True  # Enable Temporal routing
+)
 ```
+
+### 4. Enhanced Agent Builder (`agent_builder.py`)
+
+Builds ADK agents with Temporal-enhanced services:
+
+```python
+from agentarea_execution.adk_temporal.utils.agent_builder import build_temporal_enhanced_agent
+
+# Build agent with Temporal services integrated
+agent = build_temporal_enhanced_agent(agent_config, session_data)
+```
+
+## Usage Examples
+
+### Basic Integration
+
+```python
+import asyncio
+from temporalio import workflow
+from agentarea_execution.adk_temporal.services.adk_service_factory import create_adk_runner
+
+@workflow.defn
+class MyAgentWorkflow:
+    @workflow.run
+    async def run(self, agent_config, session_data, user_message):
+        # Create runner with Temporal backbone
+        runner = create_adk_runner(
+            agent_config=agent_config,
+            session_data=session_data,
+            use_temporal_backbone=True
+        )
+        
+        # Execute agent - tool/LLM calls go through Temporal
+        events = []
+        async for event in runner.run_async(
+            user_id=session_data["user_id"],
+            session_id=session_data["session_id"],
+            new_message=user_message
+        ):
+            events.append(event)
+            if event.is_final_response():
+                break
+        
+        return {"events": events}
+```
+
+### Advanced Workflow Integration
+
+```python
+@workflow.defn
+class AdvancedAgentWorkflow:
+    @workflow.run
+    async def run(self, request):
+        # Step 1: Build agent configuration
+        agent_config = await workflow.execute_activity(
+            build_agent_config_activity,
+            args=[request.agent_id],
+            start_to_close_timeout=60
+        )
+        
+        # Step 2: Execute with Temporal backbone
+        events = await workflow.execute_activity(
+            execute_agent_step,
+            args=[agent_config, request.session_data, request.message],
+            start_to_close_timeout=600
+        )
+        
+        # Step 3: Process results
+        return self.process_events(events)
+```
+
+## Benefits
+
+### 🚀 **Workflow Orchestration**
+- Complex multi-step agent workflows
+- Conditional execution based on results
+- Parallel agent execution
+- Workflow state persistence
+
+### 🔄 **Reliability & Resilience**
+- Automatic retries for failed tool/LLM calls
+- Workflow recovery from failures
+- Timeout handling
+- Circuit breaker patterns
+
+### 📊 **Observability**
+- Complete execution history
+- Tool and LLM call tracing
+- Performance metrics
+- Cost tracking
+
+### 🎯 **Scalability**
+- Horizontal scaling of agent execution
+- Load balancing across workers
+- Resource management
+- Queue-based execution
+
+### 🔧 **Flexibility**
+- Easy A/B testing of different models
+- Dynamic tool configuration
+- Runtime agent modification
+- Multi-tenant support
 
 ## Configuration
 
@@ -145,16 +181,13 @@ events = await workflow_handle.query(ADKAgentWorkflow.get_events, 10)
 
 ```python
 agent_config = {
-    "name": "my_agent",              # Required: Agent identifier
-    "model": "gpt-4",                # LLM model to use
-    "instructions": "System prompt", # Agent instructions
-    "description": "Agent purpose",  # Human-readable description
-    "tools": [                       # Optional: Tool definitions
-        {
-            "name": "calculator",
-            "description": "Math operations"
-        }
-    ]
+    "name": "my_agent",
+    "model_id": "gpt-4",  # Can be UUID or model name
+    "instruction": "You are a helpful assistant",
+    "description": "Agent with Temporal backbone",
+    "tools_config": {
+        "mcp_servers": ["server-uuid-1", "server-uuid-2"]
+    }
 }
 ```
 
@@ -162,102 +195,133 @@ agent_config = {
 
 ```python
 session_data = {
-    "user_id": "user123",           # User identifier
-    "session_id": "session456",     # Session identifier  
-    "app_name": "my_app",           # Application name
-    "state": {}                     # Initial session state
+    "user_id": "user123",
+    "session_id": "session456",
+    "app_name": "my_app",
+    "state": {}  # Optional initial state
 }
 ```
 
-## Testing
+## Running the Example
 
-Run the test suite:
+1. **Start Temporal Server:**
+   ```bash
+   temporal server start-dev
+   ```
 
-```bash
-# Unit tests
-pytest adk_temporal/tests/test_event_serializer.py
-pytest adk_temporal/tests/test_agent_builder.py
-pytest adk_temporal/tests/test_adk_activities.py
-pytest adk_temporal/tests/test_adk_workflow.py
+2. **Run Worker:**
+   ```bash
+   cd core/libs/execution
+   python -m agentarea_execution.adk_temporal.examples.temporal_backbone_example worker
+   ```
 
-# Integration tests
-pytest adk_temporal/tests/test_integration.py
+3. **Run Example:**
+   ```bash
+   cd core/libs/execution
+   python -m agentarea_execution.adk_temporal.examples.temporal_backbone_example
+   ```
 
-# All tests
-pytest adk_temporal/tests/
+## Integration Points
+
+### ADK Integration
+- **LLM Registry**: Temporal LLM service registered with ADK's LLM registry
+- **Tool System**: Temporal tools implement ADK's BaseTool interface
+- **Agent Builder**: Enhanced builder creates agents with Temporal services
+- **Event System**: ADK events serialized for Temporal storage
+
+### Temporal Integration
+- **Activities**: Tool and LLM calls as Temporal activities
+- **Workflows**: Agent execution orchestrated by workflows
+- **State Management**: Workflow state persists agent context
+- **Error Handling**: Temporal's retry and error handling
+
+## Migration Guide
+
+### From Direct ADK Usage
+
+**Before:**
+```python
+# Direct ADK usage
+agent = LlmAgent(name="my_agent", model="gpt-4", tools=tools)
+runner = Runner(agent=agent, ...)
+
+async for event in runner.run_async(...):
+    # Process events
 ```
 
-## Examples
+**After:**
+```python
+# With Temporal backbone
+agent_config = {"name": "my_agent", "model": "gpt-4", "tools": tool_configs}
+runner = create_adk_runner(agent_config, session_data, use_temporal_backbone=True)
 
-See `example_usage.py` for comprehensive examples including:
+async for event in runner.run_async(...):
+    # Same event processing - tool/LLM calls now go through Temporal
+```
 
-- Simple agent execution
-- Workflow execution with Temporal server
-- Agent configuration validation
-- Workflow pause/resume control
-- Error handling patterns
+### From Temporal Activities
 
-## Benefits
+**Before:**
+```python
+# Manual activity orchestration
+@workflow.defn
+class MyWorkflow:
+    async def run(self):
+        llm_result = await workflow.execute_activity(call_llm_activity, ...)
+        tool_result = await workflow.execute_activity(execute_tool_activity, ...)
+        # Manual orchestration
+```
 
-### 1. **Zero ADK Modification**
-- All existing ADK interfaces preserved
-- Drop-in replacement for ADK runners
-- Gradual migration path
+**After:**
+```python
+# ADK handles orchestration, Temporal handles execution
+@workflow.defn
+class MyWorkflow:
+    async def run(self):
+        events = await workflow.execute_activity(execute_agent_step, ...)
+        # ADK orchestrates, Temporal executes
+```
 
-### 2. **Full Temporal Benefits**
-- Durable execution across failures
-- Pause/resume capability  
-- Complete observability
-- Distributed scalability
+## Best Practices
 
-### 3. **Event Streaming**
-- Real-time event delivery
-- UI updates during execution
-- Complete conversation history
+1. **Use Temporal Backbone for Production**: Enable `use_temporal_backbone=True` for production workloads
+2. **Configure Timeouts**: Set appropriate timeouts for long-running operations
+3. **Handle Errors Gracefully**: Implement proper error handling in workflows
+4. **Monitor Performance**: Use Temporal's observability features
+5. **Test Thoroughly**: Test both ADK functionality and Temporal integration
 
-### 4. **Production Ready**
-- Comprehensive error handling
-- Activity retries and timeouts
-- Workflow state management
-- Cost tracking and budgets
+## Troubleshooting
 
-## Integration with AgentArea
+### Common Issues
 
-This integration is designed to work seamlessly with AgentArea's existing infrastructure:
+1. **LLM Service Not Registered**
+   ```python
+   # Ensure registration happens before agent creation
+   TemporalLlmServiceFactory.register_with_adk()
+   ```
 
-- **Task Management**: Execute agents for AgentArea tasks
-- **Agent Registry**: Load agent configurations from AgentArea database  
-- **MCP Integration**: Tool execution through AgentArea's MCP infrastructure
-- **Event System**: Publish workflow events to AgentArea's event bus
-- **UI Updates**: Real-time agent execution status in AgentArea frontend
+2. **Tool Discovery Fails**
+   ```python
+   # Check agent configuration has proper tool setup
+   agent_config["tools_config"] = {"mcp_servers": [server_id]}
+   ```
 
-## Limitations and Future Work
+3. **Workflow Timeouts**
+   ```python
+   # Increase timeouts for long-running operations
+   await workflow.execute_activity(
+       activity,
+       start_to_close_timeout=600  # 10 minutes
+   )
+   ```
 
-### Current Limitations
-- Uses in-memory services (can be extended for persistence)
-- Basic tool integration (MCP bridge can be enhanced)
-- Single-agent workflows (multi-agent orchestration planned)
+## Future Enhancements
 
-### Future Enhancements
-- **Enhanced MCP Integration**: Full tool discovery and execution
-- **Multi-Agent Workflows**: Hierarchical agent coordination  
-- **Advanced Streaming**: Real-time event delivery to UI
-- **Cost Optimization**: LLM call batching and caching
-- **Service Integration**: External memory and artifact storage
+- [ ] Streaming LLM responses through Temporal
+- [ ] Advanced tool chaining workflows
+- [ ] Multi-agent collaboration patterns
+- [ ] Dynamic model switching
+- [ ] Cost optimization strategies
+- [ ] Enhanced observability dashboards
 
-## Contributing
-
-1. Follow existing code patterns and ADK interfaces
-2. Add comprehensive tests for new functionality
-3. Update documentation for API changes
-4. Ensure compatibility with existing ADK code
-
-## Architecture Notes
-
-The integration maintains a clear separation between ADK and Temporal concerns:
-
-- **ADK Layer**: Unchanged agent, tool, and service interfaces
-- **Bridge Layer**: Serialization, service adaptation, and state management  
-- **Temporal Layer**: Workflow orchestration, durability, and scaling
-
-This design ensures that ADK functionality remains intact while gaining all Temporal benefits.
+This integration provides the best of both worlds: ADK's rich agent capabilities with Temporal's robust workflow orchestration and execution reliability.

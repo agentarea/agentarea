@@ -2,7 +2,7 @@ import "./globals.css";
 
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/providers/theme-provider";
-import MainLayout from "@/components/MainLayout";
+import ConditionalLayout from "@/components/ConditionalLayout";
 import { Toaster } from "@/components/ui/sonner";
 import { Open_Sans, Montserrat } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
@@ -48,7 +48,7 @@ export default async function RootLayout({
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <NextIntlClientProvider>
-              <MainLayout>{children}</MainLayout>
+              <ConditionalLayout>{children}</ConditionalLayout>
             </NextIntlClientProvider>
           </ThemeProvider>
           <Toaster />

@@ -42,6 +42,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
     @activity.defn
     async def build_agent_config_activity(
         agent_id: UUID,
+        user_context_data: dict[str, Any],  # Pass user context as parameter
         execution_context: dict[str, Any] | None = None,
         step_type: str | None = None,
         override_model: str | None = None,
@@ -50,10 +51,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
         # Create fresh session for this activity
         database = get_database()
         async with database.async_session_factory() as session:
+            # Reconstruct user context from passed parameters
+            from agentarea_common.auth.context import UserContext
+            user_context = UserContext(
+                user_id=user_context_data["user_id"],
+                workspace_id=user_context_data["workspace_id"]
+            )
+            
             # Create services with this session
-            agent_repository = AgentRepository(session)
+            from agentarea_common.base import RepositoryFactory
+            repository_factory = RepositoryFactory(session, user_context)
             agent_service = AgentService(
-                repository=agent_repository, event_broker=dependencies.event_broker
+                repository_factory=repository_factory, event_broker=dependencies.event_broker
             )
 
             # Get agent from database
@@ -85,23 +94,29 @@ def make_agent_activities(dependencies: ActivityDependencies):
     @activity.defn
     async def discover_available_tools_activity(
         agent_id: UUID,
+        user_context_data: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Discover available tools for an agent."""
         # Create fresh session for this activity
         database = get_database()
         async with database.async_session_factory() as session:
+            # Create user context for this activity
+            from agentarea_common.auth.context import UserContext
+            user_context = UserContext(
+                user_id=user_context_data["user_id"],
+                workspace_id=user_context_data["workspace_id"]
+            )
+            
             # Create services with this session
-            agent_repository = AgentRepository(session)
+            from agentarea_common.base import RepositoryFactory
+            repository_factory = RepositoryFactory(session, user_context)
             agent_service = AgentService(
-                repository=agent_repository, event_broker=dependencies.event_broker
+                repository_factory=repository_factory, event_broker=dependencies.event_broker
             )
 
-            mcp_server_repository = MCPServerRepository(session)
-            mcp_server_instance_repository = MCPServerInstanceRepository(session)
             mcp_server_instance_service = MCPServerInstanceService(
-                repository=mcp_server_instance_repository,
+                repository_factory=repository_factory,
                 event_broker=dependencies.event_broker,
-                mcp_server_repository=mcp_server_repository,
                 secret_manager=dependencies.secret_manager,
             )
 
@@ -126,6 +141,51 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             logger.info(f"Discovered {len(all_tools)} tools for agent {agent_id}")
             return all_tools
+
+    @activity.defn
+    async def execute_adk_agent_with_temporal_backbone(
+        agent_config: dict[str, Any],
+        session_data: dict[str, Any],
+        user_message: dict[str, Any],
+        run_config: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute ADK agent with Temporal backbone enabled.
+        
+        This activity enables the Temporal backbone and runs an ADK agent,
+        ensuring all tool and LLM calls go through Temporal activities.
+        """
+        try:
+            # Enable Temporal backbone for all ADK calls
+            from ..adk_temporal.interceptors import enable_temporal_backbone
+            enable_temporal_backbone()
+            
+            logger.info(f"Executing ADK agent with Temporal backbone: {agent_config.get('name', 'unknown')}")
+            
+            # Use the existing ADK agent activity with Temporal backbone enabled
+            from ..adk_temporal.activities.adk_agent_activities import execute_agent_step
+            
+            events = await execute_agent_step(
+                agent_config=agent_config,
+                session_data=session_data,
+                user_message=user_message,
+                run_config=run_config
+            )
+            
+            logger.info(f"ADK agent completed with Temporal backbone - Events: {len(events)}")
+            return events
+            
+        except Exception as e:
+            logger.error(f"ADK agent execution with Temporal backbone failed: {e}")
+            # Return error event
+            error_event = {
+                "author": agent_config.get("name", "agent"),
+                "content": {
+                    "parts": [{"text": f"Agent execution failed: {str(e)}"}]
+                },
+                "timestamp": "2025-01-01T00:00:00Z",
+                "event_type": "error"
+            }
+            return [error_event]
 
     @activity.defn
     async def call_llm_activity(
@@ -534,6 +594,7 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
     return [
         build_agent_config_activity,
         discover_available_tools_activity,
+        execute_adk_agent_with_temporal_backbone,
         call_llm_activity,
         execute_mcp_tool_activity,
         # check_task_completion_activity,

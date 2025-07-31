@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "AgentArea: AI Agent Platform"
+version: 0.1.0
+date-released: 2025-01-01
+url: "https://github.com/agentarea/agentarea"
+repository-code: "https://github.com/agentarea/agentarea"
+license: MIT
+authors:
+  - family-names: "AgentArea"
+    given-names: "Contributors"
+    email: "hello@agentarea.ai"
+abstract: >
+  AgentArea is an open-source platform for building, deploying, and managing
+  AI agents. It provides a comprehensive framework for agent development with
+  support for multiple protocols (A2A, ACP, Native), MCP (Model Context Protocol)
+  server management, task assignment systems, and enterprise-grade features
+  including authentication, monitoring, and scalable deployment options.
+keywords:
+  - "artificial intelligence"
+  - "ai agents"
+  - "agent platform"
+  - "mcp"
+  - "model context protocol"
+  - "task automation"
+  - "llm"
+  - "large language models"
+  - "python"
+  - "fastapi"
+  - "react"
+  - "nextjs"
+type: software

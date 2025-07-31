@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/agentarea/agentarea/discussions
+    about: Ask questions, share ideas, and discuss with the community
+  - name: 📚 Documentation
+    url: https://github.com/agentarea/agentarea/tree/main/docs
+    about: Check our comprehensive documentation for guides and references
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/agentarea/agentarea/blob/main/SECURITY.md
+    about: Report security vulnerabilities privately via email
+  - name: 💼 Enterprise Support
+    url: https://agentarea.ai/contact
+    about: Contact us for enterprise support and commercial licensing

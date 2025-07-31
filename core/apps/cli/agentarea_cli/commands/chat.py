@@ -165,7 +165,7 @@ async def _send_message(
     if session_id:
         payload["session_id"] = session_id
     
-    return await client.post("/v1/chat/messages", payload)
+    return await client.post("/api/v1/chat/messages", payload)
 
 
 def _display_response(result: dict, output_format: str):
@@ -194,7 +194,7 @@ def agents(ctx, output_format: str):
         client: "AgentAreaClient" = ctx.obj["client"]
         
         try:
-            result = await client.get("/v1/chat/agents")
+            result = await client.get("/api/v1/chat/agents")
             
             agents_list = result.get("agents", [])
             if not agents_list:
@@ -248,7 +248,7 @@ def history(ctx, session_id: Optional[str], agent_id: Optional[str], limit: int,
             params["agent_id"] = agent_id
         
         try:
-            result = await client.get("/v1/chat/history", params=params)
+            result = await client.get("/api/v1/chat/history", params=params)
             
             messages = result.get("messages", [])
             if not messages:
@@ -297,7 +297,7 @@ def clear(ctx, session_id: Optional[str], force: bool):
     async def _clear_history():
         client: "AgentAreaClient" = ctx.obj["client"]
         
-        endpoint = "/v1/chat/history"
+        endpoint = "/api/v1/chat/history"
         if session_id:
             endpoint += f"/{session_id}"
         

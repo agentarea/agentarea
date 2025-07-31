@@ -72,7 +72,7 @@ async def make_api_request(
     base_url: str = "http://localhost:8000",
 ) -> dict[str, Any]:
     """Make HTTP request to the API."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         url = f"{base_url}{endpoint}"
         try:
             if method.upper() == "GET":
@@ -606,6 +606,150 @@ def history(session_id: str):
             click.echo(f"Error getting history: {e}")
 
     asyncio.run(_get_history())
+
+
+# ============================================================================
+# Task Management Commands
+# ============================================================================
+
+
+@cli.group()
+def task():
+    """Task management commands."""
+    pass
+
+
+@task.command()
+def list():
+    """List all tasks."""
+
+    async def _list_tasks():
+        try:
+            data = await make_api_request("GET", "/v1/tasks")
+            if data and isinstance(data, list):
+                click.echo("All Tasks:")
+                for task in data:
+                    task_id = safe_get_field(task, "id")
+                    agent_name = safe_get_field(task, "agent_name")
+                    description = safe_get_field(task, "description")
+                    status = safe_get_field(task, "status")
+                    created_at = safe_get_field(task, "created_at")
+                    click.echo(f"  • {task_id[:8]}... - {agent_name}")
+                    click.echo(f"    Description: {description}")
+                    click.echo(f"    Status: {status}")
+                    click.echo(f"    Created: {created_at}")
+                    click.echo()
+            else:
+                click.echo("No tasks found")
+        except Exception as e:
+            click.echo(f"Error listing tasks: {e}")
+
+    asyncio.run(_list_tasks())
+
+
+@task.command()
+@click.option("--agent-id", required=True, help="Agent ID to execute the task")
+@click.option("--description", required=True, help="Task description")
+@click.option("--parameters", help="Task parameters as JSON string")
+@click.option("--user-id", default="cli_user", help="User ID")
+@click.option("--stream/--no-stream", default=True, help="Stream task execution events")
+def create(agent_id: str, description: str, parameters: str | None, user_id: str, stream: bool):
+    """Create and execute a task for an agent."""
+
+    async def _create_task():
+        # Parse parameters if provided
+        task_params = {}
+        if parameters:
+            try:
+                task_params = json.loads(parameters)
+            except json.JSONDecodeError:
+                click.echo("❌ Invalid JSON in parameters")
+                return
+
+        data = {
+            "description": description,
+            "parameters": task_params,
+            "user_id": user_id,
+            "enable_agent_communication": True,
+        }
+
+        try:
+            if stream:
+                # Use streaming endpoint for real-time updates
+                click.echo(f"🚀 Creating task for agent {agent_id}")
+                click.echo(f"📝 Description: {description}")
+                click.echo("📡 Streaming execution events...")
+                click.echo("-" * 50)
+                
+                async with httpx.AsyncClient(timeout=300.0) as client:
+                    url = f"http://localhost:8000/v1/agents/{agent_id}/tasks/"
+                    
+                    async with client.stream("POST", url, json=data) as response:
+                        response.raise_for_status()
+                        
+                        async for line in response.aiter_lines():
+                            if line.startswith("data: "):
+                                try:
+                                    event_data = json.loads(line[6:])  # Remove "data: " prefix
+                                    event_type = event_data.get("type", "unknown")
+                                    data_content = event_data.get("data", {})
+                                    
+                                    if event_type == "connected":
+                                        click.echo(f"✅ Connected to agent: {data_content.get('agent_name', 'Unknown')}")
+                                    elif event_type == "task_created":
+                                        task_id = data_content.get("task_id", "unknown")
+                                        click.echo(f"📋 Task created: {task_id}")
+                                        click.echo(f"   Status: {data_content.get('status', 'unknown')}")
+                                    elif event_type == "workflow_started":
+                                        click.echo("🔄 Workflow started")
+                                    elif event_type == "iteration_started":
+                                        iteration = data_content.get("iteration", "unknown")
+                                        click.echo(f"🔄 Iteration {iteration} started")
+                                    elif event_type == "llm_call_completed":
+                                        cost = data_content.get("cost", 0)
+                                        click.echo(f"🤖 LLM call completed (cost: ${cost:.4f})")
+                                    elif event_type == "tool_call_started":
+                                        tool_name = data_content.get("tool_name", "unknown")
+                                        click.echo(f"🔧 Tool call started: {tool_name}")
+                                    elif event_type == "tool_call_completed":
+                                        tool_name = data_content.get("tool_name", "unknown")
+                                        success = data_content.get("success", False)
+                                        status = "✅" if success else "❌"
+                                        click.echo(f"{status} Tool call completed: {tool_name}")
+                                    elif event_type == "workflow_completed":
+                                        click.echo("🎉 Workflow completed successfully!")
+                                        final_response = data_content.get("final_response")
+                                        if final_response:
+                                            click.echo(f"📄 Final response: {final_response}")
+                                        break
+                                    elif event_type == "workflow_failed":
+                                        click.echo("❌ Workflow failed!")
+                                        error = data_content.get("error", "Unknown error")
+                                        click.echo(f"   Error: {error}")
+                                        break
+                                    elif event_type == "error":
+                                        click.echo(f"❌ Error: {data_content.get('error', 'Unknown error')}")
+                                        break
+                                    else:
+                                        # Show other events with less formatting
+                                        message = data_content.get("message", str(data_content))
+                                        click.echo(f"📡 {event_type}: {message}")
+                                        
+                                except json.JSONDecodeError:
+                                    continue  # Skip malformed events
+                            
+            else:
+                # Use regular endpoint
+                result = await make_api_request("POST", f"/v1/agents/{agent_id}/tasks/", data)
+                task_id = safe_get_field(result, "id")
+                status = safe_get_field(result, "status")
+                click.echo(f"✅ Created task: {task_id}")
+                click.echo(f"   Status: {status}")
+
+        except Exception as e:
+            click.echo(f"❌ Error creating task: {e}")
+
+    asyncio.run(_create_task())
 
 
 if __name__ == "__main__":

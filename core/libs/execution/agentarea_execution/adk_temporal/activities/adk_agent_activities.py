@@ -82,7 +82,7 @@ async def execute_agent_step(
     user_message: Dict[str, Any],
     run_config: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
-    """Execute a single step of ADK agent execution.
+    """Execute a single step of ADK agent execution with Temporal backbone.
     
     Args:
         agent_config: Dictionary containing agent configuration
@@ -103,8 +103,13 @@ async def execute_agent_step(
         logger.info("Executing agent step - Direct mode")
     
     try:
-        # Create ADK runner with service bridges
-        runner = create_adk_runner(agent_config, session_data)
+        # Create ADK runner with Temporal backbone enabled
+        runner = create_adk_runner(
+            agent_config, 
+            session_data, 
+            use_temporal_services=False,  # Keep session services simple
+            use_temporal_backbone=True    # Enable Temporal for tool/LLM calls
+        )
         
         # Convert user message to ADK Content
         user_content = _dict_to_adk_content(user_message)
@@ -116,10 +121,10 @@ async def execute_agent_step(
         events = []
         event_count = 0
         
-        logger.info(f"Starting agent step for agent: {agent_config.get('name', 'unknown')}")
+        logger.info(f"Starting Temporal-backed agent step for agent: {agent_config.get('name', 'unknown')}")
         
         # Heartbeat to prevent timeout during long-running operations
-        activity.heartbeat("Executing ADK agent step...")
+        activity.heartbeat("Executing ADK agent step with Temporal backbone...")
         
         async for event in runner.run_async(
             user_id=session_data.get("user_id", "default"),
@@ -147,7 +152,7 @@ async def execute_agent_step(
         # Final heartbeat before completion
         activity.heartbeat("Finalizing agent step...")
         
-        logger.info(f"ADK agent step completed - Events: {len(events)}")
+        logger.info(f"ADK agent step completed with Temporal backbone - Events: {len(events)}")
         return events
         
     except Exception as e:

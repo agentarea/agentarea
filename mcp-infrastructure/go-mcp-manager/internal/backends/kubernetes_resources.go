@@ -194,7 +194,7 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	}
 
 	// Volume mounts for writable directories (since we use read-only root filesystem)
-	container.VolumeMounts = []corev1.VolumeMount{
+	volumeMounts := []corev1.VolumeMount{
 		{
 			Name:      "tmp",
 			MountPath: "/tmp",
@@ -204,6 +204,17 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 			MountPath: "/var/run",
 		},
 	}
+
+	// Add user-specified writable paths
+	for i, path := range spec.WritablePaths {
+		volumeName := fmt.Sprintf("writable-%d", i)
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      volumeName,
+			MountPath: path,
+		})
+	}
+
+	container.VolumeMounts = volumeMounts
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -229,20 +240,7 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 						RunAsUser:    &k.k8sConfig.SecurityContext.RunAsUser,
 					},
 					Containers: []corev1.Container{container},
-					Volumes: []corev1.Volume{
-						{
-							Name: "tmp",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-						{
-							Name: "var-run",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
+					Volumes:    k.createVolumes(spec),
 				},
 			},
 		},
@@ -260,6 +258,38 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	}
 
 	return nil
+}
+
+// createVolumes creates the volume specifications for writable directories
+func (k *KubernetesBackend) createVolumes(spec *InstanceSpec) []corev1.Volume {
+	// Default volumes (always needed for security)
+	volumes := []corev1.Volume{
+		{
+			Name: "tmp",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: "var-run",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+
+	// Add user-specified writable paths as EmptyDir volumes
+	for i := range spec.WritablePaths {
+		volumeName := fmt.Sprintf("writable-%d", i)
+		volumes = append(volumes, corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+	}
+
+	return volumes
 }
 
 // createService creates a Service for the MCP server

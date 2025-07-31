@@ -152,69 +152,6 @@ class AgentAreaClient:
     async def patch(self, endpoint: str, data: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """Make PATCH request."""
         return await self.request("PATCH", endpoint, data=data)
-    
-    async def post_stream(self, endpoint: str, data: Optional[dict[str, Any]] = None) -> None:
-        """Make POST request and handle SSE streaming response."""
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            url = f"{self.base_url}{endpoint}"
-            headers = self._get_headers()
-            headers["Accept"] = "text/event-stream"
-            
-            try:
-                async with client.stream("POST", url, json=data, headers=headers) as response:
-                     # Handle 307 redirects and other status codes
-                     if response.status_code in [200, 307]:
-                         async for line in response.aiter_lines():
-                             if line.strip():
-                                 # Parse SSE format
-                                 if line.startswith("data: "):
-                                     event_data = line[6:]  # Remove "data: " prefix
-                                     if event_data.strip() == "[DONE]":
-                                         break
-                                     try:
-                                         import json
-                                         parsed_data = json.loads(event_data)
-                                         if "content" in parsed_data:
-                                             click.echo(parsed_data["content"], nl=False)
-                                         elif "message" in parsed_data:
-                                             click.echo(parsed_data["message"])
-                                         elif "error" in parsed_data:
-                                             click.echo(f"\n❌ Error: {parsed_data['error']}")
-                                             break
-                                     except json.JSONDecodeError:
-                                         # If not JSON, just print the raw data
-                                         click.echo(event_data, nl=False)
-                                 elif line.startswith("event: "):
-                                     # Handle event types if needed
-                                     continue
-                                 else:
-                                     # Handle other SSE lines
-                                     click.echo(line, nl=False)
-                         click.echo()  # Final newline
-                     else:
-                         # Handle non-streaming response - read content first
-                         content = await response.aread()
-                         if response.status_code >= 400:
-                             response.raise_for_status()
-                         try:
-                             import json
-                             result = json.loads(content)
-                             if "response" in result:
-                                 click.echo(result["response"])
-                             else:
-                                 click.echo("✅ Task completed successfully")
-                         except json.JSONDecodeError:
-                             click.echo(content.decode('utf-8') if isinstance(content, bytes) else str(content))
-                            
-            except httpx.ConnectError as e:
-                raise AgentAreaConnectionError(
-                    f"Cannot connect to API server at {self.base_url}. "
-                    "Make sure the API server is running."
-                ) from e
-            except httpx.TimeoutException as e:
-                raise AgentAreaAPIError(f"Request timeout after {self.timeout}s") from e
-            except httpx.HTTPStatusError as e:
-                await self._handle_http_error(e)
 
 
 def run_async(coro):
