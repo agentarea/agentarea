@@ -350,6 +350,59 @@ export const listProviderConfigs = async (params?: {
   return { data, error };
 };
 
+// Enhanced Provider Config API with Model Instances
+export const listProviderConfigsWithModelInstances = async (params?: {
+  provider_spec_id?: string;
+  is_active?: boolean;
+}) => {
+  try {
+    // Fetch provider configs with the new endpoint
+    const configsResponse = await client.GET("/v1/provider-configs/with-instances", {
+      params: { query: params },
+    });
+    
+    if (configsResponse.error) {
+      return { data: null, error: configsResponse.error };
+    }
+
+    const configs = configsResponse.data || [];
+    
+    // Fetch model instances for all configs in parallel
+    const instancesPromises = configs.map(config => 
+      listModelInstances({
+        provider_config_id: config.id,
+        is_active: true
+      })
+    );
+    
+    const instancesResponses = await Promise.all(instancesPromises);
+    
+    // Enhance configs with their model instances
+    const enhancedConfigs = configs.map((config, index) => {
+      const instancesResponse = instancesResponses[index];
+      const modelInstances = instancesResponse.data || [];
+      
+      return {
+        ...config,
+        model_instances: modelInstances
+      };
+    });
+    
+    return { data: enhancedConfigs, error: null };
+  } catch (error) {
+    return { 
+      data: null, 
+      error: { 
+        detail: [{ 
+          loc: [], 
+          msg: error instanceof Error ? error.message : 'Unknown error', 
+          type: 'error' 
+        }] 
+      } 
+    };
+  }
+};
+
 export const createProviderConfig = async (config: components["schemas"]["ProviderConfigCreate"]) => {
   const { data, error } = await client.POST("/v1/provider-configs/", { body: config });
   return { data, error };

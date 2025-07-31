@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useActionState } from "react";
+import React, { useEffect, useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useForm, useFieldArray } from 'react-hook-form';
 import { addAgent } from './actions';
@@ -13,6 +13,7 @@ import {
   ToolConfig
 } from './components';
 import type { AgentFormValues, EventConfig } from './types';
+import { listModelInstances } from '@/lib/api';
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
@@ -25,6 +26,19 @@ export default function CreateAgentClient({
   llmModelInstances: LLMModelInstance[];
 }) {
   const [state, formAction] = useActionState(addAgent, agentInitialState);
+  const [currentModelInstances, setCurrentModelInstances] = useState(llmModelInstances);
+
+  // Function to refresh model instances
+  const refreshModelInstances = async () => {
+    try {
+      const response = await listModelInstances();
+      if (response.data) {
+        setCurrentModelInstances(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to refresh model instances:', error);
+    }
+  };
 
   const { register, control, setValue, handleSubmit, formState: { errors } } = useForm<AgentFormValues>({
     defaultValues: {
@@ -120,7 +134,9 @@ export default function CreateAgentClient({
               register={register} 
               control={control} 
               errors={errors}
-              llmModelInstances={llmModelInstances}
+              llmModelInstances={currentModelInstances}
+              onOpenConfigSheet={() => {}}
+              onRefreshModels={refreshModelInstances}
             />
           </div>
           <div className="space-y-[12px]">

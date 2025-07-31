@@ -19,7 +19,7 @@ export default function SectionTitle({children, isCollapsed, onClick, expanded}:
                     )} />
                 </div>
                 {isCollapsed && (
-                    <ChevronDown className={cn("w-4 h-4 transition-all duration-300 group-hover:text-zinc-500", expanded ? "rotate-180" : "rotate-0"    )} />
+                    <ChevronDown className={cn("w-4 h-4 transition-all duration-300 group-hover:text-zinc-500", expanded ? "rotate-0" : "-rotate-90"    )} />
                 )}
             </div>
         </>

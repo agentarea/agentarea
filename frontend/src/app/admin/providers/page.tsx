@@ -14,6 +14,7 @@ export default async function ProviderSpecsPage({
     searchParams: { [key: string]: string | string[] | undefined }
 }) {
     const t = await getTranslations('Common');
+    const tProviders = await getTranslations('ProvidersPage');
 
     // Fetch provider specs with models
     const providersResponse = await listProviderSpecsWithModels();
@@ -21,7 +22,7 @@ export default async function ProviderSpecsPage({
 
     const columns = [
         {
-            header: "Provider",
+            header: tProviders("table.provider"),
             accessor: "name",
             render: (value: string, row: any) => (
                 <div className="flex items-center gap-3">
@@ -40,15 +41,15 @@ export default async function ProviderSpecsPage({
             ),
         },
         {
-            header: "Description",
+            header: tProviders("table.description"),
             accessor: "description",
             cellClassName: "text-[12px] md:text-[14px]",
             render: (value: string) => (
-                <div className="line-clamp-3 md:line-clamp-none">{value || 'No description'}</div>
+                <div className="line-clamp-3 md:line-clamp-none">{value || tProviders("table.noDescription")}</div>
             ),
         },
         {
-            header: "Type",
+            header: tProviders("table.type"),
             accessor: "provider_type",
             render: (value: string) => (
                 <div className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
@@ -57,16 +58,16 @@ export default async function ProviderSpecsPage({
             ),
         },
         {
-            header: "Models",
+            header: tProviders("table.models"),
             accessor: "models",
             render: (models: any[]) => (
                 <div className="text-xs text-muted-foreground">
-                    {models?.length || 0} models
+                    {models?.length || 0} {tProviders("table.modelsCount")}
                 </div>
             ),
         },
         {
-            header: "Status",
+            header: tProviders("table.status"),
             accessor: "is_builtin",
             render: (value: boolean) => (
                 <div className={`text-xs px-2 py-1 rounded-full ${
@@ -74,7 +75,7 @@ export default async function ProviderSpecsPage({
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-gray-100 text-gray-800'
                 }`}>
-                    {value ? 'Built-in' : 'Custom'}
+                    {value ? tProviders("table.builtIn") : tProviders("table.custom")}
                 </div>
             ),
         },
@@ -83,13 +84,13 @@ export default async function ProviderSpecsPage({
     return (
         <ContentBlock 
             header={{
-                title: "Provider Specifications",
-                description: "Manage AI provider specifications and their available models",
+                title: tProviders("title"),
+                description: tProviders("description"),
                 controls: (
                     <Link href="/admin/providers/create" passHref legacyBehavior>
                         <Button className="shrink-0 gap-2 shadow-sm" data-test="new-provider-button">
                             <PlusCircleIcon className="mr-2 h-4 w-4" />
-                            Add Provider
+                            {tProviders("addProvider")}
                         </Button>
                     </Link>
                 )
@@ -101,11 +102,11 @@ export default async function ProviderSpecsPage({
                 columns={columns}
                 emptyState={
                     <EmptyState
-                        title="No provider specifications"
-                        description="Add a new provider specification to get started"
+                        title={tProviders("noProviders")}
+                        description={tProviders("emptyDescription")}
                         iconsType="llm"
                         action={{
-                            label: "Add Provider",
+                            label: tProviders("addProvider"),
                             href: "/admin/providers/create"
                         }}
                     />
@@ -126,11 +127,11 @@ export default async function ProviderSpecsPage({
                                 <div className="text-xs text-muted-foreground">{item.provider_key}</div>
                             </div>
                         </div>
-                        <div className="text-[14px] opacity-50 line-clamp-2">{item.description || 'No description'}</div>
+                        <div className="text-[14px] opacity-50 line-clamp-2">{item.description || tProviders("table.noDescription")}</div>
                         <div className="flex gap-2 text-xs text-muted-foreground">
-                            <span>Type: {item.provider_type}</span>
+                            <span>{tProviders("table.type")}: {item.provider_type}</span>
                             <span>•</span>
-                            <span>Models: {item.models?.length || 0}</span>
+                            <span>{tProviders("table.models")}: {item.models?.length || 0}</span>
                         </div>
                         <div className="flex gap-2">
                             <div className={`text-xs px-2 py-1 rounded-full ${
@@ -138,7 +139,7 @@ export default async function ProviderSpecsPage({
                                     ? 'bg-green-100 text-green-800' 
                                     : 'bg-gray-100 text-gray-800'
                             }`}>
-                                {item.is_builtin ? 'Built-in' : 'Custom'}
+                                {item.is_builtin ? tProviders("table.builtIn") : tProviders("table.custom")}
                             </div>
                         </div>
                     </div>

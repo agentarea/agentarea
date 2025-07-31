@@ -13,8 +13,8 @@ type Column = {
     sortableDirection?: "asc" | "desc";
 }
 
-export default function Table({data, columns}: {data: any[], columns: Column[]}) {
-    return (
+    export default function Table({data, columns}: {data: any[], columns: Column[]}) {
+        return (
         
                 <TableComponent>
                     <TableHeader>
@@ -33,7 +33,10 @@ export default function Table({data, columns}: {data: any[], columns: Column[]})
                     </TableHeader>
                     <TableBody>
                         {data.map((item) => (
-                            <TableRow key={item.id} className="hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer transition-all duration-300 py-[18px] border-zinc-100 dark:border-zinc-700">
+                            <TableRow 
+                                key={item.id} 
+                                className={cn("hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer transition-all duration-300 py-[18px] border-zinc-100 dark:border-zinc-700 group", item.className)}
+                            >
                                 {columns.map((column) => (
                                     <TableCell key={item.id + "-" + column.accessor}
                                         className={cn("py-[10px] first:pl-[20px] last:pr-[20px]", column.cellClassName)}
