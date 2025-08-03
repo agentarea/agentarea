@@ -66,16 +66,38 @@ class TemporalLlmService(BaseLlm):
             messages = self._convert_llm_request_to_messages(llm_request)
             tools = self._extract_tools_from_request(llm_request)
             
-            # Execute via Temporal activity
-            # Note: This assumes we're running within a workflow context
-            from ...activities.agent_execution_activities import call_llm_activity
+            # Check if we're in a workflow or activity context
+            # Use temporalio.activity to detect if we're in an activity
+            try:
+                from temporalio import activity
+                activity.info()
+                # If we get here, we're in an activity context
+                is_in_activity = True
+            except RuntimeError:
+                # Not in activity context, might be in workflow context
+                is_in_activity = False
             
-            result = await workflow.execute_activity(
-                call_llm_activity,
-                args=[messages, self.model, tools],
-                start_to_close_timeout=300,  # 5 minutes timeout
-                heartbeat_timeout=30,  # 30 seconds heartbeat
-            )
+            if is_in_activity:
+                # We're in an activity context - call the LLM directly
+                logger.info("Running in activity context - calling LLM directly")
+                from ...activities.agent_execution_activities import call_llm_activity
+                
+                # Get the global reference to the activity function
+                if call_llm_activity is None:
+                    raise RuntimeError("call_llm_activity not available - activities not initialized")
+                
+                # Call the activity function directly (not through Temporal)
+                result = await call_llm_activity(messages, self.model, tools)
+            else:
+                # We're in a workflow context - can call activities through Temporal
+                from ...activities.agent_execution_activities import call_llm_activity
+                
+                result = await workflow.execute_activity(
+                    call_llm_activity,
+                    args=[messages, self.model, tools],
+                    start_to_close_timeout=300,  # 5 minutes timeout
+                    heartbeat_timeout=30,  # 30 seconds heartbeat
+                )
             
             # Convert result back to LlmResponse
             response = self._convert_result_to_llm_response(result)
@@ -88,10 +110,9 @@ class TemporalLlmService(BaseLlm):
                 content=types.Content(parts=[
                     types.Part(text=f"LLM call failed: {str(e)}")
                 ]),
-                usage=types.Usage(
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    total_tokens=0
+                usage_metadata=types.GenerateContentResponseUsageMetadata(
+                    prompt_token_count=0,
+                    candidates_token_count=0
                 )
             )
             yield error_response
@@ -108,8 +129,9 @@ class TemporalLlmService(BaseLlm):
         messages = []
         
         # Add system instruction if present
-        if llm_request.system_instruction:
-            system_content = self._extract_text_from_content(llm_request.system_instruction)
+        if llm_request.config and llm_request.config.system_instruction:
+            # system_instruction is already a string, no need to extract
+            system_content = llm_request.config.system_instruction
             if system_content:
                 messages.append({
                     "role": "system",
@@ -141,11 +163,11 @@ class TemporalLlmService(BaseLlm):
         Returns:
             List of tool definitions or None
         """
-        if not llm_request.tools:
+        if not llm_request.config or not llm_request.config.tools:
             return None
         
         tools = []
-        for tool in llm_request.tools:
+        for tool in llm_request.config.tools:
             if hasattr(tool, 'function_declarations'):
                 for func_decl in tool.function_declarations:
                     tool_def = {
@@ -220,16 +242,14 @@ class TemporalLlmService(BaseLlm):
         
         # Extract usage information
         usage_data = result.get("usage", {})
-        usage = types.Usage(
-            prompt_tokens=usage_data.get("prompt_tokens", 0),
-            completion_tokens=usage_data.get("completion_tokens", 0),
-            total_tokens=usage_data.get("total_tokens", 0)
+        usage = types.GenerateContentResponseUsageMetadata(
+            prompt_token_count=usage_data.get("prompt_tokens", 0),
+            candidates_token_count=usage_data.get("completion_tokens", 0)
         )
         
         return LlmResponse(
             content=content,
-            usage=usage,
-            cost=result.get("cost", 0.0)
+            usage_metadata=usage
         )
 
 

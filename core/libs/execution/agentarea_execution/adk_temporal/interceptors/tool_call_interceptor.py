@@ -36,8 +36,7 @@ class TemporalToolCallInterceptor:
                 logger.info(f"Tool call {self.name} executing in workflow: {workflow_info.workflow_id}")
                 
                 # Execute via Temporal activity
-                # Use the mock activity for testing, real implementation would use execute_mcp_tool_activity
-                activity_name = "mock_tool_activity"
+                activity_name = "execute_mcp_tool_activity"
                 
                 result = await workflow.execute_activity(
                     activity_name,

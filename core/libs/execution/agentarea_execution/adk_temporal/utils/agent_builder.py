@@ -13,6 +13,49 @@ from ...ag.adk.models.lite_llm import LiteLlm
 logger = logging.getLogger(__name__)
 
 
+def sanitize_agent_name(name: str, workspace_id: str = "system") -> str:
+    """Sanitize agent name for ADK compatibility.
+    
+    ADK requires agent names to be valid identifiers:
+    - Start with letter or underscore
+    - Contain only letters, digits, underscores
+    - No spaces or special characters
+    
+    Args:
+        name: Original agent name
+        workspace_id: Workspace ID to use as prefix
+        
+    Returns:
+        Sanitized agent name
+    """
+    import re
+    
+    # Convert to lowercase and replace spaces with underscores
+    sanitized = name.lower().replace(" ", "_")
+    
+    # Replace any non-alphanumeric characters (except underscores) with underscores
+    sanitized = re.sub(r'[^a-z0-9_]', '_', sanitized)
+    
+    # Remove consecutive underscores
+    sanitized = re.sub(r'_+', '_', sanitized)
+    
+    # Remove leading/trailing underscores
+    sanitized = sanitized.strip('_')
+    
+    # Ensure it starts with a letter or underscore
+    if sanitized and not (sanitized[0].isalpha() or sanitized[0] == '_'):
+        sanitized = f"agent_{sanitized}"
+    
+    # If empty after sanitization, use default
+    if not sanitized:
+        sanitized = "agent"
+    
+    # Add workspace prefix to avoid conflicts
+    sanitized = f"{workspace_id}_{sanitized}"
+    
+    return sanitized
+
+
 def build_adk_agent_from_config(agent_config: Dict[str, Any]) -> BaseAgent:
     """Build an ADK agent from configuration dictionary.
     
@@ -34,9 +77,13 @@ def build_adk_agent_from_config(agent_config: Dict[str, Any]) -> BaseAgent:
         _ensure_ollama_models_registered()
         
         # Extract basic configuration
-        name = agent_config.get("name", "default_agent")
+        original_name = agent_config.get("name", "default_agent")
+        # Sanitize the name for ADK compatibility
+        name = sanitize_agent_name(original_name)
         description = agent_config.get("description", "")
         model_name = agent_config.get("model", "gpt-4")
+        
+        logger.info(f"Sanitized agent name from '{original_name}' to '{name}'")
         instructions = agent_config.get("instructions", "")
         
         # Build tools if provided

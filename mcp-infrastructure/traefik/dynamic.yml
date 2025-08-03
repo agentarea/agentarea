@@ -91,7 +91,7 @@ http:
         mcp-filesystem-instance-cb93dd87-service:
             loadBalancer:
                 servers:
-                    - url: http://10.88.0.4:8000
+                    - url: http://127.0.0.1:8000
         mcp-manager-service:
             loadBalancer:
                 servers:

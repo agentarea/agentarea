@@ -40,13 +40,27 @@ class TemporalTaskManager(BaseTaskManager):
         """Convert Task domain model to SimpleTask."""
         from .domain.models import SimpleTask
         
+        # Handle different field names between Task domain model and TaskORM
+        user_id = getattr(task, 'user_id', None) or getattr(task, 'created_by', None) or "system"
+        workspace_id = getattr(task, 'workspace_id', None) or "system"
+        
+        # Handle metadata field - could be dict, SQLAlchemy MetaData, or None
+        metadata_raw = getattr(task, 'metadata', None) or getattr(task, 'task_metadata', None)
+        if metadata_raw is None:
+            metadata = {}
+        elif isinstance(metadata_raw, dict):
+            metadata = metadata_raw
+        else:
+            # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
+            metadata = {}
+        
         return SimpleTask(
             id=task.id,
             title=task.description,  # Use description as title
             description=task.description,
             query=task.description,  # Use description as query
-            user_id=task.user_id or "system",
-            workspace_id=task.workspace_id,
+            user_id=user_id,
+            workspace_id=workspace_id,
             agent_id=task.agent_id,
             status=task.status,
             task_parameters=task.parameters or {},
@@ -57,7 +71,7 @@ class TemporalTaskManager(BaseTaskManager):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
-            metadata=task.metadata or {}
+            metadata=metadata
         )
 
     def _simple_task_to_task(self, simple_task: SimpleTask):
@@ -77,7 +91,7 @@ class TemporalTaskManager(BaseTaskManager):
             started_at=simple_task.started_at,
             completed_at=simple_task.completed_at,
             execution_id=simple_task.execution_id,
-            user_id=simple_task.user_id,
+            user_id=simple_task.user_id,  # This will be mapped to created_by in the repository
             workspace_id=simple_task.workspace_id,
             metadata=simple_task.metadata
         )

@@ -60,9 +60,11 @@ class AgentExecutionState:
     budget_usd: float | None = None
 
 
-@workflow.defn
-class AgentExecutionWorkflow:
-    """Simplified and maintainable agent execution workflow."""
+# COMMENTED OUT - Using ADK workflow instead (see bottom of file for re-export)
+# This old workflow has been replaced by ADKAgentWorkflow for better architecture
+# @workflow.defn
+class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
+    """DEPRECATED: This workflow has been replaced by ADKAgentWorkflow."""
 
     def __init__(self):
         self.state = AgentExecutionState()
@@ -117,8 +119,8 @@ class AgentExecutionWorkflow:
             "budget_limit": self.budget_tracker.budget_limit
         })
 
-        # Publish immediately
-        await self._publish_events_immediately()
+        # Publish immediately - COMMENTED OUT FOR NOW
+        # await self._publish_events_immediately()
 
         # Initialize agent configuration
         await self._initialize_agent_config()
@@ -233,7 +235,7 @@ class AgentExecutionWorkflow:
             "iteration": iteration,
             "budget_remaining": self.budget_tracker.get_remaining()
         })
-        await self._publish_events_immediately()
+        # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
         try:
             # Check if we should use ADK Temporal backbone (default to True)
@@ -251,7 +253,7 @@ class AgentExecutionWorkflow:
                 "iteration": iteration,
                 "total_cost": self.budget_tracker.cost
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
         except Exception as e:
             workflow.logger.error(f"Iteration {iteration} failed: {e}")
@@ -298,7 +300,7 @@ class AgentExecutionWorkflow:
             "message_count": len(self.state.messages),
             "execution_type": "adk_temporal_backbone"
         })
-        await self._publish_events_immediately()
+        # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
         
         try:
             events = await workflow.execute_activity(
@@ -316,7 +318,7 @@ class AgentExecutionWorkflow:
                 "events_processed": len(events),
                 "execution_type": "adk_temporal_backbone"
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
             
         except Exception as e:
             self.event_manager.add_event(EventTypes.LLM_CALL_FAILED, {
@@ -324,7 +326,7 @@ class AgentExecutionWorkflow:
                 "error": str(e),
                 "execution_type": "adk_temporal_backbone"
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
             raise
 
     async def _execute_traditional_iteration(self) -> None:
@@ -452,7 +454,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
             "iteration": self.state.current_iteration,
             "message_count": len(self.state.messages)
         })
-        await self._publish_events_immediately()
+        # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
         try:
             response = await workflow.execute_activity(
@@ -476,7 +478,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 "total_cost": self.budget_tracker.cost,
                 "usage": usage_info
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
             return response
 
@@ -485,7 +487,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 "iteration": self.state.current_iteration,
                 "error": str(e)
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
             raise
 
     async def _process_llm_response(self, response: dict[str, Any]) -> None:
@@ -512,7 +514,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 "tool_call_id": tool_call["id"],
                 "iteration": self.state.current_iteration
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
             try:
                 # Execute tool call
@@ -539,7 +541,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                     "success": result.get("success", False),
                     "iteration": self.state.current_iteration
                 })
-                await self._publish_events_immediately()
+                # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
             except Exception as e:
                 workflow.logger.error(f"Tool call {tool_name} failed: {e}")
@@ -557,7 +559,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                     "error": str(e),
                     "iteration": self.state.current_iteration
                 })
-                await self._publish_events_immediately()
+                # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
     async def _evaluate_goal_progress(self) -> None:
         """Evaluate if the goal has been achieved."""
@@ -599,7 +601,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 "limit": self.budget_tracker.budget_limit,
                 "message": self.budget_tracker.get_warning_message()
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
             self.budget_tracker.mark_warning_sent()
 
         if self.budget_tracker.is_exceeded():
@@ -608,7 +610,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 "limit": self.budget_tracker.budget_limit,
                 "message": self.budget_tracker.get_exceeded_message()
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
     async def _publish_events(self) -> None:
         """Publish pending events."""
@@ -704,7 +706,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 "error_type": type(error).__name__,
                 "iterations_completed": self.state.current_iteration
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
     def _build_goal_from_request(self, request: AgentExecutionRequest) -> AgentGoal:
         """Build goal from execution request."""

@@ -10,8 +10,8 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class TaskORM(BaseModel, WorkspaceScopedMixin, SoftDeleteMixin):
-    """Task ORM model with workspace awareness and soft delete capability."""
+class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out for now
+    """Task ORM model with workspace awareness."""
 
     __tablename__ = "tasks"
 

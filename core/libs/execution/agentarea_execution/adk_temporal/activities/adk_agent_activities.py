@@ -66,13 +66,9 @@ async def create_agent_runner(
     except RuntimeError:
         logger.info("Creating agent runner - Direct mode")
     
-    try:
-        # Create ADK runner with service bridges
-        runner = create_adk_runner(agent_config, session_data)
-        logger.info("Successfully created ADK runner")
-    except Exception as e:
-        logger.error(f"Failed to create ADK runner: {str(e)}", exc_info=True)
-        raise
+    # Create ADK runner with service bridges
+    runner = create_adk_runner(agent_config, session_data)
+    logger.info("Successfully created ADK runner")
 
 
 @activity.defn
@@ -102,71 +98,57 @@ async def execute_agent_step(
     except RuntimeError:
         logger.info("Executing agent step - Direct mode")
     
-    try:
-        # Create ADK runner with Temporal backbone enabled
-        runner = create_adk_runner(
-            agent_config, 
-            session_data, 
-            use_temporal_services=False,  # Keep session services simple
-            use_temporal_backbone=True    # Enable Temporal for tool/LLM calls
-        )
+    # Create ADK runner with Temporal backbone enabled
+    runner = create_adk_runner(
+        agent_config, 
+        session_data, 
+        use_temporal_services=False,  # Keep session services simple
+        use_temporal_backbone=True    # Enable Temporal for tool/LLM calls
+    )
+    
+    # Convert user message to ADK Content
+    user_content = _dict_to_adk_content(user_message)
+    
+    # Prepare run config - always provide a default
+    adk_run_config = RunConfig(**run_config) if run_config else RunConfig()
+    
+    # Execute agent and collect events
+    events = []
+    event_count = 0
+    
+    logger.info(f"Starting Temporal-backed agent step for agent: {agent_config.get('name', 'unknown')}")
+    
+    # Heartbeat to prevent timeout during long-running operations
+    activity.heartbeat("Executing ADK agent step with Temporal backbone...")
+    
+    async for event in runner.run_async(
+        user_id=session_data.get("user_id", "default"),
+        session_id=session_data.get("session_id", "default"),
+        new_message=user_content,
+        run_config=adk_run_config
+    ):
+        event_count += 1
         
-        # Convert user message to ADK Content
-        user_content = _dict_to_adk_content(user_message)
+        # Serialize event for Temporal storage
+        event_dict = EventSerializer.event_to_dict(event)
+        events.append(event_dict)
         
-        # Prepare run config - always provide a default
-        adk_run_config = RunConfig(**run_config) if run_config else RunConfig()
+        # Log progress periodically
+        if event_count % 5 == 0:
+            logger.info(f"Processed {event_count} events")
+            # Send heartbeat every 5 events
+            activity.heartbeat(f"Processed {event_count} events")
         
-        # Execute agent and collect events
-        events = []
-        event_count = 0
-        
-        logger.info(f"Starting Temporal-backed agent step for agent: {agent_config.get('name', 'unknown')}")
-        
-        # Heartbeat to prevent timeout during long-running operations
-        activity.heartbeat("Executing ADK agent step with Temporal backbone...")
-        
-        async for event in runner.run_async(
-            user_id=session_data.get("user_id", "default"),
-            session_id=session_data.get("session_id", "default"),
-            new_message=user_content,
-            run_config=adk_run_config
-        ):
-            event_count += 1
+        # Check if this is the final response
+        if event.is_final_response():
+            logger.info(f"Agent step completed with final response after {event_count} events")
+            break
             
-            # Serialize event for Temporal storage
-            event_dict = EventSerializer.event_to_dict(event)
-            events.append(event_dict)
-            
-            # Log progress periodically
-            if event_count % 5 == 0:
-                logger.info(f"Processed {event_count} events")
-                # Send heartbeat every 5 events
-                activity.heartbeat(f"Processed {event_count} events")
-            
-            # Check if this is the final response
-            if event.is_final_response():
-                logger.info(f"Agent step completed with final response after {event_count} events")
-                break
-                
-        # Final heartbeat before completion
-        activity.heartbeat("Finalizing agent step...")
-        
-        logger.info(f"ADK agent step completed with Temporal backbone - Events: {len(events)}")
-        return events
-        
-    except Exception as e:
-        logger.error(f"ADK agent step execution failed: {str(e)}", exc_info=True)
-        
-        # Create error event
-        error_event = Event(
-            author=agent_config.get("name", "agent"),
-            content=types.Content(parts=[
-                types.Part(text=f"Agent step execution failed: {str(e)}")
-            ])
-        )
-        
-        return [EventSerializer.event_to_dict(error_event)]
+    # Final heartbeat before completion
+    activity.heartbeat("Finalizing agent step...")
+    
+    logger.info(f"ADK agent step completed with Temporal backbone - Events: {len(events)}")
+    return events
 
 
 @activity.defn  

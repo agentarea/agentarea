@@ -47,130 +47,196 @@ const statusIcons = {
 
 function TaskTable({ tasks }: { tasks: TaskWithAgent[] }) {
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Task</TableHead>
-            <TableHead>Agent</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead>Execution ID</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tasks.map((task) => (
-            <TaskNavigationWrapper key={task.id} taskId={task.id.toString()}>
-              <TableRow>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-primary" />
-                    <div>
-                      <p className="font-medium">{task.description}</p>
-                      <p className="text-sm text-muted-foreground">ID: {task.id.toString().slice(-8)}</p>
+    <div className="grid gap-4">
+      {tasks.map((task) => (
+        <TaskNavigationWrapper key={task.id} taskId={task.id.toString()}>
+          <div className="group hover:shadow-md transition-all duration-200 border rounded-xl p-6 bg-white dark:bg-gray-900 cursor-pointer">
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start gap-4">
+                  {/* Status Indicator */}
+                  <div className="flex-shrink-0 mt-1">
+                    <div className={`w-3 h-3 rounded-full ${
+                      task.status === "running" ? "bg-blue-500 animate-pulse" :
+                      task.status === "completed" || task.status === "success" ? "bg-green-500" :
+                      task.status === "paused" ? "bg-yellow-500" :
+                      task.status === "failed" || task.status === "error" ? "bg-red-500" :
+                      "bg-gray-400"
+                    }`} />
+                  </div>
+
+                  {/* Main Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 group-hover:text-primary transition-colors">
+                          {task.description}
+                        </h3>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                          <div className="flex items-center gap-1">
+                            <Bot className="h-4 w-4" />
+                            <span>{task.agent_name || "Unknown Agent"}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            <span>{new Date(task.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            ID: {task.id.toString().slice(-8)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className="flex items-center gap-2 ml-4">
+                        {statusIcons[task.status as keyof typeof statusIcons]}
+                        <Badge variant={
+                          task.status === "running" ? "default" :
+                          task.status === "paused" ? "secondary" :
+                          task.status === "completed" || task.status === "success" ? "default" :
+                          "destructive"
+                        } className="whitespace-nowrap">
+                          {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Agent Description */}
+                    {task.agent_description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
+                        {task.agent_description}
+                      </p>
+                    )}
+
+                    {/* Footer with execution info */}
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        {task.execution_id && (
+                          <span className="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                            {task.execution_id.slice(-8)}
+                          </span>
+                        )}
+                        <span>{new Date(task.created_at).toLocaleTimeString()}</span>
+                      </div>
+                      
+                      {/* Progress indicator for running tasks */}
+                      {task.status === "running" && (
+                        <div className="flex items-center gap-2 text-xs text-blue-600">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                          <span>In Progress</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-medium">{task.agent_name || "Unknown Agent"}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {task.agent_description || "No description"}
-                    </p>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {statusIcons[task.status as keyof typeof statusIcons]}
-                    <Badge variant={
-                      task.status === "running" ? "default" :
-                      task.status === "paused" ? "secondary" :
-                      task.status === "completed" || task.status === "success" ? "default" :
-                      "destructive"
-                    }>
-                      {task.status}
-                    </Badge>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {new Date(task.created_at).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <code className="text-xs bg-muted px-2 py-1 rounded">
-                    {task.execution_id || "N/A"}
-                  </code>
-                </TableCell>
-              </TableRow>
-            </TaskNavigationWrapper>
-          ))}
-        </TableBody>
-      </Table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </TaskNavigationWrapper>
+      ))}
     </div>
   );
 }
 
 function CompletedTaskTable({ tasks }: { tasks: TaskWithAgent[] }) {
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Task</TableHead>
-            <TableHead>Agent</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead>Result</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tasks.map((task) => (
-            <TaskNavigationWrapper key={task.id} taskId={task.id.toString()}>
-              <TableRow>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-primary" />
-                    <div>
-                      <p className="font-medium">{task.description}</p>
-                      <p className="text-sm text-muted-foreground">ID: {task.id.toString().slice(-8)}</p>
+    <div className="grid gap-4">
+      {tasks.map((task) => (
+        <TaskNavigationWrapper key={task.id} taskId={task.id.toString()}>
+          <div className="group hover:shadow-md transition-all duration-200 border rounded-xl p-6 bg-white dark:bg-gray-900 cursor-pointer">
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start gap-4">
+                  {/* Status Indicator */}
+                  <div className="flex-shrink-0 mt-1">
+                    <div className={`w-3 h-3 rounded-full ${
+                      task.status === "success" || task.status === "completed" ? "bg-green-500" :
+                      task.status === "failed" || task.status === "error" ? "bg-red-500" :
+                      "bg-gray-400"
+                    }`} />
+                  </div>
+
+                  {/* Main Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 group-hover:text-primary transition-colors">
+                          {task.description}
+                        </h3>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                          <div className="flex items-center gap-1">
+                            <Bot className="h-4 w-4" />
+                            <span>{task.agent_name || "Unknown Agent"}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            <span>{new Date(task.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            ID: {task.id.toString().slice(-8)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className="flex items-center gap-2 ml-4">
+                        {statusIcons[task.status as keyof typeof statusIcons]}
+                        <Badge variant={
+                          task.status === "success" || task.status === "completed" ? "default" :
+                          task.status === "failed" || task.status === "error" ? "destructive" :
+                          "secondary"
+                        } className="whitespace-nowrap">
+                          {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Agent Description */}
+                    {task.agent_description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
+                        {task.agent_description}
+                      </p>
+                    )}
+
+                    {/* Result Preview */}
+                    {task.result && (
+                      <div className="mb-3">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                          <p className="text-xs text-gray-500 mb-1">Result Preview</p>
+                          <p className="text-sm font-mono text-gray-700 dark:text-gray-300 truncate">
+                            {JSON.stringify(task.result).slice(0, 100)}
+                            {JSON.stringify(task.result).length > 100 && "..."}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Footer with completion info */}
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>Completed {new Date(task.created_at).toLocaleTimeString()}</span>
+                      </div>
+                      
+                      {/* Success/Failure indicator */}
+                      {task.status === "success" || task.status === "completed" ? (
+                        <div className="flex items-center gap-2 text-xs text-green-600">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Completed</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-red-600">
+                          <XCircle className="w-3 h-3" />
+                          <span>Failed</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-medium">{task.agent_name || "Unknown Agent"}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {task.agent_description || "No description"}
-                    </p>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {statusIcons[task.status as keyof typeof statusIcons]}
-                    <Badge variant={
-                      task.status === "success" || task.status === "completed" ? "default" :
-                      task.status === "failed" || task.status === "error" ? "destructive" :
-                      "secondary"
-                    }>
-                      {task.status}
-                    </Badge>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {new Date(task.created_at).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <div className="max-w-xs truncate">
-                    {task.result ? 
-                      JSON.stringify(task.result).slice(0, 100) + "..." : 
-                      "No result available"
-                    }
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TaskNavigationWrapper>
-          ))}
-        </TableBody>
-      </Table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </TaskNavigationWrapper>
+      ))}
     </div>
   );
 }
@@ -286,24 +352,43 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
 
           <TabsContent value="active">
             {activeTasks.length === 0 ? (
-              <div className="text-center py-10">
-                {hasActiveFilters ? (
-                  <>
-                    <XCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">No matching active tasks</h3>
-                    <p className="text-muted-foreground mb-4">
-                      No active tasks match your current filters. Try adjusting your search or status filter.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">No active tasks</h3>
-                    <p className="text-muted-foreground mb-4">
-                      There are currently no active tasks running. Create a new task to get started.
-                    </p>
-                  </>
-                )}
+              <div className="text-center py-16 px-6">
+                <div className="max-w-sm mx-auto">
+                  {hasActiveFilters ? (
+                    <>
+                      <div className="w-20 h-20 mx-auto mb-6 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                        <XCircle className="h-10 w-10 text-gray-400" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">No matching active tasks</h3>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                        No active tasks match your current filters. Try adjusting your search or status filter to find what you're looking for.
+                      </p>
+                      <Button variant="outline" onClick={() => router.push("/tasks")} className="gap-2">
+                        <XCircle className="h-4 w-4" />
+                        Clear Filters
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-20 h-20 mx-auto mb-6 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
+                        <Bot className="h-10 w-10 text-blue-500" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">No active tasks</h3>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                        There are currently no active tasks running. Deploy an agent and create a new task to get started.
+                      </p>
+                      <div className="flex gap-3 justify-center">
+                        <Button onClick={() => router.push("/agents/create")} className="gap-2">
+                          <Bot className="h-4 w-4" />
+                          Deploy Agent
+                        </Button>
+                        <Button variant="outline" onClick={() => router.push("/agents")} className="gap-2">
+                          Browse Agents
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             ) : (
               <TaskTable tasks={activeTasks} />
@@ -312,24 +397,43 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
 
           <TabsContent value="completed">
             {completedTasks.length === 0 ? (
-              <div className="text-center py-10">
-                {hasActiveFilters ? (
-                  <>
-                    <XCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">No matching completed tasks</h3>
-                    <p className="text-muted-foreground mb-4">
-                      No completed tasks match your current filters. Try adjusting your search or status filter.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">No completed tasks</h3>
-                    <p className="text-muted-foreground">
-                      Completed tasks will appear here once they finish execution.
-                    </p>
-                  </>
-                )}
+              <div className="text-center py-16 px-6">
+                <div className="max-w-sm mx-auto">
+                  {hasActiveFilters ? (
+                    <>
+                      <div className="w-20 h-20 mx-auto mb-6 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                        <XCircle className="h-10 w-10 text-gray-400" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">No matching completed tasks</h3>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                        No completed tasks match your current filters. Try adjusting your search or status filter.
+                      </p>
+                      <Button variant="outline" onClick={() => router.push("/tasks")} className="gap-2">
+                        <XCircle className="h-4 w-4" />
+                        Clear Filters
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-20 h-20 mx-auto mb-6 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center">
+                        <CheckCircle2 className="h-10 w-10 text-green-500" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">No completed tasks yet</h3>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                        Completed tasks will appear here once they finish execution. Start by creating some tasks!
+                      </p>
+                      <div className="flex gap-3 justify-center">
+                        <Button onClick={() => router.push("/agents")} className="gap-2">
+                          <Bot className="h-4 w-4" />
+                          Browse Agents
+                        </Button>
+                        <Button variant="outline" onClick={() => router.push("/agents/create")} className="gap-2">
+                          Create Agent
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             ) : (
               <CompletedTaskTable tasks={completedTasks} />

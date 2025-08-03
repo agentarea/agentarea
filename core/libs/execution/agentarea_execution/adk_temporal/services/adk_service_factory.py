@@ -1,6 +1,7 @@
 """ADK service factory for creating Temporal-integrated ADK runners."""
 
 import logging
+import time
 from typing import Any, Dict, Optional
 
 from ...ag.adk.runners import Runner
@@ -70,6 +71,15 @@ def create_adk_runner(
             # Use ADK's in-memory session service as default
             from ...ag.adk.sessions.in_memory_session_service import InMemorySessionService
             session_service = InMemorySessionService()
+            
+            # Create the session with the provided session data
+            session = session_service.create_session_sync(
+                app_name=session_data.get("app_name", "agentarea"),
+                user_id=session_data.get("user_id", "default"),
+                session_id=session_data.get("session_id", "default"),
+                state=session_data.get("state", {})
+            )
+            logger.info(f"Created session: {session.id}")
         
         # Create runner with services
         runner = Runner(

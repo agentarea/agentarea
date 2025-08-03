@@ -44,8 +44,7 @@ class TemporalLlmCallInterceptor:
                 tools = TemporalLlmCallInterceptor._extract_tools_from_request(llm_request)
                 
                 # Execute via Temporal activity
-                # Use the mock activity for testing, real implementation would use call_llm_activity
-                activity_name = "mock_llm_activity"
+                activity_name = "call_llm_activity"
                 
                 result = await workflow.execute_activity(
                     activity_name,
@@ -108,11 +107,11 @@ class TemporalLlmCallInterceptor:
     @staticmethod
     def _extract_tools_from_request(llm_request: LlmRequest) -> List[Dict[str, Any]] | None:
         """Extract tools from LLM request in OpenAI format."""
-        if not llm_request.tools:
+        if not llm_request.config or not llm_request.config.tools:
             return None
         
         tools = []
-        for tool in llm_request.tools:
+        for tool in llm_request.config.tools:
             if hasattr(tool, 'function_declarations'):
                 for func_decl in tool.function_declarations:
                     tool_def = {
@@ -175,16 +174,14 @@ class TemporalLlmCallInterceptor:
         
         # Extract usage information
         usage_data = result.get("usage", {})
-        usage = types.Usage(
-            prompt_tokens=usage_data.get("prompt_tokens", 0),
-            completion_tokens=usage_data.get("completion_tokens", 0),
-            total_tokens=usage_data.get("total_tokens", 0)
+        usage = types.GenerateContentResponseUsageMetadata(
+            prompt_token_count=usage_data.get("prompt_tokens", 0),
+            candidates_token_count=usage_data.get("completion_tokens", 0)
         )
         
         return LlmResponse(
             content=content,
-            usage=usage,
-            cost=result.get("cost", 0.0)
+            usage_metadata=usage
         )
     
     @staticmethod

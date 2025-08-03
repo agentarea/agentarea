@@ -28,6 +28,10 @@ from ..interfaces import ActivityDependencies
 
 logger = logging.getLogger(__name__)
 
+# Global reference to the call_llm_activity function
+# This will be set when make_agent_activities is called
+call_llm_activity = None
+
 
 def make_agent_activities(dependencies: ActivityDependencies):
     """Factory function to create agent activities with injected dependencies.
@@ -154,38 +158,22 @@ def make_agent_activities(dependencies: ActivityDependencies):
         This activity enables the Temporal backbone and runs an ADK agent,
         ensuring all tool and LLM calls go through Temporal activities.
         """
-        try:
-            # Enable Temporal backbone for all ADK calls
-            from ..adk_temporal.interceptors import enable_temporal_backbone
-            enable_temporal_backbone()
-            
-            logger.info(f"Executing ADK agent with Temporal backbone: {agent_config.get('name', 'unknown')}")
-            
-            # Use the existing ADK agent activity with Temporal backbone enabled
-            from ..adk_temporal.activities.adk_agent_activities import execute_agent_step
-            
-            events = await execute_agent_step(
-                agent_config=agent_config,
-                session_data=session_data,
-                user_message=user_message,
-                run_config=run_config
-            )
-            
-            logger.info(f"ADK agent completed with Temporal backbone - Events: {len(events)}")
-            return events
-            
-        except Exception as e:
-            logger.error(f"ADK agent execution with Temporal backbone failed: {e}")
-            # Return error event
-            error_event = {
-                "author": agent_config.get("name", "agent"),
-                "content": {
-                    "parts": [{"text": f"Agent execution failed: {str(e)}"}]
-                },
-                "timestamp": "2025-01-01T00:00:00Z",
-                "event_type": "error"
-            }
-            return [error_event]
+        # Enable Temporal backbone for all ADK calls
+        from ..adk_temporal.interceptors import enable_temporal_backbone
+        enable_temporal_backbone()
+        
+        logger.info(f"Executing ADK agent with Temporal backbone: {agent_config.get('name', 'unknown')}")
+        
+        # Use the consolidated execute_agent_step function
+        events = await execute_agent_step(
+            agent_config=agent_config,
+            session_data=session_data,
+            user_message=user_message,
+            run_config=run_config
+        )
+        
+        logger.info(f"ADK agent completed with Temporal backbone - Events: {len(events)}")
+        return events
 
     @activity.defn
     async def call_llm_activity(
@@ -249,8 +237,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 litellm_params["tool_choice"] = "auto"
             logger.info(f"Calling LLM with model {litellm_model}")
 
-            # TODO: Fix this
-            litellm_params["base_url"] = "http://host.docker.internal:11434"
+            # Set base URL for Ollama - use localhost when not in Docker
+            if endpoint_url:
+                url = endpoint_url
+                if not url.startswith("http"):
+                    url = f"http://{url}"
+                litellm_params["base_url"] = url
+            elif provider_type == "ollama_chat":
+                # Default Ollama URL - use localhost for local development
+                litellm_params["base_url"] = "http://localhost:11434"
 
             response = await litellm.acompletion(**litellm_params)
             message = response.choices[0].message
@@ -590,6 +585,248 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
             logger.error(f"Failed to publish workflow events: {e}")
             return False
 
+    # ===== ADK-SPECIFIC ACTIVITIES =====
+    # These activities work directly with the ADK framework
+    
+    @activity.defn
+    async def validate_agent_configuration(
+        agent_config: dict[str, Any]
+    ) -> bool:
+        """Validate ADK agent configuration.
+        
+        Args:
+            agent_config: Dictionary containing agent configuration
+            
+        Returns:
+            True if configuration is valid, False otherwise
+            
+        Raises:
+            ValueError: If configuration is invalid
+        """
+        from ..adk_temporal.utils.agent_builder import validate_agent_config
+        
+        try:
+            activity_info = activity.info()
+            logger.info(f"Validating agent configuration - Activity: {activity_info.activity_type}")
+        except RuntimeError:
+            logger.info("Validating agent configuration - Direct mode")
+        
+        if not validate_agent_config(agent_config):
+            raise ValueError("Invalid agent configuration")
+        
+        return True
+
+    @activity.defn
+    async def create_agent_runner(
+        agent_config: dict[str, Any],
+        session_data: dict[str, Any]
+    ) -> None:
+        """Create ADK runner with service bridges.
+        
+        Args:
+            agent_config: Dictionary containing agent configuration
+            session_data: Dictionary containing session information
+            
+        Returns:
+            None
+            
+        Raises:
+            Exception: If runner creation fails
+        """
+        from ..adk_temporal.services.adk_service_factory import create_adk_runner
+        
+        try:
+            activity_info = activity.info()
+            logger.info(f"Creating agent runner - Activity: {activity_info.activity_type}")
+        except RuntimeError:
+            logger.info("Creating agent runner - Direct mode")
+        
+        # Create ADK runner with service bridges
+        runner = create_adk_runner(agent_config, session_data)
+        logger.info("Successfully created ADK runner")
+
+    @activity.defn
+    async def execute_agent_step(
+        agent_config: dict[str, Any],
+        session_data: dict[str, Any],
+        user_message: dict[str, Any],
+        run_config: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """Execute a single step of ADK agent execution with Temporal backbone.
+        
+        Args:
+            agent_config: Dictionary containing agent configuration
+            session_data: Dictionary containing session information
+            user_message: Dictionary containing user message content
+            run_config: Optional run configuration
+            
+        Returns:
+            List of serialized event dictionaries from this step
+            
+        Raises:
+            Exception: If agent execution fails
+        """
+        from ..adk_temporal.services.adk_service_factory import create_adk_runner
+        from ..adk_temporal.utils.event_serializer import EventSerializer
+        from ..ag.adk.agents.run_config import RunConfig
+        from google.genai import types
+        
+        try:
+            activity_info = activity.info()
+            logger.info(f"Executing agent step - Activity: {activity_info.activity_type}")
+        except RuntimeError:
+            logger.info("Executing agent step - Direct mode")
+        
+        # Create ADK runner with Temporal backbone enabled
+        runner = create_adk_runner(
+            agent_config, 
+            session_data, 
+            use_temporal_services=False,  # Keep session services simple
+            use_temporal_backbone=True    # Enable Temporal for tool/LLM calls
+        )
+        
+        # Convert user message to ADK Content
+        user_content = _dict_to_adk_content(user_message)
+        
+        # Prepare run config - always provide a default
+        adk_run_config = RunConfig(**run_config) if run_config else RunConfig()
+        
+        # Execute agent and collect events
+        events = []
+        event_count = 0
+        
+        logger.info(f"Starting Temporal-backed agent step for agent: {agent_config.get('name', 'unknown')}")
+        
+        # Heartbeat to prevent timeout during long-running operations
+        activity.heartbeat("Executing ADK agent step with Temporal backbone...")
+        
+        async for event in runner.run_async(
+            user_id=session_data.get("user_id", "default"),
+            session_id=session_data.get("session_id", "default"),
+            new_message=user_content,
+            run_config=adk_run_config
+        ):
+            event_count += 1
+            
+            # Serialize event for Temporal storage
+            event_dict = EventSerializer.event_to_dict(event)
+            events.append(event_dict)
+            
+            # Log progress periodically
+            if event_count % 5 == 0:
+                logger.info(f"Processed {event_count} events")
+                # Send heartbeat every 5 events
+                activity.heartbeat(f"Processed {event_count} events")
+            
+            # Check if this is the final response
+            if event.is_final_response():
+                logger.info(f"Agent step completed with final response after {event_count} events")
+                break
+                
+        # Final heartbeat before completion
+        activity.heartbeat("Finalizing agent step...")
+        
+        logger.info(f"ADK agent step completed with Temporal backbone - Events: {len(events)}")
+        return events
+
+    @activity.defn
+    async def validate_adk_agent_config(agent_config: dict[str, Any]) -> dict[str, Any]:
+        """Validate ADK agent configuration with detailed results.
+        
+        Args:
+            agent_config: Dictionary containing agent configuration
+            
+        Returns:
+            Dictionary with validation results:
+            - valid: boolean indicating if config is valid
+            - errors: list of validation error messages
+            - warnings: list of warning messages
+        """
+        from ..adk_temporal.utils.agent_builder import validate_agent_config, build_adk_agent_from_config
+        
+        logger.info("Validating ADK agent configuration")
+        
+        errors = []
+        warnings = []
+        
+        # Basic validation
+        if not validate_agent_config(agent_config):
+            errors.append("Agent configuration failed basic validation")
+        
+        # Check required fields
+        if not agent_config.get("name"):
+            errors.append("Agent name is required")
+        elif not isinstance(agent_config["name"], str):
+            errors.append("Agent name must be a string")
+        
+        # Check model
+        model = agent_config.get("model")
+        if not model:
+            warnings.append("No model specified, will use default")
+        elif not isinstance(model, str):
+            errors.append("Model must be a string")
+        
+        # Check tools
+        tools = agent_config.get("tools", [])
+        if tools and not isinstance(tools, list):
+            errors.append("Tools must be a list")
+        else:
+            for i, tool_config in enumerate(tools):
+                if not isinstance(tool_config, dict):
+                    errors.append(f"Tool {i} must be a dictionary")
+                elif not tool_config.get("name"):
+                    errors.append(f"Tool {i} missing required 'name' field")
+        
+        # Try to build agent to catch construction errors
+        if not errors:
+            try:
+                agent = build_adk_agent_from_config(agent_config)
+                if not agent:
+                    errors.append("Failed to build agent from configuration")
+            except Exception as e:
+                errors.append(f"Agent construction failed: {str(e)}")
+        
+        result = {
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "warnings": warnings
+        }
+        
+        logger.info(f"Configuration validation completed - Valid: {result['valid']}, Errors: {len(errors)}, Warnings: {len(warnings)}")
+        return result
+
+    # Helper function for ADK activities
+    def _dict_to_adk_content(message_dict: dict[str, Any]):
+        """Convert message dictionary to ADK Content object.
+        
+        Args:
+            message_dict: Dictionary containing message content
+            
+        Returns:
+            ADK Content object
+        """
+        from google.genai import types
+        from ..adk_temporal.utils.event_serializer import EventSerializer
+        
+        content_data = message_dict.get("content", {})
+        
+        # Handle different content formats
+        if isinstance(content_data, str):
+            # Simple text content
+            return types.Content(parts=[types.Part(text=content_data)])
+        elif isinstance(content_data, dict):
+            # Structured content - try to deserialize
+            deserialized = EventSerializer.deserialize_content(content_data)
+            return deserialized if deserialized is not None else types.Content(parts=[types.Part(text=str(content_data))])
+        else:
+            # Fallback to string representation
+            return types.Content(parts=[types.Part(text=str(content_data))])
+
+    # Make call_llm_activity available at module level for imports
+    import sys
+    current_module = sys.modules[__name__]
+    setattr(current_module, 'call_llm_activity', call_llm_activity)
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -601,4 +838,9 @@ Create a concrete plan with estimated steps. Return your response as a JSON obje
         create_execution_plan_activity,
         evaluate_goal_progress_activity,
         publish_workflow_events_activity,
+        # ADK-specific activities
+        validate_agent_configuration,
+        create_agent_runner,
+        execute_agent_step,
+        validate_adk_agent_config,
     ]

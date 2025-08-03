@@ -172,9 +172,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
             workflow_class = AgentTaskWorkflow.run
         elif workflow_name == "AgentExecutionWorkflow":
-            from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+            from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import ADKAgentWorkflow
 
-            workflow_class = AgentExecutionWorkflow.run
+            workflow_class = ADKAgentWorkflow.run
         else:
             raise ValueError(f"Unknown workflow: {workflow_name}")
 
