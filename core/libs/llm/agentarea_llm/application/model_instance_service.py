@@ -24,7 +24,7 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
 
     async def get(self, id: UUID) -> ModelInstance | None:
         """Get ModelInstance with all relationships loaded."""
-        return await self.repository.get(id)
+        return await self.repository.get_with_relations(id)
 
     async def list(
         self,

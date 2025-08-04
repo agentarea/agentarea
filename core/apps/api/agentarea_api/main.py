@@ -1,22 +1,20 @@
 """Main FastAPI application for AgentArea."""
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-import os
 
+from agentarea_common.auth.middleware import AuthMiddleware
+from agentarea_common.di.container import get_container, register_singleton
+from agentarea_common.events.broker import EventBroker
+from agentarea_common.exceptions.registration import register_workspace_error_handlers
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_secrets import get_real_secret_manager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
-
-from agentarea_common.auth.middleware import AuthMiddleware
-from agentarea_common.di.container import get_container, register_singleton
-from agentarea_common.events.broker import EventBroker
-from agentarea_common.events.router import create_event_broker_from_router
-from agentarea_common.exceptions.registration import register_workspace_error_handlers
-from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_secrets import get_real_secret_manager
 
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import v1_router
@@ -28,7 +26,7 @@ async def initialize_services():
     """Initialize real services instead of test mocks."""
     try:
         from agentarea_common.config import get_settings
-        from agentarea_common.events.router import get_event_router, create_event_broker_from_router
+        from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 
         settings = get_settings()
         event_router = get_event_router(settings.broker)
@@ -100,7 +98,7 @@ def create_app() -> FastAPI:
                 "description": "Operations with AI agents"
             },
             {
-                "name": "tasks", 
+                "name": "tasks",
                 "description": "Operations with agent tasks"
             },
             {
@@ -147,6 +145,10 @@ def create_app() -> FastAPI:
         }
     )
 
+    # Mount static files - this serves all files from static/ at /static/
+    static_path = Path(__file__).parent / "static"
+
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
     # Add routers
     app.include_router(events_router, prefix="/events", tags=["events"])
     app.include_router(v1_router, tags=["v1"])
@@ -156,7 +158,7 @@ def create_app() -> FastAPI:
 
     # Development endpoints (only in dev mode)
     dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
-    
+
     if dev_mode:
         @app.get("/dev/token", tags=["development"])
         async def get_dev_token():

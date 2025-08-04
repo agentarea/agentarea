@@ -1,7 +1,7 @@
 from typing import List
 from uuid import UUID
 
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.base.repository import BaseRepository
 from agentarea_common.auth.context import UserContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,13 +10,14 @@ from sqlalchemy.orm import selectinload
 from agentarea_llm.domain.models import ProviderSpec
 
 
-class ProviderSpecRepository(WorkspaceScopedRepository[ProviderSpec]):
-    def __init__(self, session: AsyncSession, user_context: UserContext):
-        super().__init__(session, ProviderSpec, user_context)
+class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily removed workspace scoping
+    def __init__(self, session: AsyncSession, user_context: UserContext = None):
+        super().__init__(session)
+        self.model_class = ProviderSpec
 
     async def get_with_relations(self, id: UUID) -> ProviderSpec | None:
         """Get provider spec by ID with relationships loaded."""
-        spec = await self.get_by_id(id)
+        spec = await self.get(id)
         if not spec:
             return None
         
@@ -33,7 +34,10 @@ class ProviderSpecRepository(WorkspaceScopedRepository[ProviderSpec]):
 
     async def get_by_provider_key(self, provider_key: str) -> ProviderSpec | None:
         """Get provider spec by provider_key (e.g., 'openai', 'anthropic')"""
-        spec = await self.find_one_by(provider_key=provider_key)
+        result = await self.session.execute(
+            select(ProviderSpec).where(ProviderSpec.provider_key == provider_key)
+        )
+        spec = result.scalar_one_or_none()
         if not spec:
             return None
         
@@ -60,12 +64,14 @@ class ProviderSpecRepository(WorkspaceScopedRepository[ProviderSpec]):
         if is_builtin is not None:
             filters['is_builtin'] = is_builtin
 
-        specs = await self.list_all(
-            creator_scoped=creator_scoped,
-            limit=limit,
-            offset=offset,
-            **filters
-        )
+        # Build query with filters
+        query = select(ProviderSpec)
+        if is_builtin is not None:
+            query = query.where(ProviderSpec.is_builtin == is_builtin)
+        
+        query = query.limit(limit).offset(offset)
+        result = await self.session.execute(query)
+        specs = list(result.scalars().all())
         
         # Load relationships for each spec
         spec_ids = [spec.id for spec in specs]
@@ -106,7 +112,9 @@ class ProviderSpecRepository(WorkspaceScopedRepository[ProviderSpec]):
         spec_data.pop('created_at', None)
         spec_data.pop('updated_at', None)
         
-        created_spec = await self.create(**spec_data)
+        # Create the spec instance
+        new_spec = ProviderSpec(**spec_data)
+        created_spec = await self.create(new_spec)
         return await self.get_with_relations(created_spec.id) or created_spec
 
     async def update_spec(self, entity: ProviderSpec) -> ProviderSpec:
@@ -127,8 +135,11 @@ class ProviderSpecRepository(WorkspaceScopedRepository[ProviderSpec]):
         # Remove None values
         spec_data = {k: v for k, v in spec_data.items() if v is not None}
         
-        updated_spec = await self.update(entity.id, **spec_data)
-        return updated_spec or entity
+        # Update fields on the entity
+        for key, value in spec_data.items():
+            setattr(entity, key, value)
+        updated_spec = await self.update(entity)
+        return updated_spec
 
     async def upsert_by_provider_key(self, entity: ProviderSpec) -> ProviderSpec:
         """Upsert provider spec by provider_key - used in bootstrap"""

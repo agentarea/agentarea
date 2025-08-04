@@ -188,7 +188,7 @@ def models():
     async def _list_models():
         try:
             data = await make_api_request("GET", "/v1/llm-models")
-            if data and isinstance(data, list):
+            if data and hasattr(data, '__iter__') and not isinstance(data, str):
                 click.echo("Available LLM Models:")
                 for model in data:
                     name = safe_get_field(model, "name")
@@ -210,7 +210,7 @@ def instances():
     async def _list_instances():
         try:
             data = await make_api_request("GET", "/v1/llm-models/instances")
-            if data and isinstance(data, list):
+            if data and hasattr(data, '__iter__') and not isinstance(data, str):
                 click.echo("LLM Model Instances:")
                 for instance in data:
                     name = safe_get_field(instance, "name")
@@ -316,7 +316,7 @@ def servers():
     async def _list_servers():
         try:
             data = await make_api_request("GET", "/v1/mcp-servers")
-            if data and isinstance(data, list):
+            if data and hasattr(data, '__iter__') and not isinstance(data, str):
                 click.echo("Available MCP Servers:")
                 for server in data:
                     name = safe_get_field(server, "name")
@@ -339,7 +339,7 @@ def mcp_instances():
     async def _list_instances():
         try:
             data = await make_api_request("GET", "/v1/mcp-server-instances")
-            if data and isinstance(data, list):
+            if data and hasattr(data, '__iter__') and not isinstance(data, str):
                 click.echo("MCP Server Instances:")
                 for instance in data:
                     name = safe_get_field(instance, "name")
@@ -449,7 +449,7 @@ def list():
     async def _list_agents():
         try:
             data = await make_api_request("GET", "/v1/agents")
-            if data and isinstance(data, list):
+            if data and hasattr(data, '__iter__') and not isinstance(data, str):
                 click.echo("Available Agents:")
                 for agent in data:
                     name = safe_get_field(agent, "name")
@@ -626,7 +626,7 @@ def list():
     async def _list_tasks():
         try:
             data = await make_api_request("GET", "/v1/tasks")
-            if data and isinstance(data, list):
+            if data and hasattr(data, '__iter__') and not isinstance(data, str):
                 click.echo("All Tasks:")
                 for task in data:
                     task_id = safe_get_field(task, "id")

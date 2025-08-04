@@ -101,7 +101,6 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             'description': entity.description,
             'is_active': entity.is_active,
             'is_public': entity.is_public,
-            'config': getattr(entity, 'config', None),
             'created_at': entity.created_at,
             'updated_at': entity.updated_at,
         }
@@ -127,7 +126,6 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             'description': entity.description,
             'is_active': entity.is_active,
             'is_public': entity.is_public,
-            'config': getattr(entity, 'config', None),
         }
         
         # Remove None values

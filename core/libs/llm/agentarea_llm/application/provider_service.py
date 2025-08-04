@@ -4,10 +4,19 @@ from uuid import UUID
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
-from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
-from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_llm.domain.models import (
+    ModelInstance,
+    ModelSpec,
+    ProviderConfig,
+    ProviderSpec,
+)
+from agentarea_llm.infrastructure.model_instance_repository import (
+    ModelInstanceRepository,
+)
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+from agentarea_llm.infrastructure.provider_config_repository import (
+    ProviderConfigRepository,
+)
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 
 
@@ -46,7 +55,9 @@ class ProviderService:
 
     # Provider Specs methods
 
-    async def list_provider_specs(self, is_builtin: bool | None = None) -> list[ProviderSpec]:
+    async def list_provider_specs(
+        self, is_builtin: bool | None = None
+    ) -> list[ProviderSpec]:
         """List all available provider specifications.
 
         Args:
@@ -87,7 +98,7 @@ class ProviderService:
         name: str,
         api_key: str,
         endpoint_url: str | None = None,
-        user_id: UUID | None = None,
+        created_by: str | None = None,
         is_public: bool = False,
     ) -> ProviderConfig:
         """Create a new provider configuration and store its API key in the secret manager.
@@ -97,7 +108,7 @@ class ProviderService:
             name (str): Name of the provider configuration.
             api_key (str): API key for the provider.
             endpoint_url (Optional[str]): Optional endpoint URL.
-            user_id (Optional[UUID]): Optional user ID.
+            created_by (Optional[str]): Optional user who created this config.
             is_public (bool): Whether the configuration is public.
 
         Returns:
@@ -106,13 +117,12 @@ class ProviderService:
         config = ProviderConfig(
             provider_spec_id=provider_spec_id,
             name=name,
-            api_key=api_key,
             endpoint_url=endpoint_url,
-            user_id=user_id,
+            created_by=created_by or "system",
             is_public=is_public,
         )
-
         secret_name = f"provider_config_{config.id}"
+        config.api_key = secret_name
         await self.secret_manager.set_secret(secret_name, api_key)
 
         return await self.provider_config_repo.create_config(config)
@@ -147,7 +157,7 @@ class ProviderService:
         Returns:
             Optional[ProviderConfig]: The provider configuration if found, else None.
         """
-        return await self.provider_config_repo.get_by_id(config_id)
+        return await self.provider_config_repo.get_with_relations(config_id)
 
     async def update_provider_config(
         self,
@@ -205,7 +215,9 @@ class ProviderService:
 
     # Model Specs methods
 
-    async def list_model_specs(self, provider_spec_id: UUID | None = None) -> list[ModelSpec]:
+    async def list_model_specs(
+        self, provider_spec_id: UUID | None = None
+    ) -> list[ModelSpec]:
         """List model specifications with optional filtering by provider specification.
 
         Args:
@@ -304,7 +316,9 @@ class ProviderService:
 
     # Helper methods
 
-    async def get_model_instance_with_config(self, instance_id: UUID) -> dict[str, Any] | None:
+    async def get_model_instance_with_config(
+        self, instance_id: UUID
+    ) -> dict[str, Any] | None:
         """Retrieve a model instance along with its provider configuration details and API key.
 
         Args:

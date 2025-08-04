@@ -125,14 +125,18 @@ class TaskService(BaseTaskService):
         self, agent_id: UUID, limit: int = 100, offset: int = 0, creator_scoped: bool = False
     ) -> List[SimpleTask]:
         """Get tasks for a specific agent."""
-        # Use the repository's list_all method with creator_scoped parameter
+        # Get Task domain models from repository and convert to SimpleTask
         if hasattr(self.task_repository, 'list_all'):
-            return await self.task_repository.list_all(
+            # Get raw TaskORM objects from workspace repository
+            task_orms = await self.task_repository.list_all(
                 creator_scoped=creator_scoped,
                 limit=limit,
                 offset=offset,
                 agent_id=agent_id
             )
+            # Convert TaskORM -> Task -> SimpleTask
+            tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
+            return [self._task_to_simple_task(task) for task in tasks]
         else:
             # Fallback for repositories that don't support workspace scoping
             return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)

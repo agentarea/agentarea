@@ -168,6 +168,8 @@ async def _populate_test_data(session: AsyncSession):
         endpoint_url="http://host.docker.internal:11434",
         is_active=True,
         is_public=True,
+        workspace_id="default",
+        created_by="system",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )

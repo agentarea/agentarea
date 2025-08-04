@@ -84,7 +84,7 @@ class AuditMixin:
     """Mixin to add audit fields to models."""
     
     created_by: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    # updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     
     def set_created_by(self, user_id: str) -> None:
         """Set the user who created this record."""

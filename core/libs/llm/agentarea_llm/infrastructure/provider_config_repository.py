@@ -1,9 +1,8 @@
-from typing import List
 from uuid import UUID
 
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import and_, select
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -19,7 +18,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
         config = await self.get_by_id(id)
         if not config:
             return None
-        
+
         # Reload with relationships
         result = await self.session.execute(
             select(ProviderConfig)
@@ -39,7 +38,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
         limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False,
-    ) -> List[ProviderConfig]:
+    ) -> list[ProviderConfig]:
         """List provider configs with filtering and relationships."""
         filters = {}
         if provider_spec_id is not None:
@@ -55,7 +54,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             offset=offset,
             **filters
         )
-        
+
         # Load relationships for each config
         config_ids = [config.id for config in configs]
         if config_ids:
@@ -69,10 +68,10 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             )
             configs_with_relations = result.scalars().all()
             return list(configs_with_relations)
-        
+
         return configs
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[ProviderConfig]:
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[ProviderConfig]:
         """Get provider configs by workspace ID with pagination.
         
         Note: This method is deprecated. Use list_configs() instead which automatically
@@ -81,7 +80,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
         # For backward compatibility, but this should be replaced with list_configs()
         if workspace_id != self.user_context.workspace_id:
             return []  # Don't allow cross-workspace access
-        
+
         return await self.list_configs(limit=limit, offset=offset)
 
     async def create_config(self, entity: ProviderConfig) -> ProviderConfig:
@@ -97,16 +96,16 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             'description': entity.description,
             'is_active': entity.is_active,
             'is_public': entity.is_public,
-            'config': getattr(entity, 'config', None),
+            'api_key': entity.api_key,
             'created_at': entity.created_at,
             'updated_at': entity.updated_at,
         }
-        
+
         # Remove None values and system fields that will be auto-populated
         config_data = {k: v for k, v in config_data.items() if v is not None}
         config_data.pop('created_at', None)
         config_data.pop('updated_at', None)
-        
+
         created_config = await self.create(**config_data)
         return await self.get_with_relations(created_config.id) or created_config
 
@@ -122,11 +121,12 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             'description': entity.description,
             'is_active': entity.is_active,
             'is_public': entity.is_public,
-            'config': getattr(entity, 'config', None),
         }
-        
+
         # Remove None values
         config_data = {k: v for k, v in config_data.items() if v is not None}
-        
+
         updated_config = await self.update(entity.id, **config_data)
-        return updated_config or entity 
+        if updated_config:
+            return await self.get_with_relations(updated_config.id)
+        return entity

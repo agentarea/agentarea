@@ -34,6 +34,7 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
         PG_UUID(as_uuid=True), ForeignKey("provider_specs.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String, nullable=False)  # "My OpenAI", "Work OpenAI"
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
     api_key: Mapped[str] = mapped_column(String, nullable=False)
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

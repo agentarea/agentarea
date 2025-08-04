@@ -21,8 +21,8 @@ from agentarea_execution import create_activities_for_worker
 from agentarea_execution.interfaces import ActivityDependencies
 
 # Import workflow and activity definitions from the execution library
-from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import (
-    ADKAgentWorkflow,
+from agentarea_execution.workflows.agent_execution_workflow import (
+    AgentExecutionWorkflow,
 )
 from agentarea_secrets import get_real_secret_manager
 from temporalio.client import Client
@@ -102,7 +102,7 @@ class AgentAreaWorker:
         self.worker = Worker(
             self.client,
             task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
-            workflows=[ADKAgentWorkflow],
+            workflows=[AgentExecutionWorkflow],
             activities=activities,
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
             max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,

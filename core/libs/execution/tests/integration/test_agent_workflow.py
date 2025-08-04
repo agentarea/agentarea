@@ -95,6 +95,7 @@ class TestAgentExecutionWorkflowIntegration:
                 messages: list[dict[str, Any]],
                 model_id: str,
                 tools: list[dict[str, Any]] | None = None,
+                user_context_data: dict[str, Any] | None = None,
             ) -> dict[str, Any]:
                 nonlocal llm_call_count
                 llm_call_count += 1
@@ -322,6 +323,7 @@ class TestAgentExecutionWorkflowIntegration:
                 messages: list[dict[str, Any]],
                 model_id: str,
                 tools: list[dict[str, Any]] | None = None,
+                user_context_data: dict[str, Any] | None = None,
             ) -> dict[str, Any]:
                 return {
                     "content": "Hello! I'm here to help you with your questions.",
@@ -486,6 +488,7 @@ class TestAgentExecutionWorkflowIntegration:
                 messages: list[dict[str, Any]],
                 model_id: str,
                 tools: list[dict[str, Any]] | None = None,
+                user_context_data: dict[str, Any] | None = None,
             ) -> dict[str, Any]:
                 return {
                     "content": "Hello! I can help you with your task.",

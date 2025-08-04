@@ -1,9 +1,3 @@
-"""Refactored agent execution workflow - clean, maintainable, and DRY.
-
-This is a simplified version of the original 1066-line workflow file,
-broken down into focused methods with helper classes for better maintainability.
-"""
-
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -14,7 +8,14 @@ from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
-    from .helpers import BudgetTracker, EventManager, MessageBuilder, StateValidator, ToolCallExtractor
+
+    from .helpers import (
+        BudgetTracker,
+        EventManager,
+        MessageBuilder,
+        StateValidator,
+        ToolCallExtractor,
+    )
 
 from ..models import AgentExecutionRequest, AgentExecutionResult
 from .constants import (
@@ -58,13 +59,12 @@ class AgentExecutionState:
     final_response: str | None = None
     success: bool = False
     budget_usd: float | None = None
+    user_context_data: dict[str, Any] = field(default_factory=dict)
 
 
-# COMMENTED OUT - Using ADK workflow instead (see bottom of file for re-export)
-# This old workflow has been replaced by ADKAgentWorkflow for better architecture
-# @workflow.defn
-class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
-    """DEPRECATED: This workflow has been replaced by ADKAgentWorkflow."""
+@workflow.defn
+class AgentExecutionWorkflow:
+    """Agent execution workflow without ADK dependency."""
 
     def __init__(self):
         self.state = AgentExecutionState()
@@ -134,7 +134,7 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
             "user_id": "dev-user",  # Use dev-user as set by JWT handler in dev mode
             "workspace_id": "system"  # Use system workspace where agents are created
         }
-        
+
         # Build agent config
         self.state.agent_config = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
@@ -238,9 +238,9 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
         # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
         try:
-            # Check if we should use ADK Temporal backbone (default to True)
-            use_adk_backbone = self.state.agent_config.get("use_adk_temporal_backbone", True)
-            
+            # Use traditional iteration (no ADK)
+            use_adk_backbone = self.state.agent_config.get("use_adk_temporal_backbone", False)
+
             if use_adk_backbone:
                 await self._execute_adk_iteration()
             else:
@@ -266,9 +266,9 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
     async def _execute_adk_iteration(self) -> None:
         """Execute iteration using ADK Temporal backbone."""
         iteration = self.state.current_iteration
-        
+
         workflow.logger.info(f"Executing ADK iteration {iteration} with Temporal backbone")
-        
+
         # Prepare agent configuration for ADK
         adk_agent_config = {
             "name": self.state.agent_config.get("name", f"agent_{self.state.agent_id}"),
@@ -277,7 +277,7 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
             "description": self.state.agent_config.get("description", "AgentArea task execution agent"),
             "tools": self._convert_tools_to_adk_format()
         }
-        
+
         # Prepare session data
         session_data = {
             "user_id": "agentarea_user",
@@ -290,10 +290,10 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
             },
             "created_time": workflow.now().timestamp()
         }
-        
+
         # Prepare user message
         user_message = self._build_user_message_for_adk()
-        
+
         # Execute ADK agent with Temporal backbone
         self.event_manager.add_event(EventTypes.LLM_CALL_STARTED, {
             "iteration": iteration,
@@ -301,7 +301,7 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
             "execution_type": "adk_temporal_backbone"
         })
         # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
-        
+
         try:
             events = await workflow.execute_activity(
                 Activities.EXECUTE_ADK_AGENT_WITH_TEMPORAL_BACKBONE,
@@ -309,17 +309,17 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
             )
-            
+
             # Process ADK events and convert to workflow messages
             await self._process_adk_events(events)
-            
+
             self.event_manager.add_event(EventTypes.LLM_CALL_COMPLETED, {
                 "iteration": iteration,
                 "events_processed": len(events),
                 "execution_type": "adk_temporal_backbone"
             })
             # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
-            
+
         except Exception as e:
             self.event_manager.add_event(EventTypes.LLM_CALL_FAILED, {
                 "iteration": iteration,
@@ -332,7 +332,7 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
     async def _execute_traditional_iteration(self) -> None:
         """Execute iteration using traditional LLM + tool approach."""
         iteration = self.state.current_iteration
-        
+
         # Build system prompt with current context
         if self.state.goal:
             system_prompt = MessageBuilder.build_system_prompt(
@@ -361,7 +361,7 @@ class AgentExecutionWorkflow_OLD_COMMENTED_OUT:
         """Build instructions for ADK agent."""
         if not self.state.goal:
             return "Complete the assigned task efficiently."
-            
+
         instructions = f"""You are an AI agent working on a specific task.
 
 GOAL: {self.state.goal.description}
@@ -400,7 +400,7 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 for msg in recent_messages
             ])
             content = f"Continue working on the task. Recent context:\n{context_summary}\n\nPlease proceed with the next step."
-        
+
         return {
             "role": "user",
             "content": content
@@ -411,14 +411,14 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
         for event in events:
             # Extract content from ADK event
             content_data = event.get("content", {})
-            
+
             if isinstance(content_data, dict) and "parts" in content_data:
                 # Extract text from parts
                 text_parts = []
                 for part in content_data.get("parts", []):
                     if isinstance(part, dict) and "text" in part:
                         text_parts.append(part["text"])
-                
+
                 if text_parts:
                     # Add as assistant message
                     message_content = " ".join(text_parts)
@@ -426,21 +426,21 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                         "role": "assistant",
                         "content": message_content
                     })
-                    
+
                     # Check if this looks like a final response
                     if any(indicator in message_content.lower() for indicator in [
                         "task completed", "finished", "done", "complete", "successfully"
                     ]):
                         self.state.final_response = message_content
                         self.state.success = True
-            
+
             elif isinstance(content_data, str):
                 # Simple string content
                 self.state.messages.append({
-                    "role": "assistant", 
+                    "role": "assistant",
                     "content": content_data
                 })
-                
+
                 # Check for completion indicators
                 if any(indicator in content_data.lower() for indicator in [
                     "task completed", "finished", "done", "complete", "successfully"
@@ -462,7 +462,9 @@ Budget remaining: ${self.budget_tracker.get_remaining():.2f}
                 args=[
                     self.state.messages,
                     self.state.agent_config.get("model_id", "gpt-4"),
-                    self.state.available_tools
+                    self.state.available_tools,
+                    self.state.user_context_data["workspace_id"],  # Extract workspace_id string
+                    self.state.user_context_data  # Pass full context as backup
                 ],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
