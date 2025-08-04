@@ -1,36 +1,88 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Input } from "@/components/ui/input";
-import { Bot, Search, Filter, ArrowUpDown, Zap, Edit } from "lucide-react";
+import { Bot, Search } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { listAgents } from "@/lib/api";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-
-const categories = ["All"];
-
-interface Agent {
-  id: string;
-  name: string;
-  description?: string | null;
-  status: string;
-}
+import { Agent } from "@/types";
+import AgentCard from "./components/AgentCard";
+import GridAndTableViews from "@/components/GridAndTableViews";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useSearchWithDebounce, useTabState } from "../../../hooks";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 export default function AgentsBrowsePage() {
   const t = useTranslations("Agent");
+  const commonT = useTranslations("Common");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory] = useState("All");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  
+  const urlTab = searchParams.get("tab");
+  const initialSearchQuery = searchParams.get("search") || "";
+  
+  // Используем кастомные хуки
+  const {
+    query: searchQuery,
+    debouncedQuery,
+    isSearching,
+    updateQuery,
+    forceUpdate
+  } = useSearchWithDebounce(initialSearchQuery);
+
+  const {
+    currentTab,
+    isTabLoaded,
+    updateTab
+  } = useTabState(pathname, urlTab);
+
+
+
+  // Обновляем URL при изменении поиска
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    if (debouncedQuery.trim()) {
+      params.set("search", debouncedQuery);
+    } else {
+      params.delete("search");
+    }
+    
+    // Сохраняем параметр таба
+    if (urlTab) {
+      params.set("tab", urlTab);
+    }
+    
+    const newUrl = params.toString() ? `?${params.toString()}` : "";
+    router.replace(`/agents/browse${newUrl}`, { scroll: false });
+  }, [debouncedQuery, router, searchParams, urlTab]);
+
+  // Сохраняем таб в куки при изменении
+  useEffect(() => {
+    if (urlTab) {
+      updateTab(urlTab);
+    }
+  }, [urlTab, updateTab]);
+
+  // Обработчики поиска
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    updateQuery(e.target.value);
+  }, [updateQuery]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      forceUpdate();
+    }
+  }, [forceUpdate]);
 
   // Fetch agents on mount
   useEffect(() => {
@@ -53,15 +105,194 @@ export default function AgentsBrowsePage() {
     fetchAgents();
   }, []);
 
-  // Filter by search query
-  const filteredAgents = agents.filter(agent =>
-    agent.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const columns = [
+    {
+      header: "Name",
+      accessor: "name",
+    },
+    {
+      header: "Status",
+      accessor: "status",
+      render: (value: string) => (
+        <StatusBadge status={value} variant="agent" />
+      ),
+    },
+    {
+      header: "Model",
+      accessor: "model_id",
+    },
+    {
+      header: "Description",
+      accessor: "description",
+      render: (value: string) => (
+        <div className="max-w-xs truncate" title={value}>
+          {value}
+        </div>
+      ),
+    },
+    {
+      header: "Actions",
+      accessor: "id",
+      render: (value: string, item: any) => (
+        <div className="flex gap-2">
+          <Button 
+            variant="default" 
+            size="sm" 
+            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/agents/${item.id}`);
+            }}
+          >
+            Explore
+          </Button>
+          <Link href={`/agents/${item.id}/edit`} onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
+              Edit
+            </Button>
+          </Link>
+        </div>
+      ),
+    },
+  ];
+
+  // const mockAgents = [
+  //   {
+  //     id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  //     name: "Customer Support Agent",
+  //     description: "AI-powered customer support agent that can handle inquiries, resolve issues, and provide product information",
+  //     status: "active",
+  //     instruction: "You are a helpful customer support agent. Always be polite and professional.",
+  //     model_id: "gpt-4",
+  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+  //     tools_config: {
+  //       knowledge_base: {},
+  //       ticket_system: {}
+  //     },
+  //     events_config: {
+  //       notifications: {},
+  //       logging: {}
+  //     },
+  //     planning: true
+  //   },
+  //   {
+  //     id: "4fb96g75-6828-5673-c4gd-3d074g77bgb7",
+  //     name: "Data Analysis Agent",
+  //     description: "Specialized agent for data processing, analysis, and generating insights from complex datasets",
+  //     status: "active",
+  //     instruction: "You are a data analysis expert. Process data efficiently and provide clear insights.",
+  //     model_id: "claude-3",
+  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+  //     tools_config: {
+  //       data_processor: {},
+  //       visualization: {}
+  //     },
+  //     events_config: {
+  //       progress_tracking: {},
+  //       error_handling: {}
+  //     },
+  //     planning: true
+  //   },
+  //   {
+  //     id: "5gc07h86-7939-6784-d5he-4e185h88chc8",
+  //     name: "Content Creation Agent",
+  //     description: "Creative agent for generating high-quality content, articles, and marketing materials",
+  //     status: "inactive",
+  //     instruction: "You are a creative content writer. Generate engaging and original content.",
+  //     model_id: "gpt-4",
+  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+  //     tools_config: {
+  //       content_generator: {},
+  //       plagiarism_checker: {}
+  //     },
+  //     events_config: {
+  //       content_review: {},
+  //       publishing: {}
+  //     },
+  //     planning: false
+  //   },
+  //   {
+  //     id: "6hd18i97-8040-7895-e6if-5f296i99did9",
+  //     name: "Task Automation Agent",
+  //     description: "Automation specialist for handling repetitive tasks and workflow optimization",
+  //     status: "active",
+  //     instruction: "You are a task automation expert. Streamline processes and improve efficiency.",
+  //     model_id: "claude-3",
+  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+  //     tools_config: {
+  //       workflow_engine: {},
+  //       scheduler: {}
+  //     },
+  //     events_config: {
+  //       task_monitoring: {},
+  //       performance_metrics: {}
+  //     },
+  //     planning: true
+  //   },
+  //   {
+  //     id: "7ie29j08-9151-8906-f7jg-6g307j00eje0",
+  //     name: "Research Assistant Agent",
+  //     description: "Research-focused agent for gathering information, analyzing sources, and compiling reports",
+  //     status: "active",
+  //     instruction: "You are a research assistant. Gather accurate information from reliable sources.",
+  //     model_id: "gpt-4",
+  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+  //     tools_config: {
+  //       web_search: {},
+  //       citation_manager: {}
+  //     },
+  //     events_config: {
+  //       source_validation: {},
+  //       report_generation: {}
+  //     },
+  //     planning: true
+  //   }
+  // ];
+
+  // Фильтрация данных
+  const filterData = useCallback((data: any[]) => {
+    if (!debouncedQuery.trim()) return data;
+    
+    const query = debouncedQuery.toLowerCase();
+    return data.filter(item => {
+      return (
+        item.name?.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query) ||
+        item.model_id?.toLowerCase().includes(query) ||
+        item.status?.toLowerCase().includes(query)
+      );
+    });
+  }, [debouncedQuery]);
+
+  const filteredAgents = useMemo(() => filterData(agents), [filterData, agents]);
+
+  // Не рендерим до загрузки таба для предотвращения мерцания
+  if (!isTabLoaded && !urlTab) {
+    return (
+      <ContentBlock 
+        header={{
+          breadcrumb: [{label: t("browseAgents")}],
+          description: t("description"),
+          controls: (
+            <Link href="/agents/create">
+              <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
+                <Bot className="h-5 w-5" />
+                {t("deployNewAgent")}
+              </Button>
+            </Link>
+          )
+        }}
+      >
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner />
+        </div>
+      </ContentBlock>
+    );
+  }
 
   return (
     <ContentBlock 
       header={{
-        // title: "Browse Agents",
         breadcrumb: [
           {label: t("browseAgents")},
         ],
@@ -76,137 +307,45 @@ export default function AgentsBrowsePage() {
         )
     }}>
 
-        {/* Main content area */}
-        <div className="w-full">
-          <div className="space-y-6 mb-8">
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr,auto,auto] gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Search agents by name or capability..."
-                  className="pl-10 h-11"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <Button variant="outline" className="h-11 gap-2" aria-label="Filter agents" disabled>
-                <Filter className="h-4 w-4" />
-                <span className="hidden sm:inline">Filter</span>
-              </Button>
-              <Button variant="outline" className="h-11 gap-2" aria-label="Sort agents" disabled>
-                <ArrowUpDown className="h-4 w-4" />
-                <span className="hidden sm:inline">Sort</span>
-              </Button>
+      <GridAndTableViews
+        isEmpty={filteredAgents.length === 0}
+        emptyState={<EmptyState
+          iconsType="agent"
+          title={t("noAgentsYet")}
+          description={t("getStartedByAddingYourFirstAgent")}
+          action={{
+            label: t("addYourFirstAgent"),
+            href: "/agents/create",
+          }}
+        />}
+        searchParams={{
+          ...Object.fromEntries(searchParams.entries()),
+          tab: currentTab
+        }}
+        data={filteredAgents}
+        columns={columns}
+        routeChange="/agents/browse"
+        cardContent={(item) => <AgentCard agent={item} />}
+        gridClassName="md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        leftComponent={
+          <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+              {isSearching ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
             </div>
-
-            <Tabs defaultValue="All" className="w-full">
-              <TabsList className="flex w-full h-auto flex-wrap gap-2 bg-transparent">
-                {categories.map((category) => (
-                  <TabsTrigger
-                    key={category}
-                    value={category}
-                    className={`rounded-full px-4 py-2 transition-all ${
-                      selectedCategory === category 
-                      ? "bg-primary text-primary-foreground" 
-                      : "bg-secondary hover:bg-secondary/80"
-                    }`}
-                  >
-                    {category}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-10">
-              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent"></div>
-              <p className="mt-2 text-muted-foreground">Loading agents...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-10 text-destructive">Failed to load agents</div>
-          ) : filteredAgents.length === 0 ? (
-            <EmptyState
-              iconsType="agent"
-              title={t("noAgentsYet")}
-              description={t("getStartedByAddingYourFirstAgent")}
-              action={{
-                label: t("addYourFirstAgent"),
-                href: "/agents/create",
-              }}
+            <Input 
+              placeholder={commonT("search")}
+              className="pl-9 w-full" 
+              value={searchQuery}
+              onChange={handleSearchChange}
+              onKeyDown={handleKeyDown}
             />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredAgents.map((agent) => (
-                <Card 
-                  key={agent.id} 
-                  className="p-6 hover:shadow-lg transition-all border border-border/40 hover:border-primary/20 group cursor-pointer"
-                  onClick={() => router.push(`/agents/${agent.id}`)}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                        <Bot className="h-6 w-6 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">{agent.name}</h3>
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                          {agent.description || "A versatile automation agent ready to help with your tasks"}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant={
-                      agent.status === "active" ? "default" :
-                      agent.status === "inactive" ? "destructive" : "outline"
-                    }>
-                      {agent.status === "active" && <Zap className="h-3 w-3 mr-1" />}
-                      {agent.status}
-                    </Badge>
-                  </div>
-                  
-                  {/* Agent capabilities/features */}
-                  <div className="mb-4">
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary" className="text-xs">
-                        Chat Enabled
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">
-                        Task Automation
-                      </Badge>
-                      {agent.status === "active" && (
-                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                          Ready
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center mt-auto gap-2">
-                    <div className="flex gap-2">
-                      <Link href={`/agents/${agent.id}`} onClick={(e) => e.stopPropagation()}>
-                        <Button variant="default" size="sm" className="gap-2">
-                          <Bot className="h-4 w-4" />
-                          Chat Now
-                        </Button>
-                      </Link>
-                      <Link href={`/agents/${agent.id}`} onClick={(e) => e.stopPropagation()}>
-                        <Button variant="outline" size="sm" className="gap-2">
-                          View Details
-                        </Button>
-                      </Link>
-                    </div>
-                    <Link href={`/agents/${agent.id}/edit`} onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
-                        <Edit className="h-3 w-3" />
-                        Edit
-                      </Button>
-                    </Link>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      </ContentBlock>
+          </div>
+        }
+      />
+    </ContentBlock>
   );
 } 
