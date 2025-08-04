@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useForm, useFieldArray } from 'react-hook-form';
 import { addAgent } from './actions';
 import { initialState as agentInitialState } from './state';
+import { generateAgentName } from './utils/agentNameGenerator';
 import type { components } from '@/api/schema';
 import { Card } from "@/components/ui/card";
 import { 
@@ -42,7 +43,7 @@ export default function CreateAgentClient({
 
   const { register, control, setValue, handleSubmit, formState: { errors } } = useForm<AgentFormValues>({
     defaultValues: {
-      name: '',
+      name: generateAgentName(), // Генерируем имя сразу при создании формы
       description: '',
       instruction: '',
       model_id: '',
@@ -66,7 +67,10 @@ export default function CreateAgentClient({
 
   useEffect(() => {
     if (state?.fieldValues) {
-      setValue("name", state.fieldValues.name ?? '');
+      // Не перезаписываем имя, если оно уже есть в форме
+      if (state.fieldValues.name) {
+        setValue("name", state.fieldValues.name);
+      }
       setValue("description", state.fieldValues.description ?? '');
       setValue("instruction", state.fieldValues.instruction ?? '');
       setValue("model_id", state.fieldValues.model_id ?? '');
@@ -127,6 +131,7 @@ export default function CreateAgentClient({
               register={register} 
               control={control} 
               errors={errors}
+              setValue={setValue}
               llmModelInstances={currentModelInstances}
               onOpenConfigSheet={() => {}}
               onRefreshModels={refreshModelInstances}
