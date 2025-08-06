@@ -326,6 +326,7 @@ export default function AgentsBrowsePage() {
         columns={columns}
         routeChange="/agents/browse"
         cardContent={(item) => <AgentCard agent={item} />}
+        itemLink={(agent) => `/agents/${agent.id}`}
         gridClassName="md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         leftComponent={
           <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
