@@ -145,7 +145,7 @@ class BaseTaskService(ABC):
         Returns:
             The task if found, None otherwise
         """
-        task_domain = await self.task_repository.get(task_id)
+        task_domain = await self.task_repository.get_task(task_id)
         if not task_domain:
             return None
 
@@ -201,7 +201,7 @@ class BaseTaskService(ABC):
         )
 
         # Persist the update
-        updated_task_domain = await self.task_repository.update(task_domain)
+        updated_task_domain = await self.task_repository.update_task(task_domain)
 
         # Convert back to SimpleTask for return
         updated_task = SimpleTask(
@@ -284,7 +284,7 @@ class BaseTaskService(ABC):
         elif status:
             tasks = await self.task_repository.get_by_status(status)
         else:
-            tasks = await self.task_repository.list()
+            tasks = await self.task_repository.list_tasks()
 
         # Convert Task domain models to SimpleTask
         return [self._task_to_simple_task(task) for task in tasks]
@@ -304,7 +304,7 @@ class BaseTaskService(ABC):
             return False
 
         # Delete the task
-        success = await self.task_repository.delete(task_id)
+        success = await self.task_repository.delete_task(task_id)
 
         if success:
             logger.info(f"Deleted task {task_id}")

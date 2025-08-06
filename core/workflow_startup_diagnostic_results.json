@@ -1,0 +1,85 @@
+{
+  "timestamp": "2025-08-05T19:40:28.587164",
+  "tests": [
+    {
+      "name": "Basic Task Creation",
+      "status": "FAIL",
+      "details": null,
+      "error": "'_GeneratorContextManager' object does not support the asynchronous context manager protocol"
+    },
+    {
+      "name": "Repository Workflow Integration",
+      "status": "INFO",
+      "details": {
+        "workflow_methods": [],
+        "has_temporal_client": false,
+        "has_workflow_start": false
+      },
+      "error": null
+    },
+    {
+      "name": "Temporal Workflow Client",
+      "status": "PASS",
+      "details": {
+        "client_connected": true,
+        "service_available": true
+      },
+      "error": null
+    },
+    {
+      "name": "Task Status Tracking",
+      "status": "FAIL",
+      "details": null,
+      "error": "'_GeneratorContextManager' object does not support the asynchronous context manager protocol"
+    },
+    {
+      "name": "End-to-End Workflow Simulation",
+      "status": "INFO",
+      "details": {
+        "task_data": {
+          "agent_id": "b6054c15-32f8-4d2d-84c3-18512b7c7eb4",
+          "description": "End-to-end test task",
+          "parameters": {
+            "test": "e2e"
+          },
+          "metadata": {
+            "source": "diagnostic"
+          }
+        },
+        "workflow_triggered": false,
+        "workflow_error": null,
+        "execution_status": {
+          "workflow_started": false,
+          "task_status": "submitted",
+          "actual_execution": true,
+          "status_mismatch": true
+        },
+        "issue_identified": "Status mismatch between task creation response and actual workflow execution"
+      },
+      "error": null
+    }
+  ],
+  "summary": {
+    "total_tests": 5,
+    "passed": 1,
+    "failed": 2,
+    "info": 2,
+    "core_issue": {
+      "description": "Task creation returns 'Task failed to start workflow' but workflows actually execute",
+      "likely_causes": [
+        "Asynchronous workflow startup not properly tracked",
+        "Task status not updated after workflow starts",
+        "Disconnect between task creation response and workflow execution",
+        "Temporal client connection issues during task creation",
+        "Missing workflow status callback to update task"
+      ],
+      "recommendations": [
+        "Add proper workflow startup status tracking",
+        "Implement async task status updates from workflow",
+        "Add workflow health checks during task creation",
+        "Improve error handling for workflow startup",
+        "Add logging to track workflow startup process"
+      ]
+    }
+  }
+}

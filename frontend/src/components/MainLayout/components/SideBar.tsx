@@ -5,6 +5,7 @@ import NavLink from "./NavLink";
 import SectionTitle from "./SectionTitle";
 import UserBlock from "./UserBlock";   
 import LogoIcon from "./LogoIcon";
+import { CommandBar } from "@/components/CommandBar";
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 // Using localStorage instead of cookies for client-side state
@@ -67,6 +68,12 @@ export default function SideBar({ menuContent, bottomMenuContent, initialCollaps
                     <LogoIcon />
                 </div>
             </div>
+            
+            {/* Command Bar */}
+            <div className="mb-2">
+                <CommandBar isCollapsed={isCollapsed} />
+            </div>
+            
             <nav className="overflow-y-auto overflow-x-hidden flex flex-col justify-between h-full gap-[10px]">
                 <div>
                     {menuContent.map((sectionContent, index) => (

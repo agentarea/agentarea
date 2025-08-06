@@ -647,32 +647,75 @@ async def get_task_events(
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
     agent_service: AgentService = Depends(get_agent_service),
-    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
-    """Get paginated task execution events for the specified task."""
+    """Get paginated task execution events for the specified task from database."""
     # Verify agent exists
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        # Get workflow status to verify task exists
-        execution_id = f"agent-task-{task_id}"
-        status = await workflow_task_service.get_workflow_status(execution_id)
-
-        # Check if task exists
-        if status.get("status") == "unknown":
-            raise HTTPException(status_code=404, detail="Task not found")
-
-        # For now, we'll generate mock events based on workflow status
-        # In a real implementation, these would be stored during workflow execution
-        events = await _get_task_events_from_workflow_history(
-            execution_id, str(task_id), str(agent_id), page, page_size, event_type
-        )
-
+        from sqlalchemy import text
+        from agentarea_api.api.deps.database import get_db_session
+        
+        # Get database session
+        async with get_db_session() as session:
+            # Build the query with optional event type filter
+            base_query = """
+                SELECT id, task_id, event_type, timestamp, data, metadata,
+                       COUNT(*) OVER() as total_count
+                FROM task_events 
+                WHERE task_id = :task_id
+            """
+            
+            params = {"task_id": str(task_id)}
+            
+            if event_type:
+                base_query += " AND event_type = :event_type"
+                params["event_type"] = event_type
+                
+            base_query += """
+                ORDER BY timestamp ASC
+                LIMIT :limit OFFSET :offset
+            """
+            
+            params.update({
+                "limit": page_size,
+                "offset": (page - 1) * page_size
+            })
+            
+            # Execute query
+            result = await session.execute(text(base_query), params)
+            rows = result.fetchall()
+        
+        if not rows:
+            # No events found - return empty response
+            return TaskEventResponse(
+                events=[],
+                total=0,
+                page=page,
+                page_size=page_size,
+                has_next=False,
+            )
+        
+        # Convert database rows to TaskEvent objects
+        total_events = rows[0].total_count if rows else 0
+        events = []
+        
+        for row in rows:
+            events.append(TaskEvent(
+                id=str(row.id),
+                task_id=str(row.task_id),
+                agent_id=str(agent_id),
+                execution_id=row.metadata.get("execution_id", "unknown"),
+                timestamp=row.timestamp,
+                event_type=row.event_type,
+                message=row.data.get("message", f"Event: {row.event_type}"),
+                metadata=dict(row.metadata) if row.metadata else {},
+            ))
+        
         # Calculate pagination info
-        total_events = len(events)  # This would come from actual event count in real implementation
-        has_next = len(events) == page_size  # Simplified logic for demo
+        has_next = (page * page_size) < total_events
 
         return TaskEventResponse(
             events=events,
@@ -682,8 +725,6 @@ async def get_task_events(
             has_next=has_next,
         )
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Failed to get task events for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get task events: {e!s}") from e
@@ -776,43 +817,7 @@ async def stream_task_events(
         raise HTTPException(status_code=500, detail=f"Failed to create event stream: {e!s}") from e
 
 
-async def _get_task_events_from_workflow_history(
-    execution_id: str,
-    task_id: str,
-    agent_id: str,
-    page: int,
-    page_size: int,
-    event_type: str | None = None,
-) -> list[TaskEvent]:
-    """Get task events from workflow history.
-
-    In a real implementation, this would query Temporal workflow history
-    or a dedicated event store. For now, we generate mock events.
-    """
-    # Mock events for demonstration
-    mock_events = [
-        TaskEvent(
-            id=f"event-{i}",
-            task_id=task_id,
-            agent_id=agent_id,
-            execution_id=execution_id,
-            timestamp=datetime.now(UTC),
-            event_type="workflow_started" if i == 0 else "activity_completed",
-            message=f"Mock event {i} for task {task_id}",
-            metadata={"step": i, "mock": True},
-        )
-        for i in range(1, min(page_size + 1, 6))  # Generate up to 5 mock events
-    ]
-
-    # Filter by event type if specified
-    if event_type:
-        mock_events = [e for e in mock_events if e.event_type == event_type]
-
-    # Apply pagination (simplified for mock data)
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-
-    return mock_events[start_idx:end_idx]
+# Mock function removed - now using real database queries
 
 
 def _format_sse_event(event_type: str, data: dict[str, Any]) -> str:

@@ -8,7 +8,7 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from uuid import uuid4
 
-from .constants import MessageTemplates
+from ..agentic.prompts import MessageTemplates, PromptBuilder
 
 
 class EventManager:
@@ -119,48 +119,38 @@ class BudgetTracker:
 
 
 class MessageBuilder:
-    """Builds consistent message formats."""
+    """Builds consistent message formats.
+    
+    This is a backward compatibility wrapper around PromptBuilder.
+    New code should use PromptBuilder directly from the agentic module.
+    """
 
     @staticmethod
     def build_system_prompt(
+        agent_name: str,
+        agent_instruction: str,
         goal_description: str,
         success_criteria: list[str],
-        available_tools: list[dict[str, Any]],
-        current_iteration: int,
-        max_iterations: int,
-        budget_remaining: float
+        available_tools: list[dict[str, Any]]
     ) -> str:
-        """Build system prompt with current context."""
-        criteria_text = "\n".join(f"- {criteria}" for criteria in success_criteria)
-        tools_text = "\n".join(f"- {tool.get('name', 'Unknown')}: {tool.get('description', 'No description')}"
-                               for tool in available_tools)
-
-        return MessageTemplates.SYSTEM_PROMPT.format(
+        """Build system prompt with agent context and current task."""
+        return PromptBuilder.build_system_prompt(
+            agent_name=agent_name,
+            agent_instruction=agent_instruction,
             goal_description=goal_description,
-            success_criteria=criteria_text,
-            available_tools=tools_text,
-            current_iteration=current_iteration,
-            max_iterations=max_iterations,
-            budget_remaining=budget_remaining
+            success_criteria=success_criteria,
+            available_tools=available_tools
         )
 
     @staticmethod
     def build_tool_call_summary(tool_name: str, result: Any) -> str:
         """Build tool call summary message."""
-        result_str = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
-        return MessageTemplates.TOOL_CALL_SUMMARY.format(
-            tool_name=tool_name,
-            result=result_str
-        )
+        return PromptBuilder.build_tool_call_summary(tool_name, result)
 
     @staticmethod
     def build_iteration_summary(iteration: int, tool_calls: int, cost: float) -> str:
         """Build iteration summary message."""
-        return MessageTemplates.ITERATION_SUMMARY.format(
-            iteration=iteration,
-            tool_calls=tool_calls,
-            cost=cost
-        )
+        return PromptBuilder.build_iteration_summary(iteration, tool_calls, cost)
 
 
 class StateValidator:
@@ -174,15 +164,22 @@ class StateValidator:
 
     @staticmethod
     def validate_tools(tools: list[dict[str, Any]]) -> bool:
-        """Validate available tools."""
+        """Validate available tools (supports both old format and OpenAI function format)."""
         if not tools:
             return True  # Empty tools list is valid
 
-        required_fields = ["name", "description"]
-        return all(
-            all(field in tool for field in required_fields)
-            for tool in tools
-        )
+        for tool in tools:
+            # Check if it's OpenAI function format
+            if tool.get("type") == "function" and "function" in tool:
+                function_def = tool["function"]
+                if not function_def.get("name") or not function_def.get("description"):
+                    return False
+            # Check if it's old format
+            elif "name" in tool and "description" in tool:
+                continue  # Valid old format
+            else:
+                return False  # Invalid format
+        return True
 
     @staticmethod
     def validate_goal(goal: dict[str, Any]) -> bool:
@@ -198,22 +195,46 @@ class ToolCallExtractor:
     """Extracts and formats tool calls from LLM responses."""
 
     @staticmethod
-    def extract_tool_calls(message: Any) -> list[dict[str, Any]]:
-        """Extract tool calls from LLM response message."""
-        if not hasattr(message, 'tool_calls') or not message.tool_calls:
+    def extract_tool_calls(message: Any) -> list[Any]:
+        """Extract tool calls from LLM response message and return ToolCall objects."""
+        # Import here to avoid circular imports
+        from ..workflows.agent_execution_workflow import ToolCall
+        
+        # Handle both dataclass and dict formats
+        tool_calls = None
+        if hasattr(message, 'tool_calls'):
+            tool_calls = message.tool_calls
+        elif isinstance(message, dict) and 'tool_calls' in message:
+            tool_calls = message['tool_calls']
+        
+        if not tool_calls:
             return []
 
-        return [
-            {
-                "id": tool_call.id,
-                "type": tool_call.type,
-                "function": {
-                    "name": tool_call.function.name,
-                    "arguments": tool_call.function.arguments,
-                },
-            }
-            for tool_call in message.tool_calls
-        ]
+        # Convert to ToolCall dataclass objects
+        result = []
+        for i, tool_call in enumerate(tool_calls):
+            if isinstance(tool_call, dict):
+                # Handle dict format from LLM activity
+                result.append(ToolCall(
+                    id=tool_call.get("id", f"call_{i}"),
+                    type=tool_call.get("type", "function"),
+                    function={
+                        "name": tool_call.get("function", {}).get("name", ""),
+                        "arguments": tool_call.get("function", {}).get("arguments", "{}"),
+                    }
+                ))
+            else:
+                # Handle object format (if any)
+                result.append(ToolCall(
+                    id=getattr(tool_call, 'id', f"call_{i}"),
+                    type=getattr(tool_call, 'type', "function"),
+                    function={
+                        "name": getattr(tool_call.function, 'name', ''),
+                        "arguments": getattr(tool_call.function, 'arguments', '{}'),
+                    }
+                ))
+        
+        return result
 
     @staticmethod
     def extract_usage_info(response: Any) -> dict[str, Any]:

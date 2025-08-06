@@ -16,8 +16,6 @@ from typing import Any
 from uuid import UUID
 
 # Third-party imports
-import litellm
-
 # Local imports
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_common.auth.context import UserContext
@@ -26,9 +24,15 @@ from agentarea_common.config import get_database
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
-from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
 from temporalio import activity
 
+from ..agentic import (
+    GoalProgressEvaluator,
+    LLMModel,
+    LLMRequest,
+    ToolExecutor,
+    ToolManager,
+)
 from ..interfaces import ActivityDependencies
 
 logger = logging.getLogger(__name__)
@@ -37,7 +41,7 @@ logger = logging.getLogger(__name__)
 def _create_user_context(user_context_data: dict[str, Any]) -> UserContext:
     """Helper function to create UserContext from data dictionary."""
     return UserContext(
-        user_id=user_context_data.get("user_id", "system"), 
+        user_id=user_context_data.get("user_id", "system"),
         workspace_id=user_context_data["workspace_id"]
     )
 
@@ -50,26 +54,7 @@ def _create_system_context(workspace_id: str) -> UserContext:
     )
 
 
-async def _create_services_with_session(
-    user_context_data: dict[str, Any], dependencies: ActivityDependencies
-):
-    """Helper function to create database session and common services."""
-    database = get_database()
-    async with database.async_session_factory() as session:
-        user_context = _create_user_context(user_context_data)
-        repository_factory = RepositoryFactory(session, user_context)
 
-        agent_service = AgentService(
-            repository_factory=repository_factory, event_broker=dependencies.event_broker
-        )
-
-        mcp_server_instance_service = MCPServerInstanceService(
-            repository_factory=repository_factory,
-            event_broker=dependencies.event_broker,
-            secret_manager=dependencies.secret_manager,
-        )
-
-        return session, user_context, repository_factory, agent_service, mcp_server_instance_service
 
 
 def make_agent_activities(dependencies: ActivityDependencies):
@@ -162,21 +147,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
             if not agent:
                 raise ValueError(f"Agent {agent_id} not found")
 
-            # Extract MCP server IDs from tools config
-            tools_config = agent.tools_config or {}
-            mcp_server_ids = tools_config.get("mcp_servers", [])
+            # Use tool manager to discover available tools
+            tool_manager = ToolManager()
+            all_tools = await tool_manager.discover_available_tools(
+                agent_id=agent_id,
+                tools_config=agent.tools_config,
+                mcp_server_instance_service=mcp_server_instance_service,
+            )
 
-            all_tools: list[dict[str, Any]] = []
-
-            # Get tools from each configured MCP server
-            for server_id in mcp_server_ids:
-                server_instance = await mcp_server_instance_service.get(UUID(str(server_id)))
-                if server_instance and server_instance.status == "running":
-                    # TODO: Implement get_tools method in MCPServerInstanceService
-                    # For now, return empty list until MCP tool discovery is implemented
-                    logger.warning(f"Tool discovery not yet implemented for MCP server {server_id}")
-
-            logger.info(f"Discovered {len(all_tools)} tools for agent {agent_id}")
             return all_tools
 
     @activity.defn
@@ -186,16 +164,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
         tools: list[dict[str, Any]] | None = None,
         workspace_id: str | None = None,
         user_context_data: dict[str, Any] | None = None,  # Deprecated, use workspace_id
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> dict[str, Any]:
         """Call LLM with messages and optional tools."""
         try:
             # model_id must be a UUID representing a model instance ID
             try:
                 model_uuid = UUID(model_id)
-            except ValueError:
-                raise ValueError(f"Invalid model_id: {model_id}. Must be a valid UUID representing a model instance.")
+            except ValueError as e:
+                raise ValueError(f"Invalid model_id: {model_id}. Must be a valid UUID representing a model instance.") from e
 
-            # Extract all needed data from model instance before closing session
+            # Get model instance from database
             async with get_database().async_session_factory() as session:
                 # Create context - prefer workspace_id, fallback to user_context_data
                 if workspace_id:
@@ -204,100 +184,63 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     user_context = _create_user_context(user_context_data)
                 else:
                     raise ValueError("Either workspace_id or user_context_data must be provided")
-                
+
                 model_instance_service = ModelInstanceService(
                     repository=ModelInstanceRepository(session, user_context),
-                event_broker=dependencies.event_broker,
-                secret_manager=dependencies.secret_manager,
-            )
+                    event_broker=dependencies.event_broker,
+                    secret_manager=dependencies.secret_manager,
+                )
                 model_instance = await model_instance_service.get(model_uuid)
                 if not model_instance:
                     raise ValueError(f"Model instance with ID {model_id} not found")
 
-                # Access the model structure
-                provider_type = model_instance.provider_config.provider_spec.provider_type
-                model_type = model_instance.model_spec.model_name
-                api_key = getattr(model_instance.provider_config, "api_key", None)
-                endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+            # Extract required parameters from model instance
+            provider_type = model_instance.provider_config.provider_spec.provider_type
+            model_name = model_instance.model_spec.model_name
+            endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
 
-            # Build litellm parameters with extracted data
-            litellm_model = f"{provider_type}/{model_type}"
+            # Decode API key from secret manager (provider_config.api_key is a secret name/placeholder)
+            api_key = None
+            api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
+            if api_key_secret_name:
+                api_key = await dependencies.secret_manager.get_secret(api_key_secret_name)
+            else:
+                logger.warning(f"No API key found for model instance {model_instance.id}")
 
-            litellm_params = {
-                "model": litellm_model,
-                "messages": messages,
-            }
-            if api_key:
-                litellm_params["api_key"] = api_key
-            if endpoint_url:
-                url = endpoint_url
-                if not url.startswith("http"):
-                    url = f"http://{url}"
-                litellm_params["base_url"] = url
-            if tools:
-                litellm_params["tools"] = tools
-                litellm_params["tool_choice"] = "auto"
-            logger.info(f"Calling LLM with model {litellm_model}")
+            # Create LLM model with explicit parameters
+            llm_model = LLMModel(
+                provider_type=provider_type,
+                model_name=model_name,
+                api_key=api_key,
+                endpoint_url=endpoint_url,
+            )
 
-            # Set base URL for Ollama - use localhost when not in Docker
-            if endpoint_url:
-                url = endpoint_url
-                if not url.startswith("http"):
-                    url = f"http://{url}"
-                litellm_params["base_url"] = url
-            elif provider_type == "ollama_chat":
-                # Default Ollama URL - use localhost for local development
-                litellm_params["base_url"] = "http://host.docker.internal:11434"
+            # Create structured request
+            request = LLMRequest(
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
-            response = await litellm.acompletion(**litellm_params)
-            message = response.choices[0].message
+            # Get structured response
+            response = await llm_model.complete(request)
+
+            # Convert to dict format for backward compatibility with existing workflow code
             result = {
-                "content": message.content or "",
-                "role": message.role,
-            }
-            if hasattr(message, "tool_calls") and message.tool_calls:
-                result["tool_calls"] = [
-                    {
-                        "id": tool_call.id,
-                        "type": tool_call.type,
-                        "function": {
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments,
+                "content": response.content,
+                "role": response.role,
+                "cost": response.cost,
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                    "total_tokens": response.usage.total_tokens if response.usage else 0,
                 },
             }
-                    for tool_call in message.tool_calls
-    ]
-            # Extract cost information from response usage
-            cost = 0.0
-            if hasattr(response, "usage") and response.usage:
-                usage = response.usage
-                # litellm includes cost calculation in some cases
-                if hasattr(usage, "completion_tokens_cost"):
-                    cost += getattr(usage, "completion_tokens_cost", 0.0)
-                if hasattr(usage, "prompt_tokens_cost"):
-                    cost += getattr(usage, "prompt_tokens_cost", 0.0)
-                # Fallback: calculate cost using token counts if available
-                elif hasattr(usage, "total_tokens"):
-                    # This is a rough estimate - actual costs vary by model
-                    # For production, should use model-specific pricing
-                    cost = (
-                        getattr(usage, "total_tokens", 0) * 0.00001
-                    )  # $0.01 per 1K tokens estimate
 
-            result["cost"] = cost
-            result["usage"] = {
-                "prompt_tokens": getattr(response.usage, "prompt_tokens", 0)
-                if hasattr(response, "usage") and response.usage
-                else 0,
-                "completion_tokens": getattr(response.usage, "completion_tokens", 0)
-                if hasattr(response, "usage") and response.usage
-                else 0,
-                "total_tokens": getattr(response.usage, "total_tokens", 0)
-                if hasattr(response, "usage") and response.usage
-                else 0,
-            }
+            if response.tool_calls:
+                result["tool_calls"] = response.tool_calls
 
-            logger.info(f"LLM call completed successfully, cost: ${cost:.6f}")
             return result
 
         except Exception as e:
@@ -310,46 +253,28 @@ def make_agent_activities(dependencies: ActivityDependencies):
         tool_args: dict[str, Any],
         server_instance_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Execute an MCP tool."""
-        # Create fresh session for this activity
-        database = get_database()
-        async with database.async_session_factory() as session:
-            # Create services with this session
-            mcp_server_repository = MCPServerRepository(session)
-            mcp_server_instance_repository = MCPServerInstanceRepository(session)
-            mcp_server_instance_service = MCPServerInstanceService(
-                repository=mcp_server_instance_repository,
-                event_broker=dependencies.event_broker,
-                mcp_server_repository=mcp_server_repository,
-                secret_manager=dependencies.secret_manager,
-            )
+        """Execute an MCP tool or built-in completion tool."""
+        # Create fresh session for MCP tools if needed
+        mcp_server_instance_service = None
+        if tool_name != "task_complete":
+            database = get_database()
+            async with database.async_session_factory() as session:
+                # Create services with this session
+                repository_factory = RepositoryFactory(session, _create_system_context("system"))
+                mcp_server_instance_service = MCPServerInstanceService(
+                    repository_factory=repository_factory,
+                    event_broker=dependencies.event_broker,
+                    secret_manager=dependencies.secret_manager,
+                )
 
-            try:
-                if server_instance_id:
-                    server_instance = await mcp_server_instance_service.get(server_instance_id)
-                    if not server_instance:
-                        raise ValueError(f"MCP server instance {server_instance_id} not found")
-                else:
-                    # TODO: Implement tool name to server mapping
-                    raise ValueError("Server instance ID is required for tool execution")
-
-                # TODO: Implement execute_tool method in MCPServerInstanceService
-                logger.warning(f"Tool execution not yet implemented for tool {tool_name}")
-
-                # Placeholder return
-                return {
-                    "tool_name": tool_name,
-                    "result": f"Tool {tool_name} executed successfully (placeholder)",
-                    "success": True,
-                }
-
-            except Exception as e:
-                logger.error(f"Tool execution failed: {e!s}")
-                return {
-                    "tool_name": tool_name,
-                    "result": f"Tool execution failed: {e!s}",
-                    "success": False,
-                }
+        # Use tool executor to handle routing
+        tool_executor = ToolExecutor()
+        return await tool_executor.execute_tool(
+            tool_name=tool_name,
+            tool_args=tool_args,
+            server_instance_id=server_instance_id,
+            mcp_server_instance_service=mcp_server_instance_service,
+        )
 
     @activity.defn
     async def create_execution_plan_activity(
@@ -389,102 +314,22 @@ def make_agent_activities(dependencies: ActivityDependencies):
         current_iteration: int,
     ) -> dict[str, Any]:
         """Evaluate progress toward the goal."""
-        try:
-            # Analyze the conversation to determine if goal is achieved
-            goal_achieved = False
-            final_response = None
-
-            if messages:
-                # Check if the last few messages indicate task completion
-                recent_messages = messages[-3:]  # Look at last 3 messages
-
-                for message in reversed(recent_messages):
-                    if message.get("role") == "assistant":
-                        content = message.get("content", "").lower()
-
-                        # Check for completion indicators
-                        completion_indicators = [
-                            "task completed",
-                            "finished",
-                            "done",
-                            "complete",
-                            "successfully",
-                            "final answer",
-                            "here is the result",
-                            "i have completed",
-                            "task is finished",
-                        ]
-
-                        if any(indicator in content for indicator in completion_indicators):
-                            goal_achieved = True
-                            final_response = message.get("content", "Task completed")
-                            break
-
-                # Also check if we have successful tool executions that might indicate completion
-                if not goal_achieved:
-                    tool_successes = sum(
-                        1
-                        for msg in recent_messages
-                        if msg.get("role") == "tool"
-                        and "error" not in str(msg.get("content", "")).lower()
-                    )
-
-                    if (
-                        tool_successes >= 2
-                    ):  # Multiple successful tool calls might indicate progress
-                        # Check if assistant is providing a summary or conclusion
-                        for message in reversed(recent_messages):
-                            if (
-                                message.get("role") == "assistant"
-                                and len(message.get("content", "")) > 50
-                            ):
-                                content = message.get("content", "")
-                                if any(
-                                    word in content.lower()
-                                    for word in ["summary", "result", "conclusion", "completed"]
-                                ):
-                                    goal_achieved = True
-                                    final_response = content
-                                    break
-
-            # Evaluate against success criteria if available
-            success_criteria_met = []
-            if goal.get("success_criteria"):
-                # This is a simplified evaluation - could be enhanced with LLM analysis
-                for criteria in goal["success_criteria"]:
-                    # Simple keyword matching for now
-                    criteria_met = any(
-                        keyword in " ".join(msg.get("content", "") for msg in messages[-5:]).lower()
-                        for keyword in criteria.lower().split()[:3]  # First 3 words of criteria
-                    )
-                    success_criteria_met.append({"criteria": criteria, "met": criteria_met})
-
-            return {
-                "goal_achieved": goal_achieved,
-                "final_response": final_response,
-                "success_criteria_met": success_criteria_met,
-                "progress_indicators": {
-                    "message_count": len(messages),
-                    "tool_calls": sum(1 for msg in messages if msg.get("role") == "tool"),
-                    "assistant_responses": sum(
-                        1 for msg in messages if msg.get("role") == "assistant"
-                    ),
-                    "iteration": current_iteration,
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Failed to evaluate goal progress: {e}")
-            return {
-                "goal_achieved": False,
-                "final_response": None,
-                "success_criteria_met": [],
-                "progress_indicators": {"error": str(e)},
-            }
+        evaluator = GoalProgressEvaluator()
+        
+        # Extract goal information for the new interface
+        goal_description = goal.get("description", "")
+        success_criteria = goal.get("success_criteria", [])
+        
+        return await evaluator.evaluate_progress(
+            goal_description=goal_description,
+            success_criteria=success_criteria,
+            conversation_history=messages,
+            current_iteration=current_iteration
+        )
 
     @activity.defn
     async def publish_workflow_events_activity(events_json: list[str]) -> bool:
-        """Publish workflow events using the EventBroker infrastructure."""
+        """Publish workflow events using the EventBroker infrastructure AND store in database."""
         if not events_json:
             return True
 
@@ -496,7 +341,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             from agentarea_common.events.base_events import DomainEvent
             from agentarea_common.events.router import create_event_broker_from_router
 
-            logger.info(f"Publishing {len(events_json)} workflow events via EventBroker")
+            logger.info(f"Publishing {len(events_json)} workflow events via EventBroker and storing in database")
 
             # Convert RedisRouter to RedisEventBroker for publishing
             # dependencies.event_broker is a RedisRouter, we need RedisEventBroker to publish
@@ -507,6 +352,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 return False
 
             redis_event_broker = create_event_broker_from_router(dependencies.event_broker)  # type: ignore
+
+            # Get database connection for storing events
+            database = get_database()
 
             for event_json in events_json:
                 event = json.loads(event_json)
@@ -525,9 +373,31 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     original_data=event["data"],
                 )
 
-                # Publish via RedisEventBroker (uses FastStream infrastructure)
+                # 1. Publish via RedisEventBroker (uses FastStream infrastructure) for real-time SSE
                 await redis_event_broker.publish(domain_event)
                 logger.debug(f"Published workflow event: {event['event_type']} for task {task_id}")
+
+                # 2. Store in database for persistence
+                try:
+                    await database.execute(
+                        """INSERT INTO task_events (task_id, event_type, timestamp, data, metadata) 
+                           VALUES (:task_id, :event_type, :timestamp, :data, :metadata)""",
+                        {
+                            "task_id": task_id,
+                            "event_type": event["event_type"],
+                            "timestamp": datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")),
+                            "data": event["data"],
+                            "metadata": {
+                                "execution_id": domain_event.event_id,
+                                "aggregate_type": domain_event.aggregate_type,
+                                "source": "temporal_workflow"
+                            }
+                        }
+                    )
+                    logger.debug(f"Stored workflow event in database: {event['event_type']} for task {task_id}")
+                except Exception as db_error:
+                    logger.error(f"Failed to store event in database: {db_error}")
+                    # Continue with other events even if one fails to store
 
             return True
 

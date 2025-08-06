@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Task(BaseModel):
@@ -26,6 +26,23 @@ class Task(BaseModel):
     workspace_id: str | None = None
     metadata: dict[str, Any] = {}
 
+    @field_validator('metadata', mode='before')
+    @classmethod
+    def validate_task_metadata(cls, v):
+        """Ensure metadata is always a dict, converting non-dict values to empty dict."""
+        if v is not None and not isinstance(v, dict):
+            # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
+            return {}
+        return v or {}
+
+    def __setattr__(self, name, value):
+        """Custom setter to validate metadata field when manually assigned."""
+        if name == 'metadata':
+            if value is not None and not isinstance(value, dict):
+                # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
+                value = {}
+        super().__setattr__(name, value)
+
     class Config:
         from_attributes = True
 
@@ -40,6 +57,32 @@ class TaskCreate(BaseModel):
     workspace_id: str | None = None
     metadata: dict[str, Any] = {}
 
+    @field_validator('metadata', mode='before')
+    @classmethod
+    def validate_task_create_metadata(cls, v):
+        """Convert non-dict metadata to empty dict."""
+        if v is not None and not isinstance(v, dict):
+            return {}
+        return v or {}
+
+    def __setattr__(self, name, value):
+        """Custom setter to validate metadata field when manually assigned."""
+        if name == 'metadata' and value is not None and not isinstance(value, dict):
+            # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
+            value = {}
+        super().__setattr__(name, value)
+
+    @classmethod
+    def model_validate(cls, obj, *, strict=None, from_attributes=None, context=None):
+        """Override model validation to handle metadata conversion."""
+        if hasattr(obj, 'metadata') and obj.metadata is not None and not isinstance(obj.metadata, dict):
+            # Create a copy and fix the metadata
+            if hasattr(obj, '__dict__'):
+                obj_dict = obj.__dict__.copy()
+                obj_dict['metadata'] = {}
+                return super().model_validate(obj_dict, strict=strict, from_attributes=from_attributes, context=context)
+        return super().model_validate(obj, strict=strict, from_attributes=from_attributes, context=context)
+
 
 class TaskUpdate(BaseModel):
     """Task update model."""
@@ -51,6 +94,22 @@ class TaskUpdate(BaseModel):
     completed_at: datetime | None = None
     execution_id: str | None = None
     metadata: dict[str, Any] | None = None
+
+    @field_validator('metadata', mode='before')
+    @classmethod
+    def validate_task_update_metadata(cls, v):
+        """Ensure metadata is always a dict, converting non-dict values to empty dict."""
+        if v is not None and not isinstance(v, dict):
+            # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
+            return {}
+        return v
+
+    def __setattr__(self, name, value):
+        """Custom setter to validate metadata field when manually assigned."""
+        if name == 'metadata' and value is not None and not isinstance(value, dict):
+            # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
+            value = {}
+        super().__setattr__(name, value)
 
 
 # Enhanced SimpleTask model for A2A compatibility and task management

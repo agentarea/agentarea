@@ -622,19 +622,37 @@ class TaskService(BaseTaskService):
                     pass
 
     async def _get_historical_events(self, task_id: UUID) -> List[dict[str, Any]]:
-        """Get historical events for a task.
-
-        This could be implemented by:
-        1. Querying workflow events via Temporal
-        2. Reading from an event store/database
-        3. Reconstructing from task state changes
-        """
-        # Placeholder implementation
-        return [
-            {
-                "event_type": "task_created",
-                "task_id": str(task_id),
-                "timestamp": datetime.now(UTC).isoformat(),
-                "data": {"status": "pending"}
-            }
-        ]
+        """Get historical events for a task from the database."""
+        try:
+            from sqlalchemy import text
+            
+            # Use the repository's session to query task events
+            session = self.task_repository.session
+            
+            # Query historical events from database
+            query = text("""
+                SELECT event_type, timestamp, data, metadata
+                FROM task_events 
+                WHERE task_id = :task_id 
+                ORDER BY timestamp ASC
+            """)
+            
+            result = await session.execute(query, {"task_id": str(task_id)})
+            rows = result.fetchall()
+            
+            # Convert database rows to event format
+            historical_events = []
+            for row in rows:
+                historical_events.append({
+                    "event_type": row.event_type,
+                    "timestamp": row.timestamp.isoformat(),
+                    "data": dict(row.data) if row.data else {}
+                })
+                
+            logger.debug(f"Retrieved {len(historical_events)} historical events for task {task_id}")
+            return historical_events
+            
+        except Exception as e:
+            logger.error(f"Failed to get historical events for task {task_id}: {e}")
+            # Return empty list on error to not break SSE streaming
+            return []

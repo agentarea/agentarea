@@ -38,7 +38,7 @@ COPY libs ./libs
 COPY apps/api ./apps/api
 COPY apps/api/alembic.ini ./alembic.ini
 COPY apps/api/alembic ./alembic
-COPY cli.py ./
+COPY apps/api/agentarea_api/cli.py ./
 COPY pyproject.toml ./
 
 # Set proper permissions

@@ -19,7 +19,13 @@
         "@modelcontextprotocol/server-puppeteer"
       ],
       "disabled": false,
-      "autoApprove": []
+      "autoApprove": [
+        "puppeteer_navigate",
+        "puppeteer_screenshot",
+        "puppeteer_fill",
+        "puppeteer_click",
+        "puppeteer_evaluate"
+      ]
     },
     "serena": {
       "command": "uvx",

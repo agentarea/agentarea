@@ -71,34 +71,3 @@ class ExecutionStatus:
     COMPLETED: Final[str] = "completed"
     FAILED: Final[str] = "failed"
     CANCELLED: Final[str] = "cancelled"
-
-# Message templates
-class MessageTemplates:
-    """Common message templates to avoid duplication."""
-    
-    SYSTEM_PROMPT: Final[str] = """You are an AI agent working on a specific task. 
-
-Your goal: {goal_description}
-
-Success criteria:
-{success_criteria}
-
-Available tools:
-{available_tools}
-
-Instructions:
-1. Work systematically towards the goal
-2. Use available tools when needed
-3. Provide clear, actionable responses
-4. Ask for clarification if the goal is unclear
-5. Stop when you've successfully completed the task
-
-Current iteration: {current_iteration}/{max_iterations}
-Budget remaining: ${budget_remaining:.2f}
-"""
-
-    BUDGET_WARNING: Final[str] = "Warning: Budget usage at {percentage:.1f}% (${used:.2f}/${total:.2f})"
-    BUDGET_EXCEEDED: Final[str] = "Budget exceeded: ${used:.2f}/${total:.2f}. Stopping execution."
-    
-    TOOL_CALL_SUMMARY: Final[str] = "Called {tool_name} with result: {result}"
-    ITERATION_SUMMARY: Final[str] = "Iteration {iteration}: {tool_calls} tool calls, ${cost:.4f} spent"

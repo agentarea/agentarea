@@ -246,46 +246,46 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     return (
       <div 
         key={instance.id} 
-        className={`group relative p-4 border-2 rounded-xl transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${statusInfo.bgColor}`}
+        className={`group relative p-3 border rounded-lg transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${statusInfo.bgColor}`}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {/* Enhanced Icon */}
+          <div className="flex items-center gap-3">
+            {/* Compact Icon */}
             <div className="relative">
-              <div className="h-12 w-12 rounded-xl bg-white dark:bg-slate-800 border-2 border-white dark:border-slate-700 shadow-sm flex items-center justify-center group-hover:scale-105 transition-transform">
-                <IconComponent className="h-6 w-6 text-primary" />
+              <div className="h-8 w-8 rounded-lg bg-white dark:bg-slate-800 border border-white dark:border-slate-700 shadow-sm flex items-center justify-center group-hover:scale-105 transition-transform">
+                <IconComponent className="h-4 w-4 text-primary" />
               </div>
-              {/* Status indicator overlay */}
-              <div className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-white dark:border-slate-800 flex items-center justify-center ${statusInfo.color === 'text-green-500' ? 'bg-green-500' : statusInfo.color === 'text-red-500' ? 'bg-red-500' : statusInfo.color === 'text-amber-500' ? 'bg-amber-500' : 'bg-gray-500'}`}>
+              {/* Smaller Status indicator overlay */}
+              <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border border-white dark:border-slate-800 flex items-center justify-center ${statusInfo.color === 'text-green-500' ? 'bg-green-500' : statusInfo.color === 'text-red-500' ? 'bg-red-500' : statusInfo.color === 'text-amber-500' ? 'bg-amber-500' : 'bg-gray-500'}`}>
                 {StatusIcon === Loader2 ? (
-                  <Loader2 className="h-2 w-2 text-white animate-spin" />
+                  <Loader2 className="h-1.5 w-1.5 text-white animate-spin" />
                 ) : (
-                  <div className="h-2 w-2 bg-white rounded-full" />
+                  <div className="h-1.5 w-1.5 bg-white rounded-full" />
                 )}
               </div>
             </div>
 
-            {/* Content */}
+            {/* Compact Content */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-slate-900 dark:text-white truncate">
+              <div className="flex items-center gap-2 mb-0.5">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                   {instance.name}
                 </h3>
                 {healthLoading && !healthCheck && (
-                  <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                  <Loader2 className="h-2.5 w-2.5 animate-spin text-gray-400" />
                 )}
               </div>
               
-              <p className="text-sm text-muted-foreground mb-2 line-clamp-1">
+              <p className="text-xs text-muted-foreground mb-1 line-clamp-1">
                 {instance.description || `${getCategory(instance)} server instance`}
               </p>
 
-              <div className="flex items-center gap-3">
-                <Badge variant="outline" className="text-xs">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                   {getCategory(instance)}
                 </Badge>
-                <div className="flex items-center gap-2">
-                  <StatusIcon className={`h-3 w-3 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
+                <div className="flex items-center gap-1">
+                  <StatusIcon className={`h-2.5 w-2.5 ${statusInfo.color} ${StatusIcon === Loader2 ? 'animate-spin' : ''}`} />
                   <span className={`text-xs font-medium ${statusInfo.color}`}>
                     {statusInfo.text}
                   </span>
@@ -297,11 +297,11 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                 </div>
               </div>
 
-              {/* URL info */}
+              {/* Compact URL info */}
               {urlInfo.url && urlInfo.displayText && (
-                <div className="flex items-center gap-2 mt-2">
-                  <Globe className="h-3 w-3 text-blue-500" />
-                  <span className="text-xs text-blue-600 truncate max-w-48">
+                <div className="flex items-center gap-1 mt-1">
+                  <Globe className="h-2.5 w-2.5 text-blue-500" />
+                  <span className="text-xs text-blue-600 truncate max-w-32">
                     {urlInfo.displayText}
                   </span>
                   <button
@@ -309,29 +309,29 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                     className="text-gray-400 hover:text-blue-600 transition-colors"
                     title="Copy URL"
                   >
-                    <Copy className="h-3 w-3" />
+                    <Copy className="h-2.5 w-2.5" />
                   </button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+          {/* Compact Actions */}
+          <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
             {urlInfo.url && (
-              <Button size="sm" variant="outline" asChild className="h-8">
+              <Button size="sm" variant="outline" asChild className="h-6 w-6 p-0">
                 <a href={urlInfo.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4" />
+                  <ExternalLink className="h-3 w-3" />
                 </a>
               </Button>
             )}
-            <Button size="sm" variant="outline" asChild className="h-8">
+            <Button size="sm" variant="outline" asChild className="h-6 w-6 p-0">
               <Link href={`/mcp-servers/${instance.id}/edit`}>
-                <Settings className="h-4 w-4" />
+                <Settings className="h-3 w-3" />
               </Link>
             </Button>
-            <Button size="sm" variant="outline" className="h-8 text-destructive hover:text-destructive">
-              <Trash2 className="h-4 w-4" />
+            <Button size="sm" variant="outline" className="h-6 w-6 p-0 text-destructive hover:text-destructive">
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         </div>
@@ -425,44 +425,45 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
     );
   };
 
-  // Enhanced Empty State
+  // Compact Empty State
   if (mcpInstances.length === 0) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
-            <Activity className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center">
+            <Activity className="h-3 w-3 text-slate-600 dark:text-slate-300" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">My Active Servers</h2>
-            <p className="text-muted-foreground">No servers configured yet</p>
+            <h2 className="text-lg font-bold">My Active Servers</h2>
+            <p className="text-xs text-muted-foreground">No servers configured yet</p>
           </div>
         </div>
         
-        <Card className="border-dashed border-2 border-slate-200 dark:border-slate-700">
-          <CardContent className="py-16 text-center">
-            <div className="max-w-md mx-auto space-y-4">
-              <div className="h-20 w-20 mx-auto rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
-                <Zap className="h-10 w-10 text-slate-400" />
+        <Card className="border-dashed border border-slate-200 dark:border-slate-700">
+          <CardContent className="py-8 text-center">
+            <div className="max-w-md mx-auto space-y-3">
+              <div className="h-12 w-12 mx-auto rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
+                <Zap className="h-6 w-6 text-slate-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-2">Ready to connect your first server?</h3>
-                <p className="text-muted-foreground mb-6">
-                  MCP servers provide powerful tools and context to your AI agents. Get started with our quick actions above.
+                <h3 className="text-base font-semibold mb-1">Ready to connect your first server?</h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  MCP servers provide tools and context to your AI agents. Get started with our quick actions above.
                 </p>
               </div>
-              <div className="flex gap-3 justify-center">
-                <Button asChild>
+              <div className="flex gap-2 justify-center">
+                <Button size="sm" asChild>
                   <Link href="/mcp-servers/add">
-                    <Globe className="h-4 w-4 mr-2" />
+                    <Globe className="h-3 w-3 mr-1" />
                     Connect by URL
                   </Link>
                 </Button>
                 <Button 
+                  size="sm"
                   variant="outline"
                   onClick={() => document.getElementById('specs-section')?.scrollIntoView({ behavior: 'smooth' })}
                 >
-                  <Wrench className="h-4 w-4 mr-2" />
+                  <Wrench className="h-3 w-3 mr-1" />
                   Browse Templates
                 </Button>
               </div>
@@ -474,40 +475,42 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Enhanced Header */}
+    <div className="space-y-4">
+      {/* Compact Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-            <Activity className="h-4 w-4 text-white" />
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+            <Activity className="h-3 w-3 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">My Active Servers</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-lg font-bold">My Active Servers</h2>
+            <p className="text-xs text-muted-foreground">
               {mcpInstances.length} {mcpInstances.length === 1 ? 'server' : 'servers'} configured
             </p>
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button 
             variant={viewMode === 'list' ? 'default' : 'outline'} 
             size="sm"
             onClick={() => setViewMode('list')}
+            className="h-7 w-7 p-0"
           >
-            <List className="h-4 w-4" />
+            <List className="h-3 w-3" />
           </Button>
           <Button 
             variant={viewMode === 'grid' ? 'default' : 'outline'} 
             size="sm"
             onClick={() => setViewMode('grid')}
+            className="h-7 w-7 p-0"
           >
-            <Grid className="h-4 w-4" />
+            <Grid className="h-3 w-3" />
           </Button>
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild className="h-7 text-xs">
             <Link href="/mcp-servers/manage">
-              <Settings className="h-4 w-4 mr-2" />
-              Manage All
+              <Settings className="h-3 w-3 mr-1" />
+              Manage
             </Link>
           </Button>
         </div>
@@ -555,27 +558,28 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
         </div>
       )}
 
-      {/* Instances Display */}
-      <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
+      {/* Compact Instances Display */}
+      <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" : "space-y-2"}>
         {displayedInstances.map(instance => 
           viewMode === 'grid' ? renderInstanceGrid(instance) : renderInstanceCard(instance)
         )}
       </div>
       
-      {/* Show More/Less */}
+      {/* Compact Show More/Less */}
       {mcpInstances.length > 6 && (
         <div className="text-center">
           <Button 
             variant="outline" 
+            size="sm"
             onClick={() => setShowAll(!showAll)}
-            className="min-w-48"
+            className="text-xs h-7"
           >
             {showAll ? (
               <>Show fewer</>
             ) : (
               <>
-                <Clock className="h-4 w-4 mr-2" />
-                Show {mcpInstances.length - 6} more servers
+                <Clock className="h-3 w-3 mr-1" />
+                Show {mcpInstances.length - 6} more
               </>
             )}
           </Button>

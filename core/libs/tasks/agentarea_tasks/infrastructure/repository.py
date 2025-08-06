@@ -34,6 +34,12 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
     async def create_task(self, entity: Task) -> Task:
         """Create a new task from domain model."""
+        # Handle metadata field - ensure it's JSON serializable
+        metadata = entity.metadata
+        if metadata is not None and not isinstance(metadata, dict):
+            # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
+            metadata = {}
+        
         # Extract fields from domain model
         task_data = {
             'id': entity.id,
@@ -46,7 +52,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             'started_at': entity.started_at,
             'completed_at': entity.completed_at,
             'execution_id': entity.execution_id,
-            'task_metadata': entity.metadata,
+            'task_metadata': metadata,
         }
         
         # Remove None values and system fields that will be auto-populated
@@ -59,6 +65,12 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
     async def update_task(self, entity: Task) -> Task:
         """Update an existing task from domain model."""
+        # Handle metadata field - ensure it's JSON serializable
+        metadata = entity.metadata
+        if metadata is not None and not isinstance(metadata, dict):
+            # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
+            metadata = {}
+        
         # Extract fields from domain model
         task_data = {
             'agent_id': entity.agent_id,
@@ -70,7 +82,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             'started_at': entity.started_at,
             'completed_at': entity.completed_at,
             'execution_id': entity.execution_id,
-            'task_metadata': entity.metadata,
+            'task_metadata': metadata,
         }
         
         # Remove None values
@@ -88,22 +100,30 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
     # Additional methods for task-specific operations
     async def create_from_data(self, task_data: TaskCreate) -> Task:
         """Create a new task from TaskCreate data."""
+        # Handle metadata field - ensure it's JSON serializable
+        metadata = task_data.metadata
+        if metadata is not None and not isinstance(metadata, dict):
+            # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
+            metadata = {}
+        
         task_orm = TaskORM(
             # BaseModel automatically provides: id, created_at, updated_at
             agent_id=task_data.agent_id,
             description=task_data.description,
             parameters=task_data.parameters,
             status="pending",
-            user_id=task_data.user_id,
-            workspace_id=task_data.workspace_id,
-            task_metadata=task_data.metadata,
+            created_by=task_data.user_id or self.user_context.user_id,
+            workspace_id=task_data.workspace_id or self.user_context.workspace_id,
+            task_metadata=metadata,
         )
+
 
         self.session.add(task_orm)
         await self.session.flush()
         await self.session.refresh(task_orm)
-
-        return self._orm_to_domain(task_orm)
+        
+        result = self._orm_to_domain(task_orm)
+        return result
 
     async def update_by_id(self, task_id: UUID, task_update: TaskUpdate) -> Task | None:
         """Update a task by ID with TaskUpdate data."""
@@ -112,18 +132,22 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         for field, value in task_update.dict(exclude_unset=True).items():
             if value is not None:
                 if field == "metadata":
+                    # Handle metadata field - ensure it's JSON serializable
+                    if value is not None and not isinstance(value, dict):
+                        # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
+                        value = {}
                     update_data["task_metadata"] = value
                 else:
                     update_data[field] = value
 
         if not update_data:
-            return await self.get(task_id)
+            return await self.get_task(task_id)
 
         stmt = update(TaskORM).where(TaskORM.id == task_id).values(**update_data)
         await self.session.execute(stmt)
         await self.session.flush()
 
-        return await self.get(task_id)
+        return await self.get_task(task_id)
 
     async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> List[Task]:
         """List tasks for an agent."""
@@ -203,6 +227,10 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         # Add any additional fields provided
         for field, value in additional_fields.items():
             if field == "metadata":
+                # Handle metadata field - ensure it's JSON serializable
+                if value is not None and not isinstance(value, dict):
+                    # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
+                    value = {}
                 update_data["task_metadata"] = value
             else:
                 update_data[field] = value
@@ -214,27 +242,33 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             return None
 
         await self.session.flush()
-        return await self.get_by_id(task_id)
+        return await self.get_task(task_id)
 
     def _orm_to_domain(self, task_orm: TaskORM) -> Task:
         """Convert ORM model to domain model."""
-        return Task(
-            id=task_orm.id,
-            agent_id=task_orm.agent_id,
-            description=task_orm.description,
-            parameters=task_orm.parameters or {},
-            status=task_orm.status,
-            result=task_orm.result,
-            error=task_orm.error,
-            created_at=task_orm.created_at,
-            updated_at=task_orm.updated_at,  # Added to match BaseModel
-            started_at=task_orm.started_at,
-            completed_at=task_orm.completed_at,
-            execution_id=task_orm.execution_id,
-            user_id=task_orm.created_by,
-            workspace_id=task_orm.workspace_id,
-            metadata=task_orm.task_metadata or {},
-        )
+        task_metadata = task_orm.task_metadata or {}
+        
+        # Ensure metadata is always a dict
+        if not isinstance(task_metadata, dict):
+            task_metadata = {}
+        
+        return Task.model_validate({
+            'id': task_orm.id,
+            'agent_id': task_orm.agent_id,
+            'description': task_orm.description,
+            'parameters': task_orm.parameters or {},
+            'status': task_orm.status,
+            'result': task_orm.result,
+            'error': task_orm.error,
+            'created_at': task_orm.created_at,
+            'updated_at': task_orm.updated_at,  # Added to match BaseModel
+            'started_at': task_orm.started_at,
+            'completed_at': task_orm.completed_at,
+            'execution_id': task_orm.execution_id,
+            'user_id': task_orm.created_by,
+            'workspace_id': task_orm.workspace_id,
+            'metadata': task_metadata,
+        })
 
     def _domain_to_orm(self, task) -> TaskORM:
         """Convert domain model to ORM model.

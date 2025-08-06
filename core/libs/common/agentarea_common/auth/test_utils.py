@@ -5,8 +5,8 @@ from typing import Optional
 
 import jwt
 
-from ..config.settings import get_settings
-from .context import UserContext
+from agentarea_common.config.settings import get_settings
+from agentarea_common.auth.context import UserContext
 
 
 def generate_test_jwt_token(

@@ -50,66 +50,66 @@ export function ActionCards() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-          <Sparkles className="h-4 w-4 text-white" />
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+          <Sparkles className="h-3 w-3 text-white" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold">Quick Start</h2>
-          <p className="text-muted-foreground">Get your first MCP server up and running</p>
+          <h2 className="text-lg font-bold">Quick Start</h2>
+          <p className="text-xs text-muted-foreground">Get your first MCP server running</p>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {actionCards.map((card, index) => {
           const IconComponent = card.icon;
           
           return (
             <Card 
               key={index}
-              className={`group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1 ${card.bgColor} border-2 ${card.borderColor} ${card.hoverBg}`}
+              className={`group relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${card.bgColor} border ${card.borderColor} ${card.hoverBg}`}
             >
               {/* Gradient overlay */}
               <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
               
-              <CardHeader className="text-center pb-4 relative">
-                <div className={`mx-auto mb-4 w-16 h-16 rounded-2xl ${card.bgColor} border-2 ${card.borderColor} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
-                  <IconComponent className={`h-8 w-8 ${card.iconColor}`} />
+              <CardHeader className="text-center pb-2 relative">
+                <div className={`mx-auto mb-2 w-10 h-10 rounded-xl ${card.bgColor} border ${card.borderColor} flex items-center justify-center group-hover:scale-105 transition-transform duration-300`}>
+                  <IconComponent className={`h-5 w-5 ${card.iconColor}`} />
                 </div>
-                <CardTitle className="text-lg font-semibold group-hover:text-primary transition-colors">
+                <CardTitle className="text-sm font-semibold group-hover:text-primary transition-colors">
                   {card.title}
                 </CardTitle>
               </CardHeader>
               
-              <CardContent className="text-center space-y-4 relative">
-                <CardDescription className="text-sm leading-relaxed min-h-[2.5rem] flex items-center justify-center">
+              <CardContent className="text-center space-y-2 relative pt-0">
+                <CardDescription className="text-xs leading-relaxed min-h-[2rem] flex items-center justify-center">
                   {card.description}
                 </CardDescription>
                 
                 {card.href ? (
                   <Button 
                     size="sm" 
-                    className={`w-full group/btn transition-all duration-200 ${card.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'}`}
+                    className={`w-full group/btn transition-all duration-200 text-xs h-7 ${card.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
                     asChild={!card.disabled}
                     disabled={card.disabled}
                   >
-                    <Link href={card.href} className="flex items-center gap-2">
+                    <Link href={card.href} className="flex items-center gap-1">
                       {card.action}
-                      <ArrowRight className="h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                      <ArrowRight className="h-3 w-3 group-hover/btn:translate-x-0.5 transition-transform" />
                     </Link>
                   </Button>
                 ) : (
                   <Button 
                     size="sm" 
-                    className={`w-full group/btn transition-all duration-200 ${card.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'}`}
+                    className={`w-full group/btn transition-all duration-200 text-xs h-7 ${card.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
                     onClick={card.onClick}
                     disabled={card.disabled}
                     variant={card.disabled ? "outline" : "default"}
                   >
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-1">
                       {card.action}
-                      {!card.disabled && <ArrowRight className="h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />}
+                      {!card.disabled && <ArrowRight className="h-3 w-3 group-hover/btn:translate-x-0.5 transition-transform" />}
                     </span>
                   </Button>
                 )}
@@ -119,14 +119,14 @@ export function ActionCards() {
         })}
       </div>
       
-      {/* Help text */}
+      {/* Compact Help text */}
       <div className="text-center">
-        <p className="text-sm text-muted-foreground">
-          New to MCP servers? Start with our verified templates below, or check out the{" "}
+        <p className="text-xs text-muted-foreground">
+          New to MCP servers? Start with templates below, or check{" "}
           <a href="#" className="text-primary hover:underline font-medium">
             documentation
           </a>{" "}
-          for detailed setup guides.
+          for guides.
         </p>
       </div>
     </div>

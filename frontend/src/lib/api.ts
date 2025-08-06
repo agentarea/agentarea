@@ -85,6 +85,28 @@ export const resumeAgentTask = async (agentId: string, taskId: string) => {
   return { data, error };
 };
 
+export const getAgentTaskEvents = async (
+  agentId: string, 
+  taskId: string, 
+  options: { 
+    page?: number; 
+    page_size?: number; 
+    event_type?: string; 
+  } = {}
+) => {
+  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/events", {
+    params: { 
+      path: { agent_id: agentId, task_id: taskId },
+      query: {
+        page: options.page || 1,
+        page_size: options.page_size || 50,
+        ...(options.event_type && { event_type: options.event_type })
+      }
+    },
+  });
+  return { data, error };
+};
+
 // Get all tasks across all agents
 export const getAllTasks = async () => {
   try {

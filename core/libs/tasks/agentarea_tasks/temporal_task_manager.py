@@ -137,15 +137,20 @@ class TemporalTaskManager(BaseTaskManager):
                 task_queue="agent-tasks"  # Use the same task queue as the worker
             )
 
-            await self.temporal_executor.start_workflow(
+            execution_id = await self.temporal_executor.start_workflow(
                 workflow_name="AgentExecutionWorkflow",
                 workflow_id=workflow_id,
                 args=args_dict,
                 config=config
             )
 
-            # Update task status to submitted
-            updated_task_domain = await self.task_repository.update_status(task.id, "submitted")
+            # Update task status to running (not submitted) since workflow started successfully
+            # Also set the execution_id for tracking
+            updated_task_domain = await self.task_repository.update_status(task.id, "running")
+            if updated_task_domain:
+                # Set execution_id on the task
+                updated_task_domain.execution_id = execution_id
+                updated_task_domain = await self.task_repository.update_task(updated_task_domain)
             
             if updated_task_domain:
                 updated_simple_task = self._task_to_simple_task(updated_task_domain)

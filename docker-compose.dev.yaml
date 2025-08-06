@@ -227,7 +227,7 @@ services:
 
   # Temporal Infrastructure Services
   temporal:
-    image: temporalio/auto-setup:1.27
+    image: temporalio/auto-setup:1.28
     container_name: agentarea-temporal
     restart: unless-stopped
     depends_on:
@@ -261,8 +261,9 @@ services:
       timeout: 10s
       retries: 10
       start_period: 120s
+
   temporal-admin-tools:
-    image: temporalio/admin-tools:1.27
+    image: temporalio/admin-tools:1.28
     container_name: agentarea-temporal-admin-tools
     depends_on:
       - temporal
@@ -281,7 +282,7 @@ services:
     environment:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CORS_ORIGINS=http://localhost:3000
-    image: temporalio/ui:2.21.3
+    image: temporalio/ui:2.39.0
     networks:
       - temporal-network
     ports:
@@ -334,7 +335,7 @@ services:
       - ./core/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
       - ./core/libs:/app/libs
     restart: unless-stopped
-    command: ["python", "-m", "agentarea_worker.cli", "dev"]
+    command: ["python", "-m", "agentarea_worker.cli", "start"]
 
 volumes:
   postgres_data:
