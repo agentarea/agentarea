@@ -1,0 +1,123 @@
+{
+  "metadata_serialization": [
+    {
+      "test": "Valid dict",
+      "original_type": "dict",
+      "processed_type": "dict",
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "Empty dict",
+      "original_type": "dict",
+      "processed_type": "dict",
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "None value",
+      "original_type": "NoneType",
+      "processed_type": "NoneType",
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "SQLAlchemy MetaData",
+      "original_type": "MetaData",
+      "processed_type": "dict",
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "String (invalid)",
+      "original_type": "str",
+      "processed_type": "dict",
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "List (invalid)",
+      "original_type": "list",
+      "processed_type": "dict",
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "Integer (invalid)",
+      "original_type": "int",
+      "processed_type": "dict",
+      "success": true,
+      "error": null
+    }
+  ],
+  "task_domain_model": [
+    {
+      "test": "Valid dict metadata",
+      "success": true,
+      "task_id": "e1b1f118-c39e-4610-8b2e-2c5abee5f0d1",
+      "metadata_type": "dict",
+      "error": null
+    },
+    {
+      "test": "Empty dict metadata",
+      "success": true,
+      "task_id": "d2111d03-8fb6-4e31-8f8b-497ef36a3da1",
+      "metadata_type": "dict",
+      "error": null
+    },
+    {
+      "test": "None metadata",
+      "success": false,
+      "task_id": null,
+      "metadata_type": "error",
+      "error": "1 validation error for Task\nmetadata\n  Input should be a valid dictionary [type=dict_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.11/v/dict_type"
+    }
+  ],
+  "repository_handling": [
+    {
+      "test": "Valid dict",
+      "original_type": "dict",
+      "processed_value": {
+        "key": "value"
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "Empty dict",
+      "original_type": "dict",
+      "processed_value": {},
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "None",
+      "original_type": "NoneType",
+      "processed_value": null,
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "SQLAlchemy MetaData",
+      "original_type": "MetaData",
+      "processed_value": {},
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "String",
+      "original_type": "str",
+      "processed_value": {},
+      "success": true,
+      "error": null
+    },
+    {
+      "test": "List",
+      "original_type": "list",
+      "processed_value": {},
+      "success": true,
+      "error": null
+    }
+  ],
+  "timestamp": "2025-08-05T18:12:37.156009"
+}

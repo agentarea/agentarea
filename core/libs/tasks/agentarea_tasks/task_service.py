@@ -11,7 +11,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
@@ -23,6 +23,7 @@ from .infrastructure.repository import TaskRepository
 
 if TYPE_CHECKING:
     from agentarea_agents.infrastructure.repository import AgentRepository
+    from agentarea_common.base import RepositoryFactory
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +33,28 @@ class TaskService(BaseTaskService):
 
     def __init__(
         self,
-        task_repository: TaskRepository,
+        repository_factory: "RepositoryFactory",
         event_broker: EventBroker,
         task_manager: BaseTaskManager,
-        agent_repository: Optional["AgentRepository"] = None,
         workflow_service: Any | None = None,
     ):
-        """Initialize with repository, event broker, task manager, and optional dependencies."""
+        """Initialize with repository factory, event broker, task manager, and optional dependencies."""
+        from agentarea_common.base import RepositoryFactory
+        
+        # Create repositories using factory
+        task_repository = repository_factory.create_repository(TaskRepository)
         super().__init__(task_repository, event_broker)
+        
+        self.repository_factory = repository_factory
         self.task_manager = task_manager
-        self.agent_repository = agent_repository
         self.workflow_service = workflow_service
+        
+        # Create agent repository using factory for validation
+        try:
+            from agentarea_agents.infrastructure.repository import AgentRepository
+            self.agent_repository = repository_factory.create_repository(AgentRepository)
+        except ImportError:
+            self.agent_repository = None
 
     async def _validate_agent_exists(self, agent_id: UUID) -> None:
         """Validate that the agent exists before processing tasks.
@@ -68,6 +80,7 @@ class TaskService(BaseTaskService):
         query: str,
         user_id: str,
         agent_id: UUID,
+        workspace_id: str | None = None,
         task_parameters: dict[str, Any] | None = None,
     ) -> SimpleTask:
         """Create a new task from parameters."""
@@ -76,6 +89,7 @@ class TaskService(BaseTaskService):
             description=description,
             query=query,
             user_id=user_id,
+            workspace_id=workspace_id,
             agent_id=agent_id,
             task_parameters=task_parameters or {},
             status="submitted",
@@ -103,15 +117,29 @@ class TaskService(BaseTaskService):
 
     async def get_user_tasks(
         self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> list[SimpleTask]:
+    ) -> List[SimpleTask]:
         """Get tasks for a specific user."""
         return await self.list_tasks(user_id=user_id, limit=limit, offset=offset)
 
     async def get_agent_tasks(
-        self, agent_id: UUID, limit: int = 100, offset: int = 0
-    ) -> list[SimpleTask]:
+        self, agent_id: UUID, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+    ) -> List[SimpleTask]:
         """Get tasks for a specific agent."""
-        return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
+        # Get Task domain models from repository and convert to SimpleTask
+        if hasattr(self.task_repository, 'list_all'):
+            # Get raw TaskORM objects from workspace repository
+            task_orms = await self.task_repository.list_all(
+                creator_scoped=creator_scoped,
+                limit=limit,
+                offset=offset,
+                agent_id=agent_id
+            )
+            # Convert TaskORM -> Task -> SimpleTask
+            tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
+            return [self._task_to_simple_task(task) for task in tasks]
+        else:
+            # Fallback for repositories that don't support workspace scoping
+            return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
 
     async def get_task_status(self, task_id: UUID) -> str | None:
         """Get task status."""
@@ -161,7 +189,7 @@ class TaskService(BaseTaskService):
         # Persist the update
         return await self.update_task(task)
 
-    async def list_agent_tasks(self, agent_id: UUID, limit: int = 100) -> list[SimpleTask]:
+    async def list_agent_tasks(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> List[SimpleTask]:
         """List tasks for an agent.
 
         This method provides compatibility with the application layer TaskService
@@ -170,23 +198,25 @@ class TaskService(BaseTaskService):
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
+            creator_scoped: If True, only return tasks created by current user
 
         Returns:
             List of tasks for the agent
         """
-        return await self.get_agent_tasks(agent_id, limit=limit)
+        return await self.get_agent_tasks(agent_id, limit=limit, creator_scoped=creator_scoped)
 
-    async def list_agent_tasks_with_workflow_status(self, agent_id: UUID, limit: int = 100) -> list[SimpleTask]:
+    async def list_agent_tasks_with_workflow_status(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> List[SimpleTask]:
         """List tasks for an agent enriched with workflow status.
 
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
+            creator_scoped: If True, only return tasks created by current user
 
         Returns:
             List of tasks for the agent with current workflow status
         """
-        tasks = await self.list_agent_tasks(agent_id, limit)
+        tasks = await self.list_agent_tasks(agent_id, limit, creator_scoped=creator_scoped)
 
         if not self.workflow_service:
             logger.warning("Workflow service not available - returning tasks without workflow enrichment")
@@ -349,47 +379,21 @@ class TaskService(BaseTaskService):
         # Set initial status
         stored_task.status = "pending"
 
-        # Try to execute with workflow if available
-        if self.workflow_service:
-            try:
-                result = await self.workflow_service.execute_agent_task_async(
-                    agent_id=agent_id,
-                    task_query=description,
-                    user_id=user_id or "api_user",
-                    task_parameters=parameters or {},
-                )
-                execution_id = result.get("execution_id")
+        # Execute task using the task manager (which uses AgentExecutionWorkflow)
+        try:
+            # Submit task through task manager
+            executed_task = await self.task_manager.submit_task(stored_task)
+            
+            # Update stored task with execution info
+            stored_task.status = executed_task.status
+            stored_task.execution_id = executed_task.execution_id
+            
+            logger.info(f"Task {task_id} submitted successfully with status {executed_task.status}")
 
-                # Update task with execution info
-                stored_task.execution_id = execution_id
-                stored_task.status = "running"
-
-                # Publish workflow started event - temporarily disabled
-                # workflow_started_event = TaskCreated(
-                #     task_id=str(task_id),
-                #     agent_id=str(agent_id),
-                #     description=description,
-                #     parameters=parameters or {},
-                # )
-                # await self._publish_task_event(workflow_started_event)
-
-                logger.info(f"Task {task_id} started with workflow execution ID {execution_id}")
-
-            except Exception as e:
-                logger.error(f"Failed to start task workflow: {e}")
-                stored_task.status = "failed"
-                stored_task.result = {"error": str(e), "error_type": "workflow_start_failed"}
-
-                # Publish workflow failed event - temporarily disabled
-                # workflow_failed_event = TaskCreated(
-                #     task_id=str(task_id),
-                #     agent_id=str(agent_id),
-                #     description=description,
-                #     parameters=parameters or {},
-                # )
-                # await self._publish_task_event(workflow_failed_event)
-        else:
-            logger.warning("Workflow service not available - task created but not executed")
+        except Exception as e:
+            logger.error(f"Failed to submit task: {e}")
+            stored_task.status = "failed"
+            stored_task.result = {"error": str(e), "error_type": "task_submission_failed"}
 
         return stored_task
 
@@ -617,20 +621,38 @@ class TaskService(BaseTaskService):
                 except asyncio.CancelledError:
                     pass
 
-    async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
-        """Get historical events for a task.
-
-        This could be implemented by:
-        1. Querying workflow events via Temporal
-        2. Reading from an event store/database
-        3. Reconstructing from task state changes
-        """
-        # Placeholder implementation
-        return [
-            {
-                "event_type": "task_created",
-                "task_id": str(task_id),
-                "timestamp": datetime.now(UTC).isoformat(),
-                "data": {"status": "pending"}
-            }
-        ]
+    async def _get_historical_events(self, task_id: UUID) -> List[dict[str, Any]]:
+        """Get historical events for a task from the database."""
+        try:
+            from sqlalchemy import text
+            
+            # Use the repository's session to query task events
+            session = self.task_repository.session
+            
+            # Query historical events from database
+            query = text("""
+                SELECT event_type, timestamp, data, metadata
+                FROM task_events 
+                WHERE task_id = :task_id 
+                ORDER BY timestamp ASC
+            """)
+            
+            result = await session.execute(query, {"task_id": str(task_id)})
+            rows = result.fetchall()
+            
+            # Convert database rows to event format
+            historical_events = []
+            for row in rows:
+                historical_events.append({
+                    "event_type": row.event_type,
+                    "timestamp": row.timestamp.isoformat(),
+                    "data": dict(row.data) if row.data else {}
+                })
+                
+            logger.debug(f"Retrieved {len(historical_events)} historical events for task {task_id}")
+            return historical_events
+            
+        except Exception as e:
+            logger.error(f"Failed to get historical events for task {task_id}: {e}")
+            # Return empty list on error to not break SSE streaming
+            return []

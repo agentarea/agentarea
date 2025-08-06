@@ -59,7 +59,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             # Try to import from execution library - fallback if not available
             try:
-                from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+                from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import ADKAgentWorkflow
                 from agentarea_execution.models import AgentExecutionRequest
                 
                 # Extract task_id UUID from execution_id pattern

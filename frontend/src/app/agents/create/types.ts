@@ -6,6 +6,15 @@ import type { components } from '@/api/schema';
 export type EventConfig = {
   event_type: string;
   config?: Record<string, unknown> | null;
+  enabled?: boolean;
+};
+
+/**
+ * MCP Tool configuration type
+ */
+export type MCPToolConfig = {
+  tool_name: string;
+  requires_user_confirmation?: boolean;
 };
 
 /**
@@ -13,10 +22,7 @@ export type EventConfig = {
  */
 export type MCPServerConfig = {
   mcp_server_id: string;
-  api_key: string;
-  config?: Record<string, unknown> | null;
-  /** Whether the tool is enabled (default true). */
-  enabled?: boolean;
+  allowed_tools?: MCPToolConfig[];
 };
 
 /**

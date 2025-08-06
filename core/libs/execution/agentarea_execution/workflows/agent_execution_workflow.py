@@ -1,9 +1,3 @@
-"""Refactored agent execution workflow - clean, maintainable, and DRY.
-
-This is a simplified version of the original 1066-line workflow file,
-broken down into focused methods with helper classes for better maintainability.
-"""
-
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -14,7 +8,14 @@ from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
-    from .helpers import BudgetTracker, EventManager, MessageBuilder, StateValidator, ToolCallExtractor
+
+    from .helpers import (
+        BudgetTracker,
+        EventManager,
+        MessageBuilder,
+        StateValidator,
+        ToolCallExtractor,
+    )
 
 from ..models import AgentExecutionRequest, AgentExecutionResult
 from .constants import (
@@ -43,25 +44,81 @@ class AgentGoal:
 
 
 @dataclass
+class Message:
+    """Structured message for conversation history."""
+    role: str
+    content: str
+    tool_call_id: str | None = None
+    name: str | None = None
+    function_call: dict[str, Any] | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+
+
+@dataclass
+class ToolCall:
+    """Structured tool call information."""
+    id: str
+    function: dict[str, Any]
+    type: str = "function"
+
+
+@dataclass
+class ToolResult:
+    """Result from tool execution."""
+    tool_call_id: str
+    content: str
+    success: bool = True
+    error: str | None = None
+
+
+@dataclass
+class LLMResponse:
+    """Structured LLM response."""
+    message: Message
+    usage: dict[str, Any] | None = None
+    cost: float = 0.0
+
+
+@dataclass
+class WorkflowEvent:
+    """Structured workflow event."""
+    event_type: str
+    data: dict[str, Any]
+    timestamp: str | None = None
+    iteration: int | None = None
+
+
+@dataclass
+class ExecutionResult:
+    """Result from main execution loop."""
+    iterations_completed: int
+    success: bool
+    final_response: str | None = None
+    total_cost: float = 0.0
+
+
+@dataclass
 class AgentExecutionState:
     """Simplified execution state with direct attribute access."""
     execution_id: str = ""
     agent_id: str = ""
     task_id: str = ""
+    user_id: str = ""  # Add user_id field for user context
     goal: AgentGoal | None = None
     status: str = ExecutionStatus.INITIALIZING
     current_iteration: int = 0
-    messages: list[dict[str, Any]] = field(default_factory=list)
+    messages: list[Message] = field(default_factory=list)
     agent_config: dict[str, Any] = field(default_factory=dict)
     available_tools: list[dict[str, Any]] = field(default_factory=list)
     final_response: str | None = None
     success: bool = False
     budget_usd: float | None = None
+    user_context_data: dict[str, Any] = field(default_factory=dict)
 
 
 @workflow.defn
 class AgentExecutionWorkflow:
-    """Simplified and maintainable agent execution workflow."""
+    """Agent execution workflow without ADK dependency."""
 
     def __init__(self):
         self.state = AgentExecutionState()
@@ -96,6 +153,7 @@ class AgentExecutionWorkflow:
         self.state.execution_id = workflow.info().workflow_id
         self.state.agent_id = str(request.agent_id)
         self.state.task_id = str(request.task_id)
+        self.state.user_id = request.user_id  # Add user_id from request
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         self.state.budget_usd = request.budget_usd
@@ -115,7 +173,7 @@ class AgentExecutionWorkflow:
             "budget_limit": self.budget_tracker.budget_limit
         })
 
-        # Publish immediately
+        # Publish immediately 
         await self._publish_events_immediately()
 
         # Initialize agent configuration
@@ -125,10 +183,16 @@ class AgentExecutionWorkflow:
         """Initialize agent configuration and available tools."""
         workflow.logger.info("Initializing agent configuration")
 
+        # Prepare user context data for activities (simplified - no roles)
+        self.state.user_context_data = {
+            "user_id": "dev-user",  # Use dev-user as set by JWT handler in dev mode
+            "workspace_id": "system"  # Use system workspace where agents are created
+        }
+
         # Build agent config
         self.state.agent_config = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
-            UUID(self.state.agent_id),
+            args=[UUID(self.state.agent_id), self.state.user_context_data],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
         )
@@ -140,7 +204,7 @@ class AgentExecutionWorkflow:
         # Discover available tools
         self.state.available_tools = await workflow.execute_activity(
             Activities.DISCOVER_AVAILABLE_TOOLS,
-            UUID(self.state.agent_id),
+            args=[UUID(self.state.agent_id), self.state.user_context_data],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
         )
@@ -198,17 +262,24 @@ class AgentExecutionWorkflow:
         Returns:
             tuple[bool, str]: (should_continue, reason_for_stopping)
         """
+        # Debug logging
+        workflow.logger.info(f"Checking termination conditions - success: {self.state.success} (type: {type(self.state.success)}), iteration: {self.state.current_iteration}")
+        workflow.logger.info(f"State object id: {id(self.state)}")
+        
         # Check if goal is achieved (highest priority)
         if self.state.success:
+            workflow.logger.info("Goal achieved - terminating workflow")
             return False, "Goal achieved successfully"
 
         # Check maximum iterations
         max_iterations = self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS
         if self.state.current_iteration >= max_iterations:
+            workflow.logger.info(f"Max iterations reached ({max_iterations}) - terminating workflow")
             return False, f"Maximum iterations reached ({max_iterations})"
 
         # Check budget constraints
         if self.budget_tracker and self.budget_tracker.is_exceeded():
+            workflow.logger.info("Budget exceeded - terminating workflow")
             return False, f"Budget exceeded (${self.budget_tracker.cost:.2f}/${self.budget_tracker.budget_limit:.2f})"
 
         # Check for cancellation (this could be extended for other cancellation conditions)
@@ -225,32 +296,10 @@ class AgentExecutionWorkflow:
             "iteration": iteration,
             "budget_remaining": self.budget_tracker.get_remaining()
         })
-        await self._publish_events_immediately()
+        # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
         try:
-            # Build system prompt with current context
-            if self.state.goal:
-                system_prompt = MessageBuilder.build_system_prompt(
-                    goal_description=self.state.goal.description,
-                    success_criteria=self.state.goal.success_criteria,
-                    available_tools=self.state.available_tools,
-                    current_iteration=iteration,
-                    max_iterations=self.state.goal.max_iterations,
-                    budget_remaining=self.budget_tracker.get_remaining()
-                )
-
-                # Add system message if first iteration
-                if iteration == 1:
-                    self.state.messages.append({
-                        "role": "system",
-                        "content": system_prompt
-                    })
-
-            # Call LLM
-            llm_response = await self._call_llm()
-
-            # Process LLM response
-            await self._process_llm_response(llm_response)
+            await self._execute_traditional_iteration()
 
             # Check budget warnings
             await self._check_budget_status()
@@ -259,7 +308,7 @@ class AgentExecutionWorkflow:
                 "iteration": iteration,
                 "total_cost": self.budget_tracker.cost
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
         except Exception as e:
             workflow.logger.error(f"Iteration {iteration} failed: {e}")
@@ -269,28 +318,80 @@ class AgentExecutionWorkflow:
             })
             raise
 
-    async def _call_llm(self) -> dict[str, Any]:
+    async def _execute_traditional_iteration(self) -> None:
+        """Execute iteration using traditional LLM + tool approach."""
+        iteration = self.state.current_iteration
+
+                # Build system prompt with agent context and current task
+        if self.state.goal:
+            system_prompt = MessageBuilder.build_system_prompt(
+                agent_name=self.state.agent_config.get("name", "AI Agent"),
+                agent_instruction=self.state.agent_config.get("instruction", "You are a helpful AI assistant."),
+                goal_description=self.state.goal.description,
+                success_criteria=self.state.goal.success_criteria,
+                available_tools=self.state.available_tools
+            )
+
+            # Add system message if first iteration
+            if iteration == 1:
+                self.state.messages.append(Message(
+                    role="system",
+                    content=system_prompt
+                ))
+            else:
+                # Add status update for subsequent iterations (not in system prompt)
+                from ..agentic.prompts import PromptBuilder
+                status_msg = f"{PromptBuilder.build_iteration_status(iteration, self.state.goal.max_iterations)} | {PromptBuilder.build_budget_status(self.budget_tracker.get_remaining())}"
+                self.state.messages.append(Message(
+                    role="user",
+                    content=f"Status: {status_msg}"
+                ))
+
+        # Call LLM
+        llm_response = await self._call_llm()
+
+        # Process LLM response
+        await self._process_llm_response(llm_response)
+
+    async def _call_llm(self) -> LLMResponse:
         """Call LLM with current messages."""
         self.event_manager.add_event(EventTypes.LLM_CALL_STARTED, {
             "iteration": self.state.current_iteration,
             "message_count": len(self.state.messages)
         })
-        await self._publish_events_immediately()
+        # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
         try:
+            # Convert messages to dict format for activity
+            messages_dict = [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "tool_call_id": msg.tool_call_id,
+                    "name": msg.name,
+                    "function_call": msg.function_call
+                }
+                for msg in self.state.messages
+            ]
+
             response = await workflow.execute_activity(
                 Activities.CALL_LLM,
                 args=[
-                    self.state.messages,
-                    self.state.agent_config.get("model_id", "gpt-4"),
-                    self.state.available_tools
+                    messages_dict,
+                    self.state.agent_config.get("model_id"),
+                    self.state.available_tools,
+                    self.state.user_context_data["workspace_id"],  # Extract workspace_id string
+                    self.state.user_context_data  # Pass full context as backup
                 ],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
             )
 
             # Extract usage info and update budget
-            usage_info = ToolCallExtractor.extract_usage_info(response)
+            usage_info = {
+                "cost": response.get("cost", 0.0),
+                "usage": response.get("usage", {})
+            }
             self.budget_tracker.add_cost(usage_info["cost"])
 
             self.event_manager.add_event(EventTypes.LLM_CALL_COMPLETED, {
@@ -299,92 +400,146 @@ class AgentExecutionWorkflow:
                 "total_cost": self.budget_tracker.cost,
                 "usage": usage_info
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
-            return response
+            # Convert response to LLMResponse data class
+            # The response is directly from the activity, not nested in "message"
+            message = Message(
+                role=response.get("role", "assistant"),
+                content=response.get("content", ""),
+                tool_call_id=response.get("tool_call_id"),
+                name=response.get("name"),
+                function_call=response.get("function_call"),
+                tool_calls=response.get("tool_calls")
+            )
+
+            return LLMResponse(
+                message=message,
+                usage=usage_info,
+                cost=usage_info.get("cost", 0.0)
+            )
 
         except Exception as e:
             self.event_manager.add_event(EventTypes.LLM_CALL_FAILED, {
                 "iteration": self.state.current_iteration,
                 "error": str(e)
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
             raise
 
-    async def _process_llm_response(self, response: dict[str, Any]) -> None:
+    async def _process_llm_response(self, response: LLMResponse) -> None:
         """Process LLM response and handle tool calls."""
-        message = response.get("message", {})
-        self.state.messages.append(message)
+        # Only add non-empty messages to state
+        if response.message.content.strip() or response.message.tool_calls:
+            self.state.messages.append(response.message)
+        else:
+            workflow.logger.warning(f"Received empty LLM response in iteration {self.state.current_iteration}")
 
         # Extract and execute tool calls
-        tool_calls = ToolCallExtractor.extract_tool_calls(message)
+        tool_calls = ToolCallExtractor.extract_tool_calls(response.message)
 
         if tool_calls:
             await self._execute_tool_calls(tool_calls)
+        elif not response.message.content.strip():
+            # If we have no content and no tool calls, this is problematic
+            workflow.logger.error(f"LLM returned empty response with no tool calls in iteration {self.state.current_iteration}")
 
         # Check if goal is achieved
         await self._evaluate_goal_progress()
 
-    async def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> None:
+    async def _execute_tool_calls(self, tool_calls: list[ToolCall]) -> None:
         """Execute all tool calls from LLM response."""
         for tool_call in tool_calls:
-            tool_name = tool_call["function"]["name"]
+            tool_name = tool_call.function["name"]
 
             self.event_manager.add_event(EventTypes.TOOL_CALL_STARTED, {
                 "tool_name": tool_name,
-                "tool_call_id": tool_call["id"],
+                "tool_call_id": tool_call.id,
                 "iteration": self.state.current_iteration
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
             try:
+                # Parse tool arguments from JSON string
+                import json
+                try:
+                    tool_args = json.loads(tool_call.function["arguments"])
+                except (json.JSONDecodeError, TypeError):
+                    workflow.logger.warning(f"Failed to parse tool arguments: {tool_call.function['arguments']}")
+                    tool_args = {}
+
                 # Execute tool call
                 result = await workflow.execute_activity(
                     Activities.EXECUTE_MCP_TOOL,
                     args=[
                         tool_name,
-                        tool_call["function"]["arguments"]
+                        tool_args
                     ],
                     start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
                 )
 
                 # Add tool result to messages
-                self.state.messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call["id"],
-                    "content": str(result.get("result", ""))
-                })
+                self.state.messages.append(Message(
+                    role="tool",
+                    tool_call_id=tool_call.id,
+                    content=str(result.get("result", ""))
+                ))
+
+                # Check if this was a completion tool call
+                workflow.logger.info(f"Tool '{tool_name}' executed with result: {result}")
+                if tool_name == "task_complete":
+                    workflow.logger.info(f"task_complete called - full result: {result}")
+                    workflow.logger.info(f"result type: {type(result)}")
+                    workflow.logger.info(f"result.get('success'): {result.get('success')}")
+                    workflow.logger.info(f"result.get('completed'): {result.get('completed')}")
+                    
+                    # Check both 'success' and 'completed' fields for completion
+                    is_successful = result.get("success", False) or result.get("completed", False)
+                    workflow.logger.info(f"is_successful: {is_successful}")
+                    
+                    if is_successful:
+                        self.state.success = True
+                        self.state.final_response = result.get("result", "Task completed")
+                        workflow.logger.info(f"Task completed successfully: {self.state.final_response}")
+                        workflow.logger.info(f"Setting self.state.success = {self.state.success}")
+                    else:
+                        workflow.logger.warning(f"task_complete called but not successful: {result}")
 
                 self.event_manager.add_event(EventTypes.TOOL_CALL_COMPLETED, {
                     "tool_name": tool_name,
-                    "tool_call_id": tool_call["id"],
+                    "tool_call_id": tool_call.id,
                     "success": result.get("success", False),
                     "iteration": self.state.current_iteration
                 })
-                await self._publish_events_immediately()
+                # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
             except Exception as e:
                 workflow.logger.error(f"Tool call {tool_name} failed: {e}")
 
                 # Add error message
-                self.state.messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call["id"],
-                    "content": f"Tool execution failed: {e}"
-                })
+                self.state.messages.append(Message(
+                    role="tool",
+                    tool_call_id=tool_call.id,
+                    content=f"Tool execution failed: {e}"
+                ))
 
                 self.event_manager.add_event(EventTypes.TOOL_CALL_FAILED, {
                     "tool_name": tool_name,
-                    "tool_call_id": tool_call["id"],
+                    "tool_call_id": tool_call.id,
                     "error": str(e),
                     "iteration": self.state.current_iteration
                 })
-                await self._publish_events_immediately()
+                # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
     async def _evaluate_goal_progress(self) -> None:
         """Evaluate if the goal has been achieved."""
         try:
+            # If task_complete was already called successfully, don't override it
+            if self.state.success:
+                workflow.logger.info("Goal already marked as achieved by task_complete tool - skipping evaluation")
+                return
+                
             if self.state.goal:
                 # Convert AgentGoal dataclass to dict for activity
                 goal_dict = {
@@ -407,8 +562,10 @@ class AgentExecutionWorkflow:
                     retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
                 )
 
-                self.state.success = evaluation.get("goal_achieved", False)
-                self.state.final_response = evaluation.get("final_response")
+                # Only update success if it wasn't already set by task_complete
+                if not self.state.success:
+                    self.state.success = evaluation.get("goal_achieved", False)
+                    self.state.final_response = evaluation.get("final_response")
 
         except Exception as e:
             workflow.logger.warning(f"Goal evaluation failed: {e}")
@@ -422,7 +579,7 @@ class AgentExecutionWorkflow:
                 "limit": self.budget_tracker.budget_limit,
                 "message": self.budget_tracker.get_warning_message()
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
             self.budget_tracker.mark_warning_sent()
 
         if self.budget_tracker.is_exceeded():
@@ -431,7 +588,7 @@ class AgentExecutionWorkflow:
                 "limit": self.budget_tracker.budget_limit,
                 "message": self.budget_tracker.get_exceeded_message()
             })
-            await self._publish_events_immediately()
+            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
 
     async def _publish_events(self) -> None:
         """Publish pending events."""

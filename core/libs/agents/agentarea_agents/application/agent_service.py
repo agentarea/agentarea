@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from agentarea_common.base.service import BaseCrudService
+from agentarea_common.base import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
 
 from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpdated
@@ -9,8 +10,11 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 
 
 class AgentService(BaseCrudService[Agent]):
-    def __init__(self, repository: AgentRepository, event_broker: EventBroker):
+    def __init__(self, repository_factory: RepositoryFactory, event_broker: EventBroker):
+        # Create repository using factory
+        repository = repository_factory.create_repository(AgentRepository)
         super().__init__(repository)
+        self.repository_factory = repository_factory
         self.event_broker = event_broker
 
     async def create_agent(

@@ -85,6 +85,28 @@ export const resumeAgentTask = async (agentId: string, taskId: string) => {
   return { data, error };
 };
 
+export const getAgentTaskEvents = async (
+  agentId: string, 
+  taskId: string, 
+  options: { 
+    page?: number; 
+    page_size?: number; 
+    event_type?: string; 
+  } = {}
+) => {
+  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/events", {
+    params: { 
+      path: { agent_id: agentId, task_id: taskId },
+      query: {
+        page: options.page || 1,
+        page_size: options.page_size || 50,
+        ...(options.event_type && { event_type: options.event_type })
+      }
+    },
+  });
+  return { data, error };
+};
+
 // Get all tasks across all agents
 export const getAllTasks = async () => {
   try {
@@ -542,12 +564,28 @@ export const deleteModelInstance = async (instanceId: string) => {
 
 // Health Check API
 export const healthCheck = async () => {
-  const { data, error } = await client.GET("/health");
+  const { data, error } = await client.GET("/health", {});
   return { data, error };
 };
 
 export const rootEndpoint = async () => {
-  const { data, error } = await client.GET("/");
+  const { data, error } = await client.GET("/", {});
+  return { data, error };
+};
+
+// Authentication API
+export const getCurrentUser = async () => {
+  const { data, error } = await client.GET("/v1/auth/users/me", {});
+  return { data, error };
+};
+
+export const testPublicEndpoint = async () => {
+  const { data, error } = await client.GET("/health", {});
+  return { data, error };
+};
+
+export const testProtectedEndpoint = async () => {
+  const { data, error } = await client.GET("/v1/protected/test", {});
   return { data, error };
 };
 

@@ -70,8 +70,7 @@ def dev(debug: bool):
             sys.executable, "-m", "watchfiles",
             "python -m agentarea_worker.cli start",
             "/app/apps/worker",
-            "/app/libs",
-            "--verbose"
+            "/app/libs"
         ], cwd="/app")
     except KeyboardInterrupt:
         click.echo("\n✅ Worker auto-restart stopped")

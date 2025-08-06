@@ -76,7 +76,8 @@ def create_test_provider_config(provider_spec_id, **kwargs) -> ProviderConfig:
         "name": f"Test Config {uuid4().hex[:8]}",
         "api_key": "test-api-key",
         "endpoint_url": None,
-        "user_id": None,
+        "workspace_id": "default",
+        "created_by": "system",
         "is_active": True,
         "is_public": False,
     }

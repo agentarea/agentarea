@@ -12,8 +12,12 @@ from agentarea_common.events.broker import EventBroker
 
 from .domain.enums import WebhookType, ExecutionStatus
 from .domain.models import WebhookTrigger, TriggerExecution
+from .logging_utils import (
+    TriggerLogger, WebhookValidationError, TriggerExecutionError,
+    set_correlation_id, generate_correlation_id
+)
 
-logger = logging.getLogger(__name__)
+logger = TriggerLogger(__name__)
 
 
 class WebhookRequestData:
@@ -147,7 +151,6 @@ class DefaultWebhookManager(WebhookManager):
         self.event_broker = event_broker
         self.base_url = base_url.rstrip('/')
         self._registered_webhooks: Dict[str, WebhookTrigger] = {}
-        self._rate_limit_cache: Dict[str, list] = {}  # webhook_id -> list of timestamps
 
     def generate_webhook_url(self, trigger_id: UUID) -> str:
         """Generate unique webhook URL for trigger."""
@@ -175,49 +178,63 @@ class DefaultWebhookManager(WebhookManager):
         query_params: Dict[str, str]
     ) -> Dict[str, Any]:
         """Process incoming webhook request."""
+        correlation_id = generate_correlation_id()
+        set_correlation_id(correlation_id)
         start_time = time.time()
         
         try:
+            logger.info(
+                f"Processing webhook request",
+                webhook_id=webhook_id,
+                method=method,
+                content_type=headers.get('content-type', 'unknown')
+            )
+            
             # Find the trigger
             trigger = self._registered_webhooks.get(webhook_id)
             if not trigger:
-                logger.warning(f"Webhook {webhook_id} not found")
-                return await self.get_webhook_response(
-                    False, 
-                    f"Webhook {webhook_id} not found"
-                )
+                error_msg = f"Webhook {webhook_id} not found"
+                logger.warning(error_msg, webhook_id=webhook_id)
+                return await self.get_webhook_response(False, error_msg)
 
             # Check if trigger is active
             if not trigger.is_active:
-                logger.warning(f"Webhook {webhook_id} is inactive")
-                return await self.get_webhook_response(
-                    False, 
-                    "Webhook is inactive"
-                )
+                error_msg = f"Webhook {webhook_id} is inactive"
+                logger.warning(error_msg, webhook_id=webhook_id, trigger_id=trigger.id)
+                return await self.get_webhook_response(False, "Webhook is inactive")
 
             # Validate HTTP method
             if not await self.validate_webhook_method(trigger, method):
-                logger.warning(f"Method {method} not allowed for webhook {webhook_id}")
-                return await self.get_webhook_response(
-                    False, 
-                    f"Method {method} not allowed"
+                error_msg = f"Method {method} not allowed for webhook {webhook_id}"
+                logger.warning(
+                    error_msg,
+                    webhook_id=webhook_id,
+                    trigger_id=trigger.id,
+                    method=method,
+                    allowed_methods=trigger.allowed_methods
                 )
-
-            # Apply rate limiting
-            if not await self.apply_rate_limiting(webhook_id):
-                logger.warning(f"Rate limit exceeded for webhook {webhook_id}")
-                return await self.get_webhook_response(
-                    False, 
-                    "Rate limit exceeded"
-                )
+                return await self.get_webhook_response(False, f"Method {method} not allowed")
 
             # Apply validation rules
-            if not await self.apply_validation_rules(trigger, headers, body):
-                logger.warning(f"Validation failed for webhook {webhook_id}")
-                return await self.get_webhook_response(
-                    False, 
-                    "Request validation failed"
+            try:
+                validation_result = await self.apply_validation_rules(trigger, headers, body)
+                if not validation_result:
+                    error_msg = "Request validation failed"
+                    logger.warning(
+                        error_msg,
+                        webhook_id=webhook_id,
+                        trigger_id=trigger.id,
+                        content_type=headers.get('content-type')
+                    )
+                    return await self.get_webhook_response(False, "Request validation failed")
+            except Exception as validation_error:
+                error_msg = f"Validation error: {validation_error}"
+                logger.error(
+                    error_msg,
+                    webhook_id=webhook_id,
+                    trigger_id=trigger.id
                 )
+                return await self.get_webhook_response(False, "Request validation failed")
 
             # Create request data
             request_data = WebhookRequestData(
@@ -229,30 +246,63 @@ class DefaultWebhookManager(WebhookManager):
             )
 
             # Parse webhook data based on type
-            parsed_data = await self._parse_webhook_data(trigger, request_data)
+            try:
+                parsed_data = await self._parse_webhook_data(trigger, request_data)
+                logger.debug(
+                    "Successfully parsed webhook data",
+                    webhook_id=webhook_id,
+                    trigger_id=trigger.id,
+                    webhook_type=trigger.webhook_type.value
+                )
+            except Exception as parse_error:
+                error_msg = f"Failed to parse webhook data: {parse_error}"
+                logger.error(
+                    error_msg,
+                    webhook_id=webhook_id,
+                    trigger_id=trigger.id,
+                    webhook_type=trigger.webhook_type.value
+                )
+                return await self.get_webhook_response(False, "Failed to parse request data")
 
             # Execute the webhook trigger
-            execution = await self.execution_callback.execute_webhook_trigger(
-                webhook_id, 
-                parsed_data
-            )
+            try:
+                execution = await self.execution_callback.execute_webhook_trigger(
+                    webhook_id, 
+                    parsed_data
+                )
+                
+                execution_time_ms = int((time.time() - start_time) * 1000)
+                logger.info(
+                    f"Webhook processed successfully",
+                    webhook_id=webhook_id,
+                    trigger_id=trigger.id,
+                    execution_time_ms=execution_time_ms,
+                    status=execution.status.value if hasattr(execution, 'status') else 'unknown'
+                )
 
-            # Log execution time
-            execution_time_ms = int((time.time() - start_time) * 1000)
-            logger.info(
-                f"Webhook {webhook_id} processed in {execution_time_ms}ms, "
-                f"status: {execution.status}"
-            )
-
-            # Return success response
-            return await self.get_webhook_response(True)
+                # Return success response
+                return await self.get_webhook_response(True)
+                
+            except Exception as execution_error:
+                execution_time_ms = int((time.time() - start_time) * 1000)
+                error_msg = f"Webhook execution failed: {execution_error}"
+                logger.error(
+                    error_msg,
+                    webhook_id=webhook_id,
+                    trigger_id=trigger.id,
+                    execution_time_ms=execution_time_ms
+                )
+                return await self.get_webhook_response(False, "Webhook execution failed")
 
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
+            error_msg = f"Unexpected error processing webhook: {e}"
             logger.error(
-                f"Error processing webhook {webhook_id} in {execution_time_ms}ms: {e}"
+                error_msg,
+                webhook_id=webhook_id,
+                execution_time_ms=execution_time_ms
             )
-            return await self.get_webhook_response(False, str(e))
+            return await self.get_webhook_response(False, "Internal server error")
 
     async def validate_webhook_method(self, trigger: WebhookTrigger, method: str) -> bool:
         """Validate HTTP method against trigger's allowed methods."""
@@ -266,14 +316,32 @@ class DefaultWebhookManager(WebhookManager):
     ) -> bool:
         """Apply trigger-specific validation rules to webhook request."""
         if not trigger.validation_rules:
+            logger.debug(
+                "No validation rules defined, allowing request",
+                webhook_id=trigger.webhook_id,
+                trigger_id=trigger.id
+            )
             return True
 
         try:
+            logger.debug(
+                "Applying validation rules",
+                webhook_id=trigger.webhook_id,
+                trigger_id=trigger.id,
+                rules_count=len(trigger.validation_rules)
+            )
+            
             # Check required headers
             required_headers = trigger.validation_rules.get('required_headers', [])
             for header in required_headers:
                 if header.lower() not in [h.lower() for h in headers.keys()]:
-                    logger.warning(f"Required header {header} missing")
+                    logger.warning(
+                        f"Required header missing: {header}",
+                        webhook_id=trigger.webhook_id,
+                        trigger_id=trigger.id,
+                        required_header=header,
+                        available_headers=list(headers.keys())
+                    )
                     return False
 
             # Check content type if specified
@@ -282,8 +350,11 @@ class DefaultWebhookManager(WebhookManager):
                 actual_content_type = headers.get('content-type', '').lower()
                 if expected_content_type.lower() not in actual_content_type:
                     logger.warning(
-                        f"Content type mismatch: expected {expected_content_type}, "
-                        f"got {actual_content_type}"
+                        f"Content type mismatch",
+                        webhook_id=trigger.webhook_id,
+                        trigger_id=trigger.id,
+                        expected_content_type=expected_content_type,
+                        actual_content_type=actual_content_type
                     )
                     return False
 
@@ -293,37 +364,54 @@ class DefaultWebhookManager(WebhookManager):
                 if not isinstance(body, dict):
                     try:
                         json.loads(str(body))
-                    except (json.JSONDecodeError, TypeError):
-                        logger.warning("Expected JSON body but got invalid JSON")
+                        logger.debug(
+                            "Successfully validated JSON body format",
+                            webhook_id=trigger.webhook_id,
+                            trigger_id=trigger.id
+                        )
+                    except (json.JSONDecodeError, TypeError) as json_error:
+                        logger.warning(
+                            f"Expected JSON body but got invalid JSON: {json_error}",
+                            webhook_id=trigger.webhook_id,
+                            trigger_id=trigger.id,
+                            body_type=type(body).__name__
+                        )
                         return False
 
+            logger.debug(
+                "All validation rules passed",
+                webhook_id=trigger.webhook_id,
+                trigger_id=trigger.id
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Error applying validation rules: {e}")
-            return False
+            logger.error(
+                f"Error applying validation rules: {e}",
+                webhook_id=trigger.webhook_id,
+                trigger_id=trigger.id
+            )
+            raise WebhookValidationError(
+                f"Validation rule processing failed: {e}",
+                webhook_id=trigger.webhook_id,
+                trigger_id=str(trigger.id),
+                original_error=str(e)
+            )
 
     async def apply_rate_limiting(self, webhook_id: str) -> bool:
-        """Apply rate limiting to webhook requests."""
-        current_time = time.time()
-        window_seconds = 60  # 1 minute window
-        max_requests = 60    # Max 60 requests per minute per webhook
-
-        # Get or create rate limit cache for this webhook
-        if webhook_id not in self._rate_limit_cache:
-            self._rate_limit_cache[webhook_id] = []
-
-        timestamps = self._rate_limit_cache[webhook_id]
-
-        # Remove old timestamps outside the window
-        timestamps[:] = [ts for ts in timestamps if current_time - ts < window_seconds]
-
-        # Check if we're over the limit
-        if len(timestamps) >= max_requests:
-            return False
-
-        # Add current timestamp
-        timestamps.append(current_time)
+        """Rate limiting is handled at infrastructure layer.
+        
+        This method is kept for interface compatibility but always returns True
+        since rate limiting is now handled by ingress/load balancer/API gateway.
+        
+        Args:
+            webhook_id: The webhook ID (unused)
+            
+        Returns:
+            Always True - rate limiting handled at infrastructure layer
+        """
+        # Rate limiting moved to infrastructure layer (ingress/load balancer/API gateway)
+        # This provides better performance and prevents application-level bottlenecks
         return True
 
     async def get_webhook_response(

@@ -247,7 +247,6 @@ class TestSchemaMigration:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             created_by=trigger_create.created_by,
-            max_executions_per_hour=trigger_create.max_executions_per_hour,
             failure_threshold=trigger_create.failure_threshold,
             consecutive_failures=0,
             webhook_id=trigger_create.webhook_id,

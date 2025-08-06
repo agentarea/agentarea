@@ -46,9 +46,7 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
     if (!servers?.length) return;
     const configs = servers.map((server) => ({
       mcp_server_id: server.id,
-      api_key: "",
-      config: null,
-      enabled: true,
+      allowed_tools: [],
     }));
     appendTool(configs);
   };

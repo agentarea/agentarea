@@ -8,7 +8,7 @@ from agentarea_api.api.deps.services import get_mcp_server_instance_service
 from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -162,12 +162,16 @@ async def get_instance_environment(
 
 @router.get("/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
+    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's instances only"),
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
 ):
+    # Determine if we should filter by creator
+    creator_scoped = created_by == "me"
+    
     # Get instances from database (configuration/metadata)
-    instances = await mcp_server_instance_service.list()
+    instances = await mcp_server_instance_service.list(creator_scoped=creator_scoped)
     
     # Get real-time status from golang manager
     try:
@@ -331,3 +335,32 @@ async def get_containers_health():
             status_code=500,
             detail=f"Failed to get container health: {str(e)}"
         ) from e
+
+
+@router.get("/{instance_id}/tools", response_model=list[dict[str, Any]])
+async def get_instance_available_tools(
+    instance_id: UUID,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Get available tools for a specific MCP server instance."""
+    instance = await service.get(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="MCP server instance not found")
+    
+    return instance.get_available_tools()
+
+
+@router.post("/{instance_id}/discover-tools")
+async def discover_instance_tools(
+    instance_id: UUID,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Trigger tool discovery for a specific MCP server instance."""
+    success = await service.discover_and_store_tools(instance_id)
+    if not success:
+        raise HTTPException(
+            status_code=400, 
+            detail="Failed to discover tools for the instance"
+        )
+    
+    return {"message": "Tool discovery completed successfully"}

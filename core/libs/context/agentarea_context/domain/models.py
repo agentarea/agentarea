@@ -13,6 +13,7 @@ class Context(BaseModel):
     context_type: ContextType = ContextType.FACTUAL
     task_id: UUID | None = None
     agent_id: UUID | None = None
+    workspace_id: str | None = None
     context_metadata: dict[str, Any] = Field(default_factory=dict)  # Renamed to avoid SQLAlchemy conflict
     score: float | None = None
     created_at: datetime = Field(default_factory=datetime.now)

@@ -1,7 +1,7 @@
 """Trigger domain models."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, List, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -23,6 +23,7 @@ class Trigger(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     created_by: str
+    workspace_id: str | None = None
 
     # Business logic safety
     failure_threshold: int = Field(default=5, ge=1, le=100)
@@ -104,7 +105,7 @@ class WebhookTrigger(Trigger):
 
     trigger_type: TriggerType = Field(default=TriggerType.WEBHOOK, frozen=True)
     webhook_id: str = Field(..., min_length=1)
-    allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
+    allowed_methods: List[str] = Field(default_factory=lambda: ["POST"])
     webhook_type: WebhookType = Field(default=WebhookType.GENERIC)
     validation_rules: dict[str, Any] = Field(default_factory=dict)
 
@@ -121,7 +122,7 @@ class WebhookTrigger(Trigger):
 
     @field_validator('allowed_methods')
     @classmethod
-    def validate_allowed_methods(cls, v: list[str]) -> list[str]:
+    def validate_allowed_methods(cls, v: List[str]) -> List[str]:
         """Validate HTTP methods."""
         if not v:
             raise ValueError("At least one HTTP method must be allowed")
@@ -178,6 +179,7 @@ class TriggerCreate(BaseModel):
     task_parameters: dict[str, Any] = Field(default_factory=dict)
     conditions: dict[str, Any] = Field(default_factory=dict)
     created_by: str
+    workspace_id: str | None = None
 
     # Business logic safety
     failure_threshold: int = Field(default=5, ge=1, le=100)
@@ -188,7 +190,7 @@ class TriggerCreate(BaseModel):
 
     # Webhook-specific fields
     webhook_id: Optional[str] = None
-    allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
+    allowed_methods: List[str] = Field(default_factory=lambda: ["POST"])
     webhook_type: WebhookType = Field(default=WebhookType.GENERIC)
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: Optional[dict[str, Any]] = None
@@ -223,7 +225,7 @@ class TriggerUpdate(BaseModel):
     timezone: Optional[str] = None
 
     # Webhook-specific fields
-    allowed_methods: Optional[list[str]] = None
+    allowed_methods: Optional[List[str]] = None
     webhook_type: Optional[WebhookType] = None
     validation_rules: Optional[dict[str, Any]] = None
     webhook_config: Optional[dict[str, Any]] = None

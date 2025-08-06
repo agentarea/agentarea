@@ -25,18 +25,16 @@ from .domain.models import (
 from .infrastructure.repository import TriggerRepository, TriggerExecutionRepository
 from .temporal_schedule_manager import TemporalScheduleManager
 from .llm_condition_evaluator import LLMConditionEvaluator, LLMConditionEvaluationError
+from .logging_utils import (
+    TriggerLogger, TriggerValidationError, TriggerNotFoundError, 
+    TriggerExecutionError, DependencyUnavailableError,
+    set_correlation_id, generate_correlation_id
+)
 
-logger = logging.getLogger(__name__)
+logger = TriggerLogger(__name__)
 
 
-class TriggerValidationError(Exception):
-    """Raised when trigger validation fails."""
-    pass
-
-
-class TriggerNotFoundError(Exception):
-    """Raised when a trigger is not found."""
-    pass
+# Error classes moved to logging_utils.py for consistency
 
 
 class TriggerService:
@@ -44,22 +42,29 @@ class TriggerService:
 
     def __init__(
         self,
-        trigger_repository: TriggerRepository,
-        trigger_execution_repository: TriggerExecutionRepository,
+        repository_factory: Any,  # RepositoryFactory type
         event_broker: EventBroker,
-        agent_repository: Optional[Any] = None,
         task_service: Optional[Any] = None,
         llm_condition_evaluator: Optional[LLMConditionEvaluator] = None,
         temporal_schedule_manager: Optional[TemporalScheduleManager] = None,
     ):
-        """Initialize with repositories, event broker, and optional dependencies."""
-        self.trigger_repository = trigger_repository
-        self.trigger_execution_repository = trigger_execution_repository
+        """Initialize with repository factory, event broker, and optional dependencies."""
+        # Create repositories using factory
+        self.trigger_repository = repository_factory.create_repository(TriggerRepository)
+        self.trigger_execution_repository = repository_factory.create_repository(TriggerExecutionRepository)
+        
+        self.repository_factory = repository_factory
         self.event_broker = event_broker
-        self.agent_repository = agent_repository
         self.task_service = task_service
         self.llm_condition_evaluator = llm_condition_evaluator
         self.temporal_schedule_manager = temporal_schedule_manager
+        
+        # Create agent repository using factory for validation
+        try:
+            from agentarea_agents.infrastructure.repository import AgentRepository
+            self.agent_repository = repository_factory.create_repository(AgentRepository)
+        except ImportError:
+            self.agent_repository = None
 
     # CRUD Operations
 
@@ -74,30 +79,75 @@ class TriggerService:
             
         Raises:
             TriggerValidationError: If validation fails
+            DependencyUnavailableError: If required dependencies are unavailable
         """
-        # Validate agent exists first (fail fast)
-        await self._validate_agent_exists(trigger_data.agent_id)
+        correlation_id = generate_correlation_id()
+        set_correlation_id(correlation_id)
         
-        # Validate trigger configuration
-        await self._validate_trigger_configuration(trigger_data)
-        
-        # Create the trigger
-        trigger = await self.trigger_repository.create_from_data(trigger_data)
-        
-        logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
-        
-        # TODO: Publish trigger creation event when event system is defined
-        
-        # Schedule cron trigger if applicable
-        if trigger.trigger_type == TriggerType.CRON and isinstance(trigger, CronTrigger):
-            try:
-                await self.schedule_cron_trigger(trigger)
-            except Exception as e:
-                logger.error(f"Failed to schedule cron trigger {trigger.id}: {e}")
-                # Don't fail the trigger creation if scheduling fails
-                # The trigger can be rescheduled later
-        
-        return trigger
+        try:
+            logger.info(
+                f"Creating trigger '{trigger_data.name}' for agent {trigger_data.agent_id}",
+                trigger_type=trigger_data.trigger_type.value,
+                agent_id=trigger_data.agent_id
+            )
+            
+            # Validate agent exists first (fail fast)
+            await self._validate_agent_exists(trigger_data.agent_id)
+            
+            # Validate trigger configuration
+            await self._validate_trigger_configuration(trigger_data)
+            
+            # Create the trigger
+            trigger = await self.trigger_repository.create_from_model(trigger_data)
+            
+            logger.info(
+                f"Successfully created trigger '{trigger.name}'",
+                trigger_id=trigger.id,
+                agent_id=trigger.agent_id,
+                trigger_type=trigger.trigger_type.value
+            )
+            
+            # TODO: Publish trigger creation event when event system is defined
+            
+            # Schedule cron trigger if applicable
+            if trigger.trigger_type == TriggerType.CRON and isinstance(trigger, CronTrigger):
+                try:
+                    await self.schedule_cron_trigger(trigger)
+                    logger.info(
+                        "Successfully scheduled cron trigger",
+                        trigger_id=trigger.id,
+                        cron_expression=trigger.cron_expression
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to schedule cron trigger: {e}",
+                        trigger_id=trigger.id,
+                        cron_expression=trigger.cron_expression
+                    )
+                    # Don't fail the trigger creation if scheduling fails
+                    # The trigger can be rescheduled later
+            
+            return trigger
+            
+        except TriggerValidationError:
+            logger.error(
+                f"Trigger validation failed for '{trigger_data.name}'",
+                agent_id=trigger_data.agent_id,
+                trigger_type=trigger_data.trigger_type.value
+            )
+            raise
+        except Exception as e:
+            logger.error(
+                f"Unexpected error creating trigger '{trigger_data.name}': {e}",
+                agent_id=trigger_data.agent_id,
+                trigger_type=trigger_data.trigger_type.value
+            )
+            raise TriggerExecutionError(
+                f"Failed to create trigger: {e}",
+                correlation_id=correlation_id,
+                trigger_name=trigger_data.name,
+                agent_id=str(trigger_data.agent_id)
+            )
 
     async def get_trigger(self, trigger_id: UUID) -> Optional[Trigger]:
         """Get a trigger by ID.
@@ -194,27 +244,47 @@ class TriggerService:
         agent_id: Optional[UUID] = None,
         trigger_type: Optional[TriggerType] = None,
         active_only: bool = False,
+        creator_scoped: bool = False,
         limit: int = 100
-    ) -> list[Trigger]:
+    ) -> List[Trigger]:
         """List triggers with optional filtering.
         
         Args:
             agent_id: Filter by agent ID
             trigger_type: Filter by trigger type
             active_only: Only return active triggers
+            creator_scoped: If True, only return triggers created by current user
             limit: Maximum number of triggers to return
             
         Returns:
             List of triggers matching the criteria
         """
+        # Build filters for the repository
+        filters = {}
         if agent_id:
-            triggers = await self.trigger_repository.list_by_agent(agent_id, limit)
-        elif trigger_type:
-            triggers = await self.trigger_repository.list_by_type(trigger_type, limit)
-        elif active_only:
-            triggers = await self.trigger_repository.list_active_triggers(limit)
+            filters['agent_id'] = agent_id
+        if trigger_type:
+            filters['trigger_type'] = trigger_type
+        if active_only:
+            filters['is_active'] = True
+        
+        # Use the repository's list_all method with creator_scoped parameter
+        if hasattr(self.trigger_repository, 'list_all'):
+            triggers = await self.trigger_repository.list_all(
+                creator_scoped=creator_scoped,
+                limit=limit,
+                **filters
+            )
         else:
-            triggers = await self.trigger_repository.list()
+            # Fallback for repositories that don't support workspace scoping
+            if agent_id:
+                triggers = await self.trigger_repository.list_by_agent(agent_id, limit)
+            elif trigger_type:
+                triggers = await self.trigger_repository.list_by_type(trigger_type, limit)
+            elif active_only:
+                triggers = await self.trigger_repository.list_active_triggers(limit)
+            else:
+                triggers = await self.trigger_repository.list()
         
         return triggers
 
@@ -285,7 +355,7 @@ class TriggerService:
         trigger_id: UUID,
         limit: int = 100,
         offset: int = 0
-    ) -> list[TriggerExecution]:
+    ) -> List[TriggerExecution]:
         """Get execution history for a trigger.
         
         Args:
@@ -325,43 +395,172 @@ class TriggerService:
             
         Returns:
             The created trigger execution record
+            
+        Raises:
+            TriggerExecutionError: If execution recording fails
         """
-        execution = TriggerExecution(
-            trigger_id=trigger_id,
-            status=status,
-            execution_time_ms=execution_time_ms,
-            task_id=task_id,
-            error_message=error_message,
-            trigger_data=trigger_data or {},
-            workflow_id=workflow_id,
-            run_id=run_id
-        )
-        
-        # Record the execution
-        recorded_execution = await self.trigger_execution_repository.create(execution)
-        
-        # Update trigger execution tracking
-        if status == ExecutionStatus.SUCCESS:
-            await self.trigger_repository.update_execution_tracking(
-                trigger_id, datetime.utcnow(), 0
+        try:
+            logger.info(
+                f"Recording trigger execution with status {status.value}",
+                trigger_id=trigger_id,
+                status=status.value,
+                execution_time_ms=execution_time_ms,
+                task_id=task_id,
+                workflow_id=workflow_id,
+                run_id=run_id
             )
-        else:
-            # Get current trigger to increment failure count
-            trigger = await self.get_trigger(trigger_id)
-            if trigger:
-                new_failure_count = trigger.consecutive_failures + 1
-                await self.trigger_repository.update_execution_tracking(
-                    trigger_id, datetime.utcnow(), new_failure_count
+            
+            execution = TriggerExecution(
+                trigger_id=trigger_id,
+                status=status,
+                execution_time_ms=execution_time_ms,
+                task_id=task_id,
+                error_message=error_message,
+                trigger_data=trigger_data or {},
+                workflow_id=workflow_id,
+                run_id=run_id
+            )
+            
+            # Record the execution
+            recorded_execution = await self.trigger_execution_repository.create(execution)
+            
+            logger.info(
+                f"Successfully recorded trigger execution",
+                trigger_id=trigger_id,
+                execution_id=recorded_execution.id,
+                status=status.value
+            )
+            
+            # Update trigger execution tracking and handle automatic disabling
+            try:
+                await self._update_trigger_execution_tracking(trigger_id, status)
+            except Exception as tracking_error:
+                # Log tracking error but don't fail the execution recording
+                logger.error(
+                    f"Failed to update trigger execution tracking: {tracking_error}",
+                    trigger_id=trigger_id,
+                    execution_id=recorded_execution.id
                 )
-                
-                # Auto-disable trigger if failure threshold reached
-                if new_failure_count >= trigger.failure_threshold:
-                    await self.disable_trigger(trigger_id)
-                    logger.warning(
-                        f"Auto-disabled trigger {trigger_id} after {new_failure_count} consecutive failures"
-                    )
+            
+            return recorded_execution
+            
+        except Exception as e:
+            error_msg = f"Failed to record trigger execution: {e}"
+            logger.error(
+                error_msg,
+                trigger_id=trigger_id,
+                status=status.value,
+                execution_time_ms=execution_time_ms
+            )
+            raise TriggerExecutionError(
+                error_msg,
+                trigger_id=str(trigger_id),
+                status=status.value,
+                original_error=str(e)
+            )
+
+    async def _update_trigger_execution_tracking(self, trigger_id: UUID, status: ExecutionStatus) -> None:
+        """Update trigger execution tracking and handle automatic disabling.
         
-        return recorded_execution
+        Args:
+            trigger_id: The trigger ID
+            status: The execution status
+        """
+        # Get the trigger
+        trigger = await self.get_trigger(trigger_id)
+        if not trigger:
+            logger.warning(f"Trigger {trigger_id} not found for execution tracking update")
+            return
+        
+        # Update execution tracking
+        if status == ExecutionStatus.SUCCESS:
+            trigger.record_execution_success()
+        else:
+            trigger.record_execution_failure()
+        
+        # Update trigger in database
+        await self.trigger_repository.update(trigger)
+        
+        # Check if trigger should be disabled due to consecutive failures
+        if trigger.should_disable_due_to_failures():
+            logger.warning(
+                f"Trigger {trigger_id} reached failure threshold ({trigger.failure_threshold}), "
+                f"disabling trigger after {trigger.consecutive_failures} consecutive failures"
+            )
+            await self.disable_trigger(trigger_id)
+            
+            # Publish trigger auto-disabled event
+            await self._publish_trigger_auto_disabled_event(trigger_id, trigger.consecutive_failures)
+
+    async def _publish_trigger_auto_disabled_event(self, trigger_id: UUID, consecutive_failures: int) -> None:
+        """Publish event when trigger is automatically disabled due to failures.
+        
+        Args:
+            trigger_id: The trigger ID that was disabled
+            consecutive_failures: Number of consecutive failures that caused the disable
+        """
+        try:
+            await self.event_broker.publish(
+                event_type="trigger.auto_disabled",
+                data={
+                    "trigger_id": str(trigger_id),
+                    "consecutive_failures": consecutive_failures,
+                    "disabled_at": datetime.utcnow().isoformat(),
+                    "reason": "consecutive_failures_threshold_exceeded"
+                }
+            )
+            logger.info(f"Published auto-disabled event for trigger {trigger_id}")
+        except Exception as e:
+            logger.error(f"Failed to publish auto-disabled event for trigger {trigger_id}: {e}")
+
+    async def reset_trigger_failure_count(self, trigger_id: UUID) -> bool:
+        """Reset the consecutive failure count for a trigger.
+        
+        This can be used to manually reset a trigger's failure count without
+        waiting for a successful execution.
+        
+        Args:
+            trigger_id: The trigger ID to reset
+            
+        Returns:
+            True if reset was successful, False if trigger not found
+        """
+        trigger = await self.get_trigger(trigger_id)
+        if not trigger:
+            return False
+        
+        # Reset failure count
+        trigger.consecutive_failures = 0
+        trigger.updated_at = datetime.utcnow()
+        
+        # Update in database
+        await self.trigger_repository.update(trigger)
+        
+        logger.info(f"Reset failure count for trigger {trigger_id}")
+        return True
+
+    async def get_trigger_safety_status(self, trigger_id: UUID) -> Optional[dict[str, Any]]:
+        """Get safety status information for a trigger.
+        
+        Args:
+            trigger_id: The trigger ID
+            
+        Returns:
+            Dictionary with safety status information, or None if trigger not found
+        """
+        trigger = await self.get_trigger(trigger_id)
+        if not trigger:
+            return None
+        
+        return {
+            "trigger_id": str(trigger_id),
+            "consecutive_failures": trigger.consecutive_failures,
+            "failure_threshold": trigger.failure_threshold,
+            "failures_until_disable": max(0, trigger.failure_threshold - trigger.consecutive_failures),
+            "is_at_risk": trigger.consecutive_failures >= (trigger.failure_threshold * 0.8),  # 80% threshold
+            "should_disable": trigger.should_disable_due_to_failures(),
+            "last_execution_at": trigger.last_execution_at.isoformat() if trigger.last_execution_at else None
+        }
 
     # Temporal Schedule Management
 
@@ -372,22 +571,52 @@ class TriggerService:
             trigger: The cron trigger to schedule
             
         Raises:
-            Exception: If scheduling fails
+            DependencyUnavailableError: If temporal_schedule_manager is not available
+            TriggerExecutionError: If scheduling fails
         """
         if not self.temporal_schedule_manager:
-            logger.warning(f"Temporal schedule manager not available, cannot schedule trigger {trigger.id}")
-            return
+            error_msg = "Temporal schedule manager not available - cannot schedule cron trigger"
+            logger.error(error_msg, trigger_id=trigger.id)
+            raise DependencyUnavailableError(
+                error_msg,
+                dependency="temporal_schedule_manager",
+                trigger_id=str(trigger.id)
+            )
         
         try:
+            logger.info(
+                "Scheduling cron trigger",
+                trigger_id=trigger.id,
+                cron_expression=trigger.cron_expression,
+                timezone=trigger.timezone
+            )
+            
             await self.temporal_schedule_manager.create_cron_schedule(
                 trigger_id=trigger.id,
                 cron_expression=trigger.cron_expression,
                 timezone=trigger.timezone
             )
-            logger.info(f"Scheduled cron trigger {trigger.id}")
+            
+            logger.info(
+                "Successfully scheduled cron trigger",
+                trigger_id=trigger.id,
+                cron_expression=trigger.cron_expression
+            )
+            
         except Exception as e:
-            logger.error(f"Failed to schedule cron trigger {trigger.id}: {e}")
-            raise
+            error_msg = f"Failed to schedule cron trigger: {e}"
+            logger.error(
+                error_msg,
+                trigger_id=trigger.id,
+                cron_expression=trigger.cron_expression,
+                timezone=trigger.timezone
+            )
+            raise TriggerExecutionError(
+                error_msg,
+                trigger_id=str(trigger.id),
+                cron_expression=trigger.cron_expression,
+                original_error=str(e)
+            )
 
     async def unschedule_cron_trigger(self, trigger_id: UUID) -> None:
         """Unschedule a cron trigger by deleting its Temporal Schedule.
@@ -501,15 +730,42 @@ class TriggerService:
             agent_id: The agent ID to validate
             
         Raises:
-            TriggerValidationError: If agent doesn't exist or agent_repository is not available
+            TriggerValidationError: If agent doesn't exist
+            DependencyUnavailableError: If agent_repository is not available
         """
         if not self.agent_repository:
-            logger.warning("Agent repository not available - skipping agent validation")
-            return
+            error_msg = "Agent repository not available - cannot validate agent existence"
+            logger.error(error_msg, agent_id=agent_id)
+            raise DependencyUnavailableError(
+                error_msg,
+                dependency="agent_repository",
+                agent_id=str(agent_id)
+            )
 
-        agent = await self.agent_repository.get(agent_id)
-        if not agent:
-            raise TriggerValidationError(f"Agent with ID {agent_id} does not exist")
+        try:
+            agent = await self.agent_repository.get(agent_id)
+            if not agent:
+                error_msg = f"Agent with ID {agent_id} does not exist"
+                logger.error(error_msg, agent_id=agent_id)
+                raise TriggerValidationError(
+                    error_msg,
+                    agent_id=str(agent_id)
+                )
+            
+            logger.debug(f"Agent validation successful", agent_id=agent_id)
+            
+        except Exception as e:
+            if isinstance(e, (TriggerValidationError, DependencyUnavailableError)):
+                raise
+            
+            error_msg = f"Error validating agent existence: {e}"
+            logger.error(error_msg, agent_id=agent_id)
+            raise DependencyUnavailableError(
+                error_msg,
+                dependency="agent_repository",
+                agent_id=str(agent_id),
+                original_error=str(e)
+            )
 
     async def _validate_trigger_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate trigger configuration based on type.
@@ -626,7 +882,7 @@ class TriggerService:
             return trigger
         return None
 
-    async def list_cron_triggers_due(self, current_time: Optional[datetime] = None) -> list[CronTrigger]:
+    async def list_cron_triggers_due(self, current_time: Optional[datetime] = None) -> List[CronTrigger]:
         """List cron triggers that are due for execution.
         
         Args:
@@ -645,7 +901,7 @@ class TriggerService:
         trigger_id: UUID,
         hours: int = 24,
         limit: int = 100
-    ) -> list[TriggerExecution]:
+    ) -> List[TriggerExecution]:
         """Get recent executions for a trigger.
         
         Args:
@@ -994,111 +1250,149 @@ class TriggerService:
                 for field_path, expected_value in field_matches.items():
                     actual_value = self._get_nested_value(event_data, field_path)
                     if actual_value != expected_value:
-                        logger.debug(f"Condition not met: {field_path} = {actual_value}, expected {expected_value}")
-                        return False
-            
-            # Check for time-based conditions (for cron triggers)
-            if "time_conditions" in conditions:
-                time_conditions = conditions["time_conditions"]
-                current_time = datetime.utcnow()
-                
-                if "hour_range" in time_conditions:
-                    hour_range = time_conditions["hour_range"]
-                    if not (hour_range[0] <= current_time.hour <= hour_range[1]):
-                        logger.debug(f"Time condition not met: hour {current_time.hour} not in range {hour_range}")
-                        return False
-                
-                if "weekdays_only" in time_conditions and time_conditions["weekdays_only"]:
-                    if current_time.weekday() >= 5:  # Saturday = 5, Sunday = 6
-                        logger.debug("Time condition not met: weekends excluded")
                         return False
             
             return True
             
         except Exception as e:
             logger.error(f"Error in simple condition evaluation: {e}")
-            return True
-
-    async def validate_condition_syntax(self, conditions: Dict[str, Any]) -> List[str]:
-        """Validate trigger condition syntax and return any errors.
-        
-        Args:
-            conditions: Condition configuration to validate
-            
-        Returns:
-            List of validation error messages (empty if valid)
-        """
-        if not conditions:
-            return []
-        
-        try:
-            if self.llm_condition_evaluator:
-                return await self.llm_condition_evaluator.validate_condition_syntax(conditions)
-            else:
-                # Basic validation for simple conditions
-                errors = []
-                
-                if "field_matches" in conditions:
-                    field_matches = conditions["field_matches"]
-                    if not isinstance(field_matches, dict):
-                        errors.append("field_matches must be a dictionary")
-                
-                if "time_conditions" in conditions:
-                    time_conditions = conditions["time_conditions"]
-                    if not isinstance(time_conditions, dict):
-                        errors.append("time_conditions must be a dictionary")
-                    else:
-                        if "hour_range" in time_conditions:
-                            hour_range = time_conditions["hour_range"]
-                            if not isinstance(hour_range, list) or len(hour_range) != 2:
-                                errors.append("hour_range must be a list of two integers")
-                            elif not all(isinstance(h, int) and 0 <= h <= 23 for h in hour_range):
-                                errors.append("hour_range values must be integers between 0 and 23")
-                
-                return errors
-                
-        except Exception as e:
-            return [f"Validation error: {e}"]
+            return True  # Default to True on evaluation errors
 
     async def extract_task_parameters_with_llm(
         self,
         instruction: str,
         event_data: Dict[str, Any],
-        trigger_context: Optional[Dict[str, Any]] = None
+        trigger_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Extract task parameters from event data using LLM.
+        """Extract task parameters using LLM.
         
         Args:
-            instruction: Natural language instruction for parameter extraction
-            event_data: Event data to extract parameters from
-            trigger_context: Optional trigger context
+            instruction: LLM instruction for parameter extraction
+            event_data: Event data to extract from
+            trigger_context: Trigger context information
             
         Returns:
             Dictionary of extracted parameters
-            
-        Raises:
-            LLMConditionEvaluationError: If parameter extraction fails
         """
         if not self.llm_condition_evaluator:
-            logger.warning("LLM condition evaluator not available, using basic parameter extraction")
-            return {
-                "event_data": event_data,
-                "instruction": instruction,
-                "extracted_via": "basic_fallback"
-            }
+            return {}
         
         try:
-            return await self.llm_condition_evaluator.extract_task_parameters(
+            return await self.llm_condition_evaluator.extract_parameters(
                 instruction=instruction,
                 event_data=event_data,
                 trigger_context=trigger_context
             )
-        except LLMConditionEvaluationError as e:
+        except Exception as e:
             logger.error(f"LLM parameter extraction failed: {e}")
-            # Fallback to basic parameter extraction
-            return {
-                "event_data": event_data,
-                "instruction": instruction,
-                "error": str(e),
-                "extracted_via": "error_fallback"
-            }
+            return {}
+
+    # Enhanced monitoring and execution history methods for task 14
+
+    async def get_execution_history_paginated(
+        self,
+        trigger_id: UUID,
+        status: Optional[ExecutionStatus] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> tuple[list[TriggerExecution], int]:
+        """Get paginated execution history with filtering.
+        
+        Args:
+            trigger_id: The trigger ID
+            status: Optional status filter
+            start_time: Optional start time filter
+            end_time: Optional end time filter
+            limit: Maximum number of executions to return
+            offset: Number of executions to skip
+            
+        Returns:
+            Tuple of (executions list, total count)
+        """
+        # Get filtered executions
+        executions = await self.trigger_execution_repository.list_executions_paginated(
+            trigger_id=trigger_id,
+            status=status,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+            offset=offset
+        )
+        
+        # Get total count with same filters
+        total = await self.trigger_execution_repository.count_executions_filtered(
+            trigger_id=trigger_id,
+            status=status,
+            start_time=start_time,
+            end_time=end_time
+        )
+        
+        return executions, total
+
+    async def get_execution_metrics(
+        self,
+        trigger_id: UUID,
+        hours: int = 24
+    ) -> dict[str, Any]:
+        """Get execution metrics for a trigger.
+        
+        Args:
+            trigger_id: The trigger ID
+            hours: Time period in hours
+            
+        Returns:
+            Dictionary with execution metrics
+        """
+        return await self.trigger_execution_repository.get_execution_metrics(
+            trigger_id, hours
+        )
+
+    async def get_execution_timeline(
+        self,
+        trigger_id: UUID,
+        hours: int = 24,
+        bucket_size_minutes: int = 60
+    ) -> List[dict[str, Any]]:
+        """Get execution timeline with bucketed counts.
+        
+        Args:
+            trigger_id: The trigger ID
+            hours: Time period in hours
+            bucket_size_minutes: Size of time buckets in minutes
+            
+        Returns:
+            List of timeline data points
+        """
+        return await self.trigger_execution_repository.get_execution_timeline(
+            trigger_id, hours, bucket_size_minutes
+        )
+
+    async def get_execution_correlations(
+        self,
+        trigger_id: UUID,
+        limit: int = 50,
+        offset: int = 0
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get execution correlation data with task tracking.
+        
+        Args:
+            trigger_id: The trigger ID
+            limit: Maximum number of executions to return
+            offset: Number of executions to skip
+            
+        Returns:
+            Tuple of (correlation data list, total count)
+        """
+        # Get executions with correlation info
+        correlations = await self.trigger_execution_repository.get_executions_with_task_correlation(
+            trigger_id, limit, offset
+        )
+        
+        # Get total count for pagination
+        total = await self.trigger_execution_repository.count_executions_filtered(
+            trigger_id=trigger_id
+        )
+        
+        return correlations, total

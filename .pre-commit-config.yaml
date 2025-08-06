@@ -1,0 +1,91 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-json
+      - id: pretty-format-json
+        args: ['--autofix']
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.86.0
+    hooks:
+      - id: terraform_fmt
+        args:
+          - --args=-recursive
+      - id: terraform_validate
+        args:
+          - --args=-json
+      - id: terraform_docs
+        args:
+          - --hook-config=--path-to-file=README.md
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+      - id: terraform_tflint
+        args:
+          - --args=--only=terraform_deprecated_interpolation
+          - --args=--only=terraform_deprecated_index
+          - --args=--only=terraform_unused_declarations
+          - --args=--only=terraform_comment_syntax
+          - --args=--only=terraform_documented_outputs
+          - --args=--only=terraform_documented_variables
+          - --args=--only=terraform_typed_variables
+          - --args=--only=terraform_module_pinned_source
+          - --args=--only=terraform_naming_convention
+          - --args=--only=terraform_required_version
+          - --args=--only=terraform_required_providers
+          - --args=--only=terraform_standard_module_structure
+          - --args=--only=terraform_workspace_remote
+      - id: terraform_tfsec
+        args:
+          - --args=--minimum-severity=MEDIUM
+          - --args=--exclude-downloaded-modules
+      - id: terraform_checkov
+        args:
+          - --args=--quiet
+          - --args=--skip-check CKV_YC_1,CKV_YC_2,CKV_YC_3
+          - --args=--framework terraform
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.13.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['-e', 'SC1091']
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        args: ['-d', 'relaxed']
+
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

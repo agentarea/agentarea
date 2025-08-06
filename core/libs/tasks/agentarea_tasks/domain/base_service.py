@@ -9,6 +9,7 @@ hierarchy and eliminating code duplication.
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import List
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
@@ -88,12 +89,12 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
-            user_id=task.user_id,
+            # user_id and workspace_id will be set automatically by WorkspaceScopedRepository
             metadata=task.metadata,
         )
 
         # Persist the task
-        created_task_domain = await self.task_repository.create(task_domain)
+        created_task_domain = await self.task_repository.create_task(task_domain)
 
         # Convert back to SimpleTask for return
         created_task = SimpleTask(
@@ -112,6 +113,7 @@ class BaseTaskService(ABC):
             started_at=created_task_domain.started_at,
             completed_at=created_task_domain.completed_at,
             execution_id=created_task_domain.execution_id,
+            workspace_id=created_task_domain.workspace_id,
             metadata=created_task_domain.metadata,
         )
 
@@ -143,7 +145,7 @@ class BaseTaskService(ABC):
         Returns:
             The task if found, None otherwise
         """
-        task_domain = await self.task_repository.get(task_id)
+        task_domain = await self.task_repository.get_task(task_id)
         if not task_domain:
             return None
 
@@ -194,11 +196,12 @@ class BaseTaskService(ABC):
             completed_at=task.completed_at,
             execution_id=task.execution_id,
             user_id=task.user_id,
+            workspace_id=task.workspace_id,
             metadata=task.metadata,
         )
 
         # Persist the update
-        updated_task_domain = await self.task_repository.update(task_domain)
+        updated_task_domain = await self.task_repository.update_task(task_domain)
 
         # Convert back to SimpleTask for return
         updated_task = SimpleTask(
@@ -217,6 +220,7 @@ class BaseTaskService(ABC):
             started_at=updated_task_domain.started_at,
             completed_at=updated_task_domain.completed_at,
             execution_id=updated_task_domain.execution_id,
+            workspace_id=updated_task_domain.workspace_id,
             metadata=updated_task_domain.metadata,
         )
 
@@ -251,15 +255,17 @@ class BaseTaskService(ABC):
         self,
         agent_id: UUID | None = None,
         user_id: str | None = None,
+        workspace_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[SimpleTask]:
+    ) -> List[SimpleTask]:
         """List tasks with optional filtering.
 
         Args:
             agent_id: Filter by agent ID
             user_id: Filter by user ID
+            workspace_id: Filter by workspace ID
             status: Filter by task status
             limit: Maximum number of tasks to return
             offset: Number of tasks to skip
@@ -267,14 +273,18 @@ class BaseTaskService(ABC):
         Returns:
             List of tasks matching the criteria
         """
-        if agent_id:
+        if workspace_id and user_id:
+            tasks = await self.task_repository.get_by_user_and_workspace(user_id, workspace_id, limit, offset)
+        elif workspace_id:
+            tasks = await self.task_repository.get_by_workspace_id(workspace_id, limit, offset)
+        elif agent_id:
             tasks = await self.task_repository.get_by_agent_id(agent_id, limit, offset)
         elif user_id:
             tasks = await self.task_repository.get_by_user_id(user_id, limit, offset)
         elif status:
             tasks = await self.task_repository.get_by_status(status)
         else:
-            tasks = await self.task_repository.list()
+            tasks = await self.task_repository.list_tasks()
 
         # Convert Task domain models to SimpleTask
         return [self._task_to_simple_task(task) for task in tasks]
@@ -294,7 +304,7 @@ class BaseTaskService(ABC):
             return False
 
         # Delete the task
-        success = await self.task_repository.delete(task_id)
+        success = await self.task_repository.delete_task(task_id)
 
         if success:
             logger.info(f"Deleted task {task_id}")
@@ -328,6 +338,7 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
+            workspace_id=task.workspace_id,
             metadata=task.metadata,
         )
 

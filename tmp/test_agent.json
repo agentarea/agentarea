@@ -1,0 +1,26 @@
+{
+  "name": "Complete Test Agent",
+  "description": "Testing complete structure",
+  "instruction": "You are a complete test agent",
+  "model_id": "gpt-4",
+  "tools_config": {
+    "mcp_server_configs": [
+      {
+        "mcp_server_id": "12345678-1234-1234-1234-123456789012",
+        "api_key": "test-api-key",
+        "enabled": true,
+        "config": {"setting": "value"}
+      }
+    ]
+  },
+  "events_config": {
+    "events": [
+      {
+        "event_type": "webhook",
+        "enabled": true,
+        "config": {"url": "https://example.com/webhook"}
+      }
+    ]
+  },
+  "planning": true
+}

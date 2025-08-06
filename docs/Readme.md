@@ -1,59 +1,93 @@
 # AgentArea Documentation
 
-Welcome to the AgentArea documentation hub. This directory contains comprehensive documentation for the AgentArea platform.
+Welcome to the AgentArea documentation hub. This directory contains comprehensive guides and references for developers, architects, and stakeholders working with the AgentArea platform.
 
-## 📚 Documentation Index
+## 🚀 Quick Start
 
-### **Getting Started**
-- **[Project Overview](./project-overview.md)** - Vision, features, business model, and roadmap
-- **[Implementation Status](./implementation-status.md)** - Current technical implementation status and achievements
-- **[Current Tasks](./current-tasks.md)** - Development status, active tasks, and next steps
-- **[Quick Reference Guide](./quick-reference.md)** - Commands, URLs, and troubleshooting
+**New to AgentArea?** Start here:
 
-### **Architecture & Design**
-- **[Architecture Insights](./architecture_insights.md)** - Comprehensive analysis of AgentArea's architecture, implementation patterns, and key learnings
-- **[Architecture Decisions (ADR)](./architecture-decisions.md)** - Key architectural decisions and rationale
-- **[MCP Architecture Overview](./mcp_architecture.md)** - System architecture and components
-- **[Agent-to-Agent Communication](./agent_to_agent_communication.md)** - A2A protocol design and implementation
+1. **[Getting Started Guide](GETTING_STARTED.md)** - Complete setup walkthrough (30 minutes)
+2. **[Project Overview](project-overview.md)** - Understanding AgentArea's vision and capabilities
+3. **[Quick Reference](quick-reference.md)** - Essential commands and URLs
 
-### **Implementation Guides**
-- **[MCP Implementation Plan](./mcp-implementation-plan.md)** - Technical implementation roadmap for MCP server management
-- **[Task Assignment](./task_assignment.md)** - Task distribution and management patterns
-- **[Dependency Injection Patterns](./dependency_injection_patterns.md)** - DI patterns and best practices used throughout the application
+## 📚 Complete Documentation
 
-### **Archive**
-- **[Archive](./archive/)** - Historical documentation and deprecated patterns
+**[📖 Documentation Index](DOCUMENTATION_INDEX.md)** - Comprehensive guide to all documentation, organized by audience and use case.
+
+### By Role
+
+#### 👨‍💻 Developers
+- **[Getting Started](GETTING_STARTED.md)** - Setup and first steps
+- **[CLI Usage](../core/docs/CLI_USAGE.md)** - Command-line interface
+- **[System Architecture](../core/docs/SYSTEM_ARCHITECTURE.md)** - Technical implementation
+- **[API Documentation](http://localhost:8000/docs)** - Interactive API reference
+
+#### 🏗️ Architects
+- **[Architecture Insights](architecture_insights.md)** - High-level system design
+- **[Architecture Decisions](architecture-decisions.md)** - ADRs and design rationale
+- **[MCP Architecture](mcp_architecture.md)** - Model Context Protocol integration
+
+#### 📋 Product/Business
+- **[Project Overview](project-overview.md)** - Vision, market, and roadmap
+- **[Current Tasks](task_assignment.md)** - Active development priorities
+
+### By Feature
+
+#### 🤖 Agent Development
+- **[A2A Integration Guide](../core/docs/A2A_INTEGRATION_GUIDE.md)** - Agent-to-Agent communication
+- **[Agent Chat Implementation](../core/docs/agent-chat-implementation-plan.md)** - Chat system
+- **[Agent Protocol Implementation](../core/docs/agent-protocol-implementation-plan.md)** - Protocol details
+
+#### 🔌 MCP Integration
+- **[MCP Architecture](mcp_architecture.md)** - System design
+- **[MCP Implementation Plan](mcp-implementation-plan.md)** - Development roadmap
+
+#### 🔐 Authentication
+- **[Auth Implementation](auth_implementation.md)** - Authentication system
+- **[Auth Context Dependency](../core/docs/auth_context_dependency.md)** - Auth patterns
+- **[Dependency Injection](dependency_injection_patterns.md)** - DI patterns
+
+## 🎯 Common Use Cases
+
+| I want to... | Start with... |
+|--------------|---------------|
+| Set up development environment | [Getting Started](GETTING_STARTED.md) |
+| Understand the architecture | [Architecture Insights](architecture_insights.md) |
+| Build an agent | [A2A Integration Guide](../core/docs/A2A_INTEGRATION_GUIDE.md) |
+| Use the CLI | [CLI Usage](../core/docs/CLI_USAGE.md) |
+| Deploy to production | [Deployment Guide](#) *(Coming Soon)* |
+| Contribute code | [Contributing Guidelines](#) *(Coming Soon)* |
+
+## 🔧 Development Resources
+
+### Essential URLs
+- **Core API**: `http://localhost:8000`
+- **API Docs**: `http://localhost:8000/docs`
+- **MCP Manager**: `http://localhost:7999`
+- **Traefik Dashboard**: `http://localhost:8080`
+
+### Quick Commands
+```bash
+# Start development
+make dev-up
+
+# View logs
+docker compose -f docker-compose.dev.yaml logs -f
+
+# Run tests
+python test_mcp_flow.py
+```
+
+## 📋 Documentation Status
+
+- ✅ **Complete** - Comprehensive and up-to-date
+- 🔄 **In Progress** - Partially complete
+- ⚠️ **Planned** - Not yet started
+
+See [Documentation Index](DOCUMENTATION_INDEX.md) for detailed status of all documents.
 
 ---
 
-## 🎯 **Quick Start for New Developers**
+*This documentation is actively maintained. For questions or improvements, please contact the development team.*
 
-If you're new to the project, start here:
-
-1. **[Project Overview](./project-overview.md)** - Understand what AgentArea is and its goals
-2. **[Architecture Insights](./architecture_insights.md)** - Get familiar with the overall system design
-3. **[Current Tasks](./current-tasks.md)** - See what's being worked on now
-4. **[Dependency Injection Patterns](./dependency_injection_patterns.md)** - Learn the coding patterns used
-
----
-
-## 💡 **Key Concepts**
-
-- **Model Context Protocol (MCP)** - Universal standard for connecting AI agents to tools and data sources
-- **Agent-to-Agent Communication** - Protocol for multi-agent collaboration and task distribution
-- **Event-Driven Architecture** - Redis-based event bus for service communication
-- **Unified Configuration** - `json_spec` pattern for flexible MCP provider configuration
-- **Domain Events** - Business-focused events for clean service boundaries
-- **Microservices** - AgentArea backend + MCP Infrastructure + supporting services
-
----
-
-## 📖 **Related Documentation**
-
-- **[Core Module Documentation](../core/docs/)** - Technical documentation for core components
-- **[Frontend Documentation](../frontend/)** - UI components and integration guides
-- **[MCP Infrastructure](../mcp-infrastructure/)** - Container management and deployment
-
----
-
-*Documentation last updated: January 2025*
+*Last updated: January 2025*

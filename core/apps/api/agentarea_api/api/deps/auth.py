@@ -2,19 +2,40 @@
 
 This module provides dependency injection functions for authentication
 and authorization used across the AgentArea API endpoints.
-
-Note: This is a simplified placeholder implementation. In a production
-environment, this would be replaced with proper authentication logic.
 """
 
 import logging
+from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from agentarea_common.auth import UserContext, UserContextDep, get_user_context
 
 logger = logging.getLogger(__name__)
 
-# Placeholder for a default test user ID
+# Placeholder for a default test user ID (for backward compatibility)
 DEFAULT_USER_ID = "test-user-123"
+
+
+async def get_workspace_id(
+    x_workspace_id: str | None = Header(
+        None, 
+        description="Workspace ID for data isolation. Required for most endpoints.",
+        alias="X-Workspace-ID"
+    )
+) -> str:
+    """Get the workspace ID from the request header.
+    
+    Args:
+        x_workspace_id: Workspace ID provided in X-Workspace-ID header
+        
+    Returns:
+        str: The workspace ID, defaults to "default" if not provided
+    """
+    return x_workspace_id or "default"
+
+
+# Type alias for workspace dependency
+WorkspaceDep = Annotated[str, Depends(get_workspace_id)]
 
 
 async def get_current_user_id(
@@ -23,8 +44,8 @@ async def get_current_user_id(
 ) -> str:
     """Get the current user ID from the request.
 
-    This is a simplified placeholder implementation. In a production environment,
-    this would validate tokens, check session cookies, etc.
+    This is a backward compatibility function. New code should use get_user_context
+    and UserContextDep instead.
 
     Args:
         request: The FastAPI request object
@@ -36,6 +57,14 @@ async def get_current_user_id(
     Raises:
         HTTPException: If authentication fails
     """
+    # First try to get from JWT context
+    try:
+        user_context = await get_user_context(request)
+        return user_context.user_id
+    except HTTPException:
+        # Fall back to legacy header/query parameter method for testing
+        pass
+
     # First check if user ID is provided in header (for testing)
     if x_user_id:
         logger.debug(f"Using user ID from header: {x_user_id}")
@@ -46,12 +75,6 @@ async def get_current_user_id(
     if user_id:
         logger.debug(f"Using user ID from query parameter: {user_id}")
         return user_id
-
-    # In a real implementation, we would:
-    # 1. Extract and validate JWT tokens from Authorization header
-    # 2. Check session cookies
-    # 3. Validate against user database
-    # 4. Handle proper error responses
 
     # For now, return a default test user ID
     logger.debug(f"Using default user ID: {DEFAULT_USER_ID}")
@@ -83,3 +106,33 @@ async def get_admin_user_id(
         )
 
     return user_id
+
+
+# New context-based dependencies
+async def get_admin_user_context(
+    user_context: UserContextDep,
+) -> UserContext:
+    """Get the current user context and verify admin privileges.
+
+    Args:
+        user_context: The user context from get_user_context
+
+    Returns:
+        UserContext: The user context if admin
+
+    Raises:
+        HTTPException: If user is not an admin
+    """
+    # In a real implementation, check if user has admin role
+    # For now, check if user has admin role in their roles list
+    if "admin" not in user_context.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Not authorized to perform this action"
+        )
+
+    return user_context
+
+
+# Type alias for admin context dependency
+AdminUserContextDep = Annotated[UserContext, Depends(get_admin_user_context)]

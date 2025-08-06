@@ -1,5 +1,12 @@
 http:
     routers:
+        mcp-filesystem-instance-cb93dd87:
+            rule: PathPrefix(`/mcp/filesystem-instance-cb93dd87`)
+            service: mcp-filesystem-instance-cb93dd87-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-filesystem-instance-cb93dd87-stripprefix
         mcp-manager-api:
             rule: PathPrefix(`/api/mcp`)
             service: mcp-manager-service
@@ -17,6 +24,20 @@ http:
             service: mcp-manager-service
             entryPoints:
                 - web
+        mcp-mcp-echo-http-d43c2606:
+            rule: PathPrefix(`/mcp/mcp-echo-http-d43c2606`)
+            service: mcp-mcp-echo-http-d43c2606-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-mcp-echo-http-d43c2606-stripprefix
+        mcp-mcp-echo2-e9a4959a:
+            rule: PathPrefix(`/mcp/mcp-echo2-e9a4959a`)
+            service: mcp-mcp-echo2-e9a4959a-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-mcp-echo2-e9a4959a-stripprefix
         mcp-nginx-704e5037:
             rule: PathPrefix(`/mcp/nginx-704e5037`)
             service: mcp-nginx-704e5037-service
@@ -52,11 +73,37 @@ http:
                 - web
             middlewares:
                 - mcp-test-nginx-server-cb3bd69f-stripprefix
+        mcp-test-service-8535b145-ad538c4a:
+            rule: PathPrefix(`/mcp/test-service-8535b145-ad538c4a`)
+            service: mcp-test-service-8535b145-ad538c4a-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-test-service-8535b145-ad538c4a-stripprefix
+        mcp-test-service-test-581aa3be-1b99e0e1:
+            rule: PathPrefix(`/mcp/test-service-test-581aa3be-1b99e0e1`)
+            service: mcp-test-service-test-581aa3be-1b99e0e1-service
+            entryPoints:
+                - web
+            middlewares:
+                - mcp-test-service-test-581aa3be-1b99e0e1-stripprefix
     services:
+        mcp-filesystem-instance-cb93dd87-service:
+            loadBalancer:
+                servers:
+                    - url: http://127.0.0.1:8000
         mcp-manager-service:
             loadBalancer:
                 servers:
                     - url: http://mcp-manager:8000
+        mcp-mcp-echo-http-d43c2606-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.4:3000
+        mcp-mcp-echo2-e9a4959a-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.3:3000
         mcp-nginx-704e5037-service:
             loadBalancer:
                 servers:
@@ -77,11 +124,34 @@ http:
             loadBalancer:
                 servers:
                     - url: http://10.88.0.2:80
+        mcp-test-service-8535b145-ad538c4a-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.6:80
+        mcp-test-service-test-581aa3be-1b99e0e1-service:
+            loadBalancer:
+                servers:
+                    - url: http://10.88.0.5:80
     middlewares:
         mcp-api-stripprefix:
             stripPrefix:
                 prefixes:
                     - /api/mcp
+                forceSlash: false
+        mcp-filesystem-instance-cb93dd87-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/filesystem-instance-cb93dd87
+                forceSlash: false
+        mcp-mcp-echo-http-d43c2606-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/mcp-echo-http-d43c2606
+                forceSlash: false
+        mcp-mcp-echo2-e9a4959a-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/mcp-echo2-e9a4959a
                 forceSlash: false
         mcp-nginx-704e5037-stripprefix:
             stripPrefix:
@@ -112,4 +182,14 @@ http:
             stripPrefix:
                 prefixes:
                     - /mcp/test-nginx-server-cb3bd69f
+                forceSlash: false
+        mcp-test-service-8535b145-ad538c4a-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/test-service-8535b145-ad538c4a
+                forceSlash: false
+        mcp-test-service-test-581aa3be-1b99e0e1-stripprefix:
+            stripPrefix:
+                prefixes:
+                    - /mcp/test-service-test-581aa3be-1b99e0e1
                 forceSlash: false

@@ -4,17 +4,23 @@ import { createAgent } from '@/lib/api';
 import { z } from 'zod';
 import type { components } from '@/api/schema';
 
+// Define Zod schema for MCP Tool Config
+const MCPToolConfigSchema = z.object({
+  tool_name: z.string().min(1, "Tool name is required"),
+  requires_user_confirmation: z.boolean().optional().default(false),
+});
+
 // Define Zod schema for MCPConfig to validate tools_config array
 const MCPConfigSchema = z.object({
   mcp_server_id: z.string().uuid("Invalid MCP Server ID"),
-  api_key: z.string().min(1, "API Key is required"),
-  config: z.record(z.unknown()).optional().nullable(), // Allow any JSON object for config
+  allowed_tools: z.array(MCPToolConfigSchema).optional().nullable(),
 });
 
 // Define Zod schema for individual Event Config items
 const EventConfigItemSchema = z.object({
   event_type: z.string().min(1, "Event type is required"), // e.g., 'text_input', 'cron'
   config: z.record(z.unknown()).optional().nullable(), // For future event-specific configs
+  enabled: z.boolean().optional().default(true), // Whether the event is enabled
 });
 
 // Extended type for form state that includes the instruction field
@@ -58,40 +64,60 @@ export async function addAgent(
 
   // Need to manually reconstruct the array/object structure for validation
   const mcpConfigs: Record<number, Partial<components["schemas"]["MCPConfig"]>> = {};
+  const mcpToolConfigs: Record<number, Record<number, Partial<components["schemas"]["MCPToolConfig"]>>> = {};
+  
   formData.forEach((value, key) => {
-    const match = key.match(/tools_config\.mcp_server_configs\[(\d+)\]\.(.*)/);
-    if (match) {
-      const index = parseInt(match[1], 10);
-      const field = match[2] as keyof components["schemas"]["MCPConfig"];
+    // Handle MCP server configs
+    const mcpMatch = key.match(/tools_config\.mcp_server_configs\[(\d+)\]\.mcp_server_id/);
+    if (mcpMatch) {
+      const index = parseInt(mcpMatch[1], 10);
       if (!mcpConfigs[index]) {
         mcpConfigs[index] = {};
       }
+      mcpConfigs[index].mcp_server_id = value as string;
+    }
+    
+    // Handle allowed tools
+    const toolMatch = key.match(/tools_config\.mcp_server_configs\[(\d+)\]\.allowed_tools\[(\d+)\]\.(.*)/);
+    if (toolMatch) {
+      const serverIndex = parseInt(toolMatch[1], 10);
+      const toolIndex = parseInt(toolMatch[2], 10);
+      const field = toolMatch[3] as keyof components["schemas"]["MCPToolConfig"];
       
-      if (field === 'config' && typeof value === 'string' && value.trim()) {
-        try {
-          mcpConfigs[index][field] = JSON.parse(value);
-        } catch (parseError) {
-          mcpConfigs[index][field] = { error: "INVALID_JSON" }; // Mark as invalid for Zod
-          console.error(`Failed to parse JSON for index ${index}, field ${field}:`, parseError);
-        }
-      } else {
-        // Assign other fields directly as string
-        mcpConfigs[index][field as string] = value as unknown;
+      if (!mcpToolConfigs[serverIndex]) {
+        mcpToolConfigs[serverIndex] = {};
       }
+      if (!mcpToolConfigs[serverIndex][toolIndex]) {
+        mcpToolConfigs[serverIndex][toolIndex] = {};
+      }
+      
+      if (field === 'requires_user_confirmation') {
+        mcpToolConfigs[serverIndex][toolIndex][field] = value === 'on' || value === 'true';
+      } else {
+        mcpToolConfigs[serverIndex][toolIndex][field as string] = value as unknown;
+      }
+    }
+  });
+  
+  // Combine MCP configs with their allowed tools
+  Object.keys(mcpConfigs).forEach(serverIndexStr => {
+    const serverIndex = parseInt(serverIndexStr, 10);
+    if (mcpToolConfigs[serverIndex]) {
+      mcpConfigs[serverIndex].allowed_tools = Object.values(mcpToolConfigs[serverIndex]) as components["schemas"]["MCPToolConfig"][];
     }
   });
   // Convert the record back to an array, ensuring required fields are present or handled by Zod
   const mcpConfigsArray = Object.values(mcpConfigs).map(config => config as components["schemas"]["MCPConfig"]);
 
   // Reconstruct events array using new format
-  const eventConfigs: Record<number, { event_type: string, config?: Record<string, unknown> }> = {};
+  const eventConfigs: Record<number, { event_type: string, config?: Record<string, unknown>, enabled?: boolean }> = {};
   formData.forEach((value, key) => {
     const match = key.match(/events_config\.events\[(\d+)\]\.(.*)/);
     if (match) {
       const index = parseInt(match[1], 10);
       const field = match[2];
       if (!eventConfigs[index]) {
-        eventConfigs[index] = { event_type: '' };
+        eventConfigs[index] = { event_type: '', enabled: true };
       }
       // Handle potential JSON parsing for config
       if (field === 'config' && typeof value === 'string' && value.trim()) {
@@ -103,6 +129,8 @@ export async function addAgent(
          }
       } else if (field === 'event_type') {
         eventConfigs[index].event_type = value as string;
+      } else if (field === 'enabled') {
+        eventConfigs[index].enabled = value === 'on' || value === 'true';
       }
     }
   });

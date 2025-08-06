@@ -3,7 +3,7 @@
 import pytest
 import pytest_asyncio
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from agentarea_triggers.domain.enums import TriggerType, ExecutionStatus
@@ -80,7 +80,7 @@ class TestTriggerExecutionIntegration:
             event_broker=AsyncMock(),
             agent_repository=None,
             task_service=mock_task_service,
-            llm_service=None,
+            llm_condition_evaluator=None,
             temporal_schedule_manager=None
         )
         
@@ -152,7 +152,7 @@ class TestTriggerExecutionIntegration:
             event_broker=AsyncMock(),
             agent_repository=None,
             task_service=mock_task_service,
-            llm_service=None,
+            llm_condition_evaluator=None,
             temporal_schedule_manager=None
         )
         
@@ -167,7 +167,7 @@ class TestTriggerExecutionIntegration:
         }
         
         # Mock datetime for time condition evaluation
-        with pytest.mock.patch('agentarea_triggers.trigger_service.datetime') as mock_datetime:
+        with patch('agentarea_triggers.trigger_service.datetime') as mock_datetime:
             mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 10, 0, 0)  # 10 AM
             
             result = await trigger_service.execute_trigger(sample_trigger.id, execution_data)
@@ -202,7 +202,7 @@ class TestTriggerExecutionIntegration:
             event_broker=AsyncMock(),
             agent_repository=None,
             task_service=mock_task_service,
-            llm_service=None,
+            llm_condition_evaluator=None,
             temporal_schedule_manager=None
         )
         
@@ -254,7 +254,7 @@ class TestTriggerExecutionIntegration:
             event_broker=AsyncMock(),
             agent_repository=None,
             task_service=mock_task_service,
-            llm_service=None,
+            llm_condition_evaluator=None,
             temporal_schedule_manager=None
         )
         
@@ -317,7 +317,7 @@ class TestTriggerExecutionIntegration:
             event_broker=AsyncMock(),
             agent_repository=None,
             task_service=mock_task_service,
-            llm_service=None,
+            llm_condition_evaluator=None,
             temporal_schedule_manager=None
         )
         

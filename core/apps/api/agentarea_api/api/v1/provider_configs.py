@@ -31,7 +31,8 @@ class ProviderConfigResponse(BaseModel):
     provider_spec_id: str
     name: str
     endpoint_url: str | None
-    user_id: str | None
+    workspace_id: str
+    created_by: str
     is_active: bool
     is_public: bool
     created_at: datetime
@@ -48,7 +49,8 @@ class ProviderConfigResponse(BaseModel):
             provider_spec_id=str(provider_config.provider_spec_id),
             name=provider_config.name,
             endpoint_url=provider_config.endpoint_url,
-            user_id=str(provider_config.user_id) if provider_config.user_id else None,
+            workspace_id=provider_config.workspace_id,
+            created_by=provider_config.created_by,
             is_active=provider_config.is_active,
             is_public=provider_config.is_public,
             created_at=provider_config.created_at,

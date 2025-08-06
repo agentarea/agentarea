@@ -15,6 +15,9 @@ from datetime import datetime
 import pytest
 import pytest_asyncio
 from agentarea_common.base.models import BaseModel
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.test_utils import create_test_user_context
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec, ProviderConfig, ModelInstance
 from sqlalchemy import event, select
 from sqlalchemy.engine import Engine
@@ -103,6 +106,52 @@ def mock_agent_config():
         "workflow_type": "single",
         "tools_config": {"mcp_servers": [], "builtin_tools": [], "custom_tools": []},
     }
+
+
+@pytest.fixture
+def test_user_context():
+    """Create a test user context for workspace-scoped tests."""
+    return create_test_user_context(
+        user_id="test-user-123",
+        workspace_id="test-workspace-456",
+        roles=["user"]
+    )
+
+
+@pytest.fixture
+def test_user_context_2():
+    """Create a second test user context for isolation testing."""
+    return create_test_user_context(
+        user_id="test-user-789",
+        workspace_id="test-workspace-456",  # Same workspace
+        roles=["user"]
+    )
+
+
+@pytest.fixture
+def test_user_context_different_workspace():
+    """Create a test user context in a different workspace for isolation testing."""
+    return create_test_user_context(
+        user_id="test-user-999",
+        workspace_id="different-workspace-999",
+        roles=["user"]
+    )
+
+
+@pytest.fixture
+def admin_user_context():
+    """Create an admin user context for testing admin functionality."""
+    return create_test_user_context(
+        user_id="admin-user-123",
+        workspace_id="admin-workspace-456",
+        roles=["user", "admin"]
+    )
+
+
+@pytest.fixture
+def repository_factory(db_session, test_user_context):
+    """Create a repository factory with test user context."""
+    return RepositoryFactory(db_session, test_user_context)
 
 
 # Integration test markers
@@ -265,7 +314,8 @@ async def populated_db_session(test_engine):
                 name="Local Ollama",
                 api_key="dummy_key_for_ollama",
                 endpoint_url="http://localhost:11434",
-                user_id=None,
+                workspace_id="default",
+                created_by="system",
                 is_active=True,
                 is_public=True,
                 created_at=datetime.utcnow(),

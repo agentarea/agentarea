@@ -1,6 +1,8 @@
+from typing import List
 from uuid import UUID
 
-from agentarea_common.base.repository import BaseRepository
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.auth.context import UserContext
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,103 +10,142 @@ from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 
 
-class MCPServerRepository(BaseRepository[MCPServer]):
-    def __init__(self, session: AsyncSession):
-        self.session = session
+class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
+    def __init__(self, session: AsyncSession, user_context: UserContext):
+        super().__init__(session, MCPServer, user_context)
 
-    async def get(self, id: UUID) -> MCPServer | None:
-        result = await self.session.execute(select(MCPServer).where(MCPServer.id == id))
-        return result.scalar_one_or_none()
-
-    async def list(
+    async def list_servers(
         self,
         status: str | None = None,
         is_public: bool | None = None,
         tag: str | None = None,
-    ) -> list[MCPServer]:
-        query = select(MCPServer)
-
-        conditions = []
+        limit: int = 100,
+        offset: int = 0,
+        creator_scoped: bool = False,
+    ) -> List[MCPServer]:
+        """List MCP servers with filtering."""
+        filters = {}
         if status is not None:
-            conditions.append(MCPServer.status == status)
+            filters['status'] = status
         if is_public is not None:
-            conditions.append(MCPServer.is_public == is_public)
+            filters['is_public'] = is_public
+        
+        # Note: tag filtering with JSON arrays is complex and may need custom implementation
+        # For now, we'll handle basic filters through the base class
+        servers = await self.list_all(
+            creator_scoped=creator_scoped,
+            limit=limit,
+            offset=offset,
+            **filters
+        )
+        
+        # Apply tag filtering manually if needed
         if tag is not None:
-            # For SQLite, use LIKE to search within JSON array
-            conditions.append(MCPServer.tags.like(f'%"{tag}"%'))
+            servers = [s for s in servers if tag in (s.tags or [])]
+        
+        return servers
 
-        if conditions:
-            query = query.where(and_(*conditions))
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[MCPServer]:
+        """Get MCP servers by workspace ID with pagination.
+        
+        Note: This method is deprecated. Use list_servers() instead which automatically
+        filters by the current workspace from user context.
+        """
+        # For backward compatibility, but this should be replaced with list_servers()
+        if workspace_id != self.user_context.workspace_id:
+            return []  # Don't allow cross-workspace access
+        
+        return await self.list_servers(limit=limit, offset=offset)
 
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
+    async def create_server(self, entity: MCPServer) -> MCPServer:
+        """Create a new MCP server from domain entity.
+        
+        Note: This method is deprecated. Use create() with field parameters instead.
+        """
+        # Extract fields from the server entity
+        server_data = {
+            'id': entity.id,
+            'name': entity.name,
+            'description': entity.description,
+            'status': entity.status,
+            'is_public': entity.is_public,
+            'tags': entity.tags,
+            'config': getattr(entity, 'config', None),
+            'created_at': entity.created_at,
+            'updated_at': entity.updated_at,
+        }
+        
+        # Remove None values and system fields that will be auto-populated
+        server_data = {k: v for k, v in server_data.items() if v is not None}
+        server_data.pop('created_at', None)
+        server_data.pop('updated_at', None)
+        
+        return await self.create(**server_data)
 
-    async def create(self, entity: MCPServer) -> MCPServer:
-        self.session.add(entity)
-        await self.session.flush()
-        return entity
+    async def update_server(self, entity: MCPServer) -> MCPServer:
+        """Update an existing MCP server from domain entity.
+        
+        Note: This method is deprecated. Use update() with field parameters instead.
+        """
+        # Extract fields from the server entity
+        server_data = {
+            'name': entity.name,
+            'description': entity.description,
+            'status': entity.status,
+            'is_public': entity.is_public,
+            'tags': entity.tags,
+            'config': getattr(entity, 'config', None),
+        }
+        
+        # Remove None values
+        server_data = {k: v for k, v in server_data.items() if v is not None}
+        
+        updated_server = await self.update(entity.id, **server_data)
+        return updated_server or entity
 
-    async def update(self, entity: MCPServer) -> MCPServer:
-        await self.session.merge(entity)
-        await self.session.flush()
-        return entity
 
-    async def delete(self, id: UUID) -> bool:
-        result = await self.session.execute(select(MCPServer).where(MCPServer.id == id))
-        server = result.scalar_one_or_none()
-        if server:
-            await self.session.delete(server)
-            await self.session.flush()
-            return True
-        return False
+class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
+    def __init__(self, session: AsyncSession, user_context: UserContext):
+        super().__init__(session, MCPServerInstance, user_context)
 
-
-class MCPServerInstanceRepository(BaseRepository[MCPServerInstance]):
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
-    async def get(self, id: UUID) -> MCPServerInstance | None:
-        result = await self.session.execute(
-            select(MCPServerInstance).where(MCPServerInstance.id == id)
-        )
-        return result.scalar_one_or_none()
-
-    async def list(
+    async def list_by_server_spec(
         self,
-        server_spec_id: str | None = None,
-        status: str | None = None,
-    ) -> list[MCPServerInstance]:
-        query = select(MCPServerInstance)
-
-        conditions = []
-        if server_spec_id is not None:
-            conditions.append(MCPServerInstance.server_spec_id == server_spec_id)
-        if status is not None:
-            conditions.append(MCPServerInstance.status == status)
-
-        if conditions:
-            query = query.where(and_(*conditions))
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
-
-    async def create(self, instance: MCPServerInstance) -> MCPServerInstance:
-        self.session.add(instance)
-        await self.session.flush()
-        return instance
-
-    async def update(self, instance: MCPServerInstance) -> MCPServerInstance:
-        await self.session.merge(instance)
-        await self.session.flush()
-        return instance
-
-    async def delete(self, id: UUID) -> bool:
-        result = await self.session.execute(
-            select(MCPServerInstance).where(MCPServerInstance.id == id)
+        server_spec_id: str,
+        creator_scoped: bool = False,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> List[MCPServerInstance]:
+        """List instances by server spec ID within the current workspace."""
+        return await self.list_all(
+            creator_scoped=creator_scoped,
+            limit=limit,
+            offset=offset,
+            server_spec_id=server_spec_id
         )
-        instance = result.scalar_one_or_none()
-        if instance:
-            await self.session.delete(instance)
-            await self.session.flush()
-            return True
-        return False
+
+    async def list_by_status(
+        self,
+        status: str,
+        creator_scoped: bool = False,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> List[MCPServerInstance]:
+        """List instances by status within the current workspace."""
+        return await self.list_all(
+            creator_scoped=creator_scoped,
+            limit=limit,
+            offset=offset,
+            status=status
+        )
+
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[MCPServerInstance]:
+        """Get MCP server instances by workspace ID with pagination.
+        
+        Note: This method is deprecated. Use list_all() instead which automatically
+        filters by the current workspace from user context.
+        """
+        # For backward compatibility, but this should be replaced with list_all()
+        if workspace_id != self.user_context.workspace_id:
+            return []  # Don't allow cross-workspace access
+        
+        return await self.list_all(limit=limit, offset=offset)

@@ -7,7 +7,9 @@ from agentarea_api.api.deps.services import get_agent_service
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_common.config import get_database
-from fastapi import APIRouter, Depends, HTTPException
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.dependencies import UserContextDep
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 # Import A2A protocol subroutes
@@ -16,11 +18,12 @@ from . import agents_a2a, agents_well_known
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-async def validate_model_id(model_id: str) -> None:
+async def validate_model_id(model_id: str, user_context: UserContext) -> None:
     """Validate that the model_id corresponds to an existing model instance or is a valid model identifier.
     
     Args:
         model_id: The model ID to validate
+        user_context: Current user context
         
     Raises:
         HTTPException: If the model_id is invalid
@@ -29,7 +32,7 @@ async def validate_model_id(model_id: str) -> None:
     database = get_database()
     async with database.async_session_factory() as session:
         # Create model instance service
-        model_instance_repository = ModelInstanceRepository(session)
+        model_instance_repository = ModelInstanceRepository(session, user_context)
         model_instance_service = ModelInstanceService(
             repository=model_instance_repository,
             event_broker=None,  # Not needed for validation
@@ -73,19 +76,25 @@ async def validate_model_id(model_id: str) -> None:
         )
 
 
+class MCPToolConfig(BaseModel):
+    tool_name: str
+    requires_user_confirmation: bool = False
+
 class MCPConfig(BaseModel):
     mcp_server_id: str
-    requires_user_confirmation: bool | None = None
-    config: dict | None = None
+    allowed_tools: list[MCPToolConfig] | None = None
 
+class EventConfig(BaseModel):
+    event_type: str
+    config: dict | None = None
+    enabled: bool = True
 
 class ToolsConfig(BaseModel):
     mcp_server_configs: list[MCPConfig] | None = None
     planning: bool | None = None
 
-
 class EventsConfig(BaseModel):
-    events: list[str] | None = None
+    events: list[EventConfig] | None = None
 
 
 class AgentCreate(BaseModel):
@@ -136,18 +145,22 @@ class AgentResponse(BaseModel):
 
 
 @router.post("/", response_model=AgentResponse)
-async def create_agent(data: AgentCreate, agent_service: AgentService = Depends(get_agent_service)):
+async def create_agent(
+    data: AgentCreate, 
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service)
+):
     """Create a new agent."""
     # Validate model_id before creating agent
-    await validate_model_id(data.model_id)
+    await validate_model_id(data.model_id, user_context)
     
     agent = await agent_service.create_agent(
         name=data.name,
         description=data.description,
         instruction=data.instruction,
         model_id=data.model_id,
-        tools_config=data.tools_config.dict() if data.tools_config else None,
-        events_config=data.events_config.dict() if data.events_config else None,
+        tools_config=data.tools_config.model_dump() if data.tools_config else None,
+        events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
     )
     return AgentResponse.from_domain(agent)
@@ -163,9 +176,15 @@ async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_ag
 
 
 @router.get("/", response_model=list[AgentResponse])
-async def list_agents(agent_service: AgentService = Depends(get_agent_service)):
-    """List all agents."""
-    agents = await agent_service.list()
+async def list_agents(
+    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's agents only"),
+    agent_service: AgentService = Depends(get_agent_service)
+):
+    """List all workspace agents with optional filtering by creator."""
+    # Determine if we should filter by creator
+    creator_scoped = created_by == "me"
+    
+    agents = await agent_service.list(creator_scoped=creator_scoped)
     return [AgentResponse.from_domain(agent) for agent in agents]
 
 
@@ -173,20 +192,21 @@ async def list_agents(agent_service: AgentService = Depends(get_agent_service)):
 async def update_agent(
     agent_id: UUID,
     data: AgentUpdate,
+    user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Update an agent."""
     # Validate model_id if it's being updated
     if data.model_id is not None:
-        await validate_model_id(data.model_id)
+        await validate_model_id(data.model_id, user_context)
     
     agent = await agent_service.update_agent(
         id=agent_id,
         name=data.name,
         description=data.description,
         model_id=data.model_id,
-        tools_config=data.tools_config.dict() if data.tools_config else None,
-        events_config=data.events_config.dict() if data.events_config else None,
+        tools_config=data.tools_config.model_dump() if data.tools_config else None,
+        events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
     )
     if not agent:

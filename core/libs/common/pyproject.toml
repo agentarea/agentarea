@@ -17,6 +17,7 @@ dependencies = [
     "returns>=0.25.0",
     "infisicalsdk>=1.0.8",
     "temporalio>=1.12.0",
+
 ]
 
 [tool.hatch.build.targets.wheel]

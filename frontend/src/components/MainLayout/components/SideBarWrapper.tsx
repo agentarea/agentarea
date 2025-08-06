@@ -1,4 +1,6 @@
-import { cookies } from 'next/headers';
+"use client";
+
+import { useState, useEffect } from 'react';
 import { NavSection, BottomNavContent } from '../MainLayout';
 import SideBar from './SideBar';
 
@@ -7,12 +9,18 @@ type SideBarWrapperProps = {
     bottomMenuContent: BottomNavContent;
 }
 
-export default async function SideBarWrapper({ menuContent, bottomMenuContent }: SideBarWrapperProps) {
-    const cookieStore = await cookies();
-    const sidebarCollapsed = cookieStore.get('sidebarCollapsed');
-    const initialCollapsed = sidebarCollapsed?.value === 'true';
-    const expandedSections = cookieStore.get('expandedSections');
-    const initialExpanded = expandedSections ? JSON.parse(expandedSections.value) : [];
+export default function SideBarWrapper({ menuContent, bottomMenuContent }: SideBarWrapperProps) {
+    const [initialCollapsed, setInitialCollapsed] = useState(false);
+    const [initialExpanded, setInitialExpanded] = useState<string[]>([]);
+
+    useEffect(() => {
+        // Read from localStorage instead of cookies for client-side state
+        const sidebarCollapsed = localStorage.getItem('sidebarCollapsed');
+        setInitialCollapsed(sidebarCollapsed === 'true');
+        
+        const expandedSections = localStorage.getItem('expandedSections');
+        setInitialExpanded(expandedSections ? JSON.parse(expandedSections) : []);
+    }, []);
 
     return (
         <SideBar 

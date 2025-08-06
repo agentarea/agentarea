@@ -1,0 +1,62 @@
+# Default values for agentarea.
+# This is a YAML-formatted file.
+
+# AgentArea Backend dependency configuration
+agentarea-backend:
+  enabled: true
+
+# AgentArea Frontend dependency configuration
+agentarea-frontend:
+  enabled: true
+
+# AgentArea Worker dependency configuration
+agentarea-worker:
+  enabled: true
+
+# AgentArea MCP Manager dependency configuration
+agentarea-mcp-manager:
+  enabled: true
+
+# AgentArea Secrets Manager dependency configuration
+agentarea-secrets-manager:
+  enabled: true
+
+# AgentArea Temporal dependency configuration
+agentarea-temporal:
+  enabled: true
+
+# Bitnami Redis dependency configuration
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    persistence:
+      enabled: false
+
+# Bitnami PostgreSQL dependency configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "postgres"
+    username: "postgres"
+    password: "postgres"
+    database: "agentarea"
+  primary:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    persistence:
+      enabled: true
+      size: 8Gi

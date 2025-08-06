@@ -1,0 +1,330 @@
+"""Temporal-based agent execution runner for workflow orchestration."""
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+from temporalio import workflow
+
+from .base import BaseAgentRunner, AgentGoal, ExecutionResult, Message, RunnerConfig
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TemporalExecutionState:
+    """Execution state for Temporal runner."""
+    goal: AgentGoal
+    messages: list[Message] = field(default_factory=list)
+    current_iteration: int = 0
+    success: bool = False
+    final_response: str | None = None
+    total_cost: float = 0.0
+    # Additional Temporal-specific fields
+    agent_config: dict[str, Any] = field(default_factory=dict)
+    available_tools: list[dict[str, Any]] = field(default_factory=list)
+
+
+class TemporalAgentRunner(BaseAgentRunner):
+    """Temporal-based agent execution runner for workflow orchestration.
+    
+    This runner integrates with Temporal workflows and uses activities
+    for infrastructure concerns while maintaining the same interface
+    as other runners.
+    """
+
+    def __init__(
+        self,
+        activities_interface,
+        event_manager=None,
+        budget_tracker=None,
+        config: RunnerConfig | None = None,
+    ):
+        """Initialize the Temporal runner.
+        
+        Args:
+            activities_interface: Temporal activities interface
+            event_manager: Event manager for tracking (optional)
+            budget_tracker: Budget tracker (optional)
+            config: Runner configuration (optional)
+        """
+        super().__init__(config)
+        self.activities = activities_interface
+        self.event_manager = event_manager
+        self.budget_tracker = budget_tracker
+        self.terminator.budget_tracker = budget_tracker
+        
+        # Temporal-specific state
+        self._paused = False
+        self._pause_reason = ""
+
+    async def run(self, goal: AgentGoal, workflow_state=None) -> ExecutionResult:
+        """Execute the agent workflow using Temporal activities.
+        
+        Args:
+            goal: The goal to achieve
+            workflow_state: Optional existing workflow state
+            
+        Returns:
+            ExecutionResult with final results
+        """
+        # Create or use existing state
+        if workflow_state:
+            state = workflow_state
+            state.goal = goal
+        else:
+            state = TemporalExecutionState(goal=goal)
+        
+        # Add system message if first run
+        if not state.messages:
+            system_prompt = self._build_system_prompt(goal)
+            state.messages.append(Message(role="system", content=system_prompt))
+        
+        workflow.logger.info(f"Starting Temporal agent execution for goal: {goal.description}")
+        
+        # Use the unified main loop with pause support
+        result = await self._execute_main_loop(
+            state,
+            pause_check=lambda: self._paused,
+            wait_for_unpause=self._wait_for_unpause
+        )
+        
+        return result
+
+    async def _execute_iteration(self, state: TemporalExecutionState) -> None:
+        """Execute a single iteration using Temporal activities."""
+        iteration = state.current_iteration
+        
+        # Log iteration start
+        if self.event_manager:
+            self.event_manager.add_event("iteration_started", {
+                "iteration": iteration,
+                "budget_remaining": self.budget_tracker.get_remaining() if self.budget_tracker else 0
+            })
+
+        try:
+            # Execute the iteration using activities
+            await self._execute_temporal_iteration(state)
+
+            # Check budget warnings
+            await self._check_budget_status()
+
+            # Log iteration completion
+            if self.event_manager:
+                self.event_manager.add_event("iteration_completed", {
+                    "iteration": iteration,
+                    "success": True
+                })
+
+        except Exception as e:
+            # Log iteration failure
+            if self.event_manager:
+                self.event_manager.add_event("iteration_failed", {
+                    "iteration": iteration,
+                    "error": str(e)
+                })
+            raise
+
+    async def _execute_temporal_iteration(self, state: TemporalExecutionState) -> None:
+        """Execute iteration using Temporal activities."""
+        from ..workflows.constants import (
+            Activities,
+            LLM_CALL_TIMEOUT,
+            TOOL_EXECUTION_TIMEOUT,
+            ACTIVITY_TIMEOUT,
+            DEFAULT_RETRY_ATTEMPTS
+        )
+        from temporalio.common import RetryPolicy
+        
+        # Convert messages to dict format for activity
+        messages_dict = [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "tool_call_id": msg.tool_call_id,
+                "name": msg.name,
+            }
+            for msg in state.messages
+        ]
+
+        # Call LLM via activity
+        response = await workflow.execute_activity(
+            Activities.CALL_LLM,
+            args=[
+                messages_dict,
+                state.agent_config.get("model_id"),
+                state.available_tools,
+                "system",  # workspace_id
+                {"user_id": "dev-user"}  # user_context_data
+            ],
+            start_to_close_timeout=LLM_CALL_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
+        )
+
+        # Extract usage info and update budget
+        if self.budget_tracker:
+            usage_info = self._extract_usage_info(response)
+            self.budget_tracker.add_cost(usage_info["cost"])
+
+        # Convert response to Message
+        message_data = response.get("message", {})
+        assistant_message = Message(
+            role=message_data.get("role", "assistant"),
+            content=message_data.get("content", ""),
+            tool_call_id=message_data.get("tool_call_id"),
+            name=message_data.get("name"),
+        )
+
+        # Add assistant message
+        state.messages.append(assistant_message)
+
+        # Handle tool calls
+        tool_calls = self._extract_tool_calls(assistant_message)
+        if tool_calls:
+            await self._handle_temporal_tool_calls(state, tool_calls)
+
+        # Evaluate goal progress
+        await self._evaluate_temporal_goal_progress(state)
+
+    async def _handle_temporal_tool_calls(self, state: TemporalExecutionState, tool_calls: list[dict[str, Any]]) -> None:
+        """Handle tool calls using Temporal activities."""
+        from ..workflows.constants import Activities, TOOL_EXECUTION_TIMEOUT, DEFAULT_RETRY_ATTEMPTS
+        from temporalio.common import RetryPolicy
+        
+        for tool_call in tool_calls:
+            tool_name = tool_call["function"]["name"]
+            
+            try:
+                # Execute tool call via activity
+                result = await workflow.execute_activity(
+                    Activities.EXECUTE_MCP_TOOL,
+                    args=[
+                        tool_name,
+                        tool_call["function"]["arguments"]
+                    ],
+                    start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
+                )
+
+                # Add tool result to messages
+                state.messages.append(Message(
+                    role="tool",
+                    tool_call_id=tool_call["id"],
+                    name=tool_name,
+                    content=str(result.get("result", ""))
+                ))
+
+                # Check if completion tool was called
+                if tool_name == "task_complete" and result.get("completed"):
+                    state.success = True
+                    state.final_response = result.get("result", "Task completed")
+
+            except Exception as e:
+                workflow.logger.error(f"Tool call {tool_name} failed: {e}")
+
+                # Add error message
+                state.messages.append(Message(
+                    role="tool",
+                    tool_call_id=tool_call["id"],
+                    name=tool_name,
+                    content=f"Tool execution failed: {e}"
+                ))
+
+    async def _evaluate_temporal_goal_progress(self, state: TemporalExecutionState) -> None:
+        """Evaluate goal progress using Temporal activities."""
+        from ..workflows.constants import Activities, ACTIVITY_TIMEOUT, DEFAULT_RETRY_ATTEMPTS
+        from temporalio.common import RetryPolicy
+        
+        try:
+            # Convert goal to dict for activity
+            goal_dict = {
+                "id": str(state.goal.context.get("id", "unknown")),
+                "description": state.goal.description,
+                "success_criteria": state.goal.success_criteria,
+                "max_iterations": state.goal.max_iterations,
+                "requires_human_approval": False,
+                "context": state.goal.context
+            }
+
+            evaluation = await workflow.execute_activity(
+                Activities.EVALUATE_GOAL_PROGRESS,
+                args=[
+                    goal_dict,
+                    [{"role": msg.role, "content": msg.content} for msg in state.messages],
+                    state.current_iteration
+                ],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
+            )
+
+            if evaluation.get("goal_achieved", False):
+                state.success = True
+                state.final_response = evaluation.get("final_response")
+
+        except Exception as e:
+            workflow.logger.warning(f"Goal evaluation failed: {e}")
+
+    async def _check_budget_status(self) -> None:
+        """Check budget status and send warnings if needed."""
+        if not self.budget_tracker:
+            return
+            
+        if self.budget_tracker.should_warn():
+            if self.event_manager:
+                self.event_manager.add_event("budget_warning", {
+                    "usage_percentage": self.budget_tracker.get_usage_percentage(),
+                    "cost": self.budget_tracker.cost,
+                    "limit": self.budget_tracker.budget_limit,
+                    "message": self.budget_tracker.get_warning_message()
+                })
+            self.budget_tracker.mark_warning_sent()
+
+        if self.budget_tracker.is_exceeded():
+            if self.event_manager:
+                self.event_manager.add_event("budget_exceeded", {
+                    "cost": self.budget_tracker.cost,
+                    "limit": self.budget_tracker.budget_limit,
+                    "message": self.budget_tracker.get_exceeded_message()
+                })
+
+    def _build_system_prompt(self, goal: AgentGoal) -> str:
+        """Build system prompt for the agent."""
+        return f"""You are an AI assistant helping to achieve the following goal:
+
+GOAL: {goal.description}
+
+SUCCESS CRITERIA:
+{chr(10).join(f"- {criterion}" for criterion in goal.success_criteria)}
+
+You have a maximum of {goal.max_iterations} iterations to complete this task.
+
+Work step by step towards achieving the goal. Use available tools as needed."""
+
+    def _extract_usage_info(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Extract usage information from LLM response."""
+        # This would extract cost and usage info from the response
+        # Implementation depends on the response format
+        return {"cost": 0.0, "usage": {}}
+
+    def _extract_tool_calls(self, message: Message) -> list[dict[str, Any]]:
+        """Extract tool calls from assistant message."""
+        # This would parse tool calls from the message
+        # Implementation depends on the message format
+        return []
+
+    # Temporal-specific pause/resume functionality
+    async def _wait_for_unpause(self) -> None:
+        """Wait for unpause signal."""
+        await workflow.wait_condition(lambda: not self._paused)
+
+    def pause(self, reason: str = "Manual pause") -> None:
+        """Pause workflow execution."""
+        self._paused = True
+        self._pause_reason = reason
+        workflow.logger.info(f"Workflow paused: {reason}")
+
+    def resume(self, reason: str = "Manual resume") -> None:
+        """Resume workflow execution."""
+        self._paused = False
+        self._pause_reason = ""
+        workflow.logger.info(f"Workflow resumed: {reason}")

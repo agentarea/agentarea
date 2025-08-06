@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import AuthGuard from "@/components/auth/AuthGuard";
 import { Card } from "@/components/ui/card";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { 
@@ -34,24 +35,24 @@ interface Message {
   timestamp: Date;
 }
 
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: "info" | "warning" | "error";
-  time: string;
-  isRead: boolean;
-}
-
 interface Task {
   id: string;
   title: string;
   description: string;
-  status: "pending" | "in_progress" | "needs_input" | "completed";
+  status: "pending" | "in_progress" | "completed" | "needs_input";
   priority: "low" | "medium" | "high";
   assignedAgent: string;
   createdAt: string;
   hasUpdates?: boolean;
+}
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: "info" | "warning" | "error" | "success";
+  time: string;
+  isRead: boolean;
 }
 
 export default function WorkplacePage() {
@@ -74,6 +75,20 @@ export default function WorkplacePage() {
     { id: "team2", name: "Development Team", icon: <Building2 className="h-4 w-4" /> },
     { id: "team3", name: "Sales Team", icon: <Building2 className="h-4 w-4" /> },
   ];
+  
+  // Load selected workspace from localStorage on mount
+  useEffect(() => {
+    const savedWorkspace = localStorage.getItem("selectedWorkspace");
+    if (savedWorkspace) {
+      setSelectedWorkplace(savedWorkspace);
+    }
+  }, []);
+  
+  // Save selected workspace to localStorage when it changes
+  const handleWorkspaceChange = (workspaceId: string) => {
+    setSelectedWorkplace(workspaceId);
+    localStorage.setItem("selectedWorkspace", workspaceId);
+  };
   
   // Sample data for tasks and notifications
   const [tasks] = useState<Task[]>([
@@ -197,7 +212,8 @@ export default function WorkplacePage() {
   };
 
   return (
-    <ContentBlock
+    <AuthGuard>
+      <ContentBlock
       header={{
         // title: "Workplace",
         breadcrumb: [
@@ -206,7 +222,7 @@ export default function WorkplacePage() {
         description: "Your command center for managing agents and tasks",
         controls: (
           <div className="flex items-center gap-2">
-              <Select value={selectedWorkplace} onValueChange={setSelectedWorkplace}>
+              <Select value={selectedWorkplace} onValueChange={handleWorkspaceChange}>
                 <SelectTrigger className="w-[200px] h-9 text-sm bg-white border-gray-200">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
@@ -269,202 +285,155 @@ export default function WorkplacePage() {
                 </p>
               </div>
               
-              <ScrollArea className="h-[280px] pr-4">
-                <div className="space-y-4">
-                  {messages.map((message) => (
-                    <div 
-                      key={message.id} 
-                      className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div 
-                        className={`max-w-[80%] p-4 rounded-xl ${
-                          message.sender === 'user' 
-                            ? 'bg-indigo-500 text-white' 
-                            : 'bg-gray-100 text-gray-900'
-                        }`}
+              {/* Recent messages */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700">Recent Messages</h3>
+                <ScrollArea className="h-32">
+                  <div className="space-y-2">
+                    {messages.slice(-3).map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                       >
-                        <p>{message.content}</p>
-                        <p className="text-xs opacity-70 mt-2">
-                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <div
+                          className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                            message.sender === "user"
+                              ? "bg-indigo-500 text-white"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {message.content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </Card>
+          </div>
+
+          {/* Sidebar with tasks and notifications */}
+          <div className="space-y-6">
+            {/* Active Tasks */}
+            <Card className="p-4 border border-gray-200 shadow-sm bg-white rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Active Tasks</h3>
+                <Badge variant="outline" className="text-xs border-gray-200">
+                  {tasks.length}
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                {tasks.slice(0, 3).map((task) => (
+                  <div key={task.id} className="p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-800 truncate">
+                          {task.title}
+                        </h4>
+                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                          {task.description}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusTagClasses(task.status)}`}>
+                            {task.status.replace('_', ' ')}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {task.assignedAgent}
+                          </span>
+                        </div>
+                      </div>
+                      {task.hasUpdates && (
+                        <div className="ml-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {tasks.length > 3 && (
+                  <Button variant="ghost" size="sm" className="w-full text-xs text-gray-600 hover:text-gray-800">
+                    View all {tasks.length} tasks
+                    <ChevronRight className="h-3 w-3 ml-1" />
+                  </Button>
+                )}
+              </div>
+            </Card>
+
+            {/* Notifications */}
+            <Card className="p-4 border border-gray-200 shadow-sm bg-white rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Notifications</h3>
+                {unreadCount > 0 && (
+                  <Badge variant="outline" className="text-xs border-gray-200">
+                    {unreadCount} new
+                  </Badge>
+                )}
+              </div>
+              <div className="space-y-2">
+                {notifications.slice(0, 3).map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                      notification.isRead ? "bg-gray-50" : "bg-blue-50"
+                    }`}
+                    onClick={() => markNotificationAsRead(notification.id)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className={`mt-1 ${
+                        notification.type === "error" ? "text-red-500" :
+                        notification.type === "warning" ? "text-yellow-500" :
+                        notification.type === "success" ? "text-green-500" :
+                        "text-blue-500"
+                      }`}>
+                        {notification.type === "error" && <AlertCircle className="h-4 w-4" />}
+                        {notification.type === "warning" && <AlertCircle className="h-4 w-4" />}
+                        {notification.type === "success" && <CheckCircle2 className="h-4 w-4" />}
+                        {notification.type === "info" && <Bell className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-800">
+                          {notification.title}
+                        </h4>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {notification.message}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {notification.time}
                         </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                  </div>
+                ))}
+                {notifications.length > 3 && (
+                  <Button variant="ghost" size="sm" className="w-full text-xs text-gray-600 hover:text-gray-800">
+                    View all {notifications.length} notifications
+                    <ChevronRight className="h-3 w-3 ml-1" />
+                  </Button>
+                )}
+              </div>
             </Card>
-          </div>
-          
-          {/* Notifications section */}
-          <div>
-            <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-indigo-500" />
-                  <h2 className="text-lg font-semibold">Notifications</h2>
-                  {unreadCount > 0 && (
-                    <Badge variant="destructive" className="ml-1 bg-red-100 text-red-800 hover:bg-red-100">{unreadCount}</Badge>
-                  )}
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setNotifications(notifications.map(n => ({...n, isRead: true})))}
-                  disabled={!unreadCount}
-                  className="text-xs h-7 text-gray-500 hover:text-gray-700"
-                >
-                  Clear all
+
+            {/* Quick Actions */}
+            <Card className="p-4 border border-gray-200 shadow-sm bg-white rounded-xl">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
+              <div className="space-y-2">
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
+                  <Bot className="h-3 w-3 mr-2" />
+                  Create New Agent
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
+                  <MessageSquare className="h-3 w-3 mr-2" />
+                  Start Chat Session
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
+                  <Clock className="h-3 w-3 mr-2" />
+                  Schedule Task
                 </Button>
               </div>
-              
-              <ScrollArea className="max-h-[350px]">
-                <div className="space-y-3">
-                  {notifications.length === 0 ? (
-                    <div className="py-8 text-center">
-                      <p className="text-sm text-gray-500">No new notifications</p>
-                    </div>
-                  ) : (
-                    notifications.map((notification) => (
-                      <div 
-                        key={notification.id} 
-                        className={`p-3 border rounded-lg cursor-pointer hover:border-indigo-200 transition-colors ${
-                          notification.isRead ? 'bg-white' : 'bg-indigo-50'
-                        }`}
-                        onClick={() => markNotificationAsRead(notification.id)}
-                      >
-                        <div className="flex items-start gap-2">
-                          {notification.type === 'info' && <Bell className="h-4 w-4 text-indigo-500 mt-0.5" />}
-                          {notification.type === 'warning' && <Clock className="h-4 w-4 text-amber-500 mt-0.5" />}
-                          {notification.type === 'error' && <AlertCircle className="h-4 w-4 text-red-500 mt-0.5" />}
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <h3 className="text-sm font-medium">{notification.title}</h3>
-                              <p className="text-xs text-gray-500">{notification.time}</p>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">{notification.message}</p>
-                          </div>
-                          {!notification.isRead && (
-                            <div className="h-2 w-2 bg-indigo-500 rounded-full shrink-0 mt-1" />
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
             </Card>
           </div>
         </div>
-        
-        {/* Tasks sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          {/* Tasks needing input */}
-          <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-500" />
-                <h2 className="text-lg font-semibold">Tasks Needing Your Input</h2>
-              </div>
-              <Badge variant="outline" className="border-gray-200">{tasksNeedingInput.length}</Badge>
-            </div>
-            
-            <ScrollArea className="max-h-[320px]">
-              <div className="space-y-3">
-                {tasksNeedingInput.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <p className="text-sm text-gray-500">No tasks need your input right now</p>
-                  </div>
-                ) : (
-                  tasksNeedingInput.map((task) => (
-                    <div key={task.id} className="p-4 border border-gray-200 rounded-lg hover:border-indigo-200 transition-colors bg-white">
-                      <div className="flex items-start gap-3 mb-3">
-                        <AlertCircle className="h-4 w-4 text-red-500 mt-1 shrink-0" />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium">{task.title}</h3>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                              task.priority === 'high' ? 'bg-red-100 text-red-800' : 
-                              task.priority === 'medium' ? 'bg-amber-100 text-amber-800' : 
-                              'bg-green-100 text-green-800'
-                            }`}>
-                              {task.priority.toUpperCase()}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">{task.description}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center text-xs mt-3">
-                        <div className="text-gray-500">
-                          <span>Agent: </span>
-                          <span className="font-medium text-gray-700">{task.assignedAgent}</span>
-                        </div>
-                        
-                        <Button size="sm" className="h-7 text-xs bg-indigo-500 hover:bg-indigo-600">
-                          Provide Input
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </Card>
-          
-          {/* Recent updates */}
-          <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-500" />
-                <h2 className="text-lg font-semibold">Recent Updates</h2>
-              </div>
-              <Button variant="ghost" size="sm" className="text-xs h-7 text-gray-500 hover:text-gray-700">View All</Button>
-            </div>
-            
-            <ScrollArea className="max-h-[320px]">
-              <div className="space-y-3">
-                {tasksWithUpdates.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <p className="text-sm text-gray-500">No recent updates</p>
-                  </div>
-                ) : (
-                  tasksWithUpdates.map((task) => (
-                    <div key={task.id} className="p-4 border border-gray-200 rounded-lg hover:border-indigo-200 transition-colors bg-white">
-                      <div className="flex items-start gap-3 mb-3">
-                        {task.status === 'completed' ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500 mt-1 shrink-0" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-blue-500 mt-1 shrink-0" />
-                        )}
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium">{task.title}</h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusTagClasses(task.status)}`}>
-                              {task.status.replace('_', ' ')}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">{task.description}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center text-xs mt-3">
-                        <div className="text-gray-500">
-                          <span>Updated: </span>
-                          <span>{task.createdAt}</span>
-                        </div>
-                        
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-50">
-                          View Details
-                          <ChevronRight className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </Card>
-        </div>
     </ContentBlock>
+    </AuthGuard>
   );
 } 

@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-manager
+  namespace: default
+  labels:
+    app: mcp-manager
+    component: api-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-manager
+      component: api-server
+  template:
+    metadata:
+      labels:
+        app: mcp-manager
+        component: api-server
+    spec:
+      serviceAccountName: mcp-manager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534 # nobody user
+        fsGroup: 65534
+      containers:
+      - name: mcp-manager
+        image: mcp-manager:k8s-test
+        imagePullPolicy: Never  # For minikube testing
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        # Environment variables from ConfigMap
+        - name: SERVER_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: SERVER_HOST
+        - name: SERVER_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: SERVER_PORT
+        - name: BACKEND_ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: BACKEND_ENVIRONMENT
+        - name: KUBERNETES_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: KUBERNETES_ENABLED
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: KUBERNETES_NAMESPACE
+        - name: KUBERNETES_DOMAIN
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: KUBERNETES_DOMAIN
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: LOG_LEVEL
+        - name: LOG_FORMAT
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: LOG_FORMAT
+        - name: CORS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-manager-config
+              key: CORS_ENABLED
+        # Auto-inject Kubernetes service account info
+        - name: KUBERNETES_SERVICE_HOST
+          value: "kubernetes.default.svc.cluster.local"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "443"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: Always

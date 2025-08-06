@@ -4,10 +4,19 @@ from uuid import UUID
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
-from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
-from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_llm.domain.models import (
+    ModelInstance,
+    ModelSpec,
+    ProviderConfig,
+    ProviderSpec,
+)
+from agentarea_llm.infrastructure.model_instance_repository import (
+    ModelInstanceRepository,
+)
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
-from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
+from agentarea_llm.infrastructure.provider_config_repository import (
+    ProviderConfigRepository,
+)
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 
 
@@ -46,7 +55,9 @@ class ProviderService:
 
     # Provider Specs methods
 
-    async def list_provider_specs(self, is_builtin: bool | None = None) -> list[ProviderSpec]:
+    async def list_provider_specs(
+        self, is_builtin: bool | None = None
+    ) -> list[ProviderSpec]:
         """List all available provider specifications.
 
         Args:
@@ -55,7 +66,7 @@ class ProviderService:
         Returns:
             List[ProviderSpec]: List of provider specifications.
         """
-        return await self.provider_spec_repo.list(is_builtin=is_builtin)
+        return await self.provider_spec_repo.list_specs(is_builtin=is_builtin)
 
     async def get_provider_spec(self, provider_spec_id: UUID) -> ProviderSpec | None:
         """Retrieve a provider specification by its ID.
@@ -66,7 +77,7 @@ class ProviderService:
         Returns:
             Optional[ProviderSpec]: The provider specification if found, else None.
         """
-        return await self.provider_spec_repo.get(provider_spec_id)
+        return await self.provider_spec_repo.get_by_id(provider_spec_id)
 
     async def get_provider_spec_by_key(self, provider_key: str) -> ProviderSpec | None:
         """Retrieve a provider specification by its provider key.
@@ -87,7 +98,7 @@ class ProviderService:
         name: str,
         api_key: str,
         endpoint_url: str | None = None,
-        user_id: UUID | None = None,
+        created_by: str | None = None,
         is_public: bool = False,
     ) -> ProviderConfig:
         """Create a new provider configuration and store its API key in the secret manager.
@@ -97,7 +108,7 @@ class ProviderService:
             name (str): Name of the provider configuration.
             api_key (str): API key for the provider.
             endpoint_url (Optional[str]): Optional endpoint URL.
-            user_id (Optional[UUID]): Optional user ID.
+            created_by (Optional[str]): Optional user who created this config.
             is_public (bool): Whether the configuration is public.
 
         Returns:
@@ -106,16 +117,15 @@ class ProviderService:
         config = ProviderConfig(
             provider_spec_id=provider_spec_id,
             name=name,
-            api_key=api_key,
             endpoint_url=endpoint_url,
-            user_id=user_id,
+            created_by=created_by or "system",
             is_public=is_public,
         )
-
         secret_name = f"provider_config_{config.id}"
+        config.api_key = secret_name
         await self.secret_manager.set_secret(secret_name, api_key)
 
-        return await self.provider_config_repo.create(config)
+        return await self.provider_config_repo.create_config(config)
 
     async def list_provider_configs(
         self,
@@ -133,9 +143,8 @@ class ProviderService:
         Returns:
             List[ProviderConfig]: List of provider configurations.
         """
-        return await self.provider_config_repo.list(
+        return await self.provider_config_repo.list_configs(
             provider_spec_id=provider_spec_id,
-            user_id=user_id,
             is_active=is_active,
         )
 
@@ -148,7 +157,7 @@ class ProviderService:
         Returns:
             Optional[ProviderConfig]: The provider configuration if found, else None.
         """
-        return await self.provider_config_repo.get(config_id)
+        return await self.provider_config_repo.get_with_relations(config_id)
 
     async def update_provider_config(
         self,
@@ -170,7 +179,7 @@ class ProviderService:
         Returns:
             Optional[ProviderConfig]: The updated provider configuration if found, else None.
         """
-        config = await self.provider_config_repo.get(config_id)
+        config = await self.provider_config_repo.get_by_id(config_id)
         if not config:
             return None
 
@@ -185,7 +194,7 @@ class ProviderService:
         if is_active is not None:
             config.is_active = is_active
 
-        return await self.provider_config_repo.update(config)
+        return await self.provider_config_repo.update_config(config)
 
     async def delete_provider_config(self, config_id: UUID) -> bool:
         """Delete a provider configuration and remove its API key from the secret manager.
@@ -206,7 +215,9 @@ class ProviderService:
 
     # Model Specs methods
 
-    async def list_model_specs(self, provider_spec_id: UUID | None = None) -> list[ModelSpec]:
+    async def list_model_specs(
+        self, provider_spec_id: UUID | None = None
+    ) -> list[ModelSpec]:
         """List model specifications with optional filtering by provider specification.
 
         Args:
@@ -215,7 +226,7 @@ class ProviderService:
         Returns:
             List[ModelSpec]: List of model specifications.
         """
-        return await self.model_spec_repo.list(provider_spec_id=provider_spec_id)
+        return await self.model_spec_repo.list_specs(provider_spec_id=provider_spec_id)
 
     async def get_model_spec(self, model_spec_id: UUID) -> ModelSpec | None:
         """Retrieve a model specification by its ID.
@@ -226,7 +237,7 @@ class ProviderService:
         Returns:
             Optional[ModelSpec]: The model specification if found, else None.
         """
-        return await self.model_spec_repo.get(model_spec_id)
+        return await self.model_spec_repo.get_by_id(model_spec_id)
 
     # Model Instances methods
 
@@ -257,7 +268,7 @@ class ProviderService:
             description=description,
             is_public=is_public,
         )
-        return await self.model_instance_repo.create(instance)
+        return await self.model_instance_repo.create_instance(instance)
 
     async def list_model_instances(
         self,
@@ -275,7 +286,7 @@ class ProviderService:
         Returns:
             List[ModelInstance]: List of model instances.
         """
-        return await self.model_instance_repo.list(
+        return await self.model_instance_repo.list_instances(
             provider_config_id=provider_config_id,
             model_spec_id=model_spec_id,
             is_active=is_active,
@@ -290,7 +301,7 @@ class ProviderService:
         Returns:
             Optional[ModelInstance]: The model instance if found, else None.
         """
-        return await self.model_instance_repo.get(instance_id)
+        return await self.model_instance_repo.get_by_id(instance_id)
 
     async def delete_model_instance(self, instance_id: UUID) -> bool:
         """Delete a model instance.
@@ -305,7 +316,9 @@ class ProviderService:
 
     # Helper methods
 
-    async def get_model_instance_with_config(self, instance_id: UUID) -> dict[str, Any] | None:
+    async def get_model_instance_with_config(
+        self, instance_id: UUID
+    ) -> dict[str, Any] | None:
         """Retrieve a model instance along with its provider configuration details and API key.
 
         Args:
@@ -315,7 +328,7 @@ class ProviderService:
             Optional[Dict[str, Any]]: Dictionary containing instance, provider type, model name,
                                       API key, and endpoint URL, or None if not found.
         """
-        instance = await self.model_instance_repo.get(instance_id)
+        instance = await self.model_instance_repo.get_by_id(instance_id)
         if not instance:
             return None
 

@@ -75,7 +75,7 @@ class TestTriggerService:
             event_broker=mock_event_broker,
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
-            llm_service=mock_llm_service,
+            llm_condition_evaluator=mock_llm_service,
             temporal_schedule_manager=mock_temporal_schedule_manager
         )
         
@@ -1026,3 +1026,371 @@ class TestTriggerService:
         assert result.status == ExecutionStatus.FAILED
         assert "failed" in result.error_message.lower()
         mock_trigger_repository.update.assert_called_once()  # For execution tracking
+
+class TestTriggerServiceMonitoring:
+    """Test cases for TriggerService monitoring and execution history enhancements."""
+
+    @pytest.fixture
+    def mock_trigger_repository(self):
+        """Mock trigger repository."""
+        return AsyncMock()
+
+    @pytest.fixture
+    def mock_trigger_execution_repository(self):
+        """Mock trigger execution repository."""
+        return AsyncMock()
+
+    @pytest.fixture
+    def mock_event_broker(self):
+        """Mock event broker."""
+        return AsyncMock()
+
+    @pytest.fixture
+    def trigger_service(
+        self,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_event_broker
+    ):
+        """Create TriggerService instance with mocked dependencies."""
+        return TriggerService(
+            trigger_repository=mock_trigger_repository,
+            trigger_execution_repository=mock_trigger_execution_repository,
+            event_broker=mock_event_broker
+        )
+
+    @pytest.fixture
+    def sample_trigger_id(self):
+        """Sample trigger ID."""
+        return uuid4()
+
+    @pytest.fixture
+    def sample_executions(self, sample_trigger_id):
+        """Sample trigger executions."""
+        return [
+            TriggerExecution(
+                id=uuid4(),
+                trigger_id=sample_trigger_id,
+                executed_at=datetime.utcnow() - timedelta(minutes=30),
+                status=ExecutionStatus.SUCCESS,
+                task_id=uuid4(),
+                execution_time_ms=1200,
+                trigger_data={"key": "value1"}
+            ),
+            TriggerExecution(
+                id=uuid4(),
+                trigger_id=sample_trigger_id,
+                executed_at=datetime.utcnow() - timedelta(minutes=20),
+                status=ExecutionStatus.FAILED,
+                task_id=None,
+                execution_time_ms=800,
+                error_message="Test error",
+                trigger_data={"key": "value2"}
+            ),
+            TriggerExecution(
+                id=uuid4(),
+                trigger_id=sample_trigger_id,
+                executed_at=datetime.utcnow() - timedelta(minutes=10),
+                status=ExecutionStatus.SUCCESS,
+                task_id=uuid4(),
+                execution_time_ms=1500,
+                trigger_data={"key": "value3"}
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_execution_history_paginated(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id,
+        sample_executions
+    ):
+        """Test getting paginated execution history."""
+        # Setup mocks
+        mock_trigger_execution_repository.list_executions_paginated.return_value = sample_executions[:2]
+        mock_trigger_execution_repository.count_executions_filtered.return_value = 10
+
+        # Execute
+        executions, total = await trigger_service.get_execution_history_paginated(
+            trigger_id=sample_trigger_id,
+            limit=2,
+            offset=0
+        )
+
+        # Verify
+        assert len(executions) == 2
+        assert total == 10
+        mock_trigger_execution_repository.list_executions_paginated.assert_called_once_with(
+            trigger_id=sample_trigger_id,
+            status=None,
+            start_time=None,
+            end_time=None,
+            limit=2,
+            offset=0
+        )
+        mock_trigger_execution_repository.count_executions_filtered.assert_called_once_with(
+            trigger_id=sample_trigger_id,
+            status=None,
+            start_time=None,
+            end_time=None
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_execution_history_paginated_with_filters(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id,
+        sample_executions
+    ):
+        """Test getting paginated execution history with status filter."""
+        # Setup mocks - only successful executions
+        successful_executions = [exec for exec in sample_executions if exec.status == ExecutionStatus.SUCCESS]
+        mock_trigger_execution_repository.list_executions_paginated.return_value = successful_executions
+        mock_trigger_execution_repository.count_executions_filtered.return_value = 2
+
+        # Execute
+        start_time = datetime.utcnow() - timedelta(hours=1)
+        end_time = datetime.utcnow()
+        executions, total = await trigger_service.get_execution_history_paginated(
+            trigger_id=sample_trigger_id,
+            status=ExecutionStatus.SUCCESS,
+            start_time=start_time,
+            end_time=end_time,
+            limit=10,
+            offset=0
+        )
+
+        # Verify
+        assert len(executions) == 2
+        assert total == 2
+        assert all(exec.status == ExecutionStatus.SUCCESS for exec in executions)
+        mock_trigger_execution_repository.list_executions_paginated.assert_called_once_with(
+            trigger_id=sample_trigger_id,
+            status=ExecutionStatus.SUCCESS,
+            start_time=start_time,
+            end_time=end_time,
+            limit=10,
+            offset=0
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_execution_metrics(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id
+    ):
+        """Test getting execution metrics."""
+        # Setup mock metrics data
+        metrics_data = {
+            'total_executions': 10,
+            'successful_executions': 8,
+            'failed_executions': 1,
+            'timeout_executions': 1,
+            'success_rate': 80.0,
+            'failure_rate': 20.0,
+            'avg_execution_time_ms': 1250.5,
+            'min_execution_time_ms': 800,
+            'max_execution_time_ms': 2000,
+            'period_hours': 24
+        }
+        mock_trigger_execution_repository.get_execution_metrics.return_value = metrics_data
+
+        # Execute
+        result = await trigger_service.get_execution_metrics(sample_trigger_id, hours=24)
+
+        # Verify
+        assert result == metrics_data
+        mock_trigger_execution_repository.get_execution_metrics.assert_called_once_with(
+            sample_trigger_id, 24
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_execution_timeline(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id
+    ):
+        """Test getting execution timeline."""
+        # Setup mock timeline data
+        timeline_data = [
+            {
+                'time_bucket': datetime.utcnow() - timedelta(hours=2),
+                'total_count': 5,
+                'success_count': 4,
+                'failed_count': 1,
+                'timeout_count': 0,
+                'success_rate': 80.0
+            },
+            {
+                'time_bucket': datetime.utcnow() - timedelta(hours=1),
+                'total_count': 3,
+                'success_count': 2,
+                'failed_count': 0,
+                'timeout_count': 1,
+                'success_rate': 66.67
+            }
+        ]
+        mock_trigger_execution_repository.get_execution_timeline.return_value = timeline_data
+
+        # Execute
+        result = await trigger_service.get_execution_timeline(
+            sample_trigger_id, hours=24, bucket_size_minutes=60
+        )
+
+        # Verify
+        assert result == timeline_data
+        assert len(result) == 2
+        assert result[0]['total_count'] == 5
+        assert result[0]['success_rate'] == 80.0
+        mock_trigger_execution_repository.get_execution_timeline.assert_called_once_with(
+            sample_trigger_id, 24, 60
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_execution_correlations(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id
+    ):
+        """Test getting execution correlations."""
+        # Setup mock correlation data
+        correlation_data = [
+            {
+                'id': uuid4(),
+                'trigger_id': sample_trigger_id,
+                'executed_at': datetime.utcnow() - timedelta(minutes=30),
+                'status': 'success',
+                'task_id': uuid4(),
+                'execution_time_ms': 1200,
+                'error_message': None,
+                'trigger_data': {'key': 'value1'},
+                'workflow_id': 'workflow_1',
+                'run_id': 'run_1',
+                'has_task_correlation': True,
+                'has_workflow_correlation': True
+            },
+            {
+                'id': uuid4(),
+                'trigger_id': sample_trigger_id,
+                'executed_at': datetime.utcnow() - timedelta(minutes=20),
+                'status': 'failed',
+                'task_id': None,
+                'execution_time_ms': 800,
+                'error_message': 'Test error',
+                'trigger_data': {'key': 'value2'},
+                'workflow_id': 'workflow_2',
+                'run_id': 'run_2',
+                'has_task_correlation': False,
+                'has_workflow_correlation': True
+            }
+        ]
+        mock_trigger_execution_repository.get_executions_with_task_correlation.return_value = correlation_data
+        mock_trigger_execution_repository.count_executions_filtered.return_value = 5
+
+        # Execute
+        correlations, total = await trigger_service.get_execution_correlations(
+            sample_trigger_id, limit=10, offset=0
+        )
+
+        # Verify
+        assert correlations == correlation_data
+        assert total == 5
+        assert len(correlations) == 2
+        assert correlations[0]['has_task_correlation'] is True
+        assert correlations[1]['has_task_correlation'] is False
+        assert all(corr['has_workflow_correlation'] is True for corr in correlations)
+        
+        mock_trigger_execution_repository.get_executions_with_task_correlation.assert_called_once_with(
+            sample_trigger_id, 10, 0
+        )
+        mock_trigger_execution_repository.count_executions_filtered.assert_called_once_with(
+            trigger_id=sample_trigger_id
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_execution_metrics_no_data(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id
+    ):
+        """Test getting execution metrics when no data exists."""
+        # Setup mock for no data
+        empty_metrics = {
+            'total_executions': 0,
+            'successful_executions': 0,
+            'failed_executions': 0,
+            'timeout_executions': 0,
+            'success_rate': 0.0,
+            'failure_rate': 0.0,
+            'avg_execution_time_ms': 0.0,
+            'min_execution_time_ms': 0,
+            'max_execution_time_ms': 0,
+            'period_hours': 24
+        }
+        mock_trigger_execution_repository.get_execution_metrics.return_value = empty_metrics
+
+        # Execute
+        result = await trigger_service.get_execution_metrics(sample_trigger_id, hours=24)
+
+        # Verify
+        assert result == empty_metrics
+        assert result['total_executions'] == 0
+        assert result['success_rate'] == 0.0
+        mock_trigger_execution_repository.get_execution_metrics.assert_called_once_with(
+            sample_trigger_id, 24
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_execution_timeline_empty(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id
+    ):
+        """Test getting execution timeline when no data exists."""
+        # Setup mock for empty timeline
+        mock_trigger_execution_repository.get_execution_timeline.return_value = []
+
+        # Execute
+        result = await trigger_service.get_execution_timeline(
+            sample_trigger_id, hours=24, bucket_size_minutes=60
+        )
+
+        # Verify
+        assert result == []
+        mock_trigger_execution_repository.get_execution_timeline.assert_called_once_with(
+            sample_trigger_id, 24, 60
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_execution_correlations_empty(
+        self,
+        trigger_service,
+        mock_trigger_execution_repository,
+        sample_trigger_id
+    ):
+        """Test getting execution correlations when no data exists."""
+        # Setup mock for empty correlations
+        mock_trigger_execution_repository.get_executions_with_task_correlation.return_value = []
+        mock_trigger_execution_repository.count_executions_filtered.return_value = 0
+
+        # Execute
+        correlations, total = await trigger_service.get_execution_correlations(
+            sample_trigger_id, limit=10, offset=0
+        )
+
+        # Verify
+        assert correlations == []
+        assert total == 0
+        mock_trigger_execution_repository.get_executions_with_task_correlation.assert_called_once_with(
+            sample_trigger_id, 10, 0
+        )
+        mock_trigger_execution_repository.count_executions_filtered.assert_called_once_with(
+            trigger_id=sample_trigger_id
+        )

@@ -1,25 +1,19 @@
-import uuid
-from datetime import datetime
-from typing import Any
+from typing import Any, List
 
-from sqlalchemy import JSON, Column, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import JSON, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
-Base = declarative_base()
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 
 
-class MCPServerInstance(Base):
+class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     __tablename__ = "mcp_server_instances"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    server_spec_id = Column(String(255), nullable=True)  # Nullable for external providers
-    json_spec = Column(JSON, nullable=False)  # Unified configuration storage
-    status = Column(String(50), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    server_spec_id: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Nullable for external providers
+    json_spec: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)  # Unified configuration storage
+    status: Mapped[str] = mapped_column(String(50), default="pending")
 
     def __init__(
         self,
@@ -28,14 +22,22 @@ class MCPServerInstance(Base):
         server_spec_id: str | None = None,
         json_spec: dict[str, Any] | None = None,
         status: str = "pending",
+        workspace_id: str | None = None,
+        created_by: str | None = None,
+        **kwargs
     ):
+        super().__init__(**kwargs)
         self.name = name
         self.description = description
         self.server_spec_id = server_spec_id
         self.json_spec = json_spec or {}
         self.status = status
+        if workspace_id is not None:
+            self.workspace_id = workspace_id
+        if created_by is not None:
+            self.created_by = created_by
 
-    def get_configured_env_vars(self) -> list[str]:
+    def get_configured_env_vars(self) -> List[str]:
         """Get list of environment variable names configured for this instance.
 
         Returns:
@@ -45,3 +47,21 @@ class MCPServerInstance(Base):
         if isinstance(env_vars, list):
             return [str(var) for var in env_vars]
         return []
+
+    def get_available_tools(self) -> List[dict[str, Any]]:
+        """Get list of available tools for this MCP server instance.
+
+        Returns:
+            List of tool dictionaries with name, description, and schema
+        """
+        return self.json_spec.get("available_tools", [])
+
+    def set_available_tools(self, tools: List[dict[str, Any]]) -> None:
+        """Set the available tools for this MCP server instance.
+
+        Args:
+            tools: List of tool dictionaries with name, description, and schema
+        """
+        if self.json_spec is None:
+            self.json_spec = {}
+        self.json_spec["available_tools"] = tools

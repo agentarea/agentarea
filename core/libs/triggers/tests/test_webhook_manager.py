@@ -243,14 +243,7 @@ class TestDefaultWebhookManager:
         
         assert result is False
     
-    @pytest.mark.asyncio
-    async def test_apply_rate_limiting_within_limit(self, webhook_manager):
-        """Test rate limiting when within limits."""
-        webhook_id = "test_webhook"
-        
-        # Should allow first request
-        result = await webhook_manager.apply_rate_limiting(webhook_id)
-        assert result is True
+    # Rate limiting tests removed - rate limiting moved to infrastructure layer
     
     @pytest.mark.asyncio
     async def test_get_webhook_response_success(self, webhook_manager):

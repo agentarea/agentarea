@@ -36,6 +36,9 @@ from .models import (
     LLMReasoningResult,
 )
 
+# Note: Agentic runners are not imported here to avoid Temporal sandbox issues
+# Import them directly from .agentic when needed outside of workflows
+
 # Import activities creation function for worker setup
 def create_activities_for_worker(dependencies: ActivityDependencies):
     """Create activities instances for the Temporal worker.
@@ -67,4 +70,5 @@ __all__ = [
     "LLMReasoningRequest",
     "LLMReasoningResult",
     "create_activities_for_worker",
+
 ] 

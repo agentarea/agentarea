@@ -6,11 +6,13 @@ from . import (
     agents_a2a,
     agents_tasks,
     agents_well_known,
+    auth,
     chat,
     mcp_server_instances,
     mcp_servers_specifications,
     model_instances_new,
     model_specs,
+    protected,
     provider_configs,
     provider_specs,
     triggers,
@@ -48,3 +50,9 @@ v1_router.include_router(webhooks.router)
 
 # Include triggers router
 v1_router.include_router(triggers.router)
+
+# Include auth router
+v1_router.include_router(auth.router)
+
+# Include protected router
+v1_router.include_router(protected.router)

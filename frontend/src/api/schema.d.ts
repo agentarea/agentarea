@@ -97,7 +97,7 @@ export interface paths {
         };
         /**
          * List Agents
-         * @description List all agents.
+         * @description List all workspace agents with optional filtering by creator.
          */
         get: operations["list_agents_v1_agents__get"];
         put?: never;
@@ -149,18 +149,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Handle Agent Jsonrpc
-         * @description A2A JSON-RPC endpoint for agent-specific communication.
-         *
-         *     Handles all A2A protocol methods for a specific agent:
-         *     - message/send
-         *     - message/stream
-         *     - tasks/get
-         *     - tasks/cancel
-         *     - tasks/send
-         *     - agent/authenticatedExtendedCard
-         */
+        /** Handle Agent Jsonrpc */
         post: operations["handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post"];
         delete?: never;
         options?: never;
@@ -175,10 +164,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Agent Well Known
-         * @description Get agent well-known information (public endpoint).
-         */
+        /** Get Agent Well Known */
         get: operations["get_agent_well_known_v1_agents__agent_id__a2a_well_known_get"];
         put?: never;
         post?: never;
@@ -271,10 +257,30 @@ export interface paths {
         get: operations["list_agent_tasks_v1_agents__agent_id__tasks__get"];
         put?: never;
         /**
-         * Create Task For Agent
-         * @description Create and execute a task for the specified agent using Temporal workflows.
+         * Create Task For Agent With Stream
+         * @description Create and execute a task for the specified agent with real-time SSE stream.
          */
-        post: operations["create_task_for_agent_v1_agents__agent_id__tasks__post"];
+        post: operations["create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agent_id}/tasks/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Task For Agent Sync
+         * @description Create and execute a task for the specified agent (synchronous response).
+         */
+        post: operations["create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -414,7 +420,7 @@ export interface paths {
         };
         /**
          * Get All Tasks
-         * @description Get all tasks across all agents with optional filtering.
+         * @description Get all workspace tasks across all agents with optional filtering.
          */
         get: operations["get_all_tasks_v1_tasks__get"];
         put?: never;
@@ -666,6 +672,46 @@ export interface paths {
         get: operations["get_containers_health_v1_mcp_server_instances_health_containers_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Instance Available Tools
+         * @description Get available tools for a specific MCP server instance.
+         */
+        get: operations["get_instance_available_tools_v1_mcp_server_instances__instance_id__tools_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp-server-instances/{instance_id}/discover-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Instance Tools
+         * @description Trigger tool discovery for a specific MCP server instance.
+         */
+        post: operations["discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -986,7 +1032,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/": {
+    "/v1/webhooks/{webhook_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -994,19 +1040,43 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Root
-         * @description Root endpoint.
+         * Handle webhook requests
+         * @description Process incoming webhook requests for registered triggers
          */
-        get: operations["root__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
+        get: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+        /**
+         * Handle webhook requests
+         * @description Process incoming webhook requests for registered triggers
+         */
+        put: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+        /**
+         * Handle webhook requests
+         * @description Process incoming webhook requests for registered triggers
+         */
+        post: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+        /**
+         * Handle webhook requests
+         * @description Process incoming webhook requests for registered triggers
+         */
+        delete: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+        /**
+         * Handle webhook requests
+         * @description Process incoming webhook requests for registered triggers
+         */
+        options: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+        /**
+         * Handle webhook requests
+         * @description Process incoming webhook requests for registered triggers
+         */
+        head: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+        /**
+         * Handle webhook requests
+         * @description Process incoming webhook requests for registered triggers
+         */
+        patch: operations["handle_webhook_v1_webhooks__webhook_id__options"];
         trace?: never;
     };
-    "/health": {
+    "/v1/webhooks/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -1014,10 +1084,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Health Check
-         * @description Health check endpoint for the main application.
+         * Webhook system health check
+         * @description Check if the webhook system is healthy and operational
          */
-        get: operations["health_check_health_get"];
+        get: operations["webhook_health_check_v1_webhooks_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1026,7 +1096,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/asyncapi": {
+    "/v1/webhooks/debug/{webhook_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1034,10 +1104,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Serve Asyncapi Schema
-         * @description Serve the AsyncAPI schema as an HTML response.
+         * Debug webhook configuration
+         * @description Get debug information about a webhook (admin only)
          */
-        get: operations["serve_asyncapi_schema_asyncapi_get"];
+        get: operations["debug_webhook_v1_webhooks_debug__webhook_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1046,15 +1116,223 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/asyncapi.json": {
+    "/v1/triggers/": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Download App Json Schema */
-        get: operations["download_app_json_schema_asyncapi_json_get"];
+        /**
+         * List Triggers
+         * @description List triggers with optional filtering.
+         *
+         *     Returns a list of triggers that match the specified criteria. Supports
+         *     filtering by agent ID, trigger type, and active status.
+         *
+         *     Args:
+         *         agent_id: Optional agent ID filter
+         *         trigger_type: Optional trigger type filter
+         *         active_only: Whether to only return active triggers
+         *         limit: Maximum number of triggers to return
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         List of triggers matching the criteria
+         */
+        get: operations["list_triggers_v1_triggers__get"];
+        put?: never;
+        /**
+         * Create Trigger
+         * @description Create a new trigger.
+         *
+         *     Creates a new trigger with the specified configuration. The trigger will be
+         *     validated and, if it's a cron trigger, automatically scheduled.
+         *
+         *     Args:
+         *         request: Trigger creation request data
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         The created trigger
+         *
+         *     Raises:
+         *         HTTPException: If validation fails or creation errors occur
+         */
+        post: operations["create_trigger_v1_triggers__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Trigger
+         * @description Get a specific trigger by ID.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         The trigger data
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        get: operations["get_trigger_v1_triggers__trigger_id__get"];
+        /**
+         * Update Trigger
+         * @description Update an existing trigger.
+         *
+         *     Updates the specified trigger with the provided data. Only non-null fields
+         *     in the request will be updated.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         request: Trigger update request data
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         The updated trigger
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found or validation fails
+         */
+        put: operations["update_trigger_v1_triggers__trigger_id__put"];
+        post?: never;
+        /**
+         * Delete Trigger
+         * @description Delete a trigger.
+         *
+         *     Permanently deletes the specified trigger and all its execution history.
+         *     If it's a cron trigger, the schedule will also be removed.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        delete: operations["delete_trigger_v1_triggers__trigger_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable Trigger
+         * @description Enable a trigger.
+         *
+         *     Enables the specified trigger, allowing it to execute when conditions are met.
+         *     For cron triggers, this will resume the schedule.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Success status
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        post: operations["enable_trigger_v1_triggers__trigger_id__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable Trigger
+         * @description Disable a trigger.
+         *
+         *     Disables the specified trigger, preventing it from executing.
+         *     For cron triggers, this will pause the schedule.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Success status
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        post: operations["disable_trigger_v1_triggers__trigger_id__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Execution History
+         * @description Get execution history for a trigger with filtering and pagination.
+         *
+         *     Returns paginated execution history for the specified trigger, including
+         *     success/failure status, execution times, and error messages. Supports
+         *     filtering by status and time range.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         page: Page number for pagination
+         *         page_size: Number of executions per page
+         *         status: Optional status filter (success, failed, timeout)
+         *         start_time: Optional start time filter
+         *         end_time: Optional end time filter
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Paginated execution history
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found or invalid parameters
+         */
+        get: operations["get_execution_history_v1_triggers__trigger_id__executions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1063,15 +1341,276 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/asyncapi.yaml": {
+    "/v1/triggers/{trigger_id}/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Download App Yaml Schema */
-        get: operations["download_app_yaml_schema_asyncapi_yaml_get"];
+        /**
+         * Get Trigger Status
+         * @description Get trigger status and schedule information.
+         *
+         *     Returns detailed status information about the trigger, including execution
+         *     status, rate limiting, and schedule information for cron triggers.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Trigger status information
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        get: operations["get_trigger_status_v1_triggers__trigger_id__status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Execution Metrics
+         * @description Get execution metrics for a trigger.
+         *
+         *     Returns aggregated metrics including success rate, average execution time,
+         *     and failure counts for the specified time period.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         hours: Time period in hours to analyze (default 24, max 168)
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Execution metrics for the trigger
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        get: operations["get_execution_metrics_v1_triggers__trigger_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Execution Timeline
+         * @description Get execution timeline for a trigger.
+         *
+         *     Returns time-bucketed execution counts and success rates for visualization
+         *     and trend analysis.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         hours: Time period in hours to analyze (default 24, max 168)
+         *         bucket_size_minutes: Size of time buckets in minutes (default 60)
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Execution timeline data
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        get: operations["get_execution_timeline_v1_triggers__trigger_id__timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/{trigger_id}/correlations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Execution Correlations
+         * @description Get execution correlation data for a trigger.
+         *
+         *     Returns execution data with correlation information to created tasks
+         *     and workflows for debugging and monitoring purposes.
+         *
+         *     Args:
+         *         trigger_id: The unique identifier of the trigger
+         *         page: Page number for pagination
+         *         page_size: Number of executions per page
+         *         auth_context: Authentication context
+         *         trigger_service: Injected trigger service
+         *
+         *     Returns:
+         *         Execution correlation data
+         *
+         *     Raises:
+         *         HTTPException: If trigger not found
+         */
+        get: operations["get_execution_correlations_v1_triggers__trigger_id__correlations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/triggers/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Triggers Health Check
+         * @description Comprehensive health check endpoint for trigger system.
+         *
+         *     Checks all trigger system components including:
+         *     - Database connectivity
+         *     - Temporal schedule manager
+         *     - Webhook manager
+         *     - Execution metrics
+         *
+         *     Returns:
+         *         Dictionary with detailed health status information
+         */
+        get: operations["triggers_health_check_v1_triggers_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/users/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Current User
+         * @description Get current user information.
+         *
+         *     This endpoint returns the user information extracted from the JWT token.
+         */
+        get: operations["get_current_user_v1_auth_users_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Token Info
+         * @description Get token information for debugging.
+         *
+         *     This endpoint returns information about the current authentication state.
+         */
+        get: operations["get_token_info_v1_auth_token_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/protected/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Test Protected Endpoint
+         * @description Test endpoint to verify authentication is working.
+         *
+         *     This endpoint requires a valid JWT token to access.
+         */
+        get: operations["test_protected_endpoint_v1_protected_test_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/protected/user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get User Info
+         * @description Get user information from the JWT token.
+         *
+         *     This endpoint returns the user information extracted from the JWT token.
+         */
+        get: operations["get_user_info_v1_protected_user_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dev Token
+         * @description Development mode information.
+         */
+        get: operations["get_dev_token_dev_token_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1276,10 +1815,106 @@ export interface components {
              */
             execution_id?: string | null;
         };
+        /** EventConfig */
+        EventConfig: {
+            /** Event Type */
+            event_type: string;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
         /** EventsConfig */
         EventsConfig: {
             /** Events */
-            events?: string[] | null;
+            events?: components["schemas"]["EventConfig"][] | null;
+        };
+        /**
+         * ExecutionCorrelationResponse
+         * @description Response model for execution correlation data.
+         */
+        ExecutionCorrelationResponse: {
+            /** Executions */
+            executions: {
+                [key: string]: unknown;
+            }[];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+        };
+        /**
+         * ExecutionHistoryResponse
+         * @description Response model for paginated execution history.
+         */
+        ExecutionHistoryResponse: {
+            /** Executions */
+            executions: components["schemas"]["TriggerExecutionResponse"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+        };
+        /**
+         * ExecutionMetricsResponse
+         * @description Response model for execution metrics.
+         */
+        ExecutionMetricsResponse: {
+            /**
+             * Trigger Id
+             * Format: uuid
+             */
+            trigger_id: string;
+            /** Period Hours */
+            period_hours: number;
+            /** Total Executions */
+            total_executions: number;
+            /** Successful Executions */
+            successful_executions: number;
+            /** Failed Executions */
+            failed_executions: number;
+            /** Timeout Executions */
+            timeout_executions: number;
+            /** Success Rate */
+            success_rate: number;
+            /** Failure Rate */
+            failure_rate: number;
+            /** Avg Execution Time Ms */
+            avg_execution_time_ms: number;
+            /** Min Execution Time Ms */
+            min_execution_time_ms: number;
+            /** Max Execution Time Ms */
+            max_execution_time_ms: number;
+        };
+        /**
+         * ExecutionTimelineResponse
+         * @description Response model for execution timeline.
+         */
+        ExecutionTimelineResponse: {
+            /**
+             * Trigger Id
+             * Format: uuid
+             */
+            trigger_id: string;
+            /** Period Hours */
+            period_hours: number;
+            /** Timeline */
+            timeline: {
+                [key: string]: unknown;
+            }[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1313,12 +1948,8 @@ export interface components {
         MCPConfig: {
             /** Mcp Server Id */
             mcp_server_id: string;
-            /** Requires User Confirmation */
-            requires_user_confirmation?: boolean | null;
-            /** Config */
-            config?: {
-                [key: string]: unknown;
-            } | null;
+            /** Allowed Tools */
+            allowed_tools?: components["schemas"]["MCPToolConfig"][] | null;
         };
         /** MCPServerCreate */
         MCPServerCreate: {
@@ -1515,6 +2146,16 @@ export interface components {
              * @description Custom command to override container CMD
              */
             cmd?: string[] | null;
+        };
+        /** MCPToolConfig */
+        MCPToolConfig: {
+            /** Tool Name */
+            tool_name: string;
+            /**
+             * Requires User Confirmation
+             * @default false
+             */
+            requires_user_confirmation: boolean;
         };
         /** ModelInstanceCreate */
         ModelInstanceCreate: {
@@ -1875,6 +2516,231 @@ export interface components {
             /** Planning */
             planning?: boolean | null;
         };
+        /**
+         * TriggerCreateRequest
+         * @description Request model for creating a trigger.
+         */
+        TriggerCreateRequest: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Trigger Type */
+            trigger_type: string;
+            /** Task Parameters */
+            task_parameters?: {
+                [key: string]: unknown;
+            };
+            /** Conditions */
+            conditions?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Failure Threshold
+             * @default 5
+             */
+            failure_threshold: number;
+            /** Cron Expression */
+            cron_expression?: string | null;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /** Webhook Id */
+            webhook_id?: string | null;
+            /** Allowed Methods */
+            allowed_methods?: string[];
+            /**
+             * Webhook Type
+             * @default generic
+             */
+            webhook_type: string;
+            /** Validation Rules */
+            validation_rules?: {
+                [key: string]: unknown;
+            };
+            /** Webhook Config */
+            webhook_config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * TriggerExecutionResponse
+         * @description Response model for trigger execution data.
+         */
+        TriggerExecutionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Trigger Id
+             * Format: uuid
+             */
+            trigger_id: string;
+            /**
+             * Executed At
+             * Format: date-time
+             */
+            executed_at: string;
+            /** Status */
+            status: string;
+            /** Task Id */
+            task_id?: string | null;
+            /** Execution Time Ms */
+            execution_time_ms: number;
+            /** Error Message */
+            error_message?: string | null;
+            /** Trigger Data */
+            trigger_data: {
+                [key: string]: unknown;
+            };
+            /** Workflow Id */
+            workflow_id?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+        };
+        /**
+         * TriggerResponse
+         * @description Response model for trigger data.
+         */
+        TriggerResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Trigger Type */
+            trigger_type: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Task Parameters */
+            task_parameters: {
+                [key: string]: unknown;
+            };
+            /** Conditions */
+            conditions: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Created By */
+            created_by: string;
+            /** Failure Threshold */
+            failure_threshold: number;
+            /** Consecutive Failures */
+            consecutive_failures: number;
+            /** Last Execution At */
+            last_execution_at?: string | null;
+            /** Cron Expression */
+            cron_expression?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+            /** Next Run Time */
+            next_run_time?: string | null;
+            /** Webhook Id */
+            webhook_id?: string | null;
+            /** Allowed Methods */
+            allowed_methods?: string[] | null;
+            /** Webhook Type */
+            webhook_type?: string | null;
+            /** Validation Rules */
+            validation_rules?: {
+                [key: string]: unknown;
+            } | null;
+            /** Webhook Config */
+            webhook_config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * TriggerStatusResponse
+         * @description Response model for trigger status information.
+         */
+        TriggerStatusResponse: {
+            /**
+             * Trigger Id
+             * Format: uuid
+             */
+            trigger_id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Last Execution At */
+            last_execution_at?: string | null;
+            /** Consecutive Failures */
+            consecutive_failures: number;
+            /** Should Disable Due To Failures */
+            should_disable_due_to_failures: boolean;
+            /** Schedule Info */
+            schedule_info?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * TriggerUpdateRequest
+         * @description Request model for updating a trigger.
+         */
+        TriggerUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Task Parameters */
+            task_parameters?: {
+                [key: string]: unknown;
+            } | null;
+            /** Conditions */
+            conditions?: {
+                [key: string]: unknown;
+            } | null;
+            /** Failure Threshold */
+            failure_threshold?: number | null;
+            /** Cron Expression */
+            cron_expression?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+            /** Allowed Methods */
+            allowed_methods?: string[] | null;
+            /** Webhook Type */
+            webhook_type?: string | null;
+            /** Validation Rules */
+            validation_rules?: {
+                [key: string]: unknown;
+            } | null;
+            /** Webhook Config */
+            webhook_config?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -2122,7 +2988,10 @@ export interface operations {
     };
     list_agents_v1_agents__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by creator: 'me' for current user's agents only */
+                created_by?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2136,6 +3005,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2434,6 +3312,8 @@ export interface operations {
             query?: {
                 /** @description Filter by task status */
                 status?: string | null;
+                /** @description Filter by creator: 'me' for current user's tasks only */
+                created_by?: string | null;
                 /** @description Maximum number of tasks to return */
                 limit?: number;
                 /** @description Number of tasks to skip */
@@ -2467,7 +3347,42 @@ export interface operations {
             };
         };
     };
-    create_task_for_agent_v1_agents__agent_id__tasks__post: {
+    create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2738,6 +3653,8 @@ export interface operations {
             query?: {
                 /** @description Filter by task status */
                 status?: string | null;
+                /** @description Filter by creator: 'me' for current user's tasks only */
+                created_by?: string | null;
                 /** @description Maximum number of tasks to return */
                 limit?: number;
                 /** @description Number of tasks to skip */
@@ -3055,7 +3972,10 @@ export interface operations {
     };
     list_mcp_server_instances_v1_mcp_server_instances__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by creator: 'me' for current user's instances only */
+                created_by?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3069,6 +3989,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPServerInstanceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3347,6 +4276,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_instance_available_tools_v1_mcp_server_instances__instance_id__tools_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4056,60 +5049,13 @@ export interface operations {
             };
         };
     };
-    root__get: {
+    handle_webhook_v1_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
+            path: {
+                webhook_id: string;
             };
-        };
-    };
-    health_check_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    serve_asyncapi_schema_asyncapi_get: {
-        parameters: {
-            query?: {
-                sidebar?: boolean;
-                info?: boolean;
-                servers?: boolean;
-                operations?: boolean;
-                messages?: boolean;
-                schemas?: boolean;
-                errors?: boolean;
-                expandMessageExamples?: boolean;
-            };
-            header?: never;
-            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -4134,7 +5080,700 @@ export interface operations {
             };
         };
     };
-    download_app_json_schema_asyncapi_json_get: {
+    handle_webhook_v1_webhooks__webhook_id__options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_webhook_v1_webhooks__webhook_id__options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_webhook_v1_webhooks__webhook_id__options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_webhook_v1_webhooks__webhook_id__options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_webhook_v1_webhooks__webhook_id__options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_webhook_v1_webhooks__webhook_id__options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhook_health_check_v1_webhooks_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    debug_webhook_v1_webhooks_debug__webhook_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_triggers_v1_triggers__get: {
+        parameters: {
+            query: {
+                agent_id: string;
+                /** @description Filter by trigger type (cron, webhook) */
+                trigger_type?: string | null;
+                /** @description Only return active triggers */
+                active_only?: boolean;
+                /** @description Filter by creator: 'me' for current user's triggers only */
+                created_by?: string | null;
+                /** @description Maximum number of triggers to return */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_trigger_v1_triggers__post: {
+        parameters: {
+            query: {
+                agent_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriggerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trigger_v1_triggers__trigger_id__get: {
+        parameters: {
+            query: {
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_trigger_v1_triggers__trigger_id__put: {
+        parameters: {
+            query: {
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriggerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_trigger_v1_triggers__trigger_id__delete: {
+        parameters: {
+            query: {
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_trigger_v1_triggers__trigger_id__enable_post: {
+        parameters: {
+            query: {
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_trigger_v1_triggers__trigger_id__disable_post: {
+        parameters: {
+            query: {
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_execution_history_v1_triggers__trigger_id__executions_get: {
+        parameters: {
+            query: {
+                /** @description Page number */
+                page?: number;
+                /** @description Number of executions per page */
+                page_size?: number;
+                /** @description Filter by execution status (success, failed, timeout) */
+                status?: string | null;
+                /** @description Filter executions after this time */
+                start_time?: string | null;
+                /** @description Filter executions before this time */
+                end_time?: string | null;
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trigger_status_v1_triggers__trigger_id__status_get: {
+        parameters: {
+            query: {
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_execution_metrics_v1_triggers__trigger_id__metrics_get: {
+        parameters: {
+            query: {
+                /** @description Time period in hours (max 7 days) */
+                hours?: number;
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionMetricsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_execution_timeline_v1_triggers__trigger_id__timeline_get: {
+        parameters: {
+            query: {
+                /** @description Time period in hours (max 7 days) */
+                hours?: number;
+                /** @description Time bucket size in minutes */
+                bucket_size_minutes?: number;
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionTimelineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_execution_correlations_v1_triggers__trigger_id__correlations_get: {
+        parameters: {
+            query: {
+                /** @description Page number */
+                page?: number;
+                /** @description Number of executions per page */
+                page_size?: number;
+                agent_id: string;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionCorrelationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    triggers_health_check_v1_triggers_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    get_current_user_v1_auth_users_me_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4154,7 +5793,67 @@ export interface operations {
             };
         };
     };
-    download_app_yaml_schema_asyncapi_yaml_get: {
+    get_token_info_v1_auth_token_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    test_protected_endpoint_v1_protected_test_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_user_info_v1_protected_user_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_dev_token_dev_token_get: {
         parameters: {
             query?: never;
             header?: never;

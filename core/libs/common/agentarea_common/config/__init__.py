@@ -12,6 +12,7 @@ from .database import Database, DatabaseSettings, get_database, get_db, get_db_s
 from .mcp import MCPManagerSettings, MCPSettings
 from .secrets import SecretManagerSettings, get_secret_manager_settings
 from .settings import Settings, get_settings
+from .triggers import TriggerSettings
 from .workflow import TaskExecutionSettings, WorkflowSettings
 
 __all__ = [
@@ -43,6 +44,8 @@ __all__ = [
     # Secrets
     "SecretManagerSettings",
     "get_secret_manager_settings",
+    # Triggers
+    "TriggerSettings",
     # Workflow
     "WorkflowSettings",
     "TaskExecutionSettings",
