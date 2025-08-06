@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Bot, FileText, MessageSquare, Cpu, Brain } from "lucide-react";
-import { Controller, FieldErrors, UseFormRegister } from 'react-hook-form';
+import { Controller, FieldErrors, UseFormRegister, UseFormSetValue } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
 import type { components } from '@/api/schema';
@@ -39,12 +39,13 @@ type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
   control: any;
   errors: FieldErrors<AgentFormValues>;
+  setValue: UseFormSetValue<AgentFormValues>;
   llmModelInstances: LLMModelInstance[];
   onOpenConfigSheet?: () => void;
   onRefreshModels?: () => void;
 };
 
-const BasicInformation = ({ register, control, errors, llmModelInstances, onOpenConfigSheet, onRefreshModels }: BasicInformationProps) => {
+const BasicInformation = ({ register, control, errors, setValue, llmModelInstances, onOpenConfigSheet, onRefreshModels }: BasicInformationProps) => {
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);

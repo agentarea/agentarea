@@ -63,6 +63,7 @@ export default function GridAndTableViews({
     cardContent,
     itemLink,
     cardClassName,
+    gridClassName,
 }: {
     searchParams: { [key: string]: string | string[] | undefined }
     isEmpty?: boolean;
@@ -74,6 +75,7 @@ export default function GridAndTableViews({
     cardContent: (item: any) => React.ReactNode;
     itemLink?: (item: any) => string;
     cardClassName?: string;
+    gridClassName?: string;
 }) {
     const t = useTranslations("Common");
 
@@ -88,7 +90,7 @@ export default function GridAndTableViews({
                 ) : (
                     <>
                         <TabsContent value="grid">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]">
+                            <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]", gridClassName)}>
                                 {data.map((item) => (
                                     (item.itemLink || itemLink) ? (
                                         <Link key={item.id} href={(item.itemLink || itemLink)(item)} className={cn("card card-shadow group", cardClassName)}>
@@ -122,6 +124,7 @@ export function GridAndTableSectionsViews({
     cardContent,
     itemLink,
     cardClassName,
+    gridClassName,
 }: {
     searchParams: { [key: string]: string | string[] | undefined }
     isEmpty?: boolean;
@@ -133,6 +136,7 @@ export function GridAndTableSectionsViews({
     cardContent: (item: any) => React.ReactNode;
     itemLink?: (item: any) => string;
     cardClassName?: string;
+    gridClassName?: string;
 }) {
     const t = useTranslations("Common");
 
@@ -162,7 +166,7 @@ export function GridAndTableSectionsViews({
                                         sectionData.data.length > 0 ? (
                                             <>
                                             <TabsContent value="grid">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]">
+                                                <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-[12px]", gridClassName)}>
                                                     {sectionData.data.map((item) => {
                                                         const linkFunction = sectionData.itemLink || itemLink;
                                                         return linkFunction ? (
