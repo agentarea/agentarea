@@ -177,8 +177,9 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
   }
 
   // Server-side filtering based on search params
-  const searchQuery = typeof searchParams.search === 'string' ? searchParams.search : "";
-  const statusFilter = typeof searchParams.status === 'string' ? searchParams.status : "all";
+  const resolvedSearchParams = await searchParams;
+  const searchQuery = typeof resolvedSearchParams.search === 'string' ? resolvedSearchParams.search : "";
+  const statusFilter = typeof resolvedSearchParams.status === 'string' ? resolvedSearchParams.status : "all";
 
   // Apply filters on server
   let filteredTasks = allTasks;
