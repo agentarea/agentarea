@@ -15,7 +15,9 @@ import AgentCard from "./components/AgentCard";
 import GridAndTableViews from "@/components/GridAndTableViews";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useSearchWithDebounce, useTabState } from "../../../hooks";
+import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
 
 export default function AgentsBrowsePage() {
   const t = useTranslations("Agent");
@@ -108,6 +110,11 @@ export default function AgentsBrowsePage() {
   const columns = [
     {
       header: "Name",
+      render: (value: string) => (
+        <div className="font-semibold truncate">
+          {value}
+        </div>
+      ),
       accessor: "name",
     },
     {
@@ -120,18 +127,55 @@ export default function AgentsBrowsePage() {
     {
       header: "Model",
       accessor: "model_id",
+      render: (value: string, item: any) => (
+        <ModelDisplay 
+          modelId={item.model_id}
+        />
+      ),
     },
     {
       header: "Description",
       accessor: "description",
       render: (value: string) => (
-        <div className="max-w-xs truncate" title={value}>
+        <div className="max-w-xs truncate note" title={value}>
           {value}
         </div>
       ),
     },
     {
-      header: "Actions",
+      header: "Tools (MCPs)",
+      accessor: "tools",
+      render: (value: string) => (
+      // FIX DATA for avatar urls 
+        <AvatarCircles
+          maxDisplay={5}
+          avatarUrls={[
+              {
+                  imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2sSeQqjaUTuZ3gRgkKjidpaipF_l6s72lBw&s",
+              },
+              {
+                  imageUrl: "https://cdn.worldvectorlogo.com/logos/jira-1.svg",
+              },
+              {
+                  imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiiqczgVWrWg2wpS5wC5iW2u3ppLqauc10yw&s",
+              },{
+                  imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Notion-logo.svg/2048px-Notion-logo.svg.png",
+              },
+              {
+                  imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+              },
+              {
+                  imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+              },
+              {
+                  imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+              }
+          ]}
+        />
+      ),
+    },
+    {
+      header: "",
       accessor: "id",
       render: (value: string, item: any) => (
         <div className="flex gap-2">

@@ -1,75 +1,15 @@
 import { Agent } from "@/types";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { listModelInstances } from "@/lib/api";
-import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
+import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
 
 type AgentCardProps = {
   agent: Agent;
 }
 
-interface ModelInfo {
-  provider_name?: string;
-  model_display_name?: string;
-  config_name?: string;
-}
-
 export default function AgentCard({ agent }: AgentCardProps) {
     console.log(agent);
-    const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-
-    useEffect(() => {
-        const fetchModelInfo = async () => {
-            if (!agent.model_id) return;
-            
-            try {
-                setIsLoading(true);
-                
-                const { data, error } = await listModelInstances();
-                if (error) {
-                    console.error('Failed to fetch model instances:', error);
-                    return;
-                }
-                
-                // Find the model in the response
-                const modelInstance = data?.find(
-                    (instance: any) => instance.id === agent.model_id
-                );
-                
-                if (modelInstance) {
-                    setModelInfo({
-                        provider_name: modelInstance.provider_name || undefined,
-                        model_display_name: modelInstance.model_display_name || undefined,
-                        config_name: modelInstance.config_name || undefined
-                    });
-                } else {
-                    console.log('Model not found:', agent.model_id);
-                }
-            } catch (err) {
-                console.error('Failed to fetch model info:', err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchModelInfo();
-    }, [agent.model_id]);
-
-    const getModelDisplayText = () => {
-        if (isLoading) return null;
-        if (!modelInfo) return null;
-        
-        const parts = [];
-        if (modelInfo.provider_name) parts.push(modelInfo.provider_name);
-        if (modelInfo.model_display_name) parts.push(modelInfo.model_display_name);
-        if (modelInfo.config_name) parts.push(`(${modelInfo.config_name})`);
-        
-        return parts.length > 0 ? parts.join(" - ") : null;
-    };
-
-    const modelDisplayText = getModelDisplayText();
 
     return (
         <div className="flex flex-col justify-between gap-6 h-full">
@@ -87,14 +27,11 @@ export default function AgentCard({ agent }: AgentCardProps) {
                             <h3>
                                 {agent.name}
                             </h3>
-                                <div className="note">
-                                    <span>{modelInfo?.config_name || modelInfo?.provider_name}</span>
-                                    {
-                                        modelInfo?.model_display_name && (
-                                            <span className="pl-1 font-semibold">({modelInfo?.model_display_name})</span>
-                                        )
-                                    }
-                                </div>
+                            <div className="note">
+                                <ModelDisplay 
+                                    modelId={agent.model_id} 
+                                />
+                            </div>
                         </div>
                     </div>
                     <StatusBadge status={agent.status} variant="agent" />
