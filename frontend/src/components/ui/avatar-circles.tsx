@@ -31,7 +31,7 @@ export const AvatarCircles = ({
         >
           <img
             key={index}
-            className="h-8 w-8 rounded-full border-2 border-white dark:border-zinc-800 bg-white"
+            className="h-7 w-7 rounded-full border-2 border-white dark:border-zinc-800 bg-white"
             src={url.imageUrl}
             width={40}
             height={40}
@@ -41,7 +41,7 @@ export const AvatarCircles = ({
       ))}
       {maxDisplay < avatarUrls.length && (
         <div
-          className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-zinc-200 text-zinc-400 bg-white font-light text-center text-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+          className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-200 text-zinc-400 bg-white font-light text-center text-xs dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
         >
           +{avatarUrls.length - maxDisplay}
         </div>
