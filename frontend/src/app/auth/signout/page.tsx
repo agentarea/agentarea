@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 export default function SignOutPage() {
   const router = useRouter();
@@ -28,14 +29,7 @@ export default function SignOutPage() {
   }, [status, router]);
 
   if (status === "loading") {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen={true} />;
   }
 
   return (

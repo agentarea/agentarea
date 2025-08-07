@@ -3,20 +3,14 @@
 import { useUser, useAuth, SignInButton, SignOutButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 export default function TestAuthPage() {
   const { user, isLoaded: userLoaded } = useUser();
   const { isSignedIn, isLoaded: authLoaded } = useAuth();
 
   if (!userLoaded || !authLoaded) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">Loading authentication...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen={true} />;
   }
 
   return (

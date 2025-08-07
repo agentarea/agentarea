@@ -45,6 +45,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { getAgentTaskStatus, pauseAgentTask, resumeAgentTask, cancelAgentTask } from "@/lib/api";
 import { toast } from "sonner";
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 // Types for task data
 interface TaskDetail {
@@ -340,12 +341,7 @@ export default function TaskDetailsPage() {
             Back to Tasks
           </Button>
         </div>
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading task details...</p>
-          </div>
-        </div>
+        <LoadingSpinner />
       </div>
     );
   }

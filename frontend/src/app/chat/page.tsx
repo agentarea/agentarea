@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Bot, Send, User, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getChatAgents, sendMessage as sendChatMessage, getChatMessageStatus } from "@/lib/api";
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 // Types
 interface Agent {
@@ -288,10 +289,7 @@ export default function ChatPage() {
             {!selectedAgent ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 {isLoadingAgents ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Loading agents...
-                  </div>
+                  <LoadingSpinner />
                 ) : agents.length === 0 ? (
                   <div className="text-center">
                     <p>No agents available.</p>

@@ -265,7 +265,7 @@ export default function MainContent({
                     <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
                         <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
                             {isSearching ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                                <LoadingSpinner size="sm" text="" />
                             ) : (
                                 <SearchIcon className="h-4 w-4" />
                             )}

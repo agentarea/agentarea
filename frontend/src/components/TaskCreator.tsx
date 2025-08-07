@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { listAgents, createAgentTask } from "@/lib/api";
 import { Loader2, Send, CheckCircle } from "lucide-react";
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 interface Agent {
   id: string;
@@ -110,10 +111,7 @@ export default function TaskCreator() {
     return (
       <Card className="w-full max-w-2xl">
         <CardContent className="pt-6">
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Loading agents...</span>
-          </div>
+          <LoadingSpinner />
         </CardContent>
       </Card>
     );
