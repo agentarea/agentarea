@@ -1,4 +1,4 @@
-import { listMCPServers, MCPServer, listModelInstances } from "@/lib/api";
+import { listMCPServers, MCPServer, listModelInstances, listMCPServerInstances } from "@/lib/api";
 import CreateAgentClient from "./CreateAgentClient";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getTranslations } from "next-intl/server";
@@ -30,6 +30,10 @@ export default async function CreateAgentPage() {
   const llmResponse = await listModelInstances();
   const llmModelInstances = llmResponse.data || [];
 
+  // Fetch MCP server instances
+  const mcpInstancesResponse = await listMCPServerInstances();
+  const mcpInstanceList = mcpInstancesResponse.data || [];
+
   // return <CreateAgentClient mcpServers={[mcpServers]} />;
 
   return (
@@ -42,7 +46,7 @@ export default async function CreateAgentPage() {
           {label: t("newAgent")},
         ],
     }}>
-      <CreateAgentClient mcpServers={mcpServers} llmModelInstances={llmModelInstances} />
+      <CreateAgentClient mcpServers={mcpServers} llmModelInstances={llmModelInstances} mcpInstanceList={mcpInstanceList} />
     </ContentBlock>
   );
 }

@@ -55,7 +55,7 @@ export function SelectableList<T extends { id: string }>({
   return (
     <Accordion
       type="multiple"
-      className="flex flex-col flex-1 overflow-y-auto space-y-2 pb-[40px]"
+      className="flex flex-col space-y-2 pb-[30px]"
       value={accordionValue}
       onValueChange={setAccordionValue}
     >
