@@ -24,7 +24,6 @@ import {
   Database, 
   MessageSquare, 
   Bot, 
-  Tool,
   Activity,
   Zap,
   Clock
@@ -69,7 +68,7 @@ const getCategoryIcon = (instance: MCPInstance) => {
   if (name.includes('database') || name.includes('sql')) return Database;
   if (name.includes('slack') || name.includes('gmail') || name.includes('message')) return MessageSquare;
   if (name.includes('puppeteer') || name.includes('automation')) return Bot;
-  return Tool;
+  return Wrench;
 };
 
 // Helper function to get category from instance name

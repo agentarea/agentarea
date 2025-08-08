@@ -21,10 +21,12 @@ type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
 export default function CreateAgentClient({ 
   mcpServers, 
-  llmModelInstances 
+  llmModelInstances, 
+  mcpInstanceList
 }: { 
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
+  mcpInstanceList: any[];
 }) {
   const [state, formAction] = useActionState(addAgent, agentInitialState);
   const [currentModelInstances, setCurrentModelInstances] = useState(llmModelInstances);
@@ -164,6 +166,7 @@ export default function CreateAgentClient({
                   removeTool={removeTool} 
                   appendTool={appendTool} 
                   mcpServers={mcpServers} 
+                  mcpInstanceList={mcpInstanceList}
                 />
               </div>
             </Card>

@@ -21,7 +21,7 @@ export const AvatarCircles = ({
   avatarUrls,
 }: AvatarCirclesProps) => {
   return (
-    <div className={cn("z-10 flex -space-x-3 rtl:space-x-reverse", className)}>
+    <div className={cn("z-10 flex -space-x-1.5 rtl:space-x-reverse", className)}>
       {avatarUrls.slice(0, maxDisplay).map((url, index) => (
         <div
           key={index}
@@ -31,7 +31,7 @@ export const AvatarCircles = ({
         >
           <img
             key={index}
-            className="h-10 w-10 rounded-full border-2 border-white dark:border-zinc-800 bg-white"
+            className="h-6 w-6 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white"
             src={url.imageUrl}
             width={40}
             height={40}
@@ -41,7 +41,7 @@ export const AvatarCircles = ({
       ))}
       {maxDisplay < avatarUrls.length && (
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-200 text-zinc-400 bg-white font-light text-center text-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 text-zinc-400 bg-white font-light text-center text-xs dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
         >
           +{avatarUrls.length - maxDisplay}
         </div>

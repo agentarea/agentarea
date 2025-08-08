@@ -23,9 +23,10 @@ type ToolConfigProps = {
   removeTool: (index: number) => void;
   appendTool: UseFieldArrayAppend<AgentFormValues, "tools_config.mcp_server_configs">;
   mcpServers: MCPServer[];
+  mcpInstanceList: any[];
 };
 
-const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpServers }: ToolConfigProps) => {
+const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpServers, mcpInstanceList }: ToolConfigProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollToolId, setScrollToolId] = useState<string | null>(null);
@@ -88,19 +89,36 @@ const ToolConfig = ({ control, errors, toolFields, removeTool, appendTool, mcpSe
           title={t('create.toolsMcp')}
           description={t('create.toolsMcpDescription')}
           triggerText="Tool"
+          className=""
         >
-          <SelectableList
-            items={mcpServers}
-            prefix="mcp"
-            extractTitle={(server) => server.name}
-            onAdd={(server) => handleAddTools([server])}
-            onRemove={(server) => handleRemoveTool(server.id)}
-            selectedIds={toolFields.map((item) => item.mcp_server_id)}
-            openItemId={scrollToolId}
-            renderContent={() => (
-              <div className="p-4 text-sm text-muted-foreground">TEST</div>
-            )}
-          />
+          <div className="flex flex-col overflow-y-auto space-y-1">
+            <div className="font-semibold">Active MCP Servers</div>
+            <SelectableList
+              items={mcpInstanceList}
+              prefix="active-mcp"
+              extractTitle={(instance) => instance.name || instance.id}
+              onAdd={(instance) => handleAddTools([instance])}
+              onRemove={(instance) => handleRemoveTool(instance.id)}
+              selectedIds={toolFields.map((item) => item.mcp_server_id)}
+              openItemId={scrollToolId}
+              renderContent={() => (
+                <div className="p-4 text-sm text-muted-foreground">Active</div>
+              )}
+            />
+            <div className="font-semibold">Available MCP Servers</div>
+            <SelectableList
+              items={mcpServers}
+              prefix="mcp"
+              extractTitle={(server) => server.name}
+              onAdd={(server) => handleAddTools([server])}
+              onRemove={(server) => handleRemoveTool(server.id)}
+              selectedIds={toolFields.map((item) => item.mcp_server_id)}
+              openItemId={scrollToolId}
+              renderContent={() => (
+                <div className="p-4 text-sm text-muted-foreground">TEST</div>
+              )}
+            />
+          </div>
         </ConfigSheet>
       }
     >

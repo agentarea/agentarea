@@ -15,7 +15,9 @@ import AgentCard from "./components/AgentCard";
 import GridAndTableViews from "@/components/GridAndTableViews";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useSearchWithDebounce, useTabState } from "../../../hooks";
+import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
 
 export default function AgentsBrowsePage() {
   const t = useTranslations("Agent");
@@ -108,6 +110,11 @@ export default function AgentsBrowsePage() {
   const columns = [
     {
       header: "Name",
+      render: (value: string) => (
+        <div className="font-semibold truncate">
+          {value}
+        </div>
+      ),
       accessor: "name",
     },
     {
@@ -120,18 +127,55 @@ export default function AgentsBrowsePage() {
     {
       header: "Model",
       accessor: "model_id",
+      render: (value: string, item: any) => (
+        <ModelDisplay 
+          modelId={item.model_id}
+        />
+      ),
     },
     {
       header: "Description",
       accessor: "description",
       render: (value: string) => (
-        <div className="max-w-xs truncate" title={value}>
+        <div className="max-w-xs truncate note" title={value}>
           {value}
         </div>
       ),
     },
     {
-      header: "Actions",
+      header: "Tools (MCPs)",
+      accessor: "tools",
+      render: (value: string) => (
+      // FIX DATA for avatar urls 
+        <AvatarCircles
+          maxDisplay={5}
+          avatarUrls={[
+              {
+                  imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2sSeQqjaUTuZ3gRgkKjidpaipF_l6s72lBw&s",
+              },
+              {
+                  imageUrl: "https://cdn.worldvectorlogo.com/logos/jira-1.svg",
+              },
+              {
+                  imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiiqczgVWrWg2wpS5wC5iW2u3ppLqauc10yw&s",
+              },{
+                  imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Notion-logo.svg/2048px-Notion-logo.svg.png",
+              },
+              {
+                  imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+              },
+              {
+                  imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+              },
+              {
+                  imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
+              }
+          ]}
+        />
+      ),
+    },
+    {
+      header: "",
       accessor: "id",
       render: (value: string, item: any) => (
         <div className="flex gap-2">
@@ -155,99 +199,6 @@ export default function AgentsBrowsePage() {
       ),
     },
   ];
-
-  // const mockAgents = [
-  //   {
-  //     id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  //     name: "Customer Support Agent",
-  //     description: "AI-powered customer support agent that can handle inquiries, resolve issues, and provide product information",
-  //     status: "active",
-  //     instruction: "You are a helpful customer support agent. Always be polite and professional.",
-  //     model_id: "gpt-4",
-  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-  //     tools_config: {
-  //       knowledge_base: {},
-  //       ticket_system: {}
-  //     },
-  //     events_config: {
-  //       notifications: {},
-  //       logging: {}
-  //     },
-  //     planning: true
-  //   },
-  //   {
-  //     id: "4fb96g75-6828-5673-c4gd-3d074g77bgb7",
-  //     name: "Data Analysis Agent",
-  //     description: "Specialized agent for data processing, analysis, and generating insights from complex datasets",
-  //     status: "active",
-  //     instruction: "You are a data analysis expert. Process data efficiently and provide clear insights.",
-  //     model_id: "claude-3",
-  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-  //     tools_config: {
-  //       data_processor: {},
-  //       visualization: {}
-  //     },
-  //     events_config: {
-  //       progress_tracking: {},
-  //       error_handling: {}
-  //     },
-  //     planning: true
-  //   },
-  //   {
-  //     id: "5gc07h86-7939-6784-d5he-4e185h88chc8",
-  //     name: "Content Creation Agent",
-  //     description: "Creative agent for generating high-quality content, articles, and marketing materials",
-  //     status: "inactive",
-  //     instruction: "You are a creative content writer. Generate engaging and original content.",
-  //     model_id: "gpt-4",
-  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-  //     tools_config: {
-  //       content_generator: {},
-  //       plagiarism_checker: {}
-  //     },
-  //     events_config: {
-  //       content_review: {},
-  //       publishing: {}
-  //     },
-  //     planning: false
-  //   },
-  //   {
-  //     id: "6hd18i97-8040-7895-e6if-5f296i99did9",
-  //     name: "Task Automation Agent",
-  //     description: "Automation specialist for handling repetitive tasks and workflow optimization",
-  //     status: "active",
-  //     instruction: "You are a task automation expert. Streamline processes and improve efficiency.",
-  //     model_id: "claude-3",
-  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-  //     tools_config: {
-  //       workflow_engine: {},
-  //       scheduler: {}
-  //     },
-  //     events_config: {
-  //       task_monitoring: {},
-  //       performance_metrics: {}
-  //     },
-  //     planning: true
-  //   },
-  //   {
-  //     id: "7ie29j08-9151-8906-f7jg-6g307j00eje0",
-  //     name: "Research Assistant Agent",
-  //     description: "Research-focused agent for gathering information, analyzing sources, and compiling reports",
-  //     status: "active",
-  //     instruction: "You are a research assistant. Gather accurate information from reliable sources.",
-  //     model_id: "gpt-4",
-  //     icon: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-  //     tools_config: {
-  //       web_search: {},
-  //       citation_manager: {}
-  //     },
-  //     events_config: {
-  //       source_validation: {},
-  //       report_generation: {}
-  //     },
-  //     planning: true
-  //   }
-  // ];
 
   // Фильтрация данных
   const filterData = useCallback((data: any[]) => {
@@ -326,13 +277,14 @@ export default function AgentsBrowsePage() {
         columns={columns}
         routeChange="/agents/browse"
         cardContent={(item) => <AgentCard agent={item} />}
+        cardClassName="px-0 pb-0 overflow-hidden"
         itemLink={(agent) => `/agents/${agent.id}`}
-        gridClassName="md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        gridClassName="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         leftComponent={
           <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
             <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
               {isSearching ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                <LoadingSpinner size="sm" text="" />
               ) : (
                 <Search className="h-4 w-4" />
               )}
