@@ -2,8 +2,8 @@ from datetime import datetime
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_model_spec_repository
-from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.domain.models import ModelSpec
+from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -37,7 +37,7 @@ class ModelSpecResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    
+
     # Related provider info (if loaded)
     provider_name: str | None = None
     provider_key: str | None = None
@@ -110,7 +110,7 @@ async def get_model_spec_by_provider_and_name(
     model_spec = await model_spec_repo.get_by_provider_and_model(provider_spec_id, model_name)
     if not model_spec:
         raise HTTPException(
-            status_code=404, 
+            status_code=404,
             detail=f"Model specification '{model_name}' not found for provider"
         )
     return ModelSpecResponse.from_domain(model_spec)
@@ -131,7 +131,7 @@ async def create_model_spec(
             status_code=400,
             detail=f"Model specification '{data.model_name}' already exists for this provider"
         )
-    
+
     model_spec = ModelSpec(
         provider_spec_id=data.provider_spec_id,
         model_name=data.model_name,
@@ -140,7 +140,7 @@ async def create_model_spec(
         context_window=data.context_window,
         is_active=data.is_active,
     )
-    
+
     created_spec = await model_spec_repo.create(model_spec)
     return ModelSpecResponse.from_domain(created_spec)
 
@@ -155,7 +155,7 @@ async def update_model_spec(
     model_spec = await model_spec_repo.get(model_spec_id)
     if not model_spec:
         raise HTTPException(status_code=404, detail="Model specification not found")
-    
+
     # Update fields if provided
     if data.display_name is not None:
         model_spec.display_name = data.display_name
@@ -165,7 +165,7 @@ async def update_model_spec(
         model_spec.context_window = data.context_window
     if data.is_active is not None:
         model_spec.is_active = data.is_active
-    
+
     updated_spec = await model_spec_repo.update(model_spec)
     return ModelSpecResponse.from_domain(updated_spec)
 
@@ -199,6 +199,6 @@ async def upsert_model_spec(
         context_window=data.context_window,
         is_active=data.is_active,
     )
-    
+
     upserted_spec = await model_spec_repo.upsert_by_provider_and_model(model_spec)
-    return ModelSpecResponse.from_domain(upserted_spec) 
+    return ModelSpecResponse.from_domain(upserted_spec)

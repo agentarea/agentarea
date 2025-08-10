@@ -45,4 +45,4 @@ class TaskExecutionSettings(BaseSettings):
     BUDGET_PAUSE_ON_EXCEEDED: bool = True
     BUDGET_SAFETY_MARGIN: float = 0.1  # 10% safety margin before pause
 
-    model_config = SettingsConfigDict(env_prefix="TASK__") 
+    model_config = SettingsConfigDict(env_prefix="TASK__")

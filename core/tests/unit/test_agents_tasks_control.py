@@ -2,21 +2,20 @@
 Unit tests for agent task control endpoints (pause/resume) and event endpoints
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4, UUID
-from fastapi import HTTPException
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
-from agentarea_api.api.v1.agents_tasks import (
-    pause_agent_task, 
-    resume_agent_task, 
-    get_task_events, 
-    stream_task_events,
-    TaskEventResponse,
-    TaskEvent
-)
+import pytest
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+from agentarea_api.api.v1.agents_tasks import (
+    TaskEventResponse,
+    get_task_events,
+    pause_agent_task,
+    resume_agent_task,
+    stream_task_events,
+)
+from fastapi import HTTPException
 
 
 class TestAgentTaskControl:

@@ -1,7 +1,7 @@
 from uuid import UUID
 
-from agentarea_common.base.service import BaseCrudService
 from agentarea_common.base import RepositoryFactory
+from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
 
 from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpdated

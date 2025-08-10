@@ -1,9 +1,6 @@
-from typing import List
-from uuid import UUID
 
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import and_, select
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.models import MCPServer
@@ -22,14 +19,14 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False,
-    ) -> List[MCPServer]:
+    ) -> list[MCPServer]:
         """List MCP servers with filtering."""
         filters = {}
         if status is not None:
             filters['status'] = status
         if is_public is not None:
             filters['is_public'] = is_public
-        
+
         # Note: tag filtering with JSON arrays is complex and may need custom implementation
         # For now, we'll handle basic filters through the base class
         servers = await self.list_all(
@@ -38,14 +35,14 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             offset=offset,
             **filters
         )
-        
+
         # Apply tag filtering manually if needed
         if tag is not None:
             servers = [s for s in servers if tag in (s.tags or [])]
-        
+
         return servers
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[MCPServer]:
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[MCPServer]:
         """Get MCP servers by workspace ID with pagination.
         
         Note: This method is deprecated. Use list_servers() instead which automatically
@@ -54,7 +51,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         # For backward compatibility, but this should be replaced with list_servers()
         if workspace_id != self.user_context.workspace_id:
             return []  # Don't allow cross-workspace access
-        
+
         return await self.list_servers(limit=limit, offset=offset)
 
     async def create_server(self, entity: MCPServer) -> MCPServer:
@@ -74,12 +71,12 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             'created_at': entity.created_at,
             'updated_at': entity.updated_at,
         }
-        
+
         # Remove None values and system fields that will be auto-populated
         server_data = {k: v for k, v in server_data.items() if v is not None}
         server_data.pop('created_at', None)
         server_data.pop('updated_at', None)
-        
+
         return await self.create(**server_data)
 
     async def update_server(self, entity: MCPServer) -> MCPServer:
@@ -96,10 +93,10 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             'tags': entity.tags,
             'config': getattr(entity, 'config', None),
         }
-        
+
         # Remove None values
         server_data = {k: v for k, v in server_data.items() if v is not None}
-        
+
         updated_server = await self.update(entity.id, **server_data)
         return updated_server or entity
 
@@ -114,7 +111,7 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
         creator_scoped: bool = False,
         limit: int | None = None,
         offset: int | None = None,
-    ) -> List[MCPServerInstance]:
+    ) -> list[MCPServerInstance]:
         """List instances by server spec ID within the current workspace."""
         return await self.list_all(
             creator_scoped=creator_scoped,
@@ -129,7 +126,7 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
         creator_scoped: bool = False,
         limit: int | None = None,
         offset: int | None = None,
-    ) -> List[MCPServerInstance]:
+    ) -> list[MCPServerInstance]:
         """List instances by status within the current workspace."""
         return await self.list_all(
             creator_scoped=creator_scoped,
@@ -138,7 +135,7 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
             status=status
         )
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[MCPServerInstance]:
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[MCPServerInstance]:
         """Get MCP server instances by workspace ID with pagination.
         
         Note: This method is deprecated. Use list_all() instead which automatically
@@ -147,5 +144,5 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
         # For backward compatibility, but this should be replaced with list_all()
         if workspace_id != self.user_context.workspace_id:
             return []  # Don't allow cross-workspace access
-        
+
         return await self.list_all(limit=limit, offset=offset)

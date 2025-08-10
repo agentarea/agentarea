@@ -33,7 +33,7 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
     """Start the API server."""
     click.echo(f"🚀 Starting AgentArea API server on {host}:{port}")
     click.echo(f"   Reload: {reload}, Log Level: {log_level}, Workers: {workers}")
-    
+
     uvicorn.run(
         app="agentarea_api.main:app",
         host=host,
@@ -48,19 +48,19 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
 def migrate():
     """Run database migrations."""
     click.echo("🔄 Running database migrations...")
-    
+
     try:
         # Check database connection
         engine = get_engine()
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         click.echo("✅ Database connection successful")
-        
+
         # Run migrations
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
         click.echo("✅ Migrations completed successfully")
-        
+
     except Exception as e:
         click.echo(f"❌ Migration failed: {e}")
         sys.exit(1)
@@ -70,29 +70,29 @@ def migrate():
 def check_migrations():
     """Check migration status."""
     click.echo("🔍 Checking migration status...")
-    
+
     try:
         from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
-        
+
         engine = get_engine()
         alembic_cfg = Config("alembic.ini")
         script = ScriptDirectory.from_config(alembic_cfg)
-        
+
         with engine.connect() as connection:
             context = MigrationContext.configure(connection)
             current = context.get_current_revision()
             head = script.get_current_head()
-            
+
             click.echo(f"   Current revision: {current}")
             click.echo(f"   Head revision: {head}")
-            
+
             if current == head:
                 click.echo("✅ Database is up to date")
             else:
                 click.echo("⚠️  Database needs migration")
                 sys.exit(1)
-                
+
     except Exception as e:
         click.echo(f"❌ Failed to check migrations: {e}")
         sys.exit(1)
@@ -102,7 +102,7 @@ def check_migrations():
 def status():
     """Check API status and configuration."""
     click.echo("🔍 API Configuration:")
-    
+
     settings = get_db_settings()
     click.echo(f"   Database: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}")
     click.echo(f"   Database Name: {settings.POSTGRES_DB}")
@@ -113,37 +113,37 @@ def status():
 def validate():
     """Validate API configuration and dependencies."""
     click.echo("🔍 Validating API configuration...")
-    
+
     try:
         # Test database connection
         engine = get_engine()
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         click.echo("✅ Database connection successful")
-        
+
         # Check if migrations are up to date
         from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
-        
+
         alembic_cfg = Config("alembic.ini")
         script = ScriptDirectory.from_config(alembic_cfg)
-        
+
         with engine.connect() as connection:
             context = MigrationContext.configure(connection)
             current = context.get_current_revision()
             head = script.get_current_head()
-            
+
             if current == head:
                 click.echo("✅ Database migrations up to date")
             else:
                 click.echo("⚠️  Database needs migration")
-        
+
         click.echo("✅ API validation passed")
-        
+
     except Exception as e:
         click.echo(f"❌ Validation failed: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    cli() 
+    cli()

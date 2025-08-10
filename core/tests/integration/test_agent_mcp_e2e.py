@@ -9,9 +9,8 @@ This test verifies the complete flow:
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import pytest
 import requests
 
 logger = logging.getLogger(__name__)
@@ -42,11 +41,11 @@ class TestAgentMCPE2E:
         if self.mcp_server_id:
             requests.delete(f"{API_BASE_URL}/v1/mcp-servers/{self.mcp_server_id}")
 
-    def create_echo_mcp_server(self) -> Dict[str, Any]:
+    def create_echo_mcp_server(self) -> dict[str, Any]:
         """Create an echo MCP server for testing."""
         server_data = {
             "name": "echo-mcp-server",
-            "description": "Echo MCP server for testing agent integration", 
+            "description": "Echo MCP server for testing agent integration",
             "docker_image_url": "nginx:alpine",
             "version": "1.0.0",
             "tags": ["test", "echo"],
@@ -67,7 +66,7 @@ class TestAgentMCPE2E:
         self.mcp_server_id = server["id"]
         return server
 
-    def create_mcp_instance(self, server_id: str) -> Dict[str, Any]:
+    def create_mcp_instance(self, server_id: str) -> dict[str, Any]:
         """Create and deploy an MCP instance."""
         instance_data = {
             "name": "echo-mcp-instance",
@@ -91,7 +90,7 @@ class TestAgentMCPE2E:
         self._wait_for_instance_ready(instance["id"])
         return instance
 
-    def create_agent_with_mcp(self, mcp_instance_id: str) -> Dict[str, Any]:
+    def create_agent_with_mcp(self, mcp_instance_id: str) -> dict[str, Any]:
         """Create an agent with MCP server assigned."""
         agent_data = {
             "name": "mcp-test-agent",
@@ -108,7 +107,7 @@ class TestAgentMCPE2E:
         self.agent_id = agent["id"]
         return agent
 
-    def execute_task_with_mcp(self, agent_id: str) -> Dict[str, Any]:
+    def execute_task_with_mcp(self, agent_id: str) -> dict[str, Any]:
         """Execute a task that should use MCP tools."""
         task_data = {
             "agent_id": agent_id,
@@ -134,7 +133,7 @@ class TestAgentMCPE2E:
             instance = response.json()
             print(f"Instance created with status: {instance.get('status')}")
             return  # Just return if instance exists
-        
+
         raise TimeoutError(f"MCP instance {instance_id} was not created")
 
     def _wait_for_task_completion(self, task_id: str, timeout: int = 120):
@@ -147,10 +146,10 @@ class TestAgentMCPE2E:
                 if task.get("status") in ["completed", "failed"]:
                     return
             time.sleep(3)
-        
+
         raise TimeoutError(f"Task {task_id} did not complete within {timeout}s")
 
-    def _get_task_details(self, task_id: str) -> Dict:
+    def _get_task_details(self, task_id: str) -> dict:
         """Get detailed task information."""
         response = requests.get(f"{API_BASE_URL}/v1/tasks/{task_id}")
         assert response.status_code == 200
@@ -163,15 +162,15 @@ class TestAgentMCPE2E:
             # Get task from database
             task_stmt = select(AgentTask).where(AgentTask.id == task_id)
             task = db.execute(task_stmt).scalar_one_or_none()
-            
+
             assert task is not None, f"Task {task_id} not found in database"
-            
+
             # Check if task has tool call information
             # This might be stored in task metadata, temporal events, or separate tool_calls table
             # We'll check multiple possible locations
-            
+
             tool_calls_found = False
-            
+
             # Check task metadata for tool calls
             if task.metadata:
                 metadata = json.loads(task.metadata) if isinstance(task.metadata, str) else task.metadata
@@ -181,10 +180,10 @@ class TestAgentMCPE2E:
                         if call.get("name") == "echo" and "Hello from MCP integration test!" in str(call):
                             tool_calls_found = True
                             break
-            
+
             # If we have a separate tool_calls table, check it here
             # This would depend on your implementation
-            
+
             assert tool_calls_found, "MCP tool calls not found in database"
 
     def test_complete_agent_mcp_integration(self):
@@ -221,7 +220,7 @@ class TestAgentMCPE2E:
 
         # Create MCP server but don't deploy instance
         mcp_server = self.create_echo_mcp_server()
-        
+
         # Create agent with non-existent MCP instance
         fake_instance_id = "fake-instance-id"
         agent_data = {
@@ -235,27 +234,27 @@ class TestAgentMCPE2E:
 
         # This should either fail during agent creation or handle gracefully during execution
         response = requests.post(f"{API_BASE_URL}/v1/agents/", json=agent_data)
-        
+
         if response.status_code == 201:
             # Agent created successfully, test task execution with broken MCP
             agent = response.json()
             self.agent_id = agent["id"]
-            
+
             task_data = {
                 "agent_id": agent["id"],
                 "message": "Please echo something",
                 "priority": "high"
             }
-            
+
             task_response = requests.post(f"{API_BASE_URL}/v1/tasks/", json=task_data)
             assert task_response.status_code == 201
             task = task_response.json()
             self.task_id = task["id"]
-            
+
             # Wait for task completion (should handle MCP error gracefully)
             self._wait_for_task_completion(task["id"])
             final_task = self._get_task_details(task["id"])
-            
+
             # Task should complete but may have an error message
             assert final_task["status"] in ["completed", "failed"]
             if final_task["status"] == "failed":
@@ -266,4 +265,4 @@ class TestAgentMCPE2E:
             error_detail = response.json()
             assert "mcp" in str(error_detail).lower()
 
-        logger.info("Agent + MCP error handling test completed!") 
+        logger.info("Agent + MCP error handling test completed!")

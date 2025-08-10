@@ -136,14 +136,14 @@ def load_mcp_provider_templates() -> dict[str, Any]:
             os.path.join(os.getcwd(), "data", "mcp_providers.yaml"),
             os.path.join(os.getcwd(), "..", "data", "mcp_providers.yaml"),
         ]
-        
+
         for alt_path in alternative_paths:
             try:
                 with open(alt_path) as f:
                     return yaml.safe_load(f)
             except FileNotFoundError:
                 continue
-        
+
         # If all paths fail, raise the original error with helpful info
         raise FileNotFoundError(
             f"Could not find mcp_providers.yaml. Tried paths: {yaml_path}, {alternative_paths}"

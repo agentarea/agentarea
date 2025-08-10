@@ -172,7 +172,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
             workflow_class = AgentTaskWorkflow.run
         elif workflow_name == "AgentExecutionWorkflow":
-            from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+            from agentarea_execution.workflows.agent_execution_workflow import (
+                AgentExecutionWorkflow,
+            )
 
             workflow_class = AgentExecutionWorkflow.run
         else:
@@ -192,9 +194,10 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                 ]
             elif workflow_name == "AgentExecutionWorkflow":
                 # Based on AgentExecutionWorkflow.run signature: takes AgentExecutionRequest
-                from agentarea_execution.models import AgentExecutionRequest
                 from uuid import UUID
-                
+
+                from agentarea_execution.models import AgentExecutionRequest
+
                 # Convert string UUIDs back to UUID objects
                 execution_request = AgentExecutionRequest(
                     task_id=UUID(args["task_id"]),

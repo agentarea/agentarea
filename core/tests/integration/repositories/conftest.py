@@ -14,19 +14,26 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_llm.domain.models import (
-    ProviderSpec, ProviderConfig, ModelSpec, ModelInstance,
     # Legacy models - still needed for some tests
-    LLMModel, LLMModelInstance, LLMProvider
+    LLMModel,
+    LLMModelInstance,
+    LLMProvider,
+    ModelInstance,
+    ModelSpec,
+    ProviderConfig,
+    ProviderSpec,
 )
+
 # from agentarea_llm.infrastructure.llm_model_instance_repository import (
 #     LLMModelInstanceRepository,
 # )
 # from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
-from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_mcp.domain.models import MCPServer
+
 # from agentarea_mcp.domain.mpc_server_instance_model import Base as MCPBase
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.repository import (
@@ -35,7 +42,6 @@ from agentarea_mcp.infrastructure.repository import (
 )
 from agentarea_tasks.domain.models import SimpleTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
-from agentarea_tasks.infrastructure.orm import TaskORM
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -118,7 +124,7 @@ async def _populate_test_data(session: AsyncSession):
         updated_at=datetime.now(),
     )
     session.add(ollama_provider_spec)
-    
+
     # Create model specs for Ollama
     qwen_model_spec = ModelSpec(
         id=uuid4(),
@@ -132,7 +138,7 @@ async def _populate_test_data(session: AsyncSession):
         updated_at=datetime.now(),
     )
     session.add(qwen_model_spec)
-    
+
     llama2_model_spec = ModelSpec(
         id=uuid4(),
         provider_spec_id=UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"),
@@ -145,7 +151,7 @@ async def _populate_test_data(session: AsyncSession):
         updated_at=datetime.now(),
     )
     session.add(llama2_model_spec)
-    
+
     mistral_model_spec = ModelSpec(
         id=uuid4(),
         provider_spec_id=UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"),
@@ -158,7 +164,7 @@ async def _populate_test_data(session: AsyncSession):
         updated_at=datetime.now(),
     )
     session.add(mistral_model_spec)
-    
+
     # Create provider config for Ollama
     ollama_provider_config = ProviderConfig(
         id=uuid4(),
@@ -174,7 +180,7 @@ async def _populate_test_data(session: AsyncSession):
         updated_at=datetime.now(),
     )
     session.add(ollama_provider_config)
-    
+
     # Create model instances
     qwen_instance = ModelInstance(
         id=uuid4(),
@@ -188,7 +194,7 @@ async def _populate_test_data(session: AsyncSession):
         updated_at=datetime.now(),
     )
     session.add(qwen_instance)
-    
+
     llama2_instance = ModelInstance(
         id=uuid4(),
         provider_config_id=ollama_provider_config.id,
@@ -201,7 +207,7 @@ async def _populate_test_data(session: AsyncSession):
         updated_at=datetime.now(),
     )
     session.add(llama2_instance)
-    
+
     # Commit the test data
     await session.commit()
 

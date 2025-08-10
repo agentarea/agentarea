@@ -8,21 +8,20 @@ for LLM calls and tool calls, rather than bundling everything into one activity.
 
 import asyncio
 import logging
-from uuid import uuid4, UUID
-
-from temporalio.client import Client
-from temporalio.worker import Worker
-
-# Import workflow and dependencies
-from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import ADKAgentWorkflow
-from agentarea_execution import create_activities_for_worker
-from agentarea_execution.models import AgentExecutionRequest
-from agentarea_execution.interfaces import ActivityDependencies
+from uuid import UUID, uuid4
 
 # Import dependencies
 from agentarea_common.config import get_settings
 from agentarea_common.events.router import get_event_router
+from agentarea_execution import create_activities_for_worker
+
+# Import workflow and dependencies
+from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import ADKAgentWorkflow
+from agentarea_execution.interfaces import ActivityDependencies
+from agentarea_execution.models import AgentExecutionRequest
 from agentarea_secrets import get_real_secret_manager
+from temporalio.client import Client
+from temporalio.worker import Worker
 
 # Configure logging
 logging.basicConfig(
@@ -45,7 +44,7 @@ class ADKWorkflowWithToolsTest:
         settings = get_settings()
         event_broker = get_event_router(settings.broker)
         secret_manager = get_real_secret_manager()
-        
+
         return ActivityDependencies(
             settings=settings,
             event_broker=event_broker,
@@ -79,7 +78,7 @@ class ADKWorkflowWithToolsTest:
             max_concurrent_workflow_tasks=1,
             max_concurrent_activities=10
         )
-        
+
         logger.info(f"✅ Test worker created for task queue: {self.task_queue}")
 
     async def test_complex_agent_with_tools(self) -> None:
@@ -89,7 +88,7 @@ class ADKWorkflowWithToolsTest:
 
         # Use existing agent with tools
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
-        
+
         # Create a request that should trigger tool usage
         test_request = AgentExecutionRequest(
             task_id=uuid4(),
@@ -108,22 +107,22 @@ class ADKWorkflowWithToolsTest:
                 id=f"tools-test-{test_request.task_id}",
                 task_queue=self.task_queue
             )
-            
+
             logger.info(f"🚀 Started tools test workflow: {handle.id}")
             logger.info(f"   Task ID: {test_request.task_id}")
             logger.info(f"   Agent ID: {test_request.agent_id}")
             logger.info(f"   Query: {test_request.task_query}")
-            
+
             # Wait for result
             result = await handle.result()
-            
+
             logger.info("✅ Tools test workflow completed!")
             logger.info(f"   Success: {result.success}")
             logger.info(f"   Final Response: {result.final_response}")
             logger.info(f"   Total Cost: ${result.total_cost:.6f}")
             logger.info(f"   Conversation History: {len(result.conversation_history)} messages")
             logger.info(f"   Reasoning Iterations: {result.reasoning_iterations_used}")
-            
+
             # Check if the response contains evidence of tool usage
             if result.final_response:
                 response_lower = result.final_response.lower()
@@ -131,9 +130,9 @@ class ADKWorkflowWithToolsTest:
                     logger.info("🎉 SUCCESS: Agent appears to have used both tools correctly!")
                 else:
                     logger.warning("⚠️ Agent response doesn't show clear evidence of tool usage")
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"❌ Tools test workflow failed: {e}")
             raise
@@ -145,7 +144,7 @@ class ADKWorkflowWithToolsTest:
 
         # Use existing agent
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
-        
+
         # Create a simple request that shouldn't need tools
         test_request = AgentExecutionRequest(
             task_id=uuid4(),
@@ -164,19 +163,19 @@ class ADKWorkflowWithToolsTest:
                 id=f"simple-test-{test_request.task_id}",
                 task_queue=self.task_queue
             )
-            
+
             logger.info(f"🚀 Started simple test workflow: {handle.id}")
-            
+
             # Wait for result
             result = await handle.result()
-            
+
             logger.info("✅ Simple test workflow completed!")
             logger.info(f"   Success: {result.success}")
             logger.info(f"   Final Response: {result.final_response}")
             logger.info(f"   Reasoning Iterations: {result.reasoning_iterations_used}")
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"❌ Simple test workflow failed: {e}")
             raise
@@ -186,30 +185,30 @@ class ADKWorkflowWithToolsTest:
         try:
             await self.connect()
             await self.create_worker()
-            
+
             # Run worker in background
             worker_task = asyncio.create_task(self.worker.run())
-            
+
             # Wait a moment for worker to start
             await asyncio.sleep(2)
-            
+
             logger.info("🧪 Running simple LLM-only test first...")
             await self.test_simple_llm_only()
-            
+
             logger.info("\n" + "="*60)
             logger.info("🧪 Running complex agent with tools test...")
             await self.test_complex_agent_with_tools()
-            
+
             # Cancel worker
             worker_task.cancel()
-            
+
             try:
                 await worker_task
             except asyncio.CancelledError:
                 pass
-            
+
             logger.info("🎉 All tests completed successfully!")
-            
+
         except Exception as e:
             logger.error(f"❌ Test failed: {e}")
             raise
@@ -218,7 +217,7 @@ class ADKWorkflowWithToolsTest:
 async def main():
     """Main entry point."""
     test = ADKWorkflowWithToolsTest()
-    
+
     try:
         await test.run_tests()
     except KeyboardInterrupt:

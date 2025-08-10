@@ -1,17 +1,16 @@
-"""
-Base authentication provider for AgentArea.
+"""Base authentication provider for AgentArea.
 
 This module provides a base implementation for authentication providers
 that can be extended by specific provider implementations.
 """
 
 import logging
-from typing import Dict, Any, Optional
 from abc import abstractmethod
-import httpx
-import json
+from typing import Any
 
-from ..interfaces import AuthProviderInterface, AuthResult, AuthToken
+import httpx
+
+from ..interfaces import AuthProviderInterface, AuthResult
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +18,8 @@ logger = logging.getLogger(__name__)
 class BaseAuthProvider(AuthProviderInterface):
     """Base authentication provider implementation."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """
-        Initialize the base auth provider.
+    def __init__(self, config: dict[str, Any] | None = None):
+        """Initialize the base auth provider.
         
         Args:
             config: Configuration dictionary for the provider
@@ -33,8 +31,7 @@ class BaseAuthProvider(AuthProviderInterface):
 
     @abstractmethod
     async def verify_token(self, token: str) -> AuthResult:
-        """
-        Verify an authentication token.
+        """Verify an authentication token.
         
         Args:
             token: The token to verify
@@ -45,9 +42,8 @@ class BaseAuthProvider(AuthProviderInterface):
         pass
 
     @abstractmethod
-    async def get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get user information by user ID.
+    async def get_user_info(self, user_id: str) -> dict[str, Any] | None:
+        """Get user information by user ID.
         
         Args:
             user_id: The user ID to look up
@@ -59,17 +55,15 @@ class BaseAuthProvider(AuthProviderInterface):
 
     @abstractmethod
     def get_provider_name(self) -> str:
-        """
-        Get the name of this authentication provider.
+        """Get the name of this authentication provider.
         
         Returns:
             The provider name
         """
         pass
 
-    async def _fetch_jwks(self, jwks_url: str) -> Dict[str, Any]:
-        """
-        Fetch JWKS (JSON Web Key Set) from the provider.
+    async def _fetch_jwks(self, jwks_url: str) -> dict[str, Any]:
+        """Fetch JWKS (JSON Web Key Set) from the provider.
         
         Args:
             jwks_url: URL to fetch JWKS from
@@ -86,9 +80,8 @@ class BaseAuthProvider(AuthProviderInterface):
             logger.error(f"Failed to fetch JWKS from {jwks_url}: {e}")
             raise
 
-    def _find_key_by_kid(self, jwks: Dict[str, Any], kid: str) -> Optional[Dict[str, Any]]:
-        """
-        Find a key in JWKS by key ID.
+    def _find_key_by_kid(self, jwks: dict[str, Any], kid: str) -> dict[str, Any] | None:
+        """Find a key in JWKS by key ID.
         
         Args:
             jwks: The JWKS dictionary
@@ -103,9 +96,8 @@ class BaseAuthProvider(AuthProviderInterface):
                 return key
         return None
 
-    def _validate_claims(self, payload: Dict[str, Any], issuer: Optional[str] = None) -> bool:
-        """
-        Validate JWT claims.
+    def _validate_claims(self, payload: dict[str, Any], issuer: str | None = None) -> bool:
+        """Validate JWT claims.
         
         Args:
             payload: The JWT payload
@@ -115,22 +107,22 @@ class BaseAuthProvider(AuthProviderInterface):
             True if claims are valid, False otherwise
         """
         import time
-        
+
         # Check expiration
         exp = payload.get("exp")
         if exp and exp < time.time():
             logger.warning("Token has expired")
             return False
-            
+
         # Check not before
         nbf = payload.get("nbf")
         if nbf and nbf > time.time():
             logger.warning("Token not yet valid")
             return False
-            
+
         # Check issuer if provided
         if issuer and payload.get("iss") != issuer:
             logger.warning("Token issuer mismatch")
             return False
-            
+
         return True

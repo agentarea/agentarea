@@ -21,4 +21,4 @@ class KafkaSettings(BrokerSettings):
     """Kafka broker configuration."""
 
     KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
-    KAFKA_TOPIC_PREFIX: str = "" 
+    KAFKA_TOPIC_PREFIX: str = ""

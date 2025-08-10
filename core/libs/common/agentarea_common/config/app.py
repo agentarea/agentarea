@@ -14,13 +14,13 @@ class AppSettings(BaseAppSettings):
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
+
     # OIDC Configuration for JWT authentication (deprecated - kept for backward compatibility)
     OIDC_JWKS_URI: str = ""
     OIDC_ALGORITHM: str = "RS256"
     OIDC_ISSUER: str = ""
     OIDC_AUDIENCE: str = ""
-    
+
     # Clerk Configuration
     CLERK_SECRET_KEY: str = ""
     CLERK_ISSUER: str = ""

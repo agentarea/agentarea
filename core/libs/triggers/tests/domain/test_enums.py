@@ -1,11 +1,10 @@
 """Tests for trigger enums."""
 
-import pytest
 
 from agentarea_triggers.domain.enums import (
-    TriggerType,
-    TriggerStatus,
     ExecutionStatus,
+    TriggerStatus,
+    TriggerType,
     WebhookType,
 )
 

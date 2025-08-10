@@ -1,9 +1,8 @@
-from typing import List
 from uuid import UUID
 
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import and_, select
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -19,7 +18,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         spec = await self.get_by_id(id)
         if not spec:
             return None
-        
+
         # Reload with relationships
         result = await self.session.execute(
             select(ModelSpec)
@@ -36,7 +35,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         spec = await self.find_one_by(provider_spec_id=provider_spec_id, model_name=model_name)
         if not spec:
             return None
-        
+
         # Reload with relationships
         result = await self.session.execute(
             select(ModelSpec)
@@ -55,7 +54,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False,
-    ) -> List[ModelSpec]:
+    ) -> list[ModelSpec]:
         """List model specs with filtering and relationships."""
         filters = {}
         if provider_spec_id is not None:
@@ -69,7 +68,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             offset=offset,
             **filters
         )
-        
+
         # Load relationships for each spec
         spec_ids = [spec.id for spec in specs]
         if spec_ids:
@@ -83,7 +82,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             )
             specs_with_relations = result.scalars().all()
             return list(specs_with_relations)
-        
+
         return specs
 
     async def create_spec(self, entity: ModelSpec) -> ModelSpec:
@@ -103,12 +102,12 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             'created_at': entity.created_at,
             'updated_at': entity.updated_at,
         }
-        
+
         # Remove None values and system fields that will be auto-populated
         spec_data = {k: v for k, v in spec_data.items() if v is not None}
         spec_data.pop('created_at', None)
         spec_data.pop('updated_at', None)
-        
+
         created_spec = await self.create(**spec_data)
         return await self.get_with_relations(created_spec.id) or created_spec
 
@@ -126,10 +125,10 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             'context_window': entity.context_window,
             'is_active': entity.is_active,
         }
-        
+
         # Remove None values
         spec_data = {k: v for k, v in spec_data.items() if v is not None}
-        
+
         updated_spec = await self.update(entity.id, **spec_data)
         return updated_spec or entity
 
@@ -145,4 +144,4 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             return await self.update(existing)
         else:
             # Create new
-            return await self.create(entity) 
+            return await self.create(entity)

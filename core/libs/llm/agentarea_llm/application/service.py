@@ -1,5 +1,5 @@
-from uuid import UUID
 from logging import getLogger
+from uuid import UUID
 
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker

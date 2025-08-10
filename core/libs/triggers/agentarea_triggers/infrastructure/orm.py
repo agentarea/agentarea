@@ -1,10 +1,10 @@
 """Trigger ORM models."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
-from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin, AuditMixin
+from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -27,21 +27,21 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     # Business logic safety
     failure_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_execution_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_execution_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Cron-specific fields
-    cron_expression: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    timezone: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default="UTC")
-    next_run_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    cron_expression: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(100), nullable=True, default="UTC")
+    next_run_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Webhook-specific fields
-    webhook_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    allowed_methods: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
-    webhook_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default="generic")
+    webhook_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    allowed_methods: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    webhook_type: Mapped[str | None] = mapped_column(String(50), nullable=True, default="generic")
     validation_rules: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     # Generic webhook configuration - supports any webhook type
-    webhook_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    webhook_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Relationship to executions
     executions: Mapped[list["TriggerExecutionORM"]] = relationship(
@@ -69,14 +69,14 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
     )
     executed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
-    task_id: Mapped[Optional[UUID]] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    task_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     execution_time_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     trigger_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     # Temporal workflow tracking
-    workflow_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    run_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    run_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationship to trigger
     trigger: Mapped["TriggerORM"] = relationship(

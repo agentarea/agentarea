@@ -10,7 +10,7 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 
 class ModelInstanceService(BaseCrudService[ModelInstance]):
     """Service for managing ModelInstance in the new 4-entity architecture."""
-    
+
     def __init__(
         self,
         repository: ModelInstanceRepository,
@@ -57,12 +57,12 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
             description=description,
             is_public=is_public,
         )
-        
+
         instance = await self.create(instance)
-        
+
         # TODO: Add event publishing when events are defined for new architecture
         # await self.event_broker.publish(ModelInstanceCreated(...))
-        
+
         return instance
 
     async def update_model_instance(
@@ -88,10 +88,10 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
             instance.is_public = is_public
 
         instance = await self.update(instance)
-        
+
         # TODO: Add event publishing when events are defined for new architecture
         # await self.event_broker.publish(ModelInstanceUpdated(...))
-        
+
         return instance
 
     async def delete_model_instance(self, id: UUID) -> bool:
@@ -101,4 +101,4 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
             # TODO: Add event publishing when events are defined for new architecture
             # await self.event_broker.publish(ModelInstanceDeleted(instance_id=id))
             pass
-        return success 
+        return success

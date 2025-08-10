@@ -1,9 +1,8 @@
 """Utilities for querying and filtering audit logs."""
 
 import json
-import logging
-from datetime import datetime, UTC
-from typing import Any, Dict, List, Optional, Union
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from ..auth.context import UserContext
@@ -11,7 +10,7 @@ from ..auth.context import UserContext
 
 class AuditLogQuery:
     """Utility for querying audit logs with workspace context."""
-    
+
     def __init__(self, log_file_path: str = "audit.log"):
         """Initialize audit log query utility.
         
@@ -19,8 +18,8 @@ class AuditLogQuery:
             log_file_path: Path to the audit log file
         """
         self.log_file_path = log_file_path
-    
-    def _parse_log_line(self, line: str) -> Optional[Dict[str, Any]]:
+
+    def _parse_log_line(self, line: str) -> dict[str, Any] | None:
         """Parse a log line into a structured dictionary.
         
         Args:
@@ -33,8 +32,8 @@ class AuditLogQuery:
             return json.loads(line.strip())
         except (json.JSONDecodeError, ValueError):
             return None
-    
-    def _matches_filters(self, log_entry: Dict[str, Any], **filters: Any) -> bool:
+
+    def _matches_filters(self, log_entry: dict[str, Any], **filters: Any) -> bool:
         """Check if log entry matches the given filters.
         
         Args:
@@ -62,21 +61,21 @@ class AuditLogQuery:
             else:
                 # Filter key not found in entry
                 return False
-        
+
         return True
-    
+
     def query_logs(
         self,
-        workspace_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        resource_type: Optional[str] = None,
-        action: Optional[str] = None,
-        resource_id: Optional[Union[str, UUID]] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        limit: Optional[int] = None,
+        workspace_id: str | None = None,
+        user_id: str | None = None,
+        resource_type: str | None = None,
+        action: str | None = None,
+        resource_id: str | UUID | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        limit: int | None = None,
         **additional_filters: Any
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Query audit logs with filtering support.
         
         Args:
@@ -94,7 +93,7 @@ class AuditLogQuery:
             List of matching log entries
         """
         filters = {}
-        
+
         if workspace_id:
             filters["workspace_id"] = workspace_id
         if user_id:
@@ -109,34 +108,34 @@ class AuditLogQuery:
             filters["start_time"] = start_time
         if end_time:
             filters["end_time"] = end_time
-        
+
         filters.update(additional_filters)
-        
+
         results = []
-        
+
         try:
-            with open(self.log_file_path, 'r') as f:
+            with open(self.log_file_path) as f:
                 for line in f:
                     if limit and len(results) >= limit:
                         break
-                    
+
                     log_entry = self._parse_log_line(line)
                     if log_entry and self._matches_filters(log_entry, **filters):
                         results.append(log_entry)
-        
+
         except FileNotFoundError:
             # Log file doesn't exist yet
             pass
-        
+
         return results
-    
+
     def get_user_activity(
         self,
         user_context: UserContext,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Get activity logs for a specific user in their workspace.
         
         Args:
@@ -155,14 +154,14 @@ class AuditLogQuery:
             end_time=end_time,
             limit=limit
         )
-    
+
     def get_workspace_activity(
         self,
         workspace_id: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Get activity logs for an entire workspace.
         
         Args:
@@ -180,14 +179,14 @@ class AuditLogQuery:
             end_time=end_time,
             limit=limit
         )
-    
+
     def get_resource_history(
         self,
         resource_type: str,
-        resource_id: Union[str, UUID],
-        workspace_id: Optional[str] = None,
-        limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        resource_id: str | UUID,
+        workspace_id: str | None = None,
+        limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Get history for a specific resource.
         
         Args:
@@ -205,15 +204,15 @@ class AuditLogQuery:
             workspace_id=workspace_id,
             limit=limit
         )
-    
+
     def get_error_logs(
         self,
-        workspace_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        workspace_id: str | None = None,
+        user_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Get error logs with optional filtering.
         
         Args:

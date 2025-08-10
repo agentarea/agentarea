@@ -1,5 +1,4 @@
-"""
-Authentication providers for AgentArea.
+"""Authentication providers for AgentArea.
 
 This module contains implementations of different authentication providers.
 """

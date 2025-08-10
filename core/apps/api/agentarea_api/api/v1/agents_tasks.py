@@ -106,7 +106,7 @@ async def get_all_tasks(
     try:
         # Determine if we should filter by creator
         creator_scoped = created_by == "me"
-        
+
         # Get all workspace agents (or user's agents if creator_scoped)
         agents = await agent_service.list(creator_scoped=creator_scoped)
 
@@ -378,7 +378,7 @@ async def list_agent_tasks(
     try:
         # Determine if we should filter by creator
         creator_scoped = created_by == "me"
-        
+
         # Get tasks with workflow status from service
         agent_tasks = await task_service.list_agent_tasks_with_workflow_status(
             agent_id, limit=limit, creator_scoped=creator_scoped
@@ -655,39 +655,39 @@ async def get_task_events(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        from sqlalchemy import text
         from agentarea_api.api.deps.database import get_db_session
-        
+        from sqlalchemy import text
+
         # Get database session
         async with get_db_session() as session:
             # Build the query with optional event type filter
             base_query = """
-                SELECT id, task_id, event_type, timestamp, data, metadata,
+                SELECT id, task_id, event_type, timestamp, data, event_metadata,
                        COUNT(*) OVER() as total_count
                 FROM task_events 
                 WHERE task_id = :task_id
             """
-            
+
             params = {"task_id": str(task_id)}
-            
+
             if event_type:
                 base_query += " AND event_type = :event_type"
                 params["event_type"] = event_type
-                
+
             base_query += """
                 ORDER BY timestamp ASC
                 LIMIT :limit OFFSET :offset
             """
-            
+
             params.update({
                 "limit": page_size,
                 "offset": (page - 1) * page_size
             })
-            
+
             # Execute query
             result = await session.execute(text(base_query), params)
             rows = result.fetchall()
-        
+
         if not rows:
             # No events found - return empty response
             return TaskEventResponse(
@@ -697,23 +697,23 @@ async def get_task_events(
                 page_size=page_size,
                 has_next=False,
             )
-        
+
         # Convert database rows to TaskEvent objects
         total_events = rows[0].total_count if rows else 0
         events = []
-        
+
         for row in rows:
             events.append(TaskEvent(
                 id=str(row.id),
                 task_id=str(row.task_id),
                 agent_id=str(agent_id),
-                execution_id=row.metadata.get("execution_id", "unknown"),
+                execution_id=row.event_metadata.get("execution_id", "unknown"),
                 timestamp=row.timestamp,
                 event_type=row.event_type,
                 message=row.data.get("message", f"Event: {row.event_type}"),
-                metadata=dict(row.metadata) if row.metadata else {},
+                metadata=dict(row.event_metadata) if row.event_metadata else {},
             ))
-        
+
         # Calculate pagination info
         has_next = (page * page_size) < total_events
 
@@ -767,19 +767,18 @@ async def stream_task_events(
 
                 # Stream events from task service
                 async for event in task_service.stream_task_events(task_id, include_history=True):
-                    # Convert task service event to SSE format
+                    # Use protocol event structure directly - task service already formats it properly
                     event_type = event.get("event_type", "task_event")
 
-                    # Add execution context if available
-                    event_data = event.get("data", {})
-                    event_data.update({
-                        "task_id": str(task_id),
-                        "agent_id": str(agent_id),
-                        "execution_id": task.execution_id,
-                        "timestamp": event.get("timestamp", datetime.now(UTC).isoformat()),
-                    })
+                    # Create protocol-compliant SSE event
+                    sse_event = {
+                        "event_type": event_type,
+                        "event_id": event.get("event_id"),
+                        "timestamp": event.get("timestamp"),
+                        "data": event.get("data", {})
+                    }
 
-                    yield _format_sse_event(event_type, event_data)
+                    yield _format_sse_event(event_type, sse_event)
 
                     # Check for terminal states
                     if event_type in ["task_completed", "task_failed", "task_cancelled", "workflow_completed", "workflow_failed"]:

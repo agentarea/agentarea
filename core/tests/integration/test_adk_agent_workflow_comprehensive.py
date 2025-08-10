@@ -8,24 +8,24 @@ including error handling, queries, signals, and various execution scenarios.
 
 import asyncio
 import logging
-import pytest
-from uuid import uuid4, UUID
 from datetime import timedelta
+from uuid import UUID, uuid4
 
-from temporalio.client import Client
-from temporalio.worker import Worker
-from temporalio.common import RetryPolicy
-
-# Import workflow and activities
-from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import ADKAgentWorkflow
-from agentarea_execution import create_activities_for_worker
-from agentarea_execution.models import AgentExecutionRequest
-from agentarea_execution.interfaces import ActivityDependencies
+import pytest
 
 # Import dependencies
 from agentarea_common.config import get_settings
 from agentarea_common.events.router import get_event_router
+from agentarea_execution import create_activities_for_worker
+
+# Import workflow and activities
+from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import ADKAgentWorkflow
+from agentarea_execution.interfaces import ActivityDependencies
+from agentarea_execution.models import AgentExecutionRequest
 from agentarea_secrets import get_real_secret_manager
+from temporalio.client import Client
+from temporalio.common import RetryPolicy
+from temporalio.worker import Worker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -41,7 +41,7 @@ class TestADKAgentWorkflowComprehensive:
         settings = get_settings()
         event_broker = get_event_router(settings.broker)
         secret_manager = get_real_secret_manager()
-        
+
         return ActivityDependencies(
             settings=settings,
             event_broker=event_broker,
@@ -52,7 +52,7 @@ class TestADKAgentWorkflowComprehensive:
     async def temporal_client(self):
         """Create Temporal client for testing."""
         client = await Client.connect("localhost:7233")
-        yield client
+        return client
         # Client cleanup is automatic
 
     @pytest.fixture
@@ -60,7 +60,7 @@ class TestADKAgentWorkflowComprehensive:
         """Create a sample agent execution request."""
         # Use existing agent ID
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
-        
+
         return AgentExecutionRequest(
             task_id=uuid4(),
             agent_id=existing_agent_id,
@@ -75,7 +75,7 @@ class TestADKAgentWorkflowComprehensive:
         """Create a simple math request for testing."""
         # Use existing agent ID
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
-        
+
         return AgentExecutionRequest(
             task_id=uuid4(),
             agent_id=existing_agent_id,
@@ -90,7 +90,7 @@ class TestADKAgentWorkflowComprehensive:
         """Create a request using an existing agent ID."""
         # Use a known agent ID from the database
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
-        
+
         return AgentExecutionRequest(
             task_id=uuid4(),
             agent_id=existing_agent_id,
@@ -104,12 +104,12 @@ class TestADKAgentWorkflowComprehensive:
     @pytest.mark.integration
     async def test_basic_adk_workflow_execution(self, temporal_client, activity_dependencies, sample_request):
         """Test basic ADK workflow execution with real Temporal server."""
-        
+
         logger.info("🧪 Starting basic ADK workflow execution test")
-        
+
         # Create activities
         activities = create_activities_for_worker(activity_dependencies)
-        
+
         # Create worker
         worker = Worker(
             temporal_client,
@@ -119,7 +119,7 @@ class TestADKAgentWorkflowComprehensive:
             max_concurrent_workflow_tasks=1,
             max_concurrent_activities=5
         )
-        
+
         async with worker:
             # Start workflow
             handle = await temporal_client.start_workflow(
@@ -130,13 +130,13 @@ class TestADKAgentWorkflowComprehensive:
                 execution_timeout=timedelta(minutes=3),
                 retry_policy=RetryPolicy(maximum_attempts=1)
             )
-            
+
             logger.info(f"📋 Workflow started with ID: {handle.id}")
-            
+
             # Wait for completion
             try:
                 result = await asyncio.wait_for(handle.result(), timeout=180.0)
-                
+
                 # Verify result structure
                 assert result is not None
                 assert hasattr(result, 'success')
@@ -144,20 +144,20 @@ class TestADKAgentWorkflowComprehensive:
                 assert hasattr(result, 'task_id')
                 assert hasattr(result, 'agent_id')
                 assert hasattr(result, 'conversation_history')
-                
+
                 # Verify result values
                 assert result.task_id == sample_request.task_id
                 assert result.agent_id == sample_request.agent_id
-                
-                logger.info(f"✅ Basic workflow test completed successfully!")
+
+                logger.info("✅ Basic workflow test completed successfully!")
                 logger.info(f"   Success: {result.success}")
                 logger.info(f"   Response: {result.final_response}")
                 logger.info(f"   Conversation history length: {len(result.conversation_history)}")
                 logger.info(f"   Total cost: ${result.total_cost:.6f}")
-                
+
                 return result
-                
-            except asyncio.TimeoutError:
+
+            except TimeoutError:
                 logger.error("❌ Workflow timed out")
                 pytest.fail("Workflow execution timed out")
 
@@ -165,18 +165,18 @@ class TestADKAgentWorkflowComprehensive:
     @pytest.mark.integration
     async def test_simple_math_workflow(self, temporal_client, activity_dependencies, simple_math_request):
         """Test workflow with a simple math question."""
-        
+
         logger.info("🧮 Starting simple math workflow test")
-        
+
         activities = create_activities_for_worker(activity_dependencies)
-        
+
         worker = Worker(
             temporal_client,
             task_queue="test-adk-math",
             workflows=[ADKAgentWorkflow],
             activities=activities
         )
-        
+
         async with worker:
             handle = await temporal_client.start_workflow(
                 ADKAgentWorkflow.run,
@@ -185,40 +185,40 @@ class TestADKAgentWorkflowComprehensive:
                 task_queue="test-adk-math",
                 execution_timeout=timedelta(minutes=2)
             )
-            
+
             logger.info(f"📋 Math workflow started with ID: {handle.id}")
-            
+
             result = await asyncio.wait_for(handle.result(), timeout=120.0)
-            
+
             # Verify math result
             assert result.success is True
             assert result.final_response is not None
-            
+
             # Check if the response contains the expected answer (12)
             response_text = result.final_response.lower()
             assert "12" in response_text or "twelve" in response_text
-            
-            logger.info(f"✅ Math workflow test completed!")
+
+            logger.info("✅ Math workflow test completed!")
             logger.info(f"   Response: {result.final_response}")
-            
+
             return result
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_workflow_queries_and_signals(self, temporal_client, activity_dependencies, sample_request):
         """Test workflow queries and signals during execution."""
-        
+
         logger.info("🔍 Starting workflow queries and signals test")
-        
+
         activities = create_activities_for_worker(activity_dependencies)
-        
+
         worker = Worker(
             temporal_client,
             task_queue="test-adk-queries",
             workflows=[ADKAgentWorkflow],
             activities=activities
         )
-        
+
         async with worker:
             handle = await temporal_client.start_workflow(
                 ADKAgentWorkflow.run,
@@ -226,50 +226,50 @@ class TestADKAgentWorkflowComprehensive:
                 id=f"query-test-{sample_request.task_id}",
                 task_queue="test-adk-queries"
             )
-            
+
             logger.info(f"📋 Query test workflow started: {handle.id}")
-            
+
             # Wait a moment for workflow to start processing
             await asyncio.sleep(3)
-            
+
             # Test queries
             try:
                 current_state = await handle.query("get_current_state")
                 logger.info(f"📊 Current state: {current_state}")
-                
+
                 assert "execution_id" in current_state
                 assert "event_count" in current_state
                 assert "success" in current_state
-                
+
                 events = await handle.query("get_events", 10)
                 logger.info(f"📝 Events retrieved: {len(events) if events else 0}")
-                
+
                 final_response = await handle.query("get_final_response")
                 logger.info(f"💬 Final response query: {final_response}")
-                
+
             except Exception as query_error:
                 logger.warning(f"⚠️ Query failed (workflow may not be ready): {query_error}")
-            
+
             # Test signals
             try:
                 await handle.signal("pause", "Integration test pause")
                 logger.info("⏸️ Sent pause signal")
-                
+
                 await asyncio.sleep(2)
-                
+
                 # Query state after pause
                 paused_state = await handle.query("get_current_state")
                 logger.info(f"📊 State after pause: {paused_state.get('paused', 'unknown')}")
-                
+
                 await handle.signal("resume", "Integration test resume")
                 logger.info("▶️ Sent resume signal")
-                
+
             except Exception as signal_error:
                 logger.warning(f"⚠️ Signal failed: {signal_error}")
-            
+
             # Wait for completion
             result = await asyncio.wait_for(handle.result(), timeout=180.0)
-            
+
             logger.info("✅ Query and signal test completed successfully!")
             return result
 
@@ -277,18 +277,18 @@ class TestADKAgentWorkflowComprehensive:
     @pytest.mark.integration
     async def test_workflow_with_existing_agent(self, temporal_client, activity_dependencies, existing_agent_request):
         """Test workflow with an existing agent from the database."""
-        
+
         logger.info("👤 Starting existing agent workflow test")
-        
+
         activities = create_activities_for_worker(activity_dependencies)
-        
+
         worker = Worker(
             temporal_client,
             task_queue="test-adk-existing",
             workflows=[ADKAgentWorkflow],
             activities=activities
         )
-        
+
         async with worker:
             handle = await temporal_client.start_workflow(
                 ADKAgentWorkflow.run,
@@ -296,22 +296,22 @@ class TestADKAgentWorkflowComprehensive:
                 id=f"existing-agent-test-{existing_agent_request.task_id}",
                 task_queue="test-adk-existing"
             )
-            
+
             logger.info(f"📋 Existing agent test started: {handle.id}")
             logger.info(f"   Using agent ID: {existing_agent_request.agent_id}")
-            
+
             try:
                 result = await asyncio.wait_for(handle.result(), timeout=120.0)
-                
+
                 assert result.agent_id == existing_agent_request.agent_id
                 assert result.final_response is not None
-                
+
                 logger.info("✅ Existing agent test completed successfully!")
                 logger.info(f"   Agent ID: {result.agent_id}")
                 logger.info(f"   Response: {result.final_response}")
-                
+
                 return result
-                
+
             except Exception as e:
                 logger.warning(f"⚠️ Existing agent test failed (agent may not exist): {e}")
                 # This is expected if the agent doesn't exist in the test database
@@ -321,9 +321,9 @@ class TestADKAgentWorkflowComprehensive:
     @pytest.mark.integration
     async def test_workflow_error_handling(self, temporal_client, activity_dependencies):
         """Test workflow error handling with invalid inputs."""
-        
+
         logger.info("💥 Starting error handling test")
-        
+
         # Create request with invalid agent ID
         invalid_request = AgentExecutionRequest(
             task_id=uuid4(),
@@ -333,16 +333,16 @@ class TestADKAgentWorkflowComprehensive:
             timeout_seconds=60,
             max_reasoning_iterations=1
         )
-        
+
         activities = create_activities_for_worker(activity_dependencies)
-        
+
         worker = Worker(
             temporal_client,
             task_queue="test-adk-errors",
             workflows=[ADKAgentWorkflow],
             activities=activities
         )
-        
+
         async with worker:
             handle = await temporal_client.start_workflow(
                 ADKAgentWorkflow.run,
@@ -350,12 +350,12 @@ class TestADKAgentWorkflowComprehensive:
                 id=f"error-test-{invalid_request.task_id}",
                 task_queue="test-adk-errors"
             )
-            
+
             logger.info("🧪 Testing error handling...")
-            
+
             try:
                 result = await asyncio.wait_for(handle.result(), timeout=90.0)
-                
+
                 # If we get a result, it should indicate failure
                 if hasattr(result, 'success'):
                     assert result.success is False
@@ -363,22 +363,22 @@ class TestADKAgentWorkflowComprehensive:
                     logger.info(f"   Error message: {getattr(result, 'error_message', 'No error message')}")
                 else:
                     logger.warning("⚠️ Got result but no success field")
-                    
+
             except Exception as workflow_error:
                 # Workflow should fail gracefully, but we expect it to handle errors internally
                 logger.info(f"✅ Workflow failed as expected: {workflow_error}")
-            
+
             logger.info("✅ Error handling test completed!")
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_concurrent_workflows(self, temporal_client, activity_dependencies):
         """Test multiple concurrent workflow executions."""
-        
+
         logger.info("🔄 Starting concurrent workflows test")
-        
+
         activities = create_activities_for_worker(activity_dependencies)
-        
+
         worker = Worker(
             temporal_client,
             task_queue="test-adk-concurrent",
@@ -387,10 +387,10 @@ class TestADKAgentWorkflowComprehensive:
             max_concurrent_workflow_tasks=3,
             max_concurrent_activities=10
         )
-        
+
         # Create multiple requests using existing agent
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
-        
+
         requests = []
         for i in range(3):
             request = AgentExecutionRequest(
@@ -402,7 +402,7 @@ class TestADKAgentWorkflowComprehensive:
                 max_reasoning_iterations=2
             )
             requests.append(request)
-        
+
         async with worker:
             # Start all workflows concurrently
             handles = []
@@ -415,7 +415,7 @@ class TestADKAgentWorkflowComprehensive:
                 )
                 handles.append(handle)
                 logger.info(f"📋 Started concurrent workflow {i+1}: {handle.id}")
-            
+
             # Wait for all to complete
             results = []
             for i, handle in enumerate(handles):
@@ -427,31 +427,31 @@ class TestADKAgentWorkflowComprehensive:
                 except Exception as e:
                     logger.error(f"❌ Concurrent workflow {i+1} failed: {e}")
                     results.append(None)
-            
+
             # Verify results
             successful_results = [r for r in results if r is not None]
             logger.info(f"✅ Concurrent test completed: {len(successful_results)}/{len(requests)} successful")
-            
+
             assert len(successful_results) >= 1, "At least one concurrent workflow should succeed"
-            
+
             return results
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_workflow_performance_metrics(self, temporal_client, activity_dependencies, simple_math_request):
         """Test workflow performance metrics collection."""
-        
+
         logger.info("📊 Starting performance metrics test")
-        
+
         activities = create_activities_for_worker(activity_dependencies)
-        
+
         worker = Worker(
             temporal_client,
             task_queue="test-adk-metrics",
             workflows=[ADKAgentWorkflow],
             activities=activities
         )
-        
+
         async with worker:
             handle = await temporal_client.start_workflow(
                 ADKAgentWorkflow.run,
@@ -459,26 +459,26 @@ class TestADKAgentWorkflowComprehensive:
                 id=f"metrics-test-{simple_math_request.task_id}",
                 task_queue="test-adk-metrics"
             )
-            
+
             logger.info(f"📋 Metrics test workflow started: {handle.id}")
-            
+
             result = await asyncio.wait_for(handle.result(), timeout=120.0)
-            
+
             # Verify performance metrics
             assert hasattr(result, 'total_cost')
             assert hasattr(result, 'reasoning_iterations_used')
             assert hasattr(result, 'conversation_history')
-            
+
             logger.info("✅ Performance metrics test completed!")
             logger.info(f"   Total cost: ${result.total_cost:.6f}")
             logger.info(f"   Reasoning iterations: {result.reasoning_iterations_used}")
             logger.info(f"   Conversation history length: {len(result.conversation_history)}")
-            
+
             # Verify metrics are reasonable
             assert result.total_cost >= 0.0
             assert result.reasoning_iterations_used >= 0
             assert len(result.conversation_history) >= 0
-            
+
             return result
 
 

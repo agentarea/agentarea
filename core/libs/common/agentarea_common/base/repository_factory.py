@@ -1,10 +1,11 @@
 """Repository factory for dependency injection with user context."""
 
-from typing import Type, TypeVar
+from typing import TypeVar
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .workspace_scoped_repository import WorkspaceScopedRepository
 from ..auth.context import UserContext
+from .workspace_scoped_repository import WorkspaceScopedRepository
 
 T = TypeVar('T', bound=WorkspaceScopedRepository)
 
@@ -15,7 +16,7 @@ class RepositoryFactory:
     This factory ensures that all repositories are properly initialized with
     the current user context for workspace-scoped data isolation.
     """
-    
+
     def __init__(self, session: AsyncSession, user_context: UserContext):
         """Initialize the repository factory.
         
@@ -25,8 +26,8 @@ class RepositoryFactory:
         """
         self.session = session
         self.user_context = user_context
-    
-    def create_repository(self, repository_class: Type[T]) -> T:
+
+    def create_repository(self, repository_class: type[T]) -> T:
         """Create a repository instance with user context.
         
         Args:

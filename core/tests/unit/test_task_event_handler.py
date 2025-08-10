@@ -1,9 +1,9 @@
 """Unit tests for TaskEventHandler."""
 
-import pytest
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
+import pytest
 from agentarea_tasks.domain.models import SimpleTask
 from agentarea_tasks.task_event_handler import TaskEventHandler
 
@@ -47,14 +47,14 @@ def sample_task():
 async def test_setup_event_listeners(task_event_handler, mock_event_broker):
     """Test that event listeners are set up correctly."""
     await task_event_handler.setup_event_listeners()
-    
+
     # Verify all event subscriptions were called
     assert mock_event_broker.subscribe.call_count == 3
-    
+
     # Check specific subscription calls
     subscribe_calls = [call[0] for call in mock_event_broker.subscribe.call_args_list]
     event_types = [call[0] for call in subscribe_calls]
-    
+
     assert "TaskStatusChanged" in event_types
     assert "TaskCompleted" in event_types
     assert "TaskFailed" in event_types
@@ -68,20 +68,20 @@ async def test_handle_task_status_changed(
     # Setup
     mock_task_repository.get.return_value = sample_task
     mock_task_repository.update.return_value = sample_task
-    
+
     # Create mock event
     mock_event = Mock()
     mock_event.task_id = str(sample_task.id)
     mock_event.new_status = Mock()
     mock_event.new_status.value = "RUNNING"
-    
+
     # Execute
     await task_event_handler.handle_task_status_changed(mock_event)
-    
+
     # Verify
     mock_task_repository.get.assert_called_once_with(sample_task.id)
     mock_task_repository.update.assert_called_once()
-    
+
     # Check that task status was updated
     updated_task = mock_task_repository.update.call_args[0][0]
     assert updated_task.status == "running"
@@ -95,15 +95,15 @@ async def test_handle_task_status_changed_string_status(
     # Setup
     mock_task_repository.get.return_value = sample_task
     mock_task_repository.update.return_value = sample_task
-    
+
     # Create mock event with string status
     mock_event = Mock()
     mock_event.task_id = str(sample_task.id)
     mock_event.new_status = "COMPLETED"
-    
+
     # Execute
     await task_event_handler.handle_task_status_changed(mock_event)
-    
+
     # Verify
     updated_task = mock_task_repository.update.call_args[0][0]
     assert updated_task.status == "completed"
@@ -117,19 +117,19 @@ async def test_handle_task_completed(
     # Setup
     mock_task_repository.get.return_value = sample_task
     mock_task_repository.update.return_value = sample_task
-    
+
     # Create mock event
     mock_event = Mock()
     mock_event.task_id = str(sample_task.id)
     mock_event.result = {"answer": "Task completed successfully"}
-    
+
     # Execute
     await task_event_handler.handle_task_completed(mock_event)
-    
+
     # Verify
     mock_task_repository.get.assert_called_once_with(sample_task.id)
     mock_task_repository.update.assert_called_once()
-    
+
     # Check that task was marked as completed with result
     updated_task = mock_task_repository.update.call_args[0][0]
     assert updated_task.status == "completed"
@@ -144,19 +144,19 @@ async def test_handle_task_failed(
     # Setup
     mock_task_repository.get.return_value = sample_task
     mock_task_repository.update.return_value = sample_task
-    
+
     # Create mock event
     mock_event = Mock()
     mock_event.task_id = str(sample_task.id)
     mock_event.error_message = "Agent execution failed"
-    
+
     # Execute
     await task_event_handler.handle_task_failed(mock_event)
-    
+
     # Verify
     mock_task_repository.get.assert_called_once_with(sample_task.id)
     mock_task_repository.update.assert_called_once()
-    
+
     # Check that task was marked as failed with error
     updated_task = mock_task_repository.update.call_args[0][0]
     assert updated_task.status == "failed"
@@ -170,15 +170,15 @@ async def test_handle_task_not_found(
     """Test handling events for non-existent tasks."""
     # Setup
     mock_task_repository.get.return_value = None
-    
+
     # Create mock event
     mock_event = Mock()
     mock_event.task_id = str(uuid4())
     mock_event.new_status = "COMPLETED"
-    
+
     # Execute
     await task_event_handler.handle_task_status_changed(mock_event)
-    
+
     # Verify - should not call update when task not found
     mock_task_repository.get.assert_called_once()
     mock_task_repository.update.assert_not_called()
@@ -191,14 +191,14 @@ async def test_handle_event_with_exception(
     """Test that exceptions in event handlers are caught and logged."""
     # Setup
     mock_task_repository.get.side_effect = Exception("Database error")
-    
+
     # Create mock event
     mock_event = Mock()
     mock_event.task_id = str(sample_task.id)
     mock_event.new_status = "COMPLETED"
-    
+
     # Execute - should not raise exception
     await task_event_handler.handle_task_status_changed(mock_event)
-    
+
     # Verify repository was called despite error
-    mock_task_repository.get.assert_called_once() 
+    mock_task_repository.get.assert_called_once()

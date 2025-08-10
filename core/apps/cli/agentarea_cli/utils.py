@@ -1,12 +1,12 @@
 """Utility functions for AgentArea CLI."""
 
 import re
-from typing import Any, List, Optional
+from typing import Any
 
 from .exceptions import ValidationError
 
 
-def format_table(headers: List[str], rows: List[List[str]], max_width: int = 120) -> str:
+def format_table(headers: list[str], rows: list[list[str]], max_width: int = 120) -> str:
     """Format data as a table with proper alignment and spacing.
     
     Args:
@@ -19,29 +19,29 @@ def format_table(headers: List[str], rows: List[List[str]], max_width: int = 120
     """
     if not headers or not rows:
         return ""
-    
+
     # Calculate column widths
     col_widths = [len(header) for header in headers]
-    
+
     for row in rows:
         for i, cell in enumerate(row):
             if i < len(col_widths):
                 col_widths[i] = max(col_widths[i], len(str(cell)))
-    
+
     # Adjust widths if table is too wide
     total_width = sum(col_widths) + len(headers) * 3 + 1  # 3 chars per separator + 1 for end
     if total_width > max_width:
         # Reduce widths proportionally, but keep minimum of 10 chars per column
         reduction_factor = (max_width - len(headers) * 3 - 1) / sum(col_widths)
         col_widths = [max(10, int(width * reduction_factor)) for width in col_widths]
-    
+
     # Build table
     lines = []
-    
+
     # Header separator
     separator = "+" + "+".join("-" * (width + 2) for width in col_widths) + "+"
     lines.append(separator)
-    
+
     # Header row
     header_row = "|"
     for i, header in enumerate(headers):
@@ -49,7 +49,7 @@ def format_table(headers: List[str], rows: List[List[str]], max_width: int = 120
             header_row += f" {header:<{col_widths[i]}} |"
     lines.append(header_row)
     lines.append(separator)
-    
+
     # Data rows
     for row in rows:
         data_row = "|"
@@ -61,10 +61,10 @@ def format_table(headers: List[str], rows: List[List[str]], max_width: int = 120
                     cell_str = cell_str[:col_widths[i]-3] + "..."
                 data_row += f" {cell_str:<{col_widths[i]}} |"
         lines.append(data_row)
-    
+
     # Bottom separator
     lines.append(separator)
-    
+
     return "\n".join(lines)
 
 
@@ -81,7 +81,7 @@ def safe_get_field(data: dict, field: str, default: Any = None) -> Any:
     """
     if not isinstance(data, dict):
         return default
-    
+
     # Handle dot notation for nested fields
     if "." in field:
         keys = field.split(".")
@@ -92,7 +92,7 @@ def safe_get_field(data: dict, field: str, default: Any = None) -> Any:
             else:
                 return default
         return current
-    
+
     return data.get(field, default)
 
 
@@ -121,7 +121,7 @@ def validate_email(email: str) -> bool:
     """
     if not email:
         return False
-    
+
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
 
@@ -137,7 +137,7 @@ def validate_url(url: str) -> bool:
     """
     if not url:
         return False
-    
+
     pattern = r'^https?://[a-zA-Z0-9.-]+(?:\.[a-zA-Z]{2,})?(?::[0-9]+)?(?:/.*)?$'
     return bool(re.match(pattern, url))
 
@@ -155,7 +155,7 @@ def truncate_string(text: str, max_length: int, suffix: str = "...") -> str:
     """
     if not text or len(text) <= max_length:
         return text
-    
+
     return text[:max_length - len(suffix)] + suffix
 
 
@@ -170,15 +170,15 @@ def format_bytes(bytes_value: int) -> str:
     """
     if bytes_value == 0:
         return "0 B"
-    
+
     units = ["B", "KB", "MB", "GB", "TB"]
     unit_index = 0
     size = float(bytes_value)
-    
+
     while size >= 1024 and unit_index < len(units) - 1:
         size /= 1024
         unit_index += 1
-    
+
     if unit_index == 0:
         return f"{int(size)} {units[unit_index]}"
     else:
@@ -196,30 +196,30 @@ def format_duration(seconds: float) -> str:
     """
     if seconds < 0:
         return "0s"
-    
+
     units = [
         ("d", 86400),  # days
         ("h", 3600),   # hours
         ("m", 60),     # minutes
         ("s", 1)       # seconds
     ]
-    
+
     parts = []
     remaining = int(seconds)
-    
+
     for unit_name, unit_seconds in units:
         if remaining >= unit_seconds:
             count = remaining // unit_seconds
             remaining %= unit_seconds
             parts.append(f"{count}{unit_name}")
-    
+
     if not parts:
         return "0s"
-    
+
     return " ".join(parts)
 
 
-def parse_key_value_pairs(pairs: List[str]) -> dict:
+def parse_key_value_pairs(pairs: list[str]) -> dict:
     """Parse key=value pairs from a list of strings.
     
     Args:
@@ -232,20 +232,20 @@ def parse_key_value_pairs(pairs: List[str]) -> dict:
         ValidationError: If any pair is not in correct format
     """
     result = {}
-    
+
     for pair in pairs:
         if "=" not in pair:
             raise ValidationError(f"Invalid key=value pair: '{pair}'")
-        
+
         key, value = pair.split("=", 1)
         key = key.strip()
         value = value.strip()
-        
+
         if not key:
             raise ValidationError(f"Empty key in pair: '{pair}'")
-        
+
         result[key] = value
-    
+
     return result
 
 
@@ -261,14 +261,14 @@ def sanitize_filename(filename: str) -> str:
     # Remove invalid characters
     invalid_chars = r'[<>:"/\\|?*]'
     sanitized = re.sub(invalid_chars, "_", filename)
-    
+
     # Remove leading/trailing dots and spaces
     sanitized = sanitized.strip(". ")
-    
+
     # Ensure it's not empty
     if not sanitized:
         sanitized = "untitled"
-    
+
     return sanitized
 
 
@@ -283,15 +283,15 @@ def confirm_action(message: str, default: bool = False) -> bool:
         True if user confirms, False otherwise
     """
     suffix = " [Y/n]" if default else " [y/N]"
-    
+
     try:
         response = input(f"{message}{suffix}: ").strip().lower()
-        
+
         if not response:
             return default
-        
+
         return response in ["y", "yes", "true", "1"]
-    
+
     except (KeyboardInterrupt, EOFError):
         return False
 
@@ -306,7 +306,7 @@ def get_status_emoji(status: str) -> str:
         Appropriate emoji
     """
     status_lower = status.lower()
-    
+
     status_map = {
         "active": "✅",
         "inactive": "❌",
@@ -323,11 +323,11 @@ def get_status_emoji(status: str) -> str:
         "available": "✅",
         "unavailable": "❌"
     }
-    
+
     return status_map.get(status_lower, "❓")
 
 
-def pluralize(count: int, singular: str, plural: Optional[str] = None) -> str:
+def pluralize(count: int, singular: str, plural: str | None = None) -> str:
     """Return singular or plural form based on count.
     
     Args:
@@ -340,7 +340,7 @@ def pluralize(count: int, singular: str, plural: Optional[str] = None) -> str:
     """
     if plural is None:
         plural = singular + "s"
-    
+
     word = singular if count == 1 else plural
     return f"{count} {word}"
 
@@ -358,7 +358,7 @@ def mask_sensitive_value(value: str, mask_char: str = "*", visible_chars: int = 
     """
     if not value or len(value) <= visible_chars:
         return mask_char * 8  # Default masked length
-    
+
     masked_length = len(value) - visible_chars
     return mask_char * masked_length + value[-visible_chars:]
 
@@ -376,7 +376,7 @@ def highlight_search_term(text: str, search_term: str, highlight_color: str = "y
     """
     if not search_term or search_term not in text.lower():
         return text
-    
+
     # Simple highlighting for terminal (could be enhanced with click.style)
     # For now, just wrap with brackets
     pattern = re.compile(re.escape(search_term), re.IGNORECASE)

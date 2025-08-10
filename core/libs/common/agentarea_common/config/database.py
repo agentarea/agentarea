@@ -151,4 +151,4 @@ def get_db():
 
 def get_sync_db():
     """Get a synchronous database session."""
-    return get_database().get_sync_db() 
+    return get_database().get_sync_db()

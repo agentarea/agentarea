@@ -49,4 +49,4 @@ def get_settings() -> Settings:
         workflow=WorkflowSettings(),
         task_execution=TaskExecutionSettings(),
         triggers=TriggerSettings(),
-    ) 
+    )

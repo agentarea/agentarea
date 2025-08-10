@@ -12,19 +12,18 @@ from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRe
 
 def setup_llm_di(container: DIContainer) -> None:
     """Setup dependency injection for LLM package."""
-    
     # Register repositories (assuming they need session/dependencies from common)
     # These would typically be registered in the main app's DI setup
-    
+
     # Register provider service
     def create_provider_service() -> ProviderService:
         provider_spec_repo = container.get(ProviderSpecRepository)
-        provider_config_repo = container.get(ProviderConfigRepository) 
+        provider_config_repo = container.get(ProviderConfigRepository)
         model_spec_repo = container.get(ModelSpecRepository)
         model_instance_repo = container.get(ModelInstanceRepository)
         event_broker = container.get(EventBroker)
         secret_manager = container.get(BaseSecretManager)
-        
+
         return ProviderService(
             provider_spec_repo=provider_spec_repo,
             provider_config_repo=provider_config_repo,
@@ -33,12 +32,12 @@ def setup_llm_di(container: DIContainer) -> None:
             event_broker=event_broker,
             secret_manager=secret_manager,
         )
-    
+
     container.register_factory(ProviderService, create_provider_service)
-    
+
     # Register embedding service
     def create_embedding_service() -> EmbeddingService:
         provider_service = container.get(ProviderService)
         return EmbeddingService(provider_service)
-    
+
     container.register_factory(EmbeddingService, create_embedding_service)

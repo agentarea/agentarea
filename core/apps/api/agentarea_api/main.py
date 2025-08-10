@@ -1,7 +1,10 @@
 """Main FastAPI application for AgentArea."""
 
+import asyncio
 import os
+import signal
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from agentarea_common.auth.middleware import AuthMiddleware
@@ -46,9 +49,42 @@ async def initialize_services():
         raise e
 
 
+async def cleanup_all_connections():
+    """Comprehensive cleanup of all connections."""
+    print("🧹 Starting comprehensive connection cleanup...")
+
+    try:
+        # Cleanup connection manager singletons
+        from agentarea_common.infrastructure.connection_manager import cleanup_connections
+        await cleanup_connections()
+        print("✅ Connection manager cleanup completed")
+    except Exception as e:
+        print(f"⚠️  Error in connection manager cleanup: {e}")
+
+    try:
+        # Stop events router
+        from agentarea_api.api.events.events_router import stop_events_router
+        await stop_events_router()
+        print("✅ Events router cleanup completed")
+    except Exception as e:
+        print(f"⚠️  Error in events router cleanup: {e}")
+
+    # Give connections time to close
+    await asyncio.sleep(0.1)
+
+    print("🎉 All connection cleanup completed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # await startup_handler()
+    # Setup signal handlers for graceful shutdown
+    def signal_handler(signum, frame):
+        print(f"📡 Received signal {signum}, initiating graceful shutdown...")
+
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # Startup
     container = get_container()
     await initialize_services()
 
@@ -56,13 +92,13 @@ async def lifespan(app: FastAPI):
     await start_events_router()
 
     print("Application started successfully")
-    yield
 
-    print("Application shutting down")
-
-    from agentarea_api.api.events.events_router import stop_events_router
-    await stop_events_router()
-    # Note: DIContainer doesn't need explicit shutdown
+    try:
+        yield
+    finally:
+        # Shutdown - ensure this always runs
+        print("Application shutting down")
+        await cleanup_all_connections()
 
 
 # Security schemes for OpenAPI documentation
@@ -215,8 +251,14 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint for the main application."""
+    from agentarea_common.infrastructure.connection_manager import get_connection_health
+
+    connection_health = await get_connection_health()
+
     return {
         "status": "healthy",
         "service": "agentarea-api",
         "version": "0.1.0",
+        "connections": connection_health,
+        "timestamp": datetime.now().isoformat()
     }

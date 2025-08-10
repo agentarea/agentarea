@@ -92,10 +92,10 @@ async def check_mcp_server_instance_configuration(
     """Check if an MCP server instance configuration is valid by validating it through the golang manager."""
     try:
         settings = get_settings()
-        
+
         # Extract json_spec from the request (the frontend sends { json_spec: {...} })
         json_spec = data.get("json_spec", data)
-        
+
         # Format the request for the golang manager
         validation_request = {
             "instance_id": "validation-check",  # Temporary ID for validation
@@ -103,7 +103,7 @@ async def check_mcp_server_instance_configuration(
             "json_spec": json_spec,
             "dry_run": True
         }
-        
+
         # Validate the configuration through the golang manager
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -111,7 +111,7 @@ async def check_mcp_server_instance_configuration(
                 json=validation_request,
                 headers={"Content-Type": "application/json"}
             )
-            
+
             if response.status_code == 200:
                 return {
                     "valid": True,
@@ -127,12 +127,12 @@ async def check_mcp_server_instance_configuration(
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=503,
-            detail=f"Unable to connect to container manager for validation: {str(e)}"
+            detail=f"Unable to connect to container manager for validation: {e!s}"
         ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to validate configuration: {str(e)}"
+            detail=f"Failed to validate configuration: {e!s}"
         ) from e
 
 
@@ -169,10 +169,10 @@ async def list_mcp_server_instances(
 ):
     # Determine if we should filter by creator
     creator_scoped = created_by == "me"
-    
+
     # Get instances from database (configuration/metadata)
     instances = await mcp_server_instance_service.list(creator_scoped=creator_scoped)
-    
+
     # Get real-time status from golang manager
     try:
         settings = get_settings()
@@ -186,12 +186,12 @@ async def list_mcp_server_instances(
     except Exception as e:
         logger.warning(f"Failed to get real-time status from container manager: {e}")
         health_lookup = {}
-    
+
     # Merge database config with real-time status
     response_instances = []
     for instance in instances:
         response_instance = MCPServerInstanceResponse.from_domain(instance)
-        
+
         # Override status with real-time data if available
         if instance.name in health_lookup:
             health_check = health_lookup[instance.name]
@@ -201,9 +201,9 @@ async def list_mcp_server_instances(
                 response_instance.status = "unhealthy"
             elif health_check["container_status"] == "stopped":
                 response_instance.status = "stopped"
-        
+
         response_instances.append(response_instance)
-    
+
     return response_instances
 
 
@@ -218,9 +218,9 @@ async def get_mcp_server_instance(
     instance = await mcp_server_instance_service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
-    
+
     response_instance = MCPServerInstanceResponse.from_domain(instance)
-    
+
     # Get real-time status from golang manager
     try:
         settings = get_settings()
@@ -229,7 +229,7 @@ async def get_mcp_server_instance(
             if response.status_code == 200:
                 health_data = response.json()
                 health_lookup = {check["service_name"]: check for check in health_data.get("health_checks", [])}
-                
+
                 # Override status with real-time data if available
                 if instance.name in health_lookup:
                     health_check = health_lookup[instance.name]
@@ -242,7 +242,7 @@ async def get_mcp_server_instance(
     except Exception as e:
         logger.warning(f"Failed to get real-time status from container manager: {e}")
         # Fall back to database status
-    
+
     return response_instance
 
 
@@ -316,24 +316,24 @@ async def get_containers_health():
         # Proxy request to golang manager
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
-            
+
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Failed to get container health: {response.text}"
                 )
-            
+
             # No URL transformation needed - Go manager returns correct external URLs
             return response.json()
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=503,
-            detail=f"Unable to connect to container manager: {str(e)}"
+            detail=f"Unable to connect to container manager: {e!s}"
         ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get container health: {str(e)}"
+            detail=f"Failed to get container health: {e!s}"
         ) from e
 
 
@@ -346,7 +346,7 @@ async def get_instance_available_tools(
     instance = await service.get(instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="MCP server instance not found")
-    
+
     return instance.get_available_tools()
 
 
@@ -359,8 +359,8 @@ async def discover_instance_tools(
     success = await service.discover_and_store_tools(instance_id)
     if not success:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Failed to discover tools for the instance"
         )
-    
+
     return {"message": "Tool discovery completed successfully"}

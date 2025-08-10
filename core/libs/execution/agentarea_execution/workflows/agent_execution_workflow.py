@@ -9,6 +9,9 @@ from temporalio.exceptions import ApplicationError
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
+    from ..message_types.messages import (
+        Message,  # Legacy compatibility
+        )
     from .helpers import (
         BudgetTracker,
         EventManager,
@@ -173,7 +176,7 @@ class AgentExecutionWorkflow:
             "budget_limit": self.budget_tracker.budget_limit
         })
 
-        # Publish immediately 
+        # Publish immediately
         await self._publish_events_immediately()
 
         # Initialize agent configuration
@@ -265,7 +268,7 @@ class AgentExecutionWorkflow:
         # Debug logging
         workflow.logger.info(f"Checking termination conditions - success: {self.state.success} (type: {type(self.state.success)}), iteration: {self.state.current_iteration}")
         workflow.logger.info(f"State object id: {id(self.state)}")
-        
+
         # Check if goal is achieved (highest priority)
         if self.state.success:
             workflow.logger.info("Goal achieved - terminating workflow")
@@ -296,7 +299,7 @@ class AgentExecutionWorkflow:
             "iteration": iteration,
             "budget_remaining": self.budget_tracker.get_remaining()
         })
-        # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+        await self._publish_events_immediately()
 
         try:
             await self._execute_traditional_iteration()
@@ -308,7 +311,7 @@ class AgentExecutionWorkflow:
                 "iteration": iteration,
                 "total_cost": self.budget_tracker.cost
             })
-            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+            await self._publish_events_immediately()
 
         except Exception as e:
             workflow.logger.error(f"Iteration {iteration} failed: {e}")
@@ -334,14 +337,16 @@ class AgentExecutionWorkflow:
 
             # Add system message if first iteration
             if iteration == 1:
+                # Create Message directly instead of using from_base_message
                 self.state.messages.append(Message(
                     role="system",
                     content=system_prompt
                 ))
             else:
                 # Add status update for subsequent iterations (not in system prompt)
-                from ..agentic.prompts import PromptBuilder
-                status_msg = f"{PromptBuilder.build_iteration_status(iteration, self.state.goal.max_iterations)} | {PromptBuilder.build_budget_status(self.budget_tracker.get_remaining())}"
+                # Avoid importing PromptBuilder to prevent Temporal sandbox issues
+                status_msg = f"Iteration {iteration}/{self.state.goal.max_iterations} | Budget remaining: ${self.budget_tracker.get_remaining():.2f}"
+                # Status updates are just regular user messages in conversation context
                 self.state.messages.append(Message(
                     role="user",
                     content=f"Status: {status_msg}"
@@ -359,7 +364,7 @@ class AgentExecutionWorkflow:
             "iteration": self.state.current_iteration,
             "message_count": len(self.state.messages)
         })
-        # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+        await self._publish_events_immediately()
 
         try:
             # Convert messages to dict format for activity
@@ -380,8 +385,14 @@ class AgentExecutionWorkflow:
                     messages_dict,
                     self.state.agent_config.get("model_id"),
                     self.state.available_tools,
-                    self.state.user_context_data["workspace_id"],  # Extract workspace_id string
-                    self.state.user_context_data  # Pass full context as backup
+                    self.state.user_context_data["workspace_id"],  # workspace_id
+                    self.state.user_context_data,  # user_context_data (deprecated but still passed)
+                    None,  # temperature
+                    None,  # max_tokens
+                    self.state.task_id,  # task_id for event publishing
+                    self.state.agent_id,  # agent_id for event publishing
+                    self.state.execution_id,  # execution_id for event publishing
+                    # Removed enable_streaming parameter - streaming is now always enabled
                 ],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
@@ -398,9 +409,12 @@ class AgentExecutionWorkflow:
                 "iteration": self.state.current_iteration,
                 "cost": usage_info["cost"],
                 "total_cost": self.budget_tracker.cost,
-                "usage": usage_info
+                "usage": usage_info,
+                "content": response.get("content", ""),
+                "tool_calls": response.get("tool_calls", []),
+                "role": response.get("role", "assistant")
             })
-            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+            await self._publish_events_immediately()
 
             # Convert response to LLMResponse data class
             # The response is directly from the activity, not nested in "message"
@@ -420,23 +434,74 @@ class AgentExecutionWorkflow:
             )
 
         except Exception as e:
+            # Simplified error handling - enriched error events are now published by the activity
+            error_type = getattr(e, 'type', type(e).__name__)
+            error_message = str(e)
+
+            # Generic LLM error event for workflow tracking
             self.event_manager.add_event(EventTypes.LLM_CALL_FAILED, {
                 "iteration": self.state.current_iteration,
-                "error": str(e)
+                "error": error_message,
+                "error_type": error_type,
+                "model_id": self.state.agent_config.get("model_id")
             })
-            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+
+            await self._publish_events_immediately()
             raise
 
     async def _process_llm_response(self, response: LLMResponse) -> None:
         """Process LLM response and handle tool calls."""
         # Only add non-empty messages to state
         if response.message.content.strip() or response.message.tool_calls:
-            self.state.messages.append(response.message)
+            # Create Message directly
+            self.state.messages.append(Message(
+                role="assistant",
+                content=response.message.content,
+                tool_calls=response.message.tool_calls
+            ))
         else:
             workflow.logger.warning(f"Received empty LLM response in iteration {self.state.current_iteration}")
 
         # Extract and execute tool calls
         tool_calls = ToolCallExtractor.extract_tool_calls(response.message)
+
+        # Handle the case where we have tool calls but no text content
+        # This addresses the issue where LLM returns only tool calls without reasoning text
+        if tool_calls and not response.message.content.strip():
+            workflow.logger.info(f"LLM returned tool calls without text content in iteration {self.state.current_iteration}")
+
+            # For task_complete tool, extract reasoning from the tool arguments
+            task_complete_calls = [tc for tc in tool_calls if tc.function.get("name") == "task_complete"]
+            if task_complete_calls:
+                import json
+                try:
+                    # Try to extract reasoning content from task_complete arguments
+                    tool_args = json.loads(task_complete_calls[0].function.get("arguments", "{}"))
+                    reasoning_content = ""
+
+                    # Look for common reasoning fields in task_complete arguments
+                    for key in ["result", "reasoning", "explanation", "summary", "response"]:
+                        if key in tool_args:
+                            reasoning_content = str(tool_args[key])
+                            break
+
+                    if reasoning_content:
+                        # Add content to the assistant message for better UX
+                        workflow.logger.info("Extracting reasoning from task_complete arguments")
+                        if self.state.messages:
+                            # Update the last assistant message to include the extracted reasoning
+                            last_message = self.state.messages[-1]
+                            if last_message.role == "assistant" and not last_message.content.strip():
+                                # Create a new message with the extracted content
+                                self.state.messages[-1] = Message(
+                                    role="assistant",
+                                    content=reasoning_content,
+                                    tool_calls=last_message.tool_calls
+                                )
+                                workflow.logger.info("Updated assistant message with extracted reasoning content")
+
+                except (json.JSONDecodeError, KeyError, AttributeError) as e:
+                    workflow.logger.debug(f"Could not extract reasoning from task_complete arguments: {e}")
 
         if tool_calls:
             await self._execute_tool_calls(tool_calls)
@@ -452,21 +517,26 @@ class AgentExecutionWorkflow:
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
 
-            self.event_manager.add_event(EventTypes.TOOL_CALL_STARTED, {
-                "tool_name": tool_name,
-                "tool_call_id": tool_call.id,
-                "iteration": self.state.current_iteration
-            })
-            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+            # Parse arguments first to include them in the event
+            import json
+            try:
+                tool_args = json.loads(tool_call.function["arguments"])
+            except (json.JSONDecodeError, KeyError):
+                tool_args = {}
+
+            # Don't publish tool_call_started events for task_complete
+            if tool_name != "task_complete":
+                self.event_manager.add_event(EventTypes.TOOL_CALL_STARTED, {
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "iteration": self.state.current_iteration,
+                    "arguments": tool_args
+                })
+                await self._publish_events_immediately()
+            else:
+                workflow.logger.debug("task_complete tool started - not publishing as workflow event")
 
             try:
-                # Parse tool arguments from JSON string
-                import json
-                try:
-                    tool_args = json.loads(tool_call.function["arguments"])
-                except (json.JSONDecodeError, TypeError):
-                    workflow.logger.warning(f"Failed to parse tool arguments: {tool_call.function['arguments']}")
-                    tool_args = {}
 
                 # Execute tool call
                 result = await workflow.execute_activity(
@@ -479,12 +549,15 @@ class AgentExecutionWorkflow:
                     retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
                 )
 
-                # Add tool result to messages
-                self.state.messages.append(Message(
-                    role="tool",
-                    tool_call_id=tool_call.id,
-                    content=str(result.get("result", ""))
-                ))
+                # Add tool result to messages (only for non-completion tools)
+                # For task_complete, we don't need to add it to conversation since workflow will terminate
+                if tool_name != "task_complete":
+                    self.state.messages.append(Message(
+                        role="tool",
+                        content=str(result.get("result", "")),
+                        tool_call_id=tool_call.id,
+                        name=tool_name
+                    ))
 
                 # Check if this was a completion tool call
                 workflow.logger.info(f"Tool '{tool_name}' executed with result: {result}")
@@ -493,26 +566,42 @@ class AgentExecutionWorkflow:
                     workflow.logger.info(f"result type: {type(result)}")
                     workflow.logger.info(f"result.get('success'): {result.get('success')}")
                     workflow.logger.info(f"result.get('completed'): {result.get('completed')}")
-                    
+
                     # Check both 'success' and 'completed' fields for completion
                     is_successful = result.get("success", False) or result.get("completed", False)
                     workflow.logger.info(f"is_successful: {is_successful}")
-                    
+
                     if is_successful:
                         self.state.success = True
                         self.state.final_response = result.get("result", "Task completed")
                         workflow.logger.info(f"Task completed successfully: {self.state.final_response}")
                         workflow.logger.info(f"Setting self.state.success = {self.state.success}")
+
+                        # Log completion internally for debugging but don't publish as workflow event
+                        workflow.logger.info(f"INTERNAL: Task completion detected - agent called task_complete with result: {self.state.final_response}")
+
+                        # CRITICAL: Break out of tool execution loop immediately after successful task_complete
+                        # This prevents the workflow from continuing to next iteration
+                        workflow.logger.info("SUCCESS: Breaking from tool execution - task completed successfully")
+                        return  # Exit the entire _execute_tool_calls method immediately
                     else:
                         workflow.logger.warning(f"task_complete called but not successful: {result}")
 
-                self.event_manager.add_event(EventTypes.TOOL_CALL_COMPLETED, {
-                    "tool_name": tool_name,
-                    "tool_call_id": tool_call.id,
-                    "success": result.get("success", False),
-                    "iteration": self.state.current_iteration
-                })
-                # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+                    # Don't publish task_complete as a workflow event - it's handled internally
+                    # The workflow completion will be signaled through workflow status events instead
+                    workflow.logger.debug("task_complete tool executed - not publishing as workflow event")
+                else:
+                    # Only publish tool events for non-completion tools
+                    self.event_manager.add_event(EventTypes.TOOL_CALL_COMPLETED, {
+                        "tool_name": tool_name,
+                        "tool_call_id": tool_call.id,
+                        "success": result.get("success", False),
+                        "iteration": self.state.current_iteration,
+                        "result": result.get("result", ""),
+                        "arguments": tool_args,
+                        "execution_time": result.get("execution_time", "")
+                    })
+                    await self._publish_events_immediately()
 
             except Exception as e:
                 workflow.logger.error(f"Tool call {tool_name} failed: {e}")
@@ -520,17 +609,22 @@ class AgentExecutionWorkflow:
                 # Add error message
                 self.state.messages.append(Message(
                     role="tool",
+                    content=f"Tool execution failed: {e}",
                     tool_call_id=tool_call.id,
-                    content=f"Tool execution failed: {e}"
+                    name=tool_name
                 ))
 
-                self.event_manager.add_event(EventTypes.TOOL_CALL_FAILED, {
-                    "tool_name": tool_name,
-                    "tool_call_id": tool_call.id,
-                    "error": str(e),
-                    "iteration": self.state.current_iteration
-                })
-                # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+                # Don't publish tool_call_failed events for task_complete
+                if tool_name != "task_complete":
+                    self.event_manager.add_event(EventTypes.TOOL_CALL_FAILED, {
+                        "tool_name": tool_name,
+                        "tool_call_id": tool_call.id,
+                        "error": str(e),
+                        "iteration": self.state.current_iteration
+                    })
+                    await self._publish_events_immediately()
+                else:
+                    workflow.logger.debug("task_complete tool failed - not publishing as workflow event")
 
     async def _evaluate_goal_progress(self) -> None:
         """Evaluate if the goal has been achieved."""
@@ -539,7 +633,7 @@ class AgentExecutionWorkflow:
             if self.state.success:
                 workflow.logger.info("Goal already marked as achieved by task_complete tool - skipping evaluation")
                 return
-                
+
             if self.state.goal:
                 # Convert AgentGoal dataclass to dict for activity
                 goal_dict = {
@@ -579,7 +673,7 @@ class AgentExecutionWorkflow:
                 "limit": self.budget_tracker.budget_limit,
                 "message": self.budget_tracker.get_warning_message()
             })
-            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+            await self._publish_events_immediately()
             self.budget_tracker.mark_warning_sent()
 
         if self.budget_tracker.is_exceeded():
@@ -588,13 +682,10 @@ class AgentExecutionWorkflow:
                 "limit": self.budget_tracker.budget_limit,
                 "message": self.budget_tracker.get_exceeded_message()
             })
-            # await self._publish_events_immediately()  # COMMENTED OUT FOR NOW
+            await self._publish_events_immediately()
 
     async def _publish_events(self) -> None:
         """Publish pending events."""
-        if not self.event_manager:
-            return
-
         events = self.event_manager.get_events()
         if not events:
             return

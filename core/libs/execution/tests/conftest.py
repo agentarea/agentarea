@@ -1,25 +1,23 @@
-"""
-Pytest configuration and fixtures for AgentArea execution tests.
+"""Pytest configuration and fixtures for AgentArea execution tests.
 """
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import pytest
 from agentarea_execution.models import AgentExecutionRequest
-from agentarea_execution.interfaces import ActivityServicesInterface
 
 
 class MockActivityServices:
     """Mock activity services for testing."""
-    
+
     def __init__(self):
         self.agent_service = AsyncMock()
         self.mcp_service = AsyncMock()
         self.llm_service = AsyncMock()
         self.event_broker = AsyncMock()
-        
+
         # Configure default return values
         self.agent_service.build_agent_config.return_value = {
             "name": "test_agent",
@@ -33,14 +31,14 @@ class MockActivityServices:
                 "mcp_servers": [],
             },
         }
-        
+
         self.agent_service.update_agent_memory.return_value = {
             "memory_entries_created": 2
         }
-        
+
         self.mcp_service.get_server_instance.return_value = None
         self.mcp_service.get_server_tools.return_value = []
-        
+
         self.event_broker.publish_event.return_value = None
 
 
@@ -81,4 +79,4 @@ def multi_agent_request():
         task_query="Research the weather in New York, then have another agent analyze the implications for tourism.",
         max_reasoning_iterations=10,
         timeout_seconds=600,
-    ) 
+    )

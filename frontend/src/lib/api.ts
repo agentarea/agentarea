@@ -548,6 +548,15 @@ export const createModelInstance = async (instance: components["schemas"]["Model
   return { data, error };
 };
 
+export const testModelInstance = async (testRequest: {
+  provider_config_id: string;
+  model_spec_id: string;
+  test_message?: string;
+}) => {
+  const { data, error } = await client.POST("/v1/model-instances/test", { body: testRequest });
+  return { data, error };
+};
+
 export const getModelInstance = async (instanceId: string) => {
   const { data, error } = await client.GET("/v1/model-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },

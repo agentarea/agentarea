@@ -5,11 +5,18 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_triggers.domain.enums import TriggerType, ExecutionStatus, WebhookType
+from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
 from agentarea_triggers.domain.models import (
-    Trigger, CronTrigger, WebhookTrigger, TriggerExecution, TriggerCreate, TriggerUpdate
+    CronTrigger,
+    TriggerCreate,
+    TriggerExecution,
+    TriggerUpdate,
+    WebhookTrigger,
 )
-from agentarea_triggers.infrastructure.repository import TriggerRepository, TriggerExecutionRepository
+from agentarea_triggers.infrastructure.repository import (
+    TriggerExecutionRepository,
+    TriggerRepository,
+)
 
 
 @pytest.mark.asyncio
@@ -286,7 +293,7 @@ class TestTriggerRepository:
         # Arrange
         past_time = datetime.utcnow() - timedelta(minutes=5)
         future_time = datetime.utcnow() + timedelta(minutes=5)
-        
+
         due_trigger = CronTrigger(
             id=uuid4(),
             name="Due Trigger",
@@ -297,7 +304,7 @@ class TestTriggerRepository:
             cron_expression="* * * * *",
             next_run_time=past_time,
         )
-        
+
         not_due_trigger = CronTrigger(
             id=uuid4(),
             name="Not Due Trigger",
@@ -463,7 +470,7 @@ class TestTriggerExecutionRepository:
         """Test listing executions by trigger ID."""
         # Arrange
         other_trigger_id = uuid4()
-        
+
         execution1 = TriggerExecution(
             id=uuid4(),
             trigger_id=sample_trigger.id,
@@ -520,7 +527,7 @@ class TestTriggerExecutionRepository:
         # Arrange
         recent_time = datetime.utcnow() - timedelta(hours=1)
         old_time = datetime.utcnow() - timedelta(hours=25)  # Older than 24 hours
-        
+
         recent_execution = TriggerExecution(
             id=uuid4(),
             trigger_id=sample_trigger.id,
@@ -553,7 +560,7 @@ class TestTriggerExecutionRepository:
         # Arrange
         start_time = datetime.utcnow() - timedelta(hours=2)
         end_time = datetime.utcnow()
-        
+
         # Create executions at different times
         execution1 = TriggerExecution(
             id=uuid4(),

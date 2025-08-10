@@ -35,4 +35,4 @@ def get_s3_client() -> Any:
         aws_secret_access_key=aws_settings.AWS_SECRET_ACCESS_KEY,
         region_name=aws_settings.AWS_REGION,
         endpoint_url=aws_settings.AWS_ENDPOINT_URL,
-    ) 
+    )

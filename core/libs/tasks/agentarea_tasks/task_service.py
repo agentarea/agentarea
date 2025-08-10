@@ -11,8 +11,8 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, List, Optional
-from uuid import UUID
+from typing import TYPE_CHECKING, Any
+from uuid import UUID, uuid4
 
 from agentarea_common.events.broker import EventBroker
 
@@ -22,7 +22,6 @@ from .domain.models import SimpleTask
 from .infrastructure.repository import TaskRepository
 
 if TYPE_CHECKING:
-    from agentarea_agents.infrastructure.repository import AgentRepository
     from agentarea_common.base import RepositoryFactory
 
 logger = logging.getLogger(__name__)
@@ -39,16 +38,14 @@ class TaskService(BaseTaskService):
         workflow_service: Any | None = None,
     ):
         """Initialize with repository factory, event broker, task manager, and optional dependencies."""
-        from agentarea_common.base import RepositoryFactory
-        
         # Create repositories using factory
         task_repository = repository_factory.create_repository(TaskRepository)
         super().__init__(task_repository, event_broker)
-        
+
         self.repository_factory = repository_factory
         self.task_manager = task_manager
         self.workflow_service = workflow_service
-        
+
         # Create agent repository using factory for validation
         try:
             from agentarea_agents.infrastructure.repository import AgentRepository
@@ -117,13 +114,13 @@ class TaskService(BaseTaskService):
 
     async def get_user_tasks(
         self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> List[SimpleTask]:
+    ) -> list[SimpleTask]:
         """Get tasks for a specific user."""
         return await self.list_tasks(user_id=user_id, limit=limit, offset=offset)
 
     async def get_agent_tasks(
         self, agent_id: UUID, limit: int = 100, offset: int = 0, creator_scoped: bool = False
-    ) -> List[SimpleTask]:
+    ) -> list[SimpleTask]:
         """Get tasks for a specific agent."""
         # Get Task domain models from repository and convert to SimpleTask
         if hasattr(self.task_repository, 'list_all'):
@@ -189,7 +186,7 @@ class TaskService(BaseTaskService):
         # Persist the update
         return await self.update_task(task)
 
-    async def list_agent_tasks(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> List[SimpleTask]:
+    async def list_agent_tasks(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> list[SimpleTask]:
         """List tasks for an agent.
 
         This method provides compatibility with the application layer TaskService
@@ -205,7 +202,7 @@ class TaskService(BaseTaskService):
         """
         return await self.get_agent_tasks(agent_id, limit=limit, creator_scoped=creator_scoped)
 
-    async def list_agent_tasks_with_workflow_status(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> List[SimpleTask]:
+    async def list_agent_tasks_with_workflow_status(self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False) -> list[SimpleTask]:
         """List tasks for an agent enriched with workflow status.
 
         Args:
@@ -383,11 +380,11 @@ class TaskService(BaseTaskService):
         try:
             # Submit task through task manager
             executed_task = await self.task_manager.submit_task(stored_task)
-            
+
             # Update stored task with execution info
             stored_task.status = executed_task.status
             stored_task.execution_id = executed_task.execution_id
-            
+
             logger.info(f"Task {task_id} submitted successfully with status {executed_task.status}")
 
         except Exception as e:
@@ -442,7 +439,7 @@ class TaskService(BaseTaskService):
         async def event_listener():
             """Listen for workflow events using direct Redis pubsub."""
             import json
-            
+
             pubsub = None
             try:
                 logger.info(f"Started event listener for task {task_id} using Redis pubsub")
@@ -450,13 +447,13 @@ class TaskService(BaseTaskService):
                 # Access the underlying Redis broker from the EventBroker
                 if not hasattr(self.event_broker, 'redis_broker'):
                     raise AttributeError("EventBroker does not have redis_broker attribute")
-                
+
                 redis_broker = self.event_broker.redis_broker
-                
+
                 # Ensure Redis broker is connected
                 if not hasattr(redis_broker, '_connection') or redis_broker._connection is None:
                     await redis_broker.connect()
-                
+
                 # Get the underlying Redis connection
                 # For FastStream RedisBroker, try different possible connection attributes
                 redis_connection = None
@@ -465,18 +462,18 @@ class TaskService(BaseTaskService):
                         redis_connection = getattr(redis_broker, attr)
                         if redis_connection is not None:
                             break
-                
+
                 if redis_connection is None:
                     raise AttributeError("Could not access underlying Redis connection from FastStream RedisBroker")
-                
+
                 # Create pubsub connection
                 pubsub = redis_connection.pubsub()
-                
+
                 # Subscribe to workflow patterns
                 await pubsub.psubscribe("workflow.*")
-                
+
                 logger.info(f"Subscribed to workflow.* patterns for task {task_id}")
-                
+
                 # Listen for messages
                 async for message in pubsub.listen():
                     try:
@@ -484,10 +481,10 @@ class TaskService(BaseTaskService):
                             # Parse the JSON event data
                             channel = message['channel'].decode('utf-8') if isinstance(message['channel'], bytes) else message['channel']
                             data = message['data']
-                            
+
                             if isinstance(data, bytes):
                                 data = data.decode('utf-8')
-                            
+
                             if isinstance(data, str):
                                 try:
                                     event_data = json.loads(data)
@@ -496,7 +493,7 @@ class TaskService(BaseTaskService):
                                     continue
                             else:
                                 event_data = data
-                            
+
                             # Handle FastStream message structure: {"data": "JSON_STRING", "headers": {...}}
                             actual_event_data = event_data
                             if isinstance(event_data, dict) and "data" in event_data and isinstance(event_data["data"], str):
@@ -506,26 +503,26 @@ class TaskService(BaseTaskService):
                                 except json.JSONDecodeError:
                                     logger.warning(f"Failed to parse inner JSON event data: {event_data['data']}")
                                     continue
-                            
+
                             # Filter events for this specific task
                             task_id_str = str(task_id)
-                            if (isinstance(actual_event_data, dict) and 
+                            if (isinstance(actual_event_data, dict) and
                                 actual_event_data.get('data', {}).get('aggregate_id') == task_id_str):
-                                
+
                                 # Convert to DomainEvent-like format for compatibility
                                 domain_event = {
                                     'event_type': channel,
                                     'event_data': actual_event_data,
                                     'timestamp': datetime.now(UTC)
                                 }
-                                
+
                                 await task_events.put(domain_event)
                                 logger.debug(f"Queued event for task {task_id}: {channel}")
-                                
+
                     except Exception as e:
                         logger.warning(f"Failed to process Redis message: {e}")
                         continue
-                            
+
             except Exception as e:
                 logger.error(f"Event listener failed for task {task_id}: {e}")
                 # Send error to the queue
@@ -561,7 +558,7 @@ class TaskService(BaseTaskService):
                 try:
                     # Wait for event with timeout to allow cleanup
                     event = await asyncio.wait_for(task_events.get(), timeout=30.0)
-                    
+
                     # Check if this is an error event (dict format)
                     if isinstance(event, dict) and "error" in event:
                         yield {
@@ -575,32 +572,34 @@ class TaskService(BaseTaskService):
                             }
                         }
                         break  # Stop streaming on listener error
-                    
+
                     # Transform and yield the event (both old DomainEvent format and new dict format)
                     if hasattr(event, 'event_type'):
                         # Old DomainEvent format
                         event_data = event.event_data if hasattr(event, 'event_data') else {}
                         # Handle nested data structure where actual data is in 'data' dict
                         actual_data = event_data.get('data', event_data) if isinstance(event_data, dict) else event_data
-                        yield {
+                        formatted_event = {
                             "event_type": event.event_type.replace("workflow.", ""),  # Remove prefix
                             "timestamp": event.timestamp.isoformat() if hasattr(event, 'timestamp') else datetime.now(UTC).isoformat(),
                             "data": actual_data
                         }
+                        yield self._format_protocol_event(formatted_event)
                     elif isinstance(event, dict) and 'event_type' in event:
                         # New dict format from Redis pubsub
                         event_data = event.get('event_data', {})
                         # Handle nested data structure where actual data is in 'data' dict
                         actual_data = event_data.get('data', event_data) if isinstance(event_data, dict) else event_data
-                        yield {
+                        formatted_event = {
                             "event_type": event['event_type'].replace("workflow.", "") if event['event_type'].startswith("workflow.") else event['event_type'],
                             "timestamp": event['timestamp'].isoformat() if hasattr(event['timestamp'], 'isoformat') else datetime.now(UTC).isoformat(),
                             "data": actual_data
                         }
+                        yield self._format_protocol_event(formatted_event)
                     else:
                         logger.warning(f"Received unexpected event format: {type(event)}")
-                    
-                except asyncio.TimeoutError:
+
+                except TimeoutError:
                     # Send heartbeat to keep connection alive
                     yield {
                         "event_type": "heartbeat",
@@ -621,14 +620,14 @@ class TaskService(BaseTaskService):
                 except asyncio.CancelledError:
                     pass
 
-    async def _get_historical_events(self, task_id: UUID) -> List[dict[str, Any]]:
+    async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
         """Get historical events for a task from the database."""
         try:
             from sqlalchemy import text
-            
+
             # Use the repository's session to query task events
             session = self.task_repository.session
-            
+
             # Query historical events from database
             query = text("""
                 SELECT event_type, timestamp, data, metadata
@@ -636,10 +635,10 @@ class TaskService(BaseTaskService):
                 WHERE task_id = :task_id 
                 ORDER BY timestamp ASC
             """)
-            
+
             result = await session.execute(query, {"task_id": str(task_id)})
             rows = result.fetchall()
-            
+
             # Convert database rows to event format
             historical_events = []
             for row in rows:
@@ -648,11 +647,40 @@ class TaskService(BaseTaskService):
                     "timestamp": row.timestamp.isoformat(),
                     "data": dict(row.data) if row.data else {}
                 })
-                
+
             logger.debug(f"Retrieved {len(historical_events)} historical events for task {task_id}")
             return historical_events
-            
+
         except Exception as e:
             logger.error(f"Failed to get historical events for task {task_id}: {e}")
             # Return empty list on error to not break SSE streaming
             return []
+
+    def _format_protocol_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        """Format event using protocol structure with rich data, no metadata pollution.
+        
+        This method formats events according to the BaseWorkflowEvent protocol structure,
+        ensuring consistent format across all transport mechanisms (SSE, REST, WebSocket).
+        """
+        event_type = event.get("event_type", "unknown")
+        data = event.get("data", {})
+
+        # Create protocol-compliant event structure
+        protocol_event = {
+            "event_type": event_type,
+            "event_id": data.get("event_id") or event.get("event_id") or str(uuid4()),
+            "timestamp": event.get("timestamp", datetime.now(UTC).isoformat()),
+            "data": {
+                # Core workflow event data
+                "task_id": data.get("task_id", ""),
+                "agent_id": data.get("agent_id", ""),
+                "execution_id": data.get("execution_id", ""),
+                "iteration": data.get("iteration"),
+
+                # Event-specific data (preserve all original data)
+                **{k: v for k, v in data.items() if k not in ['task_id', 'agent_id', 'execution_id', 'iteration', 'event_id']}
+            }
+        }
+
+        return protocol_event
+

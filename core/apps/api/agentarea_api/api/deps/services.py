@@ -8,45 +8,38 @@ import logging
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea_tasks.task_service import TaskService
-from agentarea_tasks.temporal_task_manager import TemporalTaskManager
-
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.application.execution_service import ExecutionService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
-from agentarea_agents.infrastructure.repository import AgentRepository
-
+from agentarea_common.auth import UserContextDep
+from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config import get_settings
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.events.router import get_event_router
 from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_secrets import get_real_secret_manager
-from agentarea_common.auth import UserContext, UserContextDep
-from agentarea_common.base import RepositoryFactory, RepositoryFactoryDep
-
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
-
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
-from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository, MCPServerRepository
-
+from agentarea_secrets import get_real_secret_manager
 from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.task_service import TaskService
+from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+from fastapi import Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Trigger system imports (conditional to avoid import errors)
 try:
-    from agentarea_triggers.trigger_service import TriggerService
-    from agentarea_triggers.infrastructure.repository import TriggerRepository, TriggerExecutionRepository
-    from agentarea_triggers.webhook_manager import DefaultWebhookManager, WebhookExecutionCallback
+    from agentarea_triggers.infrastructure.repository import (
+        TriggerExecutionRepository,
+        TriggerRepository,
+    )
     from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
+    from agentarea_triggers.trigger_service import TriggerService
+    from agentarea_triggers.webhook_manager import DefaultWebhookManager, WebhookExecutionCallback
     TRIGGERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"Triggers module not available: {e}")
@@ -63,18 +56,11 @@ logger = logging.getLogger(__name__)
 
 
 async def get_event_broker() -> EventBroker:
-    """Get EventBroker instance - real Redis implementation."""
-    try:
-        settings = get_settings()
-        from agentarea_common.events.router import create_event_broker_from_router
+    """Get EventBroker instance - uses connection manager singleton."""
+    from agentarea_common.infrastructure.connection_manager import get_connection_manager
 
-        router = get_event_router(settings.broker)
-        event_broker = create_event_broker_from_router(router)
-        logger.info(f"Created Redis event broker: {type(event_broker).__name__}")
-        return event_broker
-    except Exception as e:
-        logger.error(f"Failed to create Redis event broker: {e}")
-        raise e
+    connection_manager = get_connection_manager()
+    return await connection_manager.get_event_broker()
 
 
 # Common database dependency
@@ -175,18 +161,11 @@ async def get_temporal_workflow_service() -> TemporalWorkflowService:
 
 
 async def get_execution_service() -> ExecutionServiceInterface:
-    settings = get_settings()
-    from agentarea_agents.infrastructure.temporal_orchestrator import TemporalWorkflowOrchestrator
+    """Get execution service instance - uses connection manager singleton."""
+    from agentarea_common.infrastructure.connection_manager import get_connection_manager
 
-    temporal_orchestrator = TemporalWorkflowOrchestrator(
-        temporal_address=settings.workflow.TEMPORAL_SERVER_URL,
-        task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
-        max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
-        max_concurrent_workflows=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
-    )
-    execution_service = ExecutionService(temporal_orchestrator)
-    """Get an execution service instance for the current request."""
-    return execution_service
+    connection_manager = get_connection_manager()
+    return await connection_manager.get_execution_service()
 
 
 # MCP Service dependencies
@@ -242,16 +221,16 @@ async def get_secret_manager() -> BaseSecretManager:
 
 class TriggerServiceWebhookCallback(WebhookExecutionCallback):
     """Webhook execution callback that delegates to TriggerService."""
-    
+
     def __init__(self, trigger_service):
         self.trigger_service = trigger_service
-    
+
     async def execute_webhook_trigger(self, webhook_id: str, request_data: dict):
         """Execute webhook trigger via TriggerService."""
         if not TRIGGERS_AVAILABLE:
             # Return a mock failed execution
-            from uuid import uuid4
             from datetime import datetime
+            from uuid import uuid4
             return {
                 "id": str(uuid4()),
                 "trigger_id": str(uuid4()),
@@ -260,15 +239,16 @@ class TriggerServiceWebhookCallback(WebhookExecutionCallback):
                 "execution_time_ms": 0,
                 "error_message": "Triggers service not available"
             }
-        
+
         # Find trigger by webhook_id
         trigger = await self.trigger_service.get_trigger_by_webhook_id(webhook_id)
         if not trigger:
-            from agentarea_triggers.domain.models import TriggerExecution
-            from agentarea_triggers.domain.enums import ExecutionStatus
-            from uuid import uuid4
             from datetime import datetime
-            
+            from uuid import uuid4
+
+            from agentarea_triggers.domain.enums import ExecutionStatus
+            from agentarea_triggers.domain.models import TriggerExecution
+
             # Return failed execution for unknown webhook
             return TriggerExecution(
                 id=uuid4(),
@@ -278,7 +258,7 @@ class TriggerServiceWebhookCallback(WebhookExecutionCallback):
                 execution_time_ms=0,
                 error_message=f"Webhook {webhook_id} not found"
             )
-        
+
         # Execute the trigger
         return await self.trigger_service.execute_trigger(trigger.id, request_data)
 
@@ -291,12 +271,12 @@ async def get_trigger_service(
     """Get a TriggerService instance for the current request."""
     if not TRIGGERS_AVAILABLE:
         raise HTTPException(status_code=503, detail="Triggers service not available")
-    
+
     settings = get_settings()
-    
+
     # Get task service using repository factory
     task_service = await get_task_service(repository_factory, event_broker)
-    
+
     # Create LLM condition evaluator if enabled
     llm_condition_evaluator = None
     if settings.triggers.ENABLE_LLM_CONDITIONS:
@@ -311,7 +291,7 @@ async def get_trigger_service(
             )
         except Exception as e:
             logger.warning(f"LLM condition evaluator not available: {e}")
-    
+
     # Create temporal schedule manager
     temporal_schedule_manager = None
     try:
@@ -321,7 +301,7 @@ async def get_trigger_service(
         )
     except Exception as e:
         logger.warning(f"Temporal schedule manager not available: {e}")
-    
+
     return TriggerService(
         repository_factory=repository_factory,
         event_broker=event_broker,
@@ -348,16 +328,16 @@ async def get_webhook_manager(
                         "message": "Triggers service not available"
                     }
                 }
-            
+
             async def is_healthy(self):
                 return False
-        
+
         return MockWebhookManager()
-    
+
     settings = get_settings()
     trigger_service = await get_trigger_service(repository_factory, event_broker, secret_manager)
     execution_callback = TriggerServiceWebhookCallback(trigger_service)
-    
+
     return DefaultWebhookManager(
         execution_callback=execution_callback,
         event_broker=event_broker,
@@ -385,15 +365,15 @@ async def get_trigger_health_check(
                         }
                     }
                 }
-        
+
         return MockHealthCheck()
-    
+
     from agentarea_triggers.health_checks import TriggerSystemHealthCheck
-    
+
     trigger_repository = repository_factory.create_repository(TriggerRepository)
     trigger_execution_repository = repository_factory.create_repository(TriggerExecutionRepository)
     webhook_manager = await get_webhook_manager(event_broker, repository_factory, secret_manager)
-    
+
     # Get temporal schedule manager
     temporal_schedule_manager = None
     try:
@@ -404,7 +384,7 @@ async def get_trigger_health_check(
         )
     except Exception as e:
         logger.warning(f"Temporal schedule manager not available for health check: {e}")
-    
+
     return TriggerSystemHealthCheck(
         trigger_repository=trigger_repository,
         trigger_execution_repository=trigger_execution_repository,
@@ -417,7 +397,7 @@ async def get_trigger_health_check(
 if TRIGGERS_AVAILABLE:
     TriggerServiceDep = Annotated[TriggerService, Depends(get_trigger_service)]
     WebhookManagerDep = Annotated[DefaultWebhookManager, Depends(get_webhook_manager)]
-    
+
     from agentarea_triggers.health_checks import TriggerSystemHealthCheck
     TriggerHealthCheckDep = Annotated[TriggerSystemHealthCheck, Depends(get_trigger_health_check)]
 else:
@@ -425,3 +405,6 @@ else:
     TriggerServiceDep = None
     WebhookManagerDep = None
     TriggerHealthCheckDep = None
+
+
+# Cleanup is now handled by the ConnectionManager singleton

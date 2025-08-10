@@ -4,10 +4,10 @@ This provides a way to register and retrieve services within the trigger system,
 particularly useful for activities that need to access services.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 # Global service registry
-_services: Dict[str, Any] = {}
+_services: dict[str, Any] = {}
 
 
 def register_service(name: str, service: Any) -> None:

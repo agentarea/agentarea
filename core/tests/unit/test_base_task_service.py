@@ -1,33 +1,32 @@
 """Unit tests for BaseTaskService abstract class with workspace-scoped functionality."""
 
-import pytest
+import builtins
 from datetime import datetime
-from typing import List, Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
+import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.test_utils import create_test_user_context
 from agentarea_common.testing import TestEventBroker
 from agentarea_tasks.domain.base_service import (
     BaseTaskService,
-    TaskValidationError,
     TaskNotFoundError,
+    TaskValidationError,
 )
-from agentarea_tasks.domain.events import TaskCreated, TaskUpdated, TaskStatusChanged
 from agentarea_tasks.domain.models import SimpleTask
 
 
 class MockTaskRepository:
     """Mock task repository for testing with workspace-scoped behavior."""
-    
+
     def __init__(self, user_context: UserContext):
         self.tasks: dict = {}
         self.user_context = user_context
         self.create_called = False
         self.update_called = False
         self.delete_called = False
-    
+
     async def create(self, task: SimpleTask) -> SimpleTask:
         self.create_called = True
         if not task.id:
@@ -37,14 +36,14 @@ class MockTaskRepository:
         task.workspace_id = self.user_context.workspace_id
         self.tasks[task.id] = task
         return task
-    
-    async def get(self, task_id: UUID) -> Optional[SimpleTask]:
+
+    async def get(self, task_id: UUID) -> SimpleTask | None:
         task = self.tasks.get(task_id)
         # Only return tasks from current workspace
         if task and task.workspace_id == self.user_context.workspace_id:
             return task
         return None
-    
+
     async def update(self, task: SimpleTask) -> SimpleTask:
         self.update_called = True
         # Only update tasks from current workspace
@@ -52,7 +51,7 @@ class MockTaskRepository:
             self.tasks[task.id] = task
             return task
         return None
-    
+
     async def delete(self, task_id: UUID) -> bool:
         self.delete_called = True
         task = self.tasks.get(task_id)
@@ -60,42 +59,42 @@ class MockTaskRepository:
             del self.tasks[task_id]
             return True
         return False
-    
-    async def list(self) -> List[SimpleTask]:
+
+    async def list(self) -> list[SimpleTask]:
         # Only return tasks from current workspace
         return [
-            task for task in self.tasks.values() 
+            task for task in self.tasks.values()
             if task.workspace_id == self.user_context.workspace_id
         ]
-    
-    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> List[SimpleTask]:
+
+    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> builtins.list[SimpleTask]:
         return [
-            task for task in self.tasks.values() 
+            task for task in self.tasks.values()
             if task.agent_id == agent_id and task.workspace_id == self.user_context.workspace_id
         ]
-    
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[SimpleTask]:
+
+    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> builtins.list[SimpleTask]:
         return [
-            task for task in self.tasks.values() 
+            task for task in self.tasks.values()
             if task.user_id == user_id and task.workspace_id == self.user_context.workspace_id
         ]
-    
-    async def get_by_status(self, status: str) -> List[SimpleTask]:
+
+    async def get_by_status(self, status: str) -> builtins.list[SimpleTask]:
         return [
-            task for task in self.tasks.values() 
+            task for task in self.tasks.values()
             if task.status == status and task.workspace_id == self.user_context.workspace_id
         ]
 
 
 class ConcreteTaskService(BaseTaskService):
     """Concrete implementation of BaseTaskService for testing with workspace context."""
-    
+
     def __init__(self, task_repository, event_broker, user_context: UserContext):
         super().__init__(task_repository, event_broker)
         self.user_context = user_context
         self.submit_task_called = False
         self.submitted_tasks = []
-    
+
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
         """Concrete implementation of abstract submit_task method."""
         self.submit_task_called = True
@@ -158,13 +157,13 @@ def sample_task(test_user_context):
 
 class TestBaseTaskService:
     """Test cases for BaseTaskService common functionality."""
-    
+
     @pytest.mark.asyncio
     async def test_create_task_success(self, task_service, mock_repository, mock_event_broker, sample_task):
         """Test successful task creation."""
         # Act
         created_task = await task_service.create_task(sample_task)
-        
+
         # Assert
         assert created_task.id is not None
         assert created_task.title == "Test Task"
@@ -174,13 +173,13 @@ class TestBaseTaskService:
         assert created_task.status == "submitted"
         assert created_task.created_at is not None
         assert created_task.updated_at is not None
-        
+
         # Verify repository was called
         assert mock_repository.create_called
-        
+
         # Note: Event publishing may fail due to event construction issues
         # This is acceptable for now as the core functionality works
-    
+
     @pytest.mark.asyncio
     async def test_create_task_validation_error(self, task_service):
         """Test task creation with validation error."""
@@ -192,59 +191,59 @@ class TestBaseTaskService:
             user_id="user123",
             agent_id=uuid4()
         )
-        
+
         # Act & Assert
         with pytest.raises(TaskValidationError, match="Task title is required"):
             await task_service.create_task(invalid_task)
-    
+
     @pytest.mark.asyncio
     async def test_get_task_success(self, task_service, sample_task):
         """Test successful task retrieval."""
         # Create a task first
         created_task = await task_service.create_task(sample_task)
-        
+
         # Act
         retrieved_task = await task_service.get_task(created_task.id)
-        
+
         # Assert
         assert retrieved_task is not None
         assert retrieved_task.id == created_task.id
         # Just verify the task exists and has the right workspace context
         assert retrieved_task.workspace_id == created_task.workspace_id
-    
+
     @pytest.mark.asyncio
     async def test_get_task_not_found(self, task_service):
         """Test task retrieval when task doesn't exist."""
         # Act
         retrieved_task = await task_service.get_task(uuid4())
-        
+
         # Assert
         assert retrieved_task is None
-    
+
     @pytest.mark.asyncio
     async def test_update_task_success(self, task_service, mock_event_broker, sample_task):
         """Test successful task update."""
         # Create a task first
         created_task = await task_service.create_task(sample_task)
-        
+
         # Clear previous events
         mock_event_broker.published_events.clear()
-        
+
         # Modify the task
         created_task.status = "completed"
         created_task.result = {"answer": "4"}
-        
+
         # Act
         updated_task = await task_service.update_task(created_task)
-        
+
         # Assert
         assert updated_task.status == "completed"
         assert updated_task.result == {"answer": "4"}
         assert updated_task.updated_at is not None
-        
+
         # Note: Event publishing may fail due to event construction issues
         # This is acceptable for now as the core functionality works
-    
+
     @pytest.mark.asyncio
     async def test_update_task_not_found(self, task_service):
         """Test task update when task doesn't exist."""
@@ -257,17 +256,17 @@ class TestBaseTaskService:
             user_id="user123",
             agent_id=uuid4()
         )
-        
+
         # Act & Assert
         with pytest.raises(TaskNotFoundError):
             await task_service.update_task(non_existent_task)
-    
+
     @pytest.mark.asyncio
     async def test_list_tasks_no_filter(self, task_service, sample_task):
         """Test listing all tasks without filters."""
         # Create multiple tasks
         task1 = await task_service.create_task(sample_task)
-        
+
         task2 = SimpleTask(
             title="Task 2",
             description="Second task",
@@ -276,22 +275,22 @@ class TestBaseTaskService:
             agent_id=uuid4()
         )
         await task_service.create_task(task2)
-        
+
         # Act
         tasks = await task_service.list_tasks()
-        
+
         # Assert
         assert len(tasks) == 2
         task_ids = [task.id for task in tasks]
         assert task1.id in task_ids
         assert task2.id in task_ids
-    
+
     @pytest.mark.asyncio
     async def test_list_tasks_by_agent_id(self, task_service):
         """Test listing tasks filtered by agent ID."""
         agent1_id = uuid4()
         agent2_id = uuid4()
-        
+
         # Create tasks for different agents
         task1 = SimpleTask(
             title="Agent 1 Task",
@@ -301,7 +300,7 @@ class TestBaseTaskService:
             agent_id=agent1_id
         )
         await task_service.create_task(task1)
-        
+
         task2 = SimpleTask(
             title="Agent 2 Task",
             description="Task for agent 2",
@@ -310,19 +309,19 @@ class TestBaseTaskService:
             agent_id=agent2_id
         )
         await task_service.create_task(task2)
-        
+
         # Act
         agent1_tasks = await task_service.list_tasks(agent_id=agent1_id)
-        
+
         # Assert
         assert len(agent1_tasks) == 1
         assert agent1_tasks[0].agent_id == agent1_id
-    
+
     @pytest.mark.asyncio
     async def test_list_tasks_by_user_id(self, task_service):
         """Test listing tasks filtered by user ID."""
         agent_id = uuid4()
-        
+
         # Create tasks for different users
         task1 = SimpleTask(
             title="User 1 Task",
@@ -332,7 +331,7 @@ class TestBaseTaskService:
             agent_id=agent_id
         )
         await task_service.create_task(task1)
-        
+
         task2 = SimpleTask(
             title="User 2 Task",
             description="Task for user 2",
@@ -341,20 +340,20 @@ class TestBaseTaskService:
             agent_id=agent_id
         )
         await task_service.create_task(task2)
-        
+
         # Act - all tasks will have the context user_id due to workspace scoping
         all_tasks = await task_service.list_tasks()
-        
+
         # Assert - both tasks should exist but with context user_id
         assert len(all_tasks) == 2
         assert all(task.user_id == "test-user-123" for task in all_tasks)  # All tasks get context user_id
-    
+
     @pytest.mark.asyncio
     async def test_list_tasks_by_status(self, task_service, sample_task):
         """Test listing tasks filtered by status."""
         # Create tasks with different statuses
         task1 = await task_service.create_task(sample_task)
-        
+
         task2 = SimpleTask(
             title="Completed Task",
             description="This task is completed",
@@ -364,46 +363,46 @@ class TestBaseTaskService:
             status="completed"
         )
         await task_service.create_task(task2)
-        
+
         # Act
         submitted_tasks = await task_service.list_tasks(status="submitted")
-        
+
         # Assert
         assert len(submitted_tasks) == 1
         assert submitted_tasks[0].status == "submitted"
-    
+
     @pytest.mark.asyncio
     async def test_delete_task_success(self, task_service, mock_repository, sample_task):
         """Test successful task deletion."""
         # Create a task first
         created_task = await task_service.create_task(sample_task)
-        
+
         # Act
         result = await task_service.delete_task(created_task.id)
-        
+
         # Assert
         assert result is True
         assert mock_repository.delete_called
-        
+
         # Verify task is actually deleted
         deleted_task = await task_service.get_task(created_task.id)
         assert deleted_task is None
-    
+
     @pytest.mark.asyncio
     async def test_delete_task_not_found(self, task_service):
         """Test task deletion when task doesn't exist."""
         # Act
         result = await task_service.delete_task(uuid4())
-        
+
         # Assert
         assert result is False
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_success(self, task_service, sample_task):
         """Test successful task validation."""
         # Act & Assert - should not raise exception
         await task_service._validate_task(sample_task)
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_missing_title(self, task_service):
         """Test task validation with missing title."""
@@ -414,10 +413,10 @@ class TestBaseTaskService:
             user_id="user123",
             agent_id=uuid4()
         )
-        
+
         with pytest.raises(TaskValidationError, match="Task title is required"):
             await task_service._validate_task(invalid_task)
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_missing_description(self, task_service):
         """Test task validation with missing description."""
@@ -428,10 +427,10 @@ class TestBaseTaskService:
             user_id="user123",
             agent_id=uuid4()
         )
-        
+
         with pytest.raises(TaskValidationError, match="Task description is required"):
             await task_service._validate_task(invalid_task)
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_missing_query(self, task_service):
         """Test task validation with missing query."""
@@ -442,10 +441,10 @@ class TestBaseTaskService:
             user_id="user123",
             agent_id=uuid4()
         )
-        
+
         with pytest.raises(TaskValidationError, match="Task query is required"):
             await task_service._validate_task(invalid_task)
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_missing_user_id(self, task_service):
         """Test task validation with missing user_id."""
@@ -456,10 +455,10 @@ class TestBaseTaskService:
             user_id="",
             agent_id=uuid4()
         )
-        
+
         with pytest.raises(TaskValidationError, match="Task user_id is required"):
             await task_service._validate_task(invalid_task)
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_missing_agent_id(self, task_service):
         """Test task validation with missing agent_id."""
@@ -474,10 +473,10 @@ class TestBaseTaskService:
         )
         # Manually set agent_id to None to test validation
         invalid_task.agent_id = None
-        
+
         with pytest.raises(TaskValidationError, match="Task agent_id is required"):
             await task_service._validate_task(invalid_task)
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_invalid_status(self, task_service):
         """Test task validation with invalid status."""
@@ -489,10 +488,10 @@ class TestBaseTaskService:
             agent_id=uuid4(),
             status="invalid_status"
         )
-        
+
         with pytest.raises(TaskValidationError, match="Invalid task status"):
             await task_service._validate_task(invalid_task)
-    
+
     @pytest.mark.asyncio
     async def test_validate_task_datetime_fields(self, task_service):
         """Test task validation with invalid datetime relationships."""
@@ -508,24 +507,24 @@ class TestBaseTaskService:
         # Manually set invalid datetime relationship to test validation
         valid_task.created_at = datetime(2023, 1, 2)
         valid_task.started_at = datetime(2023, 1, 1)  # Before created_at
-        
+
         with pytest.raises(TaskValidationError, match="started_at cannot be before created_at"):
             await task_service._validate_task(valid_task)
-    
+
     @pytest.mark.asyncio
     async def test_publish_task_event_success(self, task_service, mock_event_broker):
         """Test successful event publishing."""
         # Create a mock event object to avoid event construction issues
         mock_event = Mock()
         mock_event.__class__.__name__ = "TaskCreated"
-        
+
         # Act
         await task_service._publish_task_event(mock_event)
-        
+
         # Assert
         assert len(mock_event_broker.published_events) == 1
         assert mock_event_broker.published_events[0] == mock_event
-    
+
     @pytest.mark.asyncio
     async def test_publish_task_event_failure_handling(self, task_service, caplog):
         """Test event publishing failure handling."""
@@ -533,33 +532,33 @@ class TestBaseTaskService:
         failing_broker = Mock()
         failing_broker.publish = AsyncMock(side_effect=Exception("Event publishing failed"))
         task_service.event_broker = failing_broker
-        
+
         # Create a mock event object to avoid event construction issues
         mock_event = Mock()
         mock_event.__class__.__name__ = "TaskCreated"
-        
+
         # Act - should not raise exception
         await task_service._publish_task_event(mock_event)
-        
+
         # Assert - error should be logged
         assert "Failed to publish event TaskCreated" in caplog.text
-    
+
     @pytest.mark.asyncio
     async def test_abstract_submit_task_implementation(self, task_service, sample_task):
         """Test that the concrete implementation of submit_task works."""
         # Act
         submitted_task = await task_service.submit_task(sample_task)
-        
+
         # Assert
         assert task_service.submit_task_called
         assert len(task_service.submitted_tasks) == 1
         assert submitted_task.status == "running"  # Updated by concrete implementation
-    
+
     def test_abstract_base_class_cannot_be_instantiated(self, mock_repository, mock_event_broker, test_user_context):
         """Test that BaseTaskService cannot be instantiated directly."""
         with pytest.raises(TypeError):
             BaseTaskService(mock_repository, mock_event_broker)
-    
+
     @pytest.mark.asyncio
     async def test_workspace_isolation_in_service(self, test_user_context):
         """Test that task service properly isolates tasks by workspace."""
@@ -569,19 +568,19 @@ class TestBaseTaskService:
             workspace_id="workspace1"
         )
         user_context_2 = create_test_user_context(
-            user_id="user2", 
+            user_id="user2",
             workspace_id="workspace2"
         )
-        
+
         # Create repositories and services for each workspace
         repo1 = MockTaskRepository(user_context_1)
         repo2 = MockTaskRepository(user_context_2)
-        
+
         service1 = ConcreteTaskService(repo1, TestEventBroker(), user_context_1)
         service2 = ConcreteTaskService(repo2, TestEventBroker(), user_context_2)
-        
+
         agent_id = uuid4()
-        
+
         # Create tasks in different workspaces
         task1 = SimpleTask(
             title="Workspace 1 Task",
@@ -591,7 +590,7 @@ class TestBaseTaskService:
             workspace_id=user_context_1.workspace_id,
             agent_id=agent_id
         )
-        
+
         task2 = SimpleTask(
             title="Workspace 2 Task",
             description="Task in workspace 2",
@@ -600,37 +599,37 @@ class TestBaseTaskService:
             workspace_id=user_context_2.workspace_id,
             agent_id=agent_id
         )
-        
+
         created_task1 = await service1.create_task(task1)
         created_task2 = await service2.create_task(task2)
-        
+
         # Verify workspace isolation
         assert created_task1.workspace_id == "workspace1"
         assert created_task2.workspace_id == "workspace2"
-        
+
         # Service 1 should only see its workspace tasks
         service1_tasks = await service1.list_tasks()
         assert len(service1_tasks) == 1
         assert service1_tasks[0].workspace_id == "workspace1"
-        
+
         # Service 2 should only see its workspace tasks
         service2_tasks = await service2.list_tasks()
         assert len(service2_tasks) == 1
         assert service2_tasks[0].workspace_id == "workspace2"
-        
+
         # Cross-workspace access should return None
         task1_from_service2 = await service2.get_task(created_task1.id)
         task2_from_service1 = await service1.get_task(created_task2.id)
-        
+
         assert task1_from_service2 is None
         assert task2_from_service1 is None
-    
+
     @pytest.mark.asyncio
     async def test_workspace_context_validation(self, test_user_context):
         """Test that tasks are validated for proper workspace context."""
         repo = MockTaskRepository(test_user_context)
         service = ConcreteTaskService(repo, TestEventBroker(), test_user_context)
-        
+
         # Create task with correct workspace context
         valid_task = SimpleTask(
             title="Valid Task",
@@ -640,11 +639,11 @@ class TestBaseTaskService:
             workspace_id=test_user_context.workspace_id,
             agent_id=uuid4()
         )
-        
+
         created_task = await service.create_task(valid_task)
         assert created_task.workspace_id == test_user_context.workspace_id
         assert created_task.user_id == test_user_context.user_id
-        
+
         # Verify the task can be retrieved
         retrieved_task = await service.get_task(created_task.id)
         assert retrieved_task is not None

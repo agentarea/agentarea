@@ -1,21 +1,20 @@
 """Test utilities for JWT token generation and authentication testing."""
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
-from agentarea_common.config.settings import get_settings
 from agentarea_common.auth.context import UserContext
+from agentarea_common.config.settings import get_settings
 
 
 def generate_test_jwt_token(
     user_id: str,
     workspace_id: str,
-    email: Optional[str] = None,
-    roles: Optional[list[str]] = None,
+    email: str | None = None,
+    roles: list[str] | None = None,
     expires_in_minutes: int = 30,
-    secret_key: Optional[str] = None,
+    secret_key: str | None = None,
     algorithm: str = "HS256"
 ) -> str:
     """Generate a test JWT token for development and testing.
@@ -34,13 +33,13 @@ def generate_test_jwt_token(
     """
     if roles is None:
         roles = ["user"]
-    
+
     if secret_key is None:
         settings = get_settings()
         secret_key = settings.app.JWT_SECRET_KEY
-    
+
     # Create token payload
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "workspace_id": workspace_id,
@@ -51,17 +50,17 @@ def generate_test_jwt_token(
         "iss": "agentarea-test",
         "aud": "agentarea-api"
     }
-    
+
     # Remove None values
     payload = {k: v for k, v in payload.items() if v is not None}
-    
+
     return jwt.encode(payload, secret_key, algorithm=algorithm)
 
 
 def create_test_user_context(
     user_id: str = "test-user-123",
     workspace_id: str = "test-workspace-456",
-    roles: Optional[list[str]] = None
+    roles: list[str] | None = None
 ) -> UserContext:
     """Create a test UserContext for testing purposes.
     
@@ -75,7 +74,7 @@ def create_test_user_context(
     """
     if roles is None:
         roles = ["user"]
-    
+
     return UserContext(
         user_id=user_id,
         workspace_id=workspace_id,

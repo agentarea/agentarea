@@ -7,18 +7,18 @@ Tests the business logic safety features including:
 - Event publishing for auto-disabled triggers
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
-from agentarea_triggers.domain.enums import TriggerType, ExecutionStatus, WebhookType
+import pytest
+from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import (
-    Trigger, CronTrigger, WebhookTrigger, TriggerExecution,
-    TriggerCreate, TriggerUpdate
+    CronTrigger,
+    TriggerExecution,
 )
 from agentarea_triggers.trigger_service import (
-    TriggerService, TriggerValidationError, TriggerNotFoundError
+    TriggerService,
 )
 
 
@@ -280,7 +280,7 @@ class TestTriggerSafetyMechanisms:
         mock_trigger_repository.get.return_value = sample_trigger_at_threshold
         mock_trigger_repository.update.return_value = sample_trigger_at_threshold
         mock_trigger_repository.disable_trigger.return_value = True
-        
+
         # Make event broker fail
         mock_event_broker.publish.side_effect = Exception("Event broker error")
 

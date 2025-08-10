@@ -65,4 +65,4 @@ def get_real_secret_manager() -> BaseSecretManager:
     Returns:
         BaseSecretManager: Real secret manager instance
     """
-    return create_infisical_secret_manager() 
+    return create_infisical_secret_manager()

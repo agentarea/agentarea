@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-from sqlalchemy import MetaData
-from agentarea_tasks.domain.models import TaskCreate
 from uuid import uuid4
+
+from agentarea_tasks.domain.models import TaskCreate
+from sqlalchemy import MetaData
 
 # Test manual assignment after object creation
 print("Testing manual assignment after object creation...")

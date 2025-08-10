@@ -1,14 +1,14 @@
-from uuid import UUID
 import re
+from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
 from agentarea_api.api.deps.services import get_agent_service
-from agentarea_llm.application.model_instance_service import ModelInstanceService
-from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
-from agentarea_common.config import get_database
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.config import get_database
+from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -38,7 +38,7 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
             event_broker=None,  # Not needed for validation
             secret_manager=None  # Not needed for validation
         )
-        
+
         # First, try to treat model_id as a UUID (model instance ID)
         try:
             model_uuid = UUID(model_id)
@@ -49,7 +49,7 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
         except ValueError:
             # Not a UUID, continue to check if it's a valid model name
             pass
-        
+
         # If not a valid UUID or model instance not found, check if it's a reasonable model identifier
         # For now, we'll allow certain patterns that are commonly used for model names
         valid_model_patterns = [
@@ -63,12 +63,12 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
             r"^[a-zA-Z][a-zA-Z0-9\-_.]*[a-zA-Z0-9]$",  # starts with letter
             r"^[a-zA-Z0-9]*[a-zA-Z][a-zA-Z0-9\-_.]*$",  # contains at least one letter
         ]
-        
+
         for pattern in valid_model_patterns:
             if re.match(pattern, model_id, re.IGNORECASE):
                 # Valid model name pattern - allow it
                 return
-        
+
         # If we get here, the model_id doesn't match any valid pattern
         raise HTTPException(
             status_code=400,
@@ -146,14 +146,14 @@ class AgentResponse(BaseModel):
 
 @router.post("/", response_model=AgentResponse)
 async def create_agent(
-    data: AgentCreate, 
+    data: AgentCreate,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service)
 ):
     """Create a new agent."""
     # Validate model_id before creating agent
     await validate_model_id(data.model_id, user_context)
-    
+
     agent = await agent_service.create_agent(
         name=data.name,
         description=data.description,
@@ -183,7 +183,7 @@ async def list_agents(
     """List all workspace agents with optional filtering by creator."""
     # Determine if we should filter by creator
     creator_scoped = created_by == "me"
-    
+
     agents = await agent_service.list(creator_scoped=creator_scoped)
     return [AgentResponse.from_domain(agent) for agent in agents]
 
@@ -199,7 +199,7 @@ async def update_agent(
     # Validate model_id if it's being updated
     if data.model_id is not None:
         await validate_model_id(data.model_id, user_context)
-    
+
     agent = await agent_service.update_agent(
         id=agent_id,
         name=data.name,

@@ -8,9 +8,9 @@ import json
 import logging
 import os
 from pathlib import Path
-from cryptography.fernet import Fernet, InvalidToken
 
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from cryptography.fernet import Fernet, InvalidToken
 
 logger = logging.getLogger(__name__)
 
@@ -130,4 +130,4 @@ class LocalSecretManager(BaseSecretManager):
         """Clear all secrets (for testing purposes)."""
         self._secrets.clear()
         self._save_secrets()
-        logger.warning("Cleared all secrets") 
+        logger.warning("Cleared all secrets")

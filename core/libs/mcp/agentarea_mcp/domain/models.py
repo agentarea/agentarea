@@ -1,10 +1,7 @@
-from datetime import datetime
 from typing import Any
-from uuid import UUID, uuid4
 
-from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin, AuditMixin
+from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, Boolean, String
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 
 Base = declarative_base()

@@ -26,9 +26,9 @@ class TemporalTaskManager(BaseTaskManager):
     def __init__(self, task_repository: TaskRepository):
         """Initialize with TaskRepository dependency."""
         from agentarea_common.config import get_settings
-        
+
         self.task_repository = task_repository
-        
+
         # Get settings and configure Temporal executor properly
         settings = get_settings()
         self.temporal_executor = TemporalWorkflowExecutor(
@@ -39,11 +39,11 @@ class TemporalTaskManager(BaseTaskManager):
     def _task_to_simple_task(self, task) -> SimpleTask:
         """Convert Task domain model to SimpleTask."""
         from .domain.models import SimpleTask
-        
+
         # Handle different field names between Task domain model and TaskORM
         user_id = getattr(task, 'user_id', None) or getattr(task, 'created_by', None) or "system"
         workspace_id = getattr(task, 'workspace_id', None) or "system"
-        
+
         # Handle metadata field - could be dict, SQLAlchemy MetaData, or None
         metadata_raw = getattr(task, 'metadata', None) or getattr(task, 'task_metadata', None)
         if metadata_raw is None:
@@ -53,7 +53,7 @@ class TemporalTaskManager(BaseTaskManager):
         else:
             # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
             metadata = {}
-        
+
         return SimpleTask(
             id=task.id,
             title=task.description,  # Use description as title
@@ -77,7 +77,7 @@ class TemporalTaskManager(BaseTaskManager):
     def _simple_task_to_task(self, simple_task: SimpleTask):
         """Convert SimpleTask to Task domain model."""
         from .domain.models import Task
-        
+
         return Task(
             id=simple_task.id,
             agent_id=simple_task.agent_id,
@@ -151,7 +151,7 @@ class TemporalTaskManager(BaseTaskManager):
                 # Set execution_id on the task
                 updated_task_domain.execution_id = execution_id
                 updated_task_domain = await self.task_repository.update_task(updated_task_domain)
-            
+
             if updated_task_domain:
                 updated_simple_task = self._task_to_simple_task(updated_task_domain)
                 logger.info(f"Task {task.id} submitted successfully")

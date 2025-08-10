@@ -1,7 +1,8 @@
 """Agent execution runner for orchestrating the main execution loop."""
 
 import logging
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from temporalio import workflow
 
@@ -133,7 +134,7 @@ class IterationExecutor:
     async def execute(self) -> None:
         """Execute a single iteration."""
         iteration = self.workflow.state.current_iteration
-        
+
         # Log iteration start
         self.event_manager.add_event("iteration_started", {
             "iteration": iteration,

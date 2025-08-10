@@ -25,4 +25,4 @@ class MCPManagerSettings(BaseSettings):
     class Config:
         """Configuration for MCPManagerSettings."""
 
-        env_prefix = "MCP_MANAGER_" 
+        env_prefix = "MCP_MANAGER_"

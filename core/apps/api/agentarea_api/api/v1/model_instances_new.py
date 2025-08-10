@@ -1,11 +1,18 @@
+import logging
 from datetime import datetime
 from uuid import UUID
 
+# Import LLM testing components
+import litellm
 from agentarea_api.api.deps.services import get_provider_service
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.dependencies import get_user_context
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/model-instances", tags=["model-instances"])
 
@@ -26,6 +33,23 @@ class ModelInstanceUpdate(BaseModel):
     is_public: bool | None = None
 
 
+class ModelInstanceTestRequest(BaseModel):
+    provider_config_id: UUID
+    model_spec_id: UUID
+    test_message: str | None = "Hello, this is a test message."
+
+
+class ModelInstanceTestResponse(BaseModel):
+    success: bool
+    message: str
+    response_content: str | None = None
+    error_type: str | None = None
+    provider_type: str | None = None
+    model_name: str | None = None
+    cost: float | None = None
+    tokens_used: int | None = None
+
+
 class ModelInstanceResponse(BaseModel):
     id: str
     provider_config_id: str
@@ -36,7 +60,7 @@ class ModelInstanceResponse(BaseModel):
     is_public: bool
     created_at: datetime
     updated_at: datetime
-    
+
     # Related data
     provider_name: str | None = None
     provider_key: str | None = None
@@ -118,4 +142,126 @@ async def delete_model_instance(
     success = await provider_service.delete_model_instance(instance_id)
     if not success:
         raise HTTPException(status_code=404, detail="Model instance not found")
-    return {"message": "Model instance deleted successfully"} 
+    return {"message": "Model instance deleted successfully"}
+
+
+@router.post("/test", response_model=ModelInstanceTestResponse)
+async def test_model_instance(
+    data: ModelInstanceTestRequest,
+    provider_service: ProviderService = Depends(get_provider_service),
+    user_context: UserContext = Depends(get_user_context),
+):
+    """Test a model instance configuration before creating it."""
+    try:
+        # Get provider config and model spec
+        provider_config = await provider_service.get_provider_config(data.provider_config_id)
+        if not provider_config:
+            raise HTTPException(status_code=404, detail="Provider config not found")
+
+        model_spec = await provider_service.get_model_spec(data.model_spec_id)
+        if not model_spec:
+            raise HTTPException(status_code=404, detail="Model spec not found")
+
+        # Extract configuration details
+        provider_type = provider_config.provider_spec.provider_type
+        model_name = model_spec.model_name
+        endpoint_url = getattr(model_spec, "endpoint_url", None)
+
+        # Get API key from secret manager
+        api_key = None
+        api_key_secret_name = getattr(provider_config, "api_key", None)
+        if api_key_secret_name:
+            # Get secret manager from provider service
+            secret_manager = provider_service._secret_manager
+            api_key = await secret_manager.get_secret(api_key_secret_name)
+
+        if not api_key and provider_type not in ["ollama_chat"]:  # Ollama doesn't need API key
+            return ModelInstanceTestResponse(
+                success=False,
+                message="No API key found for this provider configuration",
+                error_type="MissingAPIKey",
+                provider_type=provider_type,
+                model_name=model_name
+            )
+
+        # Build litellm parameters
+        litellm_model = f"{provider_type}/{model_name}"
+        params = {
+            "model": litellm_model,
+            "messages": [{"role": "user", "content": data.test_message}],
+            "max_tokens": 50,  # Keep test small and cheap
+        }
+
+        # Add API key if available
+        if api_key:
+            params["api_key"] = api_key
+
+        # Handle base URL for custom endpoints
+        if endpoint_url:
+            url = endpoint_url
+            if not url.startswith("http"):
+                url = f"http://{url}"
+            params["base_url"] = url
+        elif provider_type == "ollama_chat":
+            # Default Ollama URL
+            params["base_url"] = "http://host.docker.internal:11434"
+
+        logger.info(f"Testing LLM configuration: {provider_type}/{model_name}")
+
+        # Make test call
+        response = await litellm.acompletion(**params)
+
+        # Extract response details
+        message = response.choices[0].message
+        content = message.content or ""
+
+        # Calculate cost and tokens
+        cost = 0.0
+        tokens_used = 0
+        if hasattr(response, "usage") and response.usage:
+            tokens_used = getattr(response.usage, "total_tokens", 0)
+            # Rough cost estimate
+            cost = tokens_used * 0.00001  # $0.01 per 1K tokens estimate
+
+        return ModelInstanceTestResponse(
+            success=True,
+            message="LLM test successful",
+            response_content=content,
+            provider_type=provider_type,
+            model_name=model_name,
+            cost=cost,
+            tokens_used=tokens_used
+        )
+
+    except Exception as e:
+        error_message = str(e)
+        error_type = type(e).__name__
+
+        logger.error(f"LLM test failed: {error_message}")
+
+        # Categorize common errors
+        if "AuthenticationError" in error_type or "api_key" in error_message.lower():
+            error_type = "AuthenticationError"
+            message = "Authentication failed - please check your API key"
+        elif "RateLimitError" in error_type or "rate limit" in error_message.lower():
+            error_type = "RateLimitError"
+            message = "Rate limit exceeded - please try again later"
+        elif "quota" in error_message.lower() or "billing" in error_message.lower():
+            error_type = "QuotaError"
+            message = "Quota exceeded or billing issue"
+        elif "model" in error_message.lower() and ("not found" in error_message.lower() or "does not exist" in error_message.lower()):
+            error_type = "ModelNotFoundError"
+            message = "Model not found or not available"
+        elif "connection" in error_message.lower() or "timeout" in error_message.lower():
+            error_type = "ConnectionError"
+            message = "Connection failed - please check endpoint URL"
+        else:
+            message = f"Test failed: {error_message}"
+
+        return ModelInstanceTestResponse(
+            success=False,
+            message=message,
+            error_type=error_type,
+            provider_type=provider_type if 'provider_type' in locals() else None,
+            model_name=model_name if 'model_name' in locals() else None
+        )

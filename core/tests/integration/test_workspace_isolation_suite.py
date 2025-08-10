@@ -8,36 +8,36 @@ from pathlib import Path
 
 def run_test_suite():
     """Run the comprehensive workspace isolation test suite."""
-    
+
     test_files = [
         "tests/unit/test_workspace_scoped_repository_comprehensive.py",
-        "tests/unit/test_jwt_token_extraction_comprehensive.py", 
+        "tests/unit/test_jwt_token_extraction_comprehensive.py",
         "tests/unit/test_workspace_error_handling.py",
         "tests/integration/test_workspace_data_isolation.py",
         "tests/integration/test_cross_workspace_access_prevention.py",
         "tests/integration/test_workspace_isolation_comprehensive.py",
     ]
-    
+
     print("🚀 Running Comprehensive Workspace Isolation Test Suite")
     print("=" * 60)
-    
+
     total_passed = 0
     total_failed = 0
     failed_files = []
-    
+
     for test_file in test_files:
         print(f"\n📋 Running {test_file}")
         print("-" * 40)
-        
+
         try:
             result = subprocess.run([
-                sys.executable, "-m", "pytest", 
-                test_file, 
-                "-v", 
+                sys.executable, "-m", "pytest",
+                test_file,
+                "-v",
                 "--tb=short",
                 "--disable-warnings"
             ], capture_output=True, text=True, cwd=Path(__file__).parent)
-            
+
             if result.returncode == 0:
                 print(f"✅ {test_file} - ALL TESTS PASSED")
                 # Count passed tests from output
@@ -67,26 +67,26 @@ def run_test_suite():
                             break
                         except (ValueError, IndexError):
                             continue
-                
+
                 print("STDERR:", result.stderr)
                 print("STDOUT:", result.stdout[-1000:])  # Last 1000 chars
-                
+
         except Exception as e:
             print(f"💥 Error running {test_file}: {e}")
             failed_files.append(test_file)
-    
+
     print("\n" + "=" * 60)
     print("📊 FINAL RESULTS")
     print("=" * 60)
     print(f"✅ Total Passed: {total_passed}")
     print(f"❌ Total Failed: {total_failed}")
     print(f"📁 Files with failures: {len(failed_files)}")
-    
+
     if failed_files:
         print("\n🔍 Files that need attention:")
         for file in failed_files:
             print(f"  - {file}")
-    
+
     if total_failed == 0:
         print("\n🎉 ALL WORKSPACE ISOLATION TESTS PASSED!")
         print("✨ The workspace isolation system is working correctly!")

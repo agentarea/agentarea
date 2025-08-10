@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "agentarea-agents",
+    "agentarea-agents-sdk",
     "agentarea-api",
     "agentarea-cli",
     "agentarea-common",
@@ -73,6 +74,36 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
 ]
+
+[[package]]
+name = "agentarea-agents-sdk"
+version = "0.1.0"
+source = { editable = "libs/agentarea-agents-sdk" }
+dependencies = [
+    { name = "httpx" },
+    { name = "litellm" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.25.0" },
+    { name = "litellm" },
+    { name = "pydantic", specifier = ">=2.4.2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11.4" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "agentarea-api"
@@ -211,6 +242,7 @@ name = "agentarea-execution"
 version = "0.1.0"
 source = { editable = "libs/execution" }
 dependencies = [
+    { name = "agentarea-agents-sdk" },
     { name = "pydantic" },
     { name = "temporalio" },
 ]
@@ -224,6 +256,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agentarea-agents-sdk", editable = "libs/agentarea-agents-sdk" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
@@ -365,6 +398,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "agentarea-agents" },
+    { name = "agentarea-agents-sdk" },
     { name = "agentarea-api" },
     { name = "agentarea-common" },
     { name = "agentarea-context" },
@@ -409,6 +443,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "agentarea-agents", editable = "libs/agents" },
+    { name = "agentarea-agents-sdk", editable = "libs/agentarea-agents-sdk" },
     { name = "agentarea-api", editable = "apps/api" },
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-context", editable = "libs/context" },

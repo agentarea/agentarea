@@ -56,6 +56,7 @@ export function useTaskEvents(
 
   const eventsRef = useRef<DisplayEvent[]>([]);
   const loadedHistory = useRef(false);
+  const chunkBufferRef = useRef<Map<string, DisplayEvent>>(new Map());
 
   // SSE URL for real-time events
   const sseUrl = agentId && taskId && autoConnect 
@@ -131,17 +132,52 @@ export function useTaskEvents(
         parsedData = { message: String(sseEvent.data) };
       }
 
-      // Create SSE message format
+      // Create SSE message format matching protocol structure
+      // Extract rich content from original_data field (where the actual LLM response data lives)
+      const originalData = parsedData.original_data || {};
+      const baseData = parsedData.data || parsedData;
+      
       eventData = {
         event: sseEvent.type,
         data: {
-          event_type: sseEvent.type as any, // Will be mapped in mapSSEToDisplayEvent
-          timestamp: parsedData.timestamp || new Date().toISOString(),
-          task_id: parsedData.task_id || parsedData.aggregate_id || "unknown",
-          agent_id: parsedData.agent_id || "unknown",
-          execution_id: parsedData.execution_id || "unknown",
-          message: parsedData.message,
-          data: parsedData.data || parsedData
+          event_type: parsedData.original_event_type || parsedData.event_type || sseEvent.type as any,
+          event_id: parsedData.event_id || new Date().getTime().toString(),
+          timestamp: parsedData.original_timestamp || parsedData.timestamp || new Date().toISOString(),
+          data: {
+            // Core fields
+            task_id: baseData.task_id || parsedData.task_id || parsedData.aggregate_id || "unknown",
+            agent_id: baseData.agent_id || parsedData.agent_id || "unknown",
+            execution_id: baseData.execution_id || parsedData.execution_id || "unknown",
+            iteration: baseData.iteration || parsedData.iteration || originalData.iteration,
+            
+            // Rich event content from original_data (this is where the actual LLM responses are!)
+            content: originalData.content || baseData.content || parsedData.content,
+            chunk: originalData.chunk || baseData.chunk || parsedData.chunk,
+            chunk_index: originalData.chunk_index || baseData.chunk_index || parsedData.chunk_index,
+            is_final: originalData.is_final || baseData.is_final || parsedData.is_final,
+            cost: originalData.cost || baseData.cost || parsedData.cost,
+            usage: originalData.usage || baseData.usage || parsedData.usage,
+            tool_calls: originalData.tool_calls || baseData.tool_calls || parsedData.tool_calls,
+            model_id: originalData.model_id || baseData.model_id || parsedData.model_id,
+            tool_name: originalData.tool_name || baseData.tool_name || parsedData.tool_name,
+            result: originalData.result || baseData.result || parsedData.result,
+            success: originalData.success || baseData.success || parsedData.success,
+            error: originalData.error || baseData.error || parsedData.error,
+            error_type: originalData.error_type || baseData.error_type || parsedData.error_type,
+            
+            // Budget and goal information
+            budget_remaining: originalData.budget_remaining || baseData.budget_remaining || parsedData.budget_remaining,
+            total_cost: originalData.total_cost || baseData.total_cost || parsedData.total_cost,
+            goal_description: originalData.goal_description || baseData.goal_description || parsedData.goal_description,
+            max_iterations: originalData.max_iterations || baseData.max_iterations || parsedData.max_iterations,
+            
+            // Message count and other workflow data
+            message_count: originalData.message_count || baseData.message_count || parsedData.message_count,
+            
+            // Fallback for any other data
+            ...originalData,
+            ...baseData
+          }
         }
       };
 
@@ -151,11 +187,60 @@ export function useTaskEvents(
       const displayEvent = mapSSEToDisplayEvent(eventData);
       console.log("Display event:", displayEvent);
       
-      // Add to events list (avoid duplicates)
-      eventsRef.current = [
-        ...eventsRef.current.filter(e => e.id !== displayEvent.id),
-        displayEvent
-      ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      // Handle chunk events - aggregate them into a single message
+      if (displayEvent.type === 'LLMCallChunk' || displayEvent.type === 'llmcallchunk') {
+        const taskId = displayEvent.data?.task_id || eventData.data?.data?.task_id;
+        const chunk = displayEvent.data?.chunk;
+        const isChunkFinal = displayEvent.data?.is_final;
+        
+        if (taskId && chunk !== undefined) {
+          const chunkKey = `llm_response_${taskId}`;
+          
+          // Get or create the aggregated message
+          const existingMessage = chunkBufferRef.current.get(chunkKey) || {
+            id: `aggregated_llm_${taskId}`,
+            type: 'LLMCallStreaming',
+            timestamp: displayEvent.timestamp,
+            description: 'LLM Response (streaming)',
+            data: {
+              ...displayEvent.data,
+              content: '', // Start with empty content
+              is_streaming: !isChunkFinal,
+              chunks_received: 0
+            }
+          };
+          
+          // Append the chunk to the content
+          existingMessage.data.content = (existingMessage.data.content || '') + chunk;
+          existingMessage.data.chunks_received = (existingMessage.data.chunks_received || 0) + 1;
+          existingMessage.data.is_streaming = !isChunkFinal;
+          existingMessage.timestamp = displayEvent.timestamp; // Update timestamp to latest chunk
+          
+          // Update description to show streaming progress
+          existingMessage.description = isChunkFinal 
+            ? `LLM Response (${existingMessage.data.chunks_received} chunks, complete)`
+            : `LLM Response (${existingMessage.data.chunks_received} chunks, streaming...)`;
+          
+          // Store the updated message
+          chunkBufferRef.current.set(chunkKey, existingMessage);
+          
+          // Replace existing message or add new one
+          eventsRef.current = [
+            ...eventsRef.current.filter(e => e.id !== existingMessage.id),
+            existingMessage
+          ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+          
+          console.log("Aggregated chunk:", { chunkKey, chunk: chunk.substring(0, 50), isChunkFinal, totalContent: existingMessage.data.content.length });
+        } else {
+          console.warn("Chunk event missing required data:", { taskId, chunk });
+        }
+      } else {
+        // Regular event - add normally (avoid duplicates)
+        eventsRef.current = [
+          ...eventsRef.current.filter(e => e.id !== displayEvent.id),
+          displayEvent
+        ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      }
 
       setState(prev => ({
         ...prev,
@@ -227,6 +312,7 @@ export function useTaskEvents(
   const refresh = useCallback(async () => {
     loadedHistory.current = false;
     eventsRef.current = [];
+    chunkBufferRef.current.clear(); // Clear chunk buffer
     setState(prev => ({
       ...prev,
       events: [],
@@ -294,6 +380,7 @@ export function useTaskEvents(
   // Clear events
   const clearEvents = useCallback(() => {
     eventsRef.current = [];
+    chunkBufferRef.current.clear(); // Clear chunk buffer
     setState(prev => ({
       ...prev,
       events: [],

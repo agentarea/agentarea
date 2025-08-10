@@ -1,7 +1,7 @@
 """Example demonstrating the usage of UserContextDep in FastAPI endpoints."""
 
+from agentarea_common.auth import UserContextDep
 from fastapi import FastAPI, HTTPException
-from agentarea_common.auth import UserContextDep, UserContext
 
 app = FastAPI()
 
@@ -67,7 +67,7 @@ async def create_workspace_resource(
     # 1. Validate the resource_data
     # 2. Create the resource with user_context.user_id and user_context.workspace_id
     # 3. Store in database with proper workspace isolation
-    
+
     return {
         "resource": resource_data,
         "created_by": user_context.user_id,
@@ -96,7 +96,7 @@ async def list_workspace_users(user_context: UserContextDep) -> dict:
             status_code=403,
             detail="Admin role required to access this endpoint"
         )
-    
+
     # In a real implementation, you would query the database
     # for users in the current workspace
     return {

@@ -15,13 +15,13 @@ async def get_current_user(request: Request):
     # Access user information from request state (added by JWT middleware)
     user_id = getattr(request.state, "user_id", None)
     user_info = getattr(request.state, "user", {})
-    
+
     if not user_id:
         return JSONResponse(
             status_code=401,
             content={"detail": "Not authenticated"}
         )
-    
+
     return {
         "user_id": user_id,
         "user_info": user_info
@@ -37,7 +37,7 @@ async def get_token_info(request: Request):
     # Access user information from request state (added by JWT middleware)
     user_id = getattr(request.state, "user_id", None)
     user_info = getattr(request.state, "user", {})
-    
+
     return {
         "authenticated": user_id is not None,
         "user_id": user_id,

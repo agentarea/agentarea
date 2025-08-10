@@ -1,14 +1,13 @@
 from logging.config import fileConfig
 
-from agentarea_common.config import get_db_settings
 from agentarea_common.base.models import BaseModel
-from sqlalchemy import engine_from_config, pool
-
+from agentarea_common.config import get_db_settings
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Import all ORM models to ensure they're registered with metadata
 try:
-    from agentarea_triggers.infrastructure.orm import TriggerORM, TriggerExecutionORM  # noqa: F401
+    from agentarea_triggers.infrastructure.orm import TriggerExecutionORM, TriggerORM  # noqa: F401
 except ImportError:
     # Triggers library not yet installed - skip for now
     pass

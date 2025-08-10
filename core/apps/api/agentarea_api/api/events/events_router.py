@@ -30,9 +30,26 @@ async def start_events_router():
 
 
 async def stop_events_router():
-    """Stop the FastStream router's broker."""
+    """Stop the FastStream router's broker with thorough cleanup."""
     try:
+        # Close the broker
         await router.broker.close()
+
+        # Additional cleanup for any remaining connections
+        if hasattr(router.broker, '_connection') and router.broker._connection:
+            try:
+                await router.broker._connection.close()
+            except Exception as conn_e:
+                logger.debug(f"Error closing router broker connection: {conn_e}")
+
+        # Force cleanup of any connection pools
+        if hasattr(router.broker, '_pool') and router.broker._pool:
+            try:
+                router.broker._pool.close()
+                await router.broker._pool.wait_closed()
+            except Exception as pool_e:
+                logger.debug(f"Error closing connection pool: {pool_e}")
+
         print("✅ FastStream Redis broker closed")
         logger.info("FastStream Redis broker closed")
     except Exception as e:

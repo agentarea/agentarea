@@ -2,9 +2,9 @@
 
 import json
 import logging
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Union
+from typing import Any
 from uuid import UUID
 
 from ..auth.context import UserContext
@@ -22,16 +22,16 @@ class AuditAction(Enum):
 
 class AuditEvent:
     """Structured audit event with workspace context."""
-    
+
     def __init__(
         self,
         action: AuditAction,
         resource_type: str,
         user_context: UserContext,
-        resource_id: Optional[Union[str, UUID]] = None,
-        resource_data: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
-        additional_context: Optional[Dict[str, Any]] = None,
+        resource_id: str | UUID | None = None,
+        resource_data: dict[str, Any] | None = None,
+        error: str | None = None,
+        additional_context: dict[str, Any] | None = None,
     ):
         """Initialize audit event.
         
@@ -49,7 +49,7 @@ class AuditEvent:
         self.resource_type = resource_type
         self.user_id = user_context.user_id
         self.workspace_id = user_context.workspace_id
-        
+
         # Handle resource_id conversion safely to avoid async database queries
         if resource_id is None:
             self.resource_id = None
@@ -79,12 +79,12 @@ class AuditEvent:
                 self.resource_id = str(resource_id)
             except Exception:
                 self.resource_id = None
-        
+
         self.resource_data = resource_data or {}
         self.error = error
         self.additional_context = additional_context or {}
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert audit event to dictionary for logging."""
         return {
             "timestamp": self.timestamp.isoformat(),
@@ -97,7 +97,7 @@ class AuditEvent:
             "error": self.error,
             "additional_context": self.additional_context,
         }
-    
+
     def to_json(self) -> str:
         """Convert audit event to JSON string."""
         return json.dumps(self.to_dict(), default=str)
@@ -105,7 +105,7 @@ class AuditEvent:
 
 class AuditLogger:
     """Audit logger with workspace context support."""
-    
+
     def __init__(self, logger_name: str = "agentarea.audit"):
         """Initialize audit logger.
         
@@ -113,7 +113,7 @@ class AuditLogger:
             logger_name: Name of the logger to use
         """
         self.logger = logging.getLogger(logger_name)
-        
+
         # Ensure audit logger has appropriate level
         if not self.logger.handlers:
             # Add a handler if none exists
@@ -124,7 +124,7 @@ class AuditLogger:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
-    
+
     def log_event(self, event: AuditEvent) -> None:
         """Log an audit event.
         
@@ -142,13 +142,13 @@ class AuditLogger:
                 "action": event.action.value,
             }
         )
-    
+
     def log_create(
         self,
         resource_type: str,
         user_context: UserContext,
-        resource_id: Union[str, UUID],
-        resource_data: Optional[Dict[str, Any]] = None,
+        resource_id: str | UUID,
+        resource_data: dict[str, Any] | None = None,
         **additional_context: Any
     ) -> None:
         """Log resource creation.
@@ -169,13 +169,13 @@ class AuditLogger:
             additional_context=additional_context,
         )
         self.log_event(event)
-    
+
     def log_update(
         self,
         resource_type: str,
         user_context: UserContext,
-        resource_id: Union[str, UUID],
-        resource_data: Optional[Dict[str, Any]] = None,
+        resource_id: str | UUID,
+        resource_data: dict[str, Any] | None = None,
         **additional_context: Any
     ) -> None:
         """Log resource update.
@@ -196,12 +196,12 @@ class AuditLogger:
             additional_context=additional_context,
         )
         self.log_event(event)
-    
+
     def log_delete(
         self,
         resource_type: str,
         user_context: UserContext,
-        resource_id: Union[str, UUID],
+        resource_id: str | UUID,
         **additional_context: Any
     ) -> None:
         """Log resource deletion.
@@ -220,12 +220,12 @@ class AuditLogger:
             additional_context=additional_context,
         )
         self.log_event(event)
-    
+
     def log_read(
         self,
         resource_type: str,
         user_context: UserContext,
-        resource_id: Optional[Union[str, UUID]] = None,
+        resource_id: str | UUID | None = None,
         **additional_context: Any
     ) -> None:
         """Log resource read access.
@@ -244,13 +244,13 @@ class AuditLogger:
             additional_context=additional_context,
         )
         self.log_event(event)
-    
+
     def log_list(
         self,
         resource_type: str,
         user_context: UserContext,
-        count: Optional[int] = None,
-        filters: Optional[Dict[str, Any]] = None,
+        count: int | None = None,
+        filters: dict[str, Any] | None = None,
         **additional_context: Any
     ) -> None:
         """Log resource list access.
@@ -267,7 +267,7 @@ class AuditLogger:
             context["count"] = count
         if filters:
             context["filters"] = filters
-            
+
         event = AuditEvent(
             action=AuditAction.LIST,
             resource_type=resource_type,
@@ -275,13 +275,13 @@ class AuditLogger:
             additional_context=context,
         )
         self.log_event(event)
-    
+
     def log_error(
         self,
         resource_type: str,
         user_context: UserContext,
         error: str,
-        resource_id: Optional[Union[str, UUID]] = None,
+        resource_id: str | UUID | None = None,
         **additional_context: Any
     ) -> None:
         """Log error with workspace context.
@@ -305,7 +305,7 @@ class AuditLogger:
 
 
 # Global audit logger instance
-_audit_logger: Optional[AuditLogger] = None
+_audit_logger: AuditLogger | None = None
 
 
 def get_audit_logger() -> AuditLogger:

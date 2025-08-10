@@ -190,14 +190,14 @@ class TestE2EMainFlow:
 
         ollama_spec = response.json()
         provider_spec_id = ollama_spec["id"]
-        
+
         # Find qwen2.5 model spec
         qwen_model_spec = None
         for model in ollama_spec.get("models", []):
             if model["model_name"] == "qwen2.5":
                 qwen_model_spec = model
                 break
-        
+
         if not qwen_model_spec:
             print("❌ qwen2.5 model spec not found")
             return ""
@@ -396,11 +396,11 @@ class TestE2EMainFlow:
 
             # ✨ Updated verification for new architecture - don't enforce A2A message format
             print("🎯 Verifying task completion and structure...")
-            
+
             # The new architecture may not have the same A2A message format
             # Just verify that the task completed successfully and has result data
             print("  ✓ Task completed successfully with result data")
-            
+
             # Optional: check for message field but don't fail if it's missing
             message = final_status.get("message")
             if message and isinstance(message, dict):

@@ -1,17 +1,15 @@
 """Tests for trigger schema migration and webhook_config field."""
 
-import pytest
 from datetime import datetime
-from uuid import uuid4
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-
-from agentarea_triggers.domain.models import WebhookTrigger, TriggerCreate
+import pytest
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
-from agentarea_triggers.infrastructure.repository import TriggerRepository
+from agentarea_triggers.domain.models import TriggerCreate, WebhookTrigger
 from agentarea_triggers.infrastructure.orm import TriggerORM
+from agentarea_triggers.infrastructure.repository import TriggerRepository
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestSchemaMigration:
@@ -79,7 +77,7 @@ class TestSchemaMigration:
         assert hasattr(sample_webhook_trigger_orm, 'webhook_config')
         assert sample_webhook_trigger_orm.webhook_config is not None
         assert isinstance(sample_webhook_trigger_orm.webhook_config, dict)
-        
+
         # Verify specific config data
         config = sample_webhook_trigger_orm.webhook_config
         assert "telegram" in config
@@ -96,7 +94,7 @@ class TestSchemaMigration:
             "chat_id": "987654321",
             "parse_mode": "Markdown"
         }
-        
+
         trigger_orm = TriggerORM(
             id=uuid4(),
             name="Telegram Only",
@@ -113,7 +111,7 @@ class TestSchemaMigration:
             webhook_type=WebhookType.TELEGRAM.value,
             webhook_config=telegram_only_config,
         )
-        
+
         # Verify single service configuration
         assert trigger_orm.webhook_config == telegram_only_config
         assert trigger_orm.webhook_config["bot_token"] == "test_token_123"
@@ -137,7 +135,7 @@ class TestSchemaMigration:
             webhook_type=WebhookType.GENERIC.value,
             webhook_config=None,
         )
-        
+
         # Verify empty configuration is supported
         assert generic_trigger_orm.webhook_config is None
 
@@ -145,7 +143,7 @@ class TestSchemaMigration:
         """Test converting ORM with webhook_config to domain model."""
         # Execute conversion
         domain_trigger = repository._orm_to_domain(sample_webhook_trigger_orm)
-        
+
         # Verify conversion
         assert isinstance(domain_trigger, WebhookTrigger)
         assert domain_trigger.webhook_config == sample_webhook_trigger_orm.webhook_config
@@ -174,10 +172,10 @@ class TestSchemaMigration:
             validation_rules={},
             webhook_config=sample_webhook_config,
         )
-        
+
         # Execute conversion
         orm_trigger = repository._domain_to_orm(domain_trigger)
-        
+
         # Verify conversion
         assert isinstance(orm_trigger, TriggerORM)
         assert orm_trigger.webhook_config == sample_webhook_config
@@ -191,17 +189,17 @@ class TestSchemaMigration:
             "bot_token": "old_token",
             "chat_id": "old_chat_id"
         }
-        
+
         old_slack_config = {
             "webhook_url": "https://old.slack.com/webhook",
             "channel": "#old-channel"
         }
-        
+
         # Test migration logic (this would be handled by the migration script)
         # Scenario 1: Only telegram_config exists
         migrated_config_1 = old_telegram_config  # Direct migration
         assert migrated_config_1["bot_token"] == "old_token"
-        
+
         # Scenario 2: Multiple configs exist - should be merged
         migrated_config_2 = {
             "telegram": old_telegram_config,
@@ -219,7 +217,7 @@ class TestSchemaMigration:
             "endpoint": "https://api.example.com/webhook",
             "headers": {"Content-Type": "application/json"}
         }
-        
+
         trigger_create = TriggerCreate(
             name="API Webhook",
             description="Custom API webhook trigger",
@@ -230,10 +228,10 @@ class TestSchemaMigration:
             webhook_type=WebhookType.GENERIC,
             webhook_config=webhook_config,
         )
-        
+
         # Mock session behavior
         mock_session.flush = AsyncMock()
-        
+
         # Create a properly initialized ORM object for refresh mock
         created_orm = TriggerORM(
             id=uuid4(),
@@ -255,18 +253,18 @@ class TestSchemaMigration:
             validation_rules=trigger_create.validation_rules,
             webhook_config=trigger_create.webhook_config,
         )
-        
+
         async def mock_refresh(obj):
             # Simulate database refresh by copying values from created_orm
             for attr, value in created_orm.__dict__.items():
                 if not attr.startswith('_'):
                     setattr(obj, attr, value)
-        
+
         mock_session.refresh = AsyncMock(side_effect=mock_refresh)
-        
+
         # Execute
         result = await repository.create_from_model(trigger_create)
-        
+
         # Verify
         assert result.webhook_config == webhook_config
         assert result.webhook_config["api_key"] == "test_api_key"
@@ -277,11 +275,11 @@ class TestSchemaMigration:
     def test_webhook_config_json_serialization(self, sample_webhook_config):
         """Test that webhook_config properly handles JSON serialization."""
         import json
-        
+
         # Test serialization
         serialized = json.dumps(sample_webhook_config)
         assert isinstance(serialized, str)
-        
+
         # Test deserialization
         deserialized = json.loads(serialized)
         assert deserialized == sample_webhook_config
@@ -312,7 +310,7 @@ class TestSchemaMigration:
                 }
             }
         }
-        
+
         trigger_orm = TriggerORM(
             id=uuid4(),
             name="Complex Config Test",
@@ -329,7 +327,7 @@ class TestSchemaMigration:
             webhook_type=WebhookType.GENERIC.value,
             webhook_config=complex_config,
         )
-        
+
         # Verify complex nested structure is preserved
         config = trigger_orm.webhook_config
         assert config["service_a"]["auth"]["type"] == "oauth2"
@@ -349,13 +347,13 @@ class TestSchemaMigration:
                 "extract_fields": ["event_type", "timestamp", "data"]
             }
         }
-        
+
         validation_rules = {
             "signature_header": "X-Webhook-Signature",
             "signature_algorithm": "sha256",
             "required_fields": ["event_type"]
         }
-        
+
         trigger_orm = TriggerORM(
             id=uuid4(),
             name="Validation Test",
@@ -373,7 +371,7 @@ class TestSchemaMigration:
             validation_rules=validation_rules,
             webhook_config=webhook_config,
         )
-        
+
         # Verify both fields coexist and complement each other
         assert trigger_orm.validation_rules["signature_header"] == "X-Webhook-Signature"
         assert trigger_orm.webhook_config["validation"]["required_headers"] == ["X-Webhook-Signature"]
@@ -386,16 +384,16 @@ class TestWebhookConfigIntegration:
     def test_webhook_config_update_data_structure(self):
         """Test that TriggerUpdate properly handles webhook_config updates."""
         from agentarea_triggers.domain.models import TriggerUpdate
-        
+
         updated_config = {
             "new_service": {
                 "api_key": "new_api_key",
                 "endpoint": "https://new-service.com/webhook"
             }
         }
-        
+
         update_data = TriggerUpdate(webhook_config=updated_config)
-        
+
         # Verify the update data structure
         assert update_data.webhook_config == updated_config
         assert update_data.webhook_config["new_service"]["api_key"] == "new_api_key"
@@ -405,25 +403,25 @@ class TestWebhookConfigIntegration:
         """Test that webhook_config is compatible with query operations."""
         # This test demonstrates the data structure compatibility
         # for future query implementations
-        
+
         sample_configs = [
             {"telegram": {"bot_token": "token1", "chat_id": "123"}},
             {"slack": {"webhook_url": "https://slack.com/webhook", "channel": "#general"}},
             {"github": {"secret": "webhook_secret", "events": ["push", "pull_request"]}},
             {"custom": {"api_key": "custom_key", "endpoint": "https://custom.api.com"}}
         ]
-        
+
         # Verify all configs are JSON serializable (required for database storage)
         import json
         for config in sample_configs:
             serialized = json.dumps(config)
             deserialized = json.loads(serialized)
             assert deserialized == config
-        
+
         # Verify configs can be filtered by service type (for future query methods)
         telegram_configs = [config for config in sample_configs if "telegram" in config]
         slack_configs = [config for config in sample_configs if "slack" in config]
-        
+
         assert len(telegram_configs) == 1
         assert len(slack_configs) == 1
         assert telegram_configs[0]["telegram"]["bot_token"] == "token1"

@@ -4,9 +4,7 @@ This module demonstrates how to use the LLM condition evaluator
 for natural language trigger conditions.
 """
 
-import asyncio
 import json
-from uuid import uuid4
 
 # Example condition configurations
 
@@ -124,20 +122,20 @@ def main():
     """Print all examples."""
     print("LLM Condition Evaluation Examples")
     print("=" * 60)
-    
+
     print_example("1. Rule-Based Condition", RULE_CONDITION_EXAMPLE)
     print_example("2. LLM Natural Language Condition", LLM_CONDITION_EXAMPLE)
     print_example("3. Combined Condition", COMBINED_CONDITION_EXAMPLE)
-    
+
     print_example("4. File Upload Event Data", FILE_UPLOAD_EVENT)
     print_example("5. Text Message Event Data", TEXT_MESSAGE_EVENT)
-    
+
     print("\n" + "="*60)
     print("Parameter Extraction Instructions")
     print("="*60)
     for key, instruction in PARAMETER_EXTRACTION_EXAMPLES.items():
         print(f"{key}: {instruction}")
-    
+
     print("\n" + "="*60)
     print("Usage Examples")
     print("="*60)

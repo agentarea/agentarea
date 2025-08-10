@@ -17,4 +17,4 @@ class SecretManagerSettings(BaseAppSettings):
 @lru_cache
 def get_secret_manager_settings() -> SecretManagerSettings:
     """Get secret manager settings."""
-    return SecretManagerSettings() 
+    return SecretManagerSettings()

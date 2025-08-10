@@ -1,24 +1,23 @@
 """Tests for trigger domain models."""
 
 from datetime import datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-
-from agentarea_triggers.domain.models import (
-    Trigger,
-    CronTrigger,
-    WebhookTrigger,
-    TriggerExecution,
-    TriggerCreate,
-    TriggerUpdate,
-)
 from agentarea_triggers.domain.enums import (
-    TriggerType,
     ExecutionStatus,
+    TriggerType,
     WebhookType,
 )
+from agentarea_triggers.domain.models import (
+    CronTrigger,
+    Trigger,
+    TriggerCreate,
+    TriggerExecution,
+    TriggerUpdate,
+    WebhookTrigger,
+)
+from pydantic import ValidationError
 
 
 class TestTrigger:
@@ -178,7 +177,7 @@ class TestTrigger:
         # Record success
         original_updated_at = trigger.updated_at
         trigger.record_execution_success()
-        
+
         assert trigger.consecutive_failures == 0
         assert trigger.last_execution_at is not None
         assert trigger.updated_at > original_updated_at
@@ -186,7 +185,7 @@ class TestTrigger:
         # Record failure
         original_updated_at = trigger.updated_at
         trigger.record_execution_failure()
-        
+
         assert trigger.consecutive_failures == 1
         assert trigger.updated_at > original_updated_at
 

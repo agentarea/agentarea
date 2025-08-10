@@ -1,6 +1,5 @@
 """Utility functions for raising workspace-related exceptions."""
 
-from typing import Optional
 from uuid import UUID
 
 from ..auth.context_manager import ContextManager
@@ -10,7 +9,7 @@ from .workspace import WorkspaceAccessDenied, WorkspaceResourceNotFound
 def raise_workspace_access_denied(
     resource_type: str,
     resource_id: str,
-    resource_workspace_id: Optional[str] = None
+    resource_workspace_id: str | None = None
 ) -> None:
     """Raise WorkspaceAccessDenied exception with current context.
     
@@ -25,7 +24,7 @@ def raise_workspace_access_denied(
     context = ContextManager.get_context()
     current_workspace_id = context.workspace_id if context else "unknown"
     user_id = context.user_id if context else None
-    
+
     raise WorkspaceAccessDenied(
         resource_type=resource_type,
         resource_id=resource_id,
@@ -51,7 +50,7 @@ def raise_workspace_resource_not_found(
     context = ContextManager.get_context()
     workspace_id = context.workspace_id if context else "unknown"
     user_id = context.user_id if context else None
-    
+
     raise WorkspaceResourceNotFound(
         resource_type=resource_type,
         resource_id=resource_id,
@@ -78,7 +77,7 @@ def check_workspace_access(
     context = ContextManager.get_context()
     if not context:
         raise_workspace_access_denied(resource_type, resource_id)
-    
+
     if resource_workspace_id != context.workspace_id:
         raise_workspace_access_denied(
             resource_type=resource_type,
@@ -88,7 +87,7 @@ def check_workspace_access(
 
 
 def ensure_workspace_resource_exists(
-    resource: Optional[object],
+    resource: object | None,
     resource_type: str,
     resource_id: str
 ) -> object:
@@ -107,7 +106,7 @@ def ensure_workspace_resource_exists(
     """
     if resource is None:
         raise_workspace_resource_not_found(resource_type, resource_id)
-    
+
     return resource
 
 

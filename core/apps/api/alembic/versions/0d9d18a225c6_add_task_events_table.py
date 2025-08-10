@@ -5,24 +5,22 @@ Revises: 001_initial_schema
 Create Date: 2025-08-06 01:11:15.625087
 
 """
-from typing import Sequence, Union
 import uuid
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 # revision identifiers, used by Alembic.
 revision: str = '0d9d18a225c6'
-down_revision: Union[str, None] = '001_initial_schema'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = '001_initial_schema'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     """Create task_events table for event sourcing."""
-    
     # ========================================
     # TASK_EVENTS TABLE
     # ========================================
@@ -33,13 +31,13 @@ def upgrade() -> None:
         sa.Column('event_type', sa.String(50), nullable=False),
         sa.Column('timestamp', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column('data', postgresql.JSONB, nullable=False),
-        sa.Column('metadata', postgresql.JSONB, nullable=False, server_default='{}'),
-        
+        sa.Column('event_metadata', postgresql.JSONB, nullable=False, server_default='{}'),
+
         # Workspace and audit fields for consistency
         sa.Column('workspace_id', sa.String(255), nullable=False, server_default='default'),
         sa.Column('created_by', sa.String(255), nullable=False, server_default='system'),
     )
-    
+
     # Create indexes for performance
     op.create_index('idx_task_events_task_id_timestamp', 'task_events', ['task_id', 'timestamp'])
     op.create_index('idx_task_events_event_type', 'task_events', ['event_type'])

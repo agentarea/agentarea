@@ -17,8 +17,11 @@ from ..interfaces import ActivityDependencies
 # Import trigger logging utilities
 try:
     from agentarea_triggers.logging_utils import (
-        TriggerLogger, TriggerExecutionError, DependencyUnavailableError,
-        set_correlation_id, generate_correlation_id
+        DependencyUnavailableError,
+        TriggerExecutionError,
+        TriggerLogger,
+        generate_correlation_id,
+        set_correlation_id,
     )
     logger = TriggerLogger(__name__)
 except ImportError:
@@ -60,9 +63,12 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 trigger_id=trigger_id,
                 execution_source=execution_data.get('source', 'unknown')
             )
-            
+
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import TriggerExecutionRepository, TriggerRepository
+            from agentarea_triggers.infrastructure.repository import (
+                TriggerExecutionRepository,
+                TriggerRepository,
+            )
             from agentarea_triggers.logging_utils import TriggerNotFoundError
             from agentarea_triggers.trigger_service import TriggerService
 
@@ -134,7 +140,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                             trigger_id=trigger_id,
                             conditions_count=len(trigger.conditions)
                         )
-                        
+
                         # Use LLM service for condition evaluation if available
                         if trigger_service.llm_condition_evaluator:
                             # TODO: Implement LLM-based condition evaluation
@@ -172,8 +178,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 task_id = None
                 try:
                     # Import TaskService and create task
-                    from agentarea_tasks.task_service import TaskService
                     from agentarea_tasks.infrastructure.repository import TaskRepository
+                    from agentarea_tasks.task_service import TaskService
 
                     # Create task repository and service
                     task_repository = TaskRepository(session)
@@ -200,7 +206,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                     task_id = task.id
                     logger.info(f"Created task {task_id} from trigger {trigger_id}")
-                        
+
                 except Exception as task_error:
                     logger.error(f"Failed to create task for trigger {trigger_id}: {task_error}")
                     # Don't fail the entire trigger execution if task creation fails
@@ -229,8 +235,15 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
         except Exception as e:
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import TriggerExecutionRepository, TriggerRepository
-            from agentarea_triggers.trigger_service import TriggerNotFoundError, TriggerService, TriggerValidationError
+            from agentarea_triggers.infrastructure.repository import (
+                TriggerExecutionRepository,
+                TriggerRepository,
+            )
+            from agentarea_triggers.trigger_service import (
+                TriggerNotFoundError,
+                TriggerService,
+                TriggerValidationError,
+            )
 
             if isinstance(e, (TriggerNotFoundError, TriggerValidationError)):
                 raise
@@ -282,7 +295,10 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         """
         try:
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.infrastructure.repository import TriggerExecutionRepository, TriggerRepository
+            from agentarea_triggers.infrastructure.repository import (
+                TriggerExecutionRepository,
+                TriggerRepository,
+            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
@@ -342,7 +358,10 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             True if conditions are met, False otherwise
         """
         try:
-            from agentarea_triggers.infrastructure.repository import TriggerExecutionRepository, TriggerRepository
+            from agentarea_triggers.infrastructure.repository import (
+                TriggerExecutionRepository,
+                TriggerRepository,
+            )
             from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
@@ -386,10 +405,13 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             Dictionary containing task creation result
         """
         try:
-            from agentarea_triggers.infrastructure.repository import TriggerExecutionRepository, TriggerRepository
-            from agentarea_triggers.trigger_service import TriggerService
-            from agentarea_tasks.task_service import TaskService
             from agentarea_tasks.infrastructure.repository import TaskRepository
+            from agentarea_tasks.task_service import TaskService
+            from agentarea_triggers.infrastructure.repository import (
+                TriggerExecutionRepository,
+                TriggerRepository,
+            )
+            from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
             async with database.async_session_factory() as session:

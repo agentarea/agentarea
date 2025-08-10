@@ -14,23 +14,9 @@ Key endpoints:
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Any
 from uuid import UUID, uuid4
 
-from agentarea_common.utils.types import (
-    AgentCard,
-    AgentCapabilities,
-    AuthenticatedExtendedCardResponse as AgentAuthenticatedExtendedCardResponse,
-    CancelTaskResponse,
-    GetTaskResponse,
-    JSONRPCRequest,
-    JSONRPCResponse,
-    Message,
-    MessageSendParams,
-    MessageSendResponse as SendMessageResponse,
-    MessageStreamResponse as SendStreamingMessageResponse,
-    TextPart,
-)
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_api.api.deps.services import get_agent_service, get_task_service
 from agentarea_api.api.v1.a2a_auth import (
@@ -38,8 +24,25 @@ from agentarea_api.api.v1.a2a_auth import (
     allow_public_access,
     require_a2a_execute_auth,
 )
-from agentarea_tasks.task_service import TaskService
+from agentarea_common.utils.types import (
+    AgentCapabilities,
+    AgentCard,
+    CancelTaskResponse,
+    GetTaskResponse,
+    JSONRPCRequest,
+    JSONRPCResponse,
+    Message,
+    MessageSendParams,
+    TextPart,
+)
+from agentarea_common.utils.types import (
+    AuthenticatedExtendedCardResponse as AgentAuthenticatedExtendedCardResponse,
+)
+from agentarea_common.utils.types import (
+    MessageSendResponse as SendMessageResponse,
+)
 from agentarea_tasks.domain.models import SimpleTask
+from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -67,7 +70,7 @@ def convert_a2a_message_to_task(message_params: MessageSendParams, agent_id: UUI
         task_parameters={}
     )
 
-def convert_task_to_a2a_response(task: SimpleTask) -> Dict[str, Any]:
+def convert_task_to_a2a_response(task: SimpleTask) -> dict[str, Any]:
     return {
         "id": str(task.id),
         "status": task.status,
@@ -96,7 +99,7 @@ async def handle_task_send(request_id, params, task_service, agent_id):
         return SendMessageResponse(
             jsonrpc="2.0",
             id=request_id,
-            error={"code": -32603, "message": f"Task submission failed: {str(e)}"}
+            error={"code": -32603, "message": f"Task submission failed: {e!s}"}
         )
 
 async def handle_message_send(request_id, params, task_service, agent_id):
@@ -121,7 +124,7 @@ async def handle_message_send(request_id, params, task_service, agent_id):
         return SendMessageResponse(
             jsonrpc="2.0",
             id=request_id,
-            error={"code": -32603, "message": f"Message send failed: {str(e)}"}
+            error={"code": -32603, "message": f"Message send failed: {e!s}"}
         )
 
 async def handle_message_stream_sse(request, request_id, params, task_service, agent_id):
@@ -142,7 +145,7 @@ async def handle_message_stream_sse(request, request_id, params, task_service, a
         async def event_stream():
             yield f"data: {json.dumps({'event': 'task_created', 'task_id': str(created_task.id)})}\n\n"
             yield f"data: {json.dumps({'event': 'task_completed', 'task_id': str(created_task.id), 'result': created_task.result})}\n\n"
-            yield f"data: [DONE]\n\n"
+            yield "data: [DONE]\n\n"
         return StreamingResponse(
             event_stream(),
             media_type="text/event-stream",
@@ -178,7 +181,7 @@ async def handle_task_get(request_id, params, task_service):
         return GetTaskResponse(
             jsonrpc="2.0",
             id=request_id,
-            error={"code": -32603, "message": f"Task get failed: {str(e)}"}
+            error={"code": -32603, "message": f"Task get failed: {e!s}"}
         )
 
 async def handle_task_cancel(request_id, params, task_service):
@@ -195,7 +198,7 @@ async def handle_task_cancel(request_id, params, task_service):
         return CancelTaskResponse(
             jsonrpc="2.0",
             id=request_id,
-            error={"code": -32603, "message": f"Task cancel failed: {str(e)}"}
+            error={"code": -32603, "message": f"Task cancel failed: {e!s}"}
         )
 
 async def handle_agent_card(request_id, params, agent_service, agent_id, base_url):
@@ -239,7 +242,7 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
         return AgentAuthenticatedExtendedCardResponse(
             jsonrpc="2.0",
             id=request_id,
-            error={"code": -32603, "message": f"Agent card failed: {str(e)}"}
+            error={"code": -32603, "message": f"Agent card failed: {e!s}"}
         )
 
 async def _dispatch_rpc_method(
@@ -306,7 +309,7 @@ async def handle_agent_jsonrpc(
         return JSONRPCResponse(
             jsonrpc="2.0",
             id=locals().get("request_id", None),
-            error={"code": -32603, "message": f"Internal error: {str(e)}"},
+            error={"code": -32603, "message": f"Internal error: {e!s}"},
         )
 
 @router.get("/well-known")
@@ -344,4 +347,4 @@ async def get_agent_well_known(
         return agent_card
     except Exception as e:
         logger.error(f"Error in get_agent_well_known: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get agent info: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get agent info: {e!s}")

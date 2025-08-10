@@ -19,25 +19,25 @@ class WorkflowConfig(Protocol):
 
 class WorkflowFactory:
     """Factory for creating workflow orchestrators."""
-    
+
     def __init__(self, config: WorkflowConfig):
         """Initialize factory with required configuration - no defaults allowed."""
         if not config:
             raise ValueError("WorkflowConfig must be provided - no defaults allowed")
-        
+
         self._config = config
         self._orchestrator_cache: dict[str, WorkflowOrchestratorInterface] = {}
-    
+
     def create_temporal_orchestrator(self) -> WorkflowOrchestratorInterface:
         """Create Temporal workflow orchestrator using injected config."""
         # Use configuration from injected config - no defaults
         address = self._config.temporal_address
-        
+
         # Use cached orchestrator if available
         cache_key = f"temporal_{address}"
         if cache_key in self._orchestrator_cache:
             return self._orchestrator_cache[cache_key]
-        
+
         # Create new orchestrator with injected config
         orchestrator = TemporalWorkflowOrchestrator(
             temporal_address=address,
@@ -46,18 +46,18 @@ class WorkflowFactory:
             max_concurrent_workflows=self._config.max_concurrent_workflows,
         )
         self._orchestrator_cache[cache_key] = orchestrator
-        
+
         logger.info(f"Created Temporal orchestrator with injected config: {address}")
         return orchestrator
-    
+
     def create_default_orchestrator(self) -> WorkflowOrchestratorInterface:
         """Create default workflow orchestrator (Temporal)."""
         return self.create_temporal_orchestrator()
-    
+
     def clear_cache(self) -> None:
         """Clear orchestrator cache."""
         self._orchestrator_cache.clear()
         logger.info("Workflow orchestrator cache cleared")
 
 
-# Global factory functions removed - use di_container.py for proper DI 
+# Global factory functions removed - use di_container.py for proper DI

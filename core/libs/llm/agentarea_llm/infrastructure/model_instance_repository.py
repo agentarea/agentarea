@@ -1,9 +1,8 @@
-from typing import List
 from uuid import UUID
 
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import and_, select
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -19,7 +18,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         instance = await self.get_by_id(id)
         if not instance:
             return None
-        
+
         # Reload with relationships
         result = await self.session.execute(
             select(ModelInstance)
@@ -40,7 +39,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False,
-    ) -> List[ModelInstance]:
+    ) -> list[ModelInstance]:
         """List model instances with filtering and relationships."""
         filters = {}
         if provider_config_id is not None:
@@ -58,7 +57,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             offset=offset,
             **filters
         )
-        
+
         # Load relationships for each instance
         instance_ids = [instance.id for instance in instances]
         if instance_ids:
@@ -72,10 +71,10 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             )
             instances_with_relations = result.scalars().all()
             return list(instances_with_relations)
-        
+
         return instances
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[ModelInstance]:
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[ModelInstance]:
         """Get model instances by workspace ID with pagination.
         
         Note: This method is deprecated. Use list_instances() instead which automatically
@@ -84,7 +83,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         # For backward compatibility, but this should be replaced with list_instances()
         if workspace_id != self.user_context.workspace_id:
             return []  # Don't allow cross-workspace access
-        
+
         return await self.list_instances(limit=limit, offset=offset)
 
     async def create_instance(self, entity: ModelInstance) -> ModelInstance:
@@ -104,12 +103,12 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             'created_at': entity.created_at,
             'updated_at': entity.updated_at,
         }
-        
+
         # Remove None values and system fields that will be auto-populated
         instance_data = {k: v for k, v in instance_data.items() if v is not None}
         instance_data.pop('created_at', None)
         instance_data.pop('updated_at', None)
-        
+
         created_instance = await self.create(**instance_data)
         return await self.get_with_relations(created_instance.id) or created_instance
 
@@ -127,9 +126,9 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             'is_active': entity.is_active,
             'is_public': entity.is_public,
         }
-        
+
         # Remove None values
         instance_data = {k: v for k, v in instance_data.items() if v is not None}
-        
+
         updated_instance = await self.update(entity.id, **instance_data)
-        return updated_instance or entity 
+        return updated_instance or entity

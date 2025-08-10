@@ -1,17 +1,22 @@
 """Unit tests for TriggerService."""
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from agentarea_triggers.domain.enums import TriggerType, ExecutionStatus, WebhookType
+import pytest
+from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
 from agentarea_triggers.domain.models import (
-    Trigger, CronTrigger, WebhookTrigger, TriggerExecution,
-    TriggerCreate, TriggerUpdate
+    CronTrigger,
+    TriggerCreate,
+    TriggerExecution,
+    TriggerUpdate,
+    WebhookTrigger,
 )
 from agentarea_triggers.trigger_service import (
-    TriggerService, TriggerValidationError, TriggerNotFoundError
+    TriggerNotFoundError,
+    TriggerService,
+    TriggerValidationError,
 )
 
 
@@ -67,7 +72,7 @@ class TestTriggerService:
         """Create TriggerService instance with mocked dependencies."""
         # Create a mock temporal schedule manager
         mock_temporal_schedule_manager = AsyncMock()
-        
+
         # Create service
         service = TriggerService(
             trigger_repository=mock_trigger_repository,
@@ -78,10 +83,10 @@ class TestTriggerService:
             llm_condition_evaluator=mock_llm_service,
             temporal_schedule_manager=mock_temporal_schedule_manager
         )
-        
+
         # Make schedule manager accessible for tests
         service._mock_temporal_schedule_manager = mock_temporal_schedule_manager
-        
+
         return service
 
     @pytest.fixture
@@ -575,7 +580,7 @@ class TestTriggerService:
         # Setup mocks - trigger at failure threshold
         sample_cron_trigger.consecutive_failures = 4  # One less than threshold (5)
         sample_cron_trigger.failure_threshold = 5
-        
+
         trigger_id = sample_cron_trigger.id
         execution = TriggerExecution(
             trigger_id=trigger_id,
@@ -583,7 +588,7 @@ class TestTriggerService:
             execution_time_ms=100,
             error_message="Test error"
         )
-        
+
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get.return_value = sample_cron_trigger
         mock_trigger_repository.update_execution_tracking.return_value = True
@@ -856,10 +861,10 @@ class TestTriggerService:
         """Test that creating a cron trigger schedules it."""
         # Setup mocks
         mock_trigger_repository.create_from_data.return_value = sample_cron_trigger
-        
+
         # Execute
         await trigger_service.create_trigger(sample_cron_trigger_data)
-        
+
         # Verify schedule was created
         trigger_service._mock_temporal_schedule_manager.create_cron_schedule.assert_called_once()
 
@@ -874,13 +879,13 @@ class TestTriggerService:
         # Setup mocks
         mock_trigger_repository.get.return_value = sample_cron_trigger
         mock_trigger_repository.update_by_id.return_value = sample_cron_trigger
-        
+
         # Create update with new cron expression
         trigger_update = TriggerUpdate(cron_expression="0 10 * * *")
-        
+
         # Execute
         await trigger_service.update_trigger(sample_cron_trigger.id, trigger_update)
-        
+
         # Verify schedule was updated
         trigger_service._mock_temporal_schedule_manager.update_cron_schedule.assert_called_once()
 
@@ -895,10 +900,10 @@ class TestTriggerService:
         # Setup mocks
         mock_trigger_repository.get.return_value = sample_cron_trigger
         mock_trigger_repository.delete.return_value = True
-        
+
         # Execute
         result = await trigger_service.delete_trigger(sample_cron_trigger.id)
-        
+
         # Verify
         assert result is True
         trigger_service._mock_temporal_schedule_manager.delete_cron_schedule.assert_called_once_with(sample_cron_trigger.id)
@@ -914,10 +919,10 @@ class TestTriggerService:
         # Setup mocks
         mock_trigger_repository.enable_trigger.return_value = True
         mock_trigger_repository.get.return_value = sample_cron_trigger
-        
+
         # Execute
         result = await trigger_service.enable_trigger(sample_cron_trigger.id)
-        
+
         # Verify
         assert result is True
         trigger_service._mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once_with(sample_cron_trigger.id)
@@ -933,10 +938,10 @@ class TestTriggerService:
         # Setup mocks
         mock_trigger_repository.disable_trigger.return_value = True
         mock_trigger_repository.get.return_value = sample_cron_trigger
-        
+
         # Execute
         result = await trigger_service.disable_trigger(sample_cron_trigger.id)
-        
+
         # Verify
         assert result is True
         trigger_service._mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once_with(sample_cron_trigger.id)
@@ -959,11 +964,11 @@ class TestTriggerService:
             trigger_id=sample_cron_trigger.id,
             status=ExecutionStatus.SUCCESS
         )
-        
+
         # Execute
         trigger_data = {"source": "test"}
         result = await trigger_service.execute_trigger(sample_cron_trigger.id, trigger_data)
-        
+
         # Verify
         assert result.status == ExecutionStatus.SUCCESS
         mock_task_service.create_task_from_params.assert_called_once()
@@ -989,11 +994,11 @@ class TestTriggerService:
             status=ExecutionStatus.FAILED,
             error_message="Trigger is inactive"
         )
-        
+
         # Execute
         trigger_data = {"source": "test"}
         result = await trigger_service.execute_trigger(sample_cron_trigger.id, trigger_data)
-        
+
         # Verify
         assert result.status == ExecutionStatus.FAILED
         assert "inactive" in result.error_message.lower()
@@ -1017,11 +1022,11 @@ class TestTriggerService:
             status=ExecutionStatus.FAILED,
             error_message="Task creation failed"
         )
-        
+
         # Execute
         trigger_data = {"source": "test"}
         result = await trigger_service.execute_trigger(sample_cron_trigger.id, trigger_data)
-        
+
         # Verify
         assert result.status == ExecutionStatus.FAILED
         assert "failed" in result.error_message.lower()
@@ -1304,7 +1309,7 @@ class TestTriggerServiceMonitoring:
         assert correlations[0]['has_task_correlation'] is True
         assert correlations[1]['has_task_correlation'] is False
         assert all(corr['has_workflow_correlation'] is True for corr in correlations)
-        
+
         mock_trigger_execution_repository.get_executions_with_task_correlation.assert_called_once_with(
             sample_trigger_id, 10, 0
         )

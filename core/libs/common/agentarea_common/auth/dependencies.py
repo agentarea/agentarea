@@ -27,10 +27,10 @@ async def get_user_context(request: Request) -> UserContext:
     """
     jwt_handler = get_jwt_handler()
     user_context = await jwt_handler.extract_user_context(request)
-    
+
     # Set context in ContextManager for use throughout request
     ContextManager.set_context(user_context)
-    
+
     return user_context
 
 

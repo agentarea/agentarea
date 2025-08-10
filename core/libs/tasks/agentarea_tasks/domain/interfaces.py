@@ -5,7 +5,7 @@ from implementation details.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from .models import SimpleTask
@@ -18,7 +18,7 @@ class BaseTaskManager(ABC):
     must implement, regardless of the underlying execution engine
     (Temporal, Celery, etc.).
     """
-    
+
     @abstractmethod
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
         """Submit a task for execution.
@@ -30,9 +30,9 @@ class BaseTaskManager(ABC):
             The submitted task with updated status
         """
         pass
-    
+
     @abstractmethod
-    async def get_task(self, task_id: UUID) -> Optional[SimpleTask]:
+    async def get_task(self, task_id: UUID) -> SimpleTask | None:
         """Get a task by its ID.
         
         Args:
@@ -42,7 +42,7 @@ class BaseTaskManager(ABC):
             The task if found, None otherwise
         """
         pass
-    
+
     @abstractmethod
     async def cancel_task(self, task_id: UUID) -> bool:
         """Cancel a task.
@@ -54,13 +54,13 @@ class BaseTaskManager(ABC):
             True if the task was successfully cancelled, False otherwise
         """
         pass
-    
+
     @abstractmethod
     async def list_tasks(
-        self, 
-        agent_id: Optional[UUID] = None,
-        user_id: Optional[str] = None,
-        status: Optional[str] = None,
+        self,
+        agent_id: UUID | None = None,
+        user_id: str | None = None,
+        status: str | None = None,
         limit: int = 100,
         offset: int = 0
     ) -> list[SimpleTask]:
@@ -77,9 +77,9 @@ class BaseTaskManager(ABC):
             List of tasks matching the criteria
         """
         pass
-    
+
     @abstractmethod
-    async def get_task_status(self, task_id: UUID) -> Optional[str]:
+    async def get_task_status(self, task_id: UUID) -> str | None:
         """Get the status of a task.
         
         Args:
@@ -89,9 +89,9 @@ class BaseTaskManager(ABC):
             The task status if found, None otherwise
         """
         pass
-    
+
     @abstractmethod
-    async def get_task_result(self, task_id: UUID) -> Optional[Any]:
+    async def get_task_result(self, task_id: UUID) -> Any | None:
         """Get the result of a task.
         
         Args:
@@ -100,4 +100,4 @@ class BaseTaskManager(ABC):
         Returns:
             The task result if found, None otherwise
         """
-        pass 
+        pass

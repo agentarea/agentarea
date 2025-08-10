@@ -9,7 +9,7 @@ Tests the complete workflow with a real MCP server:
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 import pytest
@@ -20,11 +20,11 @@ class MCPRealIntegrationTest:
 
     def __init__(self, api_base: str = "http://localhost:8000"):
         self.api_base = api_base
-        self.client: Optional[httpx.AsyncClient] = None
-        self.agent_id: Optional[str] = None
-        self.mcp_server_id: Optional[str] = None
-        self.mcp_instance_id: Optional[str] = None
-        self.task_id: Optional[str] = None
+        self.client: httpx.AsyncClient | None = None
+        self.agent_id: str | None = None
+        self.mcp_server_id: str | None = None
+        self.mcp_instance_id: str | None = None
+        self.task_id: str | None = None
 
     async def setup(self):
         """Setup test client."""
@@ -74,7 +74,7 @@ class MCPRealIntegrationTest:
         server_name: str,
         dockerfile_content: str,
         mcp_endpoint_url: str,
-        tools_metadata: List[Dict[str, Any]],
+        tools_metadata: list[dict[str, Any]],
     ) -> bool:
         """Deploy a real MCP server with Dockerfile."""
         if not self.client:
@@ -133,7 +133,7 @@ class MCPRealIntegrationTest:
 
         return True
 
-    async def execute_mcp_task(self, task_description: str, expected_tools: List[str]) -> bool:
+    async def execute_mcp_task(self, task_description: str, expected_tools: list[str]) -> bool:
         """Execute a task that should use MCP tools."""
         if not self.client:
             print("❌ Client not initialized")
@@ -195,7 +195,7 @@ class MCPRealIntegrationTest:
 
         return True
 
-    async def _get_or_create_model(self) -> Optional[str]:
+    async def _get_or_create_model(self) -> str | None:
         """Get existing or create new Ollama model using new 4-entity architecture."""
         if not self.client:
             print("❌ Client not initialized")
@@ -226,7 +226,7 @@ class MCPRealIntegrationTest:
             f"{self.api_base}/v1/provider-configs/",
             params={"provider_spec_id": provider_spec_id}
         )
-        
+
         provider_config_id = None
         if response.status_code == 200:
             configs = response.json()
@@ -255,7 +255,7 @@ class MCPRealIntegrationTest:
 
         return provider_config_id
 
-    async def _create_model_instance(self, provider_config_id: str) -> Optional[str]:
+    async def _create_model_instance(self, provider_config_id: str) -> str | None:
         """Create model instance using new 4-entity architecture."""
         if not self.client:
             print("❌ Client not initialized")
@@ -271,7 +271,7 @@ class MCPRealIntegrationTest:
 
         provider_specs = response.json()
         model_spec = None
-        
+
         # Look for any available model in Ollama provider
         for spec in provider_specs:
             if spec.get("provider_key") == "ollama":

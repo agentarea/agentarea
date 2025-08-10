@@ -1,9 +1,8 @@
-from typing import Any, List
-
-from sqlalchemy import JSON, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from typing import Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
+from sqlalchemy import JSON, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
@@ -37,7 +36,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         if created_by is not None:
             self.created_by = created_by
 
-    def get_configured_env_vars(self) -> List[str]:
+    def get_configured_env_vars(self) -> list[str]:
         """Get list of environment variable names configured for this instance.
 
         Returns:
@@ -48,7 +47,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
             return [str(var) for var in env_vars]
         return []
 
-    def get_available_tools(self) -> List[dict[str, Any]]:
+    def get_available_tools(self) -> list[dict[str, Any]]:
         """Get list of available tools for this MCP server instance.
 
         Returns:
@@ -56,7 +55,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         """
         return self.json_spec.get("available_tools", [])
 
-    def set_available_tools(self, tools: List[dict[str, Any]]) -> None:
+    def set_available_tools(self, tools: list[dict[str, Any]]) -> None:
         """Set the available tools for this MCP server instance.
 
         Args:

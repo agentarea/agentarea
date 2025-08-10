@@ -2,9 +2,12 @@ import concurrent.futures
 import uuid
 from datetime import timedelta
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
+
+# Import event system components
+from agentarea_common.events.base_events import DomainEvent
+from agentarea_common.events.broker import EventBroker
 from agentarea_execution.models import AgentExecutionRequest
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
@@ -14,28 +17,24 @@ from temporalio.client import WorkflowExecutionStatus
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-# Import event system components
-from agentarea_common.events.base_events import DomainEvent
-from agentarea_common.events.broker import EventBroker
-
 
 class MockEventBroker(EventBroker):
     """Mock event broker that captures published events for testing."""
-    
+
     def __init__(self):
         self.published_events: list[DomainEvent] = []
         self.publish_calls = 0
-    
+
     async def publish(self, event: DomainEvent) -> None:
         """Capture published events."""
         self.published_events.append(event)
         self.publish_calls += 1
         print(f"📢 Event published: {event.event_type} - {event.data}")
-    
+
     def get_events_by_type(self, event_type: str) -> list[DomainEvent]:
         """Get all events of a specific type."""
         return [event for event in self.published_events if event.event_type == event_type]
-    
+
     def clear_events(self):
         """Clear captured events."""
         self.published_events.clear()
@@ -60,7 +59,7 @@ class TestAgentExecutionWorkflowIntegration:
             ) -> dict[str, Any]:
                 return {
                     "id": str(agent_id),
-                    "name": "Test Agent", 
+                    "name": "Test Agent",
                     "model_id": "gpt-4",
                     "description": "Test agent",
                     "instruction": "You are a helpful assistant.",
@@ -89,7 +88,7 @@ class TestAgentExecutionWorkflowIntegration:
 
             # Track LLM call count to simulate iterative behavior
             llm_call_count = 0
-            
+
             @activity.defn(name="call_llm_activity")
             async def mock_call_llm_activity(
                 messages: list[dict[str, Any]],
@@ -99,7 +98,7 @@ class TestAgentExecutionWorkflowIntegration:
             ) -> dict[str, Any]:
                 nonlocal llm_call_count
                 llm_call_count += 1
-                
+
                 # First call - LLM decides to use calculator
                 if llm_call_count == 1:
                     return {
@@ -123,7 +122,7 @@ class TestAgentExecutionWorkflowIntegration:
                             "total_tokens": 45,
                         }
                     }
-                
+
                 # Second call - LLM provides final answer after tool execution
                 elif llm_call_count == 2:
                     return {
@@ -138,7 +137,7 @@ class TestAgentExecutionWorkflowIntegration:
                             "total_tokens": 40,
                         }
                     }
-                
+
                 # Fallback
                 return {
                     "content": "I have completed the task.",
@@ -193,7 +192,7 @@ class TestAgentExecutionWorkflowIntegration:
                 messages: list[dict[str, Any]],
             ) -> dict[str, Any]:
                 return {
-                    "plan": "Execute the task step by step", 
+                    "plan": "Execute the task step by step",
                     "estimated_steps": 3,
                     "key_tools": [],
                     "risk_factors": ["None"]
@@ -218,7 +217,7 @@ class TestAgentExecutionWorkflowIntegration:
                             "iteration": current_iteration,
                         }
                     }
-                    
+
                 return {
                     "goal_achieved": False,
                     "final_response": None,
@@ -226,7 +225,7 @@ class TestAgentExecutionWorkflowIntegration:
                     "progress_indicators": {}
                 }
 
-            @activity.defn(name="publish_workflow_events_activity") 
+            @activity.defn(name="publish_workflow_events_activity")
             async def mock_publish_workflow_events_activity(events_json: list[str]) -> bool:
                 """Mock activity that just returns True for existing tests."""
                 return True
@@ -281,7 +280,7 @@ class TestAgentExecutionWorkflowIntegration:
                     assert result.task_id == sample_request.task_id
                     assert result.final_response is not None
                     assert "4" in result.final_response  # Should contain the calculation result
-                    
+
                     print(f"✅ Test passed! Tool calls made: {result.total_tool_calls}")
                     print(f"✅ Conversation history: {len(result.conversation_history)} messages")
                     print(f"✅ Final response: {result.final_response}")
@@ -303,7 +302,7 @@ class TestAgentExecutionWorkflowIntegration:
             ) -> dict[str, Any]:
                 return {
                     "id": str(agent_id),
-                    "name": "Test Agent", 
+                    "name": "Test Agent",
                     "model_id": "gpt-4",
                     "description": "Test agent",
                     "instruction": "You are a helpful assistant.",
@@ -364,7 +363,7 @@ class TestAgentExecutionWorkflowIntegration:
                 messages: list[dict[str, Any]],
             ) -> dict[str, Any]:
                 return {
-                    "plan": "Execute the task step by step", 
+                    "plan": "Execute the task step by step",
                     "estimated_steps": 3,
                     "key_tools": [],
                     "risk_factors": ["None"]
@@ -396,7 +395,7 @@ class TestAgentExecutionWorkflowIntegration:
                     "progress_indicators": {}
                 }
 
-            @activity.defn(name="publish_workflow_events_activity") 
+            @activity.defn(name="publish_workflow_events_activity")
             async def mock_publish_workflow_events_activity(events_json: list[str]) -> bool:
                 """Mock activity that just returns True for existing tests."""
                 return True
@@ -444,7 +443,7 @@ class TestAgentExecutionWorkflowIntegration:
                     assert result.agent_id == sample_request.agent_id
                     assert result.task_id == sample_request.task_id
                     assert result.final_response is not None
-                    
+
                     print(f"✅ Test passed! No tool calls made: {result.total_tool_calls}")
                     print(f"✅ Completed in {result.reasoning_iterations_used} iteration(s)")
                     print(f"✅ Final response: {result.final_response}")
@@ -456,7 +455,7 @@ class TestAgentExecutionWorkflowIntegration:
         async with env:
             task_queue_name = str(uuid.uuid4())
             workflow_id = str(uuid.uuid4())
-            
+
             # Create a mock event broker to capture events
             mock_event_broker = MockEventBroker()
 
@@ -554,16 +553,16 @@ class TestAgentExecutionWorkflowIntegration:
                 """Mock activity that publishes events to our mock event broker."""
                 if not events_json:
                     return True
-                    
+
                 import json
                 from datetime import datetime
                 from uuid import uuid4
-                
+
                 print(f"📢 Publishing {len(events_json)} events to mock broker")
-                
+
                 for event_json in events_json:
                     event_data = json.loads(event_json)
-                    
+
                     # Create DomainEvent and publish to our mock broker
                     domain_event = DomainEvent(
                         event_id=uuid4(),
@@ -571,9 +570,9 @@ class TestAgentExecutionWorkflowIntegration:
                         timestamp=datetime.fromisoformat(event_data["timestamp"].replace("Z", "+00:00")),
                         data=event_data["data"]
                     )
-                    
+
                     await mock_event_broker.publish(domain_event)
-                
+
                 return True
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=100) as activity_executor:
@@ -621,30 +620,30 @@ class TestAgentExecutionWorkflowIntegration:
                     assert result.final_response is not None
 
                     # ✅ EVENT PUBLISHING ASSERTIONS
-                    print(f"\n📊 EVENT VERIFICATION SUMMARY:")
+                    print("\n📊 EVENT VERIFICATION SUMMARY:")
                     print(f"Total events published: {mock_event_broker.publish_calls}")
                     print(f"Events captured: {len(mock_event_broker.published_events)}")
-                    
+
                     # Verify events were actually published
                     assert mock_event_broker.publish_calls > 0, "No events were published!"
                     assert len(mock_event_broker.published_events) > 0, "No events were captured!"
-                    
+
                     # ✅ VERIFY SPECIFIC EVENT TYPES
                     workflow_started_events = mock_event_broker.get_events_by_type("workflow.WorkflowStarted")
                     workflow_finished_events = mock_event_broker.get_events_by_type("workflow.WorkflowFinished")
                     iteration_completed_events = mock_event_broker.get_events_by_type("workflow.IterationCompleted")
-                    
+
                     print(f"Workflow started events: {len(workflow_started_events)}")
                     print(f"Workflow finished events: {len(workflow_finished_events)}")
                     print(f"Iteration completed events: {len(iteration_completed_events)}")
-                    
+
                     # Should have at least workflow start event
                     assert len(workflow_started_events) >= 1, "Missing WorkflowStarted event!"
-                    
+
                     # Check if we have finished events (may not always be present if workflow is cut short)
                     if len(workflow_finished_events) == 0:
                         print("⚠️ No WorkflowFinished events found - this might be expected for quick completion")
-                    
+
                     # ✅ VERIFY EVENT STRUCTURE FOR SSE COMPATIBILITY
                     for event in mock_event_broker.published_events:
                         # Each event should have required fields for SSE streaming
@@ -652,26 +651,26 @@ class TestAgentExecutionWorkflowIntegration:
                         assert hasattr(event, 'event_type'), "Event missing event_type"
                         assert hasattr(event, 'timestamp'), "Event missing timestamp"
                         assert hasattr(event, 'data'), "Event missing data"
-                        
+
                         # Data should contain task identifiers (nested in data.data)
                         event_data = event.data.get('data', {})
-                        assert 'task_id' in event_data, f"Event data missing task_id: {event_data}" 
+                        assert 'task_id' in event_data, f"Event data missing task_id: {event_data}"
                         assert 'agent_id' in event_data, f"Event data missing agent_id: {event_data}"
-                        
+
                         print(f"✅ Event verified: {event.event_type} - {event_data.get('task_id', 'no_task_id')}")
-                    
-                    # ✅ VERIFY EVENT SEQUENCE 
+
+                    # ✅ VERIFY EVENT SEQUENCE
                     event_types = [event.event_type for event in mock_event_broker.published_events]
                     print(f"Event sequence: {event_types}")
-                    
+
                     # Should start with WorkflowStarted
                     assert event_types[0] == "workflow.WorkflowStarted", f"First event should be WorkflowStarted, got: {event_types[0]}"
-                    
+
                     # Check the last event - it could be WorkflowFinished or IterationCompleted
                     last_event_type = event_types[-1]
                     valid_final_events = ["workflow.WorkflowFinished", "workflow.IterationCompleted", "workflow.GoalAchieved"]
                     assert last_event_type in valid_final_events, f"Last event should be one of {valid_final_events}, got: {last_event_type}"
-                    
-                    print(f"✅ Event publishing test passed!")
+
+                    print("✅ Event publishing test passed!")
                     print(f"✅ All {len(mock_event_broker.published_events)} events are properly formatted for SSE streaming")
-                    print(f"✅ Event sequence is correct: START → EXECUTION → FINISH")
+                    print("✅ Event sequence is correct: START → EXECUTION → FINISH")

@@ -23,7 +23,7 @@ class ActivityDependencies:
     will create its own session using get_database().async_session_factory()
     for better retryability and resource isolation.
     """
-    
+
     settings: "Settings"
     event_broker: "EventBroker"
     secret_manager: "BaseSecretManager"

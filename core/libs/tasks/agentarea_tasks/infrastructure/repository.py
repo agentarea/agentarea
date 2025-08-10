@@ -1,17 +1,15 @@
 """Task repository implementation."""
 
-import builtins
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..domain.models import Task, TaskCreate, TaskUpdate
-from .orm import TaskORM
+from ..domain.models import Task, TaskCreate, TaskEvent, TaskUpdate
+from .orm import TaskEventORM, TaskORM
 
 
 class TaskRepository(WorkspaceScopedRepository[TaskORM]):
@@ -27,7 +25,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             return None
         return self._orm_to_domain(task_orm)
 
-    async def list_tasks(self, limit: int = 100, offset: int = 0, creator_scoped: bool = False) -> List[Task]:
+    async def list_tasks(self, limit: int = 100, offset: int = 0, creator_scoped: bool = False) -> list[Task]:
         """List all tasks in workspace and convert to domain models."""
         task_orms = await self.list_all(creator_scoped=creator_scoped, limit=limit, offset=offset)
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
@@ -39,7 +37,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         if metadata is not None and not isinstance(metadata, dict):
             # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
             metadata = {}
-        
+
         # Extract fields from domain model
         task_data = {
             'id': entity.id,
@@ -54,12 +52,12 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             'execution_id': entity.execution_id,
             'task_metadata': metadata,
         }
-        
+
         # Remove None values and system fields that will be auto-populated
         task_data = {k: v for k, v in task_data.items() if v is not None}
         task_data.pop('created_at', None)
         task_data.pop('updated_at', None)
-        
+
         task_orm = await self.create(**task_data)
         return self._orm_to_domain(task_orm)
 
@@ -70,7 +68,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         if metadata is not None and not isinstance(metadata, dict):
             # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
             metadata = {}
-        
+
         # Extract fields from domain model
         task_data = {
             'agent_id': entity.agent_id,
@@ -84,10 +82,10 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             'execution_id': entity.execution_id,
             'task_metadata': metadata,
         }
-        
+
         # Remove None values
         task_data = {k: v for k, v in task_data.items() if v is not None}
-        
+
         task_orm = await self.update(entity.id, **task_data)
         if not task_orm:
             return entity  # Return original if update failed
@@ -105,7 +103,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         if metadata is not None and not isinstance(metadata, dict):
             # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
             metadata = {}
-        
+
         task_orm = TaskORM(
             # BaseModel automatically provides: id, created_at, updated_at
             agent_id=task_data.agent_id,
@@ -121,7 +119,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         self.session.add(task_orm)
         await self.session.flush()
         await self.session.refresh(task_orm)
-        
+
         result = self._orm_to_domain(task_orm)
         return result
 
@@ -149,7 +147,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         return await self.get_task(task_id)
 
-    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> List[Task]:
+    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> list[Task]:
         """List tasks for an agent."""
         stmt = (
             select(TaskORM)
@@ -162,7 +160,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> list[Task]:
         """Get tasks by agent ID with pagination."""
         stmt = (
             select(TaskORM)
@@ -176,7 +174,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> list[Task]:
         """Get tasks by user ID with pagination.
         
         Note: This method is deprecated. Use list_tasks(creator_scoped=True) instead.
@@ -185,7 +183,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         task_orms = await self.list_all(creator_scoped=True, limit=limit, offset=offset)
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[Task]:
         """Get tasks by workspace ID with pagination.
         
         Note: This method is deprecated. Use list_tasks() instead which automatically
@@ -194,10 +192,10 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         # For backward compatibility, but this should be replaced with list_tasks()
         if workspace_id != self.user_context.workspace_id:
             return []  # Don't allow cross-workspace access
-        
+
         return await self.list_tasks(limit=limit, offset=offset)
 
-    async def get_by_user_and_workspace(self, user_id: str, workspace_id: str, limit: int = 100, offset: int = 0) -> List[Task]:
+    async def get_by_user_and_workspace(self, user_id: str, workspace_id: str, limit: int = 100, offset: int = 0) -> list[Task]:
         """Get tasks by both user ID and workspace ID with pagination.
         
         Note: This method is deprecated. Use list_tasks(creator_scoped=True) instead.
@@ -205,10 +203,10 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         # For backward compatibility - filter by creator in current workspace
         if workspace_id != self.user_context.workspace_id:
             return []  # Don't allow cross-workspace access
-        
+
         return await self.list_tasks(creator_scoped=True, limit=limit, offset=offset)
 
-    async def get_by_status(self, status: str) -> List[Task]:
+    async def get_by_status(self, status: str) -> list[Task]:
         """Get tasks by status."""
         stmt = (
             select(TaskORM)
@@ -247,11 +245,11 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
     def _orm_to_domain(self, task_orm: TaskORM) -> Task:
         """Convert ORM model to domain model."""
         task_metadata = task_orm.task_metadata or {}
-        
+
         # Ensure metadata is always a dict
         if not isinstance(task_metadata, dict):
             task_metadata = {}
-        
+
         return Task.model_validate({
             'id': task_orm.id,
             'agent_id': task_orm.agent_id,
@@ -302,3 +300,82 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             workspace_id=task.workspace_id,
             task_metadata=task.metadata,
         )
+
+
+class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
+    """Repository for task event persistence."""
+
+    def __init__(self, session: AsyncSession, user_context: UserContext):
+        super().__init__(session, TaskEventORM, user_context)
+
+    async def create_event(self, event: TaskEvent) -> TaskEvent:
+        """Create a new task event."""
+        event_orm = TaskEventORM(
+            id=event.id,
+            task_id=event.task_id,
+            event_type=event.event_type,
+            timestamp=event.timestamp,
+            data=event.data,
+            metadata=event.metadata,
+            workspace_id=event.workspace_id,
+            created_by=event.created_by,
+        )
+
+        self.session.add(event_orm)
+        await self.session.flush()
+        await self.session.refresh(event_orm)
+
+        return self._orm_to_domain(event_orm)
+
+    async def get_events_for_task(
+        self,
+        task_id: UUID,
+        limit: int = 100,
+        offset: int = 0
+    ) -> list[TaskEvent]:
+        """Get events for a specific task."""
+        stmt = (
+            select(TaskEventORM)
+            .where(TaskEventORM.task_id == task_id)
+            .where(TaskEventORM.workspace_id == self.user_context.workspace_id)
+            .order_by(TaskEventORM.timestamp.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        event_orms = result.scalars().all()
+
+        return [self._orm_to_domain(event_orm) for event_orm in event_orms]
+
+    async def get_events_by_type(
+        self,
+        event_type: str,
+        limit: int = 100,
+        offset: int = 0
+    ) -> list[TaskEvent]:
+        """Get events by type."""
+        stmt = (
+            select(TaskEventORM)
+            .where(TaskEventORM.event_type == event_type)
+            .where(TaskEventORM.workspace_id == self.user_context.workspace_id)
+            .order_by(TaskEventORM.timestamp.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        event_orms = result.scalars().all()
+
+        return [self._orm_to_domain(event_orm) for event_orm in event_orms]
+
+    def _orm_to_domain(self, event_orm: TaskEventORM) -> TaskEvent:
+        """Convert ORM model to domain model."""
+        return TaskEvent.model_validate({
+            'id': event_orm.id,
+            'task_id': event_orm.task_id,
+            'event_type': event_orm.event_type,
+            'timestamp': event_orm.timestamp,
+            'data': event_orm.data or {},
+            'metadata': event_orm.metadata or {},
+            'workspace_id': event_orm.workspace_id,
+            'created_by': event_orm.created_by,
+        })

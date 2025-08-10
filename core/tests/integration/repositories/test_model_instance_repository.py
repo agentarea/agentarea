@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from agentarea_common.base.models import BaseModel
-from agentarea_llm.domain.models import ProviderSpec, ProviderConfig, ModelSpec, ModelInstance
+from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
@@ -127,7 +127,7 @@ class TestModelInstanceRepository:
         await db_session.flush()
 
         provider_config = create_test_provider_config(
-            provider_spec.id, 
+            provider_spec.id,
             name="My OpenAI Config"
         )
         db_session.add(provider_config)
@@ -363,4 +363,4 @@ class TestModelInstanceRepository:
         # Assert
         assert len(active_instances) == 1
         assert active_instances[0].name == "Active Instance"
-        assert active_instances[0].is_active is True 
+        assert active_instances[0].is_active is True

@@ -3,7 +3,7 @@ from enum import Enum
 
 class ContextType(str, Enum):
     WORKING = "working"
-    FACTUAL = "factual" 
+    FACTUAL = "factual"
     EPISODIC = "episodic"
     SEMANTIC = "semantic"
 

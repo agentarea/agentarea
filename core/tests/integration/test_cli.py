@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 """Test script for the AgentArea CLI."""
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'core'))
 
 try:
-    from core.apps.cli.agentarea_cli.main import cli, AuthConfig, AgentAreaClient
+    from core.apps.cli.agentarea_cli.main import AgentAreaClient, AuthConfig, cli
     print("✅ CLI module imported successfully")
-    
+
     # Test AuthConfig
     auth_config = AuthConfig()
     print("✅ AuthConfig created successfully")
-    
+
     # Test AgentAreaClient
     client = AgentAreaClient("http://localhost:8000", auth_config)
     print("✅ AgentAreaClient created successfully")
-    
+
     print("\n🎉 All CLI components are working correctly!")
     print("\nAvailable commands:")
     print("  agentarea auth login [--user-id USER] [--admin]")
@@ -29,7 +30,7 @@ try:
     print("  agentarea llm list")
     print("  agentarea llm create")
     print("  agentarea system status")
-    
+
 except ImportError as e:
     print(f"❌ Import error: {e}")
     sys.exit(1)

@@ -11,26 +11,23 @@ For A2A JSON-RPC protocol, use /v1/protocol/rpc endpoint.
 
 import json
 import logging
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
-from datetime import datetime
-from pytz import UTC
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+from agentarea_api.api.deps.events import EventBrokerDep
 from agentarea_api.api.deps.services import (
     get_agent_service,
-    get_temporal_workflow_service,
     get_task_service,
+    get_temporal_workflow_service,
 )
-from agentarea_api.api.deps.events import EventBrokerDep
-from agentarea_tasks.task_service import TaskService
-from agentarea_tasks.domain.events import TaskCreated
 from agentarea_tasks.domain.models import TaskCreate
-from agentarea_tasks.infrastructure.repository import TaskRepository
-from agentarea_common.config import get_database
+from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
+from pytz import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +137,7 @@ async def send_message(
         # The task service already handles workflow execution, so we can use the task directly
         execution_id = task.execution_id
         status = task.status
-        
+
         # Update task_id_str to match the actual task ID created
         task_id_str = str(task.id)
 

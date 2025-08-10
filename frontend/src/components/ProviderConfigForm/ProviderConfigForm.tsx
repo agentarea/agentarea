@@ -1,30 +1,45 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { motion, AnimatePresence } from 'framer-motion';
-import { createProviderConfig, createModelInstance, updateProviderConfig, listProviderSpecs, listProviderSpecsWithModels, deleteModelInstance } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { SearchableSelect } from '@/components/ui/searchable-select';
-import { AlertCircle, Bot, Server } from 'lucide-react';
-import FormLabel from '@/components/FormLabel/FormLabel';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
-import BaseInfo from './components/BaseInfo';
-import ModelInstances from './components/ModelInstances';
-import { getProviderIconUrl } from '@/lib/provider-icons';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import { useTranslations } from 'next-intl';
-import { ProviderSpec, ModelSpec, SelectedModel, ProviderConfigFormProps } from '@/types/provider';
+import React, { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  createProviderConfig,
+  createModelInstance,
+  updateProviderConfig,
+  listProviderSpecs,
+  listProviderSpecsWithModels,
+  deleteModelInstance,
+} from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { AlertCircle, Bot, Server } from "lucide-react";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
+import BaseInfo from "./components/BaseInfo";
+import ModelInstances from "./components/ModelInstances";
+import { getProviderIconUrl } from "@/lib/provider-icons";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { useTranslations } from "next-intl";
+import {
+  ProviderSpec,
+  ModelSpec,
+  SelectedModel,
+  ProviderConfigFormProps,
+} from "@/types/provider";
 
 // Form validation schema
 const providerConfigSchema = z.object({
-  provider_spec_id: z.string().min(1, 'Provider is required'),
-  name: z.string().min(1, 'Name is required').max(255, 'Name must be less than 255 characters'),
+  provider_spec_id: z.string().min(1, "Provider is required"),
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(255, "Name must be less than 255 characters"),
   api_key: z.string().optional(),
   endpoint_url: z.string().optional(),
   is_public: z.boolean(),
@@ -32,8 +47,8 @@ const providerConfigSchema = z.object({
 
 type ProviderConfigFormData = z.infer<typeof providerConfigSchema>;
 
-export default function ProviderConfigForm({ 
-  initialData, 
+export default function ProviderConfigForm({
+  initialData,
   className,
   isEdit = false,
   preselectedProviderId,
@@ -55,31 +70,38 @@ export default function ProviderConfigForm({
   const [selectedModels, setSelectedModels] = useState<SelectedModel[]>([]);
   const [providerSpecs, setProviderSpecs] = useState<ProviderSpec[]>([]);
   const [modelSpecs, setModelSpecs] = useState<ModelSpec[]>([]);
+  const [createdProviderConfigId, setCreatedProviderConfigId] = useState<
+    string | null
+  >(null);
 
   // Load provider specs and model specs on component mount
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [providerSpecsResponse, providerSpecsWithModelsResponse] = await Promise.all([
-          listProviderSpecs(),
-          listProviderSpecsWithModels()
-        ]);
+        const [providerSpecsResponse, providerSpecsWithModelsResponse] =
+          await Promise.all([
+            listProviderSpecs(),
+            listProviderSpecsWithModels(),
+          ]);
 
-        if (providerSpecsResponse.error || providerSpecsWithModelsResponse.error) {
+        if (
+          providerSpecsResponse.error ||
+          providerSpecsWithModelsResponse.error
+        ) {
           throw new Error(
-            providerSpecsResponse.error?.detail?.[0]?.msg || 
-            providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
-            'Failed to load provider specifications'
+            providerSpecsResponse.error?.detail?.[0]?.msg ||
+              providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
+              "Failed to load provider specifications"
           );
         }
 
         const specs = providerSpecsResponse.data || [];
         const specsWithModels = providerSpecsWithModelsResponse.data || [];
-        
+
         // Extract and flatten model specs from the provider specs with models
-        const models = specsWithModels.flatMap(spec => 
-          spec.models.map(model => ({
+        const models = specsWithModels.flatMap((spec) =>
+          spec.models.map((model) => ({
             id: model.id,
             provider_spec_id: spec.id,
             model_name: model.model_name,
@@ -95,7 +117,8 @@ export default function ProviderConfigForm({
         setProviderSpecs(specs);
         setModelSpecs(models);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : t("error.failedToLoadData");
+        const errorMessage =
+          err instanceof Error ? err.message : t("error.failedToLoadData");
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -113,45 +136,56 @@ export default function ProviderConfigForm({
     watch,
     setValue,
     formState: { errors, isValid },
-    reset
+    reset,
   } = useForm<ProviderConfigFormData>({
     resolver: zodResolver(
-      isEdit 
-        ? providerConfigSchema 
+      isEdit
+        ? providerConfigSchema
         : providerConfigSchema.extend({
-            api_key: z.string().min(1, 'API key is required')
+            api_key: z.string().min(1, "API key is required"),
           })
     ),
     defaultValues: {
-      provider_spec_id: preselectedProviderId || initialData?.provider_spec_id || '',
-      name: initialData?.name || '',
-      api_key: '', // API key is not returned in responses for security
-      endpoint_url: initialData?.endpoint_url || '',
+      provider_spec_id:
+        preselectedProviderId || initialData?.provider_spec_id || "",
+      name: initialData?.name || "",
+      api_key: "", // API key is not returned in responses for security
+      endpoint_url: initialData?.endpoint_url || "",
       is_public: initialData?.is_public || false,
     },
-    mode: 'onChange',
+    mode: "onChange",
   });
 
-  const watchedProviderId = watch('provider_spec_id');
-  const watchedName = watch('name');
+  const watchedProviderId = watch("provider_spec_id");
+  const watchedName = watch("name");
 
-  const selectedProvider = providerSpecs?.find?.(spec => spec.id === watchedProviderId);
-  
+  const selectedProvider = providerSpecs?.find?.(
+    (spec) => spec.id === watchedProviderId
+  );
+
   // Memoize availableModels to prevent infinite re-renders
   const availableModels = useMemo(() => {
-    return modelSpecs?.filter?.(model => 
-      selectedProvider && model.provider_spec_id === selectedProvider.id
-    ) || [];
+    return (
+      modelSpecs?.filter?.(
+        (model) =>
+          selectedProvider && model.provider_spec_id === selectedProvider.id
+      ) || []
+    );
   }, [modelSpecs, selectedProvider]);
 
   // Auto-select all models when provider changes
   useEffect(() => {
-    if (selectedProvider && availableModels.length > 0 && !isEdit && showModelSelection) {
-      const allModels = availableModels.map(model => ({
+    if (
+      selectedProvider &&
+      availableModels.length > 0 &&
+      !isEdit &&
+      showModelSelection
+    ) {
+      const allModels = availableModels.map((model) => ({
         modelSpecId: model.id,
         instanceName: `${selectedProvider.name} ${model.display_name}`,
-        description: model.description || '',
-        isPublic: false
+        description: model.description || "",
+        isPublic: false,
       }));
       setSelectedModels(allModels);
     }
@@ -159,37 +193,52 @@ export default function ProviderConfigForm({
 
   // Generate name for preselected provider
   useEffect(() => {
-    if (preselectedProviderId && selectedProvider && !isEdit && !initialData && !watchedName) {
-      const providerName = selectedProvider.name || '';
+    if (
+      preselectedProviderId &&
+      selectedProvider &&
+      !isEdit &&
+      !initialData &&
+      !watchedName
+    ) {
+      const providerName = selectedProvider.name || "";
       const randomNumber = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
-      setValue('name', `${providerName} Config - ${randomNumber}`);
+      setValue("name", `${providerName} Config - ${randomNumber}`);
     }
-  }, [preselectedProviderId, selectedProvider, isEdit, initialData, watchedName, setValue]);
+  }, [
+    preselectedProviderId,
+    selectedProvider,
+    isEdit,
+    initialData,
+    watchedName,
+    setValue,
+  ]);
 
   // Set initial values when initialData is loaded
   useEffect(() => {
     if (initialData && isEdit) {
-      setValue('provider_spec_id', initialData.provider_spec_id);
-      setValue('name', initialData.name);
-      setValue('endpoint_url', initialData.endpoint_url || '');
+      setValue("provider_spec_id", initialData.provider_spec_id);
+      setValue("name", initialData.name);
+      setValue("endpoint_url", initialData.endpoint_url || "");
     }
   }, [initialData, isEdit, setValue]);
 
   // Initialize selected models from existing model instances when in edit mode
   useEffect(() => {
     if (isEdit && existingModelInstances.length > 0 && modelSpecs.length > 0) {
-      const existingModels = existingModelInstances.map(instance => {
+      const existingModels = existingModelInstances.map((instance) => {
         // Find the corresponding model spec
-        const modelSpec = modelSpecs.find(spec => spec.id === instance.model_spec_id);
-        
+        const modelSpec = modelSpecs.find(
+          (spec) => spec.id === instance.model_spec_id
+        );
+
         return {
           modelSpecId: instance.model_spec_id,
           instanceName: instance.name,
-          description: instance.description || '',
-          isPublic: instance.is_public
+          description: instance.description || "",
+          isPublic: instance.is_public,
         };
       });
-      
+
       setSelectedModels(existingModels);
     }
   }, [isEdit, existingModelInstances, modelSpecs]);
@@ -210,20 +259,27 @@ export default function ProviderConfigForm({
   }
 
   const handleProviderChange = (providerId: string | number) => {
-    const selectedProvider = providerSpecs.find(spec => spec.id === providerId);
-    const providerName = selectedProvider?.name || '';
+    const selectedProvider = providerSpecs.find(
+      (spec) => spec.id === providerId
+    );
+    const providerName = selectedProvider?.name || "";
     const randomNumber = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
-    
-    setValue('provider_spec_id', providerId.toString());
-    setValue('name', `${providerName} Config - ${randomNumber}`);
+
+    setValue("provider_spec_id", providerId.toString());
+    setValue("name", `${providerName} Config - ${randomNumber}`);
 
     setSelectedModels([]); // Reset selected models when provider changes
   };
 
-  const updateSelectedModel = (modelSpecId: string, updates: Partial<SelectedModel>) => {
-    setSelectedModels(prev => prev.map(model => 
-      model.modelSpecId === modelSpecId ? { ...model, ...updates } : model
-    ));
+  const updateSelectedModel = (
+    modelSpecId: string,
+    updates: Partial<SelectedModel>
+  ) => {
+    setSelectedModels((prev) =>
+      prev.map((model) =>
+        model.modelSpecId === modelSpecId ? { ...model, ...updates } : model
+      )
+    );
   };
 
   const onSubmit = async (data: ProviderConfigFormData) => {
@@ -241,12 +297,12 @@ export default function ProviderConfigForm({
       if (isEdit && initialData) {
         const updateData: any = {
           name: data.name,
-          endpoint_url: data.endpoint_url === '' ? null : data.endpoint_url,
+          endpoint_url: data.endpoint_url === "" ? null : data.endpoint_url,
           is_active: data.is_public, // Note: backend uses is_active, frontend uses is_public
         };
-        
+
         // Only include api_key if it's provided (not empty)
-        if (data.api_key && data.api_key.trim() !== '') {
+        if (data.api_key && data.api_key.trim() !== "") {
           updateData.api_key = data.api_key;
         }
         console.log("Update data:", updateData);
@@ -257,8 +313,8 @@ export default function ProviderConfigForm({
         const result = await createProviderConfig({
           provider_spec_id: data.provider_spec_id,
           name: data.name,
-          api_key: data.api_key || '', // API key is required for creation, so this should never be undefined
-          endpoint_url: data.endpoint_url === '' ? null : data.endpoint_url,
+          api_key: data.api_key || "", // API key is required for creation, so this should never be undefined
+          endpoint_url: data.endpoint_url === "" ? null : data.endpoint_url,
           is_public: data.is_public,
         });
         providerConfig = result.data;
@@ -266,8 +322,21 @@ export default function ProviderConfigForm({
       }
 
       if (providerError || !providerConfig) {
-        const errorMessage = (providerError as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg || (providerError as { message?: string })?.message || t("error.unknownError");
-        throw new Error(`${t("error.failedTo")} ${isEdit ? tCommon("update") : tCommon("create")} ${t("providerConfiguration")}: ${errorMessage}`);
+        const errorMessage =
+          (providerError as { detail?: { msg?: string }[]; message?: string })
+            ?.detail?.[0]?.msg ||
+          (providerError as { message?: string })?.message ||
+          t("error.unknownError");
+        throw new Error(
+          `${t("error.failedTo")} ${
+            isEdit ? tCommon("update") : tCommon("create")
+          } ${t("providerConfiguration")}: ${errorMessage}`
+        );
+      }
+
+      // Set the created provider config ID for testing
+      if (!isEdit) {
+        setCreatedProviderConfigId(providerConfig.id);
       }
 
       // Step 2: Create model instances if any are selected (only for create mode and if model selection is enabled)
@@ -280,33 +349,48 @@ export default function ProviderConfigForm({
             description: model.description,
             is_public: model.isPublic,
           });
-          
+
           if (error || !data) {
-            throw new Error(`Failed to create model instance "${model.instanceName}": ${(error as { message?: string })?.message || 'Unknown error'}`);
+            throw new Error(
+              `Failed to create model instance "${model.instanceName}": ${
+                (error as { message?: string })?.message || "Unknown error"
+              }`
+            );
           }
-          
+
           return data;
         });
 
         await Promise.all(modelCreationPromises);
-        toast.success(t(isEdit ? "toast.configurationUpdated" : "toast.configurationCreated", { 
-          modelCount: selectedModels.length 
-        }));
+        toast.success(
+          t(
+            isEdit
+              ? "toast.configurationUpdated"
+              : "toast.configurationCreated",
+            {
+              modelCount: selectedModels.length,
+            }
+          )
+        );
       } else if (isEdit && showModelSelection) {
         // Handle model instances for edit mode
-        const existingModelSpecIds = existingModelInstances.map(instance => instance.model_spec_id);
-        const selectedModelSpecIds = selectedModels.map(model => model.modelSpecId);
-        
+        const existingModelSpecIds = existingModelInstances.map(
+          (instance) => instance.model_spec_id
+        );
+        const selectedModelSpecIds = selectedModels.map(
+          (model) => model.modelSpecId
+        );
+
         // Find models to create (new selections)
-        const modelsToCreate = selectedModels.filter(model => 
-          !existingModelSpecIds.includes(model.modelSpecId)
+        const modelsToCreate = selectedModels.filter(
+          (model) => !existingModelSpecIds.includes(model.modelSpecId)
         );
-        
+
         // Find models to delete (removed selections)
-        const modelsToDelete = existingModelInstances.filter(instance => 
-          !selectedModelSpecIds.includes(instance.model_spec_id)
+        const modelsToDelete = existingModelInstances.filter(
+          (instance) => !selectedModelSpecIds.includes(instance.model_spec_id)
         );
-        
+
         // Create new model instances
         if (modelsToCreate.length > 0) {
           const createPromises = modelsToCreate.map(async (model) => {
@@ -317,42 +401,56 @@ export default function ProviderConfigForm({
               description: model.description,
               is_public: model.isPublic,
             });
-            
+
             if (error || !data) {
-              throw new Error(`Failed to create model instance "${model.instanceName}": ${(error as { message?: string })?.message || 'Unknown error'}`);
+              throw new Error(
+                `Failed to create model instance "${model.instanceName}": ${
+                  (error as { message?: string })?.message || "Unknown error"
+                }`
+              );
             }
-            
+
             return data;
           });
-          
+
           await Promise.all(createPromises);
         }
-        
+
         // Delete removed model instances
         if (modelsToDelete.length > 0) {
           const deletePromises = modelsToDelete.map(async (instance) => {
             const { error } = await deleteModelInstance(instance.id);
-            
+
             if (error) {
-              throw new Error(`Failed to delete model instance "${instance.name}": ${(error as { message?: string })?.message || 'Unknown error'}`);
+              throw new Error(
+                `Failed to delete model instance "${instance.name}": ${
+                  (error as { message?: string })?.message || "Unknown error"
+                }`
+              );
             }
           });
-          
+
           await Promise.all(deletePromises);
         }
-        
+
         const changes = [];
-        if (modelsToCreate.length > 0) changes.push(`+${modelsToCreate.length} ${t("toast.added")}`);
-        if (modelsToDelete.length > 0) changes.push(`-${modelsToDelete.length} ${t("toast.removed")}`);
-        
+        if (modelsToCreate.length > 0)
+          changes.push(`+${modelsToCreate.length} ${t("toast.added")}`);
+        if (modelsToDelete.length > 0)
+          changes.push(`-${modelsToDelete.length} ${t("toast.removed")}`);
+
         if (changes.length > 0) {
-          toast.success(t("toast.modelInstancesUpdated") + `: ${changes.join(', ')}`);
+          toast.success(
+            t("toast.modelInstancesUpdated") + `: ${changes.join(", ")}`
+          );
         } else {
-          toast.success(t("toast.configurationUpdatedSuccessfully"));    
+          toast.success(t("toast.configurationUpdatedSuccessfully"));
         }
       } else {
         toast.success(
-            isEdit ? t("toast.configurationUpdated") : t("toast.configurationCreated")
+          isEdit
+            ? t("toast.configurationUpdated")
+            : t("toast.configurationCreated")
         );
       }
 
@@ -364,10 +462,10 @@ export default function ProviderConfigForm({
       // Reset form only if creating and no custom handler
       if (!isEdit && !onAfterSubmit) {
         reset({
-          provider_spec_id: '',
-          name: '',
-          api_key: '',
-          endpoint_url: '',
+          provider_spec_id: "",
+          name: "",
+          api_key: "",
+          endpoint_url: "",
           is_public: false,
         });
         setSelectedModels([]);
@@ -375,14 +473,14 @@ export default function ProviderConfigForm({
 
       // Redirect if autoRedirect is enabled and no custom handler
       if (autoRedirect && !onAfterSubmit) {
-        router.push('/admin/provider-configs');
+        router.push("/admin/provider-configs");
         router.refresh();
       }
-
     } catch (err) {
-              const errorMessage = err instanceof Error ? err.message : t("error.unexpectedError");
-        setError(errorMessage);
-        toast.error(errorMessage);
+      const errorMessage =
+        err instanceof Error ? err.message : t("error.unexpectedError");
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -392,16 +490,19 @@ export default function ProviderConfigForm({
     if (onCancel) {
       onCancel();
     } else if (autoRedirect) {
-      router.push('/admin/provider-configs');
+      router.push("/admin/provider-configs");
     }
   };
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSubmit(onSubmit)(e);
-    }} className={cn("space-y-6", className)}>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSubmit(onSubmit)(e);
+      }}
+      className={cn("space-y-6", className)}
+    >
       <AnimatePresence>
         {error && (
           <motion.div
@@ -418,21 +519,25 @@ export default function ProviderConfigForm({
         )}
       </AnimatePresence>
       <div className="mx-auto max-w-4xl">
-        <div className={cn(
-          "grid grid-cols-1 gap-6",
-          isClear ? "p-0" : "card card-shadow"
-        )}>
+        <div
+          className={cn(
+            "grid grid-cols-1 gap-6",
+            isClear ? "p-0" : "card card-shadow"
+          )}
+        >
           <div className="space-y-2">
-            <FormLabel htmlFor="provider" icon={Server}>{t("provider")}</FormLabel>
+            <FormLabel htmlFor="provider" icon={Server}>
+              {t("provider")}
+            </FormLabel>
             <Controller
               name="provider_spec_id"
               control={control}
               render={({ field }) => (
                 <SearchableSelect
-                  options={providerSpecs.map(spec => ({
+                  options={providerSpecs.map((spec) => ({
                     id: spec.id,
                     label: spec.name,
-                    icon: spec.icon_url || getProviderIconUrl(spec.name)
+                    icon: spec.icon_url || getProviderIconUrl(spec.name),
                   }))}
                   value={field.value}
                   onValueChange={handleProviderChange}
@@ -441,26 +546,33 @@ export default function ProviderConfigForm({
                   emptyMessage={
                     <div className="flex flex-col items-center justify-center h-full gap-1">
                       <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
-                          <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
+                        <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
                       </div>
-                      <span className="text-muted-foreground">{t("noProvidersFound")}</span>
+                      <span className="text-muted-foreground">
+                        {t("noProvidersFound")}
+                      </span>
                     </div>
                   }
                 />
               )}
             />
             {errors.provider_spec_id && (
-              <p className="text-sm text-red-600">{errors.provider_spec_id.message}</p>
+              <p className="text-sm text-red-600">
+                {errors.provider_spec_id.message}
+              </p>
             )}
             {preselectedProviderId && !isEdit && !initialData && (
-              <p className="note">
-                {t("providerIsPreSelected")}
-              </p>
+              <p className="note">{t("providerIsPreSelected")}</p>
             )}
           </div>
 
-          <BaseInfo control={control} errors={errors} providerSpecId={watchedProviderId} isEdit={isEdit} />
-          
+          <BaseInfo
+            control={control}
+            errors={errors}
+            providerSpecId={watchedProviderId}
+            isEdit={isEdit}
+          />
+
           {selectedProvider && showModelSelection && (
             <AnimatePresence>
               <motion.div
@@ -468,24 +580,29 @@ export default function ProviderConfigForm({
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ 
+                transition={{
                   height: { duration: 0.3, ease: "easeOut" },
-                  opacity: { duration: 0.2, ease: "easeOut" }
+                  opacity: { duration: 0.2, ease: "easeOut" },
                 }}
                 style={{ overflow: "hidden" }}
               >
-                <ModelInstances 
-                  selectedProvider={selectedProvider} 
-                  availableModels={availableModels} 
-                  selectedModels={selectedModels} 
+                <ModelInstances
+                  selectedProvider={selectedProvider}
+                  availableModels={availableModels}
+                  selectedModels={selectedModels}
                   setSelectedModels={setSelectedModels}
                   isEdit={isEdit}
+                  providerConfigId={
+                    createdProviderConfigId ||
+                    (isEdit && initialData ? initialData.id : undefined)
+                  }
+                  canTest={
+                    !!createdProviderConfigId || (isEdit && !!initialData)
+                  }
                 />
               </motion.div>
             </AnimatePresence>
           )}
-
-
         </div>
       </div>
 
@@ -502,22 +619,25 @@ export default function ProviderConfigForm({
         >
           {cancelButtonText || tCommon("cancel")}
         </Button>
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={isSubmitting || !isValid}
           onClick={(e) => {
             e.stopPropagation();
           }}
         >
-          {isSubmitting 
-            ? (isEdit ? t("loading.updating") : t("loading.creating")) 
-            : (submitButtonText || (isEdit 
+          {isSubmitting
+            ? isEdit
+              ? t("loading.updating")
+              : t("loading.creating")
+            : submitButtonText ||
+              (isEdit
                 ? t("updateConfiguration")
-                : t("createConfigurationWithModels", { modelCount: selectedModels.length })
-              ))
-          }
+                : t("createConfigurationWithModels", {
+                    modelCount: selectedModels.length,
+                  }))}
         </Button>
       </div>
     </form>
   );
-} 
+}

@@ -2,17 +2,18 @@
 
 import os
 import sys
+
 import click
 
 from agentarea_cli.client import AgentAreaClient
-from agentarea_cli.config import Config, AuthConfig
-from agentarea_cli.exceptions import AgentAreaError
-from agentarea_cli.commands.auth import auth
 from agentarea_cli.commands.agent import agent
+from agentarea_cli.commands.auth import auth
 from agentarea_cli.commands.chat import chat
 from agentarea_cli.commands.llm import llm
 from agentarea_cli.commands.system import system
-
+from agentarea_cli.commands.task import task
+from agentarea_cli.config import AuthConfig, Config
+from agentarea_cli.exceptions import AgentAreaError
 
 # Global config instance
 config = Config()
@@ -26,16 +27,16 @@ def cli(ctx, api_url, debug):
     # Initialize configuration
     config = Config()
     auth_config = AuthConfig(config)
-    
+
     # Override API URL if provided
     if api_url:
         auth_config.set_api_url(api_url)
-    
+
     base_url = auth_config.get_api_url()
-    
+
     # Initialize client
     client = AgentAreaClient(base_url=base_url, auth_config=auth_config)
-    
+
     # Store in context for subcommands
     ctx.ensure_object(dict)
     ctx.obj["client"] = client
@@ -50,6 +51,7 @@ cli.add_command(agent)
 cli.add_command(chat)
 cli.add_command(llm)
 cli.add_command(system)
+cli.add_command(task)
 
 
 def main():

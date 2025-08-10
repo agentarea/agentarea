@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
+
 from ..domain.interfaces import ExecutionRequest
 
 logger = logging.getLogger(__name__)

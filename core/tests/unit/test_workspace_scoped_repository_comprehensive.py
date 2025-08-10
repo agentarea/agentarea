@@ -1,15 +1,14 @@
 """Comprehensive unit tests for WorkspaceScopedRepository functionality."""
 
-import pytest
-import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+
+import pytest
+from agentarea_common.auth.context import UserContext
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea_common.auth.context import UserContext
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 
 # Mark all async tests in this module
 pytestmark = pytest.mark.asyncio
@@ -18,7 +17,7 @@ pytestmark = pytest.mark.asyncio
 class MockModel(BaseModel, WorkspaceScopedMixin):
     """Mock model for testing."""
     __tablename__ = "mock_model"
-    
+
     def __init__(self, **kwargs):
         self.id = kwargs.get('id', uuid4())
         self.workspace_id = kwargs.get('workspace_id')
@@ -28,13 +27,13 @@ class MockModel(BaseModel, WorkspaceScopedMixin):
 
 class TestWorkspaceScopedRepository:
     """Test suite for WorkspaceScopedRepository."""
-    
+
     @pytest.fixture
     def mock_session(self):
         """Create a mock async session."""
         session = AsyncMock(spec=AsyncSession)
         return session
-    
+
     @pytest.fixture
     def user_context_workspace1(self):
         """Create user context for workspace1."""
@@ -43,16 +42,16 @@ class TestWorkspaceScopedRepository:
             workspace_id="workspace1",
             roles=["user"]
         )
-    
+
     @pytest.fixture
     def user_context_workspace2(self):
         """Create user context for workspace2."""
         return UserContext(
-            user_id="user2", 
+            user_id="user2",
             workspace_id="workspace2",
             roles=["user"]
         )
-    
+
     @pytest.fixture
     def repository_workspace1(self, mock_session, user_context_workspace1):
         """Create repository for workspace1."""
@@ -61,7 +60,7 @@ class TestWorkspaceScopedRepository:
             model_class=MockModel,
             user_context=user_context_workspace1
         )
-    
+
     @pytest.fixture
     def repository_workspace2(self, mock_session, user_context_workspace2):
         """Create repository for workspace2."""
@@ -78,13 +77,13 @@ class TestWorkspaceScopedRepository:
         mock_session.add = MagicMock()
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
-        
+
         # Mock the model class constructor
         repository_workspace1.model_class = MagicMock(return_value=mock_instance)
-        
+
         # Act
         result = await repository_workspace1.create(name="test_record")
-        
+
         # Assert
         repository_workspace1.model_class.assert_called_once_with(
             name="test_record",
@@ -107,10 +106,10 @@ class TestWorkspaceScopedRepository:
             created_by="user1"
         )
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.get_by_id(test_id)
-        
+
         # Assert
         mock_session.execute.assert_called_once()
         # Verify the query includes workspace filter
@@ -130,10 +129,10 @@ class TestWorkspaceScopedRepository:
             created_by="user1"
         )
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.get_by_id(test_id, creator_scoped=True)
-        
+
         # Assert
         mock_session.execute.assert_called_once()
         assert result is not None
@@ -147,10 +146,10 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalar_one_or_none.return_value = None
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.get_by_id(test_id)
-        
+
         # Assert
         assert result is None
 
@@ -161,7 +160,7 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalar_one_or_none.return_value = None
         mock_session.execute.return_value = mock_result
-        
+
         # Act & Assert
         with pytest.raises(NoResultFound, match="MockModel with id .* not found in workspace"):
             await repository_workspace1.get_by_id_or_raise(test_id)
@@ -176,10 +175,10 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalars.return_value.all.return_value = mock_records
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.list_all()
-        
+
         # Assert
         assert len(result) == 2
         assert all(record.workspace_id == "workspace1" for record in result)
@@ -197,10 +196,10 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalars.return_value.all.return_value = mock_records
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.list_all(creator_scoped=True)
-        
+
         # Assert
         assert len(result) == 1
         assert result[0].workspace_id == "workspace1"
@@ -215,10 +214,10 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalars.return_value.all.return_value = mock_records
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.list_all(name="test1")
-        
+
         # Assert
         assert len(result) == 1
         assert result[0].name == "test1"
@@ -230,10 +229,10 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalars.return_value.all.return_value = mock_records
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.list_all(limit=10, offset=5)
-        
+
         # Assert
         mock_session.execute.assert_called_once()
         # Verify pagination was applied to query
@@ -245,10 +244,10 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalar.return_value = 5
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.count()
-        
+
         # Assert
         assert result == 5
 
@@ -258,10 +257,10 @@ class TestWorkspaceScopedRepository:
         mock_result = AsyncMock()
         mock_result.scalar.return_value = 3
         mock_session.execute.return_value = mock_result
-        
+
         # Act
         result = await repository_workspace1.count(creator_scoped=True)
-        
+
         # Assert
         assert result == 3
 
@@ -275,15 +274,15 @@ class TestWorkspaceScopedRepository:
             created_by="user2",  # Different creator
             name="original"
         )
-        
+
         # Mock get_by_id to return the existing record
         repository_workspace1.get_by_id = AsyncMock(return_value=existing_record)
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
-        
+
         # Act
         result = await repository_workspace1.update(test_id, name="updated")
-        
+
         # Assert
         repository_workspace1.get_by_id.assert_called_once_with(test_id, False)
         assert existing_record.name == "updated"
@@ -295,13 +294,13 @@ class TestWorkspaceScopedRepository:
         """Test that update(creator_scoped=True) only allows updating own records."""
         # Arrange
         test_id = uuid4()
-        
+
         # Mock get_by_id to return None (record not found for creator-scoped query)
         repository_workspace1.get_by_id = AsyncMock(return_value=None)
-        
+
         # Act
         result = await repository_workspace1.update(test_id, creator_scoped=True, name="updated")
-        
+
         # Assert
         repository_workspace1.get_by_id.assert_called_once_with(test_id, True)
         assert result is None
@@ -316,11 +315,11 @@ class TestWorkspaceScopedRepository:
             created_by="user1",
             name="original"
         )
-        
+
         repository_workspace1.get_by_id = AsyncMock(return_value=existing_record)
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
-        
+
         # Act
         result = await repository_workspace1.update(
             test_id,
@@ -328,7 +327,7 @@ class TestWorkspaceScopedRepository:
             created_by="hacker",  # Should be ignored
             workspace_id="other_workspace"  # Should be ignored
         )
-        
+
         # Assert
         assert existing_record.name == "updated"
         assert existing_record.created_by == "user1"  # Unchanged
@@ -339,7 +338,7 @@ class TestWorkspaceScopedRepository:
         # Arrange
         test_id = uuid4()
         repository_workspace1.update = AsyncMock(return_value=None)
-        
+
         # Act & Assert
         with pytest.raises(NoResultFound, match="MockModel with id .* not found in workspace"):
             await repository_workspace1.update_or_raise(test_id, name="updated")
@@ -353,14 +352,14 @@ class TestWorkspaceScopedRepository:
             workspace_id="workspace1",
             created_by="user2"  # Different creator
         )
-        
+
         repository_workspace1.get_by_id = AsyncMock(return_value=existing_record)
         mock_session.delete = AsyncMock()
         mock_session.commit = AsyncMock()
-        
+
         # Act
         result = await repository_workspace1.delete(test_id)
-        
+
         # Assert
         repository_workspace1.get_by_id.assert_called_once_with(test_id, False)
         mock_session.delete.assert_called_once_with(existing_record)
@@ -372,10 +371,10 @@ class TestWorkspaceScopedRepository:
         # Arrange
         test_id = uuid4()
         repository_workspace1.get_by_id = AsyncMock(return_value=None)
-        
+
         # Act
         result = await repository_workspace1.delete(test_id, creator_scoped=True)
-        
+
         # Assert
         repository_workspace1.get_by_id.assert_called_once_with(test_id, True)
         assert result is False
@@ -385,10 +384,10 @@ class TestWorkspaceScopedRepository:
         # Arrange
         test_id = uuid4()
         repository_workspace1.get_by_id = AsyncMock(return_value=None)
-        
+
         # Act
         result = await repository_workspace1.delete(test_id)
-        
+
         # Assert
         assert result is False
 
@@ -397,7 +396,7 @@ class TestWorkspaceScopedRepository:
         # Arrange
         test_id = uuid4()
         repository_workspace1.delete = AsyncMock(return_value=False)
-        
+
         # Act & Assert
         with pytest.raises(NoResultFound, match="MockModel with id .* not found in workspace"):
             await repository_workspace1.delete_or_raise(test_id)
@@ -408,10 +407,10 @@ class TestWorkspaceScopedRepository:
         test_id = uuid4()
         existing_record = MockModel(id=test_id, workspace_id="workspace1", created_by="user1")
         repository_workspace1.get_by_id = AsyncMock(return_value=existing_record)
-        
+
         # Act
         result = await repository_workspace1.exists(test_id)
-        
+
         # Assert
         assert result is True
 
@@ -420,10 +419,10 @@ class TestWorkspaceScopedRepository:
         # Arrange
         test_id = uuid4()
         repository_workspace1.get_by_id = AsyncMock(return_value=None)
-        
+
         # Act
         result = await repository_workspace1.exists(test_id)
-        
+
         # Assert
         assert result is False
 
@@ -432,10 +431,10 @@ class TestWorkspaceScopedRepository:
         # Arrange
         mock_records = [MockModel(id=uuid4(), workspace_id="workspace1", created_by="user1", name="test")]
         repository_workspace1.list_all = AsyncMock(return_value=mock_records)
-        
+
         # Act
         result = await repository_workspace1.find_by(name="test")
-        
+
         # Assert
         repository_workspace1.list_all.assert_called_once_with(creator_scoped=False, name="test")
         assert result == mock_records
@@ -445,10 +444,10 @@ class TestWorkspaceScopedRepository:
         # Arrange
         mock_record = MockModel(id=uuid4(), workspace_id="workspace1", created_by="user1", name="test")
         repository_workspace1.find_by = AsyncMock(return_value=[mock_record])
-        
+
         # Act
         result = await repository_workspace1.find_one_by(name="test")
-        
+
         # Assert
         repository_workspace1.find_by.assert_called_once_with(creator_scoped=False, name="test")
         assert result == mock_record
@@ -457,10 +456,10 @@ class TestWorkspaceScopedRepository:
         """Test that find_one_by() returns None when no matches found."""
         # Arrange
         repository_workspace1.find_by = AsyncMock(return_value=[])
-        
+
         # Act
         result = await repository_workspace1.find_one_by(name="nonexistent")
-        
+
         # Assert
         assert result is None
 
@@ -468,7 +467,7 @@ class TestWorkspaceScopedRepository:
         """Test that workspace filter is generated correctly."""
         # Act
         workspace_filter = repository_workspace1._get_workspace_filter()
-        
+
         # Assert
         # The filter should be a comparison expression
         assert hasattr(workspace_filter, 'left')
@@ -478,7 +477,7 @@ class TestWorkspaceScopedRepository:
         """Test that creator+workspace filter is generated correctly."""
         # Act
         creator_workspace_filter = repository_workspace1._get_creator_workspace_filter()
-        
+
         # Assert
         # The filter should be an AND expression with two comparisons
         assert hasattr(creator_workspace_filter, 'clauses')

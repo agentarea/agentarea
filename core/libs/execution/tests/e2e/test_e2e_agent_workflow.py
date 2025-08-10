@@ -58,7 +58,9 @@ class E2ETemporalTest:
         from agentarea_common.infrastructure.secret_manager import BaseSecretManager
         from agentarea_llm.application.llm_model_service import LLMModelService
         from agentarea_llm.application.service import LLMModelInstanceService
-        from agentarea_llm.infrastructure.llm_model_instance_repository import LLMModelInstanceRepository
+        from agentarea_llm.infrastructure.llm_model_instance_repository import (
+            LLMModelInstanceRepository,
+        )
         from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
 
         class DummyEventBroker(EventBroker):
@@ -367,7 +369,7 @@ class TestE2EAgentWorkflow:
             "Name three planets in our solar system",
         ]
         results = await asyncio.gather(*(e2e_test.execute_workflow_test(test_agent_id, q) for q in test_queries))
-        for result, query in zip(results, test_queries):
+        for result, query in zip(results, test_queries, strict=False):
             await e2e_test.verify_execution_result(result, query)
 
     @pytest.mark.asyncio

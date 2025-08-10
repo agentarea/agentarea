@@ -1,14 +1,13 @@
 """Unit tests for trigger execution activities."""
 
-import pytest
-import pytest_asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4, UUID
+from uuid import uuid4
 
+import pytest
 from agentarea_execution.activities.trigger_execution_activities import make_trigger_activities
 from agentarea_execution.interfaces import ActivityDependencies
-from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
+from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution
 
 pytestmark = pytest.mark.asyncio
@@ -54,10 +53,10 @@ class TestTriggerExecutionActivities:
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_execute_trigger_activity_success(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
-        sample_trigger, 
+        self,
+        mock_get_database,
+        trigger_activities,
+        sample_trigger,
         mock_database_session
     ):
         """Test successful trigger execution activity."""
@@ -132,9 +131,9 @@ class TestTriggerExecutionActivities:
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_execute_trigger_activity_trigger_not_found(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
+        self,
+        mock_get_database,
+        trigger_activities,
         mock_database_session
     ):
         """Test trigger execution activity when trigger is not found."""
@@ -164,16 +163,16 @@ class TestTriggerExecutionActivities:
             # Execute the activity - should raise TriggerNotFoundError
             trigger_id = uuid4()
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            
+
             with pytest.raises(Exception):  # TriggerNotFoundError
                 await execute_trigger_activity(trigger_id, execution_data)
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_execute_trigger_activity_inactive_trigger(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
-        sample_trigger, 
+        self,
+        mock_get_database,
+        trigger_activities,
+        sample_trigger,
         mock_database_session
     ):
         """Test trigger execution activity with inactive trigger."""
@@ -214,10 +213,10 @@ class TestTriggerExecutionActivities:
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_execute_trigger_activity_conditions_not_met(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
-        sample_trigger, 
+        self,
+        mock_get_database,
+        trigger_activities,
+        sample_trigger,
         mock_database_session
     ):
         """Test trigger execution activity when conditions are not met."""
@@ -256,10 +255,10 @@ class TestTriggerExecutionActivities:
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_record_trigger_execution_activity(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
-        sample_trigger, 
+        self,
+        mock_get_database,
+        trigger_activities,
+        sample_trigger,
         mock_database_session
     ):
         """Test record trigger execution activity."""
@@ -313,10 +312,10 @@ class TestTriggerExecutionActivities:
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_evaluate_trigger_conditions_activity(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
-        sample_trigger, 
+        self,
+        mock_get_database,
+        trigger_activities,
+        sample_trigger,
         mock_database_session
     ):
         """Test evaluate trigger conditions activity."""
@@ -357,10 +356,10 @@ class TestTriggerExecutionActivities:
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_create_task_from_trigger_activity(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
-        sample_trigger, 
+        self,
+        mock_get_database,
+        trigger_activities,
+        sample_trigger,
         mock_database_session
     ):
         """Test create task from trigger activity."""
@@ -420,9 +419,9 @@ class TestTriggerExecutionActivities:
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_create_task_from_trigger_activity_trigger_not_found(
-        self, 
-        mock_get_database, 
-        trigger_activities, 
+        self,
+        mock_get_database,
+        trigger_activities,
         mock_database_session
     ):
         """Test create task from trigger activity when trigger is not found."""

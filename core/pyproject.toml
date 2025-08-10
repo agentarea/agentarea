@@ -27,6 +27,7 @@ members = [
     "apps/cli",
     "libs/common",
     "libs/agents",
+    "libs/agentarea-agents-sdk",
     "libs/llm",
     "libs/mcp",
     "libs/tasks",
@@ -39,6 +40,7 @@ members = [
 [tool.uv.sources]
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
+agentarea-agents-sdk = { workspace = true }
 agentarea-llm = { workspace = true }
 agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
@@ -62,6 +64,7 @@ dev = [
     "coverage[toml]>=7.6.0",
     "agentarea-common",
     "agentarea-agents",
+    "agentarea-agents-sdk",
     "agentarea-llm",
     "agentarea-mcp",
     "agentarea-tasks",

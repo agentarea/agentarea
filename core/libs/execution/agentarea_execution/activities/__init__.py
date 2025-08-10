@@ -1,5 +1,4 @@
-"""
-Activity definitions for AgentArea execution system.
+"""Activity definitions for AgentArea execution system.
 
 Temporal activities for agent execution and trigger execution.
 """

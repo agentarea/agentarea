@@ -1,6 +1,5 @@
 """Workspace-related exception classes."""
 
-from typing import Optional
 
 
 class WorkspaceError(Exception):
@@ -9,13 +8,13 @@ class WorkspaceError(Exception):
     This is the base class for all workspace-related exceptions.
     It includes workspace context information for better error tracking.
     """
-    
+
     def __init__(
-        self, 
-        message: str, 
-        workspace_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        resource_id: Optional[str] = None
+        self,
+        message: str,
+        workspace_id: str | None = None,
+        user_id: str | None = None,
+        resource_id: str | None = None
     ):
         """Initialize workspace error.
         
@@ -30,7 +29,7 @@ class WorkspaceError(Exception):
         self.user_id = user_id
         self.resource_id = resource_id
         self.message = message
-    
+
     def __str__(self) -> str:
         """Return string representation with context."""
         context_parts = []
@@ -40,7 +39,7 @@ class WorkspaceError(Exception):
             context_parts.append(f"user_id={self.user_id}")
         if self.resource_id:
             context_parts.append(f"resource_id={self.resource_id}")
-        
+
         if context_parts:
             context = " (" + ", ".join(context_parts) + ")"
             return f"{self.message}{context}"
@@ -53,14 +52,14 @@ class WorkspaceAccessDenied(WorkspaceError):
     This exception is raised when a user attempts to access a resource
     that belongs to a different workspace than their current context.
     """
-    
+
     def __init__(
         self,
         resource_type: str,
         resource_id: str,
         current_workspace_id: str,
-        resource_workspace_id: Optional[str] = None,
-        user_id: Optional[str] = None
+        resource_workspace_id: str | None = None,
+        user_id: str | None = None
     ):
         """Initialize workspace access denied error.
         
@@ -82,7 +81,7 @@ class WorkspaceAccessDenied(WorkspaceError):
                 f"Access denied to {resource_type} '{resource_id}'. "
                 f"Resource not found in workspace '{current_workspace_id}'"
             )
-        
+
         super().__init__(
             message=message,
             workspace_id=current_workspace_id,
@@ -100,8 +99,8 @@ class MissingWorkspaceContext(WorkspaceError):
     This exception is raised when a request lacks the required
     user and workspace context information.
     """
-    
-    def __init__(self, missing_field: str, user_id: Optional[str] = None):
+
+    def __init__(self, missing_field: str, user_id: str | None = None):
         """Initialize missing workspace context error.
         
         Args:
@@ -122,7 +121,7 @@ class InvalidJWTToken(WorkspaceError):
     This exception is raised when JWT token validation fails or
     when the token lacks required claims for workspace context.
     """
-    
+
     def __init__(self, reason: str, token_present: bool = False):
         """Initialize invalid JWT token error.
         
@@ -134,7 +133,7 @@ class InvalidJWTToken(WorkspaceError):
             message = f"Invalid JWT token: {reason}"
         else:
             message = f"Missing or invalid JWT token: {reason}"
-        
+
         super().__init__(message=message)
         self.reason = reason
         self.token_present = token_present
@@ -147,13 +146,13 @@ class WorkspaceResourceNotFound(WorkspaceError):
     workspace context and ensure proper 404 responses for cross-workspace
     access attempts.
     """
-    
+
     def __init__(
         self,
         resource_type: str,
         resource_id: str,
         workspace_id: str,
-        user_id: Optional[str] = None
+        user_id: str | None = None
     ):
         """Initialize workspace resource not found error.
         

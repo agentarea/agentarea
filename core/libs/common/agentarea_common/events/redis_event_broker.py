@@ -26,6 +26,10 @@ class RedisEventBroker(EventBroker):
                 logger.warning(f"Failed to connect Redis event broker: {e}")
                 raise
 
+    async def is_connected(self) -> bool:
+        """Check if the Redis broker is connected."""
+        return self._connected
+
     @override
     async def publish(self, event: DomainEvent):
         # Ensure we're connected before publishing
@@ -53,11 +57,23 @@ class RedisEventBroker(EventBroker):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
+        """Async context manager exit with thorough cleanup."""
         if self._connected:
             try:
+                # Close the Redis broker
                 await self.redis_broker.close()
                 self._connected = False
                 logger.info("Redis event broker disconnected")
             except Exception as e:
                 logger.warning(f"Error closing Redis event broker: {e}")
+
+        # Additional cleanup for any remaining connections
+        try:
+            if hasattr(self.redis_broker, '_connection') and self.redis_broker._connection:
+                await self.redis_broker._connection.close()
+        except Exception as e:
+            logger.debug(f"Error during additional Redis cleanup: {e}")
+
+    async def close(self):
+        """Explicit close method for manual cleanup."""
+        await self.__aexit__(None, None, None)

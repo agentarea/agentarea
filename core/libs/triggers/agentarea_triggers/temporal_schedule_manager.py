@@ -4,20 +4,26 @@ This module provides a clean interface for managing Temporal Schedules
 for cron triggers, handling schedule creation, updates, and deletion.
 """
 
-import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from temporalio.client import (
-    Client, Schedule, ScheduleActionStartWorkflow, ScheduleSpec,
-    ScheduleState, ScheduleUpdate, ScheduleUpdateInput
+    Client,
+    Schedule,
+    ScheduleActionStartWorkflow,
+    ScheduleSpec,
+    ScheduleState,
+    ScheduleUpdate,
 )
 from temporalio.exceptions import TemporalError
 
 from .logging_utils import (
-    TriggerLogger, TriggerExecutionError, DependencyUnavailableError,
-    set_correlation_id, generate_correlation_id
+    DependencyUnavailableError,
+    TriggerExecutionError,
+    TriggerLogger,
+    generate_correlation_id,
+    set_correlation_id,
 )
 
 logger = TriggerLogger(__name__)
@@ -57,7 +63,7 @@ class TemporalScheduleManager:
         correlation_id = generate_correlation_id()
         set_correlation_id(correlation_id)
         schedule_id = f"cron-trigger-{trigger_id}"
-        
+
         if not self.client:
             error_msg = "Temporal client not available"
             logger.error(error_msg, trigger_id=trigger_id)
@@ -66,7 +72,7 @@ class TemporalScheduleManager:
                 dependency="temporal_client",
                 trigger_id=str(trigger_id)
             )
-        
+
         try:
             logger.info(
                 "Creating Temporal schedule for cron trigger",
@@ -75,7 +81,7 @@ class TemporalScheduleManager:
                 cron_expression=cron_expression,
                 timezone=timezone
             )
-            
+
             # Create the schedule
             schedule = Schedule(
                 action=ScheduleActionStartWorkflow(
@@ -101,12 +107,12 @@ class TemporalScheduleManager:
                     paused=False
                 )
             )
-            
+
             await self.client.create_schedule(
                 schedule_id=schedule_id,
                 schedule=schedule
             )
-            
+
             logger.info(
                 "Successfully created Temporal schedule",
                 trigger_id=trigger_id,
@@ -114,7 +120,7 @@ class TemporalScheduleManager:
                 cron_expression=cron_expression
             )
             return schedule_id
-            
+
         except TemporalError as e:
             error_msg = f"Temporal error creating schedule: {e}"
             logger.error(
@@ -161,11 +167,11 @@ class TemporalScheduleManager:
             Exception: If schedule update fails
         """
         schedule_id = f"cron-trigger-{trigger_id}"
-        
+
         try:
             # Get the schedule handle
             handle = self.client.get_schedule_handle(schedule_id)
-            
+
             # Update the schedule
             await handle.update(
                 updater=lambda input: ScheduleUpdate(
@@ -192,9 +198,9 @@ class TemporalScheduleManager:
                     )
                 )
             )
-            
+
             logger.info(f"Updated Temporal schedule {schedule_id} for trigger {trigger_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to update schedule for trigger {trigger_id}: {e}")
             raise
@@ -209,16 +215,16 @@ class TemporalScheduleManager:
             Exception: If schedule deletion fails
         """
         schedule_id = f"cron-trigger-{trigger_id}"
-        
+
         try:
             # Get the schedule handle
             handle = self.client.get_schedule_handle(schedule_id)
-            
+
             # Delete the schedule
             await handle.delete()
-            
+
             logger.info(f"Deleted Temporal schedule {schedule_id} for trigger {trigger_id}")
-            
+
         except TemporalError as e:
             if "not found" in str(e).lower():
                 logger.warning(f"Schedule {schedule_id} not found, may have been already deleted")
@@ -239,16 +245,16 @@ class TemporalScheduleManager:
             Exception: If schedule pause fails
         """
         schedule_id = f"cron-trigger-{trigger_id}"
-        
+
         try:
             # Get the schedule handle
             handle = self.client.get_schedule_handle(schedule_id)
-            
+
             # Pause the schedule
             await handle.pause(note=f"Trigger {trigger_id} disabled")
-            
+
             logger.info(f"Paused Temporal schedule {schedule_id} for trigger {trigger_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to pause schedule for trigger {trigger_id}: {e}")
             raise
@@ -263,21 +269,21 @@ class TemporalScheduleManager:
             Exception: If schedule unpause fails
         """
         schedule_id = f"cron-trigger-{trigger_id}"
-        
+
         try:
             # Get the schedule handle
             handle = self.client.get_schedule_handle(schedule_id)
-            
+
             # Unpause the schedule
             await handle.unpause(note=f"Trigger {trigger_id} enabled")
-            
+
             logger.info(f"Unpaused Temporal schedule {schedule_id} for trigger {trigger_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to unpause schedule for trigger {trigger_id}: {e}")
             raise
 
-    async def get_schedule_info(self, trigger_id: UUID) -> Optional[Dict[str, Any]]:
+    async def get_schedule_info(self, trigger_id: UUID) -> dict[str, Any] | None:
         """Get information about a Temporal Schedule.
         
         Args:
@@ -287,14 +293,14 @@ class TemporalScheduleManager:
             Dictionary containing schedule information, or None if not found
         """
         schedule_id = f"cron-trigger-{trigger_id}"
-        
+
         try:
             # Get the schedule handle
             handle = self.client.get_schedule_handle(schedule_id)
-            
+
             # Get schedule description
             description = await handle.describe()
-            
+
             return {
                 "schedule_id": schedule_id,
                 "trigger_id": str(trigger_id),
@@ -312,7 +318,7 @@ class TemporalScheduleManager:
                     for action in description.info.recent_actions
                 ]
             }
-            
+
         except TemporalError as e:
             if "not found" in str(e).lower():
                 return None

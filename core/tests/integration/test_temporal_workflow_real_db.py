@@ -15,16 +15,13 @@ Industry best practices implemented:
 - Proper cleanup and resource management
 """
 
-import uuid
-from datetime import timedelta
-from typing import AsyncGenerator
 import logging
+import uuid
+from collections.abc import AsyncGenerator
+from datetime import timedelta
 
 import pytest
 import pytest_asyncio
-from temporalio.client import Client
-from temporalio.testing import WorkflowEnvironment
-from temporalio.worker import Worker
 
 # Import database and models for test setup
 from agentarea_tasks.workflows.agent_task_workflow import (
@@ -36,7 +33,6 @@ from agentarea_tasks.workflows.agent_task_workflow import (
     execute_mcp_tool_activity,
     validate_agent_activity,
 )
-
 from temporalio.client import Client
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker

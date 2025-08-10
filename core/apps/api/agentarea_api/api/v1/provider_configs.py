@@ -70,7 +70,7 @@ class ModelInstanceResponse(BaseModel):
     is_public: bool
     created_at: datetime
     updated_at: datetime
-    
+
     # Related data
     provider_name: str | None = None
     provider_key: str | None = None

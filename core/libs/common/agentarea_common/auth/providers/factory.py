@@ -1,12 +1,11 @@
-"""
-Authentication provider factory for AgentArea.
+"""Authentication provider factory for AgentArea.
 
 This module provides a factory pattern implementation for creating
 authentication providers based on configuration.
 """
 
-from typing import Dict, Any, Optional
 import os
+from typing import Any
 
 from ..interfaces import AuthProviderInterface
 from .simple_jwt import SimpleJWTProvider
@@ -16,9 +15,8 @@ class AuthProviderFactory:
     """Factory for creating authentication providers."""
 
     @staticmethod
-    def create_provider(provider_name: str, config: Optional[Dict[str, Any]] = None) -> AuthProviderInterface:
-        """
-        Create an authentication provider based on the provider name.
+    def create_provider(provider_name: str, config: dict[str, Any] | None = None) -> AuthProviderInterface:
+        """Create an authentication provider based on the provider name.
         
         Args:
             provider_name: Name of the provider to create
@@ -31,7 +29,7 @@ class AuthProviderFactory:
             ValueError: If the provider name is not supported
         """
         config = config or {}
-        
+
         if provider_name.lower() == "clerk":
             # Get Clerk configuration from environment or config
             clerk_config = {
@@ -40,24 +38,23 @@ class AuthProviderFactory:
                 "issuer": config.get("issuer") or os.getenv("CLERK_ISSUER"),
                 "audience": config.get("audience") or os.getenv("CLERK_AUDIENCE"),
             }
-            
+
             # Remove None values
             clerk_config = {k: v for k, v in clerk_config.items() if v is not None}
-            
+
             return SimpleJWTProvider(clerk_config)
-        
+
         # Add other providers here as needed
         # elif provider_name.lower() == "auth0":
         #     return Auth0AuthProvider(config)
         # elif provider_name.lower() == "firebase":
         #     return FirebaseAuthProvider(config)
-        
+
         raise ValueError(f"Unsupported authentication provider: {provider_name}")
 
     @staticmethod
     def create_provider_from_env() -> AuthProviderInterface:
-        """
-        Create an authentication provider based on environment variables.
+        """Create an authentication provider based on environment variables.
         
         Returns:
             AuthProviderInterface instance

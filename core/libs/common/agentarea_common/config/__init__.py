@@ -49,4 +49,4 @@ __all__ = [
     # Workflow
     "WorkflowSettings",
     "TaskExecutionSettings",
-] 
+]

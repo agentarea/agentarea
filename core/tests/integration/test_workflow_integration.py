@@ -7,8 +7,8 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List
-from uuid import UUID, uuid4
+from typing import Any
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -28,18 +28,18 @@ from libs.execution.agentarea_execution.workflows.agent_execution_workflow impor
 @dataclass
 class MockResponses:
     """Централизованное управление мок-ответами для тестов."""
-    
+
     def __init__(self):
         self.llm_call_count = 0
         self.tool_call_count = 0
-        
+
     def reset_counters(self):
         """Сброс счетчиков для нового теста."""
         self.llm_call_count = 0
         self.tool_call_count = 0
-    
+
     @property
-    def agent_config(self) -> Dict[str, Any]:
+    def agent_config(self) -> dict[str, Any]:
         return {
             "id": "test-agent-id",
             "name": "Test Agent",
@@ -50,9 +50,9 @@ class MockResponses:
             "events_config": {},
             "planning": False,
         }
-    
+
     @property
-    def available_tools(self) -> List[Dict[str, Any]]:
+    def available_tools(self) -> list[dict[str, Any]]:
         return [
             {
                 "name": "task_complete",
@@ -89,11 +89,11 @@ class MockResponses:
                 }
             }
         ]
-    
-    def get_llm_response_success_scenario(self) -> Dict[str, Any]:
+
+    def get_llm_response_success_scenario(self) -> dict[str, Any]:
         """Сценарий успешного завершения за 2 итерации."""
         self.llm_call_count += 1
-        
+
         if self.llm_call_count == 1:
             # Первая итерация: поиск информации
             return {
@@ -142,11 +142,11 @@ class MockResponses:
                 "cost": 0.005,
                 "usage": {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70}
             }
-    
-    def get_llm_response_max_iterations_scenario(self) -> Dict[str, Any]:
+
+    def get_llm_response_max_iterations_scenario(self) -> dict[str, Any]:
         """Сценарий который никогда не завершается (для тестирования max_iterations)."""
         self.llm_call_count += 1
-        
+
         return {
             "role": "assistant",
             "content": f"Still working on iteration {self.llm_call_count}...",
@@ -163,11 +163,11 @@ class MockResponses:
             "cost": 0.02,  # Относительно дорогие вызовы
             "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
         }
-    
-    def get_llm_response_expensive_scenario(self) -> Dict[str, Any]:
+
+    def get_llm_response_expensive_scenario(self) -> dict[str, Any]:
         """Сценарий с дорогими вызовами для тестирования бюджета."""
         self.llm_call_count += 1
-        
+
         return {
             "role": "assistant",
             "content": f"Expensive operation {self.llm_call_count} in progress...",
@@ -184,11 +184,11 @@ class MockResponses:
             "cost": 3.0,  # Очень дорогой вызов
             "usage": {"prompt_tokens": 2000, "completion_tokens": 1000, "total_tokens": 3000}
         }
-    
-    def get_llm_response_empty_scenario(self) -> Dict[str, Any]:
+
+    def get_llm_response_empty_scenario(self) -> dict[str, Any]:
         """Сценарий с пустыми ответами, затем успешное завершение."""
         self.llm_call_count += 1
-        
+
         if self.llm_call_count <= 2:
             # Первые 2 итерации - пустые ответы
             return {
@@ -219,11 +219,11 @@ class MockResponses:
                 "cost": 0.01,
                 "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
             }
-    
-    def get_tool_result(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+
+    def get_tool_result(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
         """Возвращает результат выполнения инструмента."""
         self.tool_call_count += 1
-        
+
         if tool_name == "task_complete":
             return {
                 "result": tool_args.get("result", "Task completed"),
@@ -249,7 +249,7 @@ class MockResponses:
 
 class TestAgentExecutionWorkflow:
     """Интеграционные тесты для AgentExecutionWorkflow."""
-    
+
     @pytest_asyncio.fixture
     async def workflow_environment(self):
         """Создает тестовое окружение с time-skipping."""
@@ -258,17 +258,17 @@ class TestAgentExecutionWorkflow:
             yield env
         finally:
             await env.shutdown()
-    
+
     @pytest_asyncio.fixture
     async def mock_responses(self):
         """Создает объект для управления мок-ответами."""
         responses = MockResponses()
         yield responses
         responses.reset_counters()
-    
+
     def create_test_request(
-        self, 
-        max_iterations: int = 5, 
+        self,
+        max_iterations: int = 5,
         budget_usd: float = 10.0,
         task_query: str = "Complete a test task"
     ) -> AgentExecutionRequest:
@@ -285,18 +285,18 @@ class TestAgentExecutionWorkflow:
             budget_usd=budget_usd,
             requires_human_approval=False
         )
-    
+
     def create_mock_activities(self, mock_responses: MockResponses, scenario: str = "success"):
         """Создает мок-активности для указанного сценария."""
-        
+
         @activity.defn
         async def build_agent_config_activity(*args, **kwargs):
             return mock_responses.agent_config
-        
+
         @activity.defn
         async def discover_available_tools_activity(*args, **kwargs):
             return mock_responses.available_tools
-        
+
         @activity.defn
         async def call_llm_activity(*args, **kwargs):
             if scenario == "success":
@@ -309,11 +309,11 @@ class TestAgentExecutionWorkflow:
                 return mock_responses.get_llm_response_empty_scenario()
             else:
                 raise ValueError(f"Unknown scenario: {scenario}")
-        
+
         @activity.defn
         async def execute_mcp_tool_activity(tool_name: str, tool_args: dict, *args, **kwargs):
             return mock_responses.get_tool_result(tool_name, tool_args)
-        
+
         @activity.defn
         async def evaluate_goal_progress_activity(*args, **kwargs):
             # Всегда возвращаем False - пусть task_complete управляет завершением
@@ -322,11 +322,11 @@ class TestAgentExecutionWorkflow:
                 "final_response": None,
                 "confidence": 0.5
             }
-        
+
         @activity.defn
         async def publish_workflow_events_activity(*args, **kwargs):
             return True
-        
+
         return [
             build_agent_config_activity,
             discover_available_tools_activity,
@@ -335,11 +335,11 @@ class TestAgentExecutionWorkflow:
             evaluate_goal_progress_activity,
             publish_workflow_events_activity
         ]
-    
+
     @pytest.mark.asyncio
     async def test_workflow_completes_successfully_with_task_complete(
-        self, 
-        workflow_environment, 
+        self,
+        workflow_environment,
         mock_responses
     ):
         """
@@ -352,7 +352,7 @@ class TestAgentExecutionWorkflow:
         - Нет зацикливания
         """
         activities = self.create_mock_activities(mock_responses, "success")
-        
+
         async with Worker(
             workflow_environment.client,
             task_queue="test-queue",
@@ -360,14 +360,14 @@ class TestAgentExecutionWorkflow:
             activities=activities
         ):
             request = self.create_test_request()
-            
+
             result = await workflow_environment.client.execute_workflow(
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-success-{uuid4()}",
                 task_queue="test-queue"
             )
-            
+
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
             assert result.success is True, "Workflow должен завершиться успешно"
@@ -376,15 +376,15 @@ class TestAgentExecutionWorkflow:
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
             assert result.total_cost > 0, "Стоимость должна быть больше 0"
-            
+
             # Проверки счетчиков мок-объектов
             assert mock_responses.llm_call_count == 2, f"Ожидалось 2 вызова LLM, получено {mock_responses.llm_call_count}"
             assert mock_responses.tool_call_count == 2, f"Ожидалось 2 вызова инструментов, получено {mock_responses.tool_call_count}"
-    
+
     @pytest.mark.asyncio
     async def test_workflow_stops_at_max_iterations(
-        self, 
-        workflow_environment, 
+        self,
+        workflow_environment,
         mock_responses
     ):
         """
@@ -396,7 +396,7 @@ class TestAgentExecutionWorkflow:
         - Нет зацикливания или превышения лимита
         """
         activities = self.create_mock_activities(mock_responses, "max_iterations")
-        
+
         async with Worker(
             workflow_environment.client,
             task_queue="test-queue",
@@ -405,14 +405,14 @@ class TestAgentExecutionWorkflow:
         ):
             # Устанавливаем низкий лимит итераций для быстрого тестирования
             request = self.create_test_request(max_iterations=3)
-            
+
             result = await workflow_environment.client.execute_workflow(
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-max-iterations-{uuid4()}",
                 task_queue="test-queue"
             )
-            
+
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
             assert result.success is False, "Workflow не должен быть успешным при превышении лимита итераций"
@@ -420,15 +420,15 @@ class TestAgentExecutionWorkflow:
             assert result.reasoning_iterations_used == 2, f"Ожидалось 2 итерации (max_iterations-1), получено {result.reasoning_iterations_used}"
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
-            
+
             # Проверки счетчиков - должно быть max_iterations-1 вызовов
             assert mock_responses.llm_call_count == 2, f"Ожидалось 2 вызова LLM, получено {mock_responses.llm_call_count}"
             assert mock_responses.tool_call_count == 2, f"Ожидалось 2 вызова инструментов, получено {mock_responses.tool_call_count}"
-    
+
     @pytest.mark.asyncio
     async def test_workflow_stops_when_budget_exceeded(
-        self, 
-        workflow_environment, 
+        self,
+        workflow_environment,
         mock_responses
     ):
         """
@@ -441,7 +441,7 @@ class TestAgentExecutionWorkflow:
         - Нет зацикливания после превышения бюджета
         """
         activities = self.create_mock_activities(mock_responses, "budget_exceeded")
-        
+
         async with Worker(
             workflow_environment.client,
             task_queue="test-queue",
@@ -450,14 +450,14 @@ class TestAgentExecutionWorkflow:
         ):
             # Устанавливаем низкий бюджет (каждый вызов стоит 3.0)
             request = self.create_test_request(budget_usd=5.0, max_iterations=10)
-            
+
             result = await workflow_environment.client.execute_workflow(
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-budget-exceeded-{uuid4()}",
                 task_queue="test-queue"
             )
-            
+
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
             assert result.success is False, "Workflow не должен быть успешным при превышении бюджета"
@@ -465,14 +465,14 @@ class TestAgentExecutionWorkflow:
             assert result.reasoning_iterations_used <= 3, f"Не должно быть больше 3 итераций при таком бюджете, получено {result.reasoning_iterations_used}"
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
-            
+
             # Проверки счетчиков - должно остановиться рано из-за бюджета
             assert mock_responses.llm_call_count <= 3, f"Не должно быть больше 3 вызовов LLM, получено {mock_responses.llm_call_count}"
-    
+
     @pytest.mark.asyncio
     async def test_workflow_handles_empty_llm_responses(
-        self, 
-        workflow_environment, 
+        self,
+        workflow_environment,
         mock_responses
     ):
         """
@@ -484,7 +484,7 @@ class TestAgentExecutionWorkflow:
         - Workflow может завершиться успешно после пустых ответов
         """
         activities = self.create_mock_activities(mock_responses, "empty_responses")
-        
+
         async with Worker(
             workflow_environment.client,
             task_queue="test-queue",
@@ -492,14 +492,14 @@ class TestAgentExecutionWorkflow:
             activities=activities
         ):
             request = self.create_test_request(max_iterations=5)
-            
+
             result = await workflow_environment.client.execute_workflow(
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-empty-responses-{uuid4()}",
                 task_queue="test-queue"
             )
-            
+
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
             assert result.success is True, "Workflow должен завершиться успешно после обработки пустых ответов"
@@ -507,7 +507,7 @@ class TestAgentExecutionWorkflow:
             assert result.reasoning_iterations_used == 3, f"Ожидалось 3 итерации, получено {result.reasoning_iterations_used}"
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
-            
+
             # Проверки счетчиков
             assert mock_responses.llm_call_count == 3, f"Ожидалось 3 вызова LLM, получено {mock_responses.llm_call_count}"
             # Только 1 tool call (task_complete), пустые ответы не вызывают инструменты

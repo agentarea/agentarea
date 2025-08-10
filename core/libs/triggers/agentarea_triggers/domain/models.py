@@ -1,12 +1,12 @@
 """Trigger domain models."""
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .enums import TriggerType, TriggerStatus, ExecutionStatus, WebhookType
+from .enums import ExecutionStatus, TriggerType, WebhookType
 
 
 class Trigger(BaseModel):
@@ -28,7 +28,7 @@ class Trigger(BaseModel):
     # Business logic safety
     failure_threshold: int = Field(default=5, ge=1, le=100)
     consecutive_failures: int = Field(default=0, ge=0)
-    last_execution_at: Optional[datetime] = None
+    last_execution_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -46,10 +46,10 @@ class Trigger(BaseModel):
         """Validate datetime field relationships."""
         if self.updated_at < self.created_at:
             raise ValueError("updated_at cannot be before created_at")
-        
+
         if self.last_execution_at and self.last_execution_at < self.created_at:
             raise ValueError("last_execution_at cannot be before created_at")
-        
+
         return self
 
     def should_disable_due_to_failures(self) -> bool:
@@ -75,7 +75,7 @@ class CronTrigger(Trigger):
     trigger_type: TriggerType = Field(default=TriggerType.CRON, frozen=True)
     cron_expression: str = Field(..., min_length=1)
     timezone: str = Field(default="UTC")
-    next_run_time: Optional[datetime] = None
+    next_run_time: datetime | None = None
 
     @field_validator('cron_expression')
     @classmethod
@@ -83,12 +83,12 @@ class CronTrigger(Trigger):
         """Basic validation of cron expression format."""
         if not v.strip():
             raise ValueError("Cron expression cannot be empty")
-        
+
         # Basic format check - should have 5 or 6 parts
         parts = v.strip().split()
         if len(parts) not in [5, 6]:
             raise ValueError("Cron expression must have 5 or 6 parts")
-        
+
         return v.strip()
 
     @field_validator('timezone')
@@ -105,12 +105,12 @@ class WebhookTrigger(Trigger):
 
     trigger_type: TriggerType = Field(default=TriggerType.WEBHOOK, frozen=True)
     webhook_id: str = Field(..., min_length=1)
-    allowed_methods: List[str] = Field(default_factory=lambda: ["POST"])
+    allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
     webhook_type: WebhookType = Field(default=WebhookType.GENERIC)
     validation_rules: dict[str, Any] = Field(default_factory=dict)
 
     # Generic webhook configuration - supports any webhook type
-    webhook_config: Optional[dict[str, Any]] = None
+    webhook_config: dict[str, Any] | None = None
 
     @field_validator('webhook_id')
     @classmethod
@@ -122,16 +122,16 @@ class WebhookTrigger(Trigger):
 
     @field_validator('allowed_methods')
     @classmethod
-    def validate_allowed_methods(cls, v: List[str]) -> List[str]:
+    def validate_allowed_methods(cls, v: list[str]) -> list[str]:
         """Validate HTTP methods."""
         if not v:
             raise ValueError("At least one HTTP method must be allowed")
-        
+
         valid_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
         for method in v:
             if method.upper() not in valid_methods:
                 raise ValueError(f"Invalid HTTP method: {method}")
-        
+
         return [method.upper() for method in v]
 
 
@@ -142,12 +142,12 @@ class TriggerExecution(BaseModel):
     trigger_id: UUID
     executed_at: datetime = Field(default_factory=datetime.utcnow)
     status: ExecutionStatus
-    task_id: Optional[UUID] = None
+    task_id: UUID | None = None
     execution_time_ms: int = Field(ge=0)
-    error_message: Optional[str] = None
+    error_message: str | None = None
     trigger_data: dict[str, Any] = Field(default_factory=dict)
-    workflow_id: Optional[str] = None  # Temporal workflow ID
-    run_id: Optional[str] = None       # Temporal run ID
+    workflow_id: str | None = None  # Temporal workflow ID
+    run_id: str | None = None       # Temporal run ID
 
     class Config:
         from_attributes = True
@@ -185,15 +185,15 @@ class TriggerCreate(BaseModel):
     failure_threshold: int = Field(default=5, ge=1, le=100)
 
     # Cron-specific fields
-    cron_expression: Optional[str] = None
+    cron_expression: str | None = None
     timezone: str = Field(default="UTC")
 
     # Webhook-specific fields
-    webhook_id: Optional[str] = None
-    allowed_methods: List[str] = Field(default_factory=lambda: ["POST"])
+    webhook_id: str | None = None
+    allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
     webhook_type: WebhookType = Field(default=WebhookType.GENERIC)
     validation_rules: dict[str, Any] = Field(default_factory=dict)
-    webhook_config: Optional[dict[str, Any]] = None
+    webhook_config: dict[str, Any] | None = None
 
     @model_validator(mode='after')
     def validate_trigger_type_fields(self) -> 'TriggerCreate':
@@ -204,28 +204,28 @@ class TriggerCreate(BaseModel):
         elif self.trigger_type == TriggerType.WEBHOOK:
             if not self.webhook_id:
                 raise ValueError("webhook_id is required for WEBHOOK triggers")
-        
+
         return self
 
 
 class TriggerUpdate(BaseModel):
     """Model for updating an existing trigger."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
-    is_active: Optional[bool] = None
-    task_parameters: Optional[dict[str, Any]] = None
-    conditions: Optional[dict[str, Any]] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=1000)
+    is_active: bool | None = None
+    task_parameters: dict[str, Any] | None = None
+    conditions: dict[str, Any] | None = None
 
     # Business logic safety
-    failure_threshold: Optional[int] = Field(None, ge=1, le=100)
+    failure_threshold: int | None = Field(None, ge=1, le=100)
 
     # Cron-specific fields
-    cron_expression: Optional[str] = None
-    timezone: Optional[str] = None
+    cron_expression: str | None = None
+    timezone: str | None = None
 
     # Webhook-specific fields
-    allowed_methods: Optional[List[str]] = None
-    webhook_type: Optional[WebhookType] = None
-    validation_rules: Optional[dict[str, Any]] = None
-    webhook_config: Optional[dict[str, Any]] = None
+    allowed_methods: list[str] | None = None
+    webhook_type: WebhookType | None = None
+    validation_rules: dict[str, Any] | None = None
+    webhook_config: dict[str, Any] | None = None

@@ -197,3 +197,42 @@ class SimpleTask(BaseModel):
         for field, value in kwargs.items():
             if hasattr(self, field):
                 setattr(self, field, value)
+
+
+class TaskEvent(BaseModel):
+    """Task event domain model for event sourcing."""
+
+    id: UUID = Field(default_factory=uuid4)
+    task_id: UUID
+    event_type: str
+    timestamp: datetime
+    data: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    workspace_id: str = "default"
+    created_by: str = "system"
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def create_workflow_event(
+        cls,
+        task_id: UUID,
+        event_type: str,
+        data: dict[str, Any],
+        workspace_id: str = "default",
+        created_by: str = "workflow"
+    ) -> "TaskEvent":
+        """Create a workflow event with proper formatting."""
+        return cls(
+            task_id=task_id,
+            event_type=event_type,
+            timestamp=datetime.utcnow(),
+            data=data,
+            metadata={
+                "source": "workflow",
+                "created_at": datetime.utcnow().isoformat()
+            },
+            workspace_id=workspace_id,
+            created_by=created_by
+        )

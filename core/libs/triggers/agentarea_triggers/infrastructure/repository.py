@@ -1,38 +1,44 @@
 """Trigger repository implementation."""
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import and_, desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ..domain.enums import TriggerType, ExecutionStatus
-from ..domain.models import Trigger, CronTrigger, WebhookTrigger, TriggerExecution, TriggerCreate, TriggerUpdate
-from .orm import TriggerORM, TriggerExecutionORM
+from ..domain.enums import ExecutionStatus, TriggerType
+from ..domain.models import (
+    CronTrigger,
+    Trigger,
+    TriggerCreate,
+    TriggerExecution,
+    TriggerUpdate,
+    WebhookTrigger,
+)
+from .orm import TriggerExecutionORM, TriggerORM
 
 
 class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     """Repository for trigger persistence."""
-    
+
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, TriggerORM, user_context)
-    
+
     async def get_trigger(self, id: UUID) -> Trigger | None:
         """Get a trigger by ID and convert to domain model."""
         trigger_orm = await self.get_by_id(id)
         if not trigger_orm:
             return None
         return self._orm_to_domain(trigger_orm)
-    
-    async def list_triggers(self, limit: int = 100, offset: int = 0, creator_scoped: bool = False) -> List[Trigger]:
+
+    async def list_triggers(self, limit: int = 100, offset: int = 0, creator_scoped: bool = False) -> list[Trigger]:
         """List all triggers in workspace and convert to domain models."""
         trigger_orms = await self.list_all(creator_scoped=creator_scoped, limit=limit, offset=offset)
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-    
+
     async def create_trigger(self, entity: Trigger) -> Trigger:
         """Create a new trigger from domain model."""
         # Extract fields from domain model
@@ -49,7 +55,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             'consecutive_failures': entity.consecutive_failures,
             'last_execution_at': entity.last_execution_at,
         }
-        
+
         # Add type-specific fields
         if isinstance(entity, CronTrigger):
             trigger_data.update({
@@ -65,15 +71,15 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 'validation_rules': entity.validation_rules,
                 'webhook_config': entity.webhook_config,
             })
-        
+
         # Remove None values and system fields that will be auto-populated
         trigger_data = {k: v for k, v in trigger_data.items() if v is not None}
         trigger_data.pop('created_at', None)
         trigger_data.pop('updated_at', None)
-        
+
         trigger_orm = await self.create(**trigger_data)
         return self._orm_to_domain(trigger_orm)
-    
+
     async def update_trigger(self, entity: Trigger) -> Trigger:
         """Update an existing trigger from domain model."""
         # Extract fields from domain model
@@ -89,7 +95,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             'consecutive_failures': entity.consecutive_failures,
             'last_execution_at': entity.last_execution_at,
         }
-        
+
         # Add type-specific fields
         if isinstance(entity, CronTrigger):
             trigger_data.update({
@@ -105,19 +111,19 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 'validation_rules': entity.validation_rules,
                 'webhook_config': entity.webhook_config,
             })
-        
+
         # Remove None values
         trigger_data = {k: v for k, v in trigger_data.items() if v is not None}
-        
+
         trigger_orm = await self.update(entity.id, **trigger_data)
         if not trigger_orm:
             return entity  # Return original if update failed
         return self._orm_to_domain(trigger_orm)
-    
+
     async def delete_trigger(self, id: UUID) -> bool:
         """Delete a trigger by ID."""
         return await self.delete(id)
-    
+
     # Additional methods for trigger-specific operations
     async def create_from_model(self, trigger_data: TriggerCreate) -> Trigger:
         """Create a new trigger from TriggerCreate data."""
@@ -142,13 +148,13 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             validation_rules=trigger_data.validation_rules,
             webhook_config=trigger_data.webhook_config,
         )
-        
+
         self.session.add(trigger_orm)
         await self.session.flush()
         await self.session.refresh(trigger_orm)
-        
+
         return self._orm_to_domain(trigger_orm)
-    
+
     async def update_by_id(self, trigger_id: UUID, trigger_update: TriggerUpdate) -> Trigger | None:
         """Update a trigger by ID with TriggerUpdate data."""
         # Build update dict excluding None values
@@ -159,19 +165,19 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                     update_data[field] = value.value
                 else:
                     update_data[field] = value
-        
+
         if not update_data:
             return await self.get(trigger_id)
-        
+
         update_data["updated_at"] = datetime.utcnow()
-        
+
         stmt = update(TriggerORM).where(TriggerORM.id == trigger_id).values(**update_data)
         await self.session.execute(stmt)
         await self.session.flush()
-        
+
         return await self.get(trigger_id)
-    
-    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> List[Trigger]:
+
+    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> list[Trigger]:
         """List triggers for an agent."""
         stmt = (
             select(TriggerORM)
@@ -181,10 +187,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         trigger_orms = result.scalars().all()
-        
+
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-    
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> List[Trigger]:
+
+    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[Trigger]:
         """Get triggers by workspace ID with pagination.
         
         Note: This method is deprecated. Use list_triggers() instead which automatically
@@ -193,10 +199,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         # For backward compatibility, but this should be replaced with list_triggers()
         if workspace_id != self.user_context.workspace_id:
             return []  # Don't allow cross-workspace access
-        
+
         return await self.list_triggers(limit=limit, offset=offset)
-    
-    async def list_by_type(self, trigger_type: TriggerType, limit: int = 100) -> List[Trigger]:
+
+    async def list_by_type(self, trigger_type: TriggerType, limit: int = 100) -> list[Trigger]:
         """List triggers by type."""
         stmt = (
             select(TriggerORM)
@@ -206,10 +212,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         trigger_orms = result.scalars().all()
-        
+
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-    
-    async def list_active_triggers(self, limit: int = 100) -> List[Trigger]:
+
+    async def list_active_triggers(self, limit: int = 100) -> list[Trigger]:
         """List active triggers."""
         stmt = (
             select(TriggerORM)
@@ -219,21 +225,21 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         trigger_orms = result.scalars().all()
-        
+
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-    
+
     async def get_by_webhook_id(self, webhook_id: str) -> Trigger | None:
         """Get trigger by webhook ID."""
         stmt = select(TriggerORM).where(TriggerORM.webhook_id == webhook_id)
         result = await self.session.execute(stmt)
         trigger_orm = result.scalar_one_or_none()
-        
+
         if not trigger_orm:
             return None
-        
+
         return self._orm_to_domain(trigger_orm)
-    
-    async def list_cron_triggers_due(self, current_time: datetime) -> List[CronTrigger]:
+
+    async def list_cron_triggers_due(self, current_time: datetime) -> list[CronTrigger]:
         """List cron triggers that are due for execution."""
         stmt = (
             select(TriggerORM)
@@ -248,15 +254,15 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         trigger_orms = result.scalars().all()
-        
+
         triggers = []
         for trigger_orm in trigger_orms:
             trigger = self._orm_to_domain(trigger_orm)
             if isinstance(trigger, CronTrigger):
                 triggers.append(trigger)
-        
+
         return triggers
-    
+
     async def update_execution_tracking(
         self,
         trigger_id: UUID,
@@ -275,9 +281,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
-        
+
         return result.rowcount > 0
-    
+
     async def disable_trigger(self, trigger_id: UUID) -> bool:
         """Disable a trigger."""
         stmt = (
@@ -287,9 +293,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
-        
+
         return result.rowcount > 0
-    
+
     async def enable_trigger(self, trigger_id: UUID) -> bool:
         """Enable a trigger."""
         stmt = (
@@ -299,9 +305,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
-        
+
         return result.rowcount > 0
-    
+
     def _orm_to_domain(self, trigger_orm: TriggerORM) -> Trigger:
         """Convert ORM model to domain model."""
         base_data = {
@@ -321,7 +327,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "consecutive_failures": trigger_orm.consecutive_failures,
             "last_execution_at": trigger_orm.last_execution_at,
         }
-        
+
         if trigger_orm.trigger_type == TriggerType.CRON.value:
             return CronTrigger(
                 **base_data,
@@ -342,7 +348,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         else:
             # Fallback to base Trigger
             return Trigger(**base_data)
-    
+
     def _domain_to_orm(self, trigger: Trigger) -> TriggerORM:
         """Convert domain model to ORM model."""
         orm_data = {
@@ -362,7 +368,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "consecutive_failures": trigger.consecutive_failures,
             "last_execution_at": trigger.last_execution_at,
         }
-        
+
         if isinstance(trigger, CronTrigger):
             orm_data.update({
                 "cron_expression": trigger.cron_expression,
@@ -377,28 +383,28 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 "validation_rules": trigger.validation_rules,
                 "webhook_config": trigger.webhook_config,
             })
-        
+
         return TriggerORM(**orm_data)
 
 
 class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM]):
     """Repository for trigger execution persistence."""
-    
+
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, TriggerExecutionORM, user_context)
-    
+
     async def get_execution(self, id: UUID) -> TriggerExecution | None:
         """Get a trigger execution by ID and convert to domain model."""
         execution_orm = await self.get_by_id(id)
         if not execution_orm:
             return None
         return self._orm_to_domain(execution_orm)
-    
-    async def list_executions(self, limit: int = 100, offset: int = 0, creator_scoped: bool = False) -> List[TriggerExecution]:
+
+    async def list_executions(self, limit: int = 100, offset: int = 0, creator_scoped: bool = False) -> list[TriggerExecution]:
         """List all trigger executions in workspace and convert to domain models."""
         execution_orms = await self.list_all(creator_scoped=creator_scoped, limit=limit, offset=offset)
         return [self._orm_to_domain(execution_orm) for execution_orm in execution_orms]
-    
+
     async def create_execution(self, entity: TriggerExecution) -> TriggerExecution:
         """Create a new trigger execution from domain model."""
         # Extract fields from domain model
@@ -414,15 +420,15 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             'workflow_id': entity.workflow_id,
             'run_id': entity.run_id,
         }
-        
+
         # Remove None values and system fields that will be auto-populated
         execution_data = {k: v for k, v in execution_data.items() if v is not None}
         execution_data.pop('created_at', None)
         execution_data.pop('updated_at', None)
-        
+
         execution_orm = await self.create(**execution_data)
         return self._orm_to_domain(execution_orm)
-    
+
     async def update_execution(self, entity: TriggerExecution) -> TriggerExecution:
         """Update an existing trigger execution from domain model."""
         # Extract fields from domain model
@@ -437,25 +443,25 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             'workflow_id': entity.workflow_id,
             'run_id': entity.run_id,
         }
-        
+
         # Remove None values
         execution_data = {k: v for k, v in execution_data.items() if v is not None}
-        
+
         execution_orm = await self.update(entity.id, **execution_data)
         if not execution_orm:
             return entity  # Return original if update failed
         return self._orm_to_domain(execution_orm)
-    
+
     async def delete_execution(self, id: UUID) -> bool:
         """Delete a trigger execution by ID."""
         return await self.delete(id)
-    
+
     async def list_by_trigger(
         self,
         trigger_id: UUID,
         limit: int = 100,
         offset: int = 0
-    ) -> List[TriggerExecution]:
+    ) -> list[TriggerExecution]:
         """List executions for a specific trigger."""
         stmt = (
             select(TriggerExecutionORM)
@@ -466,14 +472,14 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         )
         result = await self.session.execute(stmt)
         execution_orms = result.scalars().all()
-        
+
         return [self._orm_to_domain(execution_orm) for execution_orm in execution_orms]
-    
+
     async def list_by_status(
         self,
         status: ExecutionStatus,
         limit: int = 100
-    ) -> List[TriggerExecution]:
+    ) -> list[TriggerExecution]:
         """List executions by status."""
         stmt = (
             select(TriggerExecutionORM)
@@ -483,20 +489,20 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         )
         result = await self.session.execute(stmt)
         execution_orms = result.scalars().all()
-        
+
         return [self._orm_to_domain(execution_orm) for execution_orm in execution_orms]
-    
+
     async def get_recent_executions(
         self,
         trigger_id: UUID,
         hours: int = 24,
         limit: int = 100
-    ) -> List[TriggerExecution]:
+    ) -> list[TriggerExecution]:
         """Get recent executions for a trigger within specified hours."""
         from datetime import timedelta
-        
+
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-        
+
         stmt = (
             select(TriggerExecutionORM)
             .where(
@@ -510,9 +516,9 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         )
         result = await self.session.execute(stmt)
         execution_orms = result.scalars().all()
-        
+
         return [self._orm_to_domain(execution_orm) for execution_orm in execution_orms]
-    
+
     async def count_executions_in_period(
         self,
         trigger_id: UUID,
@@ -521,7 +527,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
     ) -> int:
         """Count executions for a trigger in a specific time period."""
         from sqlalchemy import func
-        
+
         stmt = (
             select(func.count(TriggerExecutionORM.id))
             .where(
@@ -534,21 +540,21 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
-    
+
     # Enhanced pagination and filtering methods for monitoring
-    
+
     async def list_executions_paginated(
         self,
-        trigger_id: Optional[UUID] = None,
-        status: Optional[ExecutionStatus] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        trigger_id: UUID | None = None,
+        status: ExecutionStatus | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 50,
         offset: int = 0
-    ) -> List[TriggerExecution]:
+    ) -> list[TriggerExecution]:
         """List executions with pagination and filtering."""
         stmt = select(TriggerExecutionORM)
-        
+
         # Apply filters
         conditions = []
         if trigger_id:
@@ -559,29 +565,29 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             conditions.append(TriggerExecutionORM.executed_at >= start_time)
         if end_time:
             conditions.append(TriggerExecutionORM.executed_at <= end_time)
-        
+
         if conditions:
             stmt = stmt.where(and_(*conditions))
-        
+
         stmt = stmt.order_by(desc(TriggerExecutionORM.executed_at)).limit(limit).offset(offset)
-        
+
         result = await self.session.execute(stmt)
         execution_orms = result.scalars().all()
-        
+
         return [self._orm_to_domain(execution_orm) for execution_orm in execution_orms]
-    
+
     async def count_executions_filtered(
         self,
-        trigger_id: Optional[UUID] = None,
-        status: Optional[ExecutionStatus] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
+        trigger_id: UUID | None = None,
+        status: ExecutionStatus | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None
     ) -> int:
         """Count executions with filtering."""
         from sqlalchemy import func
-        
+
         stmt = select(func.count(TriggerExecutionORM.id))
-        
+
         # Apply filters
         conditions = []
         if trigger_id:
@@ -592,13 +598,13 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             conditions.append(TriggerExecutionORM.executed_at >= start_time)
         if end_time:
             conditions.append(TriggerExecutionORM.executed_at <= end_time)
-        
+
         if conditions:
             stmt = stmt.where(and_(*conditions))
-        
+
         result = await self.session.execute(stmt)
         return result.scalar() or 0
-    
+
     async def get_execution_metrics(
         self,
         trigger_id: UUID,
@@ -606,10 +612,11 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
     ) -> dict[str, Any]:
         """Get execution metrics for a trigger within specified hours."""
         from datetime import timedelta
-        from sqlalchemy import func, case
-        
+
+        from sqlalchemy import case, func
+
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-        
+
         # Get aggregated metrics
         stmt = (
             select(
@@ -628,10 +635,10 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
                 )
             )
         )
-        
+
         result = await self.session.execute(stmt)
         row = result.first()
-        
+
         if not row or row.total_executions == 0:
             return {
                 'total_executions': 0,
@@ -645,12 +652,12 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
                 'max_execution_time_ms': 0,
                 'period_hours': hours
             }
-        
+
         total = row.total_executions
         successful = row.successful_executions or 0
         failed = row.failed_executions or 0
         timeout = row.timeout_executions or 0
-        
+
         return {
             'total_executions': total,
             'successful_executions': successful,
@@ -663,18 +670,18 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             'max_execution_time_ms': row.max_execution_time_ms or 0,
             'period_hours': hours
         }
-    
+
     async def get_executions_with_task_correlation(
         self,
         trigger_id: UUID,
         limit: int = 50,
         offset: int = 0
-    ) -> List[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get executions with task correlation information."""
         # This would require joining with task tables if available
         # For now, we'll return execution data with task_id correlation
         executions = await self.list_by_trigger(trigger_id, limit, offset)
-        
+
         # Convert to dict format with correlation info
         result = []
         for execution in executions:
@@ -693,21 +700,22 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
                 'has_workflow_correlation': execution.workflow_id is not None
             }
             result.append(execution_dict)
-        
+
         return result
-    
+
     async def get_execution_timeline(
         self,
         trigger_id: UUID,
         hours: int = 24,
         bucket_size_minutes: int = 60
-    ) -> List[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get execution timeline with bucketed counts."""
         from datetime import timedelta
-        from sqlalchemy import func, extract, case
-        
+
+        from sqlalchemy import case, func
+
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-        
+
         # Create time buckets
         stmt = (
             select(
@@ -726,10 +734,10 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             .group_by(func.date_trunc('hour', TriggerExecutionORM.executed_at))
             .order_by(func.date_trunc('hour', TriggerExecutionORM.executed_at))
         )
-        
+
         result = await self.session.execute(stmt)
         rows = result.all()
-        
+
         timeline = []
         for row in rows:
             timeline.append({
@@ -740,9 +748,9 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
                 'timeout_count': row.timeout_count or 0,
                 'success_rate': (row.success_count / row.total_count * 100) if row.total_count > 0 else 0.0
             })
-        
+
         return timeline
-    
+
     def _orm_to_domain(self, execution_orm: TriggerExecutionORM) -> TriggerExecution:
         """Convert ORM model to domain model."""
         return TriggerExecution(
@@ -757,7 +765,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             workflow_id=execution_orm.workflow_id,
             run_id=execution_orm.run_id,
         )
-    
+
     def _domain_to_orm(self, execution: TriggerExecution) -> TriggerExecutionORM:
         """Convert domain model to ORM model."""
         return TriggerExecutionORM(

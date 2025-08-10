@@ -1,17 +1,21 @@
 """Unit tests for TemporalScheduleManager."""
 
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from temporalio.client import Schedule, ScheduleHandle, ScheduleActionStartWorkflow
-from temporalio.client import ScheduleSpec, ScheduleState
-from temporalio.exceptions import ScheduleNotFoundError
-
+import pytest
 from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import CronTrigger
 from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
+from temporalio.client import (
+    Schedule,
+    ScheduleActionStartWorkflow,
+    ScheduleHandle,
+    ScheduleSpec,
+    ScheduleState,
+)
+from temporalio.exceptions import ScheduleNotFoundError
 
 
 class TestTemporalScheduleManager:
@@ -55,17 +59,17 @@ class TestTemporalScheduleManager:
         # Verify
         mock_temporal_client.create_schedule.assert_called_once()
         schedule_id = f"cron-trigger-{sample_cron_trigger.id}"
-        
+
         # Verify schedule ID
         args, kwargs = mock_temporal_client.create_schedule.call_args
         assert kwargs["schedule_id"] == schedule_id
-        
+
         # Verify schedule spec
         schedule = kwargs["schedule"]
         assert isinstance(schedule, Schedule)
         assert schedule.spec.cron_expressions == [sample_cron_trigger.cron_expression]
         assert schedule.spec.timezone == sample_cron_trigger.timezone
-        
+
         # Verify workflow action
         action = schedule.action
         assert isinstance(action, ScheduleActionStartWorkflow)
@@ -117,7 +121,7 @@ class TestTemporalScheduleManager:
 
         # Verify
         mock_handle.update.assert_called_once()
-        
+
         # Verify updated schedule
         args, kwargs = mock_handle.update.call_args
         updated_schedule = args[0]
@@ -228,7 +232,7 @@ class TestTemporalScheduleManager:
         schedule_id = f"cron-trigger-{trigger_id}"
         mock_temporal_client.get_schedule_handle.assert_called_once_with(schedule_id)
         mock_handle.describe.assert_called_once()
-        
+
         # Verify result
         assert result["schedule_id"] == schedule_id
         assert "is_paused" in result

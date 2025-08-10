@@ -7,8 +7,8 @@ and authorization used across the AgentArea API endpoints.
 import logging
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, Request, status
 from agentarea_common.auth import UserContext, UserContextDep, get_user_context
+from fastapi import Depends, Header, HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ DEFAULT_USER_ID = "test-user-123"
 
 async def get_workspace_id(
     x_workspace_id: str | None = Header(
-        None, 
+        None,
         description="Workspace ID for data isolation. Required for most endpoints.",
         alias="X-Workspace-ID"
     )
@@ -127,7 +127,7 @@ async def get_admin_user_context(
     # For now, check if user has admin role in their roles list
     if "admin" not in user_context.roles:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to perform this action"
         )
 

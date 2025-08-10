@@ -1,17 +1,16 @@
 """Context manager for handling user and workspace context."""
 
 from contextvars import ContextVar
-from typing import Optional
 
 from .context import UserContext
 
 # Context variable to store the current user context
-_user_context: ContextVar[Optional[UserContext]] = ContextVar('user_context', default=None)
+_user_context: ContextVar[UserContext | None] = ContextVar('user_context', default=None)
 
 
 class ContextManager:
     """Manager for user and workspace context."""
-    
+
     @staticmethod
     def set_context(user_context: UserContext) -> None:
         """Set the current user context.
@@ -20,23 +19,23 @@ class ContextManager:
             user_context: UserContext to set as current
         """
         _user_context.set(user_context)
-    
+
     @staticmethod
-    def get_context() -> Optional[UserContext]:
+    def get_context() -> UserContext | None:
         """Get the current user context.
         
         Returns:
             Current UserContext or None if not set
         """
         return _user_context.get()
-    
+
     @staticmethod
     def clear_context() -> None:
         """Clear the current user context."""
         _user_context.set(None)
-    
+
     @staticmethod
-    def get_user_id() -> Optional[str]:
+    def get_user_id() -> str | None:
         """Get the current user ID.
         
         Returns:
@@ -44,9 +43,9 @@ class ContextManager:
         """
         context = _user_context.get()
         return context.user_id if context else None
-    
+
     @staticmethod
-    def get_workspace_id() -> Optional[str]:
+    def get_workspace_id() -> str | None:
         """Get the current workspace ID.
         
         Returns:

@@ -12,8 +12,8 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from uuid import UUID
     from datetime import datetime
+    from uuid import UUID
 
 
 class TriggerActivities:
@@ -58,17 +58,17 @@ class TriggerExecutionWorkflow:
             Dictionary containing execution result and metadata
         """
         workflow.logger.info(f"Starting trigger execution for trigger {trigger_id}")
-        
+
         # Enhanced workflow execution timeout with configurable limits
         max_execution_timeout = timedelta(minutes=30)  # Hard limit
         default_timeout = timedelta(minutes=15)  # Default timeout
-        
+
         # Use custom timeout from execution_data if provided, but cap at max
         custom_timeout_minutes = execution_data.get("timeout_minutes", 15)
         workflow_timeout = min(timedelta(minutes=custom_timeout_minutes), max_execution_timeout)
-        
+
         self.execution_start_time = workflow.now()
-        
+
         try:
             # Check for cancellation before starting
             if self.is_cancelled:
@@ -94,7 +94,7 @@ class TriggerExecutionWorkflow:
                     maximum_attempts=5,  # More attempts for condition evaluation
                     non_retryable_error_types=[
                         "TriggerValidationError",
-                        "TriggerNotFoundError", 
+                        "TriggerNotFoundError",
                         "InvalidConditionError",
                         "TriggerDisabledError",  # Don't retry if trigger was disabled
                         "AgentNotFoundError",
@@ -103,7 +103,7 @@ class TriggerExecutionWorkflow:
                     ]
                 )
             )
-            
+
             if not conditions_met:
                 workflow.logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
                 execution_time_ms = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
@@ -114,7 +114,7 @@ class TriggerExecutionWorkflow:
                     "execution_time_ms": execution_time_ms,
                     "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60
                 }
-            
+
             # Step 2: Execute the trigger with enhanced retry policy and safety mechanisms
             execution_result = await workflow.execute_activity(
                 TriggerActivities.execute_trigger,
@@ -128,7 +128,7 @@ class TriggerExecutionWorkflow:
                     backoff_coefficient=2.0,  # Exponential backoff
                     maximum_attempts=3,  # Reduced attempts to fail faster for safety
                     non_retryable_error_types=[
-                        "TriggerValidationError", 
+                        "TriggerValidationError",
                         "TriggerNotFoundError",
                         "TriggerDisabledError",  # Don't retry if trigger was auto-disabled
                         "AgentNotFoundError",
@@ -140,20 +140,20 @@ class TriggerExecutionWorkflow:
                     ]
                 )
             )
-            
+
             workflow.logger.info(f"Trigger {trigger_id} executed successfully")
-            
+
             # Add workflow metadata to execution result
             execution_result["workflow_timeout_minutes"] = workflow_timeout.total_seconds() / 60
             execution_result["total_workflow_time_ms"] = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
-            
+
             return execution_result
-            
+
         except ApplicationError as e:
             workflow.logger.error(f"Trigger {trigger_id} execution failed: {e}")
-            
+
             execution_time_ms = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
-            
+
             # Record the failure with enhanced retry policy and safety mechanisms
             await workflow.execute_activity(
                 TriggerActivities.record_trigger_execution,
@@ -178,22 +178,22 @@ class TriggerExecutionWorkflow:
                     ]
                 )
             )
-            
+
             # Re-raise the error to mark workflow as failed
             raise
-        
+
         except Exception as e:
             workflow.logger.error(f"Unexpected error in trigger {trigger_id} execution: {e}")
-            
+
             execution_time_ms = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
-            
+
             # Record the unexpected failure with enhanced retry policy and safety mechanisms
             await workflow.execute_activity(
-                TriggerActivities.record_trigger_execution, 
+                TriggerActivities.record_trigger_execution,
                 trigger_id,
                 {
                     "status": "failed",
-                    "error_message": f"Unexpected error: {str(e)}",
+                    "error_message": f"Unexpected error: {e!s}",
                     "execution_time_ms": execution_time_ms,
                     "executed_at": execution_data.get("execution_time", datetime.utcnow().isoformat()),
                     "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
@@ -212,9 +212,9 @@ class TriggerExecutionWorkflow:
                     ]
                 )
             )
-            
+
             # Convert to ApplicationError for proper workflow failure handling
-            raise ApplicationError(f"Unexpected trigger execution error: {str(e)}")
+            raise ApplicationError(f"Unexpected trigger execution error: {e!s}")
 
     @workflow.signal
     async def cancel_execution(self) -> None:
@@ -234,10 +234,10 @@ class TriggerExecutionWorkflow:
         """
         current_time = workflow.now()
         execution_duration_ms = 0
-        
+
         if self.execution_start_time:
             execution_duration_ms = int((current_time - self.execution_start_time).total_seconds() * 1000)
-        
+
         return {
             "is_cancelled": self.is_cancelled,
             "workflow_time": current_time.isoformat(),

@@ -30,17 +30,48 @@ export type WorkflowEventType =
   | "HumanApprovalRequested"
   | "HumanApprovalReceived";
 
-// SSE message format (what we receive over SSE)
+// SSE message format (what we receive over SSE) - matches protocol structure
 export interface SSEMessage {
   event: string;
   data: {
     event_type: WorkflowEventType;
+    event_id: string;
     timestamp: string;
-    task_id: string;
-    agent_id?: string;
-    execution_id?: string;
-    message?: string;
-    data?: Record<string, any>;
+    data: {
+      // Core workflow fields
+      task_id: string;
+      agent_id?: string;
+      execution_id?: string;
+      iteration?: number;
+      
+      // LLM event fields
+      content?: string;
+      cost?: number;
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        total_tokens?: number;
+      };
+      tool_calls?: Array<{
+        name: string;
+        arguments: any;
+      }>;
+      model_id?: string;
+      
+      // Tool event fields
+      tool_name?: string;
+      result?: any;
+      success?: boolean;
+      
+      // Chunk event fields
+      chunk?: string;
+      chunk_index?: number;
+      is_final?: boolean;
+      
+      // Error fields
+      error?: string;
+      error_type?: string;
+    };
   };
 }
 
@@ -210,44 +241,100 @@ export const EVENT_TYPE_CONFIG: Record<WorkflowEventType, {
 
 // Utility functions
 export const mapSSEToDisplayEvent = (sseEvent: SSEMessage, id?: string): DisplayEvent => {
-  // Map event names to our internal event types
+  // Map event names to our internal event types - handle both PascalCase and snake_case
   const eventTypeMap: Record<string, WorkflowEventType> = {
     'workflow_started': 'WorkflowStarted',
+    'workflowstarted': 'WorkflowStarted',
     'workflow_completed': 'WorkflowCompleted',
+    'workflowcompleted': 'WorkflowCompleted',
     'workflow_failed': 'WorkflowFailed',
+    'workflowfailed': 'WorkflowFailed',
     'workflow_cancelled': 'WorkflowCancelled',
+    'workflowcancelled': 'WorkflowCancelled',
     'iteration_started': 'IterationStarted',
+    'iterationstarted': 'IterationStarted',
     'iteration_completed': 'IterationCompleted',
+    'iterationcompleted': 'IterationCompleted',
     'llm_call_started': 'LLMCallStarted',
+    'llmcallstarted': 'LLMCallStarted',
     'llm_call_completed': 'LLMCallCompleted',
+    'llmcallcompleted': 'LLMCallCompleted',
     'llm_call_failed': 'LLMCallFailed',
+    'llmcallfailed': 'LLMCallFailed',
+    'llm_call_chunk': 'LLMCallCompleted', // Map chunks to completed for display
+    'llmcallchunk': 'LLMCallCompleted',
     'tool_call_started': 'ToolCallStarted',
+    'toolcallstarted': 'ToolCallStarted',
     'tool_call_completed': 'ToolCallCompleted',
+    'toolcallcompleted': 'ToolCallCompleted',
     'tool_call_failed': 'ToolCallFailed',
+    'toolcallfailed': 'ToolCallFailed',
     'budget_warning': 'BudgetWarning',
+    'budgetwarning': 'BudgetWarning',
     'budget_exceeded': 'BudgetExceeded',
+    'budgetexceeded': 'BudgetExceeded',
     'human_approval_requested': 'HumanApprovalRequested',
+    'humanapprovalrequested': 'HumanApprovalRequested',
     'human_approval_received': 'HumanApprovalReceived',
+    'humanapprovalreceived': 'HumanApprovalReceived',
     'task_completed': 'WorkflowCompleted',
+    'taskcompleted': 'WorkflowCompleted',
     'task_failed': 'WorkflowFailed',
+    'taskfailed': 'WorkflowFailed',
   };
 
-  // Get the mapped event type or use the original as fallback
-  const mappedEventType = eventTypeMap[sseEvent.event.toLowerCase()] || 
-                          eventTypeMap[sseEvent.data.event_type?.toLowerCase()] ||
+  // Get the mapped event type - try event name first, then event_type field
+  const eventKey = sseEvent.event.toLowerCase().replace(/[^a-z]/g, '');
+  const eventTypeKey = sseEvent.data.event_type?.toLowerCase().replace(/[^a-z]/g, '') || '';
+  
+  const mappedEventType = eventTypeMap[eventKey] || 
+                          eventTypeMap[eventTypeKey] ||
                           (sseEvent.data.event_type as WorkflowEventType) ||
                           'WorkflowStarted';
   
   const config = EVENT_TYPE_CONFIG[mappedEventType];
+  const eventData = sseEvent.data.data;
+  
+  // Create meaningful descriptions based on event content
+  let description = config?.title || mappedEventType;
+  
+  // Check for content in tool_calls (like task_complete results)
+  if (eventData.tool_calls && eventData.tool_calls.length > 0) {
+    const toolCall = eventData.tool_calls[0];
+    if (toolCall.function?.name === 'task_complete') {
+      try {
+        const args = typeof toolCall.function.arguments === 'string' 
+          ? JSON.parse(toolCall.function.arguments)
+          : toolCall.function.arguments;
+        description = `Task completed: ${args.summary || args.result || 'Success'}`;
+      } catch (e) {
+        description = `Task completed with ${toolCall.function?.name}`;
+      }
+    } else {
+      description = `${config?.title}: ${toolCall.function?.name || toolCall.name}`;
+    }
+  } else if (eventData.content) {
+    description = eventData.chunk 
+      ? `AI is responding: ${eventData.chunk.substring(0, 100)}${eventData.chunk.length > 100 ? '...' : ''}`
+      : `AI responded: ${eventData.content.substring(0, 100)}${eventData.content.length > 100 ? '...' : ''}`;
+  } else if (eventData.tool_name) {
+    description = `${config?.title}: ${eventData.tool_name}`;
+  } else if (eventData.error) {
+    description = `${config?.title}: ${eventData.error}`;
+  } else if (eventData.cost) {
+    description = `${config?.title} (Cost: $${eventData.cost.toFixed(4)})`;
+  } else if (eventData.iteration) {
+    description = `${config?.title} ${eventData.iteration}`;
+  }
   
   return {
-    id: id || `${sseEvent.data.task_id}-${mappedEventType}-${Date.now()}`,
+    id: id || `${eventData.task_id}-${mappedEventType}-${Date.now()}`,
     type: mappedEventType,
     timestamp: new Date(sseEvent.data.timestamp),
     title: config?.title || mappedEventType,
-    description: sseEvent.data.message || `${config?.title || mappedEventType} event occurred`, 
+    description,
     level: config?.level || "info",
-    data: sseEvent.data.data || sseEvent.data,
+    data: eventData,
     icon: config?.icon
   };
 };

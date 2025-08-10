@@ -5,11 +5,12 @@ It validates JWT tokens from OIDC providers and extracts user information for au
 """
 
 import logging
-from typing import Optional, Dict, Any
-import jwt
+from typing import Any
+
 import httpx
-from fastapi import Request, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from fastapi import HTTPException, Request, status
+from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -65,16 +66,16 @@ class JWTMiddleware(BaseHTTPMiddleware):
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid authorization header format"
                 )
-            
+
             token = auth_header[7:]  # Remove "Bearer " prefix
-            
+
             # Decode and verify JWT token
             payload = await self._verify_token(token)
-            
+
             # Add user information to request state
             request.state.user = payload
             request.state.user_id = payload.get("sub")
-            
+
         except jwt.ExpiredSignatureError:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -83,7 +84,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
         except jwt.InvalidTokenError as e:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": f"Invalid token: {str(e)}"}
+                content={"detail": f"Invalid token: {e!s}"}
             )
         except Exception as e:
             logger.error(f"Unexpected error during JWT validation: {e}")
@@ -96,7 +97,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         return response
 
-    async def _verify_token(self, token: str) -> Dict[str, Any]:
+    async def _verify_token(self, token: str) -> dict[str, Any]:
         """Verify JWT token using JWKS from OIDC provider.
         
         Args:
@@ -118,24 +119,24 @@ class JWTMiddleware(BaseHTTPMiddleware):
                         self.jwks_cache = response.json()
                     else:
                         raise jwt.InvalidTokenError(f"Failed to fetch JWKS: {response.status_code}")
-            
+
             # Get the key ID from the token header
             header = jwt.get_unverified_header(token)
             key_id = header.get("kid")
-            
+
             if not key_id:
                 raise jwt.InvalidTokenError("Token header missing key ID")
-            
+
             # Find the key in JWKS
             key = None
             for jwk in self.jwks_cache.get("keys", []):
                 if jwk.get("kid") == key_id:
                     key = jwt.algorithms.RSAAlgorithm.from_jwk(jwk)
                     break
-            
+
             if not key:
                 raise jwt.InvalidTokenError("Key not found in JWKS")
-            
+
             # Verify the token
             return jwt.decode(token, key, algorithms=self.algorithms, options={"verify_aud": False})
         else:
@@ -162,19 +163,19 @@ class JWTMiddleware(BaseHTTPMiddleware):
             "/redoc",
             "/openapi.json",
         ]
-        
+
         # Check if the request path is in the public routes
         if request.url.path in public_routes:
             return True
-            
+
         # Check if the request path starts with any public prefix
         public_prefixes = [
             "/static/",
             "/v1/auth/",  # All auth endpoints are public
         ]
-        
+
         for prefix in public_prefixes:
             if request.url.path.startswith(prefix):
                 return True
-                
+
         return False

@@ -1,8 +1,7 @@
-from typing import List
 from uuid import UUID
 
-from agentarea_common.base.repository import BaseRepository
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.repository import BaseRepository
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,7 +19,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         spec = await self.get(id)
         if not spec:
             return None
-        
+
         # Reload with relationships
         result = await self.session.execute(
             select(ProviderSpec)
@@ -40,7 +39,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         spec = result.scalar_one_or_none()
         if not spec:
             return None
-        
+
         # Reload with relationships
         result = await self.session.execute(
             select(ProviderSpec)
@@ -53,12 +52,12 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         return result.scalar_one_or_none()
 
     async def list_specs(
-        self, 
-        is_builtin: bool | None = None, 
-        limit: int = 100, 
+        self,
+        is_builtin: bool | None = None,
+        limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False
-    ) -> List[ProviderSpec]:
+    ) -> list[ProviderSpec]:
         """List provider specs with filtering and relationships."""
         filters = {}
         if is_builtin is not None:
@@ -68,11 +67,11 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         query = select(ProviderSpec)
         if is_builtin is not None:
             query = query.where(ProviderSpec.is_builtin == is_builtin)
-        
+
         query = query.limit(limit).offset(offset)
         result = await self.session.execute(query)
         specs = list(result.scalars().all())
-        
+
         # Load relationships for each spec
         spec_ids = [spec.id for spec in specs]
         if spec_ids:
@@ -86,7 +85,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
             )
             specs_with_relations = result.scalars().all()
             return list(specs_with_relations)
-        
+
         return specs
 
     async def create_spec(self, entity: ProviderSpec) -> ProviderSpec:
@@ -106,12 +105,12 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
             'created_at': entity.created_at,
             'updated_at': entity.updated_at,
         }
-        
+
         # Remove None values and system fields that will be auto-populated
         spec_data = {k: v for k, v in spec_data.items() if v is not None}
         spec_data.pop('created_at', None)
         spec_data.pop('updated_at', None)
-        
+
         # Create the spec instance
         new_spec = ProviderSpec(**spec_data)
         created_spec = await self.create(new_spec)
@@ -131,10 +130,10 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
             'icon': entity.icon,
             'is_builtin': entity.is_builtin,
         }
-        
+
         # Remove None values
         spec_data = {k: v for k, v in spec_data.items() if v is not None}
-        
+
         # Update fields on the entity
         for key, value in spec_data.items():
             setattr(entity, key, value)
@@ -154,4 +153,4 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
             return await self.update(existing)
         else:
             # Create new
-            return await self.create(entity) 
+            return await self.create(entity)

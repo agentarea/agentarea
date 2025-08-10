@@ -9,12 +9,11 @@ hierarchy and eliminating code duplication.
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
 
-from .events import TaskCreated, TaskStatusChanged, TaskUpdated
+from .events import TaskStatusChanged, TaskUpdated
 from .models import SimpleTask, Task
 
 logger = logging.getLogger(__name__)
@@ -259,7 +258,7 @@ class BaseTaskService(ABC):
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[SimpleTask]:
+    ) -> list[SimpleTask]:
         """List tasks with optional filtering.
 
         Args:

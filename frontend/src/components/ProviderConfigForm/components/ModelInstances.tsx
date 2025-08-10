@@ -20,9 +20,19 @@ type ModelInstancesProps = {
   selectedModels: SelectedModel[];
   setSelectedModels: (models: SelectedModel[]) => void;
   isEdit?: boolean;
+  providerConfigId?: string;
+  canTest?: boolean;
 }
 
-export default function ModelInstances({ selectedProvider, availableModels, selectedModels, setSelectedModels, isEdit = false }: ModelInstancesProps) {
+export default function ModelInstances({ 
+  selectedProvider, 
+  availableModels, 
+  selectedModels, 
+  setSelectedModels, 
+  isEdit = false,
+  providerConfigId,
+  canTest = false 
+}: ModelInstancesProps) {
     const t = useTranslations("ProviderConfigForm");
     // Auto-select all models when component loads or availableModels changes (only for new configs)
     useEffect(() => {
@@ -122,6 +132,8 @@ export default function ModelInstances({ selectedProvider, availableModels, sele
                             model={model}
                             isSelected={selectedModels.some(m => m.modelSpecId === model.id)}
                             onSelect={(checked) => handleModelToggle(model, checked as boolean)}
+                            providerConfigId={providerConfigId}
+                            canTest={canTest}
                         />
                     );
                   })}

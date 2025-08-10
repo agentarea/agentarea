@@ -1,24 +1,24 @@
 """Error handlers for workspace-related exceptions."""
 
 import logging
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
 from ..auth.context_manager import ContextManager
 from .workspace import (
-    WorkspaceError,
-    WorkspaceAccessDenied,
-    MissingWorkspaceContext,
     InvalidJWTToken,
+    MissingWorkspaceContext,
+    WorkspaceAccessDenied,
+    WorkspaceError,
     WorkspaceResourceNotFound,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def _get_workspace_context_for_logging() -> Dict[str, Any]:
+def _get_workspace_context_for_logging() -> dict[str, Any]:
     """Get current workspace context for logging.
     
     Returns:
@@ -35,7 +35,7 @@ def _get_workspace_context_for_logging() -> Dict[str, Any]:
     except Exception:
         # If context is not available, return empty dict
         pass
-    
+
     return {}
 
 
@@ -48,7 +48,7 @@ def _log_workspace_error(exc: WorkspaceError, request: Request) -> None:
     """
     # Get workspace context for logging
     context = _get_workspace_context_for_logging()
-    
+
     # Build log context
     log_context = {
         "error_type": type(exc).__name__,
@@ -58,7 +58,7 @@ def _log_workspace_error(exc: WorkspaceError, request: Request) -> None:
         "request_path": request.url.path,
         **context
     }
-    
+
     # Add exception-specific context
     if hasattr(exc, 'resource_type'):
         log_context["resource_type"] = exc.resource_type
@@ -68,7 +68,7 @@ def _log_workspace_error(exc: WorkspaceError, request: Request) -> None:
         log_context["missing_field"] = exc.missing_field
     if hasattr(exc, 'reason'):
         log_context["jwt_error_reason"] = exc.reason
-    
+
     # Log at appropriate level based on exception type
     if isinstance(exc, (WorkspaceAccessDenied, WorkspaceResourceNotFound)):
         # These are expected security-related errors, log at INFO level
@@ -98,7 +98,7 @@ async def workspace_access_denied_handler(request: Request, exc: WorkspaceAccess
         JSONResponse with 404 status and generic error message
     """
     _log_workspace_error(exc, request)
-    
+
     # Return 404 to avoid leaking information about resource existence
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -122,7 +122,7 @@ async def workspace_resource_not_found_handler(request: Request, exc: WorkspaceR
         JSONResponse with 404 status
     """
     _log_workspace_error(exc, request)
-    
+
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={
@@ -145,7 +145,7 @@ async def missing_workspace_context_handler(request: Request, exc: MissingWorksp
         JSONResponse with 400 status
     """
     _log_workspace_error(exc, request)
-    
+
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={
@@ -168,7 +168,7 @@ async def invalid_jwt_token_handler(request: Request, exc: InvalidJWTToken) -> J
         JSONResponse with 401 status
     """
     _log_workspace_error(exc, request)
-    
+
     return JSONResponse(
         status_code=status.HTTP_401_UNAUTHORIZED,
         content={
@@ -197,7 +197,7 @@ async def workspace_error_handler(request: Request, exc: WorkspaceError) -> JSON
         JSONResponse with 500 status
     """
     _log_workspace_error(exc, request)
-    
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -209,14 +209,14 @@ async def workspace_error_handler(request: Request, exc: WorkspaceError) -> JSON
     )
 
 
-def _get_workspace_headers() -> Dict[str, str]:
+def _get_workspace_headers() -> dict[str, str]:
     """Get workspace context headers for API responses.
     
     Returns:
         Dict containing workspace context headers
     """
     headers = {}
-    
+
     try:
         context = ContextManager.get_context()
         if context and context.workspace_id:
@@ -224,7 +224,7 @@ def _get_workspace_headers() -> Dict[str, str]:
     except Exception:
         # If context is not available, don't add headers
         pass
-    
+
     return headers
 
 

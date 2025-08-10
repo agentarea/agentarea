@@ -8,6 +8,7 @@ from . import (
     agents_well_known,
     auth,
     chat,
+    llm_errors,
     mcp_server_instances,
     mcp_servers_specifications,
     model_instances_new,
@@ -56,3 +57,6 @@ v1_router.include_router(auth.router)
 
 # Include protected router
 v1_router.include_router(protected.router)
+
+# Include LLM errors router
+v1_router.include_router(llm_errors.router)

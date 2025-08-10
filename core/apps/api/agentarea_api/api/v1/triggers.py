@@ -21,9 +21,6 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
-
 from agentarea_api.api.deps.services import (
     get_trigger_health_check,
     get_trigger_service,
@@ -39,6 +36,8 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
 
 TRIGGERS_AVAILABLE = True
 
@@ -475,7 +474,7 @@ async def list_triggers(
 
         # Determine if we should filter by creator
         creator_scoped = created_by == "me"
-        
+
         # List triggers
         triggers = await trigger_service.list_triggers(
             agent_id=agent_id,

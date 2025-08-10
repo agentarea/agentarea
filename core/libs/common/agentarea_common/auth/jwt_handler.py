@@ -4,7 +4,7 @@ import logging
 import os
 
 import jwt
-from fastapi import HTTPException, Request, status
+from fastapi import Request
 
 from ..config.settings import get_settings
 from ..exceptions.workspace import InvalidJWTToken, MissingWorkspaceContext
@@ -41,19 +41,19 @@ class JWTTokenHandler:
         """
         # Check for development mode
         dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
-        
+
         if dev_mode:
             # Development mode: use default values
             dev_user_id = "dev-user"
             workspace_id = "system"  # Use "system" workspace for built-in resources
-            
+
             self.logger.info(f"Development mode: using user_id={dev_user_id}, workspace_id={workspace_id}")
             return UserContext(
                 user_id=dev_user_id,
                 workspace_id=workspace_id,
                 roles=["dev"]
             )
-        
+
         # Production mode: use JWT token
         token = self._extract_token_from_header(request)
         if not token:
@@ -66,8 +66,8 @@ class JWTTokenHandler:
         try:
             # Decode JWT token with optional audience validation
             payload = jwt.decode(
-                token, 
-                self.secret_key, 
+                token,
+                self.secret_key,
                 algorithms=[self.algorithm],
                 options={"verify_aud": False}  # Disable audience verification for now
             )
@@ -98,7 +98,7 @@ class JWTTokenHandler:
         except jwt.InvalidTokenError as e:
             self.logger.error(f"JWT validation failed: {e}")
             raise InvalidJWTToken(
-                reason=f"Token validation failed: {str(e)}",
+                reason=f"Token validation failed: {e!s}",
                 token_present=True
             )
 

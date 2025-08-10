@@ -1,5 +1,5 @@
 import builtins
-from typing import Any, List
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.service import BaseCrudService
@@ -150,7 +150,7 @@ class MCPServerService(BaseCrudService[MCPServer]):
         status: str | None = None,
         is_public: bool | None = None,
         tag: str | None = None,
-    ) -> List[MCPServer]:
+    ) -> list[MCPServer]:
         # Use repository directly since we need custom filtering
         return await self.repository.list(status=status, is_public=is_public, tag=tag)
 
@@ -168,7 +168,7 @@ class MCPServerInstanceService:
         # Create repositories using factory
         self.repository = repository_factory.create_repository(MCPServerInstanceRepository)
         self.mcp_server_repository = repository_factory.create_repository(MCPServerRepository)
-        
+
         self.repository_factory = repository_factory
         self.event_broker = event_broker
         self.secret_manager = secret_manager
@@ -362,14 +362,14 @@ class MCPServerInstanceService:
 
     async def list(
         self, server_spec_id: str | None = None, status: str | None = None, creator_scoped: bool = False
-    ) -> List[MCPServerInstance]:
+    ) -> list[MCPServerInstance]:
         # Build filters for the repository
         filters = {}
         if server_spec_id:
             filters['server_spec_id'] = server_spec_id
         if status:
             filters['status'] = status
-        
+
         # Use the repository's list_all method with creator_scoped parameter
         return await self.repository.list_all(creator_scoped=creator_scoped, **filters)
 
@@ -427,23 +427,23 @@ class MCPServerInstanceService:
         instance = await self.repository.get_by_id(instance_id)
         if not instance:
             return False
-            
+
         try:
             # TODO: Implement actual MCP server connection and tool discovery
             # This would involve:
             # 1. Connecting to the MCP server instance (stdio/http/sse)
             # 2. Calling list_tools() on the MCP session
             # 3. Extracting tool metadata (name, description, inputSchema)
-            
+
             # For now, storing empty list as placeholder
             discovered_tools = []
-            
+
             # Store the discovered tools in the instance
             instance.set_available_tools(discovered_tools)
             updated_instance = await self.repository.update(instance_id, json_spec=instance.json_spec)
-            
+
             return updated_instance is not None
-            
+
         except Exception as e:
             print(f"Error discovering tools for instance {instance_id}: {e}")
             return False

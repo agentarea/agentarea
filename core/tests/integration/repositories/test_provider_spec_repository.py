@@ -2,7 +2,7 @@
 Integration tests for ProviderSpecRepository - new 4-entity architecture.
 """
 
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -141,13 +141,13 @@ class TestProviderSpecRepository:
         """Test listing only builtin provider specs."""
         # Arrange
         builtin_spec = create_test_provider_spec(
-            provider_key="openai", 
-            name="OpenAI", 
+            provider_key="openai",
+            name="OpenAI",
             is_builtin=True
         )
         custom_spec = create_test_provider_spec(
-            provider_key="custom", 
-            name="Custom Provider", 
+            provider_key="custom",
+            name="Custom Provider",
             is_builtin=False
         )
 
@@ -280,19 +280,19 @@ class TestProviderSpecRepository:
 async def test_provider_spec_repository_with_populated_data(populated_db_session):
     """Test that the populated database fixture works correctly."""
     repo = ProviderSpecRepository(populated_db_session)
-    
+
     # Check that Ollama provider spec exists
     ollama_spec = await repo.get(UUID("183a5efc-2525-4a1e-aded-1a5d5e9ff13b"))
     assert ollama_spec is not None
     assert ollama_spec.provider_key == "ollama"
     assert ollama_spec.name == "Ollama"
     assert ollama_spec.provider_type == "ollama_chat"
-    
+
     # Check that we can find it by provider key
     ollama_by_key = await repo.get_by_provider_key("ollama")
     assert ollama_by_key is not None
     assert ollama_by_key.id == ollama_spec.id
-    
+
     # Check that all specs are retrievable
     all_specs = await repo.list()
     assert len(all_specs) >= 1
@@ -303,7 +303,7 @@ async def test_provider_spec_repository_with_populated_data(populated_db_session
 async def test_provider_spec_repository_create(populated_db_session):
     """Test creating a new provider spec."""
     repo = ProviderSpecRepository(populated_db_session)
-    
+
     # Create a new provider spec
     new_spec = ProviderSpec(
         provider_key="test-provider",
@@ -313,13 +313,13 @@ async def test_provider_spec_repository_create(populated_db_session):
         icon="test",
         is_builtin=False,
     )
-    
+
     created_spec = await repo.create(new_spec)
     assert created_spec.id is not None
     assert created_spec.provider_key == "test-provider"
     assert created_spec.name == "Test Provider"
-    
+
     # Verify it can be retrieved
     retrieved_spec = await repo.get(created_spec.id)
     assert retrieved_spec is not None
-    assert retrieved_spec.provider_key == "test-provider" 
+    assert retrieved_spec.provider_key == "test-provider"

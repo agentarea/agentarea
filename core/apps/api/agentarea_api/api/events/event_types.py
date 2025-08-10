@@ -11,7 +11,7 @@ class EventType(Enum):
     TASK_CANCELED = "TaskCanceled"
     TASK_INPUT_REQUIRED = "TaskInputRequired"
     TASK_ARTIFACT_ADDED = "TaskArtifactAdded"
-    
+
     # Workflow execution events
     WORKFLOW_STARTED = "WorkflowStarted"
     WORKFLOW_STEP_STARTED = "WorkflowStepStarted"
@@ -29,7 +29,7 @@ class EventType(Enum):
     WORKFLOW_FAILED = "WorkflowFailed"
     WORKFLOW_PROGRESS_UPDATED = "WorkflowProgressUpdated"
     WORKFLOW_ERROR = "WorkflowError"
-    
+
     # Agent-to-agent communication events
     A2A_MESSAGE_SENT = "A2AMessageSent"
     A2A_MESSAGE_RECEIVED = "A2AMessageReceived"

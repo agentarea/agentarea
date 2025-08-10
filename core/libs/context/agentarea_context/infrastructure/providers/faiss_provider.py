@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 
 import faiss
 import numpy as np
-
 from agentarea_llm.application.embedding_service import EmbeddingService
+
 from agentarea_context.config.context_config import ContextConfig
 from agentarea_context.domain.enums import ContextType
 from agentarea_context.domain.interfaces import ContextProvider

@@ -3,7 +3,7 @@
 import json
 import logging
 import logging.config
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..auth.context import UserContext
 from .filters import WorkspaceContextFilter
@@ -11,7 +11,7 @@ from .filters import WorkspaceContextFilter
 
 class WorkspaceContextFormatter(logging.Formatter):
     """Custom formatter that includes workspace context in structured logs."""
-    
+
     def format(self, record: logging.LogRecord) -> str:
         """Format log record with workspace context."""
         # Create structured log entry
@@ -21,28 +21,28 @@ class WorkspaceContextFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        
+
         # Add workspace context if available
         if hasattr(record, 'user_id'):
             log_entry["user_id"] = record.user_id
         if hasattr(record, 'workspace_id'):
             log_entry["workspace_id"] = record.workspace_id
-        
+
         # Add audit event data if present
         if hasattr(record, 'audit_event'):
             log_entry["audit_event"] = record.audit_event
-        
+
         # Add any extra fields
         for key, value in record.__dict__.items():
-            if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 'pathname', 
-                          'filename', 'module', 'lineno', 'funcName', 'created', 
-                          'msecs', 'relativeCreated', 'thread', 'threadName', 
-                          'processName', 'process', 'getMessage', 'exc_info', 
+            if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
+                          'filename', 'module', 'lineno', 'funcName', 'created',
+                          'msecs', 'relativeCreated', 'thread', 'threadName',
+                          'processName', 'process', 'getMessage', 'exc_info',
                           'exc_text', 'stack_info', 'user_id', 'workspace_id',
                           'audit_event', 'user_id_added']:
                 if not key.startswith('_'):
                     log_entry[key] = value
-        
+
         return json.dumps(log_entry, default=str)
 
 
@@ -50,7 +50,7 @@ def setup_logging(
     level: str = "INFO",
     enable_structured_logging: bool = True,
     enable_audit_logging: bool = True,
-    user_context: Optional[UserContext] = None
+    user_context: UserContext | None = None
 ) -> None:
     """Set up logging configuration with workspace context support.
     
@@ -60,7 +60,7 @@ def setup_logging(
         enable_audit_logging: Whether to enable audit logging
         user_context: User context to include in logs
     """
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
@@ -103,7 +103,7 @@ def setup_logging(
             "handlers": ["console"]
         }
     }
-    
+
     # Add audit file handler if audit logging is enabled
     if enable_audit_logging:
         config["handlers"]["audit_file"] = {
@@ -116,7 +116,7 @@ def setup_logging(
             "filters": ["workspace_context"] if user_context else [],
         }
         config["loggers"]["agentarea.audit"]["handlers"].append("audit_file")
-    
+
     logging.config.dictConfig(config)
 
 
@@ -131,7 +131,7 @@ def update_logging_context(user_context: UserContext) -> None:
         for filter_obj in handler.filters:
             if isinstance(filter_obj, WorkspaceContextFilter):
                 filter_obj.set_context(user_context)
-    
+
     # Update filters in child loggers
     for logger_name in logging.Logger.manager.loggerDict:
         logger = logging.getLogger(logger_name)

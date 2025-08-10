@@ -1,14 +1,13 @@
 """Integration tests for trigger service with LLM condition evaluation."""
 
-import pytest
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
-from datetime import datetime
 
+import pytest
+from agentarea_triggers.domain.enums import TriggerType
+from agentarea_triggers.domain.models import CronTrigger, TriggerCreate, WebhookTrigger
 from agentarea_triggers.trigger_service import TriggerService
-from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluator
-from agentarea_triggers.domain.models import CronTrigger, WebhookTrigger, TriggerCreate
-from agentarea_triggers.domain.enums import TriggerType, WebhookType
 
 
 @pytest.fixture
@@ -87,7 +86,7 @@ class TestTriggerServiceLLMIntegration:
     async def test_create_trigger_with_llm_condition(self, trigger_service, mock_trigger_repository):
         """Test creating a trigger with LLM-based condition."""
         agent_id = uuid4()
-        
+
         trigger_data = TriggerCreate(
             name="File Upload Trigger",
             description="Trigger when user uploads a file",
@@ -104,7 +103,7 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         # Mock repository response
         created_trigger = WebhookTrigger(
             id=uuid4(),
@@ -118,13 +117,13 @@ class TestTriggerServiceLLMIntegration:
             created_by="test_user"
         )
         mock_trigger_repository.create_from_data.return_value = created_trigger
-        
+
         result = await trigger_service.create_trigger(trigger_data)
-        
+
         assert result.id == created_trigger.id
         assert result.conditions["type"] == "llm"
         assert "llm_parameter_extraction" in result.task_parameters
-        
+
         # Verify repository was called
         mock_trigger_repository.create_from_data.assert_called_once_with(trigger_data)
 
@@ -143,7 +142,7 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         event_data = {
             "request": {
                 "body": {
@@ -152,14 +151,14 @@ class TestTriggerServiceLLMIntegration:
                 }
             }
         }
-        
+
         # Mock LLM evaluator to return True
         mock_llm_condition_evaluator.evaluate_condition.return_value = True
-        
+
         result = await trigger_service.evaluate_trigger_conditions(trigger, event_data)
-        
+
         assert result is True
-        
+
         # Verify LLM evaluator was called with correct parameters
         mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
         call_args = mock_llm_condition_evaluator.evaluate_condition.call_args
@@ -182,20 +181,20 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         event_data = {
             "request": {
                 "method": "POST",
                 "body": {"message": "test"}
             }
         }
-        
+
         # Mock LLM evaluator to raise an exception
         from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
         mock_llm_condition_evaluator.evaluate_condition.side_effect = LLMConditionEvaluationError("LLM failed")
-        
+
         result = await trigger_service.evaluate_trigger_conditions(trigger, event_data)
-        
+
         # Should fallback to simple evaluation and return True (field matches)
         assert result is True
 
@@ -213,7 +212,7 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         trigger_data = {
             "request": {
                 "body": {
@@ -222,7 +221,7 @@ class TestTriggerServiceLLMIntegration:
                 }
             }
         }
-        
+
         # Mock LLM parameter extraction
         mock_llm_condition_evaluator.extract_task_parameters.return_value = {
             "user_id": "123",
@@ -230,9 +229,9 @@ class TestTriggerServiceLLMIntegration:
             "file_name": "report.pdf",
             "action": "process_document"
         }
-        
+
         result = await trigger_service._build_task_parameters(trigger, trigger_data)
-        
+
         # Should include base parameters, trigger metadata, and LLM-extracted parameters
         assert result["base_param"] == "base_value"
         assert result["trigger_id"] == str(trigger.id)
@@ -241,7 +240,7 @@ class TestTriggerServiceLLMIntegration:
         assert result["user_name"] == "John"
         assert result["file_name"] == "report.pdf"
         assert result["action"] == "process_document"
-        
+
         # Verify LLM extraction was called
         trigger_service.llm_condition_evaluator.extract_task_parameters.assert_called_once()
 
@@ -263,7 +262,7 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         trigger_data = {
             "request": {
                 "body": {
@@ -272,33 +271,33 @@ class TestTriggerServiceLLMIntegration:
                 }
             }
         }
-        
+
         # Mock repository to return the trigger
         trigger_service.trigger_repository.get.return_value = trigger
-        
+
         # Mock condition evaluation to return True
         mock_llm_condition_evaluator.evaluate_condition.return_value = True
-        
+
         # Mock parameter extraction
         mock_llm_condition_evaluator.extract_task_parameters.return_value = {
             "file_name": "analysis.pdf",
             "user_intent": "document_analysis"
         }
-        
+
         # Mock task creation
         mock_task = MagicMock()
         mock_task.id = uuid4()
         mock_task_service.create_task_from_params.return_value = mock_task
-        
+
         # Mock execution recording
         trigger_service.trigger_execution_repository.create.return_value = MagicMock()
         trigger_service.trigger_repository.update_execution_tracking.return_value = None
-        
+
         result = await trigger_service.execute_trigger(trigger_id, trigger_data)
-        
+
         # Verify condition was evaluated
         mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
-        
+
         # Verify task was created with enhanced parameters
         mock_task_service.create_task_from_params.assert_called_once()
         task_params = mock_task_service.create_task_from_params.call_args[1]["task_parameters"]
@@ -321,30 +320,30 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         trigger_data = {
             "request": {
                 "body": {"message": "Hello, how are you?"}
             }
         }
-        
+
         # Mock repository to return the trigger
         trigger_service.trigger_repository.get.return_value = trigger
-        
+
         # Mock condition evaluation to return False
         mock_llm_condition_evaluator.evaluate_condition.return_value = False
-        
+
         # Mock execution recording
         trigger_service.trigger_execution_repository.create.return_value = MagicMock()
-        
+
         result = await trigger_service.execute_trigger(trigger_id, trigger_data)
-        
+
         # Should record failed execution due to conditions not met
         assert result is not None
-        
+
         # Verify condition was evaluated
         mock_llm_condition_evaluator.evaluate_condition.assert_called_once()
-        
+
         # Verify task was NOT created
         trigger_service.task_service.create_task_from_params.assert_not_called()
 
@@ -356,12 +355,12 @@ class TestTriggerServiceLLMIntegration:
             "description": "when user sends a file",
             "context_fields": ["request.body"]
         }
-        
+
         # Mock validation to return no errors
         mock_llm_condition_evaluator.validate_condition_syntax.return_value = []
-        
+
         errors = await trigger_service.validate_condition_syntax(conditions)
-        
+
         assert len(errors) == 0
         mock_llm_condition_evaluator.validate_condition_syntax.assert_called_once_with(conditions)
 
@@ -372,14 +371,14 @@ class TestTriggerServiceLLMIntegration:
             "type": "llm"
             # Missing required description
         }
-        
+
         # Mock validation to return errors
         mock_llm_condition_evaluator.validate_condition_syntax.return_value = [
             "LLM condition must have a 'description'"
         ]
-        
+
         errors = await trigger_service.validate_condition_syntax(conditions)
-        
+
         assert len(errors) == 1
         assert "must have a 'description'" in errors[0]
 
@@ -409,19 +408,19 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         # Mock current time to be during business hours
         with patch('agentarea_triggers.trigger_service.datetime') as mock_datetime:
             mock_datetime.utcnow.return_value = datetime(2024, 1, 15, 10, 0, 0)  # Monday 10 AM
             mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
-            
+
             # Mock LLM evaluation
             mock_llm_condition_evaluator.evaluate_condition.return_value = True
-            
+
             event_data = {"execution_time": "2024-01-15T10:00:00Z"}
-            
+
             result = await trigger_service.evaluate_trigger_conditions(trigger, event_data)
-            
+
             assert result is True
 
     @pytest.mark.asyncio
@@ -437,19 +436,19 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         trigger_data = {"test": "data"}
-        
+
         # Mock LLM extraction to fail
         from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
         mock_llm_condition_evaluator.extract_task_parameters.side_effect = LLMConditionEvaluationError("Extraction failed")
-        
+
         result = await trigger_service._build_task_parameters(trigger, trigger_data)
-        
+
         # Should include basic parameters and trigger metadata
         assert result["trigger_id"] == str(trigger.id)
         assert result["trigger_data"] == trigger_data
-        
+
         # Should not include LLM-extracted parameters due to failure
         assert "extracted" not in result
 
@@ -465,7 +464,7 @@ class TestTriggerServiceLLMIntegration:
             task_service=AsyncMock(),
             llm_condition_evaluator=None,  # No LLM evaluator
         )
-        
+
         trigger = WebhookTrigger(
             id=uuid4(),
             name="Test Trigger",
@@ -478,11 +477,11 @@ class TestTriggerServiceLLMIntegration:
             },
             created_by="test_user"
         )
-        
+
         event_data = {
             "request": {"method": "POST"}
         }
-        
+
         # Should fallback to simple evaluation
         result = await service.evaluate_trigger_conditions(trigger, event_data)
         assert result is True

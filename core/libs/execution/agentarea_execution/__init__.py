@@ -1,5 +1,4 @@
-"""
-AgentArea Execution Library
+"""AgentArea Execution Library
 
 LangGraph-based Temporal workflow execution for agent tasks.
 
@@ -27,13 +26,21 @@ This architecture allows for:
 """
 
 from .interfaces import ActivityDependencies, ActivityServicesInterface
+from .message_types.messages import (
+    AssistantMessage,
+    BaseMessage,
+    Message,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
 from .models import (
     AgentExecutionRequest,
     AgentExecutionResult,
-    ToolExecutionRequest,
-    ToolExecutionResult,
     LLMReasoningRequest,
     LLMReasoningResult,
+    ToolExecutionRequest,
+    ToolExecutionResult,
 )
 
 # Note: Agentic runners are not imported here to avoid Temporal sandbox issues
@@ -51,11 +58,11 @@ def create_activities_for_worker(dependencies: ActivityDependencies):
     """
     from .activities.agent_execution_activities import make_agent_activities
     from .activities.trigger_execution_activities import make_trigger_activities
-    
+
     # Create activities using the factory pattern
     agent_activities = make_agent_activities(dependencies)
     trigger_activities = make_trigger_activities(dependencies)
-    
+
     # Return combined list of all activities
     return agent_activities + trigger_activities
 
@@ -64,11 +71,11 @@ __all__ = [
     "ActivityDependencies",
     "ActivityServicesInterface",  # Keep for backward compatibility
     "AgentExecutionRequest",
-    "AgentExecutionResult", 
-    "ToolExecutionRequest",
-    "ToolExecutionResult",
+    "AgentExecutionResult",
     "LLMReasoningRequest",
     "LLMReasoningResult",
+    "ToolExecutionRequest",
+    "ToolExecutionResult",
     "create_activities_for_worker",
 
-] 
+]

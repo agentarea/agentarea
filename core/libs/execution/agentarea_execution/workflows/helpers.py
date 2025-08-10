@@ -8,7 +8,7 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from uuid import uuid4
 
-from ..agentic.prompts import MessageTemplates, PromptBuilder
+from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 
 
 class EventManager:
@@ -119,10 +119,10 @@ class BudgetTracker:
 
 
 class MessageBuilder:
-    """Builds consistent message formats.
+    """Enhanced message builder with ReAct framework support.
     
-    This is a backward compatibility wrapper around PromptBuilder.
-    New code should use PromptBuilder directly from the agentic module.
+    Provides improved prompting strategies including ReAct (Reasoning + Acting) framework
+    for better agent reasoning and decision-making.
     """
 
     @staticmethod
@@ -133,8 +133,8 @@ class MessageBuilder:
         success_criteria: list[str],
         available_tools: list[dict[str, Any]]
     ) -> str:
-        """Build system prompt with agent context and current task."""
-        return PromptBuilder.build_system_prompt(
+        """Build system prompt with ReAct framework instructions."""
+        return PromptBuilder.build_react_system_prompt(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
@@ -199,14 +199,14 @@ class ToolCallExtractor:
         """Extract tool calls from LLM response message and return ToolCall objects."""
         # Import here to avoid circular imports
         from ..workflows.agent_execution_workflow import ToolCall
-        
+
         # Handle both dataclass and dict formats
         tool_calls = None
         if hasattr(message, 'tool_calls'):
             tool_calls = message.tool_calls
         elif isinstance(message, dict) and 'tool_calls' in message:
             tool_calls = message['tool_calls']
-        
+
         if not tool_calls:
             return []
 
@@ -233,7 +233,7 @@ class ToolCallExtractor:
                         "arguments": getattr(tool_call.function, 'arguments', '{}'),
                     }
                 ))
-        
+
         return result
 
     @staticmethod

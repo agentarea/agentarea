@@ -1,20 +1,21 @@
 """Webhook manager for handling webhook triggers."""
 
 import json
-import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
 
-from .domain.enums import WebhookType, ExecutionStatus
-from .domain.models import WebhookTrigger, TriggerExecution
+from .domain.enums import WebhookType
+from .domain.models import TriggerExecution, WebhookTrigger
 from .logging_utils import (
-    TriggerLogger, WebhookValidationError, TriggerExecutionError,
-    set_correlation_id, generate_correlation_id
+    TriggerLogger,
+    WebhookValidationError,
+    generate_correlation_id,
+    set_correlation_id,
 )
 
 logger = TriggerLogger(__name__)
@@ -22,15 +23,15 @@ logger = TriggerLogger(__name__)
 
 class WebhookRequestData:
     """Data structure for webhook requests."""
-    
+
     def __init__(
         self,
         webhook_id: str,
         method: str,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         body: Any,
-        query_params: Dict[str, str],
-        received_at: Optional[datetime] = None
+        query_params: dict[str, str],
+        received_at: datetime | None = None
     ):
         self.webhook_id = webhook_id
         self.method = method.upper()
@@ -42,12 +43,12 @@ class WebhookRequestData:
 
 class WebhookValidationResult:
     """Result of webhook validation."""
-    
+
     def __init__(
         self,
         is_valid: bool,
-        parsed_data: Dict[str, Any],
-        error_message: Optional[str] = None
+        parsed_data: dict[str, Any],
+        error_message: str | None = None
     ):
         self.is_valid = is_valid
         self.parsed_data = parsed_data
@@ -59,9 +60,9 @@ class WebhookExecutionCallback(ABC):
 
     @abstractmethod
     async def execute_webhook_trigger(
-        self, 
-        webhook_id: str, 
-        request_data: Dict[str, Any]
+        self,
+        webhook_id: str,
+        request_data: dict[str, Any]
     ) -> TriggerExecution:
         """Called when a webhook trigger should be executed."""
         pass
@@ -90,12 +91,11 @@ class WebhookManager(ABC):
         self,
         webhook_id: str,
         method: str,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         body: Any,
-        query_params: Dict[str, str]
-    ) -> Dict[str, Any]:
-        """
-        Process incoming webhook request:
+        query_params: dict[str, str]
+    ) -> dict[str, Any]:
+        """Process incoming webhook request:
         1. Find trigger by webhook_id
         2. Parse request data (Telegram, Slack, GitHub, etc.)
         3. Call TriggerService to evaluate and execute
@@ -110,9 +110,9 @@ class WebhookManager(ABC):
 
     @abstractmethod
     async def apply_validation_rules(
-        self, 
-        trigger: WebhookTrigger, 
-        headers: Dict[str, str], 
+        self,
+        trigger: WebhookTrigger,
+        headers: dict[str, str],
         body: Any
     ) -> bool:
         """Apply trigger-specific validation rules to webhook request."""
@@ -125,10 +125,10 @@ class WebhookManager(ABC):
 
     @abstractmethod
     async def get_webhook_response(
-        self, 
-        success: bool, 
-        error_message: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self,
+        success: bool,
+        error_message: str | None = None
+    ) -> dict[str, Any]:
         """Generate appropriate HTTP response for webhook requests."""
         pass
 
@@ -144,13 +144,13 @@ class DefaultWebhookManager(WebhookManager):
     def __init__(
         self,
         execution_callback: WebhookExecutionCallback,
-        event_broker: Optional[EventBroker] = None,
+        event_broker: EventBroker | None = None,
         base_url: str = "/webhooks"
     ):
         self.execution_callback = execution_callback
         self.event_broker = event_broker
         self.base_url = base_url.rstrip('/')
-        self._registered_webhooks: Dict[str, WebhookTrigger] = {}
+        self._registered_webhooks: dict[str, WebhookTrigger] = {}
 
     def generate_webhook_url(self, trigger_id: UUID) -> str:
         """Generate unique webhook URL for trigger."""
@@ -173,23 +173,23 @@ class DefaultWebhookManager(WebhookManager):
         self,
         webhook_id: str,
         method: str,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         body: Any,
-        query_params: Dict[str, str]
-    ) -> Dict[str, Any]:
+        query_params: dict[str, str]
+    ) -> dict[str, Any]:
         """Process incoming webhook request."""
         correlation_id = generate_correlation_id()
         set_correlation_id(correlation_id)
         start_time = time.time()
-        
+
         try:
             logger.info(
-                f"Processing webhook request",
+                "Processing webhook request",
                 webhook_id=webhook_id,
                 method=method,
                 content_type=headers.get('content-type', 'unknown')
             )
-            
+
             # Find the trigger
             trigger = self._registered_webhooks.get(webhook_id)
             if not trigger:
@@ -267,13 +267,13 @@ class DefaultWebhookManager(WebhookManager):
             # Execute the webhook trigger
             try:
                 execution = await self.execution_callback.execute_webhook_trigger(
-                    webhook_id, 
+                    webhook_id,
                     parsed_data
                 )
-                
+
                 execution_time_ms = int((time.time() - start_time) * 1000)
                 logger.info(
-                    f"Webhook processed successfully",
+                    "Webhook processed successfully",
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
                     execution_time_ms=execution_time_ms,
@@ -282,7 +282,7 @@ class DefaultWebhookManager(WebhookManager):
 
                 # Return success response
                 return await self.get_webhook_response(True)
-                
+
             except Exception as execution_error:
                 execution_time_ms = int((time.time() - start_time) * 1000)
                 error_msg = f"Webhook execution failed: {execution_error}"
@@ -309,9 +309,9 @@ class DefaultWebhookManager(WebhookManager):
         return method.upper() in [m.upper() for m in trigger.allowed_methods]
 
     async def apply_validation_rules(
-        self, 
-        trigger: WebhookTrigger, 
-        headers: Dict[str, str], 
+        self,
+        trigger: WebhookTrigger,
+        headers: dict[str, str],
         body: Any
     ) -> bool:
         """Apply trigger-specific validation rules to webhook request."""
@@ -330,7 +330,7 @@ class DefaultWebhookManager(WebhookManager):
                 trigger_id=trigger.id,
                 rules_count=len(trigger.validation_rules)
             )
-            
+
             # Check required headers
             required_headers = trigger.validation_rules.get('required_headers', [])
             for header in required_headers:
@@ -350,7 +350,7 @@ class DefaultWebhookManager(WebhookManager):
                 actual_content_type = headers.get('content-type', '').lower()
                 if expected_content_type.lower() not in actual_content_type:
                     logger.warning(
-                        f"Content type mismatch",
+                        "Content type mismatch",
                         webhook_id=trigger.webhook_id,
                         trigger_id=trigger.id,
                         expected_content_type=expected_content_type,
@@ -415,10 +415,10 @@ class DefaultWebhookManager(WebhookManager):
         return True
 
     async def get_webhook_response(
-        self, 
-        success: bool, 
-        error_message: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self,
+        success: bool,
+        error_message: str | None = None
+    ) -> dict[str, Any]:
         """Generate appropriate HTTP response for webhook requests."""
         if success:
             return {
@@ -447,10 +447,10 @@ class DefaultWebhookManager(WebhookManager):
             return False
 
     async def _parse_webhook_data(
-        self, 
-        trigger: WebhookTrigger, 
+        self,
+        trigger: WebhookTrigger,
         request_data: WebhookRequestData
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Parse webhook data based on webhook type."""
         base_data = {
             "webhook_id": request_data.webhook_id,
@@ -477,10 +477,10 @@ class DefaultWebhookManager(WebhookManager):
             }
 
     async def _parse_telegram_webhook(
-        self, 
-        request_data: WebhookRequestData, 
-        base_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self,
+        request_data: WebhookRequestData,
+        base_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Parse Telegram webhook data."""
         try:
             # Telegram sends JSON data
@@ -529,10 +529,10 @@ class DefaultWebhookManager(WebhookManager):
             }
 
     async def _parse_slack_webhook(
-        self, 
-        request_data: WebhookRequestData, 
-        base_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self,
+        request_data: WebhookRequestData,
+        base_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Parse Slack webhook data."""
         try:
             # Slack can send JSON or form data
@@ -566,10 +566,10 @@ class DefaultWebhookManager(WebhookManager):
             }
 
     async def _parse_github_webhook(
-        self, 
-        request_data: WebhookRequestData, 
-        base_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self,
+        request_data: WebhookRequestData,
+        base_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Parse GitHub webhook data."""
         try:
             # GitHub sends JSON data

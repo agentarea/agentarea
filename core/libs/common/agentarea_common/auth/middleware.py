@@ -1,21 +1,21 @@
-"""
-Authentication middleware for AgentArea.
+"""Authentication middleware for AgentArea.
 
 This module provides middleware for FastAPI applications to handle
 authentication using the modular auth provider system.
 """
 
 import logging
-from typing import Optional
-from fastapi import Request, HTTPException, status
+
+from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from .providers.factory import AuthProviderFactory
-from .interfaces import AuthResult
-from .context_manager import ContextManager
-from .context import UserContext
 from agentarea_common.config.app import get_app_settings
+
+from .context import UserContext
+from .context_manager import ContextManager
+from .interfaces import AuthResult
+from .providers.factory import AuthProviderFactory
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,8 @@ logger = logging.getLogger(__name__)
 class AuthMiddleware(BaseHTTPMiddleware):
     """Authentication middleware for FastAPI applications."""
 
-    def __init__(self, app, provider_name: str = "clerk", config: Optional[dict] = None):
-        """
-        Initialize the auth middleware.
+    def __init__(self, app, provider_name: str = "clerk", config: dict | None = None):
+        """Initialize the auth middleware.
         
         Args:
             app: FastAPI application instance
@@ -37,8 +36,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         self.settings = get_app_settings()
 
     async def dispatch(self, request: Request, call_next):
-        """
-        Process incoming requests and validate authentication.
+        """Process incoming requests and validate authentication.
         
         Args:
             request: Incoming HTTP request
@@ -55,7 +53,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self.settings.DEV_MODE:
             dev_user_id = "dev-user"
             workspace_id = "default"
-            
+
             # Set user context for development
             user_context = UserContext(
                 user_id=dev_user_id,
@@ -63,7 +61,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 roles=["dev"]
             )
             ContextManager.set_context(user_context)
-            
+
             try:
                 response = await call_next(request)
                 return response
@@ -92,16 +90,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Verify token
         try:
             auth_result: AuthResult = await self.auth_provider.verify_token(token)
-            
+
             if not auth_result.is_authenticated:
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": auth_result.error or "Invalid token"}
                 )
-            
+
             # Extract workspace_id from header if not in token
             workspace_id = request.headers.get("X-Workspace-ID", "default")
-            
+
             # Set user context
             if auth_result.token:
                 user_context = UserContext(
@@ -110,7 +108,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     roles=[]  # In a real implementation, this would come from the token or database
                 )
                 ContextManager.set_context(user_context)
-                
+
         except Exception as e:
             logger.error(f"Unexpected error during token validation: {e}")
             return JSONResponse(
@@ -127,8 +125,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             ContextManager.clear_context()
 
     def _is_public_route(self, request: Request) -> bool:
-        """
-        Check if the request is for a public route.
+        """Check if the request is for a public route.
         
         Args:
             request: Incoming HTTP request
@@ -145,19 +142,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/openapi.json",
             "/dev/token",  # Development endpoint
         ]
-        
+
         # Check if the request path is in the public routes
         if request.url.path in public_routes:
             return True
-            
+
         # Check if the request path starts with any public prefix
         public_prefixes = [
             "/static/",
             "/v1/auth/",  # All auth endpoints are public
         ]
-        
+
         for prefix in public_prefixes:
             if request.url.path.startswith(prefix):
                 return True
-                
+
         return False

@@ -5,10 +5,9 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .repository_factory import RepositoryFactory
-from ..auth.context import UserContext
 from ..auth.dependencies import UserContextDep
 from ..infrastructure.database import get_db_session
+from .repository_factory import RepositoryFactory
 
 
 async def get_repository_factory(

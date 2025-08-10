@@ -1,30 +1,26 @@
 """Tests for trigger repository implementations."""
 
-import pytest
 from datetime import datetime, timedelta
-from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from agentarea_triggers.domain.models import (
-    Trigger,
-    CronTrigger,
-    WebhookTrigger,
-    TriggerExecution,
-    TriggerCreate,
-    TriggerUpdate,
-)
+import pytest
 from agentarea_triggers.domain.enums import (
-    TriggerType,
     ExecutionStatus,
+    TriggerType,
     WebhookType,
 )
-from agentarea_triggers.infrastructure.repository import (
-    TriggerRepository,
-    TriggerExecutionRepository,
+from agentarea_triggers.domain.models import (
+    CronTrigger,
+    TriggerExecution,
+    WebhookTrigger,
 )
-from agentarea_triggers.infrastructure.orm import TriggerORM, TriggerExecutionORM
+from agentarea_triggers.infrastructure.orm import TriggerExecutionORM, TriggerORM
+from agentarea_triggers.infrastructure.repository import (
+    TriggerExecutionRepository,
+    TriggerRepository,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestTriggerRepository:
@@ -195,7 +191,7 @@ class TestTriggerRepository:
             webhook_type=WebhookType.TELEGRAM.value,
             validation_rules={"rule1": "value1"},
         )
-        
+
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = webhook_orm
         mock_session.execute.return_value = mock_result
@@ -326,7 +322,7 @@ class TestTriggerExecutionRepository:
         trigger_id = uuid4()
         start_time = datetime.utcnow() - timedelta(hours=1)
         end_time = datetime.utcnow()
-        
+
         mock_result = MagicMock()
         mock_result.scalar.return_value = 5
         mock_session.execute.return_value = mock_result
@@ -369,7 +365,7 @@ class TestTriggerExecutionRepositoryEnhancements:
         """Create sample TriggerExecutionORM instances for testing."""
         trigger_id = uuid4()
         base_time = datetime.utcnow()
-        
+
         return [
             TriggerExecutionORM(
                 id=uuid4(),
@@ -484,7 +480,7 @@ class TestTriggerExecutionRepositoryEnhancements:
         mock_row.avg_execution_time_ms = 1250.5
         mock_row.min_execution_time_ms = 800
         mock_row.max_execution_time_ms = 2000
-        
+
         mock_result = MagicMock()
         mock_result.first.return_value = mock_row
         mock_session.execute.return_value = mock_result
@@ -549,12 +545,12 @@ class TestTriggerExecutionRepositoryEnhancements:
         assert len(result) == 3
         assert all('has_task_correlation' in exec for exec in result)
         assert all('has_workflow_correlation' in exec for exec in result)
-        
+
         # Check correlation flags
         assert result[0]['has_task_correlation'] is True  # Has task_id
         assert result[1]['has_task_correlation'] is False  # No task_id (failed execution)
         assert result[2]['has_task_correlation'] is True  # Has task_id
-        
+
         assert all(exec['has_workflow_correlation'] is True for exec in result)  # All have workflow_id
 
     @pytest.mark.asyncio
@@ -577,7 +573,7 @@ class TestTriggerExecutionRepositoryEnhancements:
                 timeout_count=1
             ),
         ]
-        
+
         mock_result = MagicMock()
         mock_result.all.return_value = mock_rows
         mock_session.execute.return_value = mock_result
@@ -593,11 +589,11 @@ class TestTriggerExecutionRepositoryEnhancements:
         assert result[0]['failed_count'] == 1
         assert result[0]['timeout_count'] == 0
         assert result[0]['success_rate'] == 80.0
-        
+
         assert result[1]['total_count'] == 3
         assert result[1]['success_count'] == 2
         assert result[1]['failed_count'] == 0
         assert result[1]['timeout_count'] == 1
         assert abs(result[1]['success_rate'] - 66.67) < 0.01  # Approximately 66.67%
-        
+
         mock_session.execute.assert_called_once()
