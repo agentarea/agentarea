@@ -111,7 +111,7 @@ class GoalProgressEvaluator:
     def _check_explicit_completion(self, recent_messages: list[dict[str, Any]]) -> tuple[bool, str | None, str | None]:
         """Check for explicit completion tool calls."""
         for message in reversed(recent_messages):
-            if message.get("role") == "tool" and message.get("name") == "task_complete":
+            if message.get("role") == "tool" and message.get("name") == "completion":
                 # Found completion tool call - parse the result
                 tool_content = message.get("content", "")
                 if isinstance(tool_content, dict):
@@ -140,7 +140,7 @@ class GoalProgressEvaluator:
             for msg in recent_messages
             if msg.get("role") == "tool"
             and "error" not in str(msg.get("content", "")).lower()
-            and msg.get("name") != "task_complete"  # Don't count completion tool
+            and msg.get("name") != "completion"  # Don't count completion tool
         )
 
         if tool_successes >= 2:  # Multiple successful tool calls might indicate progress

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Independent Agent SDK for AgentArea - agentic AI components"
 requires-python = ">=3.12"
 dependencies = [
-    "litellm",
+    "litellm>=1.74.15",
     "pydantic>=2.4.2",
     "httpx>=0.25.0",
 ]

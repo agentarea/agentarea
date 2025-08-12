@@ -1,5 +1,6 @@
 """LLM model for encapsulating litellm interactions."""
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
@@ -7,6 +8,12 @@ from typing import Any, AsyncIterator
 import litellm
 
 logger = logging.getLogger(__name__)
+
+litellm.callbacks = ["langsmith"]
+import os
+
+os.environ["LANGSMITH_API_KEY"] = "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"
+os.environ["LANGSMITH_PROJECT"] = "pr-earnest-lox-45" # defaults to litellm-completion
 
 
 @dataclass
@@ -139,8 +146,11 @@ class LLMModel:
                 # For production, should use model-specific pricing
                 cost = getattr(response_usage, "total_tokens", 0) * 0.00001  # $0.01 per 1K tokens estimate
 
+        # Follow OpenAI standard: when tool_calls are present, content should be minimal
+        content = message.content or ""
+
         return LLMResponse(
-            content=message.content or "",
+            content=content,
             role=message.role,
             tool_calls=tool_calls,
             cost=cost,
@@ -250,7 +260,30 @@ class LLMModel:
                                     tool_calls_buffer[index]["function"]["name"] = function_delta.name
 
                                 if hasattr(function_delta, 'arguments') and function_delta.arguments:
-                                    tool_calls_buffer[index]["function"]["arguments"] += function_delta.arguments
+                                    # Handle JSON arguments properly to avoid concatenation issues
+                                    current_args = tool_calls_buffer[index]["function"]["arguments"]
+                                    new_args = function_delta.arguments
+                                    
+                                    # If current_args is empty, just use new_args
+                                    if not current_args:
+                                        tool_calls_buffer[index]["function"]["arguments"] = new_args
+                                    else:
+                                        # Try to parse and merge JSON properly
+                                        try:
+                                            # Check if current_args is valid JSON
+                                            current_json = json.loads(current_args)
+                                            # If new_args is also valid JSON, merge them
+                                            try:
+                                                new_json = json.loads(new_args)
+                                                # Merge the JSON objects
+                                                current_json.update(new_json)
+                                                tool_calls_buffer[index]["function"]["arguments"] = json.dumps(current_json)
+                                            except json.JSONDecodeError:
+                                                # If new_args is not valid JSON, append as string
+                                                tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
+                                        except json.JSONDecodeError:
+                                            # If current_args is not valid JSON, just concatenate
+                                            tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
 
                 # Extract usage and cost from final chunk if available
                 if hasattr(chunk, 'usage') and chunk.usage:
@@ -318,6 +351,8 @@ class LLMModel:
         Yields:
             LLMResponse objects containing delta responses (only new content)
         """
+
+
         try:
             # Build parameters for streaming
             params = self._build_litellm_params(request)
@@ -375,7 +410,30 @@ class LLMModel:
                                     tool_calls_buffer[index]["function"]["name"] = function_delta.name
 
                                 if hasattr(function_delta, 'arguments') and function_delta.arguments:
-                                    tool_calls_buffer[index]["function"]["arguments"] += function_delta.arguments
+                                    # Handle JSON arguments properly to avoid concatenation issues
+                                    current_args = tool_calls_buffer[index]["function"]["arguments"]
+                                    new_args = function_delta.arguments
+                                    
+                                    # If current_args is empty, just use new_args
+                                    if not current_args:
+                                        tool_calls_buffer[index]["function"]["arguments"] = new_args
+                                    else:
+                                        # Try to parse and merge JSON properly
+                                        try:
+                                            # Check if current_args is valid JSON
+                                            current_json = json.loads(current_args)
+                                            # If new_args is also valid JSON, merge them
+                                            try:
+                                                new_json = json.loads(new_args)
+                                                # Merge the JSON objects
+                                                current_json.update(new_json)
+                                                tool_calls_buffer[index]["function"]["arguments"] = json.dumps(current_json)
+                                            except json.JSONDecodeError:
+                                                # If new_args is not valid JSON, append as string
+                                                tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
+                                        except json.JSONDecodeError:
+                                            # If current_args is not valid JSON, just concatenate
+                                            tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
 
                         # For streaming tool calls, return the current state
                         delta_tool_calls = [tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())]
@@ -406,6 +464,8 @@ class LLMModel:
                             cost=cost,
                             usage=usage,
                         )
+
+
 
             logger.info(f"Streaming LLM call completed successfully, final cost: ${cost:.6f}")
 

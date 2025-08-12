@@ -11,7 +11,8 @@ This follows patterns from leading agentic frameworks like AutoGen, CrewAI, and 
 """
 
 # High-level Agent class (recommended for most users)
-from .agent import Agent
+from .agents.agent import Agent
+from .agents.basic_agent import run_agent
 
 # LLM Model
 from .models.llm_model import LLMModel, LLMRequest, LLMResponse, LLMUsage
@@ -24,7 +25,7 @@ from .runners import (
     BaseAgentRunner,
     ExecutionResult,
     RunnerConfig,
-    SyncAgentRunner,
+    # SyncAgentRunner,
 )
 
 # Services

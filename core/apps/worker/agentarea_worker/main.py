@@ -37,6 +37,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import litellm
+import os
+os.environ["OLLAMA_API_BASE"] = "http://host.docker.internal:11434"
+print(litellm.supports_function_calling("ollama_chat/qwen2.5"))
+
 
 def create_activity_dependencies() -> ActivityDependencies:
     """Create basic dependencies needed by activities.

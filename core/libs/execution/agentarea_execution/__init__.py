@@ -26,14 +26,9 @@ This architecture allows for:
 """
 
 from .interfaces import ActivityDependencies, ActivityServicesInterface
-from .message_types.messages import (
-    AssistantMessage,
-    BaseMessage,
-    Message,
-    SystemMessage,
-    ToolMessage,
-    UserMessage,
-)
+# Avoid SDK imports in execution module to prevent Temporal sandbox issues
+# Import Message from workflow models instead
+from .workflows.models import Message
 from .models import (
     AgentExecutionRequest,
     AgentExecutionResult,
@@ -74,6 +69,7 @@ __all__ = [
     "AgentExecutionResult",
     "LLMReasoningRequest",
     "LLMReasoningResult",
+    "Message",
     "ToolExecutionRequest",
     "ToolExecutionResult",
     "create_activities_for_worker",

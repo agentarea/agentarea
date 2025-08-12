@@ -74,17 +74,12 @@ export default function AgentDetailClient({ agent }: Props) {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
 
-  // Load tasks when component mounts or when tasks tab is activated
+  // Load tasks only when tasks tab is activated
   useEffect(() => {
     if (activeTab === "tasks") {
       loadTasks();
     }
   }, [activeTab, agent.id]);
-
-  // Load tasks on component mount
-  useEffect(() => {
-    loadTasks();
-  }, [agent.id]);
 
   const loadTasks = async () => {
     setTasksLoading(true);

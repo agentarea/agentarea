@@ -9,7 +9,7 @@ import sys
 
 sys.path.append('core/libs/execution')
 
-from agentarea_execution.message_types.messages import (
+from agentarea_agents_sdk.models import (
     AssistantMessage,
     BaseMessage,
     Message,

@@ -6,7 +6,7 @@ import sys
 
 sys.path.append('core/libs/execution')
 
-from agentarea_execution.message_types.messages import Message, create_system_message
+from agentarea_agents_sdk.models import Message, create_system_message
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 
 
