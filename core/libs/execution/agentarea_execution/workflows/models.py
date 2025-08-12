@@ -16,7 +16,6 @@ class Message:
     event_metadata: dict[str, Any] = field(default_factory=dict)  # Use event_metadata instead of metadata
     tool_call_id: str | None = None
     name: str | None = None
-    function_call: dict[str, Any] | None = None
     tool_calls: list[dict[str, Any]] | None = None
 
 

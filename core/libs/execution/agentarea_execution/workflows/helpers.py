@@ -144,7 +144,7 @@ class MessageBuilder:
         }
         
         # Only add optional fields if they have actual values (not None)
-        optional_fields = ["tool_call_id", "name", "function_call", "tool_calls"]
+        optional_fields = ["tool_call_id", "name", "tool_calls"]
         for field in optional_fields:
             if field in message_dict and message_dict[field] is not None:
                 normalized[field] = message_dict[field]

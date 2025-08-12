@@ -171,19 +171,10 @@ def test_endpoint_with_auth():
     assert data["workspace_id"] == "test-workspace"
 ```
 
-## Migration from Legacy Auth
+## Best Practices
 
-The new system is backward compatible with the existing `get_current_user_id` dependency. However, new endpoints should use `UserContextDep` for better functionality and workspace isolation.
+All endpoints should use `UserContextDep` for proper functionality and workspace isolation:
 
-### Before (Legacy)
-```python
-@app.get("/agents")
-async def list_agents(user_id: str = Depends(get_current_user_id)):
-    # Manual workspace handling required
-    pass
-```
-
-### After (New)
 ```python
 @app.get("/agents")
 async def list_agents(user_context: UserContextDep):

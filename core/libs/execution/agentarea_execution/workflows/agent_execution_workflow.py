@@ -301,7 +301,6 @@ class AgentExecutionWorkflow:
                     "content": msg.content,
                     "tool_call_id": msg.tool_call_id,
                     "name": msg.name,
-                    "function_call": msg.function_call,
                     "tool_calls": msg.tool_calls,
                 })
                 for msg in self.state.messages
@@ -351,7 +350,6 @@ class AgentExecutionWorkflow:
                 "content": response.get("content", ""),
                 "tool_call_id": response.get("tool_call_id"),
                 "name": response.get("name"),
-                "function_call": response.get("function_call"),
                 "tool_calls": response.get("tool_calls"),
                 "usage": usage_info,
                 "cost": usage_info.get("cost", 0.0),
@@ -709,8 +707,6 @@ class AgentExecutionWorkflow:
                 msg_dict["tool_call_id"] = msg.tool_call_id
             if msg.name:
                 msg_dict["name"] = msg.name
-            if msg.function_call:
-                msg_dict["function_call"] = msg.function_call
             if msg.tool_calls:
                 msg_dict["tool_calls"] = msg.tool_calls
             conversation_history.append(msg_dict)

@@ -34,23 +34,6 @@ class GoalProgressEvaluator:
         }
         return self._evaluate_progress_internal(goal, conversation_history, current_iteration)
 
-    def evaluate_progress_legacy(
-        self,
-        goal: dict[str, Any],
-        messages: list[dict[str, Any]],
-        current_iteration: int,
-    ) -> dict[str, Any]:
-        """Evaluate progress toward the goal (legacy interface).
-        
-        Args:
-            goal: The goal definition with optional success criteria
-            messages: List of conversation messages
-            current_iteration: Current iteration count
-            
-        Returns:
-            Dict containing evaluation results
-        """
-        return self._evaluate_progress_internal(goal, messages, current_iteration)
 
     def _evaluate_progress_internal(
         self,

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Command, Home, Bot, Server, Settings, Plus, List, Zap, User } from 'lucide-react';
+import { Search, Command, Home, Bot, Server, Settings, Plus, List, Zap, User, Store, Wrench } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -39,11 +39,13 @@ export default function CommandBar({ isCollapsed }: CommandBarProps) {
     { id: 2, title: 'Go to Tasks', shortcut: 'gt', url: '/tasks', icon: List, category: 'navigation' },
     { id: 3, title: 'Go to Agents', shortcut: 'ga', url: '/agents', icon: Bot, category: 'navigation' },
     { id: 4, title: 'Go to MCP Servers', shortcut: 'gm', url: '/mcp-servers', icon: Server, category: 'navigation' },
-    { id: 5, title: 'Go to Settings', shortcut: 'gs', url: '/settings', icon: Settings, category: 'navigation' },
+    { id: 5, title: 'Go to MCP Marketplace', shortcut: 'gmp', url: '/mcp-servers/marketplace', icon: Store, category: 'navigation' },
+    { id: 6, title: 'Go to MCP Tools', shortcut: 'gmt', url: '/mcp-servers/tools', icon: Wrench, category: 'navigation' },
+    { id: 7, title: 'Go to Settings', shortcut: 'gs', url: '/settings', icon: Settings, category: 'navigation' },
     
     // Actions
-    { id: 6, title: 'Create New Agent', shortcut: 'na', url: '/agents/new', icon: Plus, category: 'actions' },
-    { id: 7, title: 'Add MCP Server', shortcut: 'nm', url: '/mcp-servers/add', icon: Plus, category: 'actions' },
+    { id: 8, title: 'Create New Agent', shortcut: 'na', url: '/agents/new', icon: Plus, category: 'actions' },
+    { id: 9, title: 'Add MCP Server', shortcut: 'nm', url: '/mcp-servers/add', icon: Plus, category: 'actions' },
     { id: 8, title: 'Deploy Agent', shortcut: 'da', url: '/agents/deploy', icon: Zap, category: 'actions' },
     
     // Settings

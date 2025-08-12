@@ -27,8 +27,8 @@ class WorkflowSettings(BaseSettings):
 class TaskExecutionSettings(BaseSettings):
     """Task execution configuration."""
 
-    # Legacy vs new execution mode
-    USE_LEGACY_TASK_EXECUTION: bool = True
+    # New execution mode (legacy mode removed)
+    USE_LEGACY_TASK_EXECUTION: bool = False
 
     # Default task parameters
     DEFAULT_TASK_RETRY_ATTEMPTS: int = 3
