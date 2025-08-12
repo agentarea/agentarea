@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
-const LogoIcon = () => {
+const LogoIcon = ({ className }: { className?: string }) => {
   return (
     <Link href="/" className="relative text-[#2E3037] dark:text-white">
-        <AgentAreaLogo className="h-full w-max "/>      
+        <AgentAreaLogo className={cn("h-full w-max ", className)}/>      
     </Link>
     );
   };
