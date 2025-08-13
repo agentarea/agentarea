@@ -1,56 +1,42 @@
 "use client"
 
-import * as React from "react"
-import Link from "next/link"
-import LogoIcon from "./LogoIcon"
-import { NavMain } from './NavMain'
-// import { NavProjects } from './NavProjects'
-import { NavUser } from './NavUser'
-import { TeamSwitcher } from './TeamSwitcher'
+import * as React from "react";
+// import LogoIcon from "./LogoIcon";
+import { NavMain } from './NavMain';
+import { NavUser } from './NavUser';
+import { TeamSwitcher } from './TeamSwitcher';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarTrigger,
   SidebarRail,
-} from '@/components/ui/sidebar'
-
-// This is sample data.
-
-//   projects: [
-//     {
-//       name: "Design Engineering",
-//       url: "#",
-//       icon: Frame,
-//     },
-//     {
-//       name: "Sales & Marketing",
-//       url: "#",
-//       icon: PieChart,
-//     },
-//     {
-//       name: "Travel",
-//       url: "#",
-//       icon: Map,
-//     },
-//   ],
-// }
+} from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/sidebar';
+import { cn } from '@/lib/utils';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> & { data: any }) {
+  const { open } = useSidebar();
   return (
     <Sidebar collapsible="icon" {...props} className="bg-white dark:bg-zinc-800">
-      <SidebarHeader className="flex items-start justify-start overflow-hidden">
+      {/* <SidebarHeader className="flex items-center justify-between overflow-hidden flex-row">
           <LogoIcon className="h-[32px] mt-2" />
-      </SidebarHeader>
-      {/* <SidebarHeader>
-        <TeamSwitcher teams={props.data.teams} />
+          <SidebarTrigger/>
       </SidebarHeader> */}
+      <SidebarHeader>
+        <TeamSwitcher teams={props.data.workspaces} />
+      </SidebarHeader>
       <SidebarContent>
         <NavMain items={props.data.navMain} />
-        {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter 
+        className={cn(
+            `flex items-center justify-between overflow-hidden flex-row`, 
+            open ? 'flex-row' : 'flex-col-reverse ')}
+        >
         <NavUser user={props.data.user} />
+        <SidebarTrigger/>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

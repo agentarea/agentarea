@@ -24,11 +24,10 @@ type ContentBlockProps = {
 export default function ContentBlock({ children, header }: ContentBlockProps) {
   return (
     <div className="
-        px-4 py-6
+        px-4 py-5
     ">
         {header && (
             <div className="
-                min-h-[38px]
                 flex flex-row justify-between items-center
                 mb-[10px] md:mb-[20px] lg:mb-[30px]"
             >
@@ -58,8 +57,8 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
                 ) : (
                     <>
                         <div className="flex items-start gap-2">
-                            <SidebarTrigger className="hidden md:block" />
-                            <div className="hidden md:block h-5 w-px bg-zinc-200 dark:bg-zinc-700"/>
+                            {/* <SidebarTrigger className="hidden md:block" />
+                            <div className="hidden md:block h-5 w-px bg-zinc-200 dark:bg-zinc-700"/> */}
                             <div className="flex flex-col gap-1">
                                 <Breadcrumb>
                                     <BreadcrumbList>

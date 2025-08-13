@@ -26,6 +26,7 @@ export function TeamSwitcher({
     name: string
     logo: React.ElementType
     plan: string
+    logoFile?: string
   }[]
 }) {
   const { isMobile } = useSidebar()
@@ -42,10 +43,16 @@ export function TeamSwitcher({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
             >
               <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <activeTeam.logo className="size-4" />
+                {
+                  activeTeam.logoFile ? (
+                    <img src={activeTeam.logoFile} alt={activeTeam.name} width={32} height={32} />
+                  ) : (
+                    <activeTeam.logo className="size-4" />
+                  )
+                }
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{activeTeam.name}</span>
@@ -61,7 +68,7 @@ export function TeamSwitcher({
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Teams
+              Workspaces
             </DropdownMenuLabel>
             {teams.map((team, index) => (
               <DropdownMenuItem
@@ -70,18 +77,25 @@ export function TeamSwitcher({
                 className="gap-2 p-2"
               >
                 <div className="flex size-6 items-center justify-center rounded-md border">
-                  <team.logo className="size-3.5 shrink-0" />
+                  {
+                    team.logoFile ? (
+                      <img src={team.logoFile} alt={team.name} width={32} height={32} />
+                    ) : (
+                      <team.logo className="size-3.5 shrink-0" />
+                    )
+                  }
                 </div>
                 {team.name}
                 <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 p-2">
+            <DropdownMenuItem className="gap-2 p-2" disabled>
               <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
                 <Plus className="size-4" />
               </div>
-              <div className="text-muted-foreground font-medium">Add team</div>
+              {/* <div className="text-muted-foreground font-medium">Add Workspace</div> */}
+              <div className="note">Add Workspace.<br/>Comming Soon...</div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

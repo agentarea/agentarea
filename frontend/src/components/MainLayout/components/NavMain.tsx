@@ -4,6 +4,7 @@ import { ChevronRight, type LucideIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect } from "react"
+import { useTranslations } from "next-intl"
 
 import {
   Collapsible,
@@ -26,18 +27,22 @@ export function NavMain({
 }: {
   items: {
     title: string
+    titleKey?: string
     url: string
     icon?: LucideIcon
     isActive?: boolean
     items?: {
       title: string
+      titleKey?: string
       url: string
     }[]
   }[]
 }) {
+
+  console.log(items)
   const pathname = usePathname()
   const [openCollapsibles, setOpenCollapsibles] = useState<Set<string>>(new Set())
-
+  const t = useTranslations('Sidebar')
   // Восстанавливаем только открытые коллапсы из localStorage при инициализации
   useEffect(() => {
     const savedOpenCollapsibles = localStorage.getItem('navOpenCollapsibles')
@@ -80,8 +85,8 @@ export function NavMain({
     localStorage.setItem('navOpenCollapsibles', JSON.stringify(Array.from(openCollapsibles)))
   }, [openCollapsibles])
 
-  // Активность обычных ссылок — только по текущему URL
-  const isItemActive = (url: string) => pathname === url
+  // Активность ссылки для точного совпадения и вложенных путей
+  const isItemActive = (url: string) => pathname === url || pathname.startsWith(`${url}/`)
 
   // Проверяем, открыт ли коллапс
   const isCollapsibleOpen = (id: string) => openCollapsibles.has(id)
@@ -114,7 +119,7 @@ export function NavMain({
                         <CollapsibleTrigger asChild>
                             <SidebarMenuButton tooltip={item.title}>
                             {item.icon && <item.icon />}
-                            <span>{item.title}</span>
+                            <span>{item.titleKey ? t(item.titleKey) : item.title}</span>
                             <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                             </SidebarMenuButton>
                         </CollapsibleTrigger>
@@ -122,9 +127,9 @@ export function NavMain({
                             <SidebarMenuSub>
                             {item.items?.map((subItem) => (
                                 <SidebarMenuSubItem key={subItem.title}>
-                                <SidebarMenuSubButton asChild>
+                                <SidebarMenuSubButton asChild isActive={isItemActive(subItem.url)}>
                                     <Link href={subItem.url}>
-                                    <span>{subItem.title}</span>
+                                    <span>{subItem.titleKey ? t(subItem.titleKey) : subItem.title}</span>
                                     </Link>
                                 </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>
@@ -140,7 +145,7 @@ export function NavMain({
                   <SidebarMenuButton asChild isActive={isItemActive(item.url)}>
                     <Link href={item.url}>
                       {item.icon && <item.icon />}
-                      <span>{item.title}</span>
+                      <span>{item.titleKey ? t(item.titleKey) : item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
