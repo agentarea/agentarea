@@ -216,7 +216,12 @@ const Sidebar = React.forwardRef<
               <SheetTitle>Sidebar</SheetTitle>
               <SheetDescription>Displays the mobile sidebar.</SheetDescription>
             </SheetHeader>
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full w-full flex-col" onClickCapture={(e) => {
+              const target = e.target as HTMLElement
+              if (target.closest('a[href]')) {
+                setOpenMobile(false)
+              }
+            }}>{children}</div>
           </SheetContent>
         </Sheet>
       )
