@@ -28,7 +28,7 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
     ">
         {header && (
             <div className="
-                flex flex-row justify-between items-center
+                flex flex-row justify-between items-start
                 mb-[10px] md:mb-[20px] lg:mb-[30px]"
             >
                 {'title' in header ? (
@@ -57,8 +57,8 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
                 ) : (
                     <>
                         <div className="flex items-start gap-2">
-                            {/* <SidebarTrigger className="hidden md:block" />
-                            <div className="hidden md:block h-5 w-px bg-zinc-200 dark:bg-zinc-700"/> */}
+                            <SidebarTrigger className="md:hidden h-5 w-5" />
+                            <div className="md:hidden h-5 w-px bg-zinc-200 dark:bg-zinc-700"/>
                             <div className="flex flex-col gap-1">
                                 <Breadcrumb>
                                     <BreadcrumbList>
@@ -71,7 +71,9 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
                                                             <BreadcrumbPage className="font-semibold">{item.label}</BreadcrumbPage>
                                                         ) : (
                                                             item.href ? (
-                                                                <BreadcrumbLink href={item.href || ""}>{item.label}</BreadcrumbLink>
+                                                                <BreadcrumbLink asChild>
+                                                                    <Link href={item.href || ""}>{item.label}</Link>
+                                                                </BreadcrumbLink>
                                                             ) : (
                                                                 <BreadcrumbPage className="text-muted-foreground">{item.label}</BreadcrumbPage>
                                                             )

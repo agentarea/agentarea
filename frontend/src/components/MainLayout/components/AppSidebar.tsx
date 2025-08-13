@@ -36,7 +36,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> & 
             open ? 'flex-row' : 'flex-col-reverse ')}
         >
         <NavUser user={props.data.user} />
-        <SidebarTrigger/>
+        <SidebarTrigger className="hidden md:flex" />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
