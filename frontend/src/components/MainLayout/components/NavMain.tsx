@@ -1,9 +1,9 @@
 "use client"
 
-import { ChevronRight, type LucideIcon } from "lucide-react"
+import { ChevronRight, Circle, type LucideIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useTranslations } from "next-intl"
 
 import {
@@ -11,6 +11,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -20,6 +28,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 
 export function NavMain({
@@ -39,10 +48,38 @@ export function NavMain({
   }[]
 }) {
 
-  console.log(items)
   const pathname = usePathname()
   const [openCollapsibles, setOpenCollapsibles] = useState<Set<string>>(new Set())
+  const [hoveredDropdownId, setHoveredDropdownId] = useState<string | null>(null)
+  const hoverCloseTimeoutRef = useRef<number | null>(null)
+  const openOnHover = (id: string) => {
+    if (hoverCloseTimeoutRef.current) {
+      window.clearTimeout(hoverCloseTimeoutRef.current)
+      hoverCloseTimeoutRef.current = null
+    }
+    setHoveredDropdownId(id)
+  }
+  const closeOnHoverLeave = (id: string) => {
+    hoverCloseTimeoutRef.current = window.setTimeout(() => {
+      setHoveredDropdownId((prev) => (prev === id ? null : prev))
+    }, 220)
+  }
+  const closeDropdownImmediately = () => {
+    if (hoverCloseTimeoutRef.current) {
+      window.clearTimeout(hoverCloseTimeoutRef.current)
+      hoverCloseTimeoutRef.current = null
+    }
+    setHoveredDropdownId(null)
+  }
   const t = useTranslations('Sidebar')
+  // cleanup hover close timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimeoutRef.current) {
+        window.clearTimeout(hoverCloseTimeoutRef.current)
+      }
+    }
+  }, [])
   // Восстанавливаем только открытые коллапсы из localStorage при инициализации
   useEffect(() => {
     const savedOpenCollapsibles = localStorage.getItem('navOpenCollapsibles')
@@ -91,12 +128,58 @@ export function NavMain({
   // Проверяем, открыт ли коллапс
   const isCollapsibleOpen = (id: string) => openCollapsibles.has(id)
 
+  const { state, isMobile } = useSidebar()
+
   return (
     <SidebarGroup>
       {/* <SidebarGroupLabel>Platform</SidebarGroupLabel> */}
       <SidebarMenu>
         {items.map((item) => {
             if (item.items) {
+                // When collapsed, show a popout dropdown like TeamSwitcher/NavUser
+                if (state === 'collapsed' && !isMobile) {
+                  const isHovered = hoveredDropdownId === item.url
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <DropdownMenu open={isHovered} modal={false}>
+                                                  <DropdownMenuTrigger asChild>
+                            <SidebarMenuButton
+                              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none transition-none"
+                              onMouseEnter={() => openOnHover(item.url)}
+                              onMouseLeave={() => closeOnHoverLeave(item.url)}
+                            >
+                            {item.icon && <item.icon />}
+                            {state === 'collapsed' ? null : (
+                              <span>{item.titleKey ? t(item.titleKey) : item.title}</span>
+                            )}
+                          </SidebarMenuButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          side="right"
+                          sideOffset={0}
+                          className="animate-none data-[state=open]:animate-none data-[state=closed]:animate-none"
+                          onMouseEnter={() => openOnHover(item.url)}
+                          onMouseLeave={() => closeOnHoverLeave(item.url)}
+                          onCloseAutoFocus={(e) => e.preventDefault()}
+                        >
+                          <DropdownMenuLabel className="text-muted-foreground text-xs">
+                            {item.titleKey ? t(item.titleKey) : item.title}
+                          </DropdownMenuLabel>
+                          {item.items?.map((subItem) => (
+                            <DropdownMenuItem key={subItem.title} className="gap-2 p-2 cursor-pointer" onSelect={closeDropdownImmediately} asChild>
+                              <Link href={subItem.url} onClick={closeDropdownImmediately} className="flex items-center gap-2 cursor-pointer">
+                                <ChevronRight className="size-3.5 shrink-0" />
+                                {subItem.titleKey ? t(subItem.titleKey) : subItem.title}
+                              </Link>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </SidebarMenuItem>
+                  )
+                }
+                // Expanded: keep collapsible behavior
                 return (
                     <Collapsible
                         key={item.title}
@@ -117,7 +200,7 @@ export function NavMain({
                     >
                         <SidebarMenuItem>
                         <CollapsibleTrigger asChild>
-                            <SidebarMenuButton tooltip={item.title}>
+                            <SidebarMenuButton>
                             {item.icon && <item.icon />}
                             <span>{item.titleKey ? t(item.titleKey) : item.title}</span>
                             <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -142,7 +225,7 @@ export function NavMain({
             }
             return (
                 <SidebarMenuItem key={item.title} >
-                  <SidebarMenuButton asChild isActive={isItemActive(item.url)}>
+                  <SidebarMenuButton asChild isActive={isItemActive(item.url)} tooltip={item.titleKey ? t(item.titleKey) : item.title}>
                     <Link href={item.url}>
                       {item.icon && <item.icon />}
                       <span>{item.titleKey ? t(item.titleKey) : item.title}</span>

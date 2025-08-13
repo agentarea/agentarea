@@ -432,16 +432,5 @@ export default function MainLayout({
       </SidebarProvider>
       <ThemeToggle className="absolute bottom-2 right-2" />
     </>
-
-    // <>
-    //   <SidebarProvider>
-    //     <AppSidebar data={navData} />
-    //     <main>
-    //       <SidebarTrigger />
-    //       {children}
-    //     </main>
-    //   </SidebarProvider>
-    //   <ThemeToggle className="absolute bottom-2 right-2" />
-    // </>
   );
 }
