@@ -38,9 +38,9 @@ import {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> & { data: any }) {
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="flex items-start justify-start">
-          <LogoIcon className="overflow-hidden h-[32px] mt-2" />
+    <Sidebar collapsible="icon" {...props} className="bg-white dark:bg-zinc-800">
+      <SidebarHeader className="flex items-start justify-start overflow-hidden">
+          <LogoIcon className="h-[32px] mt-2" />
       </SidebarHeader>
       {/* <SidebarHeader>
         <TeamSwitcher teams={props.data.teams} />

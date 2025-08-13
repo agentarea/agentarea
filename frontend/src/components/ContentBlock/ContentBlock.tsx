@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import React from "react";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 type ContentBlockProps = {  
   children: React.ReactNode;
@@ -23,11 +24,8 @@ type ContentBlockProps = {
 export default function ContentBlock({ children, header }: ContentBlockProps) {
   return (
     <div className="
-        px-[20px] py-[20px]
-        md:px-[28px] md:py-[20px]
-        lg:px-[40px] lg:py-[25px]
+        px-4 py-6
     ">
-
         {header && (
             <div className="
                 min-h-[38px]
@@ -59,40 +57,44 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
                     </>
                 ) : (
                     <>
-                        <div className="flex flex-col gap-1">
-                            <Breadcrumb>
-                                <BreadcrumbList>
-                                {
-                                    header.breadcrumb.map((item, index) => (
-                                        <React.Fragment key={`breadcrumb-${index}`}>
-                                            <BreadcrumbItem>
-                                                {
-                                                    index === header.breadcrumb.length - 1 ? (
-                                                        <BreadcrumbPage className="font-semibold">{item.label}</BreadcrumbPage>
-                                                    ) : (
-                                                        item.href ? (
-                                                            <BreadcrumbLink href={item.href || ""}>{item.label}</BreadcrumbLink>
+                        <div className="flex items-start gap-2">
+                            <SidebarTrigger className="hidden md:block" />
+                            <div className="hidden md:block h-5 w-px bg-zinc-200 dark:bg-zinc-700"/>
+                            <div className="flex flex-col gap-1">
+                                <Breadcrumb>
+                                    <BreadcrumbList>
+                                    {
+                                        header.breadcrumb.map((item, index) => (
+                                            <React.Fragment key={`breadcrumb-${index}`}>
+                                                <BreadcrumbItem>
+                                                    {
+                                                        index === header.breadcrumb.length - 1 ? (
+                                                            <BreadcrumbPage className="font-semibold">{item.label}</BreadcrumbPage>
                                                         ) : (
-                                                            <BreadcrumbPage className="text-muted-foreground">{item.label}</BreadcrumbPage>
+                                                            item.href ? (
+                                                                <BreadcrumbLink href={item.href || ""}>{item.label}</BreadcrumbLink>
+                                                            ) : (
+                                                                <BreadcrumbPage className="text-muted-foreground">{item.label}</BreadcrumbPage>
+                                                            )
                                                         )
-                                                    )
-                                                }
-                                            </BreadcrumbItem>
-                                            {index < header.breadcrumb.length - 1 && (
-                                                <BreadcrumbSeparator />
-                                            )}
-                                        </React.Fragment>
-                                    ))
+                                                    }
+                                                </BreadcrumbItem>
+                                                {index < header.breadcrumb.length - 1 && (
+                                                    <BreadcrumbSeparator />
+                                                )}
+                                            </React.Fragment>
+                                        ))
+                                    }
+                                    </BreadcrumbList>
+                                </Breadcrumb>
+                                {
+                                    header.description && (
+                                        <p className="note">
+                                            {header.description}
+                                        </p>
+                                    )
                                 }
-                                </BreadcrumbList>
-                            </Breadcrumb>
-                            {
-                                header.description && (
-                                    <p className="note">
-                                        {header.description}
-                                    </p>
-                                )
-                            }
+                            </div>
                         </div>
                         {header.controls}
                     </>

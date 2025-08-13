@@ -411,42 +411,45 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    // <>
-    //   <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-white dark:bg-zinc-800"
-    //   // style={{ backgroundImage: "url('/bg.png')", backgroundSize: "cover", backgroundPosition: "right" }}
-    //   >
-    //     <SideBarWrapper
-    //       menuContent={navContent}
-    //       bottomMenuContent={bottomNavContent}
-    //     />
-    //     <Header menuContent={navContent} bottomMenuContent={bottomNavContent} />
-    //     {/* <main className="flex-1 overflow-hidden pb-[10px] md:pt-[10px] pr-[10px] max-md:px-[10px] max-h-screen">
-    //       <div className=" bg-[#fafbfc] dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto">
-    //         {children}
-    //       </div>
-    //     </main> */}
-    //     <main className="
-    //       flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto "
-    //       // bg-[url('/bg-p.svg')] dark:bg-[url('/bg-p-dark.svg')] bg-no-repeat bg-[right_top_10px]
-    //       // bg-[length:90%_auto] sm:bg-[length:60%_auto] md:bg-[length:60%_auto] lg:bg-[length:auto]"
-    //     >
-    //       {/* <div className="bg-[#fafbfc] dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto"> */}
-    //         {children}
-    //       {/* </div> */}
-    //     </main>
-    //   </div>
-    //   <ThemeToggle className="absolute bottom-2 right-2" />
-    // </>
-
     <>
       <SidebarProvider>
-        <AppSidebar data={navData} />
-        <main>
-          <SidebarTrigger />
-          {children}
-        </main>
+        <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-white dark:bg-zinc-800"
+        // style={{ backgroundImage: "url('/bg.png')", backgroundSize: "cover", backgroundPosition: "right" }}
+        >
+          {/* <SideBarWrapper
+            menuContent={navContent}
+            bottomMenuContent={bottomNavContent}
+          /> */}
+          <AppSidebar data={navData} />
+          <Header menuContent={navContent} bottomMenuContent={bottomNavContent} />
+          {/* <main className="flex-1 overflow-hidden pb-[10px] md:pt-[10px] pr-[10px] max-md:px-[10px] max-h-screen">
+            <div className=" bg-[#fafbfc] dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto">
+              {children}
+            </div>
+          </main> */}
+          <main className="
+            flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto "
+            // bg-[url('/bg-p.svg')] dark:bg-[url('/bg-p-dark.svg')] bg-no-repeat bg-[right_top_10px]
+            // bg-[length:90%_auto] sm:bg-[length:60%_auto] md:bg-[length:60%_auto] lg:bg-[length:auto]"
+          >
+            {/* <div className="bg-[#fafbfc] dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto"> */}
+              {children}
+            {/* </div> */}
+          </main>
+        </div>
       </SidebarProvider>
       <ThemeToggle className="absolute bottom-2 right-2" />
     </>
+
+    // <>
+    //   <SidebarProvider>
+    //     <AppSidebar data={navData} />
+    //     <main>
+    //       <SidebarTrigger />
+    //       {children}
+    //     </main>
+    //   </SidebarProvider>
+    //   <ThemeToggle className="absolute bottom-2 right-2" />
+    // </>
   );
 }

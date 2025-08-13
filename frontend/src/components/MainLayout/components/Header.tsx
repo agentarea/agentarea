@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useTranslations } from "next-intl";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 type HeaderProps = {
     menuContent: NavSection[];
@@ -26,6 +27,7 @@ export default function Header({ menuContent, bottomMenuContent }: HeaderProps) 
         >
             <Sheet>
                 <div className="w-full h-[27px]"><LogoIcon/></div>
+                <SidebarTrigger/>
                 <SheetTrigger asChild>
                     <Button size="icon" variant="ghost" className="h-[25px] w-[25px]">
                         <Menu className="h-[20px] w-[20px]"/>
