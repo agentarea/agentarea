@@ -89,12 +89,14 @@ const navData = {
 
 export default function MainLayout({
   children,
+  sidebarDefaultOpen = true,
 }: {
   children: React.ReactNode;
+  sidebarDefaultOpen?: boolean;
 }) {
   return (
     <>
-      <SidebarProvider>
+      <SidebarProvider defaultOpen={sidebarDefaultOpen}>
         <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-white dark:bg-zinc-800">
           <AppSidebar data={navData} />
           <main className="flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto ">
