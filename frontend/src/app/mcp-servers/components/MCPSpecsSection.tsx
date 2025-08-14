@@ -312,7 +312,7 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-6">
       {/* Enhanced Header */}
       <div className="flex items-center gap-3">
         <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
@@ -326,8 +326,8 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
         </div>
       </div>
       
-      <Card className="border-2 border-slate-200 dark:border-slate-700">
-        <CardHeader className="space-y-4">
+      <div>
+        <div className="space-y-4">
           {/* Enhanced Search */}
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
@@ -416,7 +416,7 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
           )}
 
           {/* Results summary */}
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center justify-between text-sm text-muted-foreground pb-2">
             <span>
               {filteredServers.length} {filteredServers.length === 1 ? 'server' : 'servers'} found
               {selectedCategory !== 'All' && ` in ${selectedCategory}`}
@@ -424,9 +424,9 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
             </span>
             <span>{mcpServers.filter(s => s.is_public).length} total available</span>
           </div>
-        </CardHeader>
+        </div>
         
-        <CardContent>
+        <div>
           {isLoading ? (
             <div className="space-y-4">
               <div className={viewMode === 'grid' 
@@ -490,8 +490,8 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <CreateInstanceDialog 
         open={dialogOpen}
