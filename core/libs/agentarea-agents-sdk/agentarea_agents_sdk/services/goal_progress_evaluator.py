@@ -34,23 +34,6 @@ class GoalProgressEvaluator:
         }
         return self._evaluate_progress_internal(goal, conversation_history, current_iteration)
 
-    def evaluate_progress_legacy(
-        self,
-        goal: dict[str, Any],
-        messages: list[dict[str, Any]],
-        current_iteration: int,
-    ) -> dict[str, Any]:
-        """Evaluate progress toward the goal (legacy interface).
-        
-        Args:
-            goal: The goal definition with optional success criteria
-            messages: List of conversation messages
-            current_iteration: Current iteration count
-            
-        Returns:
-            Dict containing evaluation results
-        """
-        return self._evaluate_progress_internal(goal, messages, current_iteration)
 
     def _evaluate_progress_internal(
         self,
@@ -111,7 +94,7 @@ class GoalProgressEvaluator:
     def _check_explicit_completion(self, recent_messages: list[dict[str, Any]]) -> tuple[bool, str | None, str | None]:
         """Check for explicit completion tool calls."""
         for message in reversed(recent_messages):
-            if message.get("role") == "tool" and message.get("name") == "task_complete":
+            if message.get("role") == "tool" and message.get("name") == "completion":
                 # Found completion tool call - parse the result
                 tool_content = message.get("content", "")
                 if isinstance(tool_content, dict):
@@ -140,7 +123,7 @@ class GoalProgressEvaluator:
             for msg in recent_messages
             if msg.get("role") == "tool"
             and "error" not in str(msg.get("content", "")).lower()
-            and msg.get("name") != "task_complete"  # Don't count completion tool
+            and msg.get("name") != "completion"  # Don't count completion tool
         )
 
         if tool_successes >= 2:  # Multiple successful tool calls might indicate progress

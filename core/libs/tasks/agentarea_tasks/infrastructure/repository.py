@@ -174,37 +174,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> list[Task]:
-        """Get tasks by user ID with pagination.
-        
-        Note: This method is deprecated. Use list_tasks(creator_scoped=True) instead.
-        """
-        # For backward compatibility - filter by creator in current workspace
-        task_orms = await self.list_all(creator_scoped=True, limit=limit, offset=offset)
-        return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[Task]:
-        """Get tasks by workspace ID with pagination.
-        
-        Note: This method is deprecated. Use list_tasks() instead which automatically
-        filters by the current workspace from user context.
-        """
-        # For backward compatibility, but this should be replaced with list_tasks()
-        if workspace_id != self.user_context.workspace_id:
-            return []  # Don't allow cross-workspace access
 
-        return await self.list_tasks(limit=limit, offset=offset)
-
-    async def get_by_user_and_workspace(self, user_id: str, workspace_id: str, limit: int = 100, offset: int = 0) -> list[Task]:
-        """Get tasks by both user ID and workspace ID with pagination.
-        
-        Note: This method is deprecated. Use list_tasks(creator_scoped=True) instead.
-        """
-        # For backward compatibility - filter by creator in current workspace
-        if workspace_id != self.user_context.workspace_id:
-            return []  # Don't allow cross-workspace access
-
-        return await self.list_tasks(creator_scoped=True, limit=limit, offset=offset)
 
     async def get_by_status(self, status: str) -> list[Task]:
         """Get tasks by status."""

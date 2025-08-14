@@ -3,7 +3,6 @@ from datetime import datetime
 from uuid import UUID
 
 # Import LLM testing components
-import litellm
 from agentarea_api.api.deps.services import get_provider_service
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
@@ -11,6 +10,7 @@ from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from agentarea_agents_sdk.models import LLMModel, LLMRequest
 
 logger = logging.getLogger(__name__)
 
@@ -184,53 +184,38 @@ async def test_model_instance(
                 model_name=model_name
             )
 
-        # Build litellm parameters
-        litellm_model = f"{provider_type}/{model_name}"
-        params = {
-            "model": litellm_model,
-            "messages": [{"role": "user", "content": data.test_message}],
-            "max_tokens": 50,  # Keep test small and cheap
-        }
+        # Prepare endpoint URL defaults
+        resolved_endpoint_url = endpoint_url
+        if not resolved_endpoint_url and provider_type == "ollama_chat":
+            resolved_endpoint_url = "http://host.docker.internal:11434"
 
-        # Add API key if available
-        if api_key:
-            params["api_key"] = api_key
+        logger.info(f"Testing LLM configuration via SDK: {provider_type}/{model_name}")
 
-        # Handle base URL for custom endpoints
-        if endpoint_url:
-            url = endpoint_url
-            if not url.startswith("http"):
-                url = f"http://{url}"
-            params["base_url"] = url
-        elif provider_type == "ollama_chat":
-            # Default Ollama URL
-            params["base_url"] = "http://host.docker.internal:11434"
+        # Use internal Agent SDK LLM model wrapper
+        llm_model = LLMModel(
+            provider_type=provider_type,
+            model_name=model_name,
+            api_key=api_key,
+            endpoint_url=resolved_endpoint_url,
+        )
 
-        logger.info(f"Testing LLM configuration: {provider_type}/{model_name}")
+        llm_request = LLMRequest(
+            messages=[{"role": "user", "content": data.test_message}],
+            max_tokens=50,
+        )
 
-        # Make test call
-        response = await litellm.acompletion(**params)
+        llm_response = await llm_model.complete(llm_request)
 
-        # Extract response details
-        message = response.choices[0].message
-        content = message.content or ""
-
-        # Calculate cost and tokens
-        cost = 0.0
-        tokens_used = 0
-        if hasattr(response, "usage") and response.usage:
-            tokens_used = getattr(response.usage, "total_tokens", 0)
-            # Rough cost estimate
-            cost = tokens_used * 0.00001  # $0.01 per 1K tokens estimate
+        tokens_used = llm_response.usage.total_tokens if llm_response.usage else 0
 
         return ModelInstanceTestResponse(
             success=True,
             message="LLM test successful",
-            response_content=content,
+            response_content=llm_response.content,
             provider_type=provider_type,
             model_name=model_name,
-            cost=cost,
-            tokens_used=tokens_used
+            cost=llm_response.cost,
+            tokens_used=tokens_used,
         )
 
     except Exception as e:

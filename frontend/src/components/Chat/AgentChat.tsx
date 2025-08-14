@@ -119,7 +119,77 @@ export default function AgentChat({
       return;
     }
 
-    // Parse event into message component
+    // Special handling for chunk events - accumulate instead of creating new messages
+    if (cleanEventType === 'LLMCallChunk') {
+      const originalData = event.data.original_data || event.data;
+      const chunk = originalData.chunk || event.data.chunk;
+      const chunkIndex = originalData.chunk_index || event.data.chunk_index || 0;
+      const isFinal = originalData.is_final || event.data.is_final || false;
+      const taskId = originalData.task_id || event.data.task_id;
+
+      setMessages(prev => {
+        const lastMessage = prev[prev.length - 1];
+        
+        // If the last message is a streaming message from the same task, append to it
+        if (lastMessage && 
+            'type' in lastMessage && 
+            lastMessage.type === 'llm_chunk' &&
+            lastMessage.data.id === taskId) {
+          
+          // Update the existing streaming message
+          const updatedMessage = {
+            ...lastMessage,
+            data: {
+              ...lastMessage.data,
+              chunk: lastMessage.data.chunk + chunk,
+              chunk_index: chunkIndex,
+              is_final: isFinal
+            }
+          };
+          
+          return [...prev.slice(0, -1), updatedMessage];
+        } else {
+          // Create new streaming message
+          const messageComponent = parseEventToMessage(cleanEventType, event.data);
+          if (messageComponent) {
+            return [...prev, messageComponent];
+          }
+          return prev;
+        }
+      });
+
+      // Convert to final message when streaming is complete
+      if (isFinal) {
+        setMessages(prev => {
+          const lastMessage = prev[prev.length - 1];
+          if (lastMessage && 
+              'type' in lastMessage && 
+              lastMessage.type === 'llm_chunk' &&
+              lastMessage.data.id === taskId) {
+            
+            // Convert to final llm_response message
+            const finalMessage: MessageComponentType = {
+              type: 'llm_response',
+              data: {
+                id: lastMessage.data.id,
+                timestamp: lastMessage.data.timestamp,
+                agent_id: lastMessage.data.agent_id,
+                event_type: 'LLMCallCompleted',
+                content: lastMessage.data.chunk,
+                role: 'assistant'
+              }
+            };
+            
+            return [...prev.slice(0, -1), finalMessage];
+          }
+          return prev;
+        });
+      }
+
+      return;
+    }
+
+    // Parse event into message component for all other event types
     const messageComponent = parseEventToMessage(cleanEventType, event.data);
     if (!messageComponent) {
       console.log(`No message component created for event: ${cleanEventType}`);

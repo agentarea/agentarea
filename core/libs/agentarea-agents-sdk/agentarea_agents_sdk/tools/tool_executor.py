@@ -5,7 +5,6 @@ from typing import Any
 from uuid import UUID
 
 from .base_tool import BaseTool, ToolExecutionError, ToolRegistry
-from .completion_tool import CompletionTool
 from .mcp_tool import MCPTool
 
 logger = logging.getLogger(__name__)

@@ -81,7 +81,7 @@ class TestToolExecutor:
         
         tool_names = [tool.name for tool in tools]
         assert "calculate" in tool_names
-        assert "task_complete" in tool_names
+        assert "completion" in tool_names
         
         # Test getting specific tool
         retrieved_tool = tool_executor.registry.get("calculate")
@@ -164,14 +164,13 @@ class TestTools:
         tool = CompletionTool()
         
         # Test basic properties
-        assert tool.name == "task_complete"
+        assert tool.name == "completion"
         assert hasattr(tool, 'description')
         
-        # Test execution
-        result = await tool.execute(result="Task completed successfully")
+        # Test execution (no parameters needed)
+        result = await tool.execute()
         assert result.get("success") is True
-        assert result.get("completed") is True
-        assert "Task completed successfully" in str(result.get("result", ""))
+        assert isinstance(result.get("result"), str)
     
     def test_tool_openai_function_definition(self):
         """Test that tools provide proper OpenAI function definitions."""

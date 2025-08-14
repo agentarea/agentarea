@@ -1,7 +1,7 @@
 """Tests for the high-level Agent class."""
 
 import pytest
-from agentarea_agents_sdk.agent import Agent, create_agent
+from agentarea_agents_sdk.agents.agent import Agent, create_agent
 
 
 class TestAgentCreation:

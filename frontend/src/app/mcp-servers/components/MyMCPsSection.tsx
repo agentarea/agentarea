@@ -457,13 +457,11 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
                     Connect by URL
                   </Link>
                 </Button>
-                <Button 
-                  size="sm"
-                  variant="outline"
-                  onClick={() => document.getElementById('specs-section')?.scrollIntoView({ behavior: 'smooth' })}
-                >
-                  <Wrench className="h-3 w-3 mr-1" />
-                  Browse Templates
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/mcp-servers/marketplace">
+                    <Wrench className="h-3 w-3 mr-1" />
+                    Browse Templates
+                  </Link>
                 </Button>
               </div>
             </div>
@@ -507,7 +505,7 @@ export function MyMCPsSection({ mcpInstances }: MyMCPsSectionProps) {
             <Grid className="h-3 w-3" />
           </Button>
           <Button variant="outline" size="sm" asChild className="h-7 text-xs">
-            <Link href="/mcp-servers/manage">
+            <Link href="/mcp-servers/tools">
               <Settings className="h-3 w-3 mr-1" />
               Manage
             </Link>

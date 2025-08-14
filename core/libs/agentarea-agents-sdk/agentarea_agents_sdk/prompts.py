@@ -39,7 +39,7 @@ INSTRUCTIONS:
 - Use available tools when they can help achieve the goal
 - Provide clear, actionable responses
 - Ask for clarification if anything is unclear
-- Call the task_complete tool when you have successfully finished the task
+- Call the completion tool when you have successfully finished the task
 
 Remember: You are {agent_name} - stay in character and leverage your specific capabilities."""
 
@@ -49,14 +49,16 @@ Remember: You are {agent_name} - stay in character and leverage your specific ca
 {agent_instruction}
 
 ## Current Task
-Goal: {goal_description}
+Goal: You are a helpful assistant.
 
 Success Criteria:
-{success_criteria}
+      - Understand the task requirements
+      - Use available tools when needed
+      - Provide clear reasoning for actions
+      - Complete the task successfully
 
 ## Available Tools
 {available_tools}
-- task_complete: Mark the task as completed when all success criteria are met
 
 ## ReAct Framework Instructions
 You MUST follow this exact pattern for EVERY action you take:
@@ -85,11 +87,11 @@ Example flow:
 
 CRITICAL RULES:
 - NEVER call tools without first showing your **Thought** and **Observation**
-- NEVER call task_complete without first demonstrating your work step-by-step
+- NEVER call completion without first demonstrating your work step-by-step
 - You must show your reasoning process for EVERY action, including the final completion
-- The task_complete tool requires detailed summary, reasoning, and result - prepare these thoughtfully
+- The completion tool requires detailed summary, reasoning, and result - prepare these thoughtfully
 
-Continue this pattern until the task is complete, then use the task_complete tool with comprehensive details.
+Continue this pattern until the task is complete, then use the completion tool with comprehensive details.
 
 Remember: ALWAYS show your reasoning before taking actions. Users want to see your thought process."""
 

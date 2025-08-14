@@ -36,9 +36,6 @@ from .event_publisher import create_event_publisher, publish_enriched_llm_error_
 logger = logging.getLogger(__name__)
 
 
-
-
-
 def make_agent_activities(dependencies: ActivityDependencies):
     """Factory function to create agent activities with injected dependencies.
 
@@ -138,7 +135,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
         agent_id: str | None = None,  # For event publishing
         execution_id: str | None = None,  # For event publishing
     ) -> dict[str, Any]:
-        """Call LLM with messages and optional tools using streaming."""
+        """Call LLM with messages and optional tools using streaming.
+        
+        Note: Messages should be normalized to exclude None values to match agent SDK format.
+        Use MessageBuilder.normalize_message_dict() in workflow to ensure consistency.
+        """
         try:
             # model_id must be a UUID representing a model instance ID
             try:
@@ -178,6 +179,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             docker_host = os.environ.get("LLM_DOCKER_HOST")
             if docker_host and provider_type == "ollama_chat":
                 endpoint_url = f"http://{docker_host}:11434"
+
             llm_model = LLMModel(
                 provider_type=provider_type,
                 model_name=model_name,
@@ -246,7 +248,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 "content": final_response.content,
                 "tool_calls": final_response.tool_calls,
                 "cost": final_response.cost,
-                "usage": final_response.usage.__dict__ if final_response.usage else None
+                "usage": final_response.usage.__dict__ if final_response.usage else None,
+                # Include reasoning text for debugging (workflow can use this if needed)
+                # "reasoning_text": reasoning_text
             }
 
             return result
@@ -290,18 +294,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
     ) -> dict[str, Any]:
         """Execute an MCP tool or built-in completion tool."""
         # Handle built-in completion tool
-        if tool_name == "task_complete":
-            # Create tool executor and register CompletionTool (like SDK does)
-            tool_executor = ToolExecutor()
-            from agentarea_agents_sdk.tools.completion_tool import CompletionTool
-            tool_executor.registry.register(CompletionTool())
+        # if tool_name == "complete":
+        #     # Create tool executor and register CompletionTool (like SDK does)
+        #     tool_executor = ToolExecutor()
+        #     from agentarea_agents_sdk.tools.completion_tool import CompletionTool
+        #     tool_executor.registry.register(CompletionTool())
 
-            return await tool_executor.execute_tool(
-                tool_name=tool_name,
-                tool_args=tool_args,
-                server_instance_id=server_instance_id,
-                mcp_server_instance_service=None,
-            )
+        #     return await tool_executor.execute_tool(
+        #         tool_name=tool_name,
+        #         tool_args=tool_args,
+        #         server_instance_id=server_instance_id,
+        #         mcp_server_instance_service=None,
+        #     )
 
         # For MCP tools, get the service
         user_context = create_system_context(workspace_id)

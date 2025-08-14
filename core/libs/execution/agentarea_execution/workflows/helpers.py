@@ -126,6 +126,32 @@ class MessageBuilder:
     """
 
     @staticmethod
+    def normalize_message_dict(message_dict: dict[str, Any]) -> dict[str, Any]:
+        """Normalize message dict by removing None values to match agent SDK format.
+        
+        This ensures consistent message formatting between the agent SDK and execution workflow.
+        The agent SDK only includes fields with actual values, so we follow the same pattern.
+        
+        Args:
+            message_dict: Raw message dictionary that may contain None values
+            
+        Returns:
+            Normalized message dictionary with None values filtered out
+        """
+        normalized = {
+            "role": message_dict["role"],
+            "content": message_dict["content"],
+        }
+        
+        # Only add optional fields if they have actual values (not None)
+        optional_fields = ["tool_call_id", "name", "tool_calls"]
+        for field in optional_fields:
+            if field in message_dict and message_dict[field] is not None:
+                normalized[field] = message_dict[field]
+                
+        return normalized
+
+    @staticmethod
     def build_system_prompt(
         agent_name: str,
         agent_instruction: str,
@@ -196,43 +222,142 @@ class ToolCallExtractor:
 
     @staticmethod
     def extract_tool_calls(message: Any) -> list[Any]:
-        """Extract tool calls from LLM response message and return ToolCall objects."""
+        """Extract tool calls from LLM response message and return ToolCall objects.
+        
+        Handles multiple formats:
+        1. Standard format: tool_calls field contains proper tool call objects
+        2. Malformed format: tool_calls is null but content contains JSON tool call data
+        3. Mixed format: content contains tool call JSON strings
+        """
         # Import here to avoid circular imports
         from ..workflows.agent_execution_workflow import ToolCall
+        import json
+        import re
 
         # Handle both dataclass and dict formats
         tool_calls = None
+        content = None
+        
         if hasattr(message, 'tool_calls'):
             tool_calls = message.tool_calls
         elif isinstance(message, dict) and 'tool_calls' in message:
             tool_calls = message['tool_calls']
+            
+        if hasattr(message, 'content'):
+            content = message.content
+        elif isinstance(message, dict) and 'content' in message:
+            content = message['content']
 
-        if not tool_calls:
-            return []
-
-        # Convert to ToolCall dataclass objects
         result = []
-        for i, tool_call in enumerate(tool_calls):
-            if isinstance(tool_call, dict):
-                # Handle dict format from LLM activity
-                result.append(ToolCall(
-                    id=tool_call.get("id", f"call_{i}"),
-                    type=tool_call.get("type", "function"),
-                    function={
-                        "name": tool_call.get("function", {}).get("name", ""),
-                        "arguments": tool_call.get("function", {}).get("arguments", "{}"),
-                    }
-                ))
-            else:
-                # Handle object format (if any)
-                result.append(ToolCall(
-                    id=getattr(tool_call, 'id', f"call_{i}"),
-                    type=getattr(tool_call, 'type', "function"),
-                    function={
-                        "name": getattr(tool_call.function, 'name', ''),
-                        "arguments": getattr(tool_call.function, 'arguments', '{}'),
-                    }
-                ))
+
+        # Method 1: Extract from proper tool_calls field
+        if tool_calls:
+            for i, tool_call in enumerate(tool_calls):
+                if isinstance(tool_call, dict):
+                    # Handle dict format from LLM activity
+                    result.append(ToolCall(
+                        id=tool_call.get("id", f"call_{i}"),
+                        type=tool_call.get("type", "function"),
+                        function={
+                            "name": tool_call.get("function", {}).get("name", ""),
+                            "arguments": tool_call.get("function", {}).get("arguments", "{}"),
+                        }
+                    ))
+                else:
+                    # Handle object format (if any)
+                    result.append(ToolCall(
+                        id=getattr(tool_call, 'id', f"call_{i}"),
+                        type=getattr(tool_call, 'type', "function"),
+                        function={
+                            "name": getattr(tool_call.function, 'name', ''),
+                            "arguments": getattr(tool_call.function, 'arguments', '{}'),
+                        }
+                    ))
+
+        # Method 2: Extract from malformed content field (for production bug)
+        if not result and content and isinstance(content, str):
+            try:
+                # Try to parse the entire content as JSON (case 1: pure JSON tool call)
+                parsed_content = json.loads(content.strip())
+                if isinstance(parsed_content, dict) and "name" in parsed_content:
+                    # This looks like a tool call
+                    arguments = parsed_content.get("arguments", {})
+                    if isinstance(arguments, dict):
+                        arguments = json.dumps(arguments)
+                    elif not isinstance(arguments, str):
+                        arguments = json.dumps(arguments)
+                    
+                    result.append(ToolCall(
+                        id="call_from_content_0",
+                        type="function",
+                        function={
+                            "name": parsed_content["name"],
+                            "arguments": arguments
+                        }
+                    ))
+            except (json.JSONDecodeError, KeyError, TypeError):
+                # Method 3: Extract using regex patterns for embedded JSON
+                try:
+                    # Look for JSON-like patterns in content
+                    # Pattern 1: {"name": "tool_name", "arguments": {...}}
+                    json_pattern = r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*\}|\{[^}]*\})\s*\}'
+                    matches = re.findall(json_pattern, content)
+                    
+                    for i, (tool_name, args_str) in enumerate(matches):
+                        try:
+                            # Validate arguments JSON
+                            json.loads(args_str)
+                            result.append(ToolCall(
+                                id=f"call_from_regex_{i}",
+                                type="function",
+                                function={
+                                    "name": tool_name,
+                                    "arguments": args_str
+                                }
+                            ))
+                        except json.JSONDecodeError:
+                            # If arguments aren't valid JSON, wrap them
+                            result.append(ToolCall(
+                                id=f"call_from_regex_{i}",
+                                type="function",
+                                function={
+                                    "name": tool_name,
+                                    "arguments": json.dumps({"raw_args": args_str})
+                                }
+                            ))
+                    
+                    # Pattern 2: Look for task_complete specifically (common case)
+                    if not result and "task_complete" in content.lower():
+                        # Extract any JSON-like arguments
+                        args_pattern = r'"arguments"\s*:\s*(\{[^}]*\})'
+                        args_match = re.search(args_pattern, content)
+                        
+                        if args_match:
+                            args_str = args_match.group(1)
+                        else:
+                            # No arguments found, use empty object
+                            args_str = "{}"
+                        
+                        result.append(ToolCall(
+                            id="call_task_complete_fallback",
+                            type="function",
+                            function={
+                                "name": "task_complete",
+                                "arguments": args_str
+                            }
+                        ))
+                        
+                except Exception:
+                    # If all parsing fails, but we detect task_complete, create a basic call
+                    if "task_complete" in content.lower():
+                        result.append(ToolCall(
+                            id="call_task_complete_emergency",
+                            type="function",
+                            function={
+                                "name": "task_complete",
+                                "arguments": "{}"
+                            }
+                        ))
 
         return result
 
