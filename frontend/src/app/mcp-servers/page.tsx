@@ -1,36 +1,31 @@
 import { listMCPServers, listMCPServerInstances } from "@/lib/api";
 import ClientWrapper from "./ClientWrapper";
-import ContentBlock from "@/components/ContentBlock";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Store, Wrench, ArrowRight, Plus, Settings } from "lucide-react";
+import ContentBlock from "@/components/ContentBlock";
+import { getTranslations } from "next-intl/server";
 
 export default async function MCPServersPage() {
   const [mcpServers, mcpInstances] = await Promise.all([
     listMCPServers(),
     listMCPServerInstances(),
   ]);
-
+  const t = await getTranslations("MCPServersPage");
   const mcpList = mcpServers.data || [];
   const mcpInstanceList = mcpInstances.data || [];
 
   return (
-    <ClientWrapper>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <ContentBlock 
+    header={{
+      breadcrumb: [
+        {label: t("title")},
+      ],
+      description: t("description"),
+    }}>
+      <ClientWrapper>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header Section */}
-          <div className="mb-8 text-center">
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
-              🚀 Model Context Protocol
-            </div>
-            <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent mb-4">
-              MCP Connections
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Connect AI servers that provide tools, context, and capabilities to your agents
-            </p>
-          </div>
 
           {/* Navigation Cards */}
           <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -119,9 +114,7 @@ export default async function MCPServersPage() {
             </div>
           </div>
         </div>
-      </div>
-    </ClientWrapper>
-
+      </ClientWrapper>
     </ContentBlock>
   );
 }

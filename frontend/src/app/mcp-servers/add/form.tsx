@@ -1,10 +1,10 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormStatus } from 'react-dom';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useActionState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,7 +74,7 @@ function SubmitButton() {
 }
 
 export function AddMCPServerForm() {
-  const [state, formAction] = useFormState(addMCPServer, initialState);
+  const [state, formAction] = useActionState(addMCPServer, initialState);
   const [serverType, setServerType] = useState<'docker' | 'external'>('docker');
 
   const {
