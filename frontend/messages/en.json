@@ -208,6 +208,26 @@
     }
   },
 
+  "MCPServersPage": {
+    "title": "MCP Servers",
+    "description": "Connect AI servers that provide tools, context, and capabilities to your agents",
+    "noServers": "No MCP servers found",
+    "addServer": "Add MCP Server",
+    "emptyDescription": "Add a new MCP server to connect to AI services",
+    "tools": {
+      "title": "Tools",
+      "description": "Tools for working with MCP servers"
+    },
+    "newServer": {
+      "title": "New MCP Server",
+      "description": "Connect an MCP server to your workspace"
+    },
+    "marketplace": {
+      "title": "Marketplace",
+      "description": "Discover and install MCP servers that provide tools, context, and capabilities to your agents"
+    }
+  },
+
   "Models": {
     "title": "Provider Management",
     "description": "Manage AI provider configurations and discover available providers",

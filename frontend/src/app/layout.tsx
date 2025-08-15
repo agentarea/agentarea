@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Open_Sans, Montserrat } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
+import { cookies } from "next/headers";
 
 const openSans = Open_Sans({
   subsets: ["latin"],
@@ -24,6 +25,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const locale = await getLocale();
+  const cookieStore = await cookies();
+  const sidebarCookie = cookieStore.get("sidebar_state")?.value;
+  const sidebarDefaultOpen = sidebarCookie !== undefined ? sidebarCookie === "true" : true;
   return (
     <html lang={locale} suppressHydrationWarning>
       <body className={`${openSans.className} ${montserrat.variable}`}>
@@ -48,7 +52,7 @@ export default async function RootLayout({
         >
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <NextIntlClientProvider>
-              <ConditionalLayout>{children}</ConditionalLayout>
+              <ConditionalLayout sidebarDefaultOpen={sidebarDefaultOpen}>{children}</ConditionalLayout>
             </NextIntlClientProvider>
           </ThemeProvider>
           <Toaster />

@@ -6,6 +6,7 @@ import MainLayout from "@/components/MainLayout";
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
+  sidebarDefaultOpen?: boolean;
 }
 
 // Routes that should NOT use the main layout (auth pages, etc.)
@@ -27,7 +28,7 @@ const PROTECTED_ROUTES = [
   '/home',
 ];
 
-export default function ConditionalLayout({ children }: ConditionalLayoutProps) {
+export default function ConditionalLayout({ children, sidebarDefaultOpen }: ConditionalLayoutProps) {
   const pathname = usePathname();
   const { isSignedIn, isLoaded } = useAuth();
   
@@ -49,5 +50,5 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
   }
   
   // Use MainLayout for known routes or authenticated users
-  return <MainLayout>{children}</MainLayout>;
+  return <MainLayout sidebarDefaultOpen={sidebarDefaultOpen}>{children}</MainLayout>;
 }

@@ -2,14 +2,15 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   Bot,
   Home,
-  Settings,
   Plug,
   ClipboardList,
   Key,
+  GalleryVerticalEnd,
+  SquareTerminal,
 } from "lucide-react";
 import { LucideProps } from "lucide-react";
-import Header from "./components/Header";
-import SideBarWrapper from "./components/SideBarWrapper";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "./components/AppSidebar";
 
 export type NavSection = {
   id: string;
@@ -33,212 +34,76 @@ export type BottomNavContent = {
   };
 } & NavSection;
 
-export const navContent: NavSection[] = [
-  {
-    id: "main",
-    items: [
-      {
-        label: "Workplace",
-        labelKey: "workplace",
-        href: "/workplace",
-        icon: <Home />,
-      },
-      {
-        label: "Browse",
-        labelKey: "browse",
-        href: "/agents/browse",
-        icon: <Bot />,
-      },
-      {
-        label: "Tasks",
-        labelKey: "tasks",
-        href: "/tasks",
-        icon: <ClipboardList />,
-      },
-      {
-        label: "Connections",
-        labelKey: "connections",
-        href: "/mcp-servers",
-        icon: <Plug />,
-      },
-    ],
-  },
-  {
-    id: "admin",
-    labelKey: "admin",
-    section: "Admin",
-    icon: <Settings />,
-    isCollapsed: true,
-    items: [
-      {
-        label: "Models",
-        labelKey: "providerConfigs",
-        href: "/admin/provider-configs",
-        icon: <Key />,
-      },
-    ],
-  },
-];
-
-// export const navContent: NavSection[] = [
-//   {
-//     id: "workplace",
-//     items: [
-//       {
-//         label: "Workplace",
-//         labelKey: "workplace",
-//         href: "/workplace",
-//         icon: <Home />,
-//       },
-//     ],
-//   },
-//   {
-//     id: "agents",
-//     labelKey: "agents",
-//     section: "Agents",
-//     icon: <Bot />,
-//     items: [
-//       {
-//         label: "Browse",
-//         labelKey: "browse",
-//         href: "/agents/browse",
-//         icon: <Bot />,
-//       },
-//       {
-//         label: "Tasks",
-//         labelKey: "tasks",
-//         href: "/agents/tasks",
-//         icon: <ClipboardList />,
-//       },
-//     ],
-//   },
-//   {
-//     id: "mcp",
-//     labelKey: "mcp",
-//     section: "MCP Servers",
-//     icon: <Server />,
-//     items: [
-//       {
-//         label: "Connections",
-//         labelKey: "connections",
-//         href: "/mcp-servers",
-//         icon: <Plug />,
-//       },
-//     ],
-//   },
-//   {
-//     id: "admin",
-//     labelKey: "admin",
-//     section: "Admin",
-//     icon: <Settings />,
-//     items: [
-//       {
-//         label: "LLM Models",
-//         labelKey: "llms",
-//         href: "/admin/llms",
-//         icon: <Cpu />,
-//       },
-//     ],
-//   },
-//   // Commented out sections
-//   /*
-//   {
-//     id: "scopes",
-//     section: "Scopes",
-//     icon: <Building2 />,
-//     items: [
-//       {
-//         label: "All Scopes",
-//         href: "/scopes",
-//         icon: <Building2 />,
-//       },
-//       {
-//         label: "Projects",
-//         href: "/scopes?type=project",
-//         icon: <Globe />,
-//       },
-//       {
-//         label: "Teams",
-//         href: "/scopes?type=team",
-//         icon: <Users />,
-//       },
-//       {
-//         label: "Departments",
-//         href: "/scopes?type=department",
-//         icon: <Building2 />,
-//       },
-//     ],
-//   },
-//   {
-//     id: "sources",
-//     section: "Sources",
-//     icon: <Database />,
-//     items: [
-//       {
-//         label: "Browse",
-//         href: "/sources/browse",
-//         icon: <Database />,
-//       },
-//     ],
-//   },
-//   {
-//     id: "catalog",
-//     section: "Catalog",
-//     icon: <ShoppingBag />,
-//     items: [
-//       {
-//         label: "Browse",
-//         href: "/marketplace/browse",
-//         icon: <ShoppingBag />,
-//       },
-//     ],
-//   },
-//   */
-// ];
-
-const bottomNavContent: BottomNavContent = {
-  id: "settings",
-  items: [
+const navData = {
+  // user: {
+  //   name: "shadcn",
+  //   email: "m@example.com",
+  //   avatar: "/avatars/shadcn.jpg",
+  // },
+  workspaces: [
     {
-      label: "Settings",
-      labelKey: "settings",
-      href: "/settings",
-      icon: <Settings />,
+      name: "AgentArea",
+      logo: GalleryVerticalEnd,
+      plan: "Base workspace",
+      logoFile: "/starlogo.svg",
+    }
+  ],
+  navMain: [
+    {
+        title: "Workplace",
+        titleKey: "workplace",
+        url: "/workplace",
+        icon: Home,
+    }, {
+        title: "Browse",
+        titleKey: "browse",
+        url: "/agents/browse",
+        icon: Bot,
+    }, {
+        title: "Tasks",
+        titleKey: "tasks",
+        url: "/tasks",
+        icon: ClipboardList,
+    }, {
+        title: "Connections",
+        titleKey: "connections",
+        url: "/mcp-servers",
+        icon: Plug,
+    }, {
+      title: "Admin",
+      titleKey: "admin",
+      url: "#",
+      icon: SquareTerminal,
+      items: [
+        {
+            title: "Models",
+            titleKey: "providerConfigs",
+            url: "/admin/provider-configs",
+            icon: Key,
+          },
+      ],
     },
   ],
-  // User data will be provided by Clerk authentication
-};
+}
+
 
 export default function MainLayout({
   children,
+  sidebarDefaultOpen = true,
 }: {
   children: React.ReactNode;
+  sidebarDefaultOpen?: boolean;
 }) {
   return (
     <>
-      <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-white dark:bg-zinc-800"
-      // style={{ backgroundImage: "url('/bg.png')", backgroundSize: "cover", backgroundPosition: "right" }}
-      >
-        <SideBarWrapper
-          menuContent={navContent}
-          bottomMenuContent={bottomNavContent}
-        />
-        <Header menuContent={navContent} bottomMenuContent={bottomNavContent} />
-        {/* <main className="flex-1 overflow-hidden pb-[10px] md:pt-[10px] pr-[10px] max-md:px-[10px] max-h-screen">
-          <div className=" bg-[#fafbfc] dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto">
-            {children}
-          </div>
-        </main> */}
-        <main className="
-          flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto "
-          // bg-[url('/bg-p.svg')] dark:bg-[url('/bg-p-dark.svg')] bg-no-repeat bg-[right_top_10px]
-          // bg-[length:90%_auto] sm:bg-[length:60%_auto] md:bg-[length:60%_auto] lg:bg-[length:auto]"
-        >
-          {/* <div className="bg-[#fafbfc] dark:bg-zinc-900 rounded-xl h-full border border-zinc-200 dark:border-zinc-700 overflow-y-auto"> */}
-            {children}
-          {/* </div> */}
-        </main>
-      </div>
+      <SidebarProvider defaultOpen={sidebarDefaultOpen}>
+        <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-white dark:bg-zinc-800">
+          <AppSidebar data={navData} />
+          <main className="flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto ">
+              {children}
+          </main>
+        </div>
+      </SidebarProvider>
       <ThemeToggle className="absolute bottom-2 right-2" />
     </>
   );

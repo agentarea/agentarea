@@ -1,12 +1,21 @@
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddMCPServerForm } from "./form";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { getTranslations } from "next-intl/server";
 
-export default function AddMCPServerPage() {
+export default async function AddMCPServerPage() {
+  const t = await getTranslations("MCPServersPage");
+  const commonT = await getTranslations("Common");
+
   return (
     <ContentBlock
       header={{
-        title: "Add MCP Server",
+        breadcrumb: [
+          {label: t("title"), href: "/mcp-servers"},
+          {label: commonT("create")},
+          {label: t("newServer.title")},
+        ],
+        description: t("newServer.description"),
         backLink: {
           label: "Back to MCP Servers",
           href: "/mcp-servers"
