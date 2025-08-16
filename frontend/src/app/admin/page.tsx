@@ -27,13 +27,6 @@ export default async function AdminDashboard() {
       icon: Brain,
       color: 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100'
     },
-    {
-      title: "LLM Monitoring",
-      description: "Monitor LLM errors, authentication failures, and performance",
-      href: '/admin/llm-monitoring',
-      icon: BarChart3,
-      color: 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-    }
   ];
 
   return (

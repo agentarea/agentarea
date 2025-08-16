@@ -189,6 +189,12 @@ export default function AgentChat({
       return;
     }
 
+    // Clear any loading state FIRST - before message parsing
+    if (cleanEventType === 'WorkflowCompleted' || cleanEventType === 'WorkflowFailed' || cleanEventType === 'task_failed') {
+      console.log(`Clearing loading state for event: ${cleanEventType}`);
+      setIsLoading(false);
+    }
+
     // Parse event into message component for all other event types
     const messageComponent = parseEventToMessage(cleanEventType, event.data);
     if (!messageComponent) {
@@ -200,11 +206,6 @@ export default function AgentChat({
 
     // Add the new message component to the messages
     setMessages(prev => [...prev, messageComponent]);
-    
-    // Clear any loading state
-    if (cleanEventType === 'WorkflowCompleted' || cleanEventType === 'WorkflowFailed' || cleanEventType === 'task_failed') {
-      setIsLoading(false);
-    }
 
     // Handle special system events that don't create messages but affect UI state
     switch (cleanEventType) {

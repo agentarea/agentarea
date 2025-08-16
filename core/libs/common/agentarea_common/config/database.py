@@ -31,8 +31,10 @@ class DatabaseSettings(BaseAppSettings):
     POSTGRES_HOST: str = "db"
     POSTGRES_PORT: str = "5432"
     POSTGRES_DB: str = "aiagents"
-    pool_size: int = 5
-    max_overflow: int = 10
+    pool_size: int = 20  # Increased from 5 to handle more concurrent SSE connections
+    max_overflow: int = 30  # Increased from 10 to handle bursts
+    pool_timeout: int = 30  # Timeout for getting connection from pool
+    pool_recycle: int = 3600  # Recycle connections every hour to prevent stale connections
     echo: bool = False
 
     @property
@@ -82,6 +84,8 @@ class Database:
             "echo": self.settings.echo,
             "pool_size": self.settings.pool_size,
             "max_overflow": self.settings.max_overflow,
+            "pool_timeout": self.settings.pool_timeout,
+            "pool_recycle": self.settings.pool_recycle,
         }
 
         self.engine: AsyncEngine = create_async_engine(self.settings.url, **engine_kwargs)

@@ -291,29 +291,45 @@ def make_agent_activities(dependencies: ActivityDependencies):
         tool_args: dict[str, Any],
         server_instance_id: UUID | None = None,
         workspace_id: str = "system",
+        tools_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Execute an MCP tool or built-in completion tool."""
-        # Handle built-in completion tool
-        # if tool_name == "complete":
-        #     # Create tool executor and register CompletionTool (like SDK does)
-        #     tool_executor = ToolExecutor()
-        #     from agentarea_agents_sdk.tools.completion_tool import CompletionTool
-        #     tool_executor.registry.register(CompletionTool())
-
-        #     return await tool_executor.execute_tool(
-        #         tool_name=tool_name,
-        #         tool_args=tool_args,
-        #         server_instance_id=server_instance_id,
-        #         mcp_server_instance_service=None,
-        #     )
-
-        # For MCP tools, get the service
+        """Execute an MCP tool or built-in tool."""
         user_context = create_system_context(workspace_id)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
 
-            # Use tool executor to handle routing
+            # Create tool executor with properly configured builtin tools
+            from agentarea_agents_sdk.tools.builtin_tools_loader import create_builtin_tool_instance
+            from agentarea_agents_sdk.tools.decorator_tool import Toolset, ToolsetAdapter
+
             tool_executor = ToolExecutor()
+
+            # Register builtin tools from configuration
+            if tools_config and tools_config.get("builtin_tools"):
+                for tool_config in tools_config["builtin_tools"]:
+                    if isinstance(tool_config, dict):
+                        builtin_tool_name = tool_config["tool_name"]
+                        # Extract method configuration
+                        disabled_methods = tool_config.get("disabled_methods", {})
+
+                        # Convert disabled_methods to constructor arguments
+                        toolset_methods = dict.fromkeys(disabled_methods.keys(), False) if disabled_methods else {}
+                    else:
+                        builtin_tool_name = tool_config
+                        toolset_methods = {}
+
+                    # Create and register the builtin tool instance
+                    tool_instance = create_builtin_tool_instance(builtin_tool_name, toolset_methods)
+                    if tool_instance:
+                        # Check if tool is a Toolset - if so, wrap it in adapter for compatibility
+                        if isinstance(tool_instance, Toolset):
+                            tool_instance = ToolsetAdapter(tool_instance)
+
+                        tool_executor.register_tool(tool_instance)
+                        logger.info(f"Registered builtin tool for execution: {builtin_tool_name}")
+                    else:
+                        logger.warning(f"Unknown builtin tool requested: {builtin_tool_name}")
+
             return await tool_executor.execute_tool(
                 tool_name=tool_name,
                 tool_args=tool_args,
@@ -374,10 +390,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
     @activity.defn
     async def publish_workflow_events_activity(events_json: list[str]) -> bool:
-        """Publish workflow events using the EventBroker infrastructure AND store in database."""
-        if not events_json:
-            return True
-
         try:
             import json
             from datetime import datetime
@@ -404,6 +416,25 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 event = json.loads(event_json)
                 task_id = event.get("data", {}).get("task_id", "unknown")
 
+                # # Check if this is an A2A-originated task by looking at the event data
+                # event_data = event.get("data", {})
+                # task_metadata = event_data.get("metadata", {})
+                # is_a2a_task = task_metadata.get("source") == "a2a"
+
+                # # Enhance event data with A2A monitoring information if this is an A2A task
+                # enhanced_event_data = event["data"].copy()
+                # if is_a2a_task:
+                #     from datetime import UTC
+                #     enhanced_event_data["a2a_metadata"] = {
+                #         "is_a2a_originated": True,
+                #         "a2a_method": task_metadata.get("a2a_method"),
+                #         "a2a_request_id": task_metadata.get("a2a_request_id"),
+                #         "auth_method": task_metadata.get("auth_method"),
+                #         "authenticated": task_metadata.get("authenticated"),
+                #         "monitoring_metadata": task_metadata.get("monitoring", {}),
+                #         "event_enhanced_timestamp": datetime.now(UTC).isoformat()
+                #     }
+
                 # Create proper domain event with correct parameters
                 domain_event = DomainEvent(
                     event_id=event.get("event_id", str(uuid4())),
@@ -414,7 +445,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     aggregate_type="task",
                     original_event_type=event["event_type"],
                     original_timestamp=event["timestamp"],
-                    original_data=event["data"],
+                    # original_data=enhanced_event_data,
                 )
 
                 # 1. Publish via RedisEventBroker (uses FastStream infrastructure) for real-time SSE
@@ -456,7 +487,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
         except Exception as e:
             logger.error(f"Failed to publish workflow events: {e}")
-            return False
+            raise e
 
     # Return all activity functions
     return [

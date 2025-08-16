@@ -20,7 +20,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from ..models.llm_model import LLMModel, LLMRequest
 from ..prompts import PromptBuilder, ToolInfo

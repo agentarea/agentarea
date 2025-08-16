@@ -44,7 +44,7 @@ class CalculateTool(BaseTool):
             Dict containing calculation results
         """
         expression = kwargs.get("expression", "")
-        
+
         if not expression:
             return {
                 "success": False,

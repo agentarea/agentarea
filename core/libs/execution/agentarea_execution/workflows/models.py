@@ -6,8 +6,9 @@ This module contains all dataclasses and type definitions used by the agent exec
 from dataclasses import dataclass, field
 from typing import Any
 
+
 # Define a simple Message class to avoid SDK imports in workflows
-@dataclass 
+@dataclass
 class Message:
     """Simple message class for workflow use without SDK dependencies."""
     role: str

@@ -18,7 +18,7 @@ from .messages import (
 __all__ = [
     # LLM Models
     "LLMModel",
-    "LLMRequest", 
+    "LLMRequest",
     "LLMResponse",
     "LLMUsage",
     # Message Types

@@ -210,13 +210,17 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     'LLMCallCompleted',
     'LLMCallChunk',
     'LLMCallFailed',
-    'ToolCallCompleted', 
+    'ToolCallStarted',
+    'ToolCallCompleted',
+    'ToolCallFailed',
+    'WorkflowStarted',
     'WorkflowCompleted',
     'WorkflowFailed',
+    'task_completed',
     'task_failed',
+    'task_cancelled',
     'BudgetWarning',
     'BudgetExceeded'
-    // Add 'WorkflowStarted' here if you want to show task start messages
   ];
   
   return displayableEvents.includes(eventType);

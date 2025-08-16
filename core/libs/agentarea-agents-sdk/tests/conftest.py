@@ -1,8 +1,9 @@
 """Pytest configuration and fixtures for agentarea-agents-sdk tests."""
 
-import pytest
-import sys
 import os
+import sys
+
+import pytest
 
 # Add the parent directory to the path so we can import the SDK modules
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agentarea_agents_sdk"))
@@ -22,7 +23,7 @@ def skip_if_no_llm():
     """Skip test if LLM is not available."""
     def _skip_if_no_llm():
         try:
-            from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
+            from agentarea_agents_sdk.models.llm_model import LLMModel
             model = LLMModel(
                 provider_type="ollama_chat",
                 model_name="qwen2.5",

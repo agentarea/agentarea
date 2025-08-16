@@ -34,6 +34,13 @@ class AgentAreaClient:
         token = self.auth_config.get_token()
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        else:
+            # Default token for local development
+            headers["Authorization"] = "Bearer simple-test-token"
+
+        # Add required user context headers for development
+        headers["X-User-ID"] = "test-user-123"
+        headers["X-Workspace-ID"] = "test-workspace-456"
 
         return headers
 

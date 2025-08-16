@@ -6,12 +6,11 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
+from agentarea_execution.models import AgentExecutionRequest
+from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
-
-from agentarea_execution.models import AgentExecutionRequest
-from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 async def test_workflow_with_malformed_tool_calls_in_content():
     """Test workflow with malformed LLM responses where tool_calls is null but content has JSON."""
-    
+
     execution_request = AgentExecutionRequest(
         agent_id=uuid4(),
         task_id=uuid4(),
@@ -32,10 +31,10 @@ async def test_workflow_with_malformed_tool_calls_in_content():
         budget_usd=1.0,
         requires_human_approval=False
     )
-    
+
     activity_calls = []
     llm_call_count = 0
-    
+
     @activity.defn(name="build_agent_config_activity")
     async def mock_build_agent_config(*args, **kwargs):
         activity_calls.append("build_agent_config")
@@ -48,7 +47,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             "events_config": {},
             "planning": False,
         }
-    
+
     @activity.defn(name="discover_available_tools_activity")
     async def mock_discover_tools(*args, **kwargs):
         activity_calls.append("discover_tools")
@@ -62,13 +61,13 @@ async def test_workflow_with_malformed_tool_calls_in_content():
                 }
             }
         ]
-    
+
     @activity.defn(name="call_llm_activity")
     async def mock_call_llm(*args, **kwargs):
         nonlocal llm_call_count
         llm_call_count += 1
         activity_calls.append(f"call_llm_{llm_call_count}")
-        
+
         if llm_call_count == 1:
             # First call: Malformed response like production (tool_calls is null, content has JSON)
             return {
@@ -83,11 +82,11 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             return {
                 "content": '{"name": "task_complete", "arguments": {"result": "Task completed successfully after parsing from content field"}}',
                 "cost": 0,
-                "role": "assistant", 
+                "role": "assistant",
                 "tool_calls": None,  # Still malformed
                 "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
             }
-    
+
     @activity.defn(name="execute_mcp_tool_activity")
     async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
         activity_calls.append(f"execute_tool_{tool_name}")
@@ -102,12 +101,12 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             logger.info(f"Mock task_complete returning: {result}")
             return result
         return {"success": False, "result": "Unknown tool"}
-    
+
     @activity.defn(name="evaluate_goal_progress_activity")
     async def mock_evaluate_goal(*args, **kwargs):
         activity_calls.append("evaluate_goal")
         return {"goal_achieved": False, "final_response": None}
-    
+
     @activity.defn(name="publish_workflow_events_activity")
     async def mock_publish_events(*args, **kwargs):
         activity_calls.append("publish_events")
@@ -123,7 +122,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             mock_evaluate_goal,
             mock_publish_events
         ]
-        
+
         async with Worker(
             env.client,
             task_queue="test-queue",
@@ -131,7 +130,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             activities=activities,
         ):
             logger.info("Starting workflow with malformed LLM responses")
-            
+
             result = await env.client.execute_workflow(
                 AgentExecutionWorkflow.run,
                 execution_request,
@@ -139,15 +138,15 @@ async def test_workflow_with_malformed_tool_calls_in_content():
                 task_queue="test-queue",
                 execution_timeout=timedelta(seconds=15)
             )
-            
+
             logger.info(f"Workflow completed: success={result.success}, iterations={result.reasoning_iterations_used}")
             logger.info(f"Activity calls: {activity_calls}")
-            
+
             # Should complete successfully despite malformed responses
             assert result.success is True, f"Expected success=True, got {result.success}"
             assert "execute_tool_task_complete" in activity_calls, "Should have executed task_complete tool"
             assert result.reasoning_iterations_used >= 1, "Should have completed at least 1 iteration"
-            
+
     finally:
         await env.shutdown()
 
@@ -155,7 +154,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
 @pytest.mark.asyncio
 async def test_workflow_with_various_malformed_formats():
     """Test workflow with various malformed response formats."""
-    
+
     execution_request = AgentExecutionRequest(
         agent_id=uuid4(),
         task_id=uuid4(),
@@ -168,10 +167,10 @@ async def test_workflow_with_various_malformed_formats():
         budget_usd=1.0,
         requires_human_approval=False
     )
-    
+
     activity_calls = []
     llm_call_count = 0
-    
+
     # Various malformed response formats to test
     malformed_responses = [
         # Format 1: JSON in content, tool_calls null
@@ -186,7 +185,7 @@ async def test_workflow_with_various_malformed_formats():
         {
             "content": 'I will complete the task: {"name": "task_complete", "arguments": {"result": "Format 2 test"}}',
             "tool_calls": None,
-            "role": "assistant", 
+            "role": "assistant",
             "cost": 0,
             "usage": {"total_tokens": 0}
         },
@@ -215,7 +214,7 @@ async def test_workflow_with_various_malformed_formats():
             "usage": {"total_tokens": 0}
         }
     ]
-    
+
     @activity.defn(name="build_agent_config_activity")
     async def mock_build_agent_config(*args, **kwargs):
         return {
@@ -227,7 +226,7 @@ async def test_workflow_with_various_malformed_formats():
             "events_config": {},
             "planning": False,
         }
-    
+
     @activity.defn(name="discover_available_tools_activity")
     async def mock_discover_tools(*args, **kwargs):
         return [
@@ -240,12 +239,12 @@ async def test_workflow_with_various_malformed_formats():
                 }
             }
         ]
-    
+
     @activity.defn(name="call_llm_activity")
     async def mock_call_llm(*args, **kwargs):
         nonlocal llm_call_count
         llm_call_count += 1
-        
+
         if llm_call_count <= len(malformed_responses):
             response = malformed_responses[llm_call_count - 1]
             logger.info(f"LLM call {llm_call_count}: {response['content'][:50]}...")
@@ -259,7 +258,7 @@ async def test_workflow_with_various_malformed_formats():
                 "cost": 0,
                 "usage": {"total_tokens": 0}
             }
-    
+
     @activity.defn(name="execute_mcp_tool_activity")
     async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
         activity_calls.append(f"execute_tool_{tool_name}")
@@ -271,11 +270,11 @@ async def test_workflow_with_various_malformed_formats():
                 "tool_name": "task_complete"
             }
         return {"success": False, "result": "Unknown tool"}
-    
+
     @activity.defn(name="evaluate_goal_progress_activity")
     async def mock_evaluate_goal(*args, **kwargs):
         return {"goal_achieved": False, "final_response": None}
-    
+
     @activity.defn(name="publish_workflow_events_activity")
     async def mock_publish_events(*args, **kwargs):
         return True
@@ -290,7 +289,7 @@ async def test_workflow_with_various_malformed_formats():
             mock_evaluate_goal,
             mock_publish_events
         ]
-        
+
         async with Worker(
             env.client,
             task_queue="test-queue",
@@ -304,13 +303,13 @@ async def test_workflow_with_various_malformed_formats():
                 task_queue="test-queue",
                 execution_timeout=timedelta(seconds=20)
             )
-            
+
             logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
             logger.info(f"Activity calls: {activity_calls}")
-            
+
             # Should eventually complete by parsing malformed responses
             assert "execute_tool_task_complete" in activity_calls, "Should have executed task_complete despite malformed responses"
-            
+
     finally:
         await env.shutdown()
 
@@ -318,7 +317,7 @@ async def test_workflow_with_various_malformed_formats():
 def test_tool_call_extractor_with_production_data():
     """Test the ToolCallExtractor with actual production data."""
     from agentarea_execution.workflows.helpers import ToolCallExtractor
-    
+
     # Test case 1: Production data - first call
     message1 = {
         "content": '{\n  "name": "task_complete",\n  "arguments": {}\n}',
@@ -327,11 +326,11 @@ def test_tool_call_extractor_with_production_data():
         "tool_calls": None,
         "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
     }
-    
+
     tool_calls1 = ToolCallExtractor.extract_tool_calls(message1)
     assert len(tool_calls1) == 1, f"Expected 1 tool call, got {len(tool_calls1)}"
     assert tool_calls1[0].function["name"] == "task_complete", f"Expected task_complete, got {tool_calls1[0].function['name']}"
-    
+
     # Test case 2: Production data - second call
     message2 = {
         "content": '{"name": "task_complete", "arguments": {"result": "Since no specific task was provided and the goal \'test\' is vague, I\'ve completed this iteration with a basic task completion message as instructed."}}',
@@ -340,17 +339,16 @@ def test_tool_call_extractor_with_production_data():
         "tool_calls": None,
         "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
     }
-    
+
     tool_calls2 = ToolCallExtractor.extract_tool_calls(message2)
     assert len(tool_calls2) == 1, f"Expected 1 tool call, got {len(tool_calls2)}"
     assert tool_calls2[0].function["name"] == "task_complete", f"Expected task_complete, got {tool_calls2[0].function['name']}"
-    
+
     # Verify arguments are properly extracted
-    import json
     args = json.loads(tool_calls2[0].function["arguments"])
     assert "result" in args, "Expected 'result' in arguments"
     assert "task was provided" in args["result"], "Expected result message to be preserved"
-    
+
     print("✅ Tool call extractor correctly handles production malformed data")
 
 

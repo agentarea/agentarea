@@ -26,9 +26,6 @@ This architecture allows for:
 """
 
 from .interfaces import ActivityDependencies, ActivityServicesInterface
-# Avoid SDK imports in execution module to prevent Temporal sandbox issues
-# Import Message from workflow models instead
-from .workflows.models import Message
 from .models import (
     AgentExecutionRequest,
     AgentExecutionResult,
@@ -37,6 +34,10 @@ from .models import (
     ToolExecutionRequest,
     ToolExecutionResult,
 )
+
+# Avoid SDK imports in execution module to prevent Temporal sandbox issues
+# Import Message from workflow models instead
+from .workflows.models import Message
 
 # Note: Agentic runners are not imported here to avoid Temporal sandbox issues
 # Import them directly from .agentic when needed outside of workflows

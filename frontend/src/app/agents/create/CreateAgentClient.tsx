@@ -49,7 +49,7 @@ export default function CreateAgentClient({
       description: '',
       instruction: '',
       model_id: '',
-      tools_config: { mcp_server_configs: [] },
+      tools_config: { mcp_server_configs: [], builtin_tools: [] },
       events_config: { events: [] },
       planning: false,
     }
@@ -59,6 +59,12 @@ export default function CreateAgentClient({
     useFieldArray({
       control,
       name: "tools_config.mcp_server_configs",
+    });
+
+  const { fields: builtinToolFields, append: appendBuiltinTool, remove: removeBuiltinTool } =
+    useFieldArray({
+      control,
+      name: "tools_config.builtin_tools",
     });
     
   const { fields: eventFields, append: appendEvent, remove: removeEvent } =
@@ -94,6 +100,15 @@ export default function CreateAgentClient({
         setValue("tools_config.mcp_server_configs", configs);
       }
       
+      if (Array.isArray(state.fieldValues.tools_config?.builtin_tools)) {
+        const configs = state.fieldValues.tools_config.builtin_tools.map(config => ({
+          tool_name: config.tool_name,
+          requires_user_confirmation: config.requires_user_confirmation ?? false,
+          enabled: config.enabled ?? true
+        }));
+        setValue("tools_config.builtin_tools", configs);
+      }
+      
       setValue("planning", !!state.fieldValues.planning);
     }
   }, [state?.fieldValues, setValue]);
@@ -118,6 +133,22 @@ export default function CreateAgentClient({
         });
       }
     });
+
+    // Add builtin tools config
+    if (data.tools_config.builtin_tools) {
+      data.tools_config.builtin_tools.forEach((builtinTool, index) => {
+        formData.append(`tools_config.builtin_tools[${index}].tool_name`, builtinTool.tool_name);
+        if (builtinTool.requires_user_confirmation !== undefined) {
+          formData.append(`tools_config.builtin_tools[${index}].requires_user_confirmation`, builtinTool.requires_user_confirmation.toString());
+        }
+        if (builtinTool.enabled !== undefined) {
+          formData.append(`tools_config.builtin_tools[${index}].enabled`, builtinTool.enabled.toString());
+        }
+        if (builtinTool.disabled_methods) {
+          formData.append(`tools_config.builtin_tools[${index}].disabled_methods`, JSON.stringify(builtinTool.disabled_methods));
+        }
+      });
+    }
 
     // Add events config
     data.events_config.events.forEach((event, index) => {
@@ -167,36 +198,13 @@ export default function CreateAgentClient({
                   appendTool={appendTool} 
                   mcpServers={mcpServers} 
                   mcpInstanceList={mcpInstanceList}
+                  builtinToolFields={builtinToolFields}
+                  removeBuiltinTool={removeBuiltinTool}
+                  appendBuiltinTool={appendBuiltinTool}
                 />
               </div>
             </Card>
           </div>
-
-          {/* <div className="space-y-[12px]">
-            <AgentTriggers 
-              control={control} 
-              errors={errors} 
-              eventFields={eventFields} 
-              removeEvent={removeEvent} 
-              appendEvent={appendEvent} 
-            />
-
-            <ToolConfig 
-              control={control} 
-              errors={errors} 
-              toolFields={toolFields} 
-              removeTool={removeTool} 
-              appendTool={appendTool} 
-              mcpServers={mcpServers} 
-            />
-
-            <AdvancedSettings 
-              control={control} 
-              errors={errors} 
-            />
-
-            <InstructionInfo />
-          </div> */}
         </div>
 
         <div className="max-w-6xl mx-auto flex flex-row items-end justify-end gap-4 sticky bottom-0 z-10 pt-6 pb-2 -mx-4 px-4">

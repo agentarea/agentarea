@@ -2,6 +2,8 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from agentarea_agents_sdk.models import LLMModel, LLMRequest
+
 # Import LLM testing components
 from agentarea_api.api.deps.services import get_provider_service
 from agentarea_common.auth.context import UserContext
@@ -10,7 +12,6 @@ from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from agentarea_agents_sdk.models import LLMModel, LLMRequest
 
 logger = logging.getLogger(__name__)
 

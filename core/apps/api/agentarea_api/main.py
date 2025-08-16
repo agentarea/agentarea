@@ -1,6 +1,7 @@
 """Main FastAPI application for AgentArea."""
 
 import asyncio
+import logging
 import os
 import signal
 from contextlib import asynccontextmanager
@@ -13,7 +14,7 @@ from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets import get_real_secret_manager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
@@ -22,8 +23,11 @@ from fastapi.staticfiles import StaticFiles
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import v1_router
 
-container = get_container()
+# Import MCP server
+from agentarea_api.api.v1.mcp import mcp_app
 
+logger = logging.getLogger(__name__)
+container = get_container()
 
 async def initialize_services():
     """Initialize real services instead of test mocks."""
@@ -76,7 +80,8 @@ async def cleanup_all_connections():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def app_lifespan(app: FastAPI):
+    """Original application lifespan."""
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
         print(f"📡 Received signal {signum}, initiating graceful shutdown...")
@@ -99,6 +104,15 @@ async def lifespan(app: FastAPI):
         # Shutdown - ensure this always runs
         print("Application shutting down")
         await cleanup_all_connections()
+
+
+@asynccontextmanager
+async def combined_lifespan(app: FastAPI):
+    """Combined lifespan for app and MCP server."""
+    # Run both lifespans - app first, then MCP
+    async with app_lifespan(app):
+        async with mcp_app.lifespan(app):
+            yield
 
 
 # Security schemes for OpenAPI documentation
@@ -127,7 +141,7 @@ def create_app() -> FastAPI:
         title="AgentArea API",
         description="Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header and workspace ID in the X-Workspace-ID header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json. In development mode, use X-Dev-User-ID header to bypass authentication.",
         version="0.1.0",
-        lifespan=lifespan,
+        lifespan=combined_lifespan,
         openapi_tags=[
             {
                 "name": "agents",
@@ -185,6 +199,7 @@ def create_app() -> FastAPI:
     static_path = Path(__file__).parent / "static"
 
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+    app.mount("/llm", mcp_app)
     # Add routers
     app.include_router(events_router, prefix="/events", tags=["events"])
     app.include_router(v1_router, tags=["v1"])

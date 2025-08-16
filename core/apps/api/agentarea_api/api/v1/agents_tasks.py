@@ -191,13 +191,6 @@ class TaskSSEEvent(BaseModel):
     type: str
     data: dict[str, Any]
 
-
-# Use the proper task service from dependency injection
-
-
-# Note: Old task manager approach has been replaced with Temporal workflows
-
-
 @router.post("/")
 async def create_task_for_agent_with_stream(
     agent_id: UUID,

@@ -1,10 +1,9 @@
 """Decorator-based tool interface for automatic schema generation."""
 
 import inspect
-import json
 from abc import ABC
-from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, get_type_hints
+from collections.abc import Callable
+from typing import Any, Optional, get_type_hints
 
 from .base_tool import BaseTool
 
@@ -24,7 +23,7 @@ def tool_method(func: Callable = None):
         else:
             f._tool_description = f"Method: {f.__name__}"
         return f
-    
+
     # Support both @tool_method and @tool_method()
     if func is None:
         return decorator
@@ -39,19 +38,19 @@ class Toolset(ABC):
     This approach automatically generates schemas from method signatures and docstrings,
     eliminating the need for manual schema definition.
     """
-    
+
     def __init__(self):
         """Initialize the tool and discover decorated methods."""
         self._tool_methods = self._discover_tool_methods()
-    
-    def _discover_tool_methods(self) -> Dict[str, Callable]:
+
+    def _discover_tool_methods(self) -> dict[str, Callable]:
         """Discover all methods decorated with @tool_method."""
         methods = {}
         for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
             if hasattr(method, '_is_tool_method'):
                 methods[name] = method
         return methods
-    
+
     @property
     def name(self) -> str:
         """Get toolset name from class name (snake_case)."""
@@ -65,12 +64,12 @@ class Toolset(ABC):
                 snake_case = snake_case[:-len(suffix)]
                 break
         return snake_case
-    
+
     @property
     def description(self) -> str:
         """Get tool description from class docstring."""
         return self.__class__.__doc__ or f"Tool: {self.name}"
-    
+
     def get_schema(self) -> dict[str, Any]:
         """Generate OpenAI function schema from decorated methods."""
         if len(self._tool_methods) == 1:
@@ -86,7 +85,7 @@ class Toolset(ABC):
                     "enum": list(self._tool_methods.keys())
                 }
             }
-            
+
             # Add parameters for each method
             for method_name, method in self._tool_methods.items():
                 method_schema = self._generate_method_schema(method)
@@ -96,7 +95,7 @@ class Toolset(ABC):
                             **param_schema,
                             "description": f"[For {method_name}] {param_schema.get('description', '')}"
                         }
-            
+
             return {
                 "parameters": {
                     "type": "object",
@@ -104,25 +103,25 @@ class Toolset(ABC):
                     "required": ["action"]
                 }
             }
-    
+
     def _generate_method_schema(self, method: Callable) -> dict[str, Any]:
         """Generate schema for a single method."""
         sig = inspect.signature(method)
         type_hints = get_type_hints(method)
-        
+
         properties = {}
         required = []
-        
+
         for param_name, param in sig.parameters.items():
             if param_name == 'self':
                 continue
-                
+
             param_schema = self._get_parameter_schema(param, type_hints.get(param_name))
             properties[param_name] = param_schema
-            
+
             if param.default == inspect.Parameter.empty:
                 required.append(param_name)
-        
+
         return {
             "parameters": {
                 "type": "object",
@@ -130,11 +129,11 @@ class Toolset(ABC):
                 "required": required
             }
         }
-    
+
     def _get_parameter_schema(self, param: inspect.Parameter, type_hint: Any) -> dict[str, Any]:
         """Generate schema for a single parameter."""
         schema = {"description": f"Parameter: {param.name}"}
-        
+
         # Map Python types to JSON schema types
         if type_hint == str or type_hint == Optional[str]:
             schema["type"] = "string"
@@ -144,15 +143,15 @@ class Toolset(ABC):
             schema["type"] = "number"
         elif type_hint == bool or type_hint == Optional[bool]:
             schema["type"] = "boolean"
-        elif type_hint == list or type_hint == List:
+        elif type_hint == list or type_hint == list:
             schema["type"] = "array"
-        elif type_hint == dict or type_hint == Dict:
+        elif type_hint == dict or type_hint == dict:
             schema["type"] = "object"
         else:
             schema["type"] = "string"  # Default fallback
-        
+
         return schema
-    
+
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Execute the appropriate tool method based on parameters."""
         try:
@@ -170,19 +169,19 @@ class Toolset(ABC):
                         "tool_name": self.name,
                         "error": "Invalid action"
                     }
-                
+
                 method = self._tool_methods[action]
                 # Filter kwargs for this specific method
                 method_kwargs = self._filter_kwargs_for_method(action, kwargs)
                 result = await self._execute_method(method, method_kwargs)
-            
+
             return {
                 "success": True,
                 "result": result,
                 "tool_name": self.name,
                 "error": None
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -190,33 +189,33 @@ class Toolset(ABC):
                 "tool_name": self.name,
                 "error": str(e)
             }
-    
+
     def _filter_kwargs_for_method(self, method_name: str, kwargs: dict) -> dict:
         """Filter kwargs to only include parameters for the specific method."""
         method = self._tool_methods[method_name]
         sig = inspect.signature(method)
-        
+
         filtered_kwargs = {}
         for param_name in sig.parameters:
             if param_name == 'self':
                 continue
-            
+
             # Check for method-specific parameter
             prefixed_name = f"{method_name}_{param_name}"
             if prefixed_name in kwargs:
                 filtered_kwargs[param_name] = kwargs[prefixed_name]
             elif param_name in kwargs:
                 filtered_kwargs[param_name] = kwargs[param_name]
-        
+
         return filtered_kwargs
-    
+
     async def _execute_method(self, method: Callable, kwargs: dict) -> Any:
         """Execute a single method with the given kwargs."""
         if inspect.iscoroutinefunction(method):
             return await method(**kwargs)
         else:
             return method(**kwargs)
-    
+
     def get_openai_function_definition(self) -> dict[str, Any]:
         """Get OpenAI-compatible function definition."""
         return {
@@ -232,20 +231,20 @@ class Toolset(ABC):
 # Adapter to make Toolset compatible with existing BaseTool interface
 class ToolsetAdapter(BaseTool):
     """Adapter to make Toolset compatible with existing BaseTool interface."""
-    
+
     def __init__(self, toolset: Toolset):
         self._toolset = toolset
-    
+
     @property
     def name(self) -> str:
         return self._toolset.name
-    
+
     @property
     def description(self) -> str:
         return self._toolset.description
-    
+
     def get_schema(self) -> dict[str, Any]:
         return self._toolset.get_schema()
-    
+
     async def execute(self, **kwargs) -> dict[str, Any]:
         return await self._toolset.execute(**kwargs)

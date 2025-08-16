@@ -6,6 +6,7 @@ import sys
 import click
 
 from agentarea_cli.client import AgentAreaClient
+from agentarea_cli.commands.a2a import a2a
 from agentarea_cli.commands.agent import agent
 from agentarea_cli.commands.auth import auth
 from agentarea_cli.commands.chat import chat
@@ -46,6 +47,7 @@ def cli(ctx, api_url, debug):
 
 
 # Register command groups
+cli.add_command(a2a)
 cli.add_command(auth)
 cli.add_command(agent)
 cli.add_command(chat)

@@ -16,6 +16,14 @@ const MCPConfigSchema = z.object({
   allowed_tools: z.array(MCPToolConfigSchema).optional().nullable(),
 });
 
+// Define Zod schema for Builtin Tool Config
+const BuiltinToolConfigSchema = z.object({
+  tool_name: z.string().min(1, "Builtin tool name is required"),
+  requires_user_confirmation: z.boolean().optional().default(false),
+  enabled: z.boolean().optional().default(true),
+  disabled_methods: z.record(z.boolean()).optional(),
+});
+
 // Define Zod schema for individual Event Config items
 const EventConfigItemSchema = z.object({
   event_type: z.string().min(1, "Event type is required"), // e.g., 'text_input', 'cron'
@@ -49,6 +57,7 @@ const AgentSchema = z.object({
   model_id: z.string().min(1, 'Model is required'),
   tools_config: z.object({
     mcp_server_configs: z.array(MCPConfigSchema).optional().nullable(),
+    builtin_tools: z.array(BuiltinToolConfigSchema).optional().nullable(),
   }).optional().nullable(),
   events_config: z.object({
     // Expect an array of EventConfigItemSchema objects
@@ -65,6 +74,7 @@ export async function addAgent(
   // Need to manually reconstruct the array/object structure for validation
   const mcpConfigs: Record<number, Partial<components["schemas"]["MCPConfig"]>> = {};
   const mcpToolConfigs: Record<number, Record<number, Partial<components["schemas"]["MCPToolConfig"]>>> = {};
+  const builtinToolConfigs: Record<number, Partial<{ tool_name: string; requires_user_confirmation: boolean; enabled: boolean; disabled_methods: Record<string, boolean>; }>> = {};
   
   formData.forEach((value, key) => {
     // Handle MCP server configs
@@ -97,6 +107,31 @@ export async function addAgent(
         mcpToolConfigs[serverIndex][toolIndex][field as string] = value as unknown;
       }
     }
+
+    // Handle builtin tools
+    const builtinMatch = key.match(/tools_config\.builtin_tools\[(\d+)\]\.(.*)/);
+    if (builtinMatch) {
+      const index = parseInt(builtinMatch[1], 10);
+      const field = builtinMatch[2] as keyof { tool_name: string; requires_user_confirmation: boolean; enabled: boolean; disabled_methods: any; };
+      
+      if (!builtinToolConfigs[index]) {
+        builtinToolConfigs[index] = {};
+      }
+      
+      if (field === 'requires_user_confirmation' || field === 'enabled') {
+        builtinToolConfigs[index][field] = value === 'on' || value === 'true';
+      } else if (field === 'disabled_methods') {
+        // Parse JSON for disabled_methods
+        try {
+          builtinToolConfigs[index][field] = JSON.parse(value as string);
+        } catch (parseError) {
+          console.error(`Failed to parse disabled_methods JSON for builtin tool ${index}:`, parseError);
+          builtinToolConfigs[index][field] = {};
+        }
+      } else {
+        builtinToolConfigs[index][field as string] = value as unknown;
+      }
+    }
   });
   
   // Combine MCP configs with their allowed tools
@@ -108,6 +143,9 @@ export async function addAgent(
   });
   // Convert the record back to an array, ensuring required fields are present or handled by Zod
   const mcpConfigsArray = Object.values(mcpConfigs).map(config => config as components["schemas"]["MCPConfig"]);
+
+  // Convert builtin tools record to array
+  const builtinToolsArray = Object.values(builtinToolConfigs).map(config => config as { tool_name: string; requires_user_confirmation: boolean; enabled: boolean; disabled_methods?: Record<string, boolean>; });
 
   // Reconstruct events array using new format
   const eventConfigs: Record<number, { event_type: string, config?: Record<string, unknown>, enabled?: boolean }> = {};
@@ -147,7 +185,7 @@ export async function addAgent(
     description,
     instruction,
     model_id,
-    tools_config: { mcp_server_configs: mcpConfigsArray },
+    tools_config: { mcp_server_configs: mcpConfigsArray, builtin_tools: builtinToolsArray },
     events_config: { events: eventConfigsArray },
     planning: formData.get('planning') === 'on',
   };

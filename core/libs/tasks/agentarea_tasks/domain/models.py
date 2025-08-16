@@ -1,6 +1,6 @@
 """Task domain models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -132,7 +132,7 @@ class SimpleTask(BaseModel):
     task_parameters: dict[str, Any] = {}
     result: dict[str, Any] | None = None
     error_message: str | None = None
-    created_at: datetime = datetime.utcnow()
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Enhanced fields for task lifecycle management
     updated_at: datetime | None = None
@@ -185,7 +185,7 @@ class SimpleTask(BaseModel):
         from datetime import datetime
 
         self.status = new_status
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
         # Automatically set timestamps based on status
         if new_status == "running" and not self.started_at:
@@ -227,11 +227,11 @@ class TaskEvent(BaseModel):
         return cls(
             task_id=task_id,
             event_type=event_type,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             data=data,
             metadata={
                 "source": "workflow",
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(UTC).isoformat()
             },
             workspace_id=workspace_id,
             created_by=created_by

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class AuthMiddleware(BaseHTTPMiddleware):
     """Authentication middleware for FastAPI applications."""
 
-    def __init__(self, app, provider_name: str = "clerk", config: dict | None = None):
+    def __init__(self, app, provider_name: str, config: dict | None = None):
         """Initialize the auth middleware.
         
         Args:
@@ -152,6 +152,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/static/",
             "/v1/auth/",  # All auth endpoints are public
         ]
+        
+        # A2A endpoints handle their own authentication
+        a2a_patterns = [
+            "/a2a/well-known",
+            "/a2a/rpc"
+        ]
+        
+        for pattern in a2a_patterns:
+            if pattern in request.url.path:
+                return True
 
         for prefix in public_prefixes:
             if request.url.path.startswith(prefix):

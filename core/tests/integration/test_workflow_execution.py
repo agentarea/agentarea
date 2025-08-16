@@ -4,43 +4,35 @@ Tests the complete workflow execution with real Temporal worker to identify
 why workflows never finish.
 """
 
-import asyncio
 import json
 import logging
-import os
-import uuid
 from datetime import timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
-from temporalio import activity
-from temporalio.client import Client
-from temporalio.testing import WorkflowEnvironment
-from temporalio.worker import Worker
-
-from agentarea_execution.activities.agent_execution_activities import make_agent_activities
 from agentarea_execution.interfaces import ActivityDependencies
 from agentarea_execution.models import AgentExecutionRequest, AgentExecutionResult
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+from temporalio.testing import WorkflowEnvironment
+from temporalio.worker import Worker
 
 logger = logging.getLogger(__name__)
 
 
 class MockSecretManager:
     """Mock secret manager for testing."""
-    
+
     async def get_secret(self, secret_name: str) -> str:
         return f"mock-api-key-{secret_name}"
 
 
 class MockEventBroker:
     """Mock event broker for testing."""
-    
+
     def __init__(self):
         self.published_events = []
-    
+
     async def publish(self, event):
         self.published_events.append(event)
         logger.info(f"Mock published event: {event}")
@@ -119,14 +111,14 @@ class TestWorkflowExecution:
         self, mock_dependencies, sample_agent_config, sample_tools, execution_request
     ):
         """Test workflow completes when LLM immediately calls task_complete."""
-        
+
         # Mock activities to simulate immediate completion
         async def mock_build_agent_config(*args, **kwargs):
             return sample_agent_config
-        
+
         async def mock_discover_tools(*args, **kwargs):
             return sample_tools
-        
+
         async def mock_call_llm(*args, **kwargs):
             # Simulate LLM calling task_complete immediately
             return {
@@ -145,7 +137,7 @@ class TestWorkflowExecution:
                 "cost": 0.001,
                 "usage": {"total_tokens": 50}
             }
-        
+
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             if tool_name == "task_complete":
                 return {
@@ -155,7 +147,7 @@ class TestWorkflowExecution:
                     "tool_name": "task_complete"
                 }
             return {"success": False, "result": "Unknown tool"}
-        
+
         async def mock_publish_events(*args, **kwargs):
             return True
 
@@ -164,12 +156,12 @@ class TestWorkflowExecution:
             # Create activities with mocks
             activities = [
                 mock_build_agent_config,
-                mock_discover_tools, 
+                mock_discover_tools,
                 mock_call_llm,
                 mock_execute_tool,
                 mock_publish_events
             ]
-            
+
             # Start worker
             async with Worker(
                 env.client,
@@ -185,7 +177,7 @@ class TestWorkflowExecution:
                     task_queue="test-queue",
                     execution_timeout=timedelta(seconds=30)
                 )
-                
+
                 # Verify workflow completed successfully
                 assert isinstance(result, AgentExecutionResult)
                 assert result.success is True
@@ -197,23 +189,23 @@ class TestWorkflowExecution:
         self, mock_dependencies, sample_agent_config, sample_tools, execution_request
     ):
         """Test workflow completes after multiple iterations."""
-        
+
         call_count = 0
-        
+
         async def mock_build_agent_config(*args, **kwargs):
             return sample_agent_config
-        
+
         async def mock_discover_tools(*args, **kwargs):
             return sample_tools
-        
+
         async def mock_call_llm(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            
+
             if call_count == 1:
                 # First call - just thinking
                 return {
-                    "role": "assistant", 
+                    "role": "assistant",
                     "content": "I need to analyze this task first.",
                     "tool_calls": None,
                     "cost": 0.001,
@@ -246,7 +238,7 @@ class TestWorkflowExecution:
                     "cost": 0.001,
                     "usage": {"total_tokens": 45}
                 }
-        
+
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             if tool_name == "task_complete":
                 return {
@@ -256,7 +248,7 @@ class TestWorkflowExecution:
                     "tool_name": "task_complete"
                 }
             return {"success": False, "result": "Unknown tool"}
-        
+
         async def mock_publish_events(*args, **kwargs):
             return True
 
@@ -269,7 +261,7 @@ class TestWorkflowExecution:
                 mock_execute_tool,
                 mock_publish_events
             ]
-            
+
             async with Worker(
                 env.client,
                 task_queue="test-queue",
@@ -283,7 +275,7 @@ class TestWorkflowExecution:
                     task_queue="test-queue",
                     execution_timeout=timedelta(seconds=30)
                 )
-                
+
                 # Verify workflow completed after multiple iterations
                 assert isinstance(result, AgentExecutionResult)
                 assert result.success is True
@@ -295,16 +287,16 @@ class TestWorkflowExecution:
         self, mock_dependencies, sample_agent_config, sample_tools, execution_request
     ):
         """Test workflow stops when max iterations reached."""
-        
+
         # Set low max iterations
         execution_request.task_parameters["max_iterations"] = 2
-        
+
         async def mock_build_agent_config(*args, **kwargs):
             return sample_agent_config
-        
+
         async def mock_discover_tools(*args, **kwargs):
             return sample_tools
-        
+
         async def mock_call_llm(*args, **kwargs):
             # Never call task_complete - just keep thinking
             return {
@@ -314,13 +306,13 @@ class TestWorkflowExecution:
                 "cost": 0.001,
                 "usage": {"total_tokens": 30}
             }
-        
+
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             return {"success": False, "result": "Should not be called"}
-        
+
         async def mock_evaluate_goal(*args, **kwargs):
             return {"goal_achieved": False, "final_response": None}
-        
+
         async def mock_publish_events(*args, **kwargs):
             return True
 
@@ -333,7 +325,7 @@ class TestWorkflowExecution:
                 mock_evaluate_goal,
                 mock_publish_events
             ]
-            
+
             async with Worker(
                 env.client,
                 task_queue="test-queue",
@@ -347,7 +339,7 @@ class TestWorkflowExecution:
                     task_queue="test-queue",
                     execution_timeout=timedelta(seconds=30)
                 )
-                
+
                 # Verify workflow stopped at max iterations
                 assert isinstance(result, AgentExecutionResult)
                 assert result.success is False  # Should not be successful
@@ -358,16 +350,16 @@ class TestWorkflowExecution:
         self, mock_dependencies, sample_agent_config, sample_tools, execution_request
     ):
         """Test workflow stops when budget is exceeded."""
-        
+
         # Set very low budget
         execution_request.budget_usd = 0.001
-        
+
         async def mock_build_agent_config(*args, **kwargs):
             return sample_agent_config
-        
+
         async def mock_discover_tools(*args, **kwargs):
             return sample_tools
-        
+
         async def mock_call_llm(*args, **kwargs):
             # Return high cost to exceed budget
             return {
@@ -377,10 +369,10 @@ class TestWorkflowExecution:
                 "cost": 0.01,  # Exceeds budget of 0.001
                 "usage": {"total_tokens": 1000}
             }
-        
+
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             return {"success": False, "result": "Should not be called"}
-        
+
         async def mock_publish_events(*args, **kwargs):
             return True
 
@@ -392,7 +384,7 @@ class TestWorkflowExecution:
                 mock_execute_tool,
                 mock_publish_events
             ]
-            
+
             async with Worker(
                 env.client,
                 task_queue="test-queue",
@@ -406,7 +398,7 @@ class TestWorkflowExecution:
                     task_queue="test-queue",
                     execution_timeout=timedelta(seconds=30)
                 )
-                
+
                 # Verify workflow stopped due to budget
                 assert isinstance(result, AgentExecutionResult)
                 assert result.success is False
@@ -420,9 +412,9 @@ class TestWorkflowStateManagement:
         """Test that workflow success flag is properly managed."""
         from agentarea_execution.workflows.agent_execution_workflow import (
             AgentExecutionState,
-            AgentGoal
+            AgentGoal,
         )
-        
+
         # Create state
         state = AgentExecutionState()
         state.goal = AgentGoal(
@@ -433,10 +425,10 @@ class TestWorkflowStateManagement:
             requires_human_approval=False,
             context={}
         )
-        
+
         # Initially not successful
         assert state.success is False
-        
+
         # Set success
         state.success = True
         assert state.success is True
@@ -444,51 +436,51 @@ class TestWorkflowStateManagement:
     def test_termination_conditions(self):
         """Test all termination conditions."""
         from agentarea_execution.workflows.agent_execution_workflow import (
-            AgentExecutionWorkflow,
             AgentExecutionState,
-            AgentGoal
+            AgentExecutionWorkflow,
+            AgentGoal,
         )
         from agentarea_execution.workflows.helpers import BudgetTracker
-        
+
         workflow_instance = AgentExecutionWorkflow()
         workflow_instance.state = AgentExecutionState()
         workflow_instance.state.goal = AgentGoal(
             id="test",
-            description="Test goal", 
+            description="Test goal",
             success_criteria=["Complete task"],
             max_iterations=3,
             requires_human_approval=False,
             context={}
         )
         workflow_instance.budget_tracker = BudgetTracker(1.0)
-        
+
         # Test 1: Success condition
         workflow_instance.state.success = True
         should_continue, reason = workflow_instance._should_continue_execution()
         assert should_continue is False
         assert "achieved" in reason.lower()
-        
+
         # Reset
         workflow_instance.state.success = False
-        
+
         # Test 2: Max iterations
         workflow_instance.state.current_iteration = 3
         should_continue, reason = workflow_instance._should_continue_execution()
         assert should_continue is False
         assert "maximum iterations" in reason.lower()
-        
+
         # Reset
         workflow_instance.state.current_iteration = 1
-        
+
         # Test 3: Budget exceeded
         workflow_instance.budget_tracker.cost = 2.0  # Exceeds budget of 1.0
         should_continue, reason = workflow_instance._should_continue_execution()
         assert should_continue is False
         assert "budget exceeded" in reason.lower()
-        
+
         # Reset
         workflow_instance.budget_tracker.cost = 0.1
-        
+
         # Test 4: Should continue
         should_continue, reason = workflow_instance._should_continue_execution()
         assert should_continue is True

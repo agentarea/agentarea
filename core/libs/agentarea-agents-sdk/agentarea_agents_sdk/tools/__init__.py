@@ -1,6 +1,7 @@
 """Tools for agent execution workflows."""
 
 from .base_tool import BaseTool, ToolExecutionError, ToolRegistry
+from .calculate_tool import CalculateTool
 from .completion_tool import CompletionTool
 from .decorator_tool import Toolset, ToolsetAdapter, tool_method
 from .file_toolset import FileToolset
@@ -10,6 +11,7 @@ from .tool_manager import ToolManager
 
 __all__ = [
     "BaseTool",
+    "CalculateTool",
     "CompletionTool",
     "FileToolset",
     "MCPTool",

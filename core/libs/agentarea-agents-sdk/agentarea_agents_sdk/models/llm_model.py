@@ -2,8 +2,9 @@
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 
 import litellm
 
@@ -12,8 +13,8 @@ logger = logging.getLogger(__name__)
 litellm.callbacks = ["langsmith"]
 import os
 
-os.environ["LANGSMITH_API_KEY"] = "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"
-os.environ["LANGSMITH_PROJECT"] = "pr-earnest-lox-45" # defaults to litellm-completion
+# os.environ["LANGSMITH_API_KEY"] = "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"
+# os.environ["LANGSMITH_PROJECT"] = "pr-earnest-lox-45" # defaults to litellm-completion
 
 
 @dataclass
@@ -86,7 +87,7 @@ class LLMModel:
                 url = f"http://{url}"
             params["base_url"] = url
         # elif self.provider_type == "ollama_chat":
-            # Default Ollama URL - use localhost for local development          
+            # Default Ollama URL - use localhost for local development
             # params["base_url"] = "http://host.docker.internal:11434"
 
         # Add tools if provided
@@ -263,7 +264,7 @@ class LLMModel:
                                     # Handle JSON arguments properly to avoid concatenation issues
                                     current_args = tool_calls_buffer[index]["function"]["arguments"]
                                     new_args = function_delta.arguments
-                                    
+
                                     # If current_args is empty, just use new_args
                                     if not current_args:
                                         tool_calls_buffer[index]["function"]["arguments"] = new_args
@@ -413,7 +414,7 @@ class LLMModel:
                                     # Handle JSON arguments properly to avoid concatenation issues
                                     current_args = tool_calls_buffer[index]["function"]["arguments"]
                                     new_args = function_delta.arguments
-                                    
+
                                     # If current_args is empty, just use new_args
                                     if not current_args:
                                         tool_calls_buffer[index]["function"]["arguments"] = new_args

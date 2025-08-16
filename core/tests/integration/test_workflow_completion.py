@@ -1,18 +1,15 @@
 """Test workflow completion scenarios to identify why workflows never finish."""
 
-import asyncio
 import json
 import logging
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from temporalio.testing import WorkflowEnvironment
-from temporalio.worker import Worker
-
 from agentarea_execution.models import AgentExecutionRequest
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
+from temporalio.testing import WorkflowEnvironment
+from temporalio.worker import Worker
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +37,10 @@ class TestWorkflowCompletion:
     @pytest.mark.asyncio
     async def test_workflow_completes_immediately_with_task_complete(self, execution_request):
         """Test that workflow completes when LLM calls task_complete immediately."""
-        
+
         # Track activity calls
         activity_calls = []
-        
+
         async def mock_build_agent_config(*args, **kwargs):
             activity_calls.append("build_agent_config")
             return {
@@ -56,7 +53,7 @@ class TestWorkflowCompletion:
                 "events_config": {},
                 "planning": False,
             }
-        
+
         async def mock_discover_tools(*args, **kwargs):
             activity_calls.append("discover_tools")
             return [
@@ -75,7 +72,7 @@ class TestWorkflowCompletion:
                     }
                 }
             ]
-        
+
         async def mock_call_llm(*args, **kwargs):
             activity_calls.append("call_llm")
             # LLM immediately calls task_complete
@@ -95,7 +92,7 @@ class TestWorkflowCompletion:
                 "cost": 0.001,
                 "usage": {"total_tokens": 50}
             }
-        
+
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             activity_calls.append(f"execute_tool_{tool_name}")
             if tool_name == "task_complete":
@@ -106,11 +103,11 @@ class TestWorkflowCompletion:
                     "tool_name": "task_complete"
                 }
             return {"success": False, "result": "Unknown tool"}
-        
+
         async def mock_evaluate_goal(*args, **kwargs):
             activity_calls.append("evaluate_goal")
             return {"goal_achieved": False, "final_response": None}
-        
+
         async def mock_publish_events(*args, **kwargs):
             activity_calls.append("publish_events")
             return True
@@ -125,7 +122,7 @@ class TestWorkflowCompletion:
                 mock_evaluate_goal,
                 mock_publish_events
             ]
-            
+
             async with Worker(
                 env.client,
                 task_queue="test-queue",
@@ -140,12 +137,12 @@ class TestWorkflowCompletion:
                     task_queue="test-queue",
                     execution_timeout=timedelta(seconds=10)  # Short timeout to catch infinite loops
                 )
-                
+
                 # Verify workflow completed
                 assert result.success is True
                 assert "completed" in result.final_response.lower()
                 assert result.reasoning_iterations_used == 1
-                
+
                 # Verify activity call sequence
                 logger.info(f"Activity calls: {activity_calls}")
                 assert "build_agent_config" in activity_calls
@@ -158,9 +155,9 @@ class TestWorkflowCompletion:
     @pytest.mark.asyncio
     async def test_workflow_state_persistence_during_execution(self, execution_request):
         """Test that workflow state persists correctly during execution."""
-        
+
         state_snapshots = []
-        
+
         async def mock_build_agent_config(*args, **kwargs):
             return {
                 "id": str(execution_request.agent_id),
@@ -171,7 +168,7 @@ class TestWorkflowCompletion:
                 "events_config": {},
                 "planning": False,
             }
-        
+
         async def mock_discover_tools(*args, **kwargs):
             return [
                 {
@@ -183,7 +180,7 @@ class TestWorkflowCompletion:
                     }
                 }
             ]
-        
+
         async def mock_call_llm(*args, **kwargs):
             # Capture state at LLM call time
             return {
@@ -202,7 +199,7 @@ class TestWorkflowCompletion:
                 "cost": 0.001,
                 "usage": {"total_tokens": 30}
             }
-        
+
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             if tool_name == "task_complete":
                 return {
@@ -212,10 +209,10 @@ class TestWorkflowCompletion:
                     "tool_name": "task_complete"
                 }
             return {"success": False}
-        
+
         async def mock_evaluate_goal(*args, **kwargs):
             return {"goal_achieved": False, "final_response": None}
-        
+
         async def mock_publish_events(*args, **kwargs):
             return True
 
@@ -228,7 +225,7 @@ class TestWorkflowCompletion:
                 mock_evaluate_goal,
                 mock_publish_events
             ]
-            
+
             async with Worker(
                 env.client,
                 task_queue="test-queue",
@@ -242,7 +239,7 @@ class TestWorkflowCompletion:
                     task_queue="test-queue",
                     execution_timeout=timedelta(seconds=10)
                 )
-                
+
                 # Verify final state
                 assert result.success is True
                 assert result.reasoning_iterations_used == 1
@@ -250,9 +247,9 @@ class TestWorkflowCompletion:
     @pytest.mark.asyncio
     async def test_workflow_with_multiple_tool_calls_before_completion(self, execution_request):
         """Test workflow with multiple tool calls before task_complete."""
-        
+
         llm_call_count = 0
-        
+
         async def mock_build_agent_config(*args, **kwargs):
             return {
                 "id": str(execution_request.agent_id),
@@ -263,7 +260,7 @@ class TestWorkflowCompletion:
                 "events_config": {},
                 "planning": False,
             }
-        
+
         async def mock_discover_tools(*args, **kwargs):
             return [
                 {
@@ -289,11 +286,11 @@ class TestWorkflowCompletion:
                     }
                 }
             ]
-        
+
         async def mock_call_llm(*args, **kwargs):
             nonlocal llm_call_count
             llm_call_count += 1
-            
+
             if llm_call_count == 1:
                 # First call - use calculate tool
                 return {
@@ -330,7 +327,7 @@ class TestWorkflowCompletion:
                     "cost": 0.001,
                     "usage": {"total_tokens": 35}
                 }
-        
+
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             if tool_name == "calculate":
                 return {
@@ -346,10 +343,10 @@ class TestWorkflowCompletion:
                     "tool_name": "task_complete"
                 }
             return {"success": False}
-        
+
         async def mock_evaluate_goal(*args, **kwargs):
             return {"goal_achieved": False, "final_response": None}
-        
+
         async def mock_publish_events(*args, **kwargs):
             return True
 
@@ -362,7 +359,7 @@ class TestWorkflowCompletion:
                 mock_evaluate_goal,
                 mock_publish_events
             ]
-            
+
             async with Worker(
                 env.client,
                 task_queue="test-queue",
@@ -376,7 +373,7 @@ class TestWorkflowCompletion:
                     task_queue="test-queue",
                     execution_timeout=timedelta(seconds=15)
                 )
-                
+
                 # Verify workflow completed after 2 iterations
                 assert result.success is True
                 assert result.reasoning_iterations_used == 2

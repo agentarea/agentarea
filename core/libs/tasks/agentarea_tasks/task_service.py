@@ -148,6 +148,77 @@ class TaskService(BaseTaskService):
         task = await self.get_task(task_id)
         return task.result if task else None
 
+    async def get_recent_tasks(
+        self, 
+        limit: int = 100, 
+        workspace_id: str | None = None,
+        hours: int = 168  # Default to 7 days
+    ) -> list[SimpleTask]:
+        """Get recent tasks within a time period for monitoring and analytics.
+        
+        Args:
+            limit: Maximum number of tasks to return
+            workspace_id: Workspace ID to filter by (optional)
+            hours: Number of hours back to look (default 7 days)
+            
+        Returns:
+            List of recent tasks ordered by creation time (newest first)
+        """
+        from datetime import timedelta
+        
+        # Calculate cutoff time
+        cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
+        
+        try:
+            if hasattr(self.task_repository, 'list_all'):
+                # Use workspace-aware repository method
+                # Note: The base repository doesn't support created_after filtering yet,
+                # so we'll get all recent tasks and filter in memory for now
+                task_orms = await self.task_repository.list_all(
+                    limit=limit * 2,  # Get more to account for time filtering
+                    offset=0
+                )
+                # Convert TaskORM -> Task -> SimpleTask and filter by time
+                tasks = []
+                for task_orm in task_orms:
+                    task = self.task_repository._orm_to_domain(task_orm)
+                    simple_task = self._task_to_simple_task(task)
+                    
+                    # Filter by time and workspace
+                    if simple_task.created_at and simple_task.created_at >= cutoff_time:
+                        if workspace_id is None or simple_task.workspace_id == workspace_id:
+                            tasks.append(simple_task)
+                    
+                    if len(tasks) >= limit:
+                        break
+                
+                # Sort by creation time (newest first)
+                tasks.sort(key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True)
+                return tasks[:limit]
+            else:
+                # Fallback for repositories without workspace scoping
+                # Get all tasks and filter in memory (not ideal for production)
+                all_tasks = await self.list_tasks(limit=limit * 2)  # Get more to account for filtering
+                
+                # Filter by time and workspace
+                filtered_tasks = []
+                for task in all_tasks:
+                    if task.created_at and task.created_at >= cutoff_time:
+                        if workspace_id is None or task.workspace_id == workspace_id:
+                            filtered_tasks.append(task)
+                    
+                    if len(filtered_tasks) >= limit:
+                        break
+                
+                # Sort by creation time (newest first)
+                filtered_tasks.sort(key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True)
+                return filtered_tasks[:limit]
+                
+        except Exception as e:
+            logger.error(f"Failed to get recent tasks: {e}")
+            # Return empty list on error to not break monitoring
+            return []
+
     async def update_task_status(
         self,
         task_id: UUID,
@@ -621,35 +692,37 @@ class TaskService(BaseTaskService):
                     pass
 
     async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
-        """Get historical events for a task from the database."""
+        """Get historical events for a task from the database with proper session management."""
         try:
             from sqlalchemy import text
+            from agentarea_common.config.database import get_database
 
-            # Use the repository's session to query task events
-            session = self.task_repository.session
+            # Use proper database session management to avoid connection leaks
+            db = get_database()
+            
+            async with db.get_db() as session:
+                # Query historical events from database
+                query = text("""
+                    SELECT event_type, timestamp, data, metadata
+                    FROM task_events 
+                    WHERE task_id = :task_id 
+                    ORDER BY timestamp ASC
+                """)
 
-            # Query historical events from database
-            query = text("""
-                SELECT event_type, timestamp, data, metadata
-                FROM task_events 
-                WHERE task_id = :task_id 
-                ORDER BY timestamp ASC
-            """)
+                result = await session.execute(query, {"task_id": str(task_id)})
+                rows = result.fetchall()
 
-            result = await session.execute(query, {"task_id": str(task_id)})
-            rows = result.fetchall()
+                # Convert database rows to event format
+                historical_events = []
+                for row in rows:
+                    historical_events.append({
+                        "event_type": row.event_type,
+                        "timestamp": row.timestamp.isoformat(),
+                        "data": dict(row.data) if row.data else {}
+                    })
 
-            # Convert database rows to event format
-            historical_events = []
-            for row in rows:
-                historical_events.append({
-                    "event_type": row.event_type,
-                    "timestamp": row.timestamp.isoformat(),
-                    "data": dict(row.data) if row.data else {}
-                })
-
-            logger.debug(f"Retrieved {len(historical_events)} historical events for task {task_id}")
-            return historical_events
+                logger.debug(f"Retrieved {len(historical_events)} historical events for task {task_id}")
+                return historical_events
 
         except Exception as e:
             logger.error(f"Failed to get historical events for task {task_id}: {e}")

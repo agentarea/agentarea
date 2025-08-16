@@ -142,13 +142,13 @@ class MessageBuilder:
             "role": message_dict["role"],
             "content": message_dict["content"],
         }
-        
+
         # Only add optional fields if they have actual values (not None)
         optional_fields = ["tool_call_id", "name", "tool_calls"]
         for field in optional_fields:
             if field in message_dict and message_dict[field] is not None:
                 normalized[field] = message_dict[field]
-                
+
         return normalized
 
     @staticmethod
@@ -230,19 +230,20 @@ class ToolCallExtractor:
         3. Mixed format: content contains tool call JSON strings
         """
         # Import here to avoid circular imports
-        from ..workflows.agent_execution_workflow import ToolCall
         import json
         import re
+
+        from ..workflows.agent_execution_workflow import ToolCall
 
         # Handle both dataclass and dict formats
         tool_calls = None
         content = None
-        
+
         if hasattr(message, 'tool_calls'):
             tool_calls = message.tool_calls
         elif isinstance(message, dict) and 'tool_calls' in message:
             tool_calls = message['tool_calls']
-            
+
         if hasattr(message, 'content'):
             content = message.content
         elif isinstance(message, dict) and 'content' in message:
@@ -286,7 +287,7 @@ class ToolCallExtractor:
                         arguments = json.dumps(arguments)
                     elif not isinstance(arguments, str):
                         arguments = json.dumps(arguments)
-                    
+
                     result.append(ToolCall(
                         id="call_from_content_0",
                         type="function",
@@ -302,7 +303,7 @@ class ToolCallExtractor:
                     # Pattern 1: {"name": "tool_name", "arguments": {...}}
                     json_pattern = r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*\}|\{[^}]*\})\s*\}'
                     matches = re.findall(json_pattern, content)
-                    
+
                     for i, (tool_name, args_str) in enumerate(matches):
                         try:
                             # Validate arguments JSON
@@ -325,19 +326,19 @@ class ToolCallExtractor:
                                     "arguments": json.dumps({"raw_args": args_str})
                                 }
                             ))
-                    
+
                     # Pattern 2: Look for task_complete specifically (common case)
                     if not result and "task_complete" in content.lower():
                         # Extract any JSON-like arguments
                         args_pattern = r'"arguments"\s*:\s*(\{[^}]*\})'
                         args_match = re.search(args_pattern, content)
-                        
+
                         if args_match:
                             args_str = args_match.group(1)
                         else:
                             # No arguments found, use empty object
                             args_str = "{}"
-                        
+
                         result.append(ToolCall(
                             id="call_task_complete_fallback",
                             type="function",
@@ -346,7 +347,7 @@ class ToolCallExtractor:
                                 "arguments": args_str
                             }
                         ))
-                        
+
                 except Exception:
                     # If all parsing fails, but we detect task_complete, create a basic call
                     if "task_complete" in content.lower():

@@ -34,25 +34,17 @@ interface LLMResponseData extends BaseMessageData {
 
 export const LLMResponseMessage: React.FC<{ data: LLMResponseData }> = ({ data }) => {
   return (
-    <div className="flex gap-3 animate-in slide-in-from-bottom-2 duration-300">
-      <Avatar className="h-8 w-8 border-2 border-primary/20">
-        <AvatarFallback className="bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
-        </AvatarFallback>
-      </Avatar>
-      <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm bg-background border border-border">
-        <div className="text-sm leading-relaxed whitespace-pre-wrap">
+    <div className="animate-in slide-in-from-bottom-2 duration-300">
+      <div className="prose prose-sm max-w-none text-gray-800 dark:text-gray-200">
+        <div className="whitespace-pre-wrap leading-relaxed text-sm">
           {data.content}
         </div>
         {data.usage && (
-          <div className="text-xs text-muted-foreground mt-2 flex gap-4">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 flex gap-4">
             <span>Tokens: {data.usage.usage.total_tokens}</span>
             <span>Cost: ${data.usage.cost.toFixed(4)}</span>
           </div>
         )}
-        <p className="text-xs opacity-70 mt-2">
-          {new Date(data.timestamp).toLocaleTimeString()}
-        </p>
       </div>
     </div>
   );
@@ -69,27 +61,19 @@ interface ToolResultData extends BaseMessageData {
 
 export const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
   return (
-    <div className="flex gap-3 animate-in slide-in-from-bottom-2 duration-300">
-      <Avatar className="h-8 w-8 border-2 border-primary/20">
-        <AvatarFallback className="bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
-        </AvatarFallback>
-      </Avatar>
-      <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm bg-background border border-border">
-        <div className="text-xs text-muted-foreground font-medium mb-2">
-          Tool: {data.tool_name}
+    <div className="animate-in slide-in-from-bottom-2 duration-300">
+      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
+          Tool Result: {data.tool_name}
         </div>
-        <div className="text-sm leading-relaxed">
+        <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200">
           {typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2)}
         </div>
         {data.execution_time && (
-          <div className="text-xs text-muted-foreground mt-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
             Execution time: {data.execution_time}
           </div>
         )}
-        <p className="text-xs opacity-70 mt-2">
-          {new Date(data.timestamp).toLocaleTimeString()}
-        </p>
       </div>
     </div>
   );
@@ -106,20 +90,19 @@ export const LLMChunkMessage: React.FC<{ data: LLMChunkData }> = ({ data }) => {
   // This component is used for accumulating streaming chunks
   // In practice, chunks would be handled by the parent component to build complete messages
   return (
-    <div className="flex gap-3 animate-in slide-in-from-bottom-2 duration-300">
-      <Avatar className="h-8 w-8 border-2 border-primary/20">
-        <AvatarFallback className="bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
-        </AvatarFallback>
-      </Avatar>
-      <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm bg-background border border-border">
-        <div className="text-sm leading-relaxed">
+    <div className="animate-in slide-in-from-bottom-2 duration-300">
+      <div className="prose prose-sm max-w-none text-gray-800 dark:text-gray-200">
+        <div className="text-sm leading-relaxed whitespace-pre-wrap">
           {data.chunk}
-          {!data.is_final && <span className="animate-pulse">|</span>}
+          {!data.is_final && (
+            <span className="inline-block w-2 h-5 bg-blue-600 animate-pulse ml-0.5 align-text-bottom"></span>
+          )}
         </div>
-        <p className="text-xs opacity-70 mt-2">
-          {data.is_final ? 'Completed' : 'Streaming...'}
-        </p>
+        {!data.is_final && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            Thinking...
+          </div>
+        )}
       </div>
     </div>
   );
@@ -149,44 +132,36 @@ export const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {
     return '⚠️';
   };
 
-  const getBorderColor = () => {
-    if (data.retryable !== false) return 'border-yellow-200'; // Retryable errors in yellow
-    return 'border-destructive/20'; // Non-retryable errors in red
+  const getErrorStyles = () => {
+    if (data.retryable !== false) {
+      return {
+        container: "bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800",
+        text: "text-yellow-700 dark:text-yellow-300"
+      };
+    }
+    return {
+      container: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800", 
+      text: "text-red-700 dark:text-red-300"
+    };
   };
 
-  const getBackgroundColor = () => {
-    if (data.retryable !== false) return 'bg-yellow-50';
-    return 'bg-destructive/5';
-  };
-
-  const getTextColor = () => {
-    if (data.retryable !== false) return 'text-yellow-700';
-    return 'text-destructive';
-  };
+  const styles = getErrorStyles();
 
   return (
-    <div className="flex gap-3 animate-in slide-in-from-bottom-2 duration-300">
-      <Avatar className="h-8 w-8 border-2 border-destructive/20">
-        <AvatarFallback className="bg-destructive/10">
-          <Bot className="h-4 w-4 text-destructive" />
-        </AvatarFallback>
-      </Avatar>
-      <div className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${getBackgroundColor()} border ${getBorderColor()}`}>
-        <div className={`text-sm leading-relaxed ${getTextColor()} flex items-center gap-2`}>
+    <div className="animate-in slide-in-from-bottom-2 duration-300">
+      <div className={`rounded-lg border p-4 ${styles.container}`}>
+        <div className={`text-sm leading-relaxed ${styles.text} flex items-center gap-2`}>
           <span>{getErrorIcon()}</span>
           {data.error}
         </div>
-        <div className="flex flex-wrap gap-2 mt-2 text-xs opacity-70">
+        <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-600 dark:text-gray-400">
           {data.error_type && <span>Type: {data.error_type}</span>}
           {data.retryable !== undefined && (
-            <span className={data.retryable ? 'text-yellow-600' : 'text-red-600'}>
+            <span className={data.retryable ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}>
               {data.retryable ? 'Retryable' : 'Non-retryable'}
             </span>
           )}
         </div>
-        <p className="text-xs opacity-70 mt-2">
-          {new Date(data.timestamp).toLocaleTimeString()}
-        </p>
       </div>
     </div>
   );
@@ -205,23 +180,17 @@ export const WorkflowResultMessage: React.FC<{ data: WorkflowResultData }> = ({ 
   const content = data.result || data.final_response || '';
   
   return (
-    <div className="flex gap-3 animate-in slide-in-from-bottom-2 duration-300">
-      <Avatar className="h-8 w-8 border-2 border-primary/20">
-        <AvatarFallback className="bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
-        </AvatarFallback>
-      </Avatar>
-      <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm bg-background border border-border">
+    <div className="animate-in slide-in-from-bottom-2 duration-300">
+      <div className="prose prose-sm max-w-none text-gray-800 dark:text-gray-200">
         <div className="text-sm leading-relaxed whitespace-pre-wrap">
           {content}
         </div>
-        <div className="text-xs text-muted-foreground mt-2 flex gap-4">
-          {data.iterations_completed && <span>Iterations: {data.iterations_completed}</span>}
-          {data.total_cost && <span>Total Cost: ${data.total_cost.toFixed(4)}</span>}
-        </div>
-        <p className="text-xs opacity-70 mt-2">
-          {new Date(data.timestamp).toLocaleTimeString()}
-        </p>
+        {(data.iterations_completed || data.total_cost) && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 flex gap-4">
+            {data.iterations_completed && <span>Iterations: {data.iterations_completed}</span>}
+            {data.total_cost && <span>Total Cost: ${data.total_cost.toFixed(4)}</span>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -235,16 +204,16 @@ interface SystemData extends BaseMessageData {
 
 export const SystemMessage: React.FC<{ data: SystemData }> = ({ data }) => {
   const levelColors = {
-    info: 'text-blue-600 bg-blue-50 border-blue-200',
-    warning: 'text-yellow-600 bg-yellow-50 border-yellow-200', 
-    error: 'text-red-600 bg-red-50 border-red-200'
+    info: 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-950/30 dark:border-blue-800',
+    warning: 'text-yellow-600 bg-yellow-50 border-yellow-200 dark:text-yellow-300 dark:bg-yellow-950/30 dark:border-yellow-800', 
+    error: 'text-red-600 bg-red-50 border-red-200 dark:text-red-300 dark:bg-red-950/30 dark:border-red-800'
   };
   
   const levelClass = levelColors[data.level || 'info'];
   
   return (
-    <div className="flex justify-center my-2">
-      <div className={`px-3 py-1 rounded-full text-xs border ${levelClass}`}>
+    <div className="flex justify-center my-4">
+      <div className={`px-3 py-1.5 rounded-full text-xs font-medium border ${levelClass}`}>
         {data.message}
       </div>
     </div>

@@ -64,7 +64,7 @@ class TestTool(BaseTool):
                 "tool_name": self.name,
                 "error": None
             }
-        
+
         elif action == "calculate":
             # Simple calculation simulation
             result = f"Calculation for '{query}': Result is 73.5 (based on input parameters). Confidence: 95%"
@@ -76,7 +76,7 @@ class TestTool(BaseTool):
                 "tool_name": self.name,
                 "error": None
             }
-        
+
         elif action == "check_status":
             return {
                 "success": True,
@@ -88,7 +88,7 @@ class TestTool(BaseTool):
                 "tool_name": self.name,
                 "error": None
             }
-        
+
         elif action == "search":
             return {
                 "success": True,
@@ -99,7 +99,7 @@ class TestTool(BaseTool):
                 "tool_name": self.name,
                 "error": None
             }
-        
+
         else:
             return {
                 "success": False,

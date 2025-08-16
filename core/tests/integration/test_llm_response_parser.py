@@ -291,7 +291,6 @@ async def test_response_parser_with_different_formats():
         pytest.skip("qwen2.5 model not available in Ollama")
 
     import litellm
-
     from agentarea_execution.parsers.llm_response_parser import LiteLLMResponseParser
 
     # Test 1: Raw response with structured tool calls

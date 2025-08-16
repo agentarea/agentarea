@@ -28,7 +28,7 @@ def list(ctx, output_format: str):
         client: AgentAreaClient = ctx.obj["client"]
 
         try:
-            data = await client.get("/v1/agents")
+            data = await client.get("/v1/agents/")
 
             if not data or not isinstance(data, list):
                 click.echo("📭 No agents found")
@@ -71,8 +71,9 @@ def list(ctx, output_format: str):
 @click.option("--model-id", required=True, help="LLM model instance ID")
 @click.option("--planning/--no-planning", default=False, help="Enable planning")
 @click.option("--public/--private", default=False, help="Make agent public")
+@click.option("--builtin-tools", help="Comma-separated list of builtin tools (e.g., calculator,weather)")
 @click.pass_context
-def create(ctx, name: str, description: str, instruction: str, model_id: str, planning: bool, public: bool):
+def create(ctx, name: str, description: str, instruction: str, model_id: str, planning: bool, public: bool, builtin_tools: str):
     """Create a new agent."""
     # Validate inputs
     if len(name.strip()) < 2:
@@ -94,13 +95,29 @@ def create(ctx, name: str, description: str, instruction: str, model_id: str, pl
             "name": name.strip(),
             "description": description.strip(),
             "instruction": instruction.strip(),
-            "llm_model_instance_id": model_id,
-            "planning_enabled": planning,
-            "is_public": public
+            "model_id": model_id,
+            "planning": planning,
         }
+        
+        # Add tools configuration if builtin tools are specified
+        if builtin_tools:
+            tools_list = []
+            for tool_name in builtin_tools.split(','):
+                tool_name = tool_name.strip()
+                if tool_name:
+                    # Use the simplified format (methods enabled by default)
+                    tools_list.append({
+                        "tool_name": tool_name
+                    })
+            
+            if tools_list:
+                data["tools_config"] = {
+                    "mcp_server_configs": [],
+                    "builtin_tools": tools_list
+                }
 
         try:
-            result = await client.post("/v1/agents", data)
+            result = await client.post("/v1/agents/", data)
             click.echo(f"✅ Agent '{name}' created successfully")
             click.echo(f"   ID: {result.get('id', 'N/A')}")
             click.echo(f"   Status: {result.get('status', 'Unknown')}")

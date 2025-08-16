@@ -3,6 +3,7 @@ import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ArrowRight } from "lucide-react";
 import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
+import { getToolAvatarUrls } from "@/utils/toolsDisplay";
 
 type AgentCardProps = {
   agent: Agent;
@@ -50,32 +51,17 @@ export default function AgentCard({ agent }: AgentCardProps) {
                 flex items-center justify-between
 "
             >
-                {/* FIX DATA for avatar urls */}
-                <AvatarCircles
-                    maxDisplay={5}
-                    avatarUrls={[
-                        {
-                            imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2sSeQqjaUTuZ3gRgkKjidpaipF_l6s72lBw&s",
-                        },
-                        {
-                            imageUrl: "https://cdn.worldvectorlogo.com/logos/jira-1.svg",
-                        },
-                        {
-                            imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiiqczgVWrWg2wpS5wC5iW2u3ppLqauc10yw&s",
-                        },{
-                            imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Notion-logo.svg/2048px-Notion-logo.svg.png",
-                        },
-                        {
-                            imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-                        },
-                        {
-                            imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-                        },
-                        {
-                            imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=64&h=64&fit=crop&crop=center",
-                        }
-                    ]}
-                />
+                {(() => {
+                    const toolAvatars = getToolAvatarUrls(agent);
+                    return toolAvatars.length > 0 ? (
+                        <AvatarCircles
+                            maxDisplay={5}
+                            avatarUrls={toolAvatars}
+                        />
+                    ) : (
+                        <span className="text-xs text-muted-foreground">No tools</span>
+                    );
+                })()}
                 <div className="small-link text-muted-foreground/70 group-hover:text-primary">
                     View agent
                     <ArrowRight className="h-4 w-4" />

@@ -7,11 +7,9 @@ from . import (
     agents_tasks,
     agents_well_known,
     auth,
-    chat,
-    llm_errors,
     mcp_server_instances,
     mcp_servers_specifications,
-    model_instances_new,
+    model_instances,
     model_specs,
     protected,
     provider_configs,
@@ -25,7 +23,7 @@ v1_router = APIRouter(prefix="/v1")
 # Well-known endpoints are included at the root level in main.py
 
 # Include chat router (unified chat interface)
-v1_router.include_router(chat.router)
+# v1_router.include_router(chat.router)
 
 # Include core API routers
 v1_router.include_router(agents.router)
@@ -44,7 +42,7 @@ v1_router.include_router(mcp_server_instances.router)
 v1_router.include_router(provider_specs.router)
 v1_router.include_router(provider_configs.router)
 v1_router.include_router(model_specs.router)
-v1_router.include_router(model_instances_new.router)
+v1_router.include_router(model_instances.router)
 
 # Include webhook router
 v1_router.include_router(webhooks.router)
@@ -59,4 +57,4 @@ v1_router.include_router(auth.router)
 v1_router.include_router(protected.router)
 
 # Include LLM errors router
-v1_router.include_router(llm_errors.router)
+# v1_router.include_router(llm_errors.router)

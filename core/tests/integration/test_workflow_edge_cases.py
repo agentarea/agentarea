@@ -6,12 +6,11 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
+from agentarea_execution.models import AgentExecutionRequest
+from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
-
-from agentarea_execution.models import AgentExecutionRequest
-from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 async def test_workflow_with_llm_never_calling_task_complete():
     """Test workflow when LLM never calls task_complete - should hit max iterations."""
-    
+
     execution_request = AgentExecutionRequest(
         agent_id=uuid4(),
         task_id=uuid4(),
@@ -32,10 +31,10 @@ async def test_workflow_with_llm_never_calling_task_complete():
         budget_usd=1.0,
         requires_human_approval=False
     )
-    
+
     activity_calls = []
     llm_call_count = 0
-    
+
     @activity.defn(name="build_agent_config_activity")
     async def mock_build_agent_config(*args, **kwargs):
         activity_calls.append("build_agent_config")
@@ -48,7 +47,7 @@ async def test_workflow_with_llm_never_calling_task_complete():
             "events_config": {},
             "planning": False,
         }
-    
+
     @activity.defn(name="discover_available_tools_activity")
     async def mock_discover_tools(*args, **kwargs):
         activity_calls.append("discover_tools")
@@ -62,13 +61,13 @@ async def test_workflow_with_llm_never_calling_task_complete():
                 }
             }
         ]
-    
+
     @activity.defn(name="call_llm_activity")
     async def mock_call_llm(*args, **kwargs):
         nonlocal llm_call_count
         llm_call_count += 1
         activity_calls.append(f"call_llm_{llm_call_count}")
-        
+
         # LLM never calls task_complete, just keeps thinking
         return {
             "role": "assistant",
@@ -77,18 +76,18 @@ async def test_workflow_with_llm_never_calling_task_complete():
             "cost": 0.001,
             "usage": {"total_tokens": 30}
         }
-    
+
     @activity.defn(name="execute_mcp_tool_activity")
     async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
         activity_calls.append(f"execute_tool_{tool_name}")
         return {"success": False, "result": "Should not be called"}
-    
+
     @activity.defn(name="evaluate_goal_progress_activity")
     async def mock_evaluate_goal(*args, **kwargs):
         activity_calls.append("evaluate_goal")
         # Goal is never achieved
         return {"goal_achieved": False, "final_response": None}
-    
+
     @activity.defn(name="publish_workflow_events_activity")
     async def mock_publish_events(*args, **kwargs):
         activity_calls.append("publish_events")
@@ -104,7 +103,7 @@ async def test_workflow_with_llm_never_calling_task_complete():
             mock_evaluate_goal,
             mock_publish_events
         ]
-        
+
         async with Worker(
             env.client,
             task_queue="test-queue",
@@ -118,12 +117,12 @@ async def test_workflow_with_llm_never_calling_task_complete():
                 task_queue="test-queue",
                 execution_timeout=timedelta(seconds=15)
             )
-            
+
             # Should complete due to max iterations, not success
             assert result.success is False, "Should not be successful when max iterations reached"
             assert result.reasoning_iterations_used == 2, f"Expected 2 completed iterations, got {result.reasoning_iterations_used}"
             assert llm_call_count == 2, f"Expected 2 LLM calls, got {llm_call_count}"
-            
+
             logger.info(f"Activity calls: {activity_calls}")
             logger.info(f"LLM call count: {llm_call_count}")
             logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
@@ -134,7 +133,7 @@ async def test_workflow_with_llm_never_calling_task_complete():
 @pytest.mark.asyncio
 async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
     """Test workflow when LLM calls task_complete but it returns unsuccessful."""
-    
+
     execution_request = AgentExecutionRequest(
         agent_id=uuid4(),
         task_id=uuid4(),
@@ -147,9 +146,9 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
         budget_usd=1.0,
         requires_human_approval=False
     )
-    
+
     activity_calls = []
-    
+
     @activity.defn(name="build_agent_config_activity")
     async def mock_build_agent_config(*args, **kwargs):
         activity_calls.append("build_agent_config")
@@ -162,7 +161,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
             "events_config": {},
             "planning": False,
         }
-    
+
     @activity.defn(name="discover_available_tools_activity")
     async def mock_discover_tools(*args, **kwargs):
         activity_calls.append("discover_tools")
@@ -176,7 +175,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
                 }
             }
         ]
-    
+
     @activity.defn(name="call_llm_activity")
     async def mock_call_llm(*args, **kwargs):
         activity_calls.append("call_llm")
@@ -197,7 +196,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
             "cost": 0.001,
             "usage": {"total_tokens": 40}
         }
-    
+
     @activity.defn(name="execute_mcp_tool_activity")
     async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
         activity_calls.append(f"execute_tool_{tool_name}")
@@ -210,12 +209,12 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
                 "tool_name": "task_complete"
             }
         return {"success": False, "result": "Unknown tool"}
-    
+
     @activity.defn(name="evaluate_goal_progress_activity")
     async def mock_evaluate_goal(*args, **kwargs):
         activity_calls.append("evaluate_goal")
         return {"goal_achieved": False, "final_response": None}
-    
+
     @activity.defn(name="publish_workflow_events_activity")
     async def mock_publish_events(*args, **kwargs):
         activity_calls.append("publish_events")
@@ -231,7 +230,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
             mock_evaluate_goal,
             mock_publish_events
         ]
-        
+
         async with Worker(
             env.client,
             task_queue="test-queue",
@@ -245,12 +244,12 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
                 task_queue="test-queue",
                 execution_timeout=timedelta(seconds=15)
             )
-            
+
             # Should continue after unsuccessful task_complete
             # This tests that the workflow doesn't get stuck when task_complete fails
             logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
             logger.info(f"Activity calls: {activity_calls}")
-            
+
             # The workflow should continue and eventually hit max iterations or succeed through goal evaluation
             assert result.reasoning_iterations_used >= 1, "Should have at least 1 iteration"
     finally:
@@ -260,7 +259,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
 @pytest.mark.asyncio
 async def test_workflow_with_empty_llm_responses():
     """Test workflow when LLM returns empty responses."""
-    
+
     execution_request = AgentExecutionRequest(
         agent_id=uuid4(),
         task_id=uuid4(),
@@ -273,9 +272,9 @@ async def test_workflow_with_empty_llm_responses():
         budget_usd=1.0,
         requires_human_approval=False
     )
-    
+
     activity_calls = []
-    
+
     @activity.defn(name="build_agent_config_activity")
     async def mock_build_agent_config(*args, **kwargs):
         activity_calls.append("build_agent_config")
@@ -288,7 +287,7 @@ async def test_workflow_with_empty_llm_responses():
             "events_config": {},
             "planning": False,
         }
-    
+
     @activity.defn(name="discover_available_tools_activity")
     async def mock_discover_tools(*args, **kwargs):
         activity_calls.append("discover_tools")
@@ -302,7 +301,7 @@ async def test_workflow_with_empty_llm_responses():
                 }
             }
         ]
-    
+
     @activity.defn(name="call_llm_activity")
     async def mock_call_llm(*args, **kwargs):
         activity_calls.append("call_llm")
@@ -314,17 +313,17 @@ async def test_workflow_with_empty_llm_responses():
             "cost": 0.001,
             "usage": {"total_tokens": 10}
         }
-    
+
     @activity.defn(name="execute_mcp_tool_activity")
     async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
         activity_calls.append(f"execute_tool_{tool_name}")
         return {"success": False, "result": "Should not be called"}
-    
+
     @activity.defn(name="evaluate_goal_progress_activity")
     async def mock_evaluate_goal(*args, **kwargs):
         activity_calls.append("evaluate_goal")
         return {"goal_achieved": False, "final_response": None}
-    
+
     @activity.defn(name="publish_workflow_events_activity")
     async def mock_publish_events(*args, **kwargs):
         activity_calls.append("publish_events")
@@ -340,7 +339,7 @@ async def test_workflow_with_empty_llm_responses():
             mock_evaluate_goal,
             mock_publish_events
         ]
-        
+
         async with Worker(
             env.client,
             task_queue="test-queue",
@@ -354,11 +353,11 @@ async def test_workflow_with_empty_llm_responses():
                 task_queue="test-queue",
                 execution_timeout=timedelta(seconds=15)
             )
-            
+
             # Should handle empty responses and eventually terminate
             logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
             logger.info(f"Activity calls: {activity_calls}")
-            
+
             assert result.reasoning_iterations_used == 2, "Should hit max iterations with empty responses"
             assert result.success is False, "Should not be successful with empty responses"
     finally:

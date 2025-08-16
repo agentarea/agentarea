@@ -3,6 +3,7 @@ from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
+from agentarea_agents_sdk.tools.tool_manager import get_available_builtin_tools
 from agentarea_api.api.deps.services import get_agent_service
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
@@ -84,6 +85,11 @@ class MCPConfig(BaseModel):
     mcp_server_id: str
     allowed_tools: list[MCPToolConfig] | None = None
 
+class BuiltinToolConfig(BaseModel):
+    tool_name: str
+    requires_user_confirmation: bool = False
+    enabled: bool = True
+
 class EventConfig(BaseModel):
     event_type: str
     config: dict | None = None
@@ -91,6 +97,7 @@ class EventConfig(BaseModel):
 
 class ToolsConfig(BaseModel):
     mcp_server_configs: list[MCPConfig] | None = None
+    builtin_tools: list[BuiltinToolConfig] | None = None
     planning: bool | None = None
 
 class EventsConfig(BaseModel):
@@ -153,6 +160,19 @@ async def create_agent(
     """Create a new agent."""
     # Validate model_id before creating agent
     await validate_model_id(data.model_id, user_context)
+
+    # Validate builtin tools if provided
+    if data.tools_config and data.tools_config.builtin_tools:
+        available_tools = get_available_builtin_tools()
+        invalid_tools = [
+            tool_config.tool_name for tool_config in data.tools_config.builtin_tools
+            if tool_config.tool_name not in available_tools
+        ]
+        if invalid_tools:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid builtin tools: {invalid_tools}. Available tools: {list(available_tools.keys())}"
+            )
 
     agent = await agent_service.create_agent(
         name=data.name,
@@ -221,6 +241,12 @@ async def delete_agent(agent_id: UUID, agent_service: AgentService = Depends(get
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success"}
+
+
+@router.get("/tools/builtin")
+async def get_builtin_tools():
+    """Get available builtin tools with full metadata including available methods."""
+    return get_available_builtin_tools()
 
 
 # Include A2A protocol subroutes

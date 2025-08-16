@@ -57,6 +57,34 @@ export const getAgentTask = async (agentId: string, taskId: string) => {
   return { data, error };
 };
 
+export const getAgentTaskById = async (agentId: string, taskId: string) => {
+  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}", {
+    params: { path: { agent_id: agentId, task_id: taskId } },
+  });
+  return { data, error };
+};
+
+export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
+  // This is a placeholder - the actual endpoint might be different
+  // For now, we'll use the events endpoint to build a message history
+  const { data: events, error } = await getAgentTaskEvents(agentId, taskId, { page_size: 100 });
+  if (error || !events) {
+    return { data: [], error };
+  }
+  
+  // Convert events to message format (simplified)
+  const messages = events
+    .filter((event: any) => ['LLMCallCompleted', 'ToolCallCompleted', 'WorkflowCompleted'].includes(event.event_type))
+    .map((event: any) => ({
+      id: event.id,
+      content: event.data?.content || event.data?.result || '',
+      role: event.event_type === 'LLMCallCompleted' ? 'assistant' : 'system',
+      timestamp: event.timestamp
+    }));
+  
+  return { data: messages, error: null };
+};
+
 export const cancelAgentTask = async (agentId: string, taskId: string) => {
   const { data, error } = await client.DELETE("/v1/agents/{agent_id}/tasks/{task_id}", {
     params: { path: { agent_id: agentId, task_id: taskId } },

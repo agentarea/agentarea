@@ -6,7 +6,6 @@ Activities should only work with services, not manually create sessions or conte
 
 import logging
 from typing import Any
-from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_common.auth.context import UserContext
@@ -27,11 +26,11 @@ class ActivityServiceContainer:
     
     Provides clean service access without manual session/context management.
     """
-    
+
     def __init__(self, dependencies: ActivityDependencies):
         self.dependencies = dependencies
         self._database = get_database()
-    
+
     async def get_agent_service(self, user_context: UserContext) -> tuple[AgentService, Any]:
         """Get AgentService with proper session and context."""
         session = self._database.async_session_factory()
@@ -41,7 +40,7 @@ class ActivityServiceContainer:
             event_broker=self.dependencies.event_broker
         )
         return service, session
-    
+
     async def get_model_instance_service(self, user_context: UserContext) -> tuple[ModelInstanceService, Any]:
         """Get ModelInstanceService with proper session and context."""
         session = self._database.async_session_factory()
@@ -52,7 +51,7 @@ class ActivityServiceContainer:
             secret_manager=self.dependencies.secret_manager
         )
         return service, session
-    
+
     async def get_mcp_server_instance_service(self, user_context: UserContext) -> tuple[MCPServerInstanceService, Any]:
         """Get MCPServerInstanceService with proper session and context."""
         session = self._database.async_session_factory()
@@ -63,7 +62,7 @@ class ActivityServiceContainer:
             secret_manager=self.dependencies.secret_manager
         )
         return service, session
-    
+
     async def get_task_event_service(self, user_context: UserContext) -> tuple[TaskEventService, Any]:
         """Get TaskEventService with proper session and context."""
         session = self._database.async_session_factory()
@@ -93,16 +92,16 @@ def create_system_context(workspace_id: str) -> UserContext:
 
 class ActivityContext:
     """Context manager for activity execution with proper cleanup."""
-    
+
     def __init__(self, container: ActivityServiceContainer, user_context: UserContext, auto_commit: bool = True):
         self.container = container
         self.user_context = user_context
         self.auto_commit = auto_commit
         self._sessions = []
-    
+
     async def __aenter__(self):
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         # Handle commits/rollbacks first
         for session in self._sessions:
@@ -115,38 +114,38 @@ class ActivityContext:
                     await session.rollback()
             except Exception as e:
                 logger.warning(f"Failed to commit/rollback session: {e}")
-        
+
         # Clean up sessions
         for session in self._sessions:
             try:
                 await session.close()
             except Exception as e:
                 logger.warning(f"Failed to close session: {e}")
-    
+
     async def get_agent_service(self) -> AgentService:
         """Get AgentService for this context."""
         service, session = await self.container.get_agent_service(self.user_context)
         self._sessions.append(session)
         return service
-    
+
     async def get_model_instance_service(self) -> ModelInstanceService:
         """Get ModelInstanceService for this context."""
         service, session = await self.container.get_model_instance_service(self.user_context)
         self._sessions.append(session)
         return service
-    
+
     async def get_mcp_server_instance_service(self) -> MCPServerInstanceService:
         """Get MCPServerInstanceService for this context."""
         service, session = await self.container.get_mcp_server_instance_service(self.user_context)
         self._sessions.append(session)
         return service
-    
+
     async def get_task_event_service(self) -> TaskEventService:
         """Get TaskEventService for this context."""
         service, session = await self.container.get_task_event_service(self.user_context)
         self._sessions.append(session)
         return service
-    
+
     async def commit(self):
         """Manually commit all sessions in this context."""
         for session in self._sessions:
@@ -155,7 +154,7 @@ class ActivityContext:
             except Exception as e:
                 logger.error(f"Failed to commit session: {e}")
                 raise
-    
+
     async def rollback(self):
         """Manually rollback all sessions in this context."""
         for session in self._sessions:

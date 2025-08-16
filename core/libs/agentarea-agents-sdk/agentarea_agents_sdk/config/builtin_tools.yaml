@@ -1,0 +1,122 @@
+# Builtin Tools Configuration
+# This file defines all available builtin tools and their metadata
+
+builtin_tools:
+  # Legacy calculator tool (single tool)
+  calculator:
+    name: "calculator"
+    display_name: "Calculator"
+    description: "Perform basic mathematical calculations like addition, subtraction, multiplication, division"
+    class_path: "agentarea_agents_sdk.tools.calculate_tool.CalculateTool"
+    category: "utility"
+    enabled_by_default: false
+    requires_user_confirmation: false
+  
+  # Math toolset (single tool with configurable methods)
+  math_toolset:
+    name: "math_toolset"
+    display_name: "Math Toolset"
+    description: "Mathematical operations including addition, subtraction, multiplication, division, and more"
+    class_path: "agentarea_agents_sdk.tools.math_toolset.MathToolset"
+    category: "math"
+    enabled_by_default: false
+    requires_user_confirmation: false
+    # Available methods that can be enabled/disabled
+    available_methods:
+      - name: "add"
+        display_name: "Addition"
+        description: "Add two numbers together"
+      - name: "subtract"
+        display_name: "Subtraction"
+        description: "Subtract one number from another"
+      - name: "multiply"
+        display_name: "Multiplication"
+        description: "Multiply two numbers"
+      - name: "divide"
+        display_name: "Division"
+        description: "Divide one number by another"
+      - name: "power"
+        display_name: "Power/Exponentiation"
+        description: "Raise a number to a power"
+      - name: "sqrt"
+        display_name: "Square Root"
+        description: "Calculate the square root of a number"
+      - name: "sin"
+        display_name: "Sine"
+        description: "Calculate the sine of an angle"
+      - name: "cos"
+        display_name: "Cosine"
+        description: "Calculate the cosine of an angle"
+      - name: "tan"
+        display_name: "Tangent"
+        description: "Calculate the tangent of an angle"
+      - name: "log"
+        display_name: "Logarithm"
+        description: "Calculate the logarithm of a number"
+      - name: "abs"
+        display_name: "Absolute Value"
+        description: "Calculate the absolute value of a number"
+      - name: "evaluate"
+        display_name: "Expression Evaluator"
+        description: "Safely evaluate mathematical expressions"
+    
+  # Example: File Operations Toolset
+  file_toolset:
+    name: "file_toolset"
+    display_name: "File Operations"
+    description: "Read, write, and manipulate files and directories"
+    class_path: "agentarea_agents_sdk.tools.file_toolset.FileToolset"
+    category: "utility"
+    enabled_by_default: false
+    requires_user_confirmation: true
+    available_methods:
+      - name: "read_file"
+        display_name: "Read File"
+        description: "Read contents of a file"
+      - name: "write_file"
+        display_name: "Write File"
+        description: "Write content to a file"
+      - name: "list_directory"
+        display_name: "List Directory"
+        description: "List files and folders in a directory"
+      - name: "create_directory"
+        display_name: "Create Directory"
+        description: "Create a new directory"
+      - name: "delete_file"
+        display_name: "Delete File"
+        description: "Delete a file"
+        
+  # Example: Web Search Toolset
+  web_toolset:
+    name: "web_toolset"
+    display_name: "Web Tools"
+    description: "Search the web and fetch information from websites"
+    class_path: "agentarea_agents_sdk.tools.web_toolset.WebToolset"
+    category: "information"
+    enabled_by_default: false
+    requires_user_confirmation: true
+    available_methods:
+      - name: "search_web"
+        display_name: "Web Search"
+        description: "Search the web for information"
+      - name: "fetch_webpage"
+        display_name: "Fetch Webpage"
+        description: "Fetch content from a specific webpage"
+      - name: "extract_text"
+        display_name: "Extract Text"
+        description: "Extract text content from HTML"
+
+# Categories help organize tools in the UI
+categories:
+  - id: "utility"
+    name: "Utility Tools"
+    description: "Basic utility functions"
+  - id: "math"
+    name: "Mathematical Tools"
+    description: "Individual mathematical operations and functions"
+  - id: "information"
+    name: "Information Tools"
+    description: "Tools for gathering information"
+  - id: "communication"
+    name: "Communication Tools"
+    description: "Tools for external communication"

@@ -55,8 +55,8 @@ def start(debug: bool, max_activities: int | None, max_workflows: int | None):
 @click.option("--debug", is_flag=True, help="Enable debug logging")
 def dev(debug: bool):
     """Start the worker with auto-restart on file changes (development mode)."""
-    import subprocess
     import os
+    import subprocess
 
     if debug:
         logging.basicConfig(level=logging.DEBUG)
@@ -68,20 +68,20 @@ def dev(debug: bool):
     try:
         # Get the current working directory (should be core/)
         current_dir = os.getcwd()
-        
+
         # Determine paths relative to current directory
         worker_path = os.path.join(current_dir, "apps", "worker")
         libs_path = os.path.join(current_dir, "libs")
-        
+
         # Check if paths exist, fallback to Docker paths if not
         if not os.path.exists(worker_path) or not os.path.exists(libs_path):
             # Fallback to Docker paths
             worker_path = "/app/apps/worker"
             libs_path = "/app/libs"
             current_dir = "/app"
-        
+
         click.echo(f"📁 Watching: {worker_path} and {libs_path}")
-        
+
         # Run watchfiles to monitor and restart the worker
         subprocess.run([
             sys.executable, "-m", "watchfiles",

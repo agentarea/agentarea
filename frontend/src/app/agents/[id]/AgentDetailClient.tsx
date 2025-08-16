@@ -139,12 +139,12 @@ export default function AgentDetailClient({ agent }: Props) {
     }
   };
 
-  // Handle task creation from chat
-  const handleTaskCreated = () => {
-    // Refresh tasks if tasks tab is active
-    if (activeTab === "tasks") {
-      loadTasks();
-    }
+  // Handle task creation from chat with URL update (no redirect)
+  const handleTaskCreated = (taskId: string) => {
+    // Update URL without redirecting to avoid loading states
+    const newUrl = `/agents/${agent.id}/tasks/${taskId}`;
+    window.history.pushState({}, '', newUrl);
+    console.log('URL updated to:', newUrl);
   };
 
   return (

@@ -4,9 +4,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from agentarea_agents_sdk.runners import (
+    AgentGoal,
+    BaseAgentRunner,
+    ExecutionResult,
+    Message,
+    RunnerConfig,
+)
 from temporalio import workflow
-
-from agentarea_agents_sdk.runners import AgentGoal, BaseAgentRunner, ExecutionResult, Message, RunnerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +205,10 @@ class TemporalAgentRunner(BaseAgentRunner):
                     Activities.EXECUTE_MCP_TOOL,
                     args=[
                         tool_name,
-                        tool_call["function"]["arguments"]
+                        tool_call["function"]["arguments"],
+                        None,
+                        "system",
+                        state.agent_config.get("tools_config")
                     ],
                     start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)

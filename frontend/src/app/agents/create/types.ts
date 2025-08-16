@@ -26,6 +26,16 @@ export type MCPServerConfig = {
 };
 
 /**
+ * Builtin Tool configuration type
+ */
+export type BuiltinToolConfig = {
+  tool_name: string;
+  requires_user_confirmation?: boolean;
+  enabled?: boolean;
+  disabled_methods?: { [methodName: string]: boolean };
+};
+
+/**
  * Main form values for agent creation
  * Extends the API's AgentCreate type with our custom instruction field
  */
@@ -36,6 +46,7 @@ export type AgentFormValues = {
   model_id: string;
   tools_config: {
     mcp_server_configs: MCPServerConfig[];
+    builtin_tools?: BuiltinToolConfig[];
   };
   events_config: {
     events: EventConfig[];
