@@ -55,19 +55,15 @@ class ToolExecutor:
                     return await mcp_tool.execute(**tool_args)
 
             # Tool not found
-            raise ToolExecutionError(tool_name, f"Tool '{tool_name}' not found")
+            logger.error(f"Tool '{tool_name}' not found in registry or MCP servers")
+            raise ToolExecutionError(tool_name, "Tool not found")
 
         except ToolExecutionError:
             # Re-raise tool execution errors as-is
             raise
         except Exception as e:
             logger.error(f"Tool execution failed for '{tool_name}': {e}")
-            return {
-                "success": False,
-                "result": None,
-                "error": str(e),
-                "tool_name": tool_name,
-            }
+            raise ToolExecutionError(tool_name, str(e), e)
 
     async def _create_mcp_tool(
         self,
@@ -77,8 +73,62 @@ class ToolExecutor:
     ) -> MCPTool | None:
         """Create an MCP tool dynamically."""
         try:
-            # TODO: Get actual tool definition from MCP server
-            # For now, create a placeholder MCP tool
+            # Ensure instance exists and is running
+            instance = await mcp_server_instance_service.get(server_instance_id)
+            if not instance:
+                logger.warning(f"MCP instance {server_instance_id} not found for dynamic tool creation")
+                return None
+            if getattr(instance, "status", None) != "running":
+                logger.info(f"MCP instance {server_instance_id} is not running; cannot create tool '{tool_name}'")
+                return None
+
+            # Attempt to fetch tool definitions from service
+            discovery_methods = ("list_tools", "get_tools", "discover_tools", "discover_available_tools")
+            tools_payload = None
+            for method in discovery_methods:
+                fn = getattr(mcp_server_instance_service, method, None)
+                if callable(fn):
+                    try:
+                        tools_payload = await fn(server_instance_id)
+                        if tools_payload is not None:
+                            break
+                    except Exception as e:
+                        logger.warning(f"Service.{method} failed for {server_instance_id}: {e}")
+
+            tools_list: list[dict[str, Any]] = []
+            if isinstance(tools_payload, dict) and isinstance(tools_payload.get("tools"), list):
+                tools_list = tools_payload["tools"]
+            elif isinstance(tools_payload, list):
+                tools_list = tools_payload
+
+            # Find the matching tool definition by name
+            tool_def: dict[str, Any] | None = None
+            for t in tools_list:
+                if isinstance(t, dict) and t.get("name") == tool_name:
+                    tool_def = t
+                    break
+
+            if tool_def:
+                description = tool_def.get("description", f"MCP tool: {tool_name}")
+                schema = (
+                    tool_def.get("schema")
+                    or tool_def.get("parameters")
+                    or {"parameters": {"type": "object", "properties": {}}}
+                )
+                if "parameters" not in schema:
+                    schema = {"parameters": schema}
+                return MCPTool(
+                    name=tool_name,
+                    description=description,
+                    schema=schema,
+                    server_instance_id=server_instance_id,
+                    mcp_server_instance_service=mcp_server_instance_service,
+                )
+
+            # Fallback placeholder tool if definition is unavailable
+            logger.warning(
+                f"Definition for MCP tool '{tool_name}' not found; creating placeholder tool"
+            )
             return MCPTool(
                 name=tool_name,
                 description=f"MCP tool: {tool_name}",

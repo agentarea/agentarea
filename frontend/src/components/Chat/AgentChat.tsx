@@ -9,9 +9,11 @@ import { Bot, Send, User, MessageCircle } from "lucide-react";
 import { useSSE } from "@/hooks/useSSE";
 import { MessageRenderer, MessageComponentType } from "./MessageComponents";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
+import { UserMessage as UserMessageComponent } from "./UserMessage";
+import { AssistantMessage as AssistantMessageComponent } from "./AssistantMessage";
 
 
-interface UserMessage {
+interface UserChatMessage {
   id: string;
   content: string;
   role: "user";
@@ -26,7 +28,7 @@ interface WelcomeMessage {
   agent_id: string;
 }
 
-type ChatMessage = UserMessage | WelcomeMessage | MessageComponentType;
+type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;
 
 interface AgentChatProps {
   agent: {
@@ -258,7 +260,7 @@ export default function AgentChat({
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const userMessage: UserMessage = {
+    const userMessage: UserChatMessage = {
       id: Date.now().toString(),
       content: input,
       role: "user",
@@ -359,36 +361,23 @@ export default function AgentChat({
             } else if (message.role === 'user') {
               // User message
               return (
-                <div key={message.id} className="flex gap-3 animate-in slide-in-from-bottom-2 duration-300 justify-end">
-                  <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm transition-all duration-200 hover:shadow-md bg-primary text-primary-foreground">
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-2">
-                      {new Date(message.timestamp).toLocaleTimeString()}
-                    </p>
-                  </div>
-                  <Avatar className="h-8 w-8 border-2 border-muted">
-                    <AvatarFallback className="bg-muted">
-                      <User className="h-4 w-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
+                <UserMessageComponent
+                  key={message.id}
+                  id={message.id}
+                  content={message.content}
+                  timestamp={message.timestamp}
+                />
               );
             } else {
               // Assistant welcome message
               return (
-                <div key={message.id} className="flex gap-3 animate-in slide-in-from-bottom-2 duration-300 justify-start">
-                  <Avatar className="h-8 w-8 border-2 border-primary/20">
-                    <AvatarFallback className="bg-primary/10">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm transition-all duration-200 hover:shadow-md bg-background border border-border">
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-2">
-                      {new Date(message.timestamp).toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
+                <AssistantMessageComponent
+                  key={message.id}
+                  id={message.id}
+                  content={message.content}
+                  timestamp={message.timestamp}
+                  agent_id={message.agent_id}
+                />
               );
             }
           })}

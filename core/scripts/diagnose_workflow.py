@@ -8,11 +8,12 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from temporalio.client import Client
+from temporalio.contrib.pydantic import pydantic_data_converter
 
 
 async def diagnose_workflow(workflow_id: str, namespace: str = "default") -> dict[str, Any]:
     """Diagnose a workflow execution to identify why it might not be finishing."""
-    client = await Client.connect("localhost:7233", namespace=namespace)
+    client = await Client.connect("localhost:7233", namespace=namespace, data_converter=pydantic_data_converter)
 
     try:
         # Get workflow handle

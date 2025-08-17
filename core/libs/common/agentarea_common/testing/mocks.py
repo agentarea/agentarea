@@ -4,9 +4,16 @@ This module consolidates all the duplicated Simple/Mock implementations
 scattered across the codebase into a single shared location.
 """
 
-from agentarea_common.events.base_events import DomainEvent
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from agentarea_common.events.base_events import DomainEvent, EventEnvelope
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+
+if TYPE_CHECKING:
+    from agentarea_common.events.event_models import BaseEvent
 
 
 class TestEventBroker(EventBroker):
@@ -17,14 +24,18 @@ class TestEventBroker(EventBroker):
     """
 
     def __init__(self):
-        self.published_events: list[DomainEvent] = []
+        self.published_events: list[object] = []
 
-    async def publish(self, event: DomainEvent) -> None:
-        """Store published events for test verification."""
+    async def publish(self, event: DomainEvent | EventEnvelope | "BaseEvent") -> None:
+        """Store published events for test verification.
+        
+        We intentionally keep the event object as-is to allow tests to assert
+        identity/equality with mock events or legacy DomainEvent instances.
+        """
         self.published_events.append(event)
         print(f"Test Event Published: {event}")
 
-    def get_published_events(self) -> list[DomainEvent]:
+    def get_published_events(self) -> list[object]:
         """Get all published events for test assertions."""
         return self.published_events.copy()
 

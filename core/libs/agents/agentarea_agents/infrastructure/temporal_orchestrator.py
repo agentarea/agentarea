@@ -38,7 +38,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         if self._client is None:
             try:
                 from temporalio.client import Client
-                self._client = await Client.connect(self.temporal_address)
+                from temporalio.contrib.pydantic import pydantic_data_converter
+                self._client = await Client.connect(
+                    self.temporal_address,
+                    data_converter=pydantic_data_converter,
+                )
                 logger.info(f"Connected to Temporal at {self.temporal_address}")
             except ImportError:
                 logger.warning("Temporal not available - using fallback")

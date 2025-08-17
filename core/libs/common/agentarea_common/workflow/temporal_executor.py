@@ -12,6 +12,7 @@ from uuid import UUID
 
 from temporalio.client import Client
 from temporalio.common import RetryPolicy, WorkflowIDReusePolicy
+from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.exceptions import TemporalError
 
 from agentarea_common.utils.types import Artifact, Message, TextPart
@@ -114,7 +115,11 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     f"Connecting to Temporal server at {self.server_url} "
                     f"with namespace {self.namespace}"
                 )
-                self.client = await Client.connect(self.server_url, namespace=self.namespace)
+                self.client = await Client.connect(
+                    self.server_url,
+                    namespace=self.namespace,
+                    data_converter=pydantic_data_converter,
+                )
                 self._connected = True
                 logger.info("Successfully connected to Temporal server")
             except Exception as e:

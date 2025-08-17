@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from temporalio.client import Client
 from temporalio.worker import Worker
+from temporalio.contrib.pydantic import pydantic_data_converter
 
 # Add the core directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -51,7 +52,7 @@ async def test_workflow_completion():
     activities = make_agent_activities(dependencies)
 
     # Connect to Temporal
-    client = await Client.connect("localhost:7233")
+    client = await Client.connect("localhost:7233", data_converter=pydantic_data_converter)
 
     # Create execution request
     execution_request = AgentExecutionRequest(

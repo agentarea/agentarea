@@ -167,6 +167,26 @@ class EventAgent:
         iteration = 0
         done = False
 
+        # Track last created IDs for simple placeholder substitution in scripted tests
+        last_task_id: str | None = None
+        last_subtask_id: str | None = None
+
+        def _replace_placeholders(obj: Any) -> Any:
+            """Recursively replace known placeholders in tool arguments.
+            This is a minimal helper to support scripted tests that emit placeholders
+            like TASK_ID_PLACEHOLDER/SUBTASK_ID_PLACEHOLDER before the real IDs are known.
+            """
+            if isinstance(obj, dict):
+                return {k: _replace_placeholders(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_replace_placeholders(v) for v in obj]
+            if isinstance(obj, str):
+                if obj == "TASK_ID_PLACEHOLDER" and last_task_id:
+                    return last_task_id
+                if obj == "SUBTASK_ID_PLACEHOLDER" and last_subtask_id:
+                    return last_subtask_id
+            return obj
+
         while not done and iteration < self.max_iterations:
             iteration += 1
             await self._emit("iteration_started", {"iteration": iteration})
@@ -222,11 +242,14 @@ class EventAgent:
                     tool_id = tool_call["id"]
 
                     try:
-                        tool_args = (
+                        raw_args = (
                             json.loads(tool_args_str)
                             if isinstance(tool_args_str, str)
                             else tool_args_str
                         )
+                        # Replace placeholders before execution (best-effort)
+                        tool_args = _replace_placeholders(raw_args)
+
                         await self._emit("tool_execution_started", {
                             "iteration": iteration,
                             "tool_name": tool_name,
@@ -235,6 +258,25 @@ class EventAgent:
                         })
 
                         result = await self.tool_executor.execute_tool(tool_name, tool_args)
+
+                        # Track created IDs for simple placeholder substitution
+                        try:
+                            if tool_name == "tasks":
+                                action = tool_args.get("action") if isinstance(tool_args, dict) else None
+                                # result.get("result") is expected to be a JSON string from TasksToolset
+                                payload = result.get("result")
+                                if isinstance(payload, str):
+                                    parsed = json.loads(payload)
+                                else:
+                                    parsed = payload
+                                if isinstance(parsed, dict) and parsed.get("id"):
+                                    if action == "create_task":
+                                        last_task_id = parsed.get("id")
+                                    elif action == "add_subtask":
+                                        last_subtask_id = parsed.get("id")
+                        except Exception:
+                            # Non-fatal: placeholder tracking is best-effort for tests
+                            pass
 
                         # Naive completion detection (kept simple to avoid breaking changes)
                         if tool_name == "completion":

@@ -2,4 +2,6 @@
 
 from .goal_progress_evaluator import GoalProgressEvaluator
 
-__all__ = ["GoalProgressEvaluator"]
+__all__ = [
+    "GoalProgressEvaluator",
+]

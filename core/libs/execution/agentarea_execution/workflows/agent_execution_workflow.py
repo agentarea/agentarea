@@ -280,14 +280,14 @@ class AgentExecutionWorkflow:
                 self.state.messages.append(
                     Message(role="user", content=self.state.goal.description)
                 )
-            else:
-                # Add status update for subsequent iterations (not in system prompt)
-                # Avoid importing PromptBuilder to prevent Temporal sandbox issues
-                status_msg = f"Iteration {iteration}/{self.state.goal.max_iterations} | Budget remaining: ${self.budget_tracker.get_remaining():.2f}"
-                # Status updates are just regular user messages in conversation context
-                self.state.messages.append(
-                    Message(role="user", content=f"Status: {status_msg}")
-                )
+            # else:
+            #     # Add status update for subsequent iterations (not in system prompt)
+            #     # Avoid importing PromptBuilder to prevent Temporal sandbox issues
+            #     status_msg = f"Iteration {iteration}/{self.state.goal.max_iterations} | Budget remaining: ${self.budget_tracker.get_remaining():.2f}"
+            #     # Status updates are just regular user messages in conversation context
+            #     self.state.messages.append(
+            #         Message(role="user", content=f"Status: {status_msg}")
+            #     )
 
         # Call LLM
         llm_response = await self._call_llm()
@@ -334,7 +334,6 @@ class AgentExecutionWorkflow:
                     self.state.task_id,  # task_id for event publishing
                     self.state.agent_id,  # agent_id for event publishing
                     self.state.execution_id,  # execution_id for event publishing
-                    # Removed enable_streaming parameter - streaming is now always enabled
                 ],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
@@ -559,28 +558,28 @@ class AgentExecutionWorkflow:
                 return
 
             # Regular goal evaluation
-            if self.state.goal:
-                # Convert AgentGoal dataclass to dict for activity
-                goal_dict = {
-                    "id": self.state.goal.id,
-                    "description": self.state.goal.description,
-                    "success_criteria": self.state.goal.success_criteria,
-                    "max_iterations": self.state.goal.max_iterations,
-                    "requires_human_approval": self.state.goal.requires_human_approval,
-                    "context": self.state.goal.context,
-                }
+            # if self.state.goal:
+            #     # Convert AgentGoal dataclass to dict for activity
+            #     goal_dict = {
+            #         "id": self.state.goal.id,
+            #         "description": self.state.goal.description,
+            #         "success_criteria": self.state.goal.success_criteria,
+            #         "max_iterations": self.state.goal.max_iterations,
+            #         "requires_human_approval": self.state.goal.requires_human_approval,
+            #         "context": self.state.goal.context,
+            #     }
 
-                evaluation = await workflow.execute_activity(
-                    Activities.EVALUATE_GOAL_PROGRESS,
-                    args=[goal_dict, self.state.messages, self.state.current_iteration],
-                    start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-                )
+            #     evaluation = await workflow.execute_activity(
+            #         Activities.EVALUATE_GOAL_PROGRESS,
+            #         args=[goal_dict, self.state.messages, self.state.current_iteration],
+            #         start_to_close_timeout=ACTIVITY_TIMEOUT,
+            #         retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            #     )
 
-                # Update success based on evaluation
-                self.state.success = evaluation.get("goal_achieved", False)
-                if evaluation.get("final_response"):
-                    self.state.final_response = evaluation.get("final_response")
+            #     # Update success based on evaluation
+            #     self.state.success = evaluation.get("goal_achieved", False)
+            #     if evaluation.get("final_response"):
+            #         self.state.final_response = evaluation.get("final_response")
 
         except Exception as e:
             workflow.logger.warning(f"Goal evaluation failed: {e}")
@@ -634,7 +633,6 @@ class AgentExecutionWorkflow:
 
     async def _publish_events_immediately(self) -> None:
         """Publish events immediately as they occur - fire and forget."""
-
         pending_events = self.event_manager.get_pending_events()
 
         # Clear pending events immediately since we're not waiting for confirmation
@@ -695,7 +693,7 @@ class AgentExecutionWorkflow:
             task_id=UUID(self.state.task_id),
             agent_id=UUID(self.state.agent_id),
             success=self.state.success,
-            final_response=self.state.final_response or "No final response",
+            final_response=self.state.final_response,
             total_cost=self.budget_tracker.cost if self.budget_tracker else 0.0,
             reasoning_iterations_used=self.state.current_iteration,
             conversation_history=conversation_history,

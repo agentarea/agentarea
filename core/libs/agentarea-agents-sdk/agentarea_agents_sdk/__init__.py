@@ -29,12 +29,14 @@ from .runners import (
 )
 
 # Services
-from .services.goal_progress_evaluator import GoalProgressEvaluator
+from .goal.goal_progress_evaluator import GoalProgressEvaluator
+from .tasks.task_service import InMemoryTaskService
 
 # Tools
 from .tools.base_tool import BaseTool, ToolExecutionError, ToolRegistry
 from .tools.completion_tool import CompletionTool
 from .tools.mcp_tool import MCPTool, MCPToolFactory
+from .tools.tasks_toolset import TasksToolset
 from .tools.tool_executor import ToolExecutor
 from .tools.tool_manager import ToolManager
 
@@ -55,8 +57,10 @@ __all__ = [
     "ToolRegistry",
     "ToolExecutor",
     "ToolManager",
+    "TasksToolset",
     # Services
     "GoalProgressEvaluator",
+    "InMemoryTaskService",
     # Prompts
     "MessageTemplates",
     "PromptBuilder",

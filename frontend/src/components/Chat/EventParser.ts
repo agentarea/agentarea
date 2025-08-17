@@ -97,23 +97,72 @@ export const parseEventToMessage = (eventType: string, eventData: any): MessageC
       };
     }
 
+    case 'ToolCallStarted': {
+      // Extract tool call start information
+      const originalData = eventData.original_data || eventData;
+      const toolName = originalData.tool_name || eventData.tool_name;
+      const toolCallId = originalData.tool_call_id || eventData.tool_call_id;
+      const toolArguments = originalData.arguments || eventData.arguments || {};
+      
+      
+      // If no tool name, create a generic tool call message
+      const displayToolName = toolName || 'Unknown Tool';
+      
+      const result = {
+        type: 'tool_call_started' as const,
+        data: {
+          ...baseData,
+          tool_name: displayToolName,
+          tool_call_id: toolCallId || 'unknown',
+          arguments: toolArguments
+        }
+      };
+      
+      return result;
+    }
+
     case 'ToolCallCompleted': {
       // Extract tool result information
       const originalData = eventData.original_data || eventData;
       const result = originalData.result || eventData.result;
       const toolName = originalData.tool_name || eventData.tool_name;
       
-      // Only create message if there's a result and tool name
-      if (!result || !toolName) return null;
+      
+      // If no tool name or result, create a generic tool completion message
+      const displayToolName = toolName || 'Unknown Tool';
+      const displayResult = result || 'Tool execution completed (no result data)';
 
-      return {
-        type: 'tool_result',
+      const resultComponent = {
+        type: 'tool_result' as const,
         data: {
           ...baseData,
-          tool_name: toolName,
-          result,
+          tool_name: displayToolName,
+          result: displayResult,
           success: originalData.success ?? eventData.success ?? true,
           execution_time: originalData.execution_time || eventData.execution_time,
+          arguments: originalData.arguments || eventData.arguments
+        }
+      };
+      
+      return resultComponent;
+    }
+
+    case 'ToolCallFailed': {
+      // Extract tool failure information
+      const originalData = eventData.original_data || eventData;
+      const error = originalData.error || eventData.error;
+      const toolName = originalData.tool_name || eventData.tool_name;
+      
+      // Only create message if there's an error and tool name
+      if (!error || !toolName) return null;
+
+      return {
+        type: 'error',
+        data: {
+          ...baseData,
+          error: `Tool "${toolName}" failed: ${error}`,
+          error_type: 'tool_call_failed',
+          tool_name: toolName,
           arguments: originalData.arguments || eventData.arguments
         }
       };

@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import logging
-from typing import Any, override
+from typing import Any, override, TYPE_CHECKING
 
 from faststream.redis import RedisBroker
 
-from .base_events import DomainEvent
+from .base_events import DomainEvent, EventEnvelope
 from .broker import EventBroker
+
+if TYPE_CHECKING:
+    from .event_models import BaseEvent
 
 logger = logging.getLogger(__name__)
 
@@ -31,18 +36,26 @@ class RedisEventBroker(EventBroker):
         return self._connected
 
     @override
-    async def publish(self, event: DomainEvent):
+    async def publish(self, event: DomainEvent | EventEnvelope | "BaseEvent") -> None:
         # Ensure we're connected before publishing
         await self._ensure_connected()
 
+        # Normalize input to EventEnvelope for type safety
+        if hasattr(event, "to_envelope") and callable(getattr(event, "to_envelope")):
+            # Supports typed Pydantic BaseEvent models without importing them here
+            envelope = event.to_envelope()  # type: ignore[attr-defined]
+        else:
+            envelope = EventEnvelope.from_any(event)  # DomainEvent | EventEnvelope | dict
+
         # Then publish to Redis for distributed subscribers
+        # Keep timestamp as unix float for backward compatibility
         event_data: dict[str, Any] = {
-            "event_id": str(event.event_id),
-            "timestamp": str(event.timestamp.timestamp()),
-            "event_type": event.event_type,
-            "data": event.data,
+            "event_id": str(envelope.event_id),
+            "timestamp": str(envelope.timestamp.timestamp()),
+            "event_type": envelope.event_type,
+            "data": envelope.data,
         }
-        channel = self._get_channel_for_event(event.event_type)
+        channel = self._get_channel_for_event(envelope.event_type)
 
         logger.info(f"Publishing event to channel: {channel}")
 

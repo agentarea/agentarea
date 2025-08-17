@@ -250,17 +250,28 @@ async def create_task_for_agent_with_stream(
 
                     # Add execution context
                     event_data = event.get("data", {})
-                    event_data.update({
-                        "task_id": str(task.id),
-                        "agent_id": str(agent_id),
-                        "execution_id": task.execution_id,
-                        "timestamp": event.get("timestamp", datetime.now(UTC).isoformat()),
-                    })
+                    event_data.update(
+                        {
+                            "task_id": str(task.id),
+                            "agent_id": str(agent_id),
+                            "execution_id": task.execution_id,
+                            "timestamp": event.get("timestamp", datetime.now(UTC).isoformat()),
+                        }
+                    )
 
-                    yield _format_sse_event(event_type, event_data)
+                    # Filter out domain-specific fields for internal stream consumers
+                    filtered_event_data = _filter_domain_fields(event_data)
+
+                    yield _format_sse_event(event_type, filtered_event_data)
 
                     # Check for terminal states
-                    if event_type in ["task_completed", "task_failed", "task_cancelled", "workflow_completed", "workflow_failed"]:
+                    if event_type in [
+                        "task_completed",
+                        "task_failed",
+                        "task_cancelled",
+                        "workflow_completed",
+                        "workflow_failed",
+                    ]:
                         logger.info(f"Task {task.id} reached terminal state: {event_type}")
                         break
             else:
@@ -763,18 +774,24 @@ async def stream_task_events(
                     # Use protocol event structure directly - task service already formats it properly
                     event_type = event.get("event_type", "task_event")
 
-                    # Create protocol-compliant SSE event
+                    # Create protocol-compliant SSE event with filtered data
                     sse_event = {
                         "event_type": event_type,
                         "event_id": event.get("event_id"),
                         "timestamp": event.get("timestamp"),
-                        "data": event.get("data", {})
+                        "data": _filter_domain_fields(event.get("data", {})),
                     }
 
                     yield _format_sse_event(event_type, sse_event)
 
                     # Check for terminal states
-                    if event_type in ["task_completed", "task_failed", "task_cancelled", "workflow_completed", "workflow_failed"]:
+                    if event_type in [
+                        "task_completed",
+                        "task_failed",
+                        "task_cancelled",
+                        "workflow_completed",
+                        "workflow_failed",
+                    ]:
                         logger.info(f"Task {task_id} reached terminal state: {event_type}")
                         break
 
@@ -810,6 +827,14 @@ async def stream_task_events(
 
 
 # Mock function removed - now using real database queries
+
+
+def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """Remove domain-specific fields from protocol event data for internal streams."""
+    if not isinstance(data, dict):
+        return data
+    # Shallow filter; current event shape places these keys at the top-level of data
+    return {k: v for k, v in data.items() if k not in ("original_event_type", "original_data")}
 
 
 def _format_sse_event(event_type: str, data: dict[str, Any]) -> str:

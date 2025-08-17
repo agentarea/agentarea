@@ -14,6 +14,7 @@ from agentarea_execution.models import AgentExecutionRequest, AgentExecutionResu
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio.client import Client
 from temporalio.worker import Worker
+from temporalio.contrib.pydantic import pydantic_data_converter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ class E2ETemporalTest:
         self.client = await Client.connect(
             self.settings.workflow.TEMPORAL_SERVER_URL,
             namespace=self.settings.workflow.TEMPORAL_NAMESPACE,
+            data_converter=pydantic_data_converter,
         )
 
     async def _create_test_llm_infrastructure(self):

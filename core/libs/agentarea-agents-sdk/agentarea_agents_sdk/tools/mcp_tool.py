@@ -69,15 +69,55 @@ class MCPTool(BaseTool):
                     f"MCP server instance {self.server_instance_id} not found"
                 )
 
-            if server_instance.status != "running":
+            # Basic safety: ensure instance is running before attempting execution
+            status = getattr(server_instance, "status", None)
+            if status != "running":
                 raise ToolExecutionError(
                     self.name,
-                    f"MCP server instance {self.server_instance_id} is not running (status: {server_instance.status})"
+                    f"MCP server instance {self.server_instance_id} is not running (status: {status})"
                 )
 
-            # TODO: Implement actual MCP tool execution
-            # This would call the MCP server's execute_tool method
-            logger.warning(f"MCP tool execution not yet implemented for tool {self.name}")
+            # Prefer a dedicated execute method on the service if available
+            service_execute = getattr(self.mcp_server_instance_service, "execute_tool", None)
+            if callable(service_execute):
+                logger.info(
+                    f"Executing MCP tool via service: instance={self.server_instance_id}, tool={self.name}, args={kwargs}"
+                )
+                result = await service_execute(
+                    server_instance_id=self.server_instance_id,
+                    tool_name=self.name,
+                    tool_args=kwargs,
+                )
+                # Expecting a dict payload; normalize minimal shape
+                if not isinstance(result, dict):
+                    result = {"success": True, "result": result}
+                # Ensure common fields exist
+                result.setdefault("tool_name", self.name)
+                result.setdefault("server_instance_id", str(self.server_instance_id))
+                result.setdefault("success", True)
+                result.setdefault("error", None)
+                return result
+
+            # Fallback: if there is a generic "run_tool" or similar method
+            for alt_method in ("run_tool", "invoke_tool", "call_tool"):
+                fn = getattr(self.mcp_server_instance_service, alt_method, None)
+                if callable(fn):
+                    logger.info(
+                        f"Executing MCP tool via service.{alt_method}: instance={self.server_instance_id}, tool={self.name}"
+                    )
+                    result = await fn(self.server_instance_id, self.name, kwargs)
+                    if not isinstance(result, dict):
+                        result = {"success": True, "result": result}
+                    result.setdefault("tool_name", self.name)
+                    result.setdefault("server_instance_id", str(self.server_instance_id))
+                    result.setdefault("success", True)
+                    result.setdefault("error", None)
+                    return result
+
+            # If we reach here, integration method is not yet implemented on the service
+            logger.warning(
+                f"MCP tool execution not yet implemented on service for tool {self.name}; service missing execute method"
+            )
 
             # Placeholder return for now
             return {
@@ -115,15 +155,79 @@ class MCPToolFactory:
         """
         try:
             server_instance = await mcp_server_instance_service.get(server_instance_id)
-            if not server_instance or server_instance.status != "running":
+            if not server_instance:
+                logger.warning(f"MCP server instance {server_instance_id} not found during tool discovery")
+                return []
+            if getattr(server_instance, "status", None) != "running":
+                logger.info(f"MCP server instance {server_instance_id} not running; skipping tool discovery")
                 return []
 
-            # TODO: Implement get_tools method in MCPServerInstanceService
-            # This would return the actual tool definitions from the MCP server
-            logger.warning(f"MCP tool discovery not yet implemented for server {server_instance_id}")
+            # Try multiple discovery method names to maximize compatibility
+            discovery_method_names = [
+                "list_tools",
+                "get_tools",
+                "discover_tools",
+                "discover_available_tools",
+            ]
+            tools_data = None
+            for method_name in discovery_method_names:
+                fn = getattr(mcp_server_instance_service, method_name, None)
+                if callable(fn):
+                    logger.info(f"Discovering MCP tools via service.{method_name} for {server_instance_id}")
+                    try:
+                        maybe_tools = await fn(server_instance_id)
+                        if maybe_tools:
+                            tools_data = maybe_tools
+                            break
+                    except Exception as e:  # continue trying other methods
+                        logger.warning(f"Service.{method_name} failed for {server_instance_id}: {e}")
 
-            # Placeholder - return empty list until MCP integration is complete
-            return []
+            if tools_data is None:
+                logger.warning(
+                    f"MCP tool discovery not implemented on service for server {server_instance_id}"
+                )
+                return []
+
+            # Normalize tools list shape
+            if isinstance(tools_data, dict) and "tools" in tools_data and isinstance(tools_data["tools"], list):
+                tools_list = tools_data["tools"]
+            elif isinstance(tools_data, list):
+                tools_list = tools_data
+            else:
+                logger.warning(f"Unexpected tools payload for server {server_instance_id}: {type(tools_data)}")
+                return []
+
+            mcp_tools: list[MCPTool] = []
+            for t in tools_list:
+                try:
+                    # Expected fields: name, description, parameters/schema
+                    name = t.get("name") if isinstance(t, dict) else None
+                    if not name:
+                        continue
+                    description = t.get("description", f"MCP tool: {name}")
+                    # Support different schema keys
+                    schema = (
+                        t.get("schema")
+                        or t.get("parameters")
+                        or {"parameters": {"type": "object", "properties": {}}}
+                    )
+                    # Ensure schema has an object parameters shape compatible with OpenAI tools
+                    if "parameters" not in schema:
+                        schema = {"parameters": schema}
+
+                    mcp_tools.append(
+                        MCPTool(
+                            name=name,
+                            description=description,
+                            schema=schema,
+                            server_instance_id=server_instance_id,
+                            mcp_server_instance_service=mcp_server_instance_service,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"Skipping invalid tool entry from server {server_instance_id}: {e}")
+
+            return mcp_tools
 
         except Exception as e:
             logger.error(f"Failed to create tools from MCP server {server_instance_id}: {e}")

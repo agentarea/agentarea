@@ -26,6 +26,7 @@ from agentarea_execution.workflows.agent_execution_workflow import (
 )
 from agentarea_secrets import get_real_secret_manager
 from temporalio.client import Client
+from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
 # Load environment variables
@@ -87,6 +88,7 @@ class AgentAreaWorker:
         self.client = await Client.connect(
             settings.workflow.TEMPORAL_SERVER_URL,
             namespace=settings.workflow.TEMPORAL_NAMESPACE,
+            data_converter=pydantic_data_converter,
         )
         logger.info("Connected to Temporal server")
 

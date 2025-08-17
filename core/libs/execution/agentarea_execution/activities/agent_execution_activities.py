@@ -445,7 +445,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     aggregate_type="task",
                     original_event_type=event["event_type"],
                     original_timestamp=event["timestamp"],
-                    # original_data=enhanced_event_data,
+                    original_data=event["data"],  # Include the original event data for tool calls
                 )
 
                 # 1. Publish via RedisEventBroker (uses FastStream infrastructure) for real-time SSE
