@@ -69,6 +69,9 @@ class EventAgent:
         max_iterations: int = 10,
         # Events
         event_listener: EventListener | None = None,
+        # Context persistence (optional)
+        context_service: Any | None = None,
+        context_task_id: str | None = None,
     ) -> None:
         self.name = name
         self.instruction = instruction
@@ -76,6 +79,9 @@ class EventAgent:
         self.max_tokens = max_tokens
         self.max_iterations = max_iterations
         self.event_listener = event_listener
+        # Persist context references for later history preloading
+        self._context_service = context_service
+        self._context_task_id = context_task_id
 
         # Configure LLM executor (DI)
         if llm_executor is not None:
@@ -102,6 +108,34 @@ class EventAgent:
         if tools:
             for tool in tools:
                 self.tool_executor.registry.register(tool)
+
+        # Wire context persistence, if provided
+        if context_service and context_task_id:
+            # Lazy import to avoid hard dependency in type layer
+            try:
+                from ..context.context_service import create_context_event_listener
+            except Exception:
+                create_context_event_listener = None  # type: ignore
+
+            if create_context_event_listener:
+                ctx_listener = create_context_event_listener(context_service, context_task_id)
+
+                # If user also supplied an event listener, compose both
+                if self.event_listener:
+                    orig_listener = self.event_listener
+
+                    def _composed_listener(evt: Event):
+                        res1 = orig_listener(evt)
+                        if asyncio.iscoroutine(res1):
+                            # Run concurrently, but don't block on persistence
+                            asyncio.create_task(res1)
+                        res2 = ctx_listener(evt)
+                        if asyncio.iscoroutine(res2):
+                            asyncio.create_task(res2)
+
+                    self.event_listener = _composed_listener
+                else:
+                    self.event_listener = ctx_listener
 
     # ---------------------------- Events -----------------------------
     async def _emit(self, event_type: str, payload: dict[str, Any]) -> None:
@@ -158,10 +192,33 @@ class EventAgent:
         goal = goal or task
         system_prompt = self._build_system_prompt(goal, success_criteria)
 
+        # Build base messages and preload prior context if available
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": task},
         ]
+        # Attempt to load and map prior events into message history
+        try:
+            if self._context_service and self._context_task_id:
+                try:
+                    # Lazy import to avoid hard dependency
+                    from ..context.context_service import events_to_messages  # type: ignore
+                except Exception:
+                    events_to_messages = None  # type: ignore
+                if events_to_messages:
+                    try:
+                        prior_events = await self._context_service.list_events(self._context_task_id)
+                        history_messages = events_to_messages(prior_events)
+                        if isinstance(history_messages, list) and history_messages:
+                            messages.extend(history_messages)
+                    except Exception:
+                        # best-effort history loading; proceed if it fails
+                        pass
+        except Exception:
+            # do not block run on context issues
+            pass
+
+        # Append current user message
+        messages.append({"role": "user", "content": task})
 
         tools = self.tool_executor.get_openai_functions()
         iteration = 0

@@ -139,8 +139,9 @@ class TemporalAgentRunner(BaseAgentRunner):
             LLM_CALL_TIMEOUT,
             Activities,
         )
+        from ..models import LLMCallRequest
 
-        # Convert messages to dict format for activity
+        # Convert messages to dict format for request
         messages_dict = [
             {
                 "role": msg.role,
@@ -151,16 +152,19 @@ class TemporalAgentRunner(BaseAgentRunner):
             for msg in state.messages
         ]
 
-        # Call LLM via activity
+        # Create Pydantic request model for LLM call
+        llm_request = LLMCallRequest(
+            messages=messages_dict,
+            model_id=state.agent_config.get("model_id") or "gpt-4",  # Provide default model
+            tools=state.available_tools,
+            workspace_id="system",
+            user_context_data={"user_id": "dev-user"}
+        )
+
+        # Call LLM via activity using Pydantic model
         response = await workflow.execute_activity(
             Activities.CALL_LLM,
-            args=[
-                messages_dict,
-                state.agent_config.get("model_id"),
-                state.available_tools,
-                "system",  # workspace_id
-                {"user_id": "dev-user"}  # user_context_data
-            ],
+            args=[llm_request],
             start_to_close_timeout=LLM_CALL_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
         )
@@ -195,21 +199,32 @@ class TemporalAgentRunner(BaseAgentRunner):
         from temporalio.common import RetryPolicy
 
         from ..workflows.constants import DEFAULT_RETRY_ATTEMPTS, TOOL_EXECUTION_TIMEOUT, Activities
+        from ..models import MCPToolRequest
 
         for tool_call in tool_calls:
             tool_name = tool_call["function"]["name"]
 
             try:
-                # Execute tool call via activity
+                # Parse tool arguments
+                import json
+                try:
+                    tool_args = json.loads(tool_call["function"]["arguments"])
+                except (json.JSONDecodeError, KeyError):
+                    tool_args = {}
+
+                # Create Pydantic request model for MCP tool execution
+                mcp_request = MCPToolRequest(
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    server_instance_id=None,
+                    workspace_id="system",
+                    tools_config=state.agent_config.get("tools_config")
+                )
+
+                # Execute tool call via activity using Pydantic model
                 result = await workflow.execute_activity(
                     Activities.EXECUTE_MCP_TOOL,
-                    args=[
-                        tool_name,
-                        tool_call["function"]["arguments"],
-                        None,
-                        "system",
-                        state.agent_config.get("tools_config")
-                    ],
+                    args=[mcp_request],
                     start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
                 )
@@ -219,13 +234,13 @@ class TemporalAgentRunner(BaseAgentRunner):
                     role="tool",
                     tool_call_id=tool_call["id"],
                     name=tool_name,
-                    content=str(result.get("result", ""))
+                    content=str(result.result if hasattr(result, 'result') else result.get("result", ""))
                 ))
 
                 # Check if completion tool was called
-                if tool_name == "task_complete" and result.get("completed"):
+                if tool_name == "task_complete" and (hasattr(result, 'result') and "completed" in str(result.result)):
                     state.success = True
-                    state.final_response = result.get("result", "Task completed")
+                    state.final_response = str(result.result if hasattr(result, 'result') else result.get("result", "Task completed"))
 
             except Exception as e:
                 workflow.logger.error(f"Tool call {tool_name} failed: {e}")
@@ -243,9 +258,10 @@ class TemporalAgentRunner(BaseAgentRunner):
         from temporalio.common import RetryPolicy
 
         from ..workflows.constants import ACTIVITY_TIMEOUT, DEFAULT_RETRY_ATTEMPTS, Activities
+        from ..models import GoalEvaluationRequest
 
         try:
-            # Convert goal to dict for activity
+            # Convert goal to dict for request
             goal_dict = {
                 "id": str(state.goal.context.get("id", "unknown")),
                 "description": state.goal.description,
@@ -255,18 +271,28 @@ class TemporalAgentRunner(BaseAgentRunner):
                 "context": state.goal.context
             }
 
+            # Convert messages to dict format for request
+            messages_dict = [{"role": msg.role, "content": msg.content} for msg in state.messages]
+
+            # Create Pydantic request model for goal evaluation
+            evaluation_request = GoalEvaluationRequest(
+                goal=goal_dict,
+                messages=messages_dict,
+                current_iteration=state.current_iteration
+            )
+
             evaluation = await workflow.execute_activity(
                 Activities.EVALUATE_GOAL_PROGRESS,
-                args=[
-                    goal_dict,
-                    [{"role": msg.role, "content": msg.content} for msg in state.messages],
-                    state.current_iteration
-                ],
+                args=[evaluation_request],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
             )
 
-            if evaluation.get("goal_achieved", False):
+            # Handle Pydantic result model
+            if hasattr(evaluation, 'goal_achieved') and evaluation.goal_achieved:
+                state.success = True
+                state.final_response = evaluation.final_response
+            elif isinstance(evaluation, dict) and evaluation.get("goal_achieved", False):
                 state.success = True
                 state.final_response = evaluation.get("final_response")
 

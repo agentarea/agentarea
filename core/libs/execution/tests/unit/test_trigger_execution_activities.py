@@ -7,6 +7,12 @@ from uuid import uuid4
 import pytest
 from agentarea_execution.activities.trigger_execution_activities import make_trigger_activities
 from agentarea_execution.interfaces import ActivityDependencies
+from agentarea_execution.models import (
+    ExecuteTriggerRequest,
+    RecordTriggerExecutionRequest,
+    EvaluateTriggerConditionsRequest,
+    CreateTaskFromTriggerRequest,
+)
 from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution
 
@@ -114,13 +120,14 @@ class TestTriggerExecutionActivities:
 
             # Execute the activity
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            result = await execute_trigger_activity(sample_trigger.id, execution_data)
+            request = ExecuteTriggerRequest(trigger_id=sample_trigger.id, execution_data=execution_data)
+            result = await execute_trigger_activity(request)
 
             # Verify results
-            assert result["status"] == "success"
-            assert result["trigger_id"] == str(sample_trigger.id)
-            assert result["task_id"] == str(mock_task.id)
-            assert result["execution_time_ms"] > 0
+            assert result.status == "success"
+            assert result.trigger_id == sample_trigger.id
+            assert result.task_id == mock_task.id
+            assert result.execution_time_ms > 0
 
             # Verify service calls
             mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
@@ -165,7 +172,8 @@ class TestTriggerExecutionActivities:
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
 
             with pytest.raises(Exception):  # TriggerNotFoundError
-                await execute_trigger_activity(trigger_id, execution_data)
+                request = ExecuteTriggerRequest(trigger_id=trigger_id, execution_data=execution_data)
+                await execute_trigger_activity(request)
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_execute_trigger_activity_inactive_trigger(
@@ -204,12 +212,13 @@ class TestTriggerExecutionActivities:
 
             # Execute the activity
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            result = await execute_trigger_activity(sample_trigger.id, execution_data)
+            request = ExecuteTriggerRequest(trigger_id=sample_trigger.id, execution_data=execution_data)
+            result = await execute_trigger_activity(request)
 
             # Verify results
-            assert result["status"] == "skipped"
-            assert result["reason"] == "trigger_inactive"
-            assert result["trigger_id"] == str(sample_trigger.id)
+            assert result.status == "skipped"
+            assert result.reason == "trigger_inactive"
+            assert result.trigger_id == sample_trigger.id
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_execute_trigger_activity_conditions_not_met(
@@ -246,12 +255,13 @@ class TestTriggerExecutionActivities:
 
             # Execute the activity
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            result = await execute_trigger_activity(sample_trigger.id, execution_data)
+            request = ExecuteTriggerRequest(trigger_id=sample_trigger.id, execution_data=execution_data)
+            result = await execute_trigger_activity(request)
 
             # Verify results
-            assert result["status"] == "skipped"
-            assert result["reason"] == "conditions_not_met"
-            assert result["trigger_id"] == str(sample_trigger.id)
+            assert result.status == "skipped"
+            assert result.reason == "conditions_not_met"
+            assert result.trigger_id == sample_trigger.id
 
     @patch('agentarea_execution.activities.trigger_execution_activities.get_database')
     async def test_record_trigger_execution_activity(
@@ -295,17 +305,18 @@ class TestTriggerExecutionActivities:
 
             # Execute the activity
             execution_data = {
-                "status": "SUCCESS",
+                "status": "success",
                 "execution_time_ms": 150,
                 "task_id": str(mock_execution.task_id),
                 "trigger_data": {"test": "data"}
             }
-            result = await record_execution_activity(sample_trigger.id, execution_data)
+            request = RecordTriggerExecutionRequest(trigger_id=sample_trigger.id, execution_data=execution_data)
+            result = await record_execution_activity(request)
 
             # Verify results
-            assert result["execution_id"] == str(mock_execution.id)
-            assert result["trigger_id"] == str(sample_trigger.id)
-            assert result["status"] == "SUCCESS"
+            assert result.execution_id == mock_execution.id
+            assert result.trigger_id == sample_trigger.id
+            assert result.status == "success"
 
             # Verify service call
             mock_trigger_service.record_execution.assert_called_once()
@@ -345,10 +356,11 @@ class TestTriggerExecutionActivities:
 
             # Execute the activity
             event_data = {"request": {"body": {"type": "test"}}}
-            result = await evaluate_conditions_activity(sample_trigger.id, event_data)
+            request = EvaluateTriggerConditionsRequest(trigger_id=sample_trigger.id, event_data=event_data)
+            result = await evaluate_conditions_activity(request)
 
             # Verify results
-            assert result is True
+            assert result.conditions_met is True
 
             # Verify service calls
             mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
@@ -405,12 +417,13 @@ class TestTriggerExecutionActivities:
 
             # Execute the activity
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            result = await create_task_activity(sample_trigger.id, execution_data)
+            request = CreateTaskFromTriggerRequest(trigger_id=sample_trigger.id, execution_data=execution_data)
+            result = await create_task_activity(request)
 
             # Verify results
-            assert result["status"] == "created"
-            assert result["task_id"] == str(mock_task.id)
-            assert result["trigger_id"] == str(sample_trigger.id)
+            assert result.status == "created"
+            assert result.task_id == mock_task.id
+            assert result.trigger_id == sample_trigger.id
 
             # Verify service calls
             mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
@@ -451,10 +464,11 @@ class TestTriggerExecutionActivities:
             # Execute the activity
             trigger_id = uuid4()
             execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            result = await create_task_activity(trigger_id, execution_data)
+            request = CreateTaskFromTriggerRequest(trigger_id=trigger_id, execution_data=execution_data)
+            result = await create_task_activity(request)
 
             # Verify results
-            assert result["status"] == "failed"
-            assert result["task_id"] is None
-            assert result["trigger_id"] == str(trigger_id)
-            assert "not found" in result["error"]
+            assert result.status == "failed"
+            assert result.task_id is None
+            assert result.trigger_id == trigger_id
+            assert result.error and "not found" in result.error

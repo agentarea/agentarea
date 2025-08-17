@@ -4,26 +4,24 @@ This module provides structured dataclasses for all workflow events
 to ensure type safety and consistent data structure across the system.
 """
 
-from abc import ABC
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
+from pydantic import BaseModel, Field
 
-@dataclass
-class BaseWorkflowEvent(ABC):
+
+class BaseWorkflowEvent(BaseModel):
     """Base class for all workflow events."""
 
-    event_id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    event_id: str = Field(default_factory=lambda: str(uuid4()))
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
     task_id: str = ""
     agent_id: str = ""
     execution_id: str = ""
     iteration: int | None = None
 
 
-@dataclass
 class WorkflowStartedEvent(BaseWorkflowEvent):
     """Event emitted when workflow starts."""
 
@@ -32,7 +30,6 @@ class WorkflowStartedEvent(BaseWorkflowEvent):
     budget_limit: float | None = None
 
 
-@dataclass
 class WorkflowCompletedEvent(BaseWorkflowEvent):
     """Event emitted when workflow completes successfully."""
 
@@ -42,7 +39,6 @@ class WorkflowCompletedEvent(BaseWorkflowEvent):
     final_response: str | None = None
 
 
-@dataclass
 class WorkflowFailedEvent(BaseWorkflowEvent):
     """Event emitted when workflow fails."""
 
@@ -53,21 +49,18 @@ class WorkflowFailedEvent(BaseWorkflowEvent):
     total_cost: float = 0.0
 
 
-@dataclass
 class IterationStartedEvent(BaseWorkflowEvent):
     """Event emitted when iteration starts."""
 
     budget_remaining: float = 0.0
 
 
-@dataclass
 class IterationCompletedEvent(BaseWorkflowEvent):
     """Event emitted when iteration completes."""
 
     total_cost: float = 0.0
 
 
-@dataclass
 class LLMCallStartedEvent(BaseWorkflowEvent):
     """Event emitted when LLM call starts."""
 
@@ -75,7 +68,6 @@ class LLMCallStartedEvent(BaseWorkflowEvent):
     model_id: str | None = None
 
 
-@dataclass
 class LLMCallChunkEvent(BaseWorkflowEvent):
     """Event emitted for LLM streaming chunks."""
 
@@ -85,7 +77,6 @@ class LLMCallChunkEvent(BaseWorkflowEvent):
     model_id: str | None = None
 
 
-@dataclass
 class LLMCallCompletedEvent(BaseWorkflowEvent):
     """Event emitted when LLM call completes successfully."""
 
@@ -98,7 +89,6 @@ class LLMCallCompletedEvent(BaseWorkflowEvent):
     model_id: str | None = None
 
 
-@dataclass
 class LLMCallFailedEvent(BaseWorkflowEvent):
     """Event emitted when LLM call fails with detailed error information."""
 
@@ -131,16 +121,14 @@ class LLMCallFailedEvent(BaseWorkflowEvent):
     retryable: bool = True
 
 
-@dataclass
 class ToolCallStartedEvent(BaseWorkflowEvent):
     """Event emitted when tool call starts."""
 
     tool_name: str = ""
     tool_call_id: str = ""
-    arguments: dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
-@dataclass
 class ToolCallCompletedEvent(BaseWorkflowEvent):
     """Event emitted when tool call completes."""
 
@@ -148,21 +136,19 @@ class ToolCallCompletedEvent(BaseWorkflowEvent):
     tool_call_id: str = ""
     success: bool = True
     result: Any = ""
-    arguments: dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = Field(default_factory=dict)
     execution_time: str | None = None
 
 
-@dataclass
 class ToolCallFailedEvent(BaseWorkflowEvent):
     """Event emitted when tool call fails."""
 
     tool_name: str = ""
     tool_call_id: str = ""
     error: str = ""
-    arguments: dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
-@dataclass
 class BudgetWarningEvent(BaseWorkflowEvent):
     """Event emitted when budget warning threshold is reached."""
 
@@ -172,7 +158,6 @@ class BudgetWarningEvent(BaseWorkflowEvent):
     message: str = ""
 
 
-@dataclass
 class BudgetExceededEvent(BaseWorkflowEvent):
     """Event emitted when budget is exceeded."""
 
@@ -206,9 +191,8 @@ def create_event_from_dict(event_type: str, data: dict[str, Any]) -> BaseWorkflo
     if not event_class:
         raise ValueError(f"Unknown event type: {event_type}")
 
-    # Filter data to only include fields that exist in the dataclass
-    import inspect
-    class_fields = set(inspect.signature(event_class).parameters.keys())
+    # Filter data to only include fields that exist in the Pydantic model
+    class_fields = set(event_class.model_fields.keys())
     filtered_data = {k: v for k, v in data.items() if k in class_fields}
 
     return event_class(**filtered_data)
@@ -216,9 +200,7 @@ def create_event_from_dict(event_type: str, data: dict[str, Any]) -> BaseWorkflo
 
 def event_to_dict(event: BaseWorkflowEvent) -> dict[str, Any]:
     """Convert structured event back to dictionary format for publishing."""
-    from dataclasses import asdict
-
-    event_dict = asdict(event)
+    event_dict = event.model_dump()
 
     # Add event type based on class name
     event_type = type(event).__name__.replace("Event", "")

@@ -17,7 +17,7 @@ import pytest
 
 from agentarea_agents_sdk.agents.event_agent import EventAgent
 from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest, LLMResponse, LLMUsage
-from agentarea_agents_sdk.goal.task_service import InMemoryTaskService
+from agentarea_agents_sdk.tasks.task_service import InMemoryTaskService
 from agentarea_agents_sdk.tools.handoff_tool import AgentHandoffTool
 from agentarea_agents_sdk.tools.tasks_toolset import TasksToolset
 from agentarea_agents_sdk.tools.decorator_tool import ToolsetAdapter

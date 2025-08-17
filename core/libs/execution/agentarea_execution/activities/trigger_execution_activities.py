@@ -13,6 +13,16 @@ from agentarea_common.config import get_database
 from temporalio import activity
 
 from ..interfaces import ActivityDependencies
+from ..models import (
+    ExecuteTriggerRequest,
+    ExecuteTriggerResult,
+    RecordTriggerExecutionRequest,
+    RecordTriggerExecutionResult,
+    EvaluateTriggerConditionsRequest,
+    EvaluateTriggerConditionsResult,
+    CreateTaskFromTriggerRequest,
+    CreateTaskFromTriggerResult,
+)
 
 # Import trigger logging utilities
 try:
@@ -40,19 +50,21 @@ def make_trigger_activities(dependencies: ActivityDependencies):
     """
 
     @activity.defn(name="execute_trigger_activity")
-    async def execute_trigger_activity(trigger_id: UUID, execution_data: dict[str, Any]) -> dict[str, Any]:
+    async def execute_trigger_activity(request: ExecuteTriggerRequest) -> ExecuteTriggerResult:
         """Execute a trigger and create a task if conditions are met.
         
         Args:
-            trigger_id: The ID of the trigger to execute
-            execution_data: Additional data about the execution
+            request: ExecuteTriggerRequest containing trigger_id and execution_data
             
         Returns:
-            Dictionary containing execution result and metadata
+            ExecuteTriggerResult containing execution result and metadata
             
         Raises:
             TriggerExecutionError: If trigger execution fails
         """
+        trigger_id = request.trigger_id
+        execution_data = request.execution_data
+
         correlation_id = generate_correlation_id()
         set_correlation_id(correlation_id)
         start_time = datetime.utcnow()
@@ -124,12 +136,13 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         trigger_id=trigger_id,
                         trigger_name=trigger.name
                     )
-                    return {
-                        "trigger_id": str(trigger_id),
-                        "status": "skipped",
-                        "reason": "trigger_inactive",
-                        "execution_time_ms": 0
-                    }
+                    return ExecuteTriggerResult(
+                        trigger_id=trigger_id,
+                        status="skipped",
+                        reason="trigger_inactive",
+                        execution_time_ms=0,
+                        trigger_data=execution_data,
+                    )
 
                 # Evaluate trigger conditions with error handling
                 conditions_met = True
@@ -167,12 +180,13 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                 if not conditions_met:
                     logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
-                    return {
-                        "trigger_id": str(trigger_id),
-                        "status": "skipped",
-                        "reason": "conditions_not_met",
-                        "execution_time_ms": int((datetime.utcnow() - start_time).total_seconds() * 1000)
-                    }
+                    return ExecuteTriggerResult(
+                        trigger_id=trigger_id,
+                        status="skipped",
+                        reason="conditions_not_met",
+                        execution_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000),
+                        trigger_data=execution_data,
+                    )
 
                 # Create task from trigger
                 task_id = None
@@ -224,14 +238,14 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                 logger.info(f"Trigger {trigger_id} executed successfully, task_id: {task_id}")
 
-                return {
-                    "trigger_id": str(trigger_id),
-                    "status": "success",
-                    "task_id": str(task_id) if task_id else None,
-                    "execution_id": str(execution_result.id),
-                    "execution_time_ms": execution_time_ms,
-                    "trigger_data": execution_data
-                }
+                return ExecuteTriggerResult(
+                    trigger_id=trigger_id,
+                    status="success",
+                    task_id=task_id,
+                    execution_id=execution_result.id,
+                    execution_time_ms=execution_time_ms,
+                    trigger_data=execution_data,
+                )
 
         except Exception as e:
             from agentarea_triggers.domain.enums import ExecutionStatus
@@ -281,18 +295,18 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
     @activity.defn(name="record_trigger_execution_activity")
     async def record_trigger_execution_activity(
-        trigger_id: UUID,
-        execution_data: dict[str, Any]
-    ) -> dict[str, Any]:
+        request: RecordTriggerExecutionRequest,
+    ) -> RecordTriggerExecutionResult:
         """Record a trigger execution result.
         
         Args:
-            trigger_id: The ID of the trigger
-            execution_data: Execution result data
+            request: RecordTriggerExecutionRequest including trigger_id and execution_data
             
         Returns:
-            Dictionary containing the recorded execution info
+            RecordTriggerExecutionResult containing the recorded execution info
         """
+        trigger_id = request.trigger_id
+        execution_data = request.execution_data
         try:
             from agentarea_triggers.domain.enums import ExecutionStatus
             from agentarea_triggers.infrastructure.repository import (
@@ -332,12 +346,12 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                 logger.info(f"Recorded execution for trigger {trigger_id}: {status}")
 
-                return {
-                    "execution_id": str(execution_result.id),
-                    "trigger_id": str(trigger_id),
-                    "status": status.value,
-                    "recorded_at": execution_result.executed_at.isoformat()
-                }
+                return RecordTriggerExecutionResult(
+                    execution_id=execution_result.id,
+                    trigger_id=trigger_id,
+                    status=status.value,
+                    recorded_at=execution_result.executed_at.isoformat(),
+                )
 
         except Exception as e:
             logger.error(f"Failed to record execution for trigger {trigger_id}: {e}")
@@ -345,18 +359,18 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
     @activity.defn(name="evaluate_trigger_conditions_activity")
     async def evaluate_trigger_conditions_activity(
-        trigger_id: UUID,
-        event_data: dict[str, Any]
-    ) -> bool:
+        request: EvaluateTriggerConditionsRequest,
+    ) -> EvaluateTriggerConditionsResult:
         """Evaluate trigger conditions using LLM service.
         
         Args:
-            trigger_id: The ID of the trigger
-            event_data: Event data to evaluate against
+            request: EvaluateTriggerConditionsRequest including trigger_id and event_data
             
         Returns:
-            True if conditions are met, False otherwise
+            EvaluateTriggerConditionsResult with evaluation outcome
         """
+        trigger_id = request.trigger_id
+        event_data = request.event_data
         try:
             from agentarea_triggers.infrastructure.repository import (
                 TriggerExecutionRepository,
@@ -381,29 +395,30 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 trigger = await trigger_service.get_trigger(trigger_id)
                 if not trigger:
                     logger.warning(f"Trigger {trigger_id} not found for condition evaluation")
-                    return False
+                    return EvaluateTriggerConditionsResult(conditions_met=False, trigger_id=trigger_id)
 
                 # Use the trigger service's condition evaluation method
-                return await trigger_service.evaluate_trigger_conditions(trigger, event_data)
+                conditions_met = await trigger_service.evaluate_trigger_conditions(trigger, event_data)
+                return EvaluateTriggerConditionsResult(conditions_met=conditions_met, trigger_id=trigger_id)
 
         except Exception as e:
             logger.error(f"Error evaluating conditions for trigger {trigger_id}: {e}")
-            return False
+            return EvaluateTriggerConditionsResult(conditions_met=False, trigger_id=trigger_id)
 
     @activity.defn(name="create_task_from_trigger_activity")
     async def create_task_from_trigger_activity(
-        trigger_id: UUID,
-        execution_data: dict[str, Any]
-    ) -> dict[str, Any]:
+        request: CreateTaskFromTriggerRequest,
+    ) -> CreateTaskFromTriggerResult:
         """Create a task from a trigger execution.
         
         Args:
-            trigger_id: The ID of the trigger
-            execution_data: Execution data to include in task parameters
+            request: CreateTaskFromTriggerRequest including trigger_id and execution_data
             
         Returns:
-            Dictionary containing task creation result
+            CreateTaskFromTriggerResult containing task creation result
         """
+        trigger_id = request.trigger_id
+        execution_data = request.execution_data
         try:
             from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
@@ -433,7 +448,13 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Get the trigger
                 trigger = await trigger_service.get_trigger(trigger_id)
                 if not trigger:
-                    raise ValueError(f"Trigger {trigger_id} not found")
+                    return CreateTaskFromTriggerResult(
+                        task_id=None,
+                        trigger_id=trigger_id,
+                        status="failed",
+                        task_parameters={},
+                        error=f"Trigger {trigger_id} not found",
+                    )
 
                 # Create task service with minimal dependencies for task creation
                 task_service = TaskService(
@@ -459,21 +480,22 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                 logger.info(f"Created task {task.id} from trigger {trigger_id}")
 
-                return {
-                    "task_id": str(task.id),
-                    "trigger_id": str(trigger_id),
-                    "status": "created",
-                    "task_parameters": task_params
-                }
+                return CreateTaskFromTriggerResult(
+                    task_id=task.id,
+                    trigger_id=trigger_id,
+                    status="created",
+                    task_parameters=task_params,
+                )
 
         except Exception as e:
             logger.error(f"Failed to create task from trigger {trigger_id}: {e}")
-            return {
-                "task_id": None,
-                "trigger_id": str(trigger_id),
-                "status": "failed",
-                "error": str(e)
-            }
+            return CreateTaskFromTriggerResult(
+                task_id=None,
+                trigger_id=trigger_id,
+                status="failed",
+                task_parameters={},
+                error=str(e),
+            )
 
     return [
         execute_trigger_activity,

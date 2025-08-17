@@ -11,6 +11,7 @@ from agentarea_cli.client import run_async
 from agentarea_cli.exceptions import APIError as AgentAreaAPIError
 from agentarea_cli.exceptions import AuthenticationError
 from agentarea_cli.utils import format_table, safe_get_field
+from agentarea_cli.protocol_routing import ProtocolRouter
 
 if TYPE_CHECKING:
     from agentarea_cli.client import AgentAreaClient
@@ -31,82 +32,71 @@ def task():
 @click.option("--stream/--no-stream", default=True, help="Stream task execution events")
 @click.option("--timeout", default=300, help="Timeout in seconds for task execution")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--protocol", type=click.Choice(["internal", "a2a"]), default="internal", help="Protocol to use for communication")
 @click.pass_context
 def create(ctx, agent_id: str, description: str, parameters: str | None, user_id: str,
-          stream: bool, timeout: int, output_format: str):
+          stream: bool, timeout: int, output_format: str, protocol: str):
     """Create and execute a task for an agent with real-time event streaming."""
+    client: "AgentAreaClient" = ctx.obj["client"]
 
-    async def _create_task():
-        client: AgentAreaClient = ctx.obj["client"]
-        auth_config: AuthConfig = ctx.obj["auth_config"]
-
-        # Disable debug logging for cleaner output
-        import logging
-        logging.getLogger("httpcore").setLevel(logging.WARNING)
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-
-        # Check authentication
-        if not auth_config.is_authenticated():
-            click.echo("❌ Please login first with 'agentarea auth login'")
+    # Try parsing parameters JSON
+    params_dict = {}
+    if parameters:
+        try:
+            params_dict = json.loads(parameters)
+        except json.JSONDecodeError as e:
+            click.echo(f"Invalid JSON for parameters: {e}")
             raise click.Abort()
 
-        # Parse parameters if provided
-        task_params = {}
-        if parameters:
-            try:
-                task_params = json.loads(parameters)
-            except json.JSONDecodeError:
-                click.echo("❌ Invalid JSON in parameters")
-                raise click.Abort()
+    if protocol == "a2a":
+        router = ProtocolRouter(client)
+        if stream:
+            # Stream A2A task creation, which will output normalized events
+            return run_async(router.stream_task_create_a2a(agent_id, description, params_dict, user_id, timeout, output_format))
+        else:
+            # Non-streaming A2A send: use message/send to get final response
+            return run_async(router.send_a2a_message(agent_id, description, params_dict, user_id, stream=False, output_format=output_format))
 
-        # Default parameters for CLI tasks
-        task_params.update({
-            "task_type": "cli_task",
-            "session_id": f"cli-{int(datetime.now().timestamp())}",
-            "created_via": "cli"
-        })
-
+    # Internal protocol existing behavior
+    if stream:
+        # Build task_data payload for internal streaming endpoint
         task_data = {
             "description": description,
-            "parameters": task_params,
+            "parameters": params_dict or {},
             "user_id": user_id,
-            "enable_agent_communication": True,
         }
+        return run_async(_stream_task_creation(client, agent_id, task_data, timeout, output_format))
 
+    # Non-streaming internal sync endpoint
+    async def _create_task_sync():
         try:
-            if not stream:
-                # Synchronous task creation
-                result = await client.post(f"/v1/agents/{agent_id}/tasks/sync", task_data)
-
+            payload = {
+                "description": description,
+                "parameters": params_dict or {},
+                "user_id": user_id,
+                "mode": "sync",
+                "timeout": timeout,
+            }
+            url = f"{client.base_url}/v1/agents/{agent_id}/tasks/sync"
+            headers = client._get_headers()
+            async with httpx.AsyncClient(timeout=timeout + 5) as http_client:
+                resp = await http_client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
                 if output_format == "json":
-                    click.echo(json.dumps(result, indent=2))
+                    click.echo(json.dumps(data, indent=2))
                 else:
-                    task_id = safe_get_field(result, "id")
-                    status = safe_get_field(result, "status")
-                    execution_id = safe_get_field(result, "execution_id")
-
-                    click.echo(f"✅ Task created: {task_id}")
-                    click.echo(f"   Status: {status}")
-                    if execution_id != "Unknown":
-                        click.echo(f"   Execution ID: {execution_id}")
-
-                    if status == "failed":
-                        error = safe_get_field(result, "result", {}).get("error", "Unknown error")
-                        click.echo(f"   Error: {error}")
-                return
-
-            # Start conversation naturally without verbose setup
-
-            await _stream_task_creation(client, agent_id, task_data, timeout, output_format)
-
-        except AuthenticationError:
-            click.echo("❌ Authentication failed. Please login again with 'agentarea auth login'")
+                    result = data.get("result") or {}
+                    output_text = result.get("output", "") or result.get("content", "")
+                    click.echo(output_text)
+        except httpx.HTTPStatusError as e:
+            click.echo(f"HTTP error: {e.response.status_code} - {e.response.text}")
             raise click.Abort()
-        except AgentAreaAPIError as e:
-            click.echo(f"❌ Error creating task: {e}")
+        except (AuthenticationError, AgentAreaAPIError) as e:
+            click.echo(f"Error: {e}")
             raise click.Abort()
 
-    run_async(_create_task())
+    return run_async(_create_task_sync())
 
 
 async def _stream_task_creation(
@@ -534,8 +524,9 @@ def status(ctx, task_id: str, agent_id: str | None, output_format: str):
 @click.option("--agent-id", help="Agent ID (required if not using global task ID)")
 @click.option("--follow", "-f", is_flag=True, help="Follow/stream live events")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--protocol", type=click.Choice(["internal", "a2a"]), default="internal", help="Protocol to use for communication")
 @click.pass_context
-def events(ctx, task_id: str, agent_id: str | None, follow: bool, output_format: str):
+def events(ctx, task_id: str, agent_id: str | None, follow: bool, output_format: str, protocol: str):
     """View task execution events."""
 
     async def _get_events():
@@ -559,38 +550,54 @@ def events(ctx, task_id: str, agent_id: str | None, follow: bool, output_format:
                     click.echo("Press Ctrl+C to stop")
                     click.echo("-" * 60)
 
-                await _stream_task_events(client, agent_id, task_id, output_format)
+                await _stream_task_events(client, agent_id, task_id, output_format, protocol)
 
             else:
                 # Get historical events
-                endpoint = f"/v1/agents/{agent_id}/tasks/{task_id}/events" if agent_id else f"/v1/tasks/{task_id}/events"
-                data = await client.get(endpoint)
-
-                events = data.get("events", []) if isinstance(data, dict) else data
-
-                if output_format == "json":
-                    click.echo(json.dumps(events, indent=2))
+                if protocol == "a2a":
+                    if not agent_id:
+                        click.echo("❌ Agent ID is required for A2A protocol")
+                        raise click.Abort()
+                    router = ProtocolRouter(client)
+                    status = await router.get_a2a_task_status(agent_id, task_id)
+                    # A2A tasks/get returns status structure; display some info
+                    if output_format == "json":
+                        click.echo(json.dumps(status, indent=2))
+                        return
+                    state = safe_get_field(status, "status.state", "unknown")
+                    click.echo(f"Task {task_id} state: {state}")
+                    # If events history is not available over A2A, inform user
+                    click.echo("ℹ️ Detailed event history is not available via A2A. Use internal protocol for full events.")
                     return
-
-                if events:
-                    click.echo(f"📋 Task Events: {task_id}")
-                    click.echo("=" * 50)
-
-                    for event in events:
-                        event_type = safe_get_field(event, "event_type")
-                        timestamp = safe_get_field(event, "timestamp")
-                        message = safe_get_field(event, "message")
-
-                        # Format timestamp
-                        try:
-                            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                            time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                        except:
-                            time_str = timestamp
-
-                        click.echo(f"[{time_str}] {event_type}: {message}")
                 else:
-                    click.echo("📭 No events found for this task")
+                    endpoint = f"/v1/agents/{agent_id}/tasks/{task_id}/events" if agent_id else f"/v1/tasks/{task_id}/events"
+                    data = await client.get(endpoint)
+
+                    events = data.get("events", []) if isinstance(data, dict) else data
+
+                    if output_format == "json":
+                        click.echo(json.dumps(events, indent=2))
+                        return
+
+                    if events:
+                        click.echo(f"📋 Task Events: {task_id}")
+                        click.echo("=" * 50)
+
+                        for event in events:
+                            event_type = safe_get_field(event, "event_type")
+                            timestamp = safe_get_field(event, "timestamp")
+                            message = safe_get_field(event, "message")
+
+                            # Format timestamp
+                            try:
+                                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                            except:
+                                time_str = timestamp
+
+                            click.echo(f"[{time_str}] {event_type}: {message}")
+                    else:
+                        click.echo("📭 No events found for this task")
 
         except KeyboardInterrupt:
             if output_format == "text":
@@ -609,9 +616,18 @@ async def _stream_task_events(
     client: "AgentAreaClient",
     agent_id: str,
     task_id: str,
-    output_format: str
+    output_format: str,
+    protocol: str = "internal"
 ):
     """Stream live task events."""
+    if protocol == "a2a":
+        # Route to A2A streaming - note: A2A doesn't have dedicated events streaming
+        # For now, we'll show a helpful message
+        click.echo("ℹ️ A2A protocol doesn't support dedicated event streaming for existing tasks.")
+        click.echo("   Use 'agentarea a2a get-task' to check task status instead.")
+        return
+    
+    # Internal streaming implementation
     base_url = client.base_url
     headers = client._get_headers()
     headers["Accept"] = "text/event-stream"
@@ -669,8 +685,9 @@ async def _stream_task_events(
 @click.option("--agent-id", required=True, help="Agent ID to chat with")
 @click.option("--message", "-m", help="Single message to send (if not provided, enters interactive mode)")
 @click.option("--timeout", default=300, help="Timeout in seconds for each message")
+@click.option("--protocol", type=click.Choice(["internal", "a2a"]), default="internal", help="Protocol to use for communication")
 @click.pass_context
-def chat(ctx, agent_id: str, message: str | None, timeout: int):
+def chat(ctx, agent_id: str, message: str | None, timeout: int, protocol: str):
     """Chat with an agent in a conversational interface."""
 
     async def _chat():
@@ -684,19 +701,26 @@ def chat(ctx, agent_id: str, message: str | None, timeout: int):
 
         if message:
             # Single message mode
-            await _send_single_message(client, agent_id, message, timeout)
+            await _send_single_message(client, agent_id, message, timeout, protocol)
         else:
             # Interactive chat mode
-            await _interactive_chat(client, agent_id, timeout)
+            await _interactive_chat(client, agent_id, timeout, protocol)
 
     run_async(_chat())
 
 
-async def _send_single_message(client: "AgentAreaClient", agent_id: str, message: str, timeout: int):
+async def _send_single_message(client: "AgentAreaClient", agent_id: str, message: str, timeout: int, protocol: str):
     """Send a single message and display the response."""
     click.echo(f"💬 You: {message}")
     click.echo()
 
+    if protocol == "a2a":
+        router = ProtocolRouter(client)
+        # Use A2A streaming to send the message
+        await router.send_a2a_message(agent_id=agent_id, message=message, parameters={"task_type": "chat", "created_via": "cli_task_chat"}, stream=True, output_format="text")
+        return
+
+    # Internal default: create a task and stream its events
     task_data = {
         "description": message,
         "parameters": {
@@ -711,7 +735,7 @@ async def _send_single_message(client: "AgentAreaClient", agent_id: str, message
     await _stream_task_creation(client, agent_id, task_data, timeout, "text")
 
 
-async def _interactive_chat(client: "AgentAreaClient", agent_id: str, timeout: int):
+async def _interactive_chat(client: "AgentAreaClient", agent_id: str, timeout: int, protocol: str):
     """Start an interactive chat session."""
     click.echo("💬 Interactive Chat Mode")
     click.echo("Commands: 'exit' or 'quit' to end, 'clear' for new session")
@@ -741,7 +765,24 @@ async def _interactive_chat(client: "AgentAreaClient", agent_id: str, timeout: i
             message_count += 1
             click.echo()  # Add space before agent response
 
-            # Send message
+            if protocol == "a2a":
+                router = ProtocolRouter(client)
+                await router.send_a2a_message(
+                    agent_id=agent_id,
+                    message=user_input,
+                    parameters={
+                        "task_type": "chat",
+                        "session_id": session_id,
+                        "created_via": "cli_interactive",
+                        "message_number": message_count
+                    },
+                    stream=True,
+                    output_format="text"
+                )
+                click.echo()  # Add space after agent response
+                continue
+
+            # Internal default path: create a task per message and stream
             task_data = {
                 "description": user_input,
                 "parameters": {

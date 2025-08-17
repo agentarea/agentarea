@@ -22,7 +22,7 @@ with workflow.unsafe.imports_passed_through():
         ToolCall,
     )
 
-from ..models import AgentExecutionRequest, AgentExecutionResult
+from ..models import AgentExecutionRequest, AgentExecutionResult, AgentConfigRequest, AgentConfigResult, ToolDiscoveryRequest, ToolDiscoveryResult, LLMCallRequest, LLMCallResult, MCPToolRequest, MCPToolResult, WorkflowEventsRequest, WorkflowEventsResult
 from .constants import (
     ACTIVITY_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
@@ -113,25 +113,61 @@ class AgentExecutionWorkflow:
             "workspace_id": "system",  # Use system workspace where agents are created
         }
 
-        # Build agent config
-        self.state.agent_config = await workflow.execute_activity(
+        # Build agent config using Pydantic request model
+        agent_config_request = AgentConfigRequest(
+            agent_id=UUID(self.state.agent_id),
+            user_context_data=self.state.user_context_data
+        )
+        agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
-            args=[UUID(self.state.agent_id), self.state.user_context_data],
+            args=[agent_config_request],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )
+        
+        # Convert result to dict for state storage (supports Pydantic BaseModel or plain dict)
+        try:
+            self.state.agent_config = agent_config_result.model_dump()
+        except AttributeError:
+            self.state.agent_config = dict(agent_config_result)
 
         # Validate configuration
         if not StateValidator.validate_agent_config(self.state.agent_config):
             raise ApplicationError("Invalid agent configuration")
 
-        # Discover available tools
-        self.state.available_tools = await workflow.execute_activity(
+        # Discover available tools using Pydantic request model
+        tools_request = ToolDiscoveryRequest(
+            agent_id=UUID(self.state.agent_id),
+            user_context_data=self.state.user_context_data
+        )
+        tools_result: ToolDiscoveryResult = await workflow.execute_activity(
             Activities.DISCOVER_AVAILABLE_TOOLS,
-            args=[UUID(self.state.agent_id), self.state.user_context_data],
+            args=[tools_request],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )
+
+        # Normalize tools to list[dict] for state storage, accepting multiple shapes
+        available_tools: list[dict[str, Any]] = []
+        try:
+            tools_list = tools_result.tools  # Expected ToolDiscoveryResult
+        except AttributeError:
+            tools_list = tools_result  # Fallback: activity returned a raw list
+
+        for tool in tools_list or []:
+            try:
+                available_tools.append(tool.model_dump())  # Pydantic ToolDefinition
+            except AttributeError:
+                if isinstance(tool, dict):
+                    available_tools.append(tool)
+                else:
+                    # Last resort: convert object to dict via __dict__
+                    try:
+                        available_tools.append(dict(tool.__dict__))
+                    except Exception:
+                        pass
+
+        self.state.available_tools = available_tools
 
         if not StateValidator.validate_tools(self.state.available_tools):
             raise ApplicationError("Invalid tools configuration")
@@ -296,7 +332,10 @@ class AgentExecutionWorkflow:
         await self._process_llm_response(llm_response)
 
     async def _call_llm(self) -> dict[str, Any]:
-        """Call LLM with current messages."""
+        """Call LLM with conversation context using Pydantic models."""
+        workflow.logger.info(f"Calling LLM in iteration {self.state.current_iteration}")
+
+        # Add event for LLM call start
         self.event_manager.add_event(
             EventTypes.LLM_CALL_STARTED,
             {
@@ -307,7 +346,7 @@ class AgentExecutionWorkflow:
         await self._publish_events_immediately()
 
         try:
-            # Convert messages to dict format for activity - filter out None values to match agent SDK format
+            # Convert messages to dict format for LLM call - filter out None values to match agent SDK format
             messages_dict = [
                 MessageBuilder.normalize_message_dict(
                     {
@@ -321,28 +360,60 @@ class AgentExecutionWorkflow:
                 for msg in self.state.messages
             ]
 
-            response = await workflow.execute_activity(
+            # Create Pydantic request model
+            llm_request = LLMCallRequest(
+                messages=messages_dict,
+                model_id=self.state.agent_config.get("model_id"),
+                tools=self.state.available_tools,
+                workspace_id=self.state.user_context_data["workspace_id"],
+                user_context_data=self.state.user_context_data,
+                temperature=None,
+                max_tokens=None,
+                task_id=self.state.task_id,
+                agent_id=self.state.agent_id,
+                execution_id=self.state.execution_id,
+            )
+
+            response: LLMCallResult = await workflow.execute_activity(
                 Activities.CALL_LLM,
-                args=[
-                    messages_dict,
-                    self.state.agent_config.get("model_id"),
-                    self.state.available_tools,
-                    self.state.user_context_data["workspace_id"],  # workspace_id
-                    self.state.user_context_data,  # user_context_data (deprecated but still passed)
-                    None,  # temperature
-                    None,  # max_tokens
-                    self.state.task_id,  # task_id for event publishing
-                    self.state.agent_id,  # agent_id for event publishing
-                    self.state.execution_id,  # execution_id for event publishing
-                ],
+                args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
 
+            # Normalize response fields to support both Pydantic model and plain dict
+            if isinstance(response, dict):
+                raw_usage = response.get("usage")
+                cost_value = response.get("cost", 0.0)
+                role_value = response.get("role", "assistant")
+                content_value = response.get("content", "")
+                tool_calls_value = response.get("tool_calls")
+            else:
+                raw_usage = getattr(response, "usage", None)
+                cost_value = getattr(response, "cost", 0.0)
+                role_value = getattr(response, "role", "assistant")
+                content_value = getattr(response, "content", "")
+                tool_calls_value = getattr(response, "tool_calls", None)
+
             # Extract usage info and update budget
+            if raw_usage is None:
+                usage_payload = {}
+            else:
+                # raw_usage may be a Pydantic model or a plain dict-like object
+                try:
+                    usage_payload = raw_usage.model_dump()  # Pydantic BaseModel
+                except AttributeError:
+                    try:
+                        if isinstance(raw_usage, dict):
+                            usage_payload = raw_usage
+                        else:
+                            usage_payload = dict(raw_usage.__dict__)
+                    except Exception:
+                        usage_payload = {}
+
             usage_info = {
-                "cost": response.get("cost", 0.0),
-                "usage": response.get("usage", {}),
+                "cost": cost_value,
+                "usage": usage_payload,
             }
             self.budget_tracker.add_cost(usage_info["cost"])
 
@@ -353,23 +424,22 @@ class AgentExecutionWorkflow:
                     "cost": usage_info["cost"],
                     "total_cost": self.budget_tracker.cost,
                     "usage": usage_info,
-                    "content": response.get("content", ""),
-                    "tool_calls": response.get("tool_calls", []),
-                    "role": response.get("role", "assistant"),
+                    "content": content_value,
+                    "tool_calls": tool_calls_value or [],
+                    "role": role_value,
                 },
             )
             await self._publish_events_immediately()
 
-            # Return the activity response directly - no need for extra wrapper
-            # The activity already returns the correct format
+            # Return dict for compatibility with existing code
             return {
-                "role": response.get("role", "assistant"),
-                "content": response.get("content", ""),
-                "tool_call_id": response.get("tool_call_id"),
-                "name": response.get("name"),
-                "tool_calls": response.get("tool_calls"),
+                "role": role_value,
+                "content": content_value,
+                "tool_call_id": None,  # Not provided by LLM response
+                "name": None,  # Not provided by LLM response
+                "tool_calls": tool_calls_value,
                 "usage": usage_info,
-                "cost": usage_info.get("cost", 0.0),
+                "cost": cost_value,
             }
 
         except Exception as e:
@@ -457,7 +527,7 @@ class AgentExecutionWorkflow:
         workflow.logger.info("Workflow will terminate after this iteration")
 
     async def _execute_mcp_tool(self, tool_call: ToolCall) -> None:
-        """Execute a single MCP tool call."""
+        """Execute a single MCP tool call using Pydantic models."""
         tool_name = tool_call.function["name"]
 
         # Parse arguments
@@ -481,25 +551,53 @@ class AgentExecutionWorkflow:
         await self._publish_events_immediately()
 
         try:
-            # Execute MCP tool
-            result = await workflow.execute_activity(
+            # Create Pydantic request model for MCP tool execution
+            mcp_request = MCPToolRequest(
+                tool_name=tool_name,
+                tool_args=tool_args,
+                server_instance_id=None,
+                workspace_id="system",
+                tools_config=self.state.agent_config.get("tools_config"),
+            )
+
+            result_obj = await workflow.execute_activity(
                 Activities.EXECUTE_MCP_TOOL,
-                args=[
-                    tool_name,
-                    tool_args,
-                    None,
-                    "system",
-                    self.state.agent_config.get("tools_config"),
-                ],
+                args=[mcp_request],
                 start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
+
+            # Normalize result to a dict for robust access
+            result_dict: dict[str, Any]
+            if hasattr(result_obj, "model_dump") and callable(getattr(result_obj, "model_dump")):
+                try:
+                    result_dict = result_obj.model_dump()  # type: ignore[attr-defined]
+                except Exception:
+                    result_dict = {}
+            elif isinstance(result_obj, dict):
+                result_dict = result_obj
+            else:
+                result_dict = getattr(result_obj, "__dict__", {}) or {}
+
+            # Extract fields with fallbacks
+            success = bool(result_dict.get("success", getattr(result_obj, "success", True)))
+            # Prefer standard "result", fallback to "output", then stringify the whole object
+            result_text = result_dict.get("result", getattr(result_obj, "result", None))
+            if result_text is None:
+                result_text = result_dict.get("output", getattr(result_obj, "output", ""))
+            result_text = str(result_text) if result_text is not None else ""
+
+            # Execution time may be named differently
+            execution_time = (
+                result_dict.get("execution_time", getattr(result_obj, "execution_time", None))
+                or result_dict.get("execution_time_seconds", getattr(result_obj, "execution_time_seconds", None))
             )
 
             # Add tool result to conversation
             self.state.messages.append(
                 Message(
                     role="tool",
-                    content=str(result.get("result", "")),
+                    content=result_text,
                     tool_call_id=tool_call.id,
                     name=tool_name,
                 )
@@ -511,11 +609,11 @@ class AgentExecutionWorkflow:
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
-                    "success": result.get("success", False),
+                    "success": success,
                     "iteration": self.state.current_iteration,
-                    "result": result.get("result", ""),
+                    "result": result_text,
                     "arguments": tool_args,
-                    "execution_time": result.get("execution_time", ""),
+                    "execution_time": execution_time,
                 },
             )
             await self._publish_events_immediately()
@@ -611,7 +709,7 @@ class AgentExecutionWorkflow:
             await self._publish_events_immediately()
 
     async def _publish_events(self) -> None:
-        """Publish pending events."""
+        """Publish pending events using Pydantic models."""
         events = self.event_manager.get_events()
         if not events:
             return
@@ -619,9 +717,12 @@ class AgentExecutionWorkflow:
         try:
             events_json = [json.dumps(event) for event in events]
 
+            # Create Pydantic request model for event publishing
+            events_request = WorkflowEventsRequest(events_json=events_json)
+
             await workflow.execute_activity(
                 Activities.PUBLISH_WORKFLOW_EVENTS,
-                events_json,
+                args=[events_request],
                 start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=EVENT_PUBLISH_RETRY_ATTEMPTS),
             )
@@ -632,7 +733,7 @@ class AgentExecutionWorkflow:
             workflow.logger.warning(f"Failed to publish events: {e}")
 
     async def _publish_events_immediately(self) -> None:
-        """Publish events immediately as they occur - fire and forget."""
+        """Publish events immediately as they occur - fire and forget using Pydantic models."""
         pending_events = self.event_manager.get_pending_events()
 
         # Clear pending events immediately since we're not waiting for confirmation
@@ -643,12 +744,15 @@ class AgentExecutionWorkflow:
         # Fire and forget - publish async without waiting for result
         workflow.logger.debug(f"Publishing {len(events_json)} events immediately")
 
-            # Start the activity but don't await it (fire and forget)
+        # Create Pydantic request model for event publishing
+        events_request = WorkflowEventsRequest(events_json=events_json)
+
+        # Start the activity but don't await it (fire and forget)
         await workflow.execute_activity(
-                Activities.PUBLISH_WORKFLOW_EVENTS,
-                events_json,
-                start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=1),  # Single attempt only
+            Activities.PUBLISH_WORKFLOW_EVENTS,
+            args=[events_request],
+            start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=1),  # Single attempt only
         )
 
     async def _finalize_execution(self, result: dict[str, Any]) -> AgentExecutionResult:

@@ -25,7 +25,7 @@ def a2a():
 async def discover(agent_id: str, base_url: str, output_format: str, token: str, api_key: str, dev_user_id: str):
     """Discover an agent's capabilities via A2A well-known endpoint."""
     try:
-        url = f"{base_url}/api/v1/agents/{agent_id}/a2a/well-known"
+        url = f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json"
         
         # Prepare headers for authentication
         headers = {}
@@ -34,7 +34,7 @@ async def discover(agent_id: str, base_url: str, output_format: str, token: str,
         elif api_key:
             headers["X-API-Key"] = api_key
         elif dev_user_id:
-            headers["X-Dev-User-ID"] = dev_user_id
+            headers["x-user-id"] = dev_user_id
         
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
@@ -95,7 +95,7 @@ async def discover(agent_id: str, base_url: str, output_format: str, token: str,
 async def send(agent_id: str, message: str, base_url: str, method: str, stream: bool, output_format: str):
     """Send a message to an agent via A2A protocol."""
     try:
-        url = f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc"
+        url = f"{base_url}/v1/agents/{agent_id}/a2a/rpc"
         
         # Use streaming method if requested
         if stream:
@@ -183,7 +183,7 @@ async def send(agent_id: str, message: str, base_url: str, method: str, stream: 
 async def get_task(agent_id: str, task_id: str, base_url: str, output_format: str):
     """Get task status via A2A protocol."""
     try:
-        url = f"{base_url}/api/v1/agents/{agent_id}/a2a/rpc"
+        url = f"{base_url}/v1/agents/{agent_id}/a2a/rpc"
         
         request_data = {
             "jsonrpc": "2.0",
@@ -229,7 +229,7 @@ async def get_task(agent_id: str, task_id: str, base_url: str, output_format: st
 async def list_agents(base_url: str, output_format: str):
     """List available agents for A2A communication."""
     try:
-        url = f"{base_url}/api/v1/agents"
+        url = f"{base_url}/v1/agents"
         
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:

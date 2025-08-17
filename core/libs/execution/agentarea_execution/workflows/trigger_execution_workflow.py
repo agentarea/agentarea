@@ -25,6 +25,17 @@ class TriggerActivities:
     create_task_from_trigger = "create_task_from_trigger_activity"
 
 
+# Import Pydantic models for trigger activities
+from ..models import (
+    ExecuteTriggerRequest,
+    ExecuteTriggerResult,
+    RecordTriggerExecutionRequest,
+    RecordTriggerExecutionResult,
+    EvaluateTriggerConditionsRequest,
+    EvaluateTriggerConditionsResult,
+)
+
+
 @workflow.defn
 class TriggerExecutionWorkflow:
     """Workflow for executing a single trigger instance.
@@ -81,10 +92,9 @@ class TriggerExecutionWorkflow:
                     "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60
                 }
             # Step 1: Evaluate trigger conditions with enhanced retry policy and circuit breaker
-            conditions_met = await workflow.execute_activity(
+            conditions_result: EvaluateTriggerConditionsResult = await workflow.execute_activity(
                 TriggerActivities.evaluate_trigger_conditions,
-                trigger_id,
-                execution_data,
+                args=[EvaluateTriggerConditionsRequest(trigger_id=trigger_id, event_data=execution_data)],
                 start_to_close_timeout=timedelta(minutes=3),  # Increased timeout for LLM evaluation
                 heartbeat_timeout=timedelta(seconds=30),  # Heartbeat for condition evaluation
                 retry_policy=RetryPolicy(
@@ -104,7 +114,7 @@ class TriggerExecutionWorkflow:
                 )
             )
 
-            if not conditions_met:
+            if not conditions_result.conditions_met:
                 workflow.logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
                 execution_time_ms = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
                 return {
@@ -116,10 +126,9 @@ class TriggerExecutionWorkflow:
                 }
 
             # Step 2: Execute the trigger with enhanced retry policy and safety mechanisms
-            execution_result = await workflow.execute_activity(
+            execution_result_model: ExecuteTriggerResult = await workflow.execute_activity(
                 TriggerActivities.execute_trigger,
-                trigger_id,
-                execution_data,
+                args=[ExecuteTriggerRequest(trigger_id=trigger_id, execution_data=execution_data)],
                 start_to_close_timeout=timedelta(minutes=12),  # Increased timeout for complex triggers
                 heartbeat_timeout=timedelta(minutes=2),  # Heartbeat for long-running activities
                 retry_policy=RetryPolicy(
@@ -144,6 +153,15 @@ class TriggerExecutionWorkflow:
             workflow.logger.info(f"Trigger {trigger_id} executed successfully")
 
             # Add workflow metadata to execution result
+            execution_result = execution_result_model.model_dump()
+            # Normalize UUID fields to strings for consistency in workflow outputs
+            if execution_result.get("trigger_id") is not None:
+                execution_result["trigger_id"] = str(execution_result["trigger_id"])
+            if execution_result.get("task_id") is not None:
+                execution_result["task_id"] = str(execution_result["task_id"]) if execution_result["task_id"] else None
+            if execution_result.get("execution_id") is not None:
+                execution_result["execution_id"] = str(execution_result["execution_id"]) if execution_result["execution_id"] else None
+
             execution_result["workflow_timeout_minutes"] = workflow_timeout.total_seconds() / 60
             execution_result["total_workflow_time_ms"] = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
 
@@ -157,15 +175,17 @@ class TriggerExecutionWorkflow:
             # Record the failure with enhanced retry policy and safety mechanisms
             await workflow.execute_activity(
                 TriggerActivities.record_trigger_execution,
-                trigger_id,
-                {
-                    "status": "failed",
-                    "error_message": str(e),
-                    "execution_time_ms": execution_time_ms,
-                    "executed_at": execution_data.get("execution_time", datetime.utcnow().isoformat()),
-                    "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
-                    "error_type": type(e).__name__
-                },
+                args=[RecordTriggerExecutionRequest(
+                    trigger_id=trigger_id,
+                    execution_data={
+                        "status": "failed",
+                        "error_message": str(e),
+                        "execution_time_ms": execution_time_ms,
+                        "executed_at": execution_data.get("execution_time", datetime.utcnow().isoformat()),
+                        "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
+                        "error_type": type(e).__name__
+                    }
+                )],
                 start_to_close_timeout=timedelta(minutes=2),  # Increased timeout for failure recording
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=1),
@@ -190,16 +210,18 @@ class TriggerExecutionWorkflow:
             # Record the unexpected failure with enhanced retry policy and safety mechanisms
             await workflow.execute_activity(
                 TriggerActivities.record_trigger_execution,
-                trigger_id,
-                {
-                    "status": "failed",
-                    "error_message": f"Unexpected error: {e!s}",
-                    "execution_time_ms": execution_time_ms,
-                    "executed_at": execution_data.get("execution_time", datetime.utcnow().isoformat()),
-                    "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
-                    "error_type": type(e).__name__,
-                    "is_unexpected_error": True
-                },
+                args=[RecordTriggerExecutionRequest(
+                    trigger_id=trigger_id,
+                    execution_data={
+                        "status": "failed",
+                        "error_message": f"Unexpected error: {e!s}",
+                        "execution_time_ms": execution_time_ms,
+                        "executed_at": execution_data.get("execution_time", datetime.utcnow().isoformat()),
+                        "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
+                        "error_type": type(e).__name__,
+                        "is_unexpected_error": True
+                    }
+                )],
                 start_to_close_timeout=timedelta(minutes=2),  # Increased timeout for failure recording
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=1),

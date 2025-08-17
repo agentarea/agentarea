@@ -3,25 +3,26 @@
 This module contains all dataclasses and type definitions used by the agent execution workflow.
 """
 
-from dataclasses import dataclass, field
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 # Define a simple Message class to avoid SDK imports in workflows
-@dataclass
-class Message:
+class Message(BaseModel):
     """Simple message class for workflow use without SDK dependencies."""
+
     role: str
     content: str
     timestamp: str | None = None
-    event_metadata: dict[str, Any] = field(default_factory=dict)  # Use event_metadata instead of metadata
+    # Use event_metadata instead of metadata
+    event_metadata: dict[str, Any] = Field(default_factory=dict)
     tool_call_id: str | None = None
     name: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
 
 
-@dataclass
-class AgentGoal:
+class AgentGoal(BaseModel):
     """Agent goal definition."""
 
     id: str
@@ -35,8 +36,7 @@ class AgentGoal:
 # Message classes moved to agentarea_agents_sdk for better organization
 
 
-@dataclass
-class ToolCall:
+class ToolCall(BaseModel):
     """Structured tool call information."""
 
     id: str
@@ -44,8 +44,7 @@ class ToolCall:
     type: str = "function"
 
 
-@dataclass
-class ToolResult:
+class ToolResult(BaseModel):
     """Result from tool execution."""
 
     tool_call_id: str
@@ -54,8 +53,7 @@ class ToolResult:
     error: str | None = None
 
 
-@dataclass
-class WorkflowEvent:
+class WorkflowEvent(BaseModel):
     """Structured workflow event."""
 
     event_type: str
@@ -64,8 +62,7 @@ class WorkflowEvent:
     iteration: int | None = None
 
 
-@dataclass
-class ExecutionResult:
+class ExecutionResult(BaseModel):
     """Result from main execution loop."""
 
     iterations_completed: int
@@ -74,8 +71,7 @@ class ExecutionResult:
     total_cost: float = 0.0
 
 
-@dataclass
-class AgentExecutionState:
+class AgentExecutionState(BaseModel):
     """Simplified execution state with direct attribute access."""
 
     execution_id: str = ""
@@ -85,10 +81,10 @@ class AgentExecutionState:
     goal: AgentGoal | None = None
     status: str = "initializing"  # Will be set to ExecutionStatus.INITIALIZING in workflow
     current_iteration: int = 0
-    messages: list[Message] = field(default_factory=list)
-    agent_config: dict[str, Any] = field(default_factory=dict)
-    available_tools: list[dict[str, Any]] = field(default_factory=list)
+    messages: list[Message] = Field(default_factory=list)
+    agent_config: dict[str, Any] = Field(default_factory=dict)
+    available_tools: list[dict[str, Any]] = Field(default_factory=list)
     final_response: str | None = None
     success: bool = False
     budget_usd: float | None = None
-    user_context_data: dict[str, Any] = field(default_factory=dict)
+    user_context_data: dict[str, Any] = Field(default_factory=dict)

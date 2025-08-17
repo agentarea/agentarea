@@ -6,7 +6,7 @@ import json
 from uuid import UUID
 
 from .decorator_tool import Toolset, tool_method
-from agentarea_agents_sdk.goal.task_service import InMemoryTaskService
+from agentarea_agents_sdk.tasks.task_service import InMemoryTaskService
 from agentarea_agents_sdk.tasks import TaskStatus
 
 

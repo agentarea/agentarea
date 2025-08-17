@@ -121,6 +121,17 @@ class LLMModel:
                 }
                 for tool_call in message.tool_calls
             ]
+        elif hasattr(message, "function_call") and getattr(message, "function_call"):
+            # Fallback for providers that use function_call instead of tool_calls
+            fc = message.function_call
+            tool_calls = [{
+                "id": "",
+                "type": "function",
+                "function": {
+                    "name": getattr(fc, "name", ""),
+                    "arguments": getattr(fc, "arguments", "") or "",
+                },
+            }]
 
         # Calculate cost information
         cost = 0.0
@@ -286,6 +297,34 @@ class LLMModel:
                                             # If current_args is not valid JSON, just concatenate
                                             tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
 
+                    # Fallback: some providers stream legacy function_call instead of tool_calls
+                    if hasattr(delta, 'function_call') and getattr(delta, 'function_call'):
+                        fc = delta.function_call
+                        index = 0
+                        if index not in tool_calls_buffer:
+                            tool_calls_buffer[index] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            }
+                        if hasattr(fc, 'name') and fc.name:
+                            tool_calls_buffer[index]["function"]["name"] = fc.name
+                        if hasattr(fc, 'arguments') and fc.arguments:
+                            current_args = tool_calls_buffer[index]["function"]["arguments"]
+                            new_args = fc.arguments
+                            if not current_args:
+                                tool_calls_buffer[index]["function"]["arguments"] = new_args
+                            else:
+                                try:
+                                    current_json = json.loads(current_args)
+                                    try:
+                                        new_json = json.loads(new_args)
+                                        current_json.update(new_json)
+                                        tool_calls_buffer[index]["function"]["arguments"] = json.dumps(current_json)
+                                    except json.JSONDecodeError:
+                                        tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
+                                except json.JSONDecodeError:
+                                    tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
                 # Extract usage and cost from final chunk if available
                 if hasattr(chunk, 'usage') and chunk.usage:
                     usage_info = chunk.usage
@@ -437,6 +476,37 @@ class LLMModel:
                                             tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
 
                         # For streaming tool calls, return the current state
+                        delta_tool_calls = [tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())]
+
+                    # Fallback: legacy function_call streaming support
+                    if hasattr(delta, 'function_call') and getattr(delta, 'function_call'):
+                        fc = delta.function_call
+                        index = 0
+                        if index not in tool_calls_buffer:
+                            tool_calls_buffer[index] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            }
+                        if hasattr(fc, 'name') and fc.name:
+                            tool_calls_buffer[index]["function"]["name"] = fc.name
+                        if hasattr(fc, 'arguments') and fc.arguments:
+                            current_args = tool_calls_buffer[index]["function"]["arguments"]
+                            new_args = fc.arguments
+                            if not current_args:
+                                tool_calls_buffer[index]["function"]["arguments"] = new_args
+                            else:
+                                try:
+                                    current_json = json.loads(current_args)
+                                    try:
+                                        new_json = json.loads(new_args)
+                                        current_json.update(new_json)
+                                        tool_calls_buffer[index]["function"]["arguments"] = json.dumps(current_json)
+                                    except json.JSONDecodeError:
+                                        tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
+                                except json.JSONDecodeError:
+                                    tool_calls_buffer[index]["function"]["arguments"] = current_args + new_args
+                        # Provide current state as delta
                         delta_tool_calls = [tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())]
 
                     # Extract usage and cost from chunk if available

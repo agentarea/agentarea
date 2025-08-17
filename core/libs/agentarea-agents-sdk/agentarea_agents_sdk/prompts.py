@@ -49,13 +49,10 @@ Remember: You are {agent_name} - stay in character and leverage your specific ca
 {agent_instruction}
 
 ## Current Task
-Goal: You are a helpful assistant.
+Goal: {goal_description}
 
 Success Criteria:
-      - Understand the task requirements
-      - Use available tools when needed
-      - Provide clear reasoning for actions
-      - Complete the task successfully
+{success_criteria}
 
 ## Available Tools
 {available_tools}

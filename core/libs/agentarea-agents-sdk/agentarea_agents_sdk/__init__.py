@@ -31,6 +31,7 @@ from .runners import (
 # Services
 from .goal.goal_progress_evaluator import GoalProgressEvaluator
 from .tasks.task_service import InMemoryTaskService
+from .context.context_service import ContextService, InMemoryContextService, ContextEvent, events_to_messages
 
 # Tools
 from .tools.base_tool import BaseTool, ToolExecutionError, ToolRegistry
@@ -61,6 +62,10 @@ __all__ = [
     # Services
     "GoalProgressEvaluator",
     "InMemoryTaskService",
+    "ContextService",
+    "InMemoryContextService",
+    "ContextEvent",
+    "events_to_messages",
     # Prompts
     "MessageTemplates",
     "PromptBuilder",
