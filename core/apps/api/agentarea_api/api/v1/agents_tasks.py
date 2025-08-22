@@ -830,10 +830,23 @@ async def stream_task_events(
 
 
 def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
-    """Remove domain-specific fields from protocol event data for internal streams."""
+    """Remove domain-specific fields from protocol event data for internal streams.
+
+    Preserves original_data for tool events and LLM events that need it for proper UI display.
+    """
     if not isinstance(data, dict):
         return data
-    # Shallow filter; current event shape places these keys at the top-level of data
+
+    # For tool events and LLM events, preserve original_data as it contains essential display information
+    if "original_event_type" in data:
+        original_event_type = data.get("original_event_type", "")
+        if (original_event_type.startswith("ToolCall") or
+            original_event_type.startswith("LLMCall") or
+            "tool_name" in str(data.get("original_data", {}))):
+            # Keep original_data for tool and LLM events
+            return {k: v for k, v in data.items() if k != "original_event_type"}
+
+    # For other events, filter out both original_event_type and original_data
     return {k: v for k, v in data.items() if k not in ("original_event_type", "original_data")}
 
 

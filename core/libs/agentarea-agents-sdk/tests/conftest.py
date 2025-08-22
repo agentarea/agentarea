@@ -4,6 +4,7 @@ import os
 import sys
 
 import pytest
+import warnings
 
 # Add the parent directory to the path so we can import the SDK modules
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agentarea_agents_sdk"))
@@ -34,3 +35,11 @@ def skip_if_no_llm():
         except Exception:
             pytest.skip("LLM model not available")
     return _skip_if_no_llm
+
+# Suppress noisy Pydantic serializer warnings coming from LiteLLM provider model types
+warnings.filterwarnings(
+    "ignore",
+    message=r"^Pydantic serializer warnings:",
+    category=UserWarning,
+    module=r"pydantic\.main",
+)

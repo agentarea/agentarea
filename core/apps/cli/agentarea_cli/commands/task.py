@@ -190,16 +190,28 @@ async def _stream_task_creation(
                         pass
 
                     elif clean_event_type in ["LLMCallStarted", "LLMRequestStarted"]:
-                        # Start agent response naturally
-                        click.echo(f"🤖 {agent_name or 'Agent'}: ", nl=False)
-                        is_streaming_response = True
-                        current_response = ""
+                        # Start agent response naturally (guard to avoid duplicate prefixes)
+                        if not is_streaming_response:
+                            click.echo(f"🤖 {agent_name or 'Agent'}: ", nl=False)
+                            is_streaming_response = True
+                            current_response = ""
 
                     elif clean_event_type in ["LLMCallChunk", "LLMResponseChunk"]:
                         if is_streaming_response:
-                            # Extract chunk from original_data (this is where the actual chunk content is)
-                            original_data = event_data.get("original_data", {})
-                            chunk = original_data.get("chunk", "")
+                            # Extract chunk robustly from multiple possible fields
+                            original_data = event_data.get("original_data", {}) or {}
+                            chunk = (
+                                original_data.get("chunk")
+                                or (original_data.get("delta", {}) or {}).get("text")
+                                or data_payload.get("chunk")
+                                or (data_payload.get("delta", {}) or {}).get("text")
+                                or original_data.get("content")
+                                or data_payload.get("content")
+                                or original_data.get("text")
+                                or data_payload.get("text")
+                            )
+                            if isinstance(chunk, (dict, list)):
+                                chunk = str(chunk)
                             if chunk:
                                 current_response += chunk
                                 # Print chunk without newline to create streaming effect
@@ -244,16 +256,14 @@ async def _stream_task_creation(
                         if success and result:
                             # If this looks like content the user should see, display it naturally
                             result_str = str(result).strip()
-                            if result_str and len(result_str) > 10:  # Substantial content
-                                # Check if this is the main response content
-                                if tool_name == "task_complete" or "joke" in result_str.lower() or len(result_str) > 50:
-                                    click.echo(f"\n🤖 Agent: {result_str}")
+                            if result_str:  # Display any non-empty result
+                                # Only elevate task_complete as primary output; no content-based heuristics
+                                if tool_name == "task_complete":
+                                    # Don't add Agent prefix here - it's already handled by streaming
+                                    click.echo(f"\n{result_str}")
                                 else:
                                     # Show tool result briefly
-                                    if len(result_str) > 100:
-                                        result_preview = result_str[:100] + "..."
-                                    else:
-                                        result_preview = result_str
+                                    result_preview = result_str[:100] + "..." if len(result_str) > 100 else result_str
                                     click.echo(f"🔧 {tool_name}: {result_preview}")
                         # Don't show anything for empty or failed tool calls
 
@@ -272,7 +282,7 @@ async def _stream_task_creation(
                         if result and result.strip():
                             # If we haven't streamed any content yet, show the result
                             if not current_response.strip():
-                                click.echo(f"🤖 Agent: {result}")
+                                click.echo(f"🤖 {agent_name or 'Agent'}: {result}")
                             # If the result is different from what we streamed, show it
                             elif result != current_response.strip():
                                 click.echo(f"\n📄 Final result: {result}")

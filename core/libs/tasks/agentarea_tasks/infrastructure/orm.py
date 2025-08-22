@@ -10,6 +10,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+# Import event base model without created_at/updated_at
+from .event_orm import EventBaseModel
+
 
 class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out for now
     """Task ORM model with workspace awareness."""
@@ -28,7 +31,7 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     task_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
 
 
-class TaskEventORM(BaseModel, WorkspaceScopedMixin):
+class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):
     """Task event ORM model for event sourcing."""
 
     __tablename__ = "task_events"
