@@ -206,18 +206,6 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           {label: "Agent Workflow"},
         ],
         description: "Monitor, manage, and review your agent workflows",
-        controls: (
-          <div className="flex gap-4">
-            <Button variant="outline" disabled className="gap-2">
-              <Calendar className="h-4 w-4" />
-              Date Range
-            </Button>
-            <Button variant="outline" disabled className="gap-2">
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-          </div>
-        )
       }}
     >
       <div>

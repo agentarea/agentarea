@@ -28,28 +28,24 @@ import {
 import Link from "next/link"
 import { useAuth } from "@/hooks/useAuth";
 
-export function NavUser({
-  user: userProps,
-}: {
-  user: {
-    name: string;
-    email: string;
-    avatar: string;
-  };
-}) {
+export function NavUser() {
   const { isMobile } = useSidebar();
   const { user: authUser, isLoaded, signOut } = useAuth();
   const user = authUser ? {
     name: authUser.fullName || authUser.firstName || "User",
     email: authUser.email || "",
     avatar: authUser.imageUrl || ""
-} : userProps;
+  } : null;
 
   const handleLogout = async () => {
     await signOut();
   };
 
   if (!isLoaded) {
+    return null;
+  }
+
+  if (!user) {
     return null;
   }
 

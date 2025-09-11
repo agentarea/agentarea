@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import MainLayout from "@/components/MainLayout";
+import AuthGuard from "@/components/auth/AuthGuard";
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
@@ -50,5 +51,9 @@ export default function ConditionalLayout({ children, sidebarDefaultOpen }: Cond
   }
   
   // Use MainLayout for known routes or authenticated users
-  return <MainLayout sidebarDefaultOpen={sidebarDefaultOpen}>{children}</MainLayout>;
+  return (
+    <AuthGuard>
+      <MainLayout sidebarDefaultOpen={sidebarDefaultOpen}>{children}</MainLayout>
+    </AuthGuard>
+  );
 }
