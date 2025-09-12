@@ -1,5 +1,5 @@
 # Development stage with live reload
-FROM golang:1.24-alpine AS development
+FROM golang:1.25-alpine AS development
 
 # Install development dependencies including Air for live reload and Traefik
 RUN apk add --no-cache \
@@ -67,7 +67,7 @@ ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["air", "-c", ".air.toml"]
 
 # Production build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates
