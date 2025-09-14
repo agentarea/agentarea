@@ -58,8 +58,8 @@ existing_files = []
 
 if 'navigation' in config:
     navigation = config['navigation']
-    # Handle both old array format and new object format
-    groups = navigation.get('groups', navigation) if isinstance(navigation, dict) else navigation
+    # Handle new object format with groups
+    groups = navigation.get('groups', []) if isinstance(navigation, dict) else []
     
     for section in groups:
         if 'pages' in section:

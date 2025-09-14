@@ -1,48 +1,76 @@
 {
-  "name": "Agentarea docs",
+  "name": "AgentArea Platform Documentation",
   "theme": "maple",
-  "colors": { "primary": "#3498db" },
+  "colors": { 
+    "primary": "#3498db",
+    "background": {
+      "dark": "#111827"
+    }
+  },
+  "logo": {
+    "dark": "/logo-dark.png",
+    "light": "/logo-light.png"
+  },
+  "favicon": "/favicon.png",
   "navigation": {
     "groups": [
       {
         "group": "Getting Started",
+        "icon": "rocket",
         "pages": [
-          "project-overview",
-          "GETTING_STARTED",
-          "quick-reference",
-          "TROUBLESHOOTING"
+          "index",
+          "platform-overview",
+          "getting-started",
+          "troubleshooting"
         ]
       },
       {
-        "group": "Architecture",
+        "group": "Building with AgentArea",
+        "icon": "bot",
         "pages": [
-          "architecture_insights",
-          "architecture-decisions",
-          "mcp_architecture"
+          "building-agents",
+          "agent-communication",
+          "mcp-integration"
         ]
       },
       {
-        "group": "Implementation",
+        "group": "Infrastructure & Deployment",
+        "icon": "server",
         "pages": [
-          "CONSOLIDATED_IMPLEMENTATION_PLAN",
-          "mcp-implementation-plan",
-          "auth_implementation"
+          "infrastructure",
+          "deployment",
+          "secrets-management",
+          "monitoring"
         ]
       },
       {
-        "group": "API Reference",
+        "group": "Reference",
+        "icon": "book",
         "pages": [
-          "API_REFERENCE"
+          "api-reference",
+          "architecture",
+          "security"
         ]
       },
       {
-        "group": "Advanced Topics",
+        "group": "Community",
+        "icon": "users",
         "pages": [
-          "agent_to_agent_communication",
-          "task_assignment",
-          "dependency_injection_patterns"
+          "contributing",
+          "community",
+          "roadmap",
+          "changelog"
         ]
       }
     ]
+  },
+  "footerSocials": {
+    "github": "https://github.com/agentarea/agentarea",
+    "discord": "https://discord.gg/agentarea"
+  },
+  "analytics": {
+    "posthog": {
+      "apiKey": "your-posthog-api-key"
+    }
   }
 }
