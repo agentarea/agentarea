@@ -52,6 +52,9 @@ providers:
     - name: qwen2.5
       description: Meta's Llama 3.1 model
       context_window: 4096
+    - name: qwen3:0.6b
+      description: Qwen model
+      context_window: 4096
     - name: llama2
       description: Meta's Llama 2 model
       context_window: 4096

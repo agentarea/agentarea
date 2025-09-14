@@ -2,10 +2,7 @@
   "name": "AgentArea Platform Documentation",
   "theme": "maple",
   "colors": { 
-    "primary": "#3498db",
-    "background": {
-      "dark": "#111827"
-    }
+    "primary": "#3498db"
   },
   "logo": {
     "dark": "/logo-dark.png",
