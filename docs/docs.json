@@ -1,5 +1,46 @@
 {
   "name": "Agentarea docs",
   "theme": "maple",
-  "colors": { "primary": "#3498db" }
+  "colors": { "primary": "#3498db" },
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "project-overview",
+        "GETTING_STARTED",
+        "quick-reference",
+        "TROUBLESHOOTING"
+      ]
+    },
+    {
+      "group": "Architecture",
+      "pages": [
+        "architecture_insights",
+        "architecture-decisions",
+        "mcp_architecture"
+      ]
+    },
+    {
+      "group": "Implementation",
+      "pages": [
+        "CONSOLIDATED_IMPLEMENTATION_PLAN",
+        "mcp-implementation-plan",
+        "auth_implementation"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "API_REFERENCE"
+      ]
+    },
+    {
+      "group": "Advanced Topics",
+      "pages": [
+        "agent_to_agent_communication",
+        "task_assignment",
+        "dependency_injection_patterns"
+      ]
+    }
+  ]
 }

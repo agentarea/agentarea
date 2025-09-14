@@ -1,0 +1,16 @@
+{
+  "name": "agentarea-docs",
+  "version": "1.0.0",
+  "description": "Agentarea documentation with Mintlify",
+  "scripts": {
+    "dev": "mint dev",
+    "validate": "mint validate",
+    "validate-full": "./validate-docs.sh",
+    "build": "mint build",
+    "preview": "mint dev --port 3000",
+    "check": "npm run validate-full"
+  },
+  "devDependencies": {
+    "mintlify": "^4.0.0"
+  }
+}

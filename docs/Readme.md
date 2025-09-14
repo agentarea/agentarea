@@ -86,6 +86,39 @@ python test_mcp_flow.py
 
 See [Documentation Index](DOCUMENTATION_INDEX.md) for detailed status of all documents.
 
+## 📖 Documentation Development (Mintlify)
+
+This documentation is built with [Mintlify](https://mintlify.com). For local development and validation:
+
+### Local Setup
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev              # Available at http://localhost:3000
+```
+
+### Validation
+```bash
+npm run check           # Full validation (recommended)
+npm run validate        # Quick Mintlify validation
+./validate-docs.sh      # Direct script execution
+```
+
+### CI/CD Integration
+Documentation validation runs automatically on GitHub Actions for:
+- ✅ `docs.json` syntax and structure
+- ✅ All referenced files exist
+- ✅ Mintlify configuration validity
+- ✅ Build success and internal links
+
+### Adding Documentation
+1. Create `.md` file in `docs/` directory
+2. Add page to `navigation` in `docs.json`
+3. Run `npm run check` to validate
+4. Test with `npm run dev`
+
 ---
 
 *This documentation is actively maintained. For questions or improvements, please contact the development team.*
