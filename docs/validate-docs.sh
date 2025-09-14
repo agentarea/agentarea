@@ -34,6 +34,12 @@ if ! grep -q '"navigation"' docs.json; then
     exit 1
 fi
 
+# Check navigation structure
+if ! python3 -c "import json; config=json.load(open('docs.json')); assert isinstance(config.get('navigation', {}), dict)" 2>/dev/null; then
+    echo -e "${RED}❌ navigation field must be an object, not an array${NC}"
+    exit 1
+fi
+
 echo -e "${GREEN}✅ docs.json structure is valid${NC}"
 
 echo -e "${BLUE}📋 Step 2: Checking documentation files...${NC}"
@@ -51,7 +57,11 @@ missing_files = []
 existing_files = []
 
 if 'navigation' in config:
-    for section in config['navigation']:
+    navigation = config['navigation']
+    # Handle both old array format and new object format
+    groups = navigation.get('groups', navigation) if isinstance(navigation, dict) else navigation
+    
+    for section in groups:
         if 'pages' in section:
             for page in section['pages']:
                 # Check for .md file
