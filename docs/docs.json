@@ -1,73 +1,174 @@
 {
-  "name": "AgentArea Platform Documentation",
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "AgentArea Platform",
   "theme": "maple",
   "colors": { 
-    "primary": "#3498db"
+    "primary": "#3498db",
+    "primaryDark": "#2980b9"
   },
   "logo": {
     "dark": "/logo-dark.png",
     "light": "/logo-light.png"
   },
   "favicon": "/favicon.png",
+  "versions": ["v0.2"],
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true
+  },
+  "search": {
+    "prompt": "Search AgentArea documentation..."
+  },
   "navigation": {
     "groups": [
       {
-        "group": "Getting Started",
+        "group": "Get Started",
         "icon": "rocket",
         "pages": [
-          "index",
-          "platform-overview",
-          "getting-started",
-          "troubleshooting"
+          {
+            "page": "welcome",
+            "icon": "home"
+          },
+          {
+            "page": "getting-started",
+            "icon": "play"
+          },
+          {
+            "page": "platform-overview",
+            "icon": "eye"
+          }
         ]
       },
       {
-        "group": "Building with AgentArea",
-        "icon": "bot",
+        "group": "Core Concepts",
+        "icon": "lightbulb",
         "pages": [
-          "building-agents",
-          "agent-communication",
-          "mcp-integration"
+          {
+            "page": "building-agents",
+            "icon": "bot"
+          },
+          {
+            "page": "agent-communication",
+            "icon": "network"
+          },
+          {
+            "page": "mcp-integration",
+            "icon": "plug"
+          }
         ]
       },
       {
-        "group": "Infrastructure & Deployment",
+        "group": "Examples",
+        "icon": "play",
+        "pages": [
+          {
+            "page": "examples",
+            "icon": "folder-open"
+          }
+        ]
+      },
+      {
+        "group": "Deployment",
         "icon": "server",
         "pages": [
-          "infrastructure",
-          "deployment",
-          "secrets-management",
-          "monitoring"
+          {
+            "page": "infrastructure",
+            "icon": "cpu"
+          },
+          {
+            "page": "deployment",
+            "icon": "upload"
+          },
+          {
+            "page": "secrets-management",
+            "icon": "key"
+          },
+          {
+            "page": "monitoring",
+            "icon": "activity"
+          }
         ]
       },
       {
-        "group": "Reference",
+        "group": "API Reference",
+        "icon": "code",
+        "pages": [
+          {
+            "page": "api-reference",
+            "icon": "terminal"
+          }
+        ]
+      },
+      {
+        "group": "Resources",
         "icon": "book",
         "pages": [
-          "api-reference",
-          "architecture",
-          "security"
+          {
+            "page": "architecture",
+            "icon": "layers"
+          },
+          {
+            "page": "security",
+            "icon": "shield"
+          },
+          {
+            "page": "troubleshooting",
+            "icon": "help-circle"
+          }
         ]
       },
       {
         "group": "Community",
         "icon": "users",
         "pages": [
-          "contributing",
-          "community",
-          "roadmap",
-          "changelog"
+          {
+            "page": "contributing",
+            "icon": "git-pull-request"
+          },
+          {
+            "page": "community",
+            "icon": "heart"
+          },
+          {
+            "page": "roadmap",
+            "icon": "map"
+          },
+          {
+            "page": "changelog",
+            "icon": "clock"
+          }
         ]
       }
     ]
   },
   "footerSocials": {
-    "github": "https://github.com/agentarea/agentarea",
-    "discord": "https://discord.gg/agentarea"
+    "github": "https://github.com/agentarea/agentarea"
   },
-  "analytics": {
-    "posthog": {
-      "apiKey": "your-posthog-api-key"
+  "anchors": [
+    {
+      "name": "API Playground",
+      "icon": "code",
+      "url": "http://localhost:8000/docs"
+    },
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/agentarea/agentarea"
+    },
+    {
+      "name": "Community",
+      "icon": "discord",
+      "url": "https://github.com/agentarea/agentarea/discussions"
     }
+  ],
+  "topbarLinks": [
+    {
+      "name": "Support",
+      "url": "https://github.com/agentarea/agentarea/discussions"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "https://github.com/agentarea/agentarea"
   }
 }

@@ -6,21 +6,17 @@ Welcome to the AgentArea community! We're building the future of AI agent platfo
 
 ## 🌟 Join Our Community
 
-<CardGroup cols={2}>
-  <Card title="Discord Server" icon="message-circle" href="https://discord.gg/agentarea">
-    Real-time chat, support, and collaboration with other developers building AI agents
+<CardGroup cols={3}>
+  <Card title="GitHub Repository" icon="code" href="https://github.com/agentarea/agentarea">
+    Source code, issues, contributions, and project management
   </Card>
   
   <Card title="GitHub Discussions" icon="github" href="https://github.com/agentarea/agentarea/discussions">
     Design discussions, feature proposals, Q&A, and community announcements
   </Card>
   
-  <Card title="GitHub Repository" icon="code" href="https://github.com/agentarea/agentarea">
-    Source code, issues, contributions, and project management
-  </Card>
-  
-  <Card title="Community Forum" icon="users" href="https://forum.agentarea.ai">
-    Long-form discussions, tutorials, showcases, and community-driven content
+  <Card title="GitHub Issues" icon="bug" href="https://github.com/agentarea/agentarea/issues">
+    Report bugs, request features, and track development progress
   </Card>
 </CardGroup>
 
@@ -224,27 +220,25 @@ We encourage community members to create educational content:
 - **Workshops** - Deep-dive technical training sessions
 - **Meetups** - Local in-person gatherings
 
-## 📊 Community Stats & Growth
+## 📊 Growing Community
 
-<CardGroup cols={4}>
-  <Card title="Discord Members" icon="users">
-    **2,500+**
-    Active community members
+We're building a vibrant community of developers, researchers, and businesses interested in AI agents. Join us to:
+
+<CardGroup cols={2}>
+  <Card title="Connect & Learn" icon="users">
+    Meet other developers building AI agent solutions
   </Card>
   
-  <Card title="GitHub Stars" icon="star">
-    **1,200+**
-    Developers following the project
+  <Card title="Share & Showcase" icon="star">
+    Show off your projects and learn from others
   </Card>
   
-  <Card title="Contributors" icon="git-branch">
-    **45+**
-    Code contributors
+  <Card title="Contribute & Grow" icon="git-branch">
+    Help improve AgentArea and grow your skills
   </Card>
   
-  <Card title="Projects Built" icon="rocket">
-    **150+**
-    Community AI agent projects
+  <Card title="Build Together" icon="rocket">
+    Collaborate on innovative AI agent projects
   </Card>
 </CardGroup>
 
@@ -328,7 +322,7 @@ We encourage community members to create educational content:
 
 <Steps>
   <Step title="Search First">
-    Check documentation, GitHub issues, and Discord history before asking
+    Check documentation and GitHub issues/discussions before asking
   </Step>
   
   <Step title="Provide Context">
@@ -344,19 +338,12 @@ We encourage community members to create educational content:
   </Step>
 </Steps>
 
-## 🎉 Community Success Stories
+## 🎉 Join Our Growing Community
 
-> *"AgentArea's community helped me build my first multi-agent system in just two weeks. The support and resources are incredible!"*  
-> **— Sarah Chen, Startup Founder**
-
-> *"Contributing to AgentArea has been an amazing learning experience. The maintainers are supportive and the code quality is top-notch."*  
-> **— Marcus Rodriguez, Senior Developer**
-
-> *"The Discord community is so welcoming! I went from complete beginner to building production AI agents in just a few months."*  
-> **— Alex Kim, Student Developer**
+AgentArea is an open-source platform that thrives on community contributions and collaboration. Whether you're just getting started with AI agents or you're an experienced developer, there's a place for you in our community.
 
 ---
 
 <Note>
-Ready to join our community? **[Join our Discord](https://discord.gg/agentarea)** and introduce yourself! We can't wait to see what you'll build with AgentArea. 🚀
+Ready to join our community? **[Start a discussion on GitHub](https://github.com/agentarea/agentarea/discussions)** and introduce yourself! We can't wait to see what you'll build with AgentArea. 🚀
 </Note>

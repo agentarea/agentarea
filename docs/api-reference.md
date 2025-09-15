@@ -302,7 +302,7 @@ POST /v1/auth/login
   "user": {
     "id": "user-123",
     "username": "your-username",
-    "email": "user@example.com"
+    "email": "developer@localhost"
   }
 }
 ```
@@ -337,7 +337,7 @@ POST /v1/tasks/
   "agent_id": "agent-123",
   "priority": "high",
   "data": {
-    "document_url": "https://example.com/doc.pdf",
+    "document_url": "http://localhost:8000/uploads/doc.pdf",
     "extract_fields": ["name", "date", "amount"]
   }
 }
@@ -533,7 +533,7 @@ const agent = await client.createAgent('test-agent', 'chat', { model: 'gpt-4' })
 - **[Authentication Guide](auth_implementation.md)** - Detailed auth implementation
 - **[A2A Integration](../core/docs/A2A_INTEGRATION_GUIDE.md)** - Agent communication
 - **[MCP Architecture](mcp_architecture.md)** - MCP system design
-- **[Getting Started](GETTING_STARTED.md)** - Setup and first steps
+- **[Getting Started](getting-started.md)** - Setup and first steps
 
 ---
 

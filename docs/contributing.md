@@ -327,8 +327,8 @@ We follow the [Contributor Covenant](https://www.contributor-covenant.org/):
     Bug reports, feature requests, and project discussions
   </Card>
   
-  <Card title="Discord" icon="message-circle">
-    Real-time chat, community support, and collaboration
+  <Card title="GitHub Discussions" icon="message-circle">
+    Community discussions, support, and collaboration
   </Card>
   
   <Card title="GitHub Discussions" icon="chat">
@@ -357,8 +357,7 @@ We follow the [Contributor Covenant](https://www.contributor-covenant.org/):
 **Stuck on something?** Don't hesitate to ask for help:
 
 - **GitHub Issues**: For bug reports and feature requests
-- **Discord**: For real-time community support
-- **GitHub Discussions**: For design questions and general discussion
+- **GitHub Discussions**: For community support and design questions
 - **Documentation**: Check our comprehensive guides and API reference
 
 We're here to help you succeed in contributing to AgentArea! 🚀

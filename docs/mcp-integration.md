@@ -299,7 +299,7 @@ The `json_spec` in `MCPServerInstance` contains the complete runtime configurati
 - Event parsing and data extraction (minor bug fix needed)
 - Container creation from `json_spec`
 
-### 📋 TODO
+### 📋 Future Enhancements
 - Secret resolution in Go service
 - URL-based MCP provider support
 - Health monitoring and status updates

@@ -225,25 +225,9 @@ Stay up to date with the latest AgentArea releases, bug fixes, and new features.
 
 ## Security Updates
 
-### Critical Security Fixes
+### Security Updates
 
-<Accordion>
-  <AccordionItem title="CVE-2024-001 (Fixed in v0.2.1)">
-    **Issue**: SQL injection vulnerability in agent query endpoint  
-    **Severity**: High  
-    **Impact**: Potential data exposure  
-    **Fix**: Implemented parameterized queries and input validation  
-    **Action Required**: Update to v0.2.1 immediately
-  </AccordionItem>
-  
-  <AccordionItem title="CVE-2024-002 (Fixed in v0.1.2)">
-    **Issue**: JWT token validation bypass  
-    **Severity**: Medium  
-    **Impact**: Unauthorized access possible  
-    **Fix**: Enhanced token validation logic  
-    **Action Required**: Update authentication tokens
-  </AccordionItem>
-</Accordion>
+Security fixes and improvements are documented in release notes. We follow responsible disclosure practices and address security issues promptly.
 
 ## Performance Improvements
 
@@ -258,18 +242,13 @@ Stay up to date with the latest AgentArea releases, bug fixes, and new features.
 
 ## Community Contributions
 
-We thank all our contributors! 🎉
+We welcome and appreciate all community contributions! If you've contributed to AgentArea, thank you for helping make the platform better for everyone.
 
-### v0.2.1 Contributors
-- @contributor1 - MCP integration improvements
-- @contributor2 - Documentation enhancements  
-- @contributor3 - Performance optimizations
-- @contributor4 - Security fixes
-
-### v0.2.0 Contributors  
-- @contributor5 - Multi-agent communication framework
-- @contributor6 - CLI tool development
-- @contributor7 - Database schema improvements
+To contribute to future releases:
+- Check our [Contributing Guide](/contributing) for guidelines
+- Look for "good first issue" labels on GitHub  
+- Join our [Discord community](/community) for support
+- Submit pull requests for bug fixes and features
 
 ## Getting Help
 
@@ -288,7 +267,7 @@ We thank all our contributors! 🎉
 <Note>
 **Stay Updated**: 
 - 🔔 Watch our [GitHub repository](https://github.com/agentarea/agentarea) for release notifications
-- 💬 Join our [Discord](https://discord.gg/agentarea) for real-time updates
+- 💬 Follow [GitHub Discussions](https://github.com/agentarea/agentarea/discussions) for updates
 - 📧 Subscribe to our release newsletter for detailed release notes
 </Note>
 

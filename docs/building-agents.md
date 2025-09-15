@@ -98,7 +98,7 @@ Every AgentArea agent consists of several key components:
       -d '{
         "sources": [
           {"type": "document", "path": "/docs/user_manual.pdf"},
-          {"type": "url", "url": "https://api.example.com/docs"},
+          {"type": "url", "url": "http://localhost:8000/api/docs"},
           {"type": "database", "connection": "postgres://..."}
         ]
       }'
@@ -430,5 +430,5 @@ curl http://localhost:8000/v1/agents/{agent_id}/conversations/export
 ---
 
 <Note>
-Need help? Join our [Discord community](https://discord.gg/your-discord) or check out the [API Reference](/API_REFERENCE) for detailed technical documentation.
+Need help? Check out [GitHub Discussions](https://github.com/agentarea/agentarea/discussions) or the [API Reference](/api-reference) for detailed technical documentation.
 </Note>

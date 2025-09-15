@@ -254,7 +254,7 @@ AgentArea transforms how you work with AI by enabling you to:
   <Step title="Quick Setup">
     Get AgentArea running locally in 5 minutes:
     ```bash
-    git clone https://github.com/your-org/agentarea
+    git clone https://github.com/agentarea/agentarea
     cd agentarea
     make dev-up
     ```
@@ -306,8 +306,8 @@ AgentArea transforms how you work with AI by enabling you to:
 
 <CardGroup cols={2}>
   <Card title="Community Resources" icon="users">
-    - [GitHub Repository](https://github.com/your-org/agentarea)
-    - [Discord Community](https://discord.gg/your-discord)
+    - [GitHub Repository](https://github.com/agentarea/agentarea)
+    - [GitHub Discussions](https://github.com/agentarea/agentarea/discussions)
     - [Community Forum](https://forum.agentarea.ai)
     - [YouTube Tutorials](https://youtube.com/@agentarea)
   </Card>
@@ -325,7 +325,7 @@ AgentArea transforms how you work with AI by enabling you to:
 Ready to start building with AI agents? Here are your next steps:
 
 <CardGroup cols={3}>
-  <Card title="Quick Start Guide" icon="rocket" href="/GETTING_STARTED">
+  <Card title="Quick Start Guide" icon="rocket" href="/getting-started">
     Complete setup and first agent tutorial
   </Card>
   
@@ -333,7 +333,7 @@ Ready to start building with AI agents? Here are your next steps:
     Step-by-step agent development guide
   </Card>
   
-  <Card title="Explore the API" icon="terminal" href="/API_REFERENCE">
+  <Card title="Explore the API" icon="terminal" href="/api-reference">
     Comprehensive API documentation
   </Card>
 </CardGroup>
@@ -341,5 +341,5 @@ Ready to start building with AI agents? Here are your next steps:
 ---
 
 <Note>
-**Ready to revolutionize how you work with AI?** [Get started now](/GETTING_STARTED) or join our [community](https://discord.gg/your-discord) to connect with other builders!
+**Ready to revolutionize how you work with AI?** [Get started now](/getting-started) or join our [community](https://github.com/agentarea/agentarea/discussions) to connect with other builders!
 </Note>

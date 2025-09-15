@@ -55,7 +55,7 @@ await self.event_broker.publish(
 ```python
 # External MCP Provider
 {
-    "endpoint_url": "https://api.example.com/mcp",
+    "endpoint_url": "http://localhost:3001",
     "headers": {
         "Authorization": "Bearer token"
     }

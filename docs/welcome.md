@@ -1,18 +1,27 @@
 # Welcome to AgentArea
 
 <Info>
-AgentArea is a comprehensive platform for building, deploying, and managing AI agents at scale. Whether you're creating simple chatbots or complex multi-agent systems, AgentArea provides the tools and infrastructure you need.
+Build, deploy, and manage AI agents at scale. Create your first agent in under 5 minutes with pre-built templates and seamless MCP integration.
 </Info>
+
+<CardGroup cols={2}>
+  <Card title="⚡ Quick Start" icon="rocket" href="/getting-started">
+    Get AgentArea running locally in 5 minutes
+  </Card>
+  <Card title="🤖 Build Your First Agent" icon="bot" href="/building-agents">
+    Create a working AI agent with our templates
+  </Card>
+</CardGroup>
 
 ## 🚀 What is AgentArea?
 
-AgentArea is a cloud-native platform that enables developers, businesses, and organizations to:
+AgentArea is an open-source platform that enables developers to:
 
-- **Build AI Agents** with pre-built templates and customizable components
-- **Deploy at Scale** with automated infrastructure and load balancing
-- **Manage Conversations** across multiple channels and contexts
-- **Integrate Seamlessly** with existing systems and APIs
-- **Monitor Performance** with real-time analytics and debugging tools
+- **Build AI Agents** with templates and customizable components
+- **Deploy at Scale** with Docker and Kubernetes support
+- **Enable Agent Communication** with built-in multi-agent workflows
+- **Integrate Tools** using the Model Context Protocol (MCP)
+- **Monitor Performance** with real-time analytics and debugging
 
 ## ✨ Key Features
 
@@ -95,7 +104,7 @@ Get started with AgentArea in just a few minutes:
   <Step title="Installation">
     Clone the repository and start the development environment:
     ```bash
-    git clone https://github.com/your-org/agentarea
+    git clone https://github.com/agentarea/agentarea
     cd agentarea
     make dev-up
     ```
@@ -118,28 +127,28 @@ Get started with AgentArea in just a few minutes:
 ## 📚 Next Steps
 
 <CardGroup cols={3}>
-  <Card title="Getting Started Guide" icon="rocket" href="/GETTING_STARTED">
+  <Card title="Getting Started Guide" icon="rocket" href="/getting-started">
     Complete step-by-step setup and tutorial
   </Card>
   
-  <Card title="Build Your First Agent" icon="bot" href="/agent_to_agent_communication">
+  <Card title="Core Concepts" icon="lightbulb" href="/building-agents">
     Learn how to create and customize AI agents
   </Card>
   
-  <Card title="API Documentation" icon="terminal" href="/API_REFERENCE">
+  <Card title="API Documentation" icon="terminal" href="/api-reference">
     Explore our comprehensive API reference
   </Card>
 </CardGroup>
 
 ## 🤝 Community & Support
 
-- **GitHub**: [AgentArea Repository](https://github.com/your-org/agentarea)
-- **Discord**: [Join our community](https://discord.gg/your-discord)
+- **GitHub**: [AgentArea Repository](https://github.com/agentarea/agentarea)
 - **Documentation**: You're reading it! 📖
 - **Issues**: Report bugs and request features on GitHub
+- **Contributing**: Check our [Contributing Guide](/contributing)
 
 ---
 
 <Note>
-Ready to build the future of AI agents? [Get started now](/GETTING_STARTED) or [explore our API](/API_REFERENCE)!
+Ready to build the future of AI agents? [Get started now](/getting-started) or [explore our API](/api-reference)!
 </Note>

@@ -49,6 +49,12 @@ jobs:
             exit 1
           fi
           
+          # Check navigation structure
+          if ! python3 -c "import json; config=json.load(open('docs.json')); assert isinstance(config.get('navigation', {}), dict)" 2>/dev/null; then
+            echo "❌ navigation field must be an object, not an array"
+            exit 1
+          fi
+          
           echo "✅ docs.json structure is valid"
 
       - name: Validate Mintlify configuration
@@ -77,7 +83,11 @@ jobs:
           missing_files = []
           
           if 'navigation' in config:
-              for section in config['navigation']:
+              navigation = config['navigation']
+              # Handle new object format with groups
+              groups = navigation.get('groups', []) if isinstance(navigation, dict) else []
+              
+              for section in groups:
                   if 'pages' in section:
                       for page in section['pages']:
                           # Check for .md file

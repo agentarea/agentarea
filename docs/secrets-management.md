@@ -502,8 +502,8 @@ AgentArea requires various types of secrets for secure operation:
         organizations:
         - agentarea
       dnsNames:
-      - agentarea.example.com
-      - api.agentarea.example.com
+      - localhost
+      - api.localhost
       issuerRef:
         name: letsencrypt-prod
         kind: ClusterIssuer

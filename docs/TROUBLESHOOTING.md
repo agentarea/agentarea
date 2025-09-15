@@ -445,7 +445,7 @@ When reporting issues, include:
 
 ### Support Channels
 - **Documentation**: [Documentation Index](DOCUMENTATION_INDEX.md)
-- **API Reference**: [API Reference](API_REFERENCE.md)
+- **API Reference**: [API Reference](api-reference.md)
 - **Architecture**: [System Architecture](../core/docs/SYSTEM_ARCHITECTURE.md)
 - **Team Support**: Contact development team
 
@@ -457,4 +457,4 @@ When reporting issues, include:
 ---
 
 *Troubleshooting guide last updated: January 2025*
-*For additional help, refer to the [Getting Started Guide](GETTING_STARTED.md) or contact the development team.*
+*For additional help, refer to the [Getting Started Guide](getting-started.md) or check [GitHub Discussions](https://github.com/agentarea/agentarea/discussions).*

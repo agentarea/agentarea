@@ -1,8 +1,12 @@
 # Getting Started with AgentArea
 
-## 🎯 Welcome to AgentArea
+<Info>
+Create your first AI agent in under 5 minutes. This guide walks you through installation, setup, and building your first working agent.
+</Info>
 
-AgentArea is a cutting-edge platform for AI agent orchestration and communication. This guide will get you up and running in under 30 minutes.
+<Warning>
+Make sure you have Docker installed and running before starting.
+</Warning>
 
 ## 📋 Prerequisites
 
@@ -22,7 +26,7 @@ AgentArea is a cutting-edge platform for AI agent orchestration and communicatio
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-org/agentarea.git
+git clone https://github.com/agentarea/agentarea.git
 cd agentarea
 ```
 
@@ -214,8 +218,8 @@ docker compose -f docker-compose.dev.yaml up -d
 1. **Check Logs**: `docker compose -f docker-compose.dev.yaml logs -f`
 2. **Service Status**: `docker compose -f docker-compose.dev.yaml ps`
 3. **Health Checks**: Visit health endpoints listed above
-4. **Documentation**: Refer to [Documentation Index](DOCUMENTATION_INDEX.md)
-5. **Team Support**: Contact the development team
+4. **Documentation**: Check our [troubleshooting guide](/troubleshooting)
+5. **Community Support**: Ask for help in [GitHub Discussions](https://github.com/agentarea/agentarea/discussions)
 
 ## 🎉 Success!
 
@@ -224,6 +228,17 @@ If you've reached this point, you should have:
 - ✅ All services healthy
 - ✅ Database connected
 - ✅ First API call successful
+
+## 🚀 What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Build Your First Agent" icon="bot" href="/building-agents">
+    Create a working AI agent with our step-by-step guide
+  </Card>
+  <Card title="Explore Examples" icon="play" href="/examples">
+    See real-world examples and use cases
+  </Card>
+</CardGroup>
 
 **Ready to build amazing AI agent experiences!** 🚀
 
