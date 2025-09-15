@@ -202,6 +202,19 @@ body {
   }
 }
 
+/* Hide dashed separator for the last message */
+.aa-message-wrapper:last-child .aa-dashed {
+  display: none;
+}
+/* Hide dashed when wrapper is immediately before the end marker */
+.aa-message-wrapper:has(+ .aa-messages-end) .aa-dashed {
+  display: none;
+}
+/* Hide dashed when the next message is a user message (end of assistant group) */
+.aa-message-wrapper:has(+ .aa-user-message) .aa-dashed {
+  display: none;
+}
+
 /* Sonner Toast Styles */
 [data-sonner-toast][data-type="error"] {
   background-color: rgba(254, 226, 226, 0.95) !important;

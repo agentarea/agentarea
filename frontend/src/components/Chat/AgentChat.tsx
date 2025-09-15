@@ -381,7 +381,7 @@ export default function AgentChat({
               );
             }
           })}
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
       </CardContent>
       <CardFooter className="p-0">
