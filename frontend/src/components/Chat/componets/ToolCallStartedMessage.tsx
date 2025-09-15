@@ -11,7 +11,7 @@ interface ToolCallStartedData {
 const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({ data }) => {
   return (
     <MessageWrapper>
-      <BaseMessage headerLeft={`Calling ${data.tool_name}...`} >
+      <BaseMessage headerLeft={`Tool Call Started: ${data.tool_name}`} >
         {Object.keys(data.arguments).length > 0 && (
           <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
             <details className="cursor-pointer">
