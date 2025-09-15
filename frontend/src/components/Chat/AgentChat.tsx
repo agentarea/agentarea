@@ -344,15 +344,14 @@ export default function AgentChat({
 
   return (
     <Card className={cn("flex justify-between flex-col h-full max-h-full shadow-none p-0 hover:shadow-none cursor-auto", className)}>
-      <CardHeader className="border-b">
-        <CardTitle className="flex items-center gap-2">
-          <MessageCircle className="h-5 w-5 text-primary" />
+      <CardHeader className="border-b p-4">
+        <CardTitle className="flex items-center gap-2 ">
           Chat with {agent.name}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col overflow-auto p-0">
+      <CardContent className="flex-1 flex flex-col overflow-auto p-0 bg-chatBackground">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto space-y-4 p-4">
+        <div className="flex-1 overflow-y-auto space-y-3 py-3 px-3">
           {messages.map((message) => {
             // Handle different message types
             if ('type' in message) {

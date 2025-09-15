@@ -13,6 +13,7 @@ export default {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			text: 'hsl(var(--text))',
+			chatBackground: 'hsl(var(--chat-background))',
   			card: {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
