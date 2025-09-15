@@ -61,6 +61,9 @@ providers:
     - name: codellama
       description: Code-optimized Llama model
       context_window: 4096
+    - name: qwen3:0.6b
+      description: Qwen 3:0.6b model
+      context_window: 4096
     icon: ollama
   azure_openai:
     id: 97e6f0ca-568d-493c-a329-82c9446d4608

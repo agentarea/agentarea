@@ -24,7 +24,7 @@ type ContentBlockProps = {
 export default function ContentBlock({ children, header }: ContentBlockProps) {
   return (
     <div className="
-        px-4 py-5
+        px-4 py-5 h-full flex flex-col
     ">
         {header && (
             <div className="
@@ -104,9 +104,9 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
             </div>
         )}
 
-        <div>
+        {/* <div className="h-full"> */}
             {children}
-        </div>
+        {/* </div> */}
     </div>
   )
 }

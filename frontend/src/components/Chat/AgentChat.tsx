@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -9,9 +9,9 @@ import { Bot, Send, User, MessageCircle } from "lucide-react";
 import { useSSE } from "@/hooks/useSSE";
 import { MessageRenderer, MessageComponentType } from "./MessageComponents";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
-import { UserMessage as UserMessageComponent } from "./UserMessage";
-import { AssistantMessage as AssistantMessageComponent } from "./AssistantMessage";
-
+import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
+import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
+import { cn } from "@/lib/utils";
 
 interface UserChatMessage {
   id: string;
@@ -343,14 +343,14 @@ export default function AgentChat({
   };
 
   return (
-    <Card className={`flex flex-col shadow-sm border-0 bg-gradient-to-b from-background to-muted/20 ${className}`} style={{ height }}>
-      <CardHeader className="border-b bg-background/50 backdrop-blur-sm">
+    <Card className={cn("flex justify-between flex-col h-full max-h-full shadow-none p-0 hover:shadow-none cursor-auto", className)}>
+      <CardHeader className="border-b">
         <CardTitle className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5 text-primary" />
           Chat with {agent.name}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col p-0">
+      <CardContent className="flex-1 flex flex-col overflow-auto p-0">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto space-y-4 p-4">
           {messages.map((message) => {
@@ -383,9 +383,10 @@ export default function AgentChat({
           })}
           <div ref={messagesEndRef} />
         </div>
-
+      </CardContent>
+      <CardFooter className="p-0">
         {/* Input */}
-        <div className="border-t bg-background/80 backdrop-blur-sm p-4">
+        <div className="border-t w-full p-4">
           <form onSubmit={sendMessage} className="flex gap-3">
             <Input
               ref={inputRef}
@@ -409,7 +410,7 @@ export default function AgentChat({
             </Button>
           </form>
         </div>
-      </CardContent>
+      </CardFooter>
     </Card>
   );
 }

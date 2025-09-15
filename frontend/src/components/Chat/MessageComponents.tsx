@@ -1,5 +1,6 @@
 import React from 'react';
 import { MessageWrapper } from './MessageWrapper';
+import LLMResponseMessage from './componets/LLMResponseMessage';
 
 // Base message data structure
 interface BaseMessageData {
@@ -30,26 +31,6 @@ interface LLMResponseData extends BaseMessageData {
     };
   };
 }
-
-export const LLMResponseMessage: React.FC<{ data: LLMResponseData }> = ({ data }) => {
-  return (
-    <MessageWrapper>
-      <div className="rounded-2xl px-4 py-3 shadow-sm transition-all duration-200 hover:shadow-md bg-background border border-border">
-        <div className="prose prose-sm max-w-none text-gray-800 dark:text-gray-200">
-          <div className="whitespace-pre-wrap leading-relaxed text-sm">
-            {data.content}
-          </div>
-          {data.usage && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 flex gap-4">
-              <span>Tokens: {data.usage.usage.total_tokens}</span>
-              <span>Cost: ${data.usage.cost.toFixed(4)}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </MessageWrapper>
-  );
-};
 
 // Tool Call Started Message
 interface ToolCallStartedData extends BaseMessageData {

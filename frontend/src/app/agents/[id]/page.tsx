@@ -20,8 +20,11 @@ export default async function AgentDetailPage({ params }: Props) {
   return (
     <ContentBlock
       header={{
-        title: agent.name,
-        description: agent.description || "Agent details and interaction",
+        breadcrumb: [
+          {label: "Browse Agents", href: "/agents/browse"},
+          {label: agent.name, href: `/agents/${agent.id}`},
+        ],
+        // description: agent.description || "Agent details and interaction",
         backLink: {
           label: "Back to Browse Agents",
           href: "/agents/browse",
