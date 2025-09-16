@@ -18,7 +18,7 @@ import { useSearchWithDebounce, useTabState } from "../../../hooks";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
-import { getToolAvatarUrls } from "@/utils/toolsDisplay";
+import { getToolAvatarUrls } from "../../../utils/toolsDisplay";
 
 export default function AgentsBrowsePage() {
   const t = useTranslations("Agent");
@@ -200,31 +200,7 @@ export default function AgentsBrowsePage() {
   }, [debouncedQuery]);
 
   const filteredAgents = useMemo(() => filterData(agents), [filterData, agents]);
-
-  // Не рендерим до загрузки таба для предотвращения мерцания
-  if (!isTabLoaded && !urlTab) {
-    return (
-      <ContentBlock 
-        header={{
-          breadcrumb: [{label: t("browseAgents")}],
-          description: t("description"),
-          controls: (
-            <Link href="/agents/create">
-              <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
-                <Bot className="h-5 w-5" />
-                {t("deployNewAgent")}
-              </Button>
-            </Link>
-          )
-        }}
-      >
-        <div className="flex items-center justify-center h-32">
-          <LoadingSpinner />
-        </div>
-      </ContentBlock>
-    );
-  }
-
+  
   return (
     <ContentBlock 
       header={{
@@ -241,48 +217,53 @@ export default function AgentsBrowsePage() {
           </Link>
         )
     }}>
-
-      <GridAndTableViews
-        isEmpty={filteredAgents.length === 0}
-        emptyState={<EmptyState
-          iconsType="agent"
-          title={t("noAgentsYet")}
-          description={t("getStartedByAddingYourFirstAgent")}
-          action={{
-            label: t("addYourFirstAgent"),
-            href: "/agents/create",
+      {loading || (!isTabLoaded && !urlTab) ? (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner />
+        </div>
+      ) : (      
+        <GridAndTableViews
+          isEmpty={filteredAgents.length === 0}
+          emptyState={<EmptyState
+            iconsType="agent"
+            title={t("noAgentsYet")}
+            description={t("getStartedByAddingYourFirstAgent")}
+            action={{
+              label: t("addYourFirstAgent"),
+              href: "/agents/create",
+            }}
+          />}
+          searchParams={{
+            ...Object.fromEntries(searchParams.entries()),
+            tab: currentTab
           }}
-        />}
-        searchParams={{
-          ...Object.fromEntries(searchParams.entries()),
-          tab: currentTab
-        }}
-        data={filteredAgents}
-        columns={columns}
-        routeChange="/agents/browse"
-        cardContent={(item) => <AgentCard agent={item} />}
-        cardClassName="px-0 pb-0 overflow-hidden"
-        itemLink={(agent) => `/agents/${agent.id}`}
-        gridClassName="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-        leftComponent={
-          <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-              {isSearching ? (
-                <LoadingSpinner size="sm" text="" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
+          data={filteredAgents}
+          columns={columns}
+          routeChange="/agents/browse"
+          cardContent={(item) => <AgentCard agent={item} />}
+          cardClassName="px-0 pb-0 overflow-hidden"
+          itemLink={(agent) => `/agents/${agent.id}`}
+          gridClassName="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+          leftComponent={
+            <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                {isSearching ? (
+                  <LoadingSpinner size="sm" text="" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </div>
+              <Input 
+                placeholder={commonT("search")}
+                className="pl-9 w-full" 
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onKeyDown={handleKeyDown}
+              />
             </div>
-            <Input 
-              placeholder={commonT("search")}
-              className="pl-9 w-full" 
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onKeyDown={handleKeyDown}
-            />
-          </div>
-        }
-      />
+          }
+        />
+      )}
     </ContentBlock>
   );
 } 
