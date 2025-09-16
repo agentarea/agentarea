@@ -1,7 +1,7 @@
 import { getProviderConfig, listModelInstances } from '@/lib/api';
 import ProviderConfigForm from '@/components/ProviderConfigForm';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
-import DeleteButton from './components/DeleteButton';
+import DeleteProviderConfigButton from './components/DeleteProviderConfigButton';
 import { getTranslations } from 'next-intl/server';
 
 export default async function CreateProviderConfigPage({
@@ -62,7 +62,7 @@ export default async function CreateProviderConfigPage({
           {label:  t("configureProvider")}
         ],
         controls: isEdit && initialData ? (
-          <DeleteButton 
+          <DeleteProviderConfigButton 
             configId={initialData.id}
             configName={initialData.name}
           />

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getAgent } from "@/lib/api";
 import AgentDetailClient from "./AgentDetailClient";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import DeleteAgentButton from './components/DeleteAgentButton';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -29,6 +30,12 @@ export default async function AgentDetailPage({ params }: Props) {
           label: "Back to Browse Agents",
           href: "/agents/browse",
         },
+        controls: (
+          <DeleteAgentButton 
+            agentId={agent.id} 
+            agentName={agent.name}
+          />
+        ),
       }}
     >
       <AgentDetailClient agent={agent} />

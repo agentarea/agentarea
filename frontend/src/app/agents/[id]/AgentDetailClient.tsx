@@ -27,7 +27,7 @@ import { AgentChat } from "@/components/Chat";
 interface Agent {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   status: string;
   created_at?: string;
   updated_at?: string;
