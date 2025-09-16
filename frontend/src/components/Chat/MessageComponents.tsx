@@ -105,19 +105,19 @@ export type MessageComponentType =
 export const MessageRenderer: React.FC<{ message: MessageComponentType }> = ({ message }) => {
   switch (message.type) {
     case 'llm_response':
-      return <LLMResponseMessage data={message.data} />;
+      return <LLMResponseMessage data={message.data} key={message.data.id} />;
     case 'llm_chunk':
-      return <LLMChunkMessage data={message.data} />;
+      return <LLMChunkMessage data={message.data} key={message.data.id} />;
     case 'tool_call_started':
-      return <ToolCallStartedMessage data={message.data} />;
+      return <ToolCallStartedMessage data={message.data} key={message.data.id} />;
     case 'tool_result':
-      return <ToolResultMessage data={message.data} />;
+      return <ToolResultMessage data={message.data} key={message.data.id} />;
     case 'error':
-      return <ErrorMessage data={message.data} />;
+      return <ErrorMessage data={message.data} key={message.data.id} />;
     case 'workflow_result':
-      return <WorkflowResultMessage data={message.data} />;
+      return <WorkflowResultMessage data={message.data} key={message.data.id} />;
     case 'system':
-      return <SystemMessage data={message.data} />;
+      return <SystemMessage data={message.data} key={message.data.id} />;
     default:
       return null;
   }

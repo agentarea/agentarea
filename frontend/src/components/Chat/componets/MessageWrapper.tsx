@@ -1,13 +1,13 @@
 import React from 'react';
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, User } from "lucide-react";
+import { Bot, User, Settings, Check } from "lucide-react";
 import { cn } from '@/lib/utils';
 
 interface MessageWrapperProps {
   children: React.ReactNode;
   className?: string;
-  type?: "error" | "success" | "assistant" | "user" | "info";
+  type?: "error" | "success" | "assistant" | "user" | "tool-call" | "tool-result" | "info";
 }
 
 export const MessageWrapper: React.FC<MessageWrapperProps> = ({ children, className = "", type = "assistant" }) => {
@@ -24,12 +24,16 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({ children, classN
         />
       )}
 
-      <Avatar className="h-8 w-8 border relative z-10 bg-white dark:bg-zinc-800">
-        <AvatarFallback className="bg-white">
+      <Avatar className={cn("h-8 w-8 border relative z-10 bg-white dark:bg-zinc-800", type === "user" ? "border-primary/80 dark:border-accent/80" : "")}>
+        <AvatarFallback className={cn(type === "tool-call" ? "bg-zinc-900 dark:bg-zinc-300" : "bg-white")}>
           {type === "error" ? (
             <span className="inline-block h-3 w-3 rounded-full bg-red-700" />
           ) : type === "user" ? (
             <User className="h-4 w-4 text-primary dark:text-accent" />
+          ) : type === "tool-call" ? (
+            <Settings className="h-4 w-4 text-white dark:text-zinc-900" />
+          ) : type === "tool-result" ? (
+            <Check className="h-4 w-4 text-green-500" />
           ) : (
             <Bot className="h-4 w-4 text-text" />
           )}

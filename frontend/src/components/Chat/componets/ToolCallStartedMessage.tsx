@@ -10,8 +10,8 @@ interface ToolCallStartedData {
 
 const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({ data }) => {
   return (
-    <MessageWrapper>
-      <BaseMessage headerLeft={`Tool Call Started: ${data.tool_name}`} >
+    <MessageWrapper type="tool-call" >
+      <BaseMessage headerLeft={`Tool Call Started: ${data.tool_name}`} collapsed={true}>
         {Object.keys(data.arguments).length > 0 && (
           <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
             <details className="cursor-pointer">

@@ -38,8 +38,8 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
   const colors = getStatusColor();
 
   return (
-    <MessageWrapper>
-      <BaseMessage headerLeft={<span>{`Tool Result: ${data.tool_name}`}</span>}>
+    <MessageWrapper type="tool-result">
+      <BaseMessage headerLeft={<span>{`Tool Result: ${data.tool_name}`}</span>} collapsed={true}>
         <div className={`text-sm leading-relaxed ${colors.content}`}>
           <pre className="whitespace-pre-wrap overflow-x-auto">
             {formatResult(data.result)}

@@ -352,11 +352,11 @@ export default function AgentChat({
       <CardContent className="flex-1 flex flex-col overflow-auto p-0 bg-chatBackground">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto space-y-3 py-3 px-3">
-          {messages.map((message) => {
+          {messages.map((message, index) => {
             // Handle different message types
             if ('type' in message) {
               // This is a MessageComponentType - use MessageRenderer
-              return <MessageRenderer key={message.data.id} message={message} />;
+              return <MessageRenderer key={`${message.data.id}-${message.data.event_type}-${index}`} message={message} />;
             } else if (message.role === 'user') {
               // User message
               return (
