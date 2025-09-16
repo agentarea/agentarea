@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, Send, User, MessageCircle } from "lucide-react";
+import { Bot, Send, User, MessageCircle, Paperclip, X } from "lucide-react";
+import { FileCard } from "@/components/ui/file-card";
 import { useSSE } from "@/hooks/useSSE";
 import { MessageRenderer, MessageComponentType } from "./MessageComponents";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
@@ -18,6 +19,7 @@ interface UserChatMessage {
   content: string;
   role: "user";
   timestamp: string;
+  files?: File[];
 }
 
 interface WelcomeMessage {
@@ -55,10 +57,12 @@ export default function AgentChat({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(taskId || null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentAssistantMessageRef = useRef<MessageComponentType | null>(null);
   const onTaskCreatedRef = useRef(onTaskCreated);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -248,6 +252,37 @@ export default function AgentChat({
     console.log('SSE connection closed');
   }, []);
 
+  // File handling functions
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(prev => [...prev, ...files]);
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Auto-resize textarea function
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const scrollHeight = textarea.scrollHeight;
+      const maxHeight = 3 * 24; // 3 lines * 24px line height
+      textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    }
+  };
+
+  // Handle input change with auto-resize
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    adjustTextareaHeight();
+  };
+
   // Initialize SSE connection
   useSSE(sseUrl, {
     onMessage: handleSSEMessage,
@@ -258,19 +293,26 @@ export default function AgentChat({
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && selectedFiles.length === 0) || isLoading) return;
 
     const userMessage: UserChatMessage = {
       id: Date.now().toString(),
       content: input,
       role: "user",
       timestamp: new Date().toISOString(),
+      files: selectedFiles.length > 0 ? selectedFiles : undefined,
     };
 
     // Add user message immediately
     setMessages(prev => [...prev, userMessage]);
     setInput("");
+    setSelectedFiles([]);
     setIsLoading(true);
+    
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     try {
       // Create task with SSE streaming
@@ -365,6 +407,7 @@ export default function AgentChat({
                   id={message.id}
                   content={message.content}
                   timestamp={message.timestamp}
+                  files={message.files}
                 />
               );
             } else {
@@ -386,19 +429,51 @@ export default function AgentChat({
       <CardFooter className="p-0">
         {/* Input */}
         <div className="border-t w-full p-4">
+          {/* Selected Files Display */}
+          {selectedFiles.length > 0 && (
+            <div className="mb-3 flex flex-row flex-wrap gap-2">
+              {selectedFiles.map((file, index) => (
+                <FileCard
+                  key={index}
+                  file={file}
+                  onRemove={() => removeFile(index)}
+                />
+              ))}
+            </div>
+          )}
+          
           <form onSubmit={sendMessage} className="flex gap-3">
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={`Message ${agent.name}...`}
-              disabled={isLoading}
-              className="flex-1 rounded-full border-2 focus:border-primary/50 transition-colors duration-200"
-            />
+            <div className="flex-1 relative">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInputChange}
+                placeholder={`Message ${agent.name}...`}
+                disabled={isLoading}
+                className="min-h-[40px] max-h-[72px] resize-none rounded-3xl border focus:border-primary/50 transition-colors duration-200 pr-12 py-2"
+                rows={1}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage(e);
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={openFileDialog}
+                disabled={isLoading}
+                className="absolute right-2 top-1 h-8 w-8 p-0 rounded-full hover:text-text hover:bg-zinc-200 dark:hover:bg-gray-800"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            </div>
             <Button 
               type="submit" 
               size="icon" 
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || (!input.trim() && selectedFiles.length === 0)}
               className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all duration-200"
             >
               {isLoading ? (
@@ -408,6 +483,16 @@ export default function AgentChat({
               )}
             </Button>
           </form>
+          
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+            accept="*/*"
+          />
         </div>
       </CardFooter>
     </Card>

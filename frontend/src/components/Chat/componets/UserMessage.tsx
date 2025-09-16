@@ -4,18 +4,49 @@ import { User } from "lucide-react";
 import MessageWrapper from './MessageWrapper';
 import BaseMessage from './BaseMessage';
 import { formatTimestamp } from '../../../utils/dateUtils';
+import { FileCardMessage } from '@/components/ui/file-card-message';
 
 interface UserMessageProps {
   id: string;
   content: string;
   timestamp: string;
+  files?: File[];
 }
 
-export const UserMessage: React.FC<UserMessageProps> = ({ id, content, timestamp }) => {
+export const UserMessage: React.FC<UserMessageProps> = ({ id, content, timestamp, files }) => {
+  const handleFileDownload = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <MessageWrapper type="user">
       <BaseMessage isUser={true} headerLeft={"User"} headerRight={formatTimestamp(new Date().toISOString())}>
-        {content}
+        <div className="space-y-3">
+          {content && <div>{content}</div>}
+          {files && files.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                Attached files:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {files.map((file, index) => (
+                  <FileCardMessage
+                    key={index}
+                    file={file}
+                    onDownload={() => handleFileDownload(file)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </BaseMessage>
     </MessageWrapper>
   );
