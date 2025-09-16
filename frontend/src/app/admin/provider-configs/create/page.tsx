@@ -68,7 +68,7 @@ export default async function CreateProviderConfigPage({
           />
         ) : undefined
     }}>
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto w-full">
         <ProviderConfigForm 
           preselectedProviderId={preselectedProviderId}
           isEdit={isEdit}

@@ -237,7 +237,10 @@ export async function addAgent(
       // Return success state with created agent data
       return {
         message: 'Agent created successfully!',
-        fieldValues: validatedFields.data,
+        fieldValues: {
+          ...validatedFields.data,
+          id: data.id, // Include the agent ID
+        },
       };
     }
   } catch (err) {
