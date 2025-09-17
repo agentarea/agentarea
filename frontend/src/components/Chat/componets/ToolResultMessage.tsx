@@ -39,7 +39,7 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
 
   return (
     <MessageWrapper type="tool-result">
-      <BaseMessage headerLeft={<span>{`Tool Result: ${data.tool_name}`}</span>} collapsed={true}>
+      <BaseMessage headerLeft={<span>{`Tool Call: ${data.tool_name}`}</span>} collapsed={true}>
         <div className={`text-sm leading-relaxed ${colors.content}`}>
           <pre className="whitespace-pre-wrap overflow-x-auto">
             {formatResult(data.result)}

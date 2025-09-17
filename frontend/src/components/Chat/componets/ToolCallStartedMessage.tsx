@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { Settings } from 'lucide-react';
 import BaseMessage from './BaseMessage';
 import MessageWrapper from './MessageWrapper';
 
@@ -9,9 +10,34 @@ interface ToolCallStartedData {
 }
 
 const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({ data }) => {
+  const [showCalling, setShowCalling] = useState(true);
+
+  useEffect(() => {
+    // Показываем "calling..." постоянно, пока не заменится на результат
+  }, [data]);
+
   return (
     <MessageWrapper type="tool-call" >
-      <BaseMessage headerLeft={`Tool Call Started: ${data.tool_name}`} collapsed={true}>
+      <BaseMessage 
+        headerLeft={`Tool Call: ${data.tool_name}`} 
+        headerRight={
+          <div className="flex items-center gap-2">
+            {showCalling && (
+              <Settings 
+                className="w-4 h-4 text-blue-500" 
+                style={{ 
+                  animation: 'spin 2.5s linear infinite',
+                  transformOrigin: 'center'
+                }}
+              />
+            )}
+            <span className={showCalling ? "animate-pulse text-blue-600" : ""}>
+              {showCalling ? "Calling..." : "Processing..."}
+            </span>
+          </div>
+        } 
+        collapsed={true}
+      >
         {Object.keys(data.arguments).length > 0 && (
           <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
             <details className="cursor-pointer">

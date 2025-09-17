@@ -12,7 +12,7 @@ type BaseMessageProps = {
 
 const BaseMessage = ( { children, headerLeft, headerRight, collapsed, isUser }: BaseMessageProps ) => {
   return (
-    <Accordion type="single" collapsible className="w-full max-w-[60%]" defaultValue={collapsed ? undefined : "item-1"}>
+    <Accordion type="single" collapsible className="w-full max-w-full lg:max-w-[80%]" defaultValue={collapsed ? undefined : "item-1"}>
       <AccordionItem value="item-1" className={cn("w-full border rounded-xl dark:border-zinc-700 data-[state=open]:shadow-sm", isUser ? "bg-primary/10" : "bg-chatBackground")}>
         <AccordionTrigger className="px-2 py-1 text-sm hover:no-underline">
           <div className="w-full flex flex-row items-center justify-between">

@@ -31,7 +31,13 @@ export const MessageWrapper: React.FC<MessageWrapperProps> = ({ children, classN
           ) : type === "user" ? (
             <User className="h-4 w-4 text-primary dark:text-accent" />
           ) : type === "tool-call" ? (
-            <Settings className="h-4 w-4 text-white dark:text-zinc-900" />
+            <Settings 
+              className="h-4 w-4 text-white dark:text-zinc-900" 
+              style={{ 
+                animation: 'spin 2.5s linear infinite',
+                transformOrigin: 'center'
+              }}
+            />
           ) : type === "tool-result" ? (
             <Check className="h-4 w-4 text-green-500" />
           ) : (

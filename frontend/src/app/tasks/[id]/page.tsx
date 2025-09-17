@@ -46,7 +46,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getAgentTaskStatus, pauseAgentTask, resumeAgentTask, cancelAgentTask } from "@/lib/api";
 import { toast } from "sonner";
 import { LoadingSpinner } from '@/components/LoadingSpinner';
-
+import ContentBlock from "@/components/ContentBlock";
 // Types for task data
 interface TaskDetail {
   id: string;
@@ -330,17 +330,6 @@ export default function TaskDetailsPage() {
   if (loading) {
     return (
       <div className="p-8">
-        <div className="flex items-center gap-2 mb-6">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => router.push("/tasks")}
-            className="gap-1"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Tasks
-          </Button>
-        </div>
         <LoadingSpinner />
       </div>
     );
@@ -350,17 +339,6 @@ export default function TaskDetailsPage() {
   if (error || !task) {
     return (
       <div className="p-8">
-        <div className="flex items-center gap-2 mb-6">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => router.push("/tasks")}
-            className="gap-1"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Tasks
-          </Button>
-        </div>
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
@@ -393,18 +371,16 @@ export default function TaskDetailsPage() {
   const errorMessage = taskStatus?.error;
 
   return (
-    <div className="p-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => router.push("/tasks")}
-          className="gap-1"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Tasks
-        </Button>
-      </div>
+    <ContentBlock 
+        header={{
+          breadcrumb: [
+            {label: "Tasks", href: "/tasks"}, 
+            {label: task?.agent_name || `Agent ${task?.agent_id || 'Unknown'}`, href: task?.agent_id ? `/agents/${task.agent_id}` : undefined}, 
+            {label: task?.description || 'Task Details'}
+          ],
+        }}
+      >
+
       {/* Compact Header */}
       <div className="bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
@@ -1000,6 +976,6 @@ export default function TaskDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ContentBlock>
   );
 }

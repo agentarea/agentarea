@@ -8,6 +8,9 @@ import WorkflowResultMessage from './componets/WorkflowResultMessage';
 import SystemMessage from './componets/SystemMessage';
 import { MessageComponentType } from './types';
 
+// Export the type for use in other components
+export type { MessageComponentType };
+
 // Message renderer that picks the right component
 export const MessageRenderer: React.FC<{ message: MessageComponentType, agent_name?: string }> = ({ message, agent_name }) => {
   switch (message.type) {

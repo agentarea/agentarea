@@ -38,6 +38,7 @@ export interface ToolCallStartedData extends BaseMessageData {
 // Tool Result Message
 export interface ToolResultData extends BaseMessageData {
   tool_name: string;
+  tool_call_id: string;
   result: any;
   success: boolean;
   execution_time?: string;

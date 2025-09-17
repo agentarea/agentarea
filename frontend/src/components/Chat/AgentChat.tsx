@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, Send, User, MessageCircle, Paperclip, X } from "lucide-react";
+import { Bot, Send, User, MessageCircle, Paperclip, X, ChevronDown } from "lucide-react";
 import { FileCard } from "@/components/ui/file-card";
 import { useSSE } from "@/hooks/useSSE";
 import { MessageRenderer, MessageComponentType } from "./MessageComponents";
@@ -58,11 +58,13 @@ export default function AgentChat({
   const [isLoading, setIsLoading] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(taskId || null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentAssistantMessageRef = useRef<MessageComponentType | null>(null);
   const onTaskCreatedRef = useRef(onTaskCreated);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -74,10 +76,72 @@ export default function AgentChat({
     ? `/api/sse/agents/${agent.id}/tasks/${currentTaskId}/events/stream`
     : null;
 
-  // Auto-scroll to bottom when messages change
+  // Check if user is at bottom of scroll
+  const checkIfAtBottom = useCallback(() => {
+    if (!messagesContainerRef.current) return false;
+    
+    const container = messagesContainerRef.current;
+    const threshold = 50; // Уменьшаем порог для более точной проверки
+    const scrollTop = container.scrollTop;
+    const clientHeight = container.clientHeight;
+    const scrollHeight = container.scrollHeight;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - threshold;
+    
+    console.log('Scroll check:', { 
+      scrollTop, 
+      clientHeight, 
+      scrollHeight, 
+      threshold, 
+      isAtBottom,
+      diff: scrollHeight - (scrollTop + clientHeight)
+    });
+    
+    return isAtBottom;
+  }, []);
+
+  // Handle scroll events
+  const handleScroll = useCallback(() => {
+    // Добавляем небольшую задержку для более стабильной работы
+    setTimeout(() => {
+      const atBottom = checkIfAtBottom();
+      console.log('Scroll event, isAtBottom:', atBottom);
+      setIsAtBottom(atBottom);
+    }, 50);
+  }, [checkIfAtBottom]);
+
+  // Auto-scroll to bottom when messages change (only if user was at bottom)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    console.log('Messages changed, isAtBottom:', isAtBottom);
+    if (isAtBottom) {
+      console.log('Auto-scrolling to bottom');
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      
+      // Принудительно проверяем позицию после прокрутки
+      setTimeout(() => {
+        const atBottom = checkIfAtBottom();
+        console.log('After scroll check:', atBottom);
+        if (!atBottom) {
+          console.log('Force scrolling again');
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 200);
+    }
+  }, [messages, isAtBottom, checkIfAtBottom]);
+
+  // Check scroll position when container size changes
+  useEffect(() => {
+    const checkPosition = () => {
+      const atBottom = checkIfAtBottom();
+      setIsAtBottom(atBottom);
+    };
+
+    const container = messagesContainerRef.current;
+    if (container) {
+      // Check position after a short delay to allow for layout changes
+      const timeoutId = setTimeout(checkPosition, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages.length, checkIfAtBottom]);
 
   // Initialize messages only once
   useEffect(() => {
@@ -191,6 +255,83 @@ export default function AgentChat({
           return prev;
         });
       }
+
+      return;
+    }
+
+    // Special handling for tool call events - replace tool_call_started with tool_result
+    if (cleanEventType === 'ToolCallStarted') {
+      const originalData = event.data.original_data || event.data;
+      const toolName = originalData.tool_name || event.data.tool_name;
+      const toolCallId = originalData.tool_call_id || event.data.tool_call_id;
+
+      setMessages(prev => {
+        // Check if this tool call has already been started
+        const alreadyStarted = prev.some(msg => 
+          'type' in msg && 
+          msg.type === 'tool_call_started' && 
+          (msg.data as any).tool_name === toolName &&
+          (msg.data as any).tool_call_id === toolCallId
+        );
+
+        if (alreadyStarted) {
+          return prev;
+        }
+
+        // Create new tool call started message
+        const messageComponent = parseEventToMessage(cleanEventType, event.data);
+        if (messageComponent) {
+          return [...prev, messageComponent];
+        }
+        return prev;
+      });
+
+      return;
+    }
+
+    if (cleanEventType === 'ToolCallCompleted') {
+      const originalData = event.data.original_data || event.data;
+      const toolName = originalData.tool_name || event.data.tool_name;
+      const toolCallId = originalData.tool_call_id || event.data.tool_call_id;
+
+      setMessages(prev => {
+        // Check if this tool call has already been completed
+        const alreadyCompleted = prev.some(msg => 
+          'type' in msg && 
+          msg.type === 'tool_result' && 
+          (msg.data as any).tool_name === toolName &&
+          (msg.data as any).tool_call_id === toolCallId
+        );
+
+        if (alreadyCompleted) {
+          return prev;
+        }
+
+        // Find the last tool_call_started message for the same tool and call ID
+        const lastToolCallIndex = prev.findLastIndex(msg => 
+          'type' in msg && 
+          msg.type === 'tool_call_started' && 
+          msg.data.tool_name === toolName &&
+          msg.data.tool_call_id === toolCallId
+        );
+
+        if (lastToolCallIndex !== -1) {
+          // Replace the tool_call_started message with tool_result
+          const messageComponent = parseEventToMessage(cleanEventType, event.data);
+          if (messageComponent) {
+            const newMessages = [...prev];
+            newMessages[lastToolCallIndex] = messageComponent;
+            return newMessages;
+          }
+        } else {
+          // If no matching tool_call_started found, just add the result
+          const messageComponent = parseEventToMessage(cleanEventType, event.data);
+          if (messageComponent) {
+            return [...prev, messageComponent];
+          }
+        }
+        return prev;
+      });
 
       return;
     }
@@ -385,15 +526,19 @@ export default function AgentChat({
   };
 
   return (
-    <Card className={cn("flex justify-between flex-col h-full max-h-full shadow-none p-0 hover:shadow-none cursor-auto", className)}>
+    <Card className={cn("flex justify-between flex-col h-full overflow-hidden max-h-full shadow-none p-0 hover:shadow-none cursor-auto", className)}>
       <CardHeader className="border-b p-4">
         <CardTitle className="flex items-center gap-2 ">
           Chat with {agent.name}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col overflow-auto p-0 bg-chatBackground">
+      <CardContent className="flex-1 flex flex-col overflow-auto p-0 bg-chatBackground relative">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto space-y-3 py-3 px-3">
+        <div 
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto space-y-3 py-3 px-3"
+        >
           {messages.map((message, index) => {
             // Handle different message types
             if ('type' in message) {
@@ -425,6 +570,20 @@ export default function AgentChat({
             }
           })}
           <div ref={messagesEndRef} className="aa-messages-end" />
+        </div>
+        
+        {/* Scroll to bottom button */}
+        <div className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <Button
+            onClick={() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              setIsAtBottom(true);
+            }}
+            size="sm"
+            className="h-8 w-8 rounded-full hover:text-white shadow-lg bg-white text-text dark:bg-zinc-900 dark:text-zinc-200 "
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
         </div>
       </CardContent>
       <CardFooter className="p-0">
