@@ -8,10 +8,10 @@ interface LLMChunkData {
   is_final: boolean;
 }
 
-const LLMChunkMessage: React.FC<{ data: LLMChunkData }> = ({ data }) => {
+const LLMChunkMessage: React.FC<{ data: LLMChunkData, agent_name?: string }> = ({ data, agent_name }) => {
   return (
     <MessageWrapper>
-      <BaseMessage headerLeft={data.is_final ? null : null} headerRight={data.is_final ? null : 'Thinking...'}>
+      <BaseMessage headerLeft={data.is_final ? agent_name || "Assistant" : null} headerRight={data.is_final ? null : 'Thinking...'}>
           {data.chunk}
       </BaseMessage>
     </MessageWrapper>

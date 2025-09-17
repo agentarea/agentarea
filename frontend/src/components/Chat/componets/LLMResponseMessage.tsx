@@ -3,10 +3,10 @@ import { LLMResponseData } from '../types';
 import BaseMessage from './BaseMessage';
 import { formatTimestamp } from '../../../utils/dateUtils';
 
-export const LLMResponseMessage: React.FC<{ data: LLMResponseData }> = ({ data }) => {
+export const LLMResponseMessage: React.FC<{ data: LLMResponseData, agent_name?: string }> = ({ data, agent_name }) => {
     return (
       <MessageWrapper>
-        <BaseMessage headerLeft={"Assistant"} headerRight={formatTimestamp(data.timestamp)}>
+        <BaseMessage headerLeft={agent_name || "Assistant"} headerRight={formatTimestamp(data.timestamp)}>
             {data.content}
             {data.usage && (
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 flex gap-4">

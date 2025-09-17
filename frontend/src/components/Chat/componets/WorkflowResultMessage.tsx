@@ -10,7 +10,7 @@ interface WorkflowResultData {
   total_cost?: number;
 }
 
-const WorkflowResultMessage: React.FC<{ data: WorkflowResultData }> = ({ data }) => {
+const WorkflowResultMessage: React.FC<{ data: WorkflowResultData, agent_name?: string }> = ({ data, agent_name }) => {
   const content = data.result || data.final_response || '';
   
   return (

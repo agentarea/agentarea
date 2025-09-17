@@ -8,12 +8,13 @@ interface AssistantMessageProps {
   content: string;
   timestamp: string;
   agent_id: string;
+  agent_name?: string;
 }
 
-export const AssistantMessage: React.FC<AssistantMessageProps> = ({ id, content, timestamp }) => {
+export const AssistantMessage: React.FC<AssistantMessageProps> = ({ id, content, timestamp, agent_name }) => {
   return (
     <MessageWrapper>
-      <BaseMessage headerLeft={"Assistant"} headerRight={formatTimestamp(timestamp)}>
+      <BaseMessage headerLeft={agent_name || "Assistant"} headerRight={formatTimestamp(timestamp)}>
         {content}
       </BaseMessage>
     </MessageWrapper>

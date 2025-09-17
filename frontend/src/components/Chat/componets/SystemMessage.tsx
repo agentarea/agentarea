@@ -18,7 +18,7 @@ const SystemMessage: React.FC<{ data: SystemData }> = ({ data }) => {
   
   return (
     <MessageWrapper type="info">
-      <BaseMessage headerLeft={null} headerRight={null}>
+      <BaseMessage headerLeft={"System message"} headerRight={null}>
         <div className={`${levelClass}`}>
           {data.message}
         </div>

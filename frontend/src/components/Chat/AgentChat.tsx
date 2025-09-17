@@ -398,7 +398,7 @@ export default function AgentChat({
             // Handle different message types
             if ('type' in message) {
               // This is a MessageComponentType - use MessageRenderer
-              return <MessageRenderer key={`${message.data.id}-${message.data.event_type}-${index}`} message={message} />;
+              return <MessageRenderer key={`${message.data.id}-${message.data.event_type}-${index}`} message={message} agent_name={agent.name} />;
             } else if (message.role === 'user') {
               // User message
               return (
@@ -419,6 +419,7 @@ export default function AgentChat({
                   content={message.content}
                   timestamp={message.timestamp}
                   agent_id={message.agent_id}
+                  agent_name={agent.name}
                 />
               );
             }
