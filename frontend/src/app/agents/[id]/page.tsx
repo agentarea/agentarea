@@ -3,6 +3,7 @@ import { getAgent } from "@/lib/api";
 import AgentDetailClient from "./AgentDetailClient";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import DeleteAgentButton from './components/DeleteAgentButton';
+import { Card } from "@/components/ui/card";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -22,14 +23,10 @@ export default async function AgentDetailPage({ params }: Props) {
     <ContentBlock
       header={{
         breadcrumb: [
-          {label: "Browse Agents", href: "/agents/browse"},
+          {label: "Browse Agents", href: "/agents"},
           {label: agent.name, href: `/agents/${agent.id}`},
         ],
         // description: agent.description || "Agent details and interaction",
-        backLink: {
-          label: "Back to Browse Agents",
-          href: "/agents/browse",
-        },
         controls: (
           <DeleteAgentButton 
             agentId={agent.id} 

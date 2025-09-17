@@ -39,7 +39,6 @@ interface Task {
   description: string;
   status: string;
   created_at: string;
-  updated_at?: string;
   agent_id: string;
   agent_name?: string;
 }

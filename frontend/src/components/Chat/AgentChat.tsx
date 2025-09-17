@@ -66,10 +66,24 @@ export default function AgentChat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollRAFRef = useRef<number | null>(null);
 
   useEffect(() => {
     onTaskCreatedRef.current = onTaskCreated;
   }, [onTaskCreated]);
+
+  // Cleanup timeouts and RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      if (scrollRAFRef.current) {
+        cancelAnimationFrame(scrollRAFRef.current);
+      }
+    };
+  }, []);
 
   // SSE connection URL - only connect if we have a task
   const sseUrl = currentTaskId 
@@ -81,65 +95,69 @@ export default function AgentChat({
     if (!messagesContainerRef.current) return false;
     
     const container = messagesContainerRef.current;
-    const threshold = 50; // Уменьшаем порог для более точной проверки
+    const threshold = 100; // Увеличиваем порог для более стабильной работы
     const scrollTop = container.scrollTop;
     const clientHeight = container.clientHeight;
     const scrollHeight = container.scrollHeight;
     const isAtBottom = scrollTop + clientHeight >= scrollHeight - threshold;
     
-    console.log('Scroll check:', { 
-      scrollTop, 
-      clientHeight, 
-      scrollHeight, 
-      threshold, 
-      isAtBottom,
-      diff: scrollHeight - (scrollTop + clientHeight)
-    });
-    
     return isAtBottom;
   }, []);
 
-  // Handle scroll events
+  // Handle scroll events with debounce
   const handleScroll = useCallback(() => {
-    // Добавляем небольшую задержку для более стабильной работы
-    setTimeout(() => {
+    // Отменяем предыдущий таймаут если он есть
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
+    // Устанавливаем новый таймаут для debounce
+    scrollTimeoutRef.current = setTimeout(() => {
       const atBottom = checkIfAtBottom();
-      console.log('Scroll event, isAtBottom:', atBottom);
       setIsAtBottom(atBottom);
-    }, 50);
+    }, 100); // Увеличиваем задержку для более стабильной работы
   }, [checkIfAtBottom]);
 
   // Auto-scroll to bottom when messages change (only if user was at bottom)
   useEffect(() => {
-    console.log('Messages changed, isAtBottom:', isAtBottom);
     if (isAtBottom) {
-      console.log('Auto-scrolling to bottom');
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      // Отменяем предыдущий RAF если он есть
+      if (scrollRAFRef.current) {
+        cancelAnimationFrame(scrollRAFRef.current);
+      }
       
-      // Принудительно проверяем позицию после прокрутки
-      setTimeout(() => {
-        const atBottom = checkIfAtBottom();
-        console.log('After scroll check:', atBottom);
-        if (!atBottom) {
-          console.log('Force scrolling again');
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }
-      }, 200);
+      // Используем requestAnimationFrame для более плавного скролла
+      scrollRAFRef.current = requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        
+        // Проверяем позицию после скролла
+        scrollRAFRef.current = requestAnimationFrame(() => {
+          const atBottom = checkIfAtBottom();
+          if (!atBottom) {
+            // Принудительно скроллим еще раз если не достигли низа
+            messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+          }
+        });
+      });
     }
   }, [messages, isAtBottom, checkIfAtBottom]);
 
   // Check scroll position when container size changes
   useEffect(() => {
-    const checkPosition = () => {
-      const atBottom = checkIfAtBottom();
-      setIsAtBottom(atBottom);
-    };
-
     const container = messagesContainerRef.current;
     if (container) {
-      // Check position after a short delay to allow for layout changes
-      const timeoutId = setTimeout(checkPosition, 100);
-      return () => clearTimeout(timeoutId);
+      // Используем RAF для проверки позиции после изменения размера
+      const checkPosition = () => {
+        const atBottom = checkIfAtBottom();
+        setIsAtBottom(atBottom);
+      };
+      
+      scrollRAFRef.current = requestAnimationFrame(checkPosition);
+      return () => {
+        if (scrollRAFRef.current) {
+          cancelAnimationFrame(scrollRAFRef.current);
+        }
+      };
     }
   }, [messages.length, checkIfAtBottom]);
 
@@ -165,27 +183,20 @@ export default function AgentChat({
 
   // Handle SSE events
   const handleSSEMessage = useCallback((event: { type: string; data: any }) => {
-    console.log('SSE Event received (UPDATED VERSION):', event);
-
     // Get the actual event type from the data if available
     const actualEventType = event.data?.event_type || event.data?.original_event_type || event.type;
     
     // Handle generic "message" events that might be heartbeats or connection events
     if (actualEventType === 'message' && !event.data?.event_type) {
-      // This is likely a heartbeat or connection event - just log it
-      console.log('Heartbeat/connection event received:', event.data);
+      // This is likely a heartbeat or connection event - just return
       return;
     }
     
     // Remove workflow prefix if present
     const cleanEventType = actualEventType.replace('workflow.', '');
     
-    console.log('Processing event type:', cleanEventType, 'Category:', event.data?.event_category);
-    console.log('Event data:', event.data);
-    
     // Check if this event should create a visible message
     if (!shouldDisplayEvent(cleanEventType)) {
-      console.log(`Skipping non-displayable event: ${cleanEventType}`);
       return;
     }
 
@@ -338,18 +349,14 @@ export default function AgentChat({
 
     // Clear any loading state FIRST - before message parsing
     if (cleanEventType === 'WorkflowCompleted' || cleanEventType === 'WorkflowFailed' || cleanEventType === 'task_failed') {
-      console.log(`Clearing loading state for event: ${cleanEventType}`);
       setIsLoading(false);
     }
 
     // Parse event into message component for all other event types
     const messageComponent = parseEventToMessage(cleanEventType, event.data);
     if (!messageComponent) {
-      console.log(`No message component created for event: ${cleanEventType}`);
       return;
     }
-
-    console.log(`Creating message component of type: ${messageComponent.type}`);
 
     // Add the new message component to the messages
     setMessages(prev => [...prev, messageComponent]);
@@ -357,7 +364,6 @@ export default function AgentChat({
     // Handle special system events that don't create messages but affect UI state
     switch (cleanEventType) {
       case 'connected':
-        console.log('Connected to task stream');
         break;
 
       case 'task_created':
@@ -365,7 +371,6 @@ export default function AgentChat({
           setCurrentTaskId(event.data.task_id);
           onTaskCreatedRef.current?.(event.data.task_id);
         }
-        console.log('Task created, waiting for workflow events...');
         break;
 
       case 'error':
@@ -386,11 +391,11 @@ export default function AgentChat({
   }, []);
 
   const handleSSEOpen = useCallback(() => {
-    console.log('SSE connection opened');
+    // SSE connection opened
   }, []);
 
   const handleSSEClose = useCallback(() => {
-    console.log('SSE connection closed');
+    // SSE connection closed
   }, []);
 
   // File handling functions
@@ -576,8 +581,14 @@ export default function AgentChat({
         <div className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <Button
             onClick={() => {
-              messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-              setIsAtBottom(true);
+              // Принудительно скроллим к низу
+              messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+              
+              // Проверяем позицию после скролла
+              requestAnimationFrame(() => {
+                const atBottom = checkIfAtBottom();
+                setIsAtBottom(atBottom);
+              });
             }}
             size="sm"
             className="h-8 w-8 rounded-full hover:text-white shadow-lg bg-white text-text dark:bg-zinc-900 dark:text-zinc-200 "

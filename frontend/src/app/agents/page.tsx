@@ -14,11 +14,11 @@ import { Agent } from "@/types";
 import AgentCard from "./components/AgentCard";
 import GridAndTableViews from "@/components/GridAndTableViews";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useSearchWithDebounce, useTabState } from "../../../hooks";
+import { useSearchWithDebounce, useTabState } from "@/hooks";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
-import { getToolAvatarUrls } from "../../../utils/toolsDisplay";
+import ModelDisplay from "@/app/agents/components/ModelDisplay";
+import { getToolAvatarUrls } from "@/utils/toolsDisplay";
 
 export default function AgentsBrowsePage() {
   const t = useTranslations("Agent");
@@ -66,7 +66,7 @@ export default function AgentsBrowsePage() {
     }
     
     const newUrl = params.toString() ? `?${params.toString()}` : "";
-    router.replace(`/agents/browse${newUrl}`, { scroll: false });
+    router.replace(`/agents${newUrl}`, { scroll: false });
   }, [debouncedQuery, router, searchParams, urlTab]);
 
   // Сохраняем таб в куки при изменении
@@ -239,7 +239,7 @@ export default function AgentsBrowsePage() {
           }}
           data={filteredAgents}
           columns={columns}
-          routeChange="/agents/browse"
+          routeChange="/agents"
           cardContent={(item) => <AgentCard agent={item} />}
           cardClassName="px-0 pb-0 overflow-hidden"
           itemLink={(agent) => `/agents/${agent.id}`}

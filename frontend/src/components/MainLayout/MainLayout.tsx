@@ -57,7 +57,7 @@ const navData = {
     }, {
         title: "Browse",
         titleKey: "browse",
-        url: "/agents/browse",
+        url: "/agents",
         icon: Bot,
     }, {
         title: "Tasks",

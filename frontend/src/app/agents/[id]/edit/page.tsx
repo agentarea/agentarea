@@ -34,7 +34,7 @@ export default async function EditAgentPage({ params }: Props) {
           title: "Edit Agent",
           backLink: {
             label: "Back to Browse Agents",
-            href: "/agents/browse"
+            href: "/agents"
           }
         }}>
         <EditAgentClient 

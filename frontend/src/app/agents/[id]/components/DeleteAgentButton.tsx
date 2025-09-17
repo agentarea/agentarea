@@ -14,7 +14,7 @@ export default function DeleteAgentButton({ agentId, agentName }: DeleteAgentBut
       itemId={agentId}
       itemName={agentName}
       onDelete={deleteAgent}
-      redirectPath="/agents/browse"
+      redirectPath="/agents"
       title="Delete Agent"
       successMessage="Agent deleted successfully"
       errorMessages={{
