@@ -94,12 +94,12 @@ export default function AgentsBrowsePage() {
         setLoading(true);
         const { data: agentsData = [], error: apiError } = await listAgents();
         if (apiError) {
-          setError("Failed to load agents");
+          setError(t("error.loadingData"));
         } else {
           setAgents(agentsData);
         }
       } catch (err) {
-        setError("Failed to load agents");
+        setError(t("error.loadingData"));
       } finally {
         setLoading(false);
       }
@@ -110,7 +110,7 @@ export default function AgentsBrowsePage() {
 
   const columns = [
     {
-      header: "Name",
+      header: t("name"),
       render: (value: string) => (
         <div className="font-semibold truncate">
           {value}
@@ -119,14 +119,14 @@ export default function AgentsBrowsePage() {
       accessor: "name",
     },
     {
-      header: "Status",
+      header: t("status"),
       accessor: "status",
       render: (value: string) => (
         <StatusBadge status={value} variant="agent" />
       ),
     },
     {
-      header: "Model",
+      header: t("model"),
       accessor: "model_id",
       render: (value: string, item: any) => (
         <ModelDisplay 
@@ -135,7 +135,7 @@ export default function AgentsBrowsePage() {
       ),
     },
     {
-      header: "Description",
+      header: t("description"),
       accessor: "description",
       render: (value: string) => (
         <div className="max-w-xs truncate note" title={value}>
@@ -144,7 +144,7 @@ export default function AgentsBrowsePage() {
       ),
     },
     {
-      header: "Tools",
+      header: t("tools"),
       accessor: "tools",
       render: (value: string, item: Agent) => {
         const toolAvatars = getToolAvatarUrls(item);
@@ -154,7 +154,7 @@ export default function AgentsBrowsePage() {
             avatarUrls={toolAvatars}
           />
         ) : (
-          <span className="text-xs text-muted-foreground">No tools</span>
+          <span className="text-xs text-muted-foreground">{t("noTools")}</span>
         );
       },
     },
@@ -176,7 +176,7 @@ export default function AgentsBrowsePage() {
           </Button>
           <Link href={`/agents/${item.id}/edit`} onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
-              Edit
+              {commonT("edit")}
             </Button>
           </Link>
         </div>
@@ -207,7 +207,7 @@ export default function AgentsBrowsePage() {
         breadcrumb: [
           {label: t("browseAgents")},
         ],
-        description: t("description"),
+        description: t("descriptionPage"),
         controls: (
           <Link href="/agents/create">
             <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">

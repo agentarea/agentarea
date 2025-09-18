@@ -11,6 +11,7 @@
     "close": "Close",
     "back": "Back",
     "create": "Create",
+    "deleteDescription": "Are you sure you want to delete \"{itemName}\"? This action cannot be undone.",
     "emptyState": {
       "title": "Empty data",
       "description": "Sorry, we couldn't find any data"
@@ -232,8 +233,8 @@
     "title": "Provider Management",
     "description": "Manage AI provider configurations and discover available providers",
     "createButton": "Add Configuration",
-    "editConfiguration": "Edit Configuration",
-    "configureProvider": "Configure Provider",
+    "editConfiguration": "Edit",
+    "configureProvider": "Configure",
     "availableProviders": "Available Providers",
     "deleteProviderConfiguration": "Delete Provider Configuration",
     "deleteProviderConfigurationDescription": "Are you sure you want to delete the provider configuration \"{configName}\"? This action cannot be undone and will permanently remove the configuration.",
@@ -314,14 +315,34 @@
   },
 
   "Agent": {
+    "name": "Name",
+    "status": "Status",
+    "model": "Model",
+    "description": "Description",
+    "tools": "Tools",
+    "noTools": "No tools",
+    "error": {
+      "loadingData": "Error loading data"
+    },
+    "createTask": "Create Task",
+    "currentTasks": "Current Tasks",
     "browseAgents": "Browse Agents",
     "newAgent": "New Agent",
-    "description": "Browse and manage your agents",
+    "descriptionPage": "Browse and manage your agents",
     "deployNewAgent": "Deploy New Agent",
     "deployNewAgentDescription": "Deploy a new agent to get started.",
     "noAgentsYet": "No agents yet",
     "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
     "addYourFirstAgent": "Add your first agent",
+    "delete": {
+      "deleteAgent": "Delete Agent",
+      "agentDeletedSuccessfully": "Agent deleted successfully",
+      "error": {
+        "noAgentIdProvided": "No agent ID provided",
+        "failedToDeleteAgent": "Failed to delete agent",
+        "unexpectedErrorWhileDeletingAgent": "Unexpected error while deleting agent"
+      }
+    },
     "create": {
       "agentName": "Agent Name",
       "agentNamePlaceholder": "Enter agent name",

@@ -2,6 +2,7 @@
 
 import { deleteAgent } from '@/lib/api';
 import DeleteButton from '@/components/DeleteButton';
+import { useTranslations } from 'next-intl';
 
 interface DeleteAgentButtonProps {
   agentId: string;
@@ -9,18 +10,19 @@ interface DeleteAgentButtonProps {
 }
 
 export default function DeleteAgentButton({ agentId, agentName }: DeleteAgentButtonProps) {
+  const t = useTranslations("Agent.delete");
   return (
     <DeleteButton
       itemId={agentId}
       itemName={agentName}
       onDelete={deleteAgent}
       redirectPath="/agents"
-      title="Delete Agent"
-      successMessage="Agent deleted successfully"
+      title={t("deleteAgent")}
+      successMessage={t("agentDeletedSuccessfully")}
       errorMessages={{
-        noIdProvided: 'No agent ID provided',
-        failedToDelete: 'Failed to delete agent',
-        unexpectedError: 'Unexpected error while deleting agent'
+        noIdProvided: t("error.noAgentIdProvided"),
+        failedToDelete: t("error.failedToDeleteAgent"),
+        unexpectedError: t("error.unexpectedErrorWhileDeletingAgent")
       }}
     />
   );

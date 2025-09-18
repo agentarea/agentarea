@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useTranslations } from "next-intl";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Bot, 
   CheckCircle,
   Pause,
   Play,
@@ -68,6 +68,7 @@ interface Props {
 
 
 export default function AgentDetailClient({ agent }: Props) {
+  const t = useTranslations("Agent");
   const [activeTab, setActiveTab] = useState("create");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -154,14 +155,14 @@ export default function AgentDetailClient({ agent }: Props) {
           className="gap-2 px-3 py-2 rounded-none border-b-2 border-transparent data-[state=active]:border-gray-900 data-[state=active]:bg-transparent bg-transparent hover:bg-gray-50 transition-all duration-200 text-sm"
         >
           <Plus className="h-3 w-3" />
-          Create Task
+          {t("createTask")}
         </TabsTrigger>
         <TabsTrigger 
           value="tasks" 
           className="gap-2 px-3 py-2 rounded-none border-b-2 border-transparent data-[state=active]:border-gray-900 data-[state=active]:bg-transparent bg-transparent hover:bg-gray-50 transition-all duration-200 text-sm"
         >
           <CheckCircle className="h-3 w-3" />
-          Current Tasks
+          {t("currentTasks")}
         </TabsTrigger>
       </TabsList>
 

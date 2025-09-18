@@ -44,7 +44,7 @@ export default function DeleteButton({
     ...errorMessages
   };
 
-  const defaultDescription = description || `Are you sure you want to delete "${itemName}"? This action cannot be undone.`;
+  const defaultDescription = description || tCommon("deleteDescription", { itemName });
 
   const handleDelete = async () => {
     if (!itemId) {

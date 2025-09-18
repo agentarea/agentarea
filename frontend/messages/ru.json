@@ -11,6 +11,7 @@
     "close": "Закрыть",
     "back": "Назад",
     "create": "Создание",
+    "deleteDescription": "Вы уверены, что хотите удалить \"{itemName}\"? Это действие не может быть отменено.",
     "emptyState": {
       "title": "Пустые данные",
       "description": "Извините, мы не смогли найти данные"
@@ -62,7 +63,7 @@
   "Sidebar": {
     "workplace": "Рабочее место",
     "agents": "Агенты",
-    "browse": "Обзор",
+    "browse": "Агенты",
     "tasks": "Задачи",
     "llms": "Модели LLM",
     "llmBrowse": "Обзор",
@@ -277,9 +278,30 @@
   },
 
   "Agent": {
-    "browseAgents": "Обзор агентов",
+    "name": "Имя",
+    "status": "Статус",
+    "model": "Модель",
+    "description": "Описание",
+    "tools": "Инструменты",
+    "noTools": "Нет инструментов",
+    "createTask": "Создать задачу",
+    "currentTasks": "Текущие задачи",
+    "error": {
+      "loadingData": "Ошибка загрузки данных"
+    },
+    "delete": {
+
+      "deleteAgent": "Удалить агента",
+      "agentDeletedSuccessfully": "Агент успешно удален",
+      "error": {
+        "noAgentIdProvided": "ID агента не предоставлен",
+        "failedToDeleteAgent": "Не удалось удалить агента",
+        "unexpectedErrorWhileDeletingAgent": "Произошла непредвиденная ошибка при удалении агента"
+      }
+    },
+    "browseAgents": "Агенты",
     "newAgent": "Новый агент",
-    "description": "Обзор и управление вашими агентами",
+    "descriptionPage": "Обзор и управление вашими агентами",
     "deployNewAgent": "Создать нового агента",
     "deployNewAgentDescription": "Создайте нового агента, чтобы начать работу.",
     "deployNewAgentButton": "Создать агента",
