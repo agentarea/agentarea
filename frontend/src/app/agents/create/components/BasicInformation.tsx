@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { Bot, FileText, MessageSquare, Cpu, Brain } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister, UseFormSetValue } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
@@ -17,23 +17,6 @@ import { getProviderIconUrl } from "@/lib/provider-icons";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
-// Функция для группировки моделей по конфигурациям
-const groupModelsByConfig = (instances: LLMModelInstance[]) => {
-  const grouped = instances.reduce((acc, instance) => {
-    const configName = instance.config_name || 'Unknown Config';
-    if (!acc[configName]) {
-      acc[configName] = [];
-    }
-    acc[configName].push(instance);
-    return acc;
-  }, {} as Record<string, LLMModelInstance[]>);
-
-  return Object.entries(grouped).map(([configName, instances]) => ({
-    configName,
-    instances,
-    icon: getProviderIconUrl(instances[0]?.provider_name || '')
-  }));
-};
 
 type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
@@ -126,42 +109,14 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
               control={control}
               rules={{ required: "Model is required" }}
               render={({ field }) => (
-                <SearchableSelect
-                  options={[]} // Пустой массив, так как используем группы
-                  groups={llmModelInstances.length > 0 ? 
-                    groupModelsByConfig(llmModelInstances).map((group) => ({
-                      label: group.configName,
-                      icon: group.icon || undefined,
-                      options: group.instances.map((instance) => ({
-                        id: `${instance.provider_config_id}:${instance.id}`,
-                        label: instance.name,
-                        description: instance.config_name || instance.provider_name,
-                        icon: getProviderIconUrl(instance.provider_name || '') || undefined,
-                      }))
-                    })) : []
-                  }
-                  value={(() => {
-                    // Если у нас есть выбранное значение, находим соответствующий инстанс и создаем составной ключ
-                    if (field.value && llmModelInstances.length > 0) {
-                      const selectedInstance = llmModelInstances.find(instance => instance.id === field.value);
-                      if (selectedInstance) {
-                        return `${selectedInstance.provider_config_id}:${selectedInstance.id}`;
-                      }
-                    }
-                    return field.value;
-                  })()}
-                  onValueChange={(value) => {
-                    // При выборе значения извлекаем только instance.id для сохранения в форме
-                    if (typeof value === 'string' && value.includes(':')) {
-                      const instanceId = value.split(':')[1];
-                      field.onChange(instanceId);
-                    } else {
-                      field.onChange(value);
-                    }
-                  }}
+                <ProviderModelSelector
+                  modelInstances={llmModelInstances}
+                  value={field.value}
+                  onValueChange={field.onChange}
                   placeholder={t("selectModel")}
                   open={searchableSelectOpen}
                   onOpenChange={setSearchableSelectOpen}
+                  onAddProvider={handleCreateConfigClick}
                   emptyMessage={
                     <div className="flex flex-col items-center gap-2 px-6">
                       <div>{t("noConfigurationsYet")}</div>
@@ -175,7 +130,6 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
                       </Button>
                     </div>
                   }
-                  defaultIcon={<Brain className="w-5 h-5" />}
                 />
               )}
             />
