@@ -1,5 +1,6 @@
 import React from 'react';
 import BaseMessage from './BaseMessage';
+import { useTranslations } from 'next-intl';
 import MessageWrapper from './MessageWrapper';
 
 interface ToolResultData {
@@ -11,6 +12,8 @@ interface ToolResultData {
 }
 
 const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
+  const t = useTranslations("Chat.Messages");
+  
   const formatResult = (result: any) => {
     if (typeof result === 'string') {
       return result;
@@ -39,7 +42,7 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
 
   return (
     <MessageWrapper type="tool-result">
-      <BaseMessage headerLeft={<span>{`Tool Call: ${data.tool_name}`}</span>} collapsed={true}>
+      <BaseMessage headerLeft={<span>{`${t("toolCall")}: ${data.tool_name}`}</span>} collapsed={true}>
         <div className={`text-sm leading-relaxed ${colors.content}`}>
           <pre className="whitespace-pre-wrap overflow-x-auto">
             {formatResult(data.result)}

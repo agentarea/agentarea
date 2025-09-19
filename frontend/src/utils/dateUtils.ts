@@ -1,4 +1,6 @@
+import { useTranslations } from "next-intl";
 export const formatTimestamp = (timestamp: string): string => {
+  const t = useTranslations("Common");
   const date = new Date(timestamp);
   const today = new Date();
   const yesterday = new Date(today);
@@ -10,10 +12,10 @@ export const formatTimestamp = (timestamp: string): string => {
   const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (isToday) {
-    return `Today at ${timeString}`;
+    return `${t("today")} ${t("at")} ${timeString}`;
   } else if (isYesterday) {
-    return `Yesterday at ${timeString}`;
+    return `${t("yesterday")} ${t("at")} ${timeString}`;
   } else {
-    return date.toLocaleDateString('en-GB') + ' at ' + timeString;
+    return `${date.toLocaleDateString('en-GB')} ${t("at")} ${timeString}`;
   }
 };

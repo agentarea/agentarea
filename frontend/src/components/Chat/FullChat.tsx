@@ -11,6 +11,7 @@ import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 interface UserChatMessage {
   id: string;
@@ -53,6 +54,7 @@ export default function FullChat({
   onTaskStarted,
   onTaskFinished,
 }: FullChatProps) {
+  const t = useTranslations("Chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -633,7 +635,7 @@ export default function FullChat({
                  ref={textareaRef}
                  value={input}
                  onChange={handleInputChange}
-                 placeholder={`Write new task for ${agent.name}...`}
+                 placeholder={t("writeNewTaskFor", {agentName: agent.name})}
                  disabled={isLoading}
                  className="min-h-auto h-auto resize-none border-none duration-200 pr-12 pb-0 pt-3"
                  rows={3}

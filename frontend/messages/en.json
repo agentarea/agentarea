@@ -11,6 +11,9 @@
     "close": "Close",
     "back": "Back",
     "create": "Create",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "at": "at",
     "deleteDescription": "Are you sure you want to delete \"{itemName}\"? This action cannot be undone.",
     "emptyState": {
       "title": "Empty data",
@@ -321,6 +324,16 @@
     "description": "Description",
     "tools": "Tools",
     "noTools": "No tools",
+    "descriptionPage": {
+      "time": "Time",
+      "usage": "Usage",
+      "kpi": "KPI",
+      "info": "Info",
+      "from": "From",
+      "description": "Description",
+      "model": "Model",
+      "tools": "Tools"
+    },
     "error": {
       "loadingData": "Error loading data"
     },
@@ -328,7 +341,7 @@
     "currentTasks": "Current Tasks",
     "browseAgents": "Browse Agents",
     "newAgent": "New Agent",
-    "descriptionPage": "Browse and manage your agents",
+    "mainDescriptionPage": "Browse and manage your agents",
     "deployNewAgent": "Deploy New Agent",
     "deployNewAgentDescription": "Deploy a new agent to get started.",
     "noAgentsYet": "No agents yet",
@@ -355,6 +368,18 @@
       "noConfigurationsYet": "No configurations yet",
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
       "createConfiguration": "Create Configuration"
+    }
+  },
+  "Chat": {
+    "writeNewTaskFor": "Write new task for {agentName}...",
+    "Messages": {
+      "toolCall": "Tool Call",
+      "calling": "Calling",
+      "processing": "Processing",
+      "arguments": "Arguments",
+      "executionTime": "Execution Time",
+      "result": "Result"
+      
     }
   }
 }

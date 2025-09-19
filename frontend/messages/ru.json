@@ -8,6 +8,9 @@
     "add": "Добавить",
     "cancel": "Отменить",
     "save": "Сохранить",
+    "today": "Сегодня",
+    "yesterday": "Вчера",
+    "at": "в",
     "close": "Закрыть",
     "back": "Назад",
     "create": "Создание",
@@ -286,6 +289,16 @@
     "noTools": "Нет инструментов",
     "createTask": "Создать задачу",
     "currentTasks": "Текущие задачи",
+    "descriptionPage": {
+      "time": "Время",
+      "usage": "Использование",
+      "kpi": "KPI",
+      "info": "Информация",
+      "from": "из",
+      "description": "Описание",
+      "model": "Модель",
+      "tools": "Инструменты"
+    },
     "error": {
       "loadingData": "Ошибка загрузки данных"
     },
@@ -301,7 +314,7 @@
     },
     "browseAgents": "Агенты",
     "newAgent": "Новый агент",
-    "descriptionPage": "Обзор и управление вашими агентами",
+    "mainDescriptionPage": "Обзор и управление вашими агентами",
     "deployNewAgent": "Создать нового агента",
     "deployNewAgentDescription": "Создайте нового агента, чтобы начать работу.",
     "deployNewAgentButton": "Создать агента",
@@ -320,6 +333,17 @@
       "noConfigurationsYet": "Нет конфигураций",
       "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
       "createConfiguration": "Создать конфигурацию"
+    }
+  },
+  "Chat": {
+    "writeNewTaskFor": "Напишите новую задачу для {agentName}...",
+    "Messages": {
+      "toolCall": "Использую инструмент",
+      "calling": "Вызов",
+      "processing": "Обработка",
+      "arguments": "Аргументы",
+      "executionTime": "Время выполнения",
+      "result": "Результат"
     }
   }
 }

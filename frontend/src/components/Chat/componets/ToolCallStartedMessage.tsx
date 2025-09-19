@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings } from 'lucide-react';
 import BaseMessage from './BaseMessage';
 import MessageWrapper from './MessageWrapper';
+import { useTranslations } from 'next-intl';
 
 interface ToolCallStartedData {
   tool_name: string;
@@ -11,6 +12,7 @@ interface ToolCallStartedData {
 
 const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({ data }) => {
   const [showCalling, setShowCalling] = useState(true);
+  const t = useTranslations("Chat.Messages");
 
   useEffect(() => {
     // Показываем "calling..." постоянно, пока не заменится на результат
@@ -19,7 +21,7 @@ const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({ data 
   return (
     <MessageWrapper type="tool-call" >
       <BaseMessage 
-        headerLeft={`Tool Call: ${data.tool_name}`} 
+        headerLeft={`${t("toolCall")}: ${data.tool_name}`} 
         headerRight={
           <div className="flex items-center gap-2">
             {showCalling && (
@@ -32,7 +34,7 @@ const ToolCallStartedMessage: React.FC<{ data: ToolCallStartedData }> = ({ data 
               />
             )}
             <span className={showCalling ? "animate-pulse text-blue-600" : ""}>
-              {showCalling ? "Calling..." : "Processing..."}
+              {showCalling ? `${t("calling")}...` : `${t("processing")}...`}
             </span>
           </div>
         } 

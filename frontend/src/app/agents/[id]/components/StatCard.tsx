@@ -1,11 +1,13 @@
 import { cn } from "@/lib/utils";
 import { Clock, DollarSign, TrendingUp, Info } from "lucide-react";
+import { useTranslations } from "next-intl";
 interface StatCardProps {
     children: React.ReactNode;
     type?: "timer" | "money" | "kpi" | "info";
 }
 
 export default function StatCard({ children, type }: StatCardProps) {
+    const t = useTranslations("Agent.descriptionPage");
     // return (
     //     <div className={cn(
     //         "card border-none card-shadow flex flex-row gap-2 py-2 items-center relative", 
@@ -50,10 +52,10 @@ export default function StatCard({ children, type }: StatCardProps) {
                     <Info className="h-3 w-3 mt-0.5"/> 
                 }
                 {
-                    type === "timer" ? "Time" :
-                    type === "money" ? "Usage" :
-                    type === "kpi" ? "KPI" :
-                    "Info"
+                    type === "timer" ? t("time") :
+                    type === "money" ? t("usage") :
+                    type === "kpi" ? t("kpi") :
+                    t("info")
                 }
             </div>
             <div className={cn(

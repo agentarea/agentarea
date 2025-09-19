@@ -5,6 +5,7 @@ import Timer from "./Timer";
 import ModelBadge from "./ModelBadge";
 import ToolsDisplay from "./ToolsDisplay";
 import StatCard from "./StatCard";
+import { useTranslations } from "next-intl";
 
 interface Props {
     agent: Agent;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function AgentDetails({ agent, isTaskRunning = false }: Props) {
+    const t = useTranslations("Agent.descriptionPage");
     return (
         <div className="w-full flex flex-row gap-2">
             {/* <div className="w-full card">
@@ -28,17 +30,17 @@ export default function AgentDetails({ agent, isTaskRunning = false }: Props) {
             <div className="w-full card flex flex-row gap-6 col-span-5 flex-1 py-2 px-4">
                 <div className="flex flex-col space-y-2 flex-1">
                     <div className="flex flex-row gap-2 items-center">
-                        <p className="text-xs">Model:</p >
+                        <p className="text-xs">{t("model")}:</p >
                             <ModelBadge modelId={agent.model_id} />
                     </div>
                     <div className="flex flex-row gap-2 items-center">
-                        <p className="text-xs">Tools:</p >
+                        <p className="text-xs">{t("tools")}:</p >
                         <ToolsDisplay agent={agent} />
                     </div>
                 </div>
                 
                 <div className="flex flex-row gap-2 items-top flex-1">
-                    <p className="text-xs mt-0.5">Description:</p>
+                    <p className="text-xs mt-0.5">{t("description")}:</p>
                     <p className="text-sm text-gray-500 line-clamp-4 overflow-hidden">
                         {agent.description || "No description available"}
                     </p>
@@ -52,7 +54,7 @@ export default function AgentDetails({ agent, isTaskRunning = false }: Props) {
                 <StatCard type="money">
                     <div className="flex flex-row gap-2 items-baseline">
                         <p className="text-4xl">0$</p>
-                        <p className="text-xs text-muted-foreground">from</p>
+                        <p className="text-xs text-muted-foreground">{t("from")}</p>
                         <p className="text-sm text-muted-foreground">20$</p>
                     </div>
                 </StatCard>

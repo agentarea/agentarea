@@ -207,7 +207,7 @@ export default function AgentsBrowsePage() {
         breadcrumb: [
           {label: t("browseAgents")},
         ],
-        description: t("descriptionPage"),
+        description: t("mainDescriptionPage"),
         controls: (
           <Link href="/agents/create">
             <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
