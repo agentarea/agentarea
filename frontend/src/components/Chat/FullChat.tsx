@@ -551,14 +551,15 @@ export default function FullChat({
   };
 
   return (
-    <div className={cn('w-full max-w-7xl mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', hasUserMessages ? 'justify-between' : 'justify-center')}>
+    <div className={cn('rounded-3xl  w-full max-w-7xl mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', 
+    hasUserMessages ? 'justify-between mt-2 border bg-chatBackground' : 'justify-center')}>
         {/* {
             !hasUserMessages && (
                 <div>Hello! How can I help you today?</div>
             ) 
         } */}
-        <div className={`flex flex-col overflow-auto p-0 relative ${
-          hasUserMessages ? 'flex-1' : 'flex-none'
+        <div className={`flex flex-col overflow-auto p-0 relative transition-all duration-700 ease-out ${
+          hasUserMessages ? 'flex-1 h-full' : 'flex-none h-0'
         }`}>
         <div 
           ref={messagesContainerRef}
@@ -632,10 +633,10 @@ export default function FullChat({
                  ref={textareaRef}
                  value={input}
                  onChange={handleInputChange}
-                 placeholder={`Message ${agent.name}...`}
+                 placeholder={`Write new task for ${agent.name}...`}
                  disabled={isLoading}
                  className="min-h-auto h-auto resize-none border-none duration-200 pr-12 pb-0 pt-3"
-                 rows={4}
+                 rows={3}
                  onKeyDown={(e) => {
                    if (e.key === 'Enter' && !e.shiftKey) {
                      e.preventDefault();

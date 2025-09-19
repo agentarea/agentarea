@@ -49,6 +49,9 @@ export const UserMessage: React.FC<UserMessageProps> = ({ id, content, timestamp
         </div>
       </BaseMessage>
     </MessageWrapper>
+    // <div className="ml-10 py-5 text-lg font-medium">
+    //   {content}
+    // </div>
   );
 };
 
