@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { listModelInstances } from "@/lib/api";
+import { getProviderIconUrl } from "@/lib/provider-icons";
+import { Bot } from "lucide-react";
 
 interface ModelInfo {
   provider_name?: string;
@@ -56,20 +58,65 @@ export default function ModelDisplay({
     fetchModelInfo();
   }, [modelId]);
 
+  const renderProviderIcon = () => {
+    if (isLoading) {
+      return <div className="w-5 h-5 animate-pulse bg-gray-200 rounded" />;
+    }
+
+    if (!modelInfo?.provider_name) {
+      return <Bot className="w-5 h-5 text-muted-foreground" />;
+    }
+
+    const iconUrl = getProviderIconUrl(modelInfo.provider_name);
+    
+    if (iconUrl) {
+      return (
+        <img
+          src={iconUrl}
+          alt={modelInfo.provider_name}
+          className="w-5 h-5 rounded dark:invert"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+          }}
+        />
+      );
+    }
+
+    return <Bot className="w-5 h-5 text-muted-foreground" />;
+  };
+
   if (isLoading) {
-    return <span className="text-muted-foreground">Loading...</span>;
+    return (
+      <div className="flex items-center gap-2">
+        <div className="w-5 h-5 animate-pulse bg-gray-200 rounded" />
+        <span className="text-muted-foreground">Loading...</span>
+      </div>
+    );
   }
 
   if (!modelInfo) {
-    return <span className="text-muted-foreground">Unknown model</span>;
+    return (
+      <div className="flex items-center gap-2">
+        <Bot className="w-5 h-5 text-muted-foreground" />
+        <span className="text-muted-foreground">Unknown model</span>
+      </div>
+    );
   }
 
   return (
-    <span className={className}>
-      <span>{modelInfo.config_name || modelInfo.provider_name}</span>
-      {modelInfo.model_display_name && (
-        <span className="pl-1 font-semibold">({modelInfo.model_display_name})</span>
-      )}
-    </span>
+    <div className={`flex items-center gap-2 ${className}`}>
+      {renderProviderIcon()}
+      <div className="flex flex-col">
+        <span className="font-medium">
+          {modelInfo.model_display_name || modelInfo.config_name || modelInfo.provider_name}
+        </span>
+        {modelInfo.provider_name && modelInfo.model_display_name && (
+          <span className="text-sm text-muted-foreground">
+            {modelInfo.provider_name}
+          </span>
+        )}
+      </div>
+    </div>
   );
 } 
