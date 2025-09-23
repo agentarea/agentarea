@@ -57,7 +57,7 @@ const navData = {
     }, {
         title: "Browse",
         titleKey: "browse",
-        url: "/agents/browse",
+        url: "/agents",
         icon: Bot,
     }, {
         title: "Tasks",
@@ -99,7 +99,8 @@ export default function MainLayout({
       <SidebarProvider defaultOpen={sidebarDefaultOpen}>
         <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-white dark:bg-zinc-800">
           <AppSidebar data={navData} />
-          <main className="flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto ">
+          <main className="flex-1 overflow-hidden max-h-screen bg-[url('/dots3.png')] bg-contain bg-repeat bg-size-100 dark:bg-zinc-900 dark:bg-none h-full overflow-y-auto ">
+          {/* <main className="flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto "> */}
               {children}
           </main>
         </div>

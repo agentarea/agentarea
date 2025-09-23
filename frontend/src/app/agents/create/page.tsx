@@ -41,7 +41,7 @@ export default async function CreateAgentPage() {
       header={{
         // title: "Create Agent",
         breadcrumb: [
-          {label: t("browseAgents"), href: "/agents/browse"},
+          {label: t("browseAgents"), href: "/agents"},
           {label: tCommon("create")},
           {label: t("newAgent")},
         ],

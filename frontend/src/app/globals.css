@@ -26,6 +26,8 @@ body {
     --sidebar: 240 10% 96%;
     --text: 220 9% 19%;
 
+    --chat-background: 0 0 98%;
+
     /* --primary: 0 0% 9%;
     --primary-foreground: 0 0% 98%; */
     /* perple */
@@ -81,6 +83,8 @@ body {
     /* --primary: 0 0% 98%;
     --primary-foreground: 0 0% 9%; */
 
+    --chat-background: 240 4% 16%;
+
     /* perple */
     /* --primary: 263 44% 46%;
     --primary-foreground: 266 100% 99%; */
@@ -128,15 +132,18 @@ body {
   }
 
   h1 {
-    @apply font-montserrat font-bold text-xl md:text-2xl;
+    @apply font-bold text-xl md:text-2xl;
+    /* @apply font-montserrat; */
   }
 
   h2 {
-    @apply font-montserrat font-semibold text-lg md:text-xl;
+    @apply font-semibold text-lg md:text-xl;
+    /* @apply font-montserrat; */
   }
 
   h3 {
-    @apply font-[500] text-[16px] font-montserrat;
+    @apply font-[500] text-[16px];
+
   }
 
   .content-section {
@@ -144,7 +151,7 @@ body {
   }
 
   .card {
-    @apply bg-white dark:bg-zinc-800 rounded-[16px];
+    @apply bg-white dark:bg-zinc-800 rounded-2xl;
     @apply p-[16px] md:p-[20px] lg:p-[24px] cursor-pointer;
     @apply border border-zinc-200 dark:border-zinc-700;
     @apply hover:shadow-md transition-all duration-300;
@@ -200,6 +207,19 @@ body {
   .card-item {
     @apply border border-border dark:border-zinc-700 rounded-md transition-colors pr-[7px];
   }
+}
+
+/* Hide dashed separator for the last message */
+.aa-message-wrapper:last-child .aa-dashed {
+  display: none;
+}
+/* Hide dashed when wrapper is immediately before the end marker */
+.aa-message-wrapper:has(+ .aa-messages-end) .aa-dashed {
+  display: none;
+}
+/* Hide dashed when the next message is a user message (end of assistant group) */
+.aa-message-wrapper:has(+ .aa-user-message) .aa-dashed {
+  display: none;
 }
 
 /* Sonner Toast Styles */

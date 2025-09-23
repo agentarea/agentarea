@@ -50,12 +50,12 @@ export function getToolAvatars(agent: Agent): ToolAvatar[] {
   if (agent.tools_config.mcp_server_configs && Array.isArray(agent.tools_config.mcp_server_configs)) {
     for (const serverConfig of agent.tools_config.mcp_server_configs) {
       if (typeof serverConfig === 'object' && serverConfig.mcp_server_id) {
-        // For now, we'll use generic MCP icons
-        // In the future, this could be enhanced to show specific server icons
-        const iconUrl = MCP_SERVER_ICONS.default;
+        // Try to match server ID to known icons
+        const serverId = serverConfig.mcp_server_id.toLowerCase();
+        const iconUrl = MCP_SERVER_ICONS[serverId] || MCP_SERVER_ICONS.default;
         toolAvatars.push({
           imageUrl: iconUrl,
-          name: `MCP Server: ${serverConfig.mcp_server_id}`,
+          name: serverConfig.mcp_server_id,
           type: 'mcp'
         });
       }
@@ -91,4 +91,32 @@ export function getToolsSummary(agent: Agent): string {
   if (mcpCount > 0) parts.push(`${mcpCount} MCP server${mcpCount > 1 ? 's' : ''}`);
   
   return parts.join(', ');
+}
+
+/**
+ * Get detailed list of tools for display
+ */
+export function getToolsList(agent: Agent): string {
+  const toolAvatars = getToolAvatars(agent);
+  
+  if (toolAvatars.length === 0) {
+    return "No tools configured";
+  }
+  
+  const toolNames = toolAvatars.map(tool => {
+    if (tool.type === 'builtin') {
+      return tool.name;
+    } else {
+      return tool.name; // Already includes "MCP Server: " prefix
+    }
+  });
+  
+  return toolNames.join(', ');
+}
+
+/**
+ * Get tools data for component display with icons
+ */
+export function getToolsForDisplay(agent: Agent): ToolAvatar[] {
+  return getToolAvatars(agent);
 }

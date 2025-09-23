@@ -2,7 +2,7 @@ import { Agent } from "@/types";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ArrowRight } from "lucide-react";
-import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
+import ModelDisplay from "@/app/agents/components/ModelDisplay";
 import { getToolAvatarUrls } from "@/utils/toolsDisplay";
 
 type AgentCardProps = {

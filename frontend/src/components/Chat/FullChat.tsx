@@ -1,11 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, Send, User, MessageCircle, Paperclip, X, ChevronDown } from "lucide-react";
+import { Send, Paperclip, ChevronDown } from "lucide-react";
 import { FileCard } from "@/components/ui/file-card";
 import { useSSE } from "@/hooks/useSSE";
 import { MessageRenderer, MessageComponentType } from "./MessageComponents";
@@ -13,6 +11,7 @@ import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 interface UserChatMessage {
   id: string;
@@ -32,7 +31,7 @@ interface WelcomeMessage {
 
 type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;
 
-interface AgentChatProps {
+interface FullChatProps {
   agent: {
     id: string;
     name: string;
@@ -41,24 +40,28 @@ interface AgentChatProps {
   taskId?: string;
   initialMessages?: ChatMessage[];
   onTaskCreated?: (taskId: string) => void;
+  onTaskStarted?: (taskId: string) => void;
+  onTaskFinished?: (taskId: string) => void;
   className?: string;
   height?: string;
 }
 
-export default function AgentChat({
+export default function FullChat({
   agent,
   taskId,
   initialMessages = [],
   onTaskCreated,
-  className = "",
-  height = "600px"
-}: AgentChatProps) {
+  onTaskStarted,
+  onTaskFinished,
+}: FullChatProps) {
+  const t = useTranslations("Chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(taskId || null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasUserMessages, setHasUserMessages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentAssistantMessageRef = useRef<MessageComponentType | null>(null);
@@ -102,6 +105,13 @@ export default function AgentChat({
     const isAtBottom = scrollTop + clientHeight >= scrollHeight - threshold;
     
     return isAtBottom;
+  }, []);
+
+  // Check if there are any user messages (not just welcome messages)
+  const checkForUserMessages = useCallback((messagesList: ChatMessage[]) => {
+    return messagesList.some(message => 
+      'role' in message && message.role === 'user'
+    );
   }, []);
 
   // Handle scroll events with debounce
@@ -167,8 +177,9 @@ export default function AgentChat({
       initializedRef.current = true;
       if (initialMessages.length > 0) {
         setMessages(initialMessages);
+        setHasUserMessages(checkForUserMessages(initialMessages));
       } else {
-        setMessages([
+        const welcomeMessages = [
           {
             id: "welcome",
             content: `Hello! I'm ${agent.name}. How can I help you today?`,
@@ -176,10 +187,12 @@ export default function AgentChat({
             timestamp: new Date().toISOString(),
             agent_id: agent.id,
           } as WelcomeMessage,
-        ]);
+        ];
+        setMessages(welcomeMessages);
+        setHasUserMessages(checkForUserMessages(welcomeMessages));
       }
     }
-  }, []); // Empty dependency array - only run once
+  }, [checkForUserMessages]); // Add checkForUserMessages to dependencies
 
   // Handle SSE events
   const handleSSEMessage = useCallback((event: { type: string; data: any }) => {
@@ -350,6 +363,13 @@ export default function AgentChat({
     // Clear any loading state FIRST - before message parsing
     if (cleanEventType === 'WorkflowCompleted' || cleanEventType === 'WorkflowFailed' || cleanEventType === 'task_failed') {
       setIsLoading(false);
+      
+      // Call onTaskFinished when task completes (success or failure)
+      // Use task_id from event data if currentTaskId is not available
+      const taskId = currentTaskId || event.data?.task_id;
+      if (onTaskFinished && taskId) {
+        onTaskFinished(taskId);
+      }
     }
 
     // Parse event into message component for all other event types
@@ -370,6 +390,8 @@ export default function AgentChat({
         if (event.data.task_id && !currentTaskId) {
           setCurrentTaskId(event.data.task_id);
           onTaskCreatedRef.current?.(event.data.task_id);
+          // Also call onTaskStarted with the real task ID
+          onTaskStarted?.(event.data.task_id);
         }
         break;
 
@@ -412,21 +434,9 @@ export default function AgentChat({
     fileInputRef.current?.click();
   };
 
-  // Auto-resize textarea function
-  const adjustTextareaHeight = () => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      const scrollHeight = textarea.scrollHeight;
-      const maxHeight = 3 * 24; // 3 lines * 24px line height
-      textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
-    }
-  };
-
   // Handle input change with auto-resize
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-    adjustTextareaHeight();
   };
 
   // Initialize SSE connection
@@ -450,7 +460,11 @@ export default function AgentChat({
     };
 
     // Add user message immediately
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(prev => {
+      const newMessages = [...prev, userMessage];
+      setHasUserMessages(checkForUserMessages(newMessages));
+      return newMessages;
+    });
     setInput("");
     setSelectedFiles([]);
     setIsLoading(true);
@@ -487,6 +501,14 @@ export default function AgentChat({
 
       if (!response.body) {
         throw new Error('No response body');
+      }
+
+      // Call onTaskStarted immediately after task creation
+      if (onTaskStarted) {
+        // We need to extract task ID from the response or create a temporary one
+        // For now, we'll use a timestamp-based ID and update it when we get the real task ID
+        const tempTaskId = `temp-${Date.now()}`;
+        onTaskStarted(tempTaskId);
       }
 
       const reader = response.body.getReader();
@@ -531,18 +553,22 @@ export default function AgentChat({
   };
 
   return (
-    <Card className={cn("flex justify-between flex-col h-full overflow-hidden max-h-full shadow-none p-0 hover:shadow-none cursor-auto", className)}>
-      <CardHeader className="border-b p-4">
-        <CardTitle className="flex items-center gap-2 ">
-          Chat with {agent.name}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col overflow-auto p-0 bg-chatBackground relative">
-        {/* Messages */}
+    <div className={cn('rounded-3xl  w-full max-w-7xl mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', 
+    hasUserMessages ? 'justify-between mt-2 border bg-chatBackground' : 'justify-center')}>
+        {/* {
+            !hasUserMessages && (
+                <div>Hello! How can I help you today?</div>
+            ) 
+        } */}
+        <div className={`flex flex-col overflow-auto p-0 relative transition-all duration-700 ease-out ${
+          hasUserMessages ? 'flex-1 h-full' : 'flex-none h-0'
+        }`}>
         <div 
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto space-y-3 py-3 px-3"
+          className={`overflow-y-auto space-y-3 py-3 px-3 ${
+            hasUserMessages ? 'flex-1' : 'min-h-0'
+          }`}
         >
           {messages.map((message, index) => {
             // Handle different message types
@@ -560,19 +586,20 @@ export default function AgentChat({
                   files={message.files}
                 />
               );
-            } else {
-              // Assistant welcome message
-              return (
-                <AssistantMessageComponent
-                  key={message.id}
-                  id={message.id}
-                  content={message.content}
-                  timestamp={message.timestamp}
-                  agent_id={message.agent_id}
-                  agent_name={agent.name}
-                />
-              );
-            }
+            } 
+            // else {
+            //   // Assistant welcome message
+            //   return (
+            //     <AssistantMessageComponent
+            //       key={message.id}
+            //       id={message.id}
+            //       content={message.content}
+            //       timestamp={message.timestamp}
+            //       agent_id={message.agent_id}
+            //       agent_name={agent.name}
+            //     />
+            //   );
+            // }
           })}
           <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
@@ -596,76 +623,194 @@ export default function AgentChat({
             <ChevronDown className="h-4 w-4" />
           </Button>
         </div>
-      </CardContent>
-      <CardFooter className="p-0">
-        {/* Input */}
-        <div className="border-t w-full p-4">
-          {/* Selected Files Display */}
-          {selectedFiles.length > 0 && (
-            <div className="mb-3 flex flex-row flex-wrap gap-2">
-              {selectedFiles.map((file, index) => (
-                <FileCard
-                  key={index}
-                  file={file}
-                  onRemove={() => removeFile(index)}
-                />
-              ))}
-            </div>
-          )}
-          
-          <form onSubmit={sendMessage} className="flex gap-3">
-            <div className="flex-1 relative">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInputChange}
-                placeholder={`Message ${agent.name}...`}
-                disabled={isLoading}
-                className="min-h-[40px] max-h-[72px] resize-none rounded-3xl border focus:border-primary/50 transition-colors duration-200 pr-12 py-2"
-                rows={1}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage(e);
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={openFileDialog}
-                disabled={isLoading}
-                className="absolute right-2 top-1 h-8 w-8 p-0 rounded-full hover:text-text hover:bg-zinc-200 dark:hover:bg-gray-800"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-            </div>
-            <Button 
-              type="submit" 
-              size="icon" 
-              disabled={isLoading || (!input.trim() && selectedFiles.length === 0)}
-              className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all duration-200"
-            >
-              {isLoading ? (
-                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </form>
-          
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-            accept="*/*"
-          />
         </div>
-      </CardFooter>
-    </Card>
+        <div className={cn(
+            "w-full bg-white rounded-3xl card hover:shadow-none cursor-auto mx-auto", 
+            "px-2 pb-2 pt-0",
+            "transition-all duration-500 ease-out",
+            hasUserMessages ? 'max-w-full' : 'w-full max-w-5xl')
+        }>
+            <form onSubmit={sendMessage} className="flex flex-col gap-1 transition-all duration-700 ease-out">
+               <Textarea
+                 ref={textareaRef}
+                 value={input}
+                 onChange={handleInputChange}
+                 placeholder={t("writeNewTaskFor", {agentName: agent.name})}
+                 disabled={isLoading}
+                 className="min-h-auto h-auto resize-none border-none duration-200 pr-12 pb-0 pt-3"
+                 rows={3}
+                 onKeyDown={(e) => {
+                   if (e.key === 'Enter' && !e.shiftKey) {
+                     e.preventDefault();
+                     sendMessage(e);
+                   }
+                 }}
+               />
+               <div className="flex items-center justify-end gap-2">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={openFileDialog}
+                        disabled={isLoading}
+                        className="h-10 w-10 p-0 rounded-full hover:text-text hover:bg-zinc-200 dark:hover:bg-gray-800"
+                    >
+                        <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                        type="submit" 
+                        size="icon" 
+                        disabled={isLoading || (!input.trim() && selectedFiles.length === 0)}
+                        className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all duration-200"
+                    >
+                        {isLoading ? (
+                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <Send className="h-4 w-4" />
+                        )}
+                    </Button>
+               </div>
+           </form>
+        </div>
+    </div>
   );
+
+//   return (
+//     <Card className={cn("flex justify-between flex-col h-full overflow-hidden max-h-full shadow-none p-0 hover:shadow-none cursor-auto", className)}>
+//       <CardHeader className="border-b p-4">
+//         <CardTitle className="flex items-center gap-2 ">
+//           Chat with {agent.name}
+//         </CardTitle>
+//       </CardHeader>
+//       <CardContent className="flex-1 flex flex-col overflow-auto p-0 bg-chatBackground relative">
+//         {/* Messages */}
+//         <div 
+//           ref={messagesContainerRef}
+//           onScroll={handleScroll}
+//           className="flex-1 overflow-y-auto space-y-3 py-3 px-3"
+//         >
+//           {messages.map((message, index) => {
+//             // Handle different message types
+//             if ('type' in message) {
+//               // This is a MessageComponentType - use MessageRenderer
+//               return <MessageRenderer key={`${message.data.id}-${message.data.event_type}-${index}`} message={message} agent_name={agent.name} />;
+//             } else if (message.role === 'user') {
+//               // User message
+//               return (
+//                 <UserMessageComponent
+//                   key={message.id}
+//                   id={message.id}
+//                   content={message.content}
+//                   timestamp={message.timestamp}
+//                   files={message.files}
+//                 />
+//               );
+//             } else {
+//               // Assistant welcome message
+//               return (
+//                 <AssistantMessageComponent
+//                   key={message.id}
+//                   id={message.id}
+//                   content={message.content}
+//                   timestamp={message.timestamp}
+//                   agent_id={message.agent_id}
+//                   agent_name={agent.name}
+//                 />
+//               );
+//             }
+//           })}
+//           <div ref={messagesEndRef} className="aa-messages-end" />
+//         </div>
+        
+//         {/* Scroll to bottom button */}
+//         <div className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+//           <Button
+//             onClick={() => {
+//               // Принудительно скроллим к низу
+//               messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+              
+//               // Проверяем позицию после скролла
+//               requestAnimationFrame(() => {
+//                 const atBottom = checkIfAtBottom();
+//                 setIsAtBottom(atBottom);
+//               });
+//             }}
+//             size="sm"
+//             className="h-8 w-8 rounded-full hover:text-white shadow-lg bg-white text-text dark:bg-zinc-900 dark:text-zinc-200 "
+//           >
+//             <ChevronDown className="h-4 w-4" />
+//           </Button>
+//         </div>
+//       </CardContent>
+//       <CardFooter className="p-0">
+//         {/* Input */}
+//         <div className="border-t w-full p-4">
+//           {/* Selected Files Display */}
+//           {selectedFiles.length > 0 && (
+//             <div className="mb-3 flex flex-row flex-wrap gap-2">
+//               {selectedFiles.map((file, index) => (
+//                 <FileCard
+//                   key={index}
+//                   file={file}
+//                   onRemove={() => removeFile(index)}
+//                 />
+//               ))}
+//             </div>
+//           )}
+          
+//           <form onSubmit={sendMessage} className="flex gap-3">
+//             <div className="flex-1 relative">
+//               <Textarea
+//                 ref={textareaRef}
+//                 value={input}
+//                 onChange={handleInputChange}
+//                 placeholder={`Message ${agent.name}...`}
+//                 disabled={isLoading}
+//                 className="min-h-[40px] max-h-[72px] resize-none rounded-3xl border focus:border-primary/50 transition-colors duration-200 pr-12 py-2"
+//                 rows={1}
+//                 onKeyDown={(e) => {
+//                   if (e.key === 'Enter' && !e.shiftKey) {
+//                     e.preventDefault();
+//                     sendMessage(e);
+//                   }
+//                 }}
+//               />
+//               <Button
+//                 type="button"
+//                 variant="ghost"
+//                 size="sm"
+//                 onClick={openFileDialog}
+//                 disabled={isLoading}
+//                 className="absolute right-2 top-1 h-8 w-8 p-0 rounded-full hover:text-text hover:bg-zinc-200 dark:hover:bg-gray-800"
+//               >
+//                 <Paperclip className="h-4 w-4" />
+//               </Button>
+//             </div>
+//             <Button 
+//               type="submit" 
+//               size="icon" 
+//               disabled={isLoading || (!input.trim() && selectedFiles.length === 0)}
+//               className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all duration-200"
+//             >
+//               {isLoading ? (
+//                 <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+//               ) : (
+//                 <Send className="h-4 w-4" />
+//               )}
+//             </Button>
+//           </form>
+          
+//           {/* Hidden file input */}
+//           <input
+//             ref={fileInputRef}
+//             type="file"
+//             multiple
+//             onChange={handleFileSelect}
+//             className="hidden"
+//             accept="*/*"
+//           />
+//         </div>
+//       </CardFooter>
+//     </Card>
+//   );
 }

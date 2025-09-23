@@ -104,7 +104,6 @@ export const parseEventToMessage = (eventType: string, eventData: any): MessageC
       const toolCallId = originalData.tool_call_id || eventData.tool_call_id;
       const toolArguments = originalData.arguments || eventData.arguments || {};
       
-      
       // If no tool name, create a generic tool call message
       const displayToolName = toolName || 'Unknown Tool';
       
@@ -126,7 +125,7 @@ export const parseEventToMessage = (eventType: string, eventData: any): MessageC
       const originalData = eventData.original_data || eventData;
       const result = originalData.result || eventData.result;
       const toolName = originalData.tool_name || eventData.tool_name;
-      
+      const toolCallId = originalData.tool_call_id || eventData.tool_call_id;
       
       // If no tool name or result, create a generic tool completion message
       const displayToolName = toolName || 'Unknown Tool';
@@ -137,6 +136,7 @@ export const parseEventToMessage = (eventType: string, eventData: any): MessageC
         data: {
           ...baseData,
           tool_name: displayToolName,
+          tool_call_id: toolCallId || 'unknown',
           result: displayResult,
           success: originalData.success ?? eventData.success ?? true,
           execution_time: originalData.execution_time || eventData.execution_time,

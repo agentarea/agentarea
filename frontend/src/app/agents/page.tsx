@@ -14,10 +14,10 @@ import { Agent } from "@/types";
 import AgentCard from "./components/AgentCard";
 import GridAndTableViews from "@/components/GridAndTableViews";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useSearchWithDebounce, useTabState } from "../../../hooks";
+import { useSearchWithDebounce, useTabState } from "@/hooks";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import ModelDisplay from "@/app/agents/browse/components/ModelDisplay";
+import ModelDisplay from "@/app/agents/components/ModelDisplay";
 import { getToolAvatarUrls } from "@/utils/toolsDisplay";
 
 export default function AgentsBrowsePage() {
@@ -66,7 +66,7 @@ export default function AgentsBrowsePage() {
     }
     
     const newUrl = params.toString() ? `?${params.toString()}` : "";
-    router.replace(`/agents/browse${newUrl}`, { scroll: false });
+    router.replace(`/agents${newUrl}`, { scroll: false });
   }, [debouncedQuery, router, searchParams, urlTab]);
 
   // Сохраняем таб в куки при изменении
@@ -94,12 +94,12 @@ export default function AgentsBrowsePage() {
         setLoading(true);
         const { data: agentsData = [], error: apiError } = await listAgents();
         if (apiError) {
-          setError("Failed to load agents");
+          setError(t("error.loadingData"));
         } else {
           setAgents(agentsData);
         }
       } catch (err) {
-        setError("Failed to load agents");
+        setError(t("error.loadingData"));
       } finally {
         setLoading(false);
       }
@@ -110,7 +110,7 @@ export default function AgentsBrowsePage() {
 
   const columns = [
     {
-      header: "Name",
+      header: t("name"),
       render: (value: string) => (
         <div className="font-semibold truncate">
           {value}
@@ -119,14 +119,14 @@ export default function AgentsBrowsePage() {
       accessor: "name",
     },
     {
-      header: "Status",
+      header: t("status"),
       accessor: "status",
       render: (value: string) => (
         <StatusBadge status={value} variant="agent" />
       ),
     },
     {
-      header: "Model",
+      header: t("model"),
       accessor: "model_id",
       render: (value: string, item: any) => (
         <ModelDisplay 
@@ -135,7 +135,7 @@ export default function AgentsBrowsePage() {
       ),
     },
     {
-      header: "Description",
+      header: t("description"),
       accessor: "description",
       render: (value: string) => (
         <div className="max-w-xs truncate note" title={value}>
@@ -144,7 +144,7 @@ export default function AgentsBrowsePage() {
       ),
     },
     {
-      header: "Tools",
+      header: t("tools"),
       accessor: "tools",
       render: (value: string, item: Agent) => {
         const toolAvatars = getToolAvatarUrls(item);
@@ -154,7 +154,7 @@ export default function AgentsBrowsePage() {
             avatarUrls={toolAvatars}
           />
         ) : (
-          <span className="text-xs text-muted-foreground">No tools</span>
+          <span className="text-xs text-muted-foreground">{t("noTools")}</span>
         );
       },
     },
@@ -176,7 +176,7 @@ export default function AgentsBrowsePage() {
           </Button>
           <Link href={`/agents/${item.id}/edit`} onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
-              Edit
+              {commonT("edit")}
             </Button>
           </Link>
         </div>
@@ -200,38 +200,14 @@ export default function AgentsBrowsePage() {
   }, [debouncedQuery]);
 
   const filteredAgents = useMemo(() => filterData(agents), [filterData, agents]);
-
-  // Не рендерим до загрузки таба для предотвращения мерцания
-  if (!isTabLoaded && !urlTab) {
-    return (
-      <ContentBlock 
-        header={{
-          breadcrumb: [{label: t("browseAgents")}],
-          description: t("description"),
-          controls: (
-            <Link href="/agents/create">
-              <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
-                <Bot className="h-5 w-5" />
-                {t("deployNewAgent")}
-              </Button>
-            </Link>
-          )
-        }}
-      >
-        <div className="flex items-center justify-center h-32">
-          <LoadingSpinner />
-        </div>
-      </ContentBlock>
-    );
-  }
-
+  
   return (
     <ContentBlock 
       header={{
         breadcrumb: [
           {label: t("browseAgents")},
         ],
-        description: t("description"),
+        description: t("mainDescriptionPage"),
         controls: (
           <Link href="/agents/create">
             <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
@@ -241,48 +217,53 @@ export default function AgentsBrowsePage() {
           </Link>
         )
     }}>
-
-      <GridAndTableViews
-        isEmpty={filteredAgents.length === 0}
-        emptyState={<EmptyState
-          iconsType="agent"
-          title={t("noAgentsYet")}
-          description={t("getStartedByAddingYourFirstAgent")}
-          action={{
-            label: t("addYourFirstAgent"),
-            href: "/agents/create",
+      {loading || (!isTabLoaded && !urlTab) ? (
+        <div className="flex items-center justify-center h-32">
+          <LoadingSpinner />
+        </div>
+      ) : (      
+        <GridAndTableViews
+          isEmpty={filteredAgents.length === 0}
+          emptyState={<EmptyState
+            iconsType="agent"
+            title={t("noAgentsYet")}
+            description={t("getStartedByAddingYourFirstAgent")}
+            action={{
+              label: t("addYourFirstAgent"),
+              href: "/agents/create",
+            }}
+          />}
+          searchParams={{
+            ...Object.fromEntries(searchParams.entries()),
+            tab: currentTab
           }}
-        />}
-        searchParams={{
-          ...Object.fromEntries(searchParams.entries()),
-          tab: currentTab
-        }}
-        data={filteredAgents}
-        columns={columns}
-        routeChange="/agents/browse"
-        cardContent={(item) => <AgentCard agent={item} />}
-        cardClassName="px-0 pb-0 overflow-hidden"
-        itemLink={(agent) => `/agents/${agent.id}`}
-        gridClassName="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-        leftComponent={
-          <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-              {isSearching ? (
-                <LoadingSpinner size="sm" text="" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
+          data={filteredAgents}
+          columns={columns}
+          routeChange="/agents"
+          cardContent={(item) => <AgentCard agent={item} />}
+          cardClassName="px-0 pb-0 overflow-hidden"
+          itemLink={(agent) => `/agents/${agent.id}`}
+          gridClassName="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+          leftComponent={
+            <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                {isSearching ? (
+                  <LoadingSpinner size="sm" text="" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </div>
+              <Input 
+                placeholder={commonT("search")}
+                className="pl-9 w-full" 
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onKeyDown={handleKeyDown}
+              />
             </div>
-            <Input 
-              placeholder={commonT("search")}
-              className="pl-9 w-full" 
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onKeyDown={handleKeyDown}
-            />
-          </div>
-        }
-      />
+          }
+        />
+      )}
     </ContentBlock>
   );
 } 

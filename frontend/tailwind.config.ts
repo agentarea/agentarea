@@ -13,6 +13,7 @@ export default {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			text: 'hsl(var(--text))',
+			chatBackground: 'hsl(var(--chat-background))',
   			card: {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
@@ -97,7 +98,10 @@ export default {
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
   		boxShadow: {
-  			card: '0 2px 10px rgba(0,0,0,0.04)'
+  			card: '0 2px 10px rgba(0,0,0,0.04)',
+			'inner-strong': 'inset 0 4px 10px 0 rgba(139, 92, 246, 0.2), inset 0 2px 6px 0 rgba(59, 130, 246, 0.2)',
+			'inner-strong-md': 'inset 0 4px 12px 0 rgba(0, 0, 0, 0.15)',
+			'inner-strong-lg': 'inset 0 6px 16px 0 rgba(0, 0, 0, 0.12)',
   		}
   	}
   },
