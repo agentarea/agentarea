@@ -12,8 +12,13 @@ interface ConditionalLayoutProps {
 
 // Routes that should NOT use the main layout (auth pages, etc.)
 const NO_LAYOUT_ROUTES = [
-  '/sign-in',
-  '/sign-up', 
+  '/auth/signin',
+  '/auth/signout',
+  '/auth/login',
+  '/auth/consent',
+  '/auth/verification',
+  '/auth/recovery',
+  '/auth/error',
 ];
 
 // Known protected routes that should use main layout when authenticated
@@ -32,25 +37,25 @@ const PROTECTED_ROUTES = [
 export default function ConditionalLayout({ children, sidebarDefaultOpen }: ConditionalLayoutProps) {
   const pathname = usePathname();
   const { isSignedIn, isLoaded } = useAuth();
-  
-  // Always skip layout for auth pages
-  const shouldUseNoLayout = NO_LAYOUT_ROUTES.some(route => 
+
+  // Always skip layout for auth pages and root page
+  const shouldUseNoLayout = NO_LAYOUT_ROUTES.some(route =>
     pathname.startsWith(route)
-  );
-  
+  ) || pathname === '/';
+
   if (shouldUseNoLayout) {
     return <>{children}</>;
   }
-  
+
   // For unknown routes: only use main layout if user is authenticated
-  const isKnownRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route)) || pathname === '/';
-  
+  const isKnownRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+
   if (!isKnownRoute && isLoaded && !isSignedIn) {
     // Unknown route + unauthenticated = no layout (clean 404)
     return <>{children}</>;
   }
-  
-  // Use MainLayout for known routes or authenticated users
+
+  // Use MainLayout for known protected routes
   return (
     <AuthGuard>
       <MainLayout sidebarDefaultOpen={sidebarDefaultOpen}>{children}</MainLayout>

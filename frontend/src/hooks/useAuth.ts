@@ -1,49 +1,42 @@
 "use client";
 
-import { useAuth as useClerkAuth, useUser as useClerkUser } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
-import { AuthHook, User } from "@/types/auth";
+import { useSession } from "@ory/elements-react/client";
 
-/**
- * Custom authentication hook that abstracts the underlying auth provider (currently Clerk)
- * This allows us to easily switch auth providers in the future without changing all components
- */
-export function useAuth(): AuthHook {
-  const { isLoaded, isSignedIn, signOut: clerkSignOut } = useClerkAuth();
-  const { user: clerkUser } = useClerkUser();
-  const router = useRouter();
+interface User {
+  id: string;
+  name?: string;
+  email?: string;
+  image?: string;
+}
 
-  // Transform Clerk user to our User interface
-  const user: User | null = clerkUser ? {
-    id: clerkUser.id,
-    email: clerkUser.primaryEmailAddress?.emailAddress || '',
-    firstName: clerkUser.firstName || undefined,
-    lastName: clerkUser.lastName || undefined,
-    fullName: clerkUser.fullName || undefined,
-    imageUrl: clerkUser.imageUrl || undefined,
-    createdAt: clerkUser.createdAt || undefined,
-    updatedAt: clerkUser.updatedAt || undefined,
-  } : null;
+interface AuthState {
+  user: User | null;
+  isLoaded: boolean;
+  isSignedIn: boolean;
+  signOut: () => void;
+}
 
-  const signIn = () => {
-    router.push('/sign-in');
-  };
+export function useAuth(): AuthState {
+  const { session, isLoading } = useSession();
 
-  const signUp = () => {
-    router.push('/sign-up');
-  };
+  const user = session?.identity
+    ? {
+        id: session.identity.id,
+        name: session.identity.traits?.name?.first
+          ? `${session.identity.traits.name.first} ${session.identity.traits.name.last || ''}`.trim()
+          : session.identity.traits?.username || session.identity.traits?.email,
+        email: session.identity.traits?.email,
+      }
+    : null;
 
-  const signOut = async () => {
-    await clerkSignOut();
-    router.push('/');
+  const signOut = () => {
+    window.location.href = "/auth/logout";
   };
 
   return {
-    isLoaded,
-    isSignedIn: isSignedIn || false,
     user,
-    signIn,
+    isLoaded: !isLoading,
+    isSignedIn: !!session?.identity,
     signOut,
-    signUp,
   };
 }

@@ -9,19 +9,21 @@ const client = createClient<paths>({
 // Add authentication middleware
 client.use({
   async onRequest({ request }) {
-    // Get the JWT token from Clerk
-    // For client-side requests, we'll use the Clerk session token
+    // Get the JWT token from NextAuth
+    // For client-side requests, we'll use the NextAuth session token
     if (typeof window !== "undefined") {
       try {
-        const response = await fetch("/api/auth/token");
+        const response = await fetch("/api/auth/session");
         if (response.ok) {
-          const { token } = await response.json();
-          if (token) {
-            request.headers.set("Authorization", `Bearer ${token}`);
+          const session = await response.json();
+          if (session?.user) {
+            // For now, we'll just pass the user ID as a simple token
+            // In production, you'd want a proper JWT token
+            request.headers.set("Authorization", `Bearer ${session.user.id}`);
           }
         }
       } catch (error) {
-        console.error("Error getting auth token:", error);
+        console.error("Error getting auth session:", error);
       }
     }
     
@@ -41,7 +43,7 @@ client.use({
     if (response.status === 401) {
       // Redirect to login page
       if (typeof window !== "undefined") {
-        window.location.href = "/sign-in";
+        window.location.href = "/auth/signin";
       }
     }
     

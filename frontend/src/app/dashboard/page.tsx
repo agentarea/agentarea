@@ -1,15 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
 import TestApiClient from "./test-api-client";
 
-export default async function DashboardPage() {
-  // Check if user is authenticated
-  const { userId } = await auth();
-  
-  // If not authenticated, redirect to sign in
-  if (!userId) {
-    redirect("/sign-in");
-  }
+export default function DashboardPage() {
+  // Authentication is handled by middleware and AuthGuard in ConditionalLayout
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
