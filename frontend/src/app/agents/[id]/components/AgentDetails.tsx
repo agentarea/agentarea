@@ -2,7 +2,7 @@
 
 import { Agent } from "@/types/agent";
 import Timer from "./Timer";
-import ModelBadge from "./ModelBadge";
+import ModelBadge from "@/components/ui/ModelBadge";
 import ToolsDisplay from "./ToolsDisplay";
 import StatCard from "./StatCard";
 import { useTranslations } from "next-intl";
