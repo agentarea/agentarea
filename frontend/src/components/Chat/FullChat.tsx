@@ -630,7 +630,7 @@ export default function FullChat({
             "transition-all duration-500 ease-out",
             hasUserMessages ? 'max-w-full rounded-t-none' : 'w-full max-w-5xl')
         }>
-            <form onSubmit={sendMessage} className="flex flex-col gap-1 transition-all duration-700 ease-out">
+            <form onSubmit={sendMessage} className="flex flex-col gap-2 transition-all duration-700 ease-out">
                <Textarea
                  ref={textareaRef}
                  value={input}
@@ -646,31 +646,51 @@ export default function FullChat({
                    }
                  }}
                />
-               <div className="flex items-center justify-end gap-2">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={openFileDialog}
-                        disabled={isLoading}
-                        className="h-10 w-10 p-0 rounded-full hover:text-text hover:bg-zinc-200 dark:hover:bg-gray-800"
-                    >
-                        <Paperclip className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                        type="submit" 
-                        size="icon" 
-                        disabled={isLoading || (!input.trim() && selectedFiles.length === 0)}
-                        className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all duration-200"
-                    >
-                        {isLoading ? (
-                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                            <Send className="h-4 w-4" />
-                        )}
-                    </Button>
+               <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-row flex-wrap gap-2">
+                      {selectedFiles.length > 0 && selectedFiles.map((file, index) => (
+                        <FileCard
+                          key={index}
+                          file={file}
+                          onRemove={() => removeFile(index)}
+                        />
+                      ))}
+                    </div>
+                    <div>
+                      <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={openFileDialog}
+                          disabled={isLoading}
+                          className="h-10 w-10 p-0 rounded-full hover:text-text hover:bg-zinc-200 dark:hover:bg-gray-800"
+                      >
+                          <Paperclip className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                          type="submit" 
+                          size="icon" 
+                          disabled={isLoading || (!input.trim() && selectedFiles.length === 0)}
+                          className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all duration-200"
+                      >
+                          {isLoading ? (
+                              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                              <Send className="h-4 w-4" />
+                          )}
+                      </Button>
+                    </div>
                </div>
            </form>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              accept="*/*"
+            />
         </div>
     </div>
   );
