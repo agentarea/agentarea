@@ -2,6 +2,7 @@ import React from 'react';
 import BaseMessage from './BaseMessage';
 import { useTranslations } from 'next-intl';
 import MessageWrapper from './MessageWrapper';
+import { Streamdown } from 'streamdown';
 
 interface ToolResultData {
   tool_name: string;
@@ -16,7 +17,13 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
   
   const formatResult = (result: any) => {
     if (typeof result === 'string') {
-      return result;
+      return (
+        <Streamdown className="prose prose-sm dark:prose-invert max-w-none" components={{ think: ({ children }: any) => (
+          <div className="text-xs text-gray-400 dark:text-gray-300">{children}</div>
+        ) } as any}>
+          {result}
+        </Streamdown>
+      );
     }
     return JSON.stringify(result, null, 2);
   };
@@ -44,9 +51,13 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
     <MessageWrapper type="tool-result">
       <BaseMessage headerLeft={<span>{`${t("toolCall")}: ${data.tool_name}`}</span>} collapsed={true}>
         <div className={`text-sm leading-relaxed ${colors.content}`}>
-          <pre className="whitespace-pre-wrap overflow-x-auto">
-            {formatResult(data.result)}
-          </pre>
+          {typeof data.result === 'string' ? (
+            formatResult(data.result)
+          ) : (
+            <pre className="whitespace-pre-wrap overflow-x-auto">
+              {formatResult(data.result)}
+            </pre>
+          )}
         </div>
         {Object.keys(data.arguments || {}).length > 0 && (
           <div className="mt-3 pt-2 border-t border-current/20">
