@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Paperclip, ChevronDown } from "lucide-react";
-import { FileCard } from "@/components/ui/file-card";
+import { AttachmentCard } from "@/components/ui/attachment-card";
 import { useSSE } from "@/hooks/useSSE";
 import { MessageRenderer, MessageComponentType } from "./MessageComponents";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
@@ -649,14 +649,15 @@ export default function FullChat({
                <div className="flex items-center justify-between gap-2">
                     <div className="flex flex-row flex-wrap gap-2">
                       {selectedFiles.length > 0 && selectedFiles.map((file, index) => (
-                        <FileCard
+                        <AttachmentCard
                           key={index}
                           file={file}
-                          onRemove={() => removeFile(index)}
+                          onAction={() => removeFile(index)}
+                          actionType="remove"
                         />
                       ))}
                     </div>
-                    <div>
+                    <div className="flex items-center gap-2">
                       <Button
                           type="button"
                           variant="ghost"

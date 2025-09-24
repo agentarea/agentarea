@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Download } from 'lucide-react';
 import { Button } from './button';
-import { getFileTypeInfo, formatFileSize, isImageFile } from '@/utils/fileUtils';
+import { X, Download } from 'lucide-react';
+import { getFileTypeInfo, isImageFile } from '@/utils/fileUtils';
 
-interface FileCardMessageProps {
+interface AttachmentCardProps {
   file: File;
-  onDownload: () => void;
+  onAction: () => void;
+  actionType: 'remove' | 'download';
   className?: string;
 }
 
-export const FileCardMessage: React.FC<FileCardMessageProps> = ({ file, onDownload, className = '' }) => {
+export const AttachmentCard: React.FC<AttachmentCardProps> = ({ file, onAction, actionType, className = '' }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
@@ -17,7 +18,9 @@ export const FileCardMessage: React.FC<FileCardMessageProps> = ({ file, onDownlo
   const IconComponent = fileInfo.icon;
   const isImage = isImageFile(file);
 
-  // Create image preview when component mounts
+  // Prepare action button visuals
+  const actionSizeClass = actionType === 'remove' ? 'h-4 w-4' : 'h-5 w-5';
+
   React.useEffect(() => {
     if (isImage && !imageError) {
       setImageLoading(true);
@@ -37,7 +40,7 @@ export const FileCardMessage: React.FC<FileCardMessageProps> = ({ file, onDownlo
   if (isImage) {
     return (
       <div className={`inline-block relative ${className}`}>
-        <div className={`flex-shrink-0 border w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center relative`}>
+        <div className={`flex-shrink-0 border w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center relative`}>
           {imageLoading ? (
             <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
           ) : imagePreview && !imageError ? (
@@ -48,17 +51,21 @@ export const FileCardMessage: React.FC<FileCardMessageProps> = ({ file, onDownlo
               onError={() => setImageError(true)}
             />
           ) : (
-            <IconComponent className={`h-6 w-6 ${fileInfo.color}`} />
+            <IconComponent className={`h-5 w-5 ${fileInfo.color}`} />
           )}
 
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={onDownload}
-            className="h-5 w-5 p-0 bg-zinc-300 dark:bg-zinc-700 text-white hover:bg-zinc-900 dark:hover:bg-gray-600 rounded-full flex-shrink-0 absolute -top-1 -right-1"
+            onClick={onAction}
+            className={`${actionSizeClass} p-0 bg-zinc-700 text-white hover:bg-zinc-900 dark:hover:bg-gray-600 rounded-full flex-shrink-0 absolute -top-1 -right-1`}
           >
-            <Download className="h-3 w-3" />
+            {actionType === 'remove' ? (
+              <X className="h-3 w-3" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
           </Button>
         </div>
       </div>
@@ -66,34 +73,37 @@ export const FileCardMessage: React.FC<FileCardMessageProps> = ({ file, onDownlo
   }
 
   return (
-    <div className={`relative inline-flex items-center gap-2 bg-white dark:bg-zinc-900 rounded-lg pl-1 pr-4 py-1 border relative ${className}`}>
-      {/* File Icon */}
-      <div className={`flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden`}>
+    <div className={`relative inline-flex items-center gap-2 bg-white dark:bg-zinc-900 rounded-lg pl-1 pr-4 h-12 border ${className}`}>
+      <div className={`flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden`}>
         <IconComponent className={`h-5 w-5 text-gray-500`} />
       </div>
-      
-      {/* File Info */}
+
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+        <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate max-w-[160px]">
           {file.name}
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400">
           {fileInfo.type}
         </div>
       </div>
-      
-      {/* Download Button */}
+
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        onClick={onDownload}
-        className="h-5 w-5 p-0 bg-zinc-300 dark:bg-zinc-700 text-white hover:bg-zinc-900 dark:hover:bg-gray-600 rounded-full flex-shrink-0  absolute -top-1 -right-1"
+        onClick={onAction}
+        className={`${actionSizeClass} p-0 bg-zinc-700 text-white hover:bg-zinc-900 dark:hover:bg-gray-600 rounded-full flex-shrink-0 absolute -top-1 -right-1`}
       >
-        <Download className="h-3 w-3" />
+        {actionType === 'remove' ? (
+          <X className="h-3 w-3" />
+        ) : (
+          <Download className="h-3 w-3" />
+        )}
       </Button>
     </div>
   );
 };
 
-export default FileCardMessage;
+export default AttachmentCard;
+
+
