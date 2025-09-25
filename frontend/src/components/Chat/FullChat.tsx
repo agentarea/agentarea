@@ -44,10 +44,12 @@ interface FullChatProps {
   onTaskFinished?: (taskId: string) => void;
   className?: string;
   height?: string;
+  placeholder?: string;
 }
 
 export default function FullChat({
   agent,
+  placeholder,
   taskId,
   initialMessages = [],
   onTaskCreated,
@@ -514,25 +516,76 @@ export default function FullChat({
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
+      // Buffered SSE parser: accumulates lines across chunks and parses events on blank line
+      let textBuffer = "";
+      let currentEventType: string | null = null;
+      let currentDataLines: string[] = [];
+
+      const processEvent = () => {
+        if (currentDataLines.length === 0 && !currentEventType) {
+          return;
+        }
+        const dataStr = currentDataLines.join('\n').trim();
+        if (dataStr === "") {
+          currentDataLines = [];
+          currentEventType = null;
+          return;
+        }
+        try {
+          const parsed = JSON.parse(dataStr);
+          const type = currentEventType || (parsed as any).type || 'message';
+          const data = (parsed as any).data ?? parsed;
+          handleSSEMessage({ type, data });
+        } catch (_err) {
+          // Non-JSON payloads (e.g., heartbeats or [DONE])
+          if (dataStr === '[DONE]' || dataStr.toLowerCase().includes('ping')) {
+            // ignore heartbeats
+          } else {
+            handleSSEMessage({ type: currentEventType || 'message', data: { message: dataStr } });
+          }
+        }
+        currentEventType = null;
+        currentDataLines = [];
+      };
+
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
+          textBuffer += decoder.decode(value, { stream: true });
 
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const eventData = JSON.parse(line.slice(6));
-                handleSSEMessage({ type: eventData.type || 'message', data: eventData.data || eventData });
-              } catch (parseError) {
-                console.error('Failed to parse SSE event:', parseError);
-              }
+          // Process complete lines; keep the last partial line in buffer
+          const parts = textBuffer.split(/\r?\n/);
+          textBuffer = parts.pop() || "";
+
+          for (const rawLine of parts) {
+            const line = rawLine; // already trimmed split
+            if (line === '') {
+              // blank line denotes end of event
+              processEvent();
+              continue;
             }
+            if (line.startsWith(':')) {
+              // comment/heartbeat
+              continue;
+            }
+            if (line.startsWith('event:')) {
+              currentEventType = line.slice(6).trimStart();
+              continue;
+            }
+            if (line.startsWith('data:')) {
+              // support both 'data: ' and 'data:'
+              const data = line.slice(5).trimStart();
+              currentDataLines.push(data);
+              continue;
+            }
+            // Fallback: treat as data continuation
+            currentDataLines.push(line);
           }
         }
+        // Flush any pending event on stream end
+        processEvent();
       } finally {
         reader.releaseLock();
       }
@@ -553,13 +606,19 @@ export default function FullChat({
   };
 
   return (
-    <div className={cn('rounded-3xl  w-full max-w-7xl mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', 
-    hasUserMessages ? 'justify-between mt-2 border bg-chatBackground' : 'justify-center')}>
-        {/* {
-            !hasUserMessages && (
-                <div>Hello! How can I help you today?</div>
-            ) 
-        } */}
+    <div className={cn('rounded-3xl  w-full mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', 
+    // hasUserMessages ? 'justify-between border bg-chatBackground' : 'justify-center')}>
+    hasUserMessages ? 'justify-between border border-b-0 bg-chatBackground' : 'justify-between')}>
+        {
+            (!hasUserMessages && placeholder) ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex flex-col items-center justify-center relative">
+                    {/* <div className="absolute w-[120%] h-[300%] z-0 rounded-full bg-gradient-to-b from-primary/0 via-accent/5 to-accent-foreground/0"> </div> */}
+                    <h1 className="text-primary/20 dark:text-accent-foreground/20 z-10 relative">{placeholder}</h1>
+                  </div>
+                </div>
+            ) : null
+        }
         <div className={`flex flex-col overflow-auto p-0 relative transition-all duration-700 ease-out ${
           hasUserMessages ? 'flex-1 h-full' : 'flex-none h-0'
         }`}>
@@ -625,7 +684,7 @@ export default function FullChat({
         </div>
         </div>
         <div className={cn(
-            "w-full bg-white rounded-3xl card hover:shadow-none cursor-auto mx-auto", 
+            "w-full bg-white rounded-3xl card hover:shadow-none cursor-auto mx-auto dark:bg-zinc-900", 
             "px-2 pb-2 pt-0",
             "transition-all duration-500 ease-out",
             hasUserMessages ? 'max-w-full rounded-t-none' : 'w-full max-w-5xl')

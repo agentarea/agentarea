@@ -47,9 +47,9 @@ export default function Timer({
     const remainingSeconds = seconds % 60;
     return (
       <span className="flex items-baseline gap-1">
-        <span className="text-4xl ">{minutes.toString().padStart(2, '0')}</span>
-        <span className="text-xl">:</span>
-        <span className="text-xl">{remainingSeconds.toString().padStart(2, '0')}</span>
+        <span className="text-xl ">{minutes.toString().padStart(2, '0')}</span>
+        <span className="text-sm">:</span>
+        <span className="text-sm">{remainingSeconds.toString().padStart(2, '0')}</span>
       </span>
     );
   };
