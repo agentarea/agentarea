@@ -1,3 +1,5 @@
+`use server`;
+
 import client from "./client";
 import type { components } from "../api/schema";
 

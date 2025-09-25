@@ -5,11 +5,18 @@ import { Agent } from "@/types/agent";
 import AgentDetails from "./AgentDetails";
 import FullChat from "@/components/Chat/FullChat";
 
-interface Props {
-  agent: Agent;
+interface ModelInfo {
+  provider_name?: string;
+  model_display_name?: string;
+  config_name?: string;
 }
 
-export default function AgentPageClient({ agent }: Props) {
+interface Props {
+  agent: Agent;
+  modelInfo: ModelInfo | null;
+}
+
+export default function AgentPageClient({ agent, modelInfo }: Props) {
   const [isTaskRunning, setIsTaskRunning] = useState(false);
 
   // Handle task creation from chat
@@ -26,7 +33,7 @@ export default function AgentPageClient({ agent }: Props) {
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
-      <AgentDetails agent={agent} isTaskRunning={isTaskRunning} />
+      <AgentDetails agent={agent} modelInfo={modelInfo} isTaskRunning={isTaskRunning} />
       <FullChat
         agent={{
           id: agent.id,

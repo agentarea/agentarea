@@ -301,7 +301,7 @@ class ProviderService:
         Returns:
             Optional[ModelInstance]: The model instance if found, else None.
         """
-        return await self.model_instance_repo.get_by_id(instance_id)
+        return await self.model_instance_repo.get_with_relations(instance_id)
 
     async def delete_model_instance(self, instance_id: UUID) -> bool:
         """Delete a model instance.

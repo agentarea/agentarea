@@ -7,12 +7,19 @@ import ToolsDisplay from "./ToolsDisplay";
 import StatCard from "./StatCard";
 import { useTranslations } from "next-intl";
 
+interface ModelInfo {
+  provider_name?: string;
+  model_display_name?: string;
+  config_name?: string;
+}
+
 interface Props {
     agent: Agent;
+    modelInfo: ModelInfo | null;
     isTaskRunning?: boolean;
 }
 
-export default function AgentDetails({ agent, isTaskRunning = false }: Props) {
+export default function AgentDetails({ agent, modelInfo, isTaskRunning = false }: Props) {
     const t = useTranslations("Agent.descriptionPage");
     return (
         <div className="w-full flex flex-row gap-2">
@@ -31,7 +38,7 @@ export default function AgentDetails({ agent, isTaskRunning = false }: Props) {
                 <div className="flex flex-col space-y-2 flex-1">
                     <div className="flex flex-row gap-2 items-center">
                         <p className="text-xs">{t("model")}:</p >
-                            <ModelBadge modelId={agent.model_id} />
+                            <ModelBadge modelInfo={modelInfo} />
                     </div>
                     <div className="flex flex-row gap-2 items-center">
                         <p className="text-xs">{t("tools")}:</p >

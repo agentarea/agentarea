@@ -1,9 +1,4 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { listModelInstances } from "@/lib/api";
 import { getProviderIconUrl } from "@/lib/provider-icons";
-import { Bot } from "lucide-react";
 import Image from "next/image";
 
 interface ModelInfo {
@@ -13,55 +8,12 @@ interface ModelInfo {
 }
 
 interface ModelBadgeProps {
-  modelId: string | null | undefined;
+  modelInfo: ModelInfo | null;
 }
 
-export default function ModelBadge({ modelId }: ModelBadgeProps) {
-  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchModelInfo = async () => {
-      if (!modelId) return;
-      
-      try {
-        setIsLoading(true);
-        
-        const { data, error } = await listModelInstances();
-        if (error) {
-          console.error('Failed to fetch model instances:', error);
-          return;
-        }
-        
-        // Find the model in the response
-        const modelInstance = data?.find(
-          (instance: any) => instance.id === modelId
-        );
-        
-        if (modelInstance) {
-          setModelInfo({
-            provider_name: modelInstance.provider_name || undefined,
-            model_display_name: modelInstance.model_display_name || undefined,
-            config_name: modelInstance.config_name || undefined
-          });
-        } else {
-          console.log('Model not found:', modelId);
-        }
-      } catch (err) {
-        console.error('Failed to fetch model info:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchModelInfo();
-  }, [modelId]);
+export default function ModelBadge({ modelInfo }: ModelBadgeProps) {
 
   const getProviderIcon = () => {
-    if (isLoading) {
-      return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iI0YzRjNGMyIvPgo8Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iMyIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K";
-    }
-
     if (!modelInfo?.provider_name) {
       return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iI0YzRjNGMyIvPgo8cGF0aCBkPSJNOCA0QzkuMTA0NTcgNCAxMCA0Ljg5NTQzIDEwIDZDMTAgNy4xMDQ1NyA5LjEwNDU3IDggOCA4QzYuODk1NDMgOCA2IDcuMTA0NTcgNiA2QzYgNC44OTU0MyA2Ljg5NTQzIDQgOCA0WiIgZmlsbD0iIzk5OTk5OSIvPgo8cGF0aCBkPSJNOCA5QzkuMTA0NTcgOSAxMCA5Ljg5NTQzIDEwIDExQzEwIDEyLjEwNDYgOS4xMDQ1NyAxMyA4IDEzQzYuODk1NDMgMTMgNiAxMi4xMDQ2IDYgMTFDNiA5Ljg5NTQzIDYuODk1NDMgOSA4IDlaIiBmaWxsPSIjOTk5OTk5Ii8+Cjwvc3ZnPgo=";
     }
@@ -71,9 +23,8 @@ export default function ModelBadge({ modelId }: ModelBadgeProps) {
   };
 
   const getModelName = () => {
-    if (isLoading) return "Loading...";
     if (!modelInfo) return "Unknown model";
-    
+
     return modelInfo.model_display_name || modelInfo.config_name || modelInfo.provider_name || "Unknown model";
   };
 

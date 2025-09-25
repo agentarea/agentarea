@@ -173,7 +173,7 @@ async def test_model_instance(
         api_key_secret_name = getattr(provider_config, "api_key", None)
         if api_key_secret_name:
             # Get secret manager from provider service
-            secret_manager = provider_service._secret_manager
+            secret_manager = provider_service.secret_manager
             api_key = await secret_manager.get_secret(api_key_secret_name)
 
         if not api_key and provider_type not in ["ollama_chat"]:  # Ollama doesn't need API key
