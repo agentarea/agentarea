@@ -29,7 +29,7 @@ export default function AgentPageClient({ agent }: Props) {
   };
 
   return (
-    <div className="flex flex-row items-start h-full w-full overflow-hidden gap-6 max-w-7xl mx-auto">
+    <div className="flex flex-row items-start h-full w-full overflow-hidden gap-3 max-w-7xl mx-auto">
       {/* <AgentDetails agent={agent} isTaskRunning={isTaskRunning} /> */}
       <FullChat
         placeholder={t("placeholderNewTask", { agentName: agent.name })}

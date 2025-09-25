@@ -606,7 +606,7 @@ export default function FullChat({
   };
 
   return (
-    <div className={cn('rounded-3xl  w-full mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', 
+    <div className={cn('rounded-lg  w-full mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', 
     // hasUserMessages ? 'justify-between border bg-chatBackground' : 'justify-center')}>
     hasUserMessages ? 'justify-between border border-b-0 bg-chatBackground' : 'justify-between')}>
         {
@@ -684,12 +684,12 @@ export default function FullChat({
         </div>
         </div>
         <div className={cn(
-            "w-full bg-white rounded-3xl card hover:shadow-none cursor-auto mx-auto dark:bg-zinc-900", 
+            "w-full bg-white card hover:shadow-none cursor-auto mx-auto dark:bg-zinc-900", 
             "px-2 pb-2 pt-0",
-            "transition-all duration-500 ease-out",
-            hasUserMessages ? 'max-w-full rounded-t-none' : 'w-full max-w-5xl')
+            // "transition-width transition-height duration-500 ease-out transition-border-none",
+            hasUserMessages ? 'max-w-full rounded-t-none border-l-0 border-r-0' : 'w-full max-w-5xl')
         }>
-            <form onSubmit={sendMessage} className="flex flex-col gap-2 transition-all duration-700 ease-out">
+            <form onSubmit={sendMessage} className="flex flex-col gap-2 transition-all  duration-700 ease-out">
                <Textarea
                  ref={textareaRef}
                  value={input}

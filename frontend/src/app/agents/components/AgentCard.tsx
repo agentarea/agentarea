@@ -35,7 +35,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
                     </div>
                     {/* <StatusBadge status={agent.status} variant="agent" /> */}
                 </div>
-                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                     {agent.description || agent.instruction}
                 </p>
             </div>

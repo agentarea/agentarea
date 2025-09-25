@@ -243,7 +243,7 @@ export default function AgentsBrowsePage() {
           cardContent={(item) => <AgentCard agent={item} />}
           cardClassName="px-0 pb-0 overflow-hidden"
           itemLink={(agent) => `/agents/${agent.id}`}
-          gridClassName="grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+          gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
           leftComponent={
             <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
               <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
