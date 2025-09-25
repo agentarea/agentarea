@@ -325,6 +325,9 @@
     "tools": "Tools",
     "noTools": "No tools",
     "descriptionPage": {
+      "placeholderNewTask": "Write new task for {agentName}...",
+      "agentDetails": "Agent details",
+      "taskDetails": "Task details",
       "time": "Time",
       "usage": "Usage",
       "kpi": "KPI",

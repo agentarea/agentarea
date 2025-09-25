@@ -1,8 +1,5 @@
-"use client";
-
 import { Agent } from "@/types/agent";
 import { getToolsForDisplay } from "@/utils/toolsDisplay";
-import Image from "next/image";
 
 interface Props {
     agent: Agent;

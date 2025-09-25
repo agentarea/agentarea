@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { getAgent, getAgentTaskById } from "@/lib/api";
 import AgentTaskClient from "./AgentTaskClient";
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
 
 interface Props {
   params: Promise<{ id: string; taskId: string }>;
@@ -24,17 +23,6 @@ export default async function AgentTaskPage({ params }: Props) {
   const task = taskResponse.data;
 
   return (
-    <ContentBlock
-      header={{
-        title: agent.name,
-        description: task?.description || "Agent task interaction",
-        backLink: {
-          label: "Back to Agent",
-          href: `/agents/${id}`,
-        },
-      }}
-    >
-      <AgentTaskClient agent={agent} taskId={taskId} task={task} />
-    </ContentBlock>
+    <AgentTaskClient agent={agent} taskId={taskId} task={task} />
   );
 }

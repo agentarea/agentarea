@@ -4,7 +4,7 @@ import { User } from "lucide-react";
 import MessageWrapper from './MessageWrapper';
 import BaseMessage from './BaseMessage';
 import { formatTimestamp } from '../../../utils/dateUtils';
-import { FileCardMessage } from '@/components/ui/file-card-message';
+import { AttachmentCard } from '@/components/ui/attachment-card';
 
 interface UserMessageProps {
   id: string;
@@ -31,19 +31,15 @@ export const UserMessage: React.FC<UserMessageProps> = ({ id, content, timestamp
         <div className="space-y-3">
           {content && <div>{content}</div>}
           {files && files.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Attached files:
-              </div>
-              <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 pt-3">
                 {files.map((file, index) => (
-                  <FileCardMessage
+                  <AttachmentCard
                     key={index}
                     file={file}
-                    onDownload={() => handleFileDownload(file)}
+                    onAction={() => handleFileDownload(file)}
+                    actionType="download"
                   />
                 ))}
-              </div>
             </div>
           )}
         </div>
