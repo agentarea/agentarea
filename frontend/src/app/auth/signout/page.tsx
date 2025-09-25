@@ -1,64 +1,49 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 
-export default function SignOutPage() {
+export default function SignOut() {
   const router = useRouter();
-  const { data: session, status } = useSession();
-  const [loading, setLoading] = useState(false);
 
-  const handleSignOut = async () => {
-    setLoading(true);
-    try {
-      await signOut({ redirect: false });
-      router.push("/auth/signin");
-    } catch (error) {
-      console.error("Error signing out:", error);
-      setLoading(false);
-    }
+  const handleSignOut = () => {
+    // Перенаправляем прямо на Ory Kratos logout flow
+    window.location.href = `${process.env.NEXT_PUBLIC_ORY_SDK_URL}/self-service/logout/browser`;
   };
 
-  // If there's no session, redirect to signin
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/auth/signin");
-    }
-  }, [status, router]);
-
-  if (status === "loading") {
-    return <LoadingSpinner fullScreen={true} />;
-  }
-
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sign Out</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 dark:from-gray-900 dark:via-gray-800 dark:to-slate-900">
+      <Card className="w-full max-w-md p-8 bg-white/95 dark:bg-gray-800/95 shadow-2xl rounded-xl backdrop-blur-sm border border-white/20 dark:border-gray-700/20">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Sign out of AgentArea
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
             Are you sure you want to sign out?
           </p>
         </div>
-        
-        <div className="mt-8 space-y-4">
-          <button
+
+        <div className="flex flex-col gap-4">
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-full"
             onClick={handleSignOut}
-            disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
           >
-            {loading ? "Signing out..." : "Sign out"}
-          </button>
-          
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            Sign Out
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => router.push("/workplace")}
           >
             Cancel
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

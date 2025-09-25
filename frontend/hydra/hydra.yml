@@ -1,0 +1,66 @@
+# Ory Hydra Configuration for AgentArea
+
+version: v2.2.0
+
+dsn: postgres://hydra:secret@postgres-hydra:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+
+serve:
+  public:
+    port: 4444
+    host: 0.0.0.0
+    cors:
+      enabled: true
+      allowed_origins:
+        - http://localhost:3000
+        - http://localhost:3001
+      allowed_methods:
+        - POST
+        - GET
+        - PUT
+        - PATCH
+        - DELETE
+      allowed_headers:
+        - Authorization
+        - Content-Type
+      exposed_headers:
+        - Content-Type
+  admin:
+    port: 4445
+    host: 0.0.0.0
+
+urls:
+  self:
+    issuer: http://localhost:4444
+  consent: http://localhost:3000/auth/consent
+  login: http://localhost:3000/auth/login
+  logout: http://localhost:3000/auth/logout
+  error: http://localhost:3000/auth/error
+
+secrets:
+  system:
+    - this-is-the-primary-secret-replace-me-in-production
+  cookie:
+    - PLEASE-CHANGE-ME-I-AM-VERY-INSECURE-dev-only
+
+oidc:
+  subject_identifiers:
+    supported_types:
+      - public
+      - pairwise
+    pairwise:
+      salt: some-random-salt
+
+log:
+  level: debug
+  format: text
+  leak_sensitive_values: true
+
+ttl:
+  login_consent_request: 1h
+  access_token: 1h
+  refresh_token: 720h
+  id_token: 1h
+  auth_code: 10m
+
+oauth2:
+  expose_internal_errors: true

@@ -278,7 +278,9 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+  // Try to get sidebar context, but don't throw if it's not available
+  const context = React.useContext(SidebarContext)
+  const toggleSidebar = context?.toggleSidebar
 
   return (
     <Button
@@ -289,7 +291,10 @@ const SidebarTrigger = React.forwardRef<
       className={cn("h-7 w-7  hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", className)}
       onClick={(event) => {
         onClick?.(event)
-        toggleSidebar()
+        // Only toggle if sidebar context is available
+        if (toggleSidebar) {
+          toggleSidebar()
+        }
       }}
       {...props}
     >

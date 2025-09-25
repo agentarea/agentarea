@@ -338,6 +338,137 @@ services:
     restart: unless-stopped
     command: ["python", "-m", "agentarea_worker.cli", "dev"]
 
+  # Ory Authentication Services
+
+  # PostgreSQL database for Ory Kratos
+  postgres-kratos:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: kratos
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: kratos
+    volumes:
+      - kratos-postgres:/var/lib/postgresql/data
+    networks:
+      - auth-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kratos -d kratos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Ory Kratos Identity Server
+  kratos:
+    image: oryd/kratos:v1.1.0
+    ports:
+      - "4433:4433" # public API
+      - "4434:4434" # admin API
+    environment:
+      DSN: postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+      LOG_LEVEL: debug
+    command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+    volumes:
+      - ./frontend/kratos:/etc/config/kratos
+    networks:
+      - auth-network
+    depends_on:
+      postgres-kratos:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # PostgreSQL database for Ory Hydra
+  postgres-hydra:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: hydra
+    volumes:
+      - hydra-postgres:/var/lib/postgresql/data
+    networks:
+      - auth-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hydra -d hydra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Ory Hydra OAuth2/OIDC Server
+  hydra:
+    image: oryd/hydra:v2.2.0
+    ports:
+      - "4444:4444" # public API
+      - "4445:4445" # admin API
+    environment:
+      DSN: postgres://hydra:secret@postgres-hydra:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      URLS_SELF_ISSUER: http://localhost:4444
+      URLS_CONSENT: http://localhost:3000/auth/consent
+      URLS_LOGIN: http://localhost:3000/auth/login
+      URLS_LOGOUT: http://localhost:3000/auth/logout
+      URLS_ERROR: http://localhost:3000/auth/error
+      SECRETS_SYSTEM: this-is-the-primary-secret-replace-me-in-production
+      OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
+      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: some-random-salt
+      LOG_LEVEL: debug
+      LOG_LEAK_SENSITIVE_VALUES: true
+    command: serve all --dev
+    volumes:
+      - ./frontend/hydra:/etc/config/hydra
+    networks:
+      - auth-network
+    depends_on:
+      postgres-hydra:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # MailSlurper for email testing (catches emails in development)
+  mailslurper:
+    image: oryd/mailslurper:latest-smtps
+    ports:
+      - "4436:4436" # web UI
+      - "4437:4437" # SMTP
+    networks:
+      - auth-network
+
+  # Hydra OAuth2 Client Setup
+  hydra-migrate:
+    image: oryd/hydra:v2.2.0
+    environment:
+      DSN: postgres://hydra:secret@postgres-hydra:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+    command: migrate -c /etc/config/hydra/hydra.yml sql -e --yes
+    volumes:
+      - ./frontend/hydra:/etc/config/hydra
+    networks:
+      - auth-network
+    depends_on:
+      postgres-hydra:
+        condition: service_healthy
+
+  # Register OAuth2 client for frontend
+  hydra-client-setup:
+    image: oryd/hydra:v2.2.0
+    environment:
+      ORY_SDK_URL: http://hydra:4445
+    entrypoint: ["sh", "-c"]
+    command: >
+      "
+        sleep 15 &&
+        hydra create oauth2-client \
+          --name 'AgentArea Frontend' \
+          --secret agentarea-secret \
+          --grant-type authorization_code,refresh_token \
+          --response-type code \
+          --scope openid,profile,email \
+          --redirect-uri http://localhost:3000/auth/callback \
+          --redirect-uri http://localhost:3000/workplace \
+          --skip-consent || echo 'Client may already exist'
+      "
+    networks:
+      - auth-network
+    depends_on:
+      hydra:
+        condition: service_started
+
 volumes:
   postgres_data:
   minio_data:
@@ -345,6 +476,8 @@ volumes:
   infisical_bootstrap:
   mcp_containers:
     driver: local
+  kratos-postgres:
+  hydra-postgres:
 
 networks:
   infisical:
@@ -352,4 +485,6 @@ networks:
   mcp-network:
     driver: bridge
   temporal-network:
+    driver: bridge
+  auth-network:
     driver: bridge

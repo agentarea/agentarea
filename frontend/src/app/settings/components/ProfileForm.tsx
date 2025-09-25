@@ -10,8 +10,9 @@ export default function ProfileForm(defaultValues: { name: string, email: string
     const t = useTranslations('SettingsPage');
 
     const handleManageAccount = () => {
-        // This would typically open Clerk's user profile management
-        window.open('https://clerk.com/docs/components/user/user-profile', '_blank');
+        // This would typically open the authentication provider's user profile management
+        // For Ory, this could be a custom profile page or Ory Account Experience
+        alert('Profile management through authentication provider not yet implemented');
     };
 
     return (
