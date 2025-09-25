@@ -115,7 +115,7 @@ export default function AgentTasksList({ agentId }: { agentId: string }) {
           <p className="text-sm text-gray-500 mb-4">
             This agent hasn't been assigned any tasks yet.
           </p>
-          <Link href={`?tab=new`}>
+          <Link href={`./new`}>
             <Button size="sm" className="gap-2">
               Create your first task
             </Button>

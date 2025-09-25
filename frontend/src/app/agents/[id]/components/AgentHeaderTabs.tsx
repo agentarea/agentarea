@@ -1,51 +1,23 @@
-"use client";
+import { getTranslations } from "next-intl/server";
+import ActiveLink from "./ActiveLink";
 
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
-
-export default function AgentHeaderTabs() {
-  const t = useTranslations("Agent");
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-
-  const initialTab = useMemo(() => {
-    const tab = searchParams.get("tab");
-    return tab === "all" ? "all" : "new";
-  }, [searchParams]);
-
-  const [activeTab, setActiveTab] = useState<string>(initialTab);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get("tab");
-      setActiveTab(tab === "all" ? "all" : "new");
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", value);
-    const newUrl = `${pathname}?${params.toString()}`;
-    window.history.pushState({}, "", newUrl);
-  };
-
+export default async function AgentHeaderTabs({ agentId }: { agentId: string }) {
+  const t = await getTranslations("Agent");
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange}>
-      <TabsList>
-        <TabsTrigger value="new" className="px-[10px] sm:px-[20px]">
-          {t("createTask")}
-        </TabsTrigger>
-        <TabsTrigger value="all" className="px-[10px] sm:px-[20px]">
-          {t("currentTasks")}
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
+    <div className="inline-flex items-center gap-1 rounded-md bg-muted p-1">
+      <ActiveLink
+        href={`/agents/${agentId}/new-task`}
+        className="px-[10px] sm:px-[20px] py-1.5 rounded text-sm"
+      >
+        {t("createTask")}
+      </ActiveLink>
+      <ActiveLink
+        href={`/agents/${agentId}/tasks`}
+        className="px-[10px] sm:px-[20px] py-1.5 rounded text-sm"
+      >
+        {t("currentTasks")}
+      </ActiveLink>
+    </div>
   );
 }
 
