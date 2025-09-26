@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import ModelBadge from "@/components/ui/ModelBadge";
+import ModelBadge from "@/components/ui/model-badge";
 import ToolsDisplay from "./ToolsDisplay";
 import { useTranslations } from "next-intl";
 import { Agent } from "@/types/agent";
@@ -24,7 +24,11 @@ export default function TaskDetails({ agent, isTaskRunning = false, isTaskActive
             <div className="flex flex-col space-y-2">
                 <div className="flex flex-row gap-2 items-center">
                     <p className="text-xs">{t("model")}:</p >
-                        <ModelBadge modelId={agent.model_id} />
+                        <ModelBadge 
+                            providerName={agent.model_info?.provider_name}
+                            modelDisplayName={agent.model_info?.model_display_name}
+                            configName={agent.model_info?.config_name}
+                        />
                 </div>
                 <div className="flex flex-row gap-2 items-center">
                     <p className="text-xs">{t("tools")}:</p >
