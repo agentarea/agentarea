@@ -19,7 +19,6 @@ class ToolInfo(TypedDict, total=False):
 class MessageTemplates:
     """Prompt templates for agent-LLM interactions following framework best practices."""
 
-    # Main system prompt - follows AutoGen/LangChain patterns
     SYSTEM_PROMPT: Final[str] = """You are {agent_name}, an AI agent with the following role:
 
 {agent_instruction}

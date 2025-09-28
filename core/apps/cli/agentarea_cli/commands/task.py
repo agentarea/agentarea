@@ -33,9 +33,10 @@ def task():
 @click.option("--timeout", default=300, help="Timeout in seconds for task execution")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--protocol", type=click.Choice(["internal", "a2a"]), default="internal", help="Protocol to use for communication")
+@click.option("--requires-human-approval/--no-requires-human-approval", default=False, help="Require human approval before task runs")
 @click.pass_context
 def create(ctx, agent_id: str, description: str, parameters: str | None, user_id: str,
-          stream: bool, timeout: int, output_format: str, protocol: str):
+          stream: bool, timeout: int, output_format: str, protocol: str, requires_human_approval: bool):
     """Create and execute a task for an agent with real-time event streaming."""
     client: "AgentAreaClient" = ctx.obj["client"]
 
@@ -52,10 +53,10 @@ def create(ctx, agent_id: str, description: str, parameters: str | None, user_id
         router = ProtocolRouter(client)
         if stream:
             # Stream A2A task creation, which will output normalized events
-            return run_async(router.stream_task_create_a2a(agent_id, description, params_dict, user_id, timeout, output_format))
+            return run_async(router.stream_task_create_a2a(agent_id, description, params_dict, user_id, timeout, output_format, requires_human_approval))
         else:
             # Non-streaming A2A send: use message/send to get final response
-            return run_async(router.send_a2a_message(agent_id, description, params_dict, user_id, stream=False, output_format=output_format))
+            return run_async(router.send_a2a_message(agent_id, description, params_dict, user_id, stream=False, output_format=output_format, requires_human_approval=requires_human_approval))
 
     # Internal protocol existing behavior
     if stream:
@@ -64,6 +65,7 @@ def create(ctx, agent_id: str, description: str, parameters: str | None, user_id
             "description": description,
             "parameters": params_dict or {},
             "user_id": user_id,
+            "requires_human_approval": requires_human_approval,
         }
         return run_async(_stream_task_creation(client, agent_id, task_data, timeout, output_format))
 
@@ -76,6 +78,7 @@ def create(ctx, agent_id: str, description: str, parameters: str | None, user_id
                 "user_id": user_id,
                 "mode": "sync",
                 "timeout": timeout,
+                "requires_human_approval": requires_human_approval,
             }
             url = f"{client.base_url}/v1/agents/{agent_id}/tasks/sync"
             headers = client._get_headers()

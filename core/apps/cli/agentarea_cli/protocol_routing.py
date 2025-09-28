@@ -107,7 +107,8 @@ class ProtocolRouter:
         parameters: dict = None,
         user_id: str = "cli_user",
         stream: bool = False,
-        output_format: str = "text"
+        output_format: str = "text",
+        requires_human_approval: bool = False
     ) -> Any:
         """Send message via A2A protocol."""
         base_url = self.client.base_url
@@ -117,10 +118,16 @@ class ProtocolRouter:
         # Use streaming method if requested
         method = "message/stream" if stream else "message/send"
         
-        # Include parameters in message if provided
+        # Include parameters in message if provided (kept for backward compatibility)
         message_text = message
         if parameters:
             message_text += f"\nParameters: {json.dumps(parameters)}"
+        
+        # Prepare metadata for JSON-RPC params
+        metadata = {"requires_human_approval": requires_human_approval}
+        if parameters:
+            # Also include provided parameters inside metadata for server-side use
+            metadata.update(parameters)
         
         # Prepare JSON-RPC request
         request_data = {
@@ -131,7 +138,8 @@ class ProtocolRouter:
                 "message": {
                     "role": "user",
                     "parts": [{"text": message_text}]
-                }
+                },
+                "metadata": metadata
             }
         }
         
@@ -176,17 +184,19 @@ class ProtocolRouter:
         parameters: dict = None,
         user_id: str = "cli_user",
         timeout: int = 300,
-        output_format: str = "text"
+        output_format: str = "text",
+        requires_human_approval: bool = False
     ):
         """Stream task creation via A2A protocol using message/stream."""
         # Use message/stream for creating and streaming task
         await self.send_a2a_message(
-            agent_id, 
-            description, 
-            parameters, 
-            user_id, 
-            stream=True, 
-            output_format=output_format
+            agent_id,
+            description,
+            parameters,
+            user_id,
+            stream=True,
+            output_format=output_format,
+            requires_human_approval=requires_human_approval
         )
 
     async def get_a2a_task_status(

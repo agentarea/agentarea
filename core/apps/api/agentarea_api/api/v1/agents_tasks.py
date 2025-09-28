@@ -30,6 +30,7 @@ class TaskCreate(BaseModel):
     parameters: dict[str, Any] = {}
     user_id: str | None = "api_user"
     enable_agent_communication: bool | None = True
+    requires_human_approval: bool | None = False
 
 
 class TaskResponse(BaseModel):
@@ -226,6 +227,7 @@ async def create_task_for_agent_with_stream(
                 parameters=data.parameters,
                 user_id=data.user_id,
                 enable_agent_communication=data.enable_agent_communication or True,
+                requires_human_approval=data.requires_human_approval or False,
             )
 
             # Send task created event
@@ -339,6 +341,7 @@ async def create_task_for_agent_sync(
             parameters=data.parameters,
             user_id=data.user_id,
             enable_agent_communication=data.enable_agent_communication or True,
+            requires_human_approval=data.requires_human_approval or False,
         )
 
         # Convert to API response format

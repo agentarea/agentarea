@@ -328,7 +328,7 @@ class ProviderService:
             Optional[Dict[str, Any]]: Dictionary containing instance, provider type, model name,
                                       API key, and endpoint URL, or None if not found.
         """
-        instance = await self.model_instance_repo.get_by_id(instance_id)
+        instance = await self.model_instance_repo.get_with_relations(instance_id)
         if not instance:
             return None
 

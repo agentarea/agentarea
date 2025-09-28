@@ -383,6 +383,7 @@ class TaskService(BaseTaskService):
         parameters: dict[str, Any] | None = None,
         user_id: str | None = None,
         enable_agent_communication: bool = True,
+        requires_human_approval: bool = False,
     ) -> SimpleTask:
         """Create a task and execute it using workflow.
 
@@ -392,6 +393,7 @@ class TaskService(BaseTaskService):
             parameters: Task parameters
             user_id: User ID (defaults to "api_user")
             enable_agent_communication: Whether to enable agent communication
+            requires_human_approval: Whether this task requires human approval before running
 
         Returns:
             Created task with workflow execution info
@@ -428,6 +430,7 @@ class TaskService(BaseTaskService):
                 "created_via": "api",
                 "agent_name": agent_name,
                 "enable_agent_communication": enable_agent_communication,
+                "requires_human_approval": requires_human_approval,
             },
         )
 

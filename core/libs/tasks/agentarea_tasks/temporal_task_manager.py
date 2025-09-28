@@ -114,7 +114,9 @@ class TemporalTaskManager(BaseTaskManager):
                 user_id=task.user_id,
                 task_query=task.query,
                 task_parameters=task.task_parameters or {},
-                workflow_metadata={}
+                enable_agent_communication=bool((task.metadata or {}).get("enable_agent_communication", False)),
+                requires_human_approval=bool((task.metadata or {}).get("requires_human_approval", False)),
+                workflow_metadata=task.metadata or {}
             )
 
             # Start the workflow using the correct workflow name and arguments

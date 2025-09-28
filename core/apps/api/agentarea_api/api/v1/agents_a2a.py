@@ -324,6 +324,13 @@ def convert_a2a_message_to_task(
             "agent_target": str(agent_id)
         }
     }
+    # Merge any provided metadata from A2A params (e.g., requires_human_approval)
+    if getattr(message_params, "metadata", None):
+        try:
+            a2a_metadata.update(message_params.metadata)
+        except Exception:
+            # If metadata merging fails, continue with base metadata
+            pass
     
     # Add agent info if available in auth context
     if "agent_name" in auth_context.metadata:
@@ -502,7 +509,8 @@ async def handle_message_send(request_id, params, task_service, agent_id, auth_c
         
         # Create validated message
         message = Message(role="user", parts=[TextPart(text=text_content)])
-        message_params = MessageSendParams(message=message)
+        # Include optional metadata from params (e.g., requires_human_approval)
+        message_params = MessageSendParams(message=message, metadata=params.get("metadata"))
         
         # Convert to task with proper metadata
         task = convert_a2a_message_to_task(
@@ -612,7 +620,8 @@ async def handle_message_stream_sse(request, request_id, params, task_service, a
         
         # Create validated message
         message = Message(role="user", parts=[TextPart(text=text_content)])
-        message_params = MessageSendParams(message=message)
+        # Include optional metadata from params (e.g., requires_human_approval)
+        message_params = MessageSendParams(message=message, metadata=params.get("metadata"))
         
         # Create task with proper A2A metadata
         task = convert_a2a_message_to_task(
