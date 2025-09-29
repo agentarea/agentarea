@@ -1,54 +1,20 @@
 import React from "react";
-import { Cpu, Calculator, Wrench, Plus, Trash2 } from "lucide-react";
+import { Cpu, Calculator } from "lucide-react";
 import { FieldErrors, UseFieldArrayReturn, UseFieldArrayAppend } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues, BuiltinToolConfig } from "../types";
 import type { components } from '@/api/schema';
-import AccordionControl from "./AccordionControl";
 import { useState, useEffect } from "react";
 import { TriggerControl } from "./TriggerControl";
 import { Accordion } from "@/components/ui/accordion";
 import { SelectableList } from "./SelectableList";
 import { useTranslations } from "next-intl";
-import FormLabel from "@/components/FormLabel/FormLabel";
 import ConfigSheet from "./ConfigSheet";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { BuiltinToolIconGrid } from "./BuiltinToolIconGrid";
-import { client } from '@/lib/api';
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
-// Builtin tools will be fetched from API - for now using static data
-const BUILTIN_TOOLS = [
-  {
-    name: "calculator",
-    display_name: "Calculator", 
-    description: "Perform basic mathematical calculations like addition, subtraction, multiplication, division",
-    category: "utility"
-  },
-  {
-    name: "math_toolset",
-    display_name: "Math Toolset",
-    description: "Mathematical operations including addition, subtraction, multiplication, division, and more",
-    category: "math",
-    available_methods: [
-      { name: "add", display_name: "Addition", description: "Add two numbers together" },
-      { name: "subtract", display_name: "Subtraction", description: "Subtract one number from another" },
-      { name: "multiply", display_name: "Multiplication", description: "Multiply two numbers" },
-      { name: "divide", display_name: "Division", description: "Divide one number by another" },
-      { name: "power", display_name: "Power/Exponentiation", description: "Raise a number to a power" },
-      { name: "sqrt", display_name: "Square Root", description: "Calculate the square root of a number" },
-      { name: "sin", display_name: "Sine", description: "Calculate the sine of an angle" },
-      { name: "cos", display_name: "Cosine", description: "Calculate the cosine of an angle" },
-      { name: "tan", display_name: "Tangent", description: "Calculate the tangent of an angle" },
-      { name: "log", display_name: "Logarithm", description: "Calculate the logarithm of a number" },
-      { name: "abs", display_name: "Absolute Value", description: "Calculate the absolute value of a number" },
-      { name: "evaluate", display_name: "Expression Evaluator", description: "Safely evaluate mathematical expressions" }
-    ]
-  }
-];
 
 type ToolConfigProps = {
   control: any;
@@ -58,6 +24,7 @@ type ToolConfigProps = {
   appendTool: UseFieldArrayAppend<AgentFormValues, "tools_config.mcp_server_configs">;
   mcpServers: MCPServer[];
   mcpInstanceList: any[];
+  builtinTools: any[];
   builtinToolFields?: UseFieldArrayReturn<AgentFormValues, "tools_config.builtin_tools", "id">["fields"];
   removeBuiltinTool?: (index: number) => void;
   appendBuiltinTool?: UseFieldArrayAppend<AgentFormValues, "tools_config.builtin_tools">;
@@ -71,6 +38,7 @@ const ToolConfig = ({
   appendTool, 
   mcpServers, 
   mcpInstanceList,
+  builtinTools,
   builtinToolFields,
   removeBuiltinTool,
   appendBuiltinTool
@@ -78,38 +46,9 @@ const ToolConfig = ({
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollToolId, setScrollToolId] = useState<string | null>(null);
-  const [builtinTools, setBuiltinTools] = useState<any[]>([]);
   const [loadingBuiltinTools, setLoadingBuiltinTools] = useState(false);
   const t = useTranslations('AgentsPage');
 
-  // Fetch builtin tools from API
-  useEffect(() => {
-    const fetchBuiltinTools = async () => {
-      setLoadingBuiltinTools(true);
-      try {
-        const response = await client.GET('/v1/agents/tools/builtin');
-        if (response.data) {
-          // Convert the object to array format
-          const toolsArray = Object.values(response.data).map((tool: any) => ({
-            name: tool.name,
-            display_name: tool.display_name,
-            description: tool.description,
-            category: tool.category,
-            available_methods: tool.available_methods || []
-          }));
-          setBuiltinTools(toolsArray);
-        }
-      } catch (error) {
-        console.error('Failed to fetch builtin tools:', error);
-        // Fallback to static data
-        setBuiltinTools(BUILTIN_TOOLS);
-      } finally {
-        setLoadingBuiltinTools(false);
-      }
-    };
-
-    fetchBuiltinTools();
-  }, []);
 
   // Builtin tools helpers for unified selector
   const handleAddBuiltinTool = (toolName: string) => {

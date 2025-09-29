@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Input } from "@/components/ui/input";
-import { Bot, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { listAgents } from "@/lib/api";
@@ -210,8 +210,8 @@ export default function AgentsBrowsePage() {
         description: t("mainDescriptionPage"),
         controls: (
           <Link href="/agents/create">
-            <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
-              <Bot className="h-5 w-5" />
+            <Button className="shrink-0 gap-2" size="xs" data-test="deploy-button">
+              <Plus className="h-5 w-5" />
               {t("deployNewAgent")}
             </Button>
           </Link>

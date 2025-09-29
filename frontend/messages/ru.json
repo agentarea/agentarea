@@ -325,7 +325,7 @@
     "getStartedByAddingYourFirstAgent": "Начните работу, добавив своего первого агента.",
     "addYourFirstAgent": "Добавьте своего первого агента",
     "create": {
-      "agentName": "Имя агента",
+      "agentName": "Имя",
       "agentNamePlaceholder": "Введите имя агента",
       "description": "Описание / Цель",
       "descriptionPlaceholder": "Опишите цель и задачи агента...",

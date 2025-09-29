@@ -24,12 +24,12 @@ type ContentBlockProps = {
 export default function ContentBlock({ children, header }: ContentBlockProps) {
   return (
     <div className="
-        px-4 py-5 h-full flex flex-col
+        h-full flex flex-col overflow-hidden
     ">
         {header && (
             <div className="
-                flex flex-row justify-between items-start
-                mb-[10px] md:mb-[20px] lg:mb-[30px]"
+                flex flex-row justify-between items-center min-h-[50px]
+                bg-white px-4 border-b border-zinc-200 dark:border-zinc-700"
             >
                 {'title' in header ? (
                     <>
@@ -88,13 +88,13 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
                                     }
                                     </BreadcrumbList>
                                 </Breadcrumb>
-                                {
+                                {/* {
                                     header.description && (
                                         <p className="note">
                                             {header.description}
                                         </p>
                                     )
-                                }
+                                } */}
                             </div>
                         </div>
                         {header.controls}
@@ -104,9 +104,9 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
             </div>
         )}
 
-        {/* <div className="h-full"> */}
+        <div className="px-4 py-5 overflow-auto h-full">
             {children}
-        {/* </div> */}
+        </div>
     </div>
   )
 }
