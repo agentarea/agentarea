@@ -1,10 +1,11 @@
 import createClient from "openapi-fetch";
 import type { paths } from "../api/schema";
 import { getAuthTokenClient } from "./auth-client";
+import { env } from "@/env";
 
 // Create the base client
 const client = createClient<paths>({
-  baseUrl: process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "http://localhost:8000",
+  baseUrl: env.NEXT_PUBLIC_API_URL,
 });
 
 // Add authentication middleware

@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from 'next-intl/plugin';
+import "./src/env";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -14,11 +15,6 @@ const nextConfig: NextConfig = {
     ],
   },
   output: "standalone",
-  env: {
-    NEXT_PUBLIC_ORY_SDK_URL: process.env.NEXT_PUBLIC_ORY_SDK_URL || 'http://localhost:4433',
-    ORY_ADMIN_URL: process.env.ORY_ADMIN_URL || 'http://localhost:4434',
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
-  },
   async rewrites() {
     return [
       {

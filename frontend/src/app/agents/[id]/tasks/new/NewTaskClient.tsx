@@ -9,11 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Bot, 
-  ArrowLeft, 
-  MessageCircle, 
-  Settings, 
+import {
+  Bot,
+  ArrowLeft,
+  MessageCircle,
+  Settings,
   Send,
   Zap,
   Plus,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { AgentChat } from "@/components/Chat";
+import { env } from "@/env";
 
 interface Agent {
   id: string;
@@ -63,7 +64,7 @@ export default function NewTaskClient({ agent }: Props) {
       }
 
       // Create task using API
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const baseUrl = env.NEXT_PUBLIC_API_URL;
       const response = await fetch(`${baseUrl}/v1/agents/${agent.id}/tasks/sync`, {
         method: 'POST',
         headers: {

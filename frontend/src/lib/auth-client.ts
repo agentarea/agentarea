@@ -1,12 +1,14 @@
+import { env } from "@/env";
+
 // Client-only helper to obtain a short-lived JWT from Ory Kratos using the
 // current browser session cookie. We call the public whoami endpoint with
 // `tokenize_as` so Kratos returns a tokenized JWT for downstream APIs.
 export async function getAuthTokenClient(): Promise<string | null> {
   try {
     const base =
-      process.env.NEXT_PUBLIC_ORY_PUBLIC_URL ||
-      process.env.NEXT_PUBLIC_ORY_URL ||
-      "http://localhost:4433"; // Kratos public port by default
+      env.NEXT_PUBLIC_ORY_PUBLIC_URL ||
+      env.NEXT_PUBLIC_ORY_URL ||
+      env.NEXT_PUBLIC_ORY_SDK_URL; // Kratos public port by default
 
     // Ensure no trailing slash
     const baseUrl = base.replace(/\/$/, "");

@@ -3,7 +3,9 @@
  * Icons are served from the backend at /static/icons/providers/
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { env } from "@/env";
+
+const API_BASE_URL = env.NEXT_PUBLIC_API_URL;
 
 // Map of provider names to icon identifiers
 const PROVIDER_ICON_MAP: Record<string, string> = {

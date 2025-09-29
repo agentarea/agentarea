@@ -2,10 +2,11 @@
 
 import { Configuration, FrontendApi } from "@ory/kratos-client";
 import { cookies } from "next/headers";
+import { env } from "@/env";
 
 // Create Kratos client for server-side calls
 const kratosConfig = new Configuration({
-  basePath: process.env.ORY_ADMIN_URL || "http://localhost:4433",
+  basePath: env.ORY_ADMIN_URL,
 });
 const kratos = new FrontendApi(kratosConfig);
 

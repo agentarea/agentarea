@@ -2,6 +2,7 @@
 
 import client from "./client";
 import type { components } from "../api/schema";
+import { env } from "@/env";
 
 // Agent API
 export const listAgents = async () => {
@@ -294,7 +295,7 @@ export const listMCPServerInstances = async () => {
 export const checkMCPServerInstanceConfiguration = async (checkRequest: { json_spec: Record<string, any> }) => {
   // Use fetch directly since the endpoint isn't in the generated schema yet
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/v1/mcp-server-instances/check`, {
+    const response = await fetch(`${env.NEXT_PUBLIC_API_BASE_URL}/v1/mcp-server-instances/check`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

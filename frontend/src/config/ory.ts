@@ -1,5 +1,3 @@
-// Copyright © 2024 Ory Corp
-
 import type { OryClientConfiguration } from "@ory/elements-react"
 
 const config: OryClientConfiguration = {
