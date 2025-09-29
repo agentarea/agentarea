@@ -122,7 +122,7 @@ export default function AgentsList({ initialAgents }: { initialAgents: Agent[] }
       accessor: "id",
       render: (_value: string, item: any) => (
         <div className="flex gap-2">
-          <Link href={`/agents/${item.id}`} onClick={(e) => e.stopPropagation()}>
+          <Link href={`/agents/${item.id}/new-task`} onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
             Explore
             </Button>
@@ -177,7 +177,7 @@ export default function AgentsList({ initialAgents }: { initialAgents: Agent[] }
           routeChange="/agents"
           cardContent={(item) => <AgentCard agent={item} />}
           cardClassName="px-0 pb-0 overflow-hidden"
-          itemLink={(agent) => `/agents/${agent.id}`}
+          itemLink={(agent) => `/agents/${agent.id}/new-task`}
           gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
           leftComponent={
             <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
