@@ -50,7 +50,7 @@ export const TriggerControl = ({ trigger, index, control, removeEvent, editEvent
                     variant="ghost"
                     size="icon"
                     onClick={() => editEvent(index)}
-                    className="text-muted-foreground/60 h-4 w-4 flex-shrink-0 hover:bg-transparent"
+                    className="text-muted-foreground/60 h-4 w-4 flex-shrink-0 hover:bg-transparent hover:text-primary"
                     aria-label="Edit Event"
                 >
                     <Edit className="h-4 w-4" />
@@ -63,7 +63,7 @@ export const TriggerControl = ({ trigger, index, control, removeEvent, editEvent
                     variant="ghost"
                     size="icon"
                     onClick={() => removeEvent(index)}
-                    className="text-muted-foreground/60 h-4 w-4 flex-shrink-0 hover:bg-transparent"
+                    className="text-muted-foreground/60 h-4 w-4 flex-shrink-0 hover:bg-transparent hover:text-red-500"
                     aria-label="Remove Event"
                 >
                     <Trash2 className="h-4 w-4" />

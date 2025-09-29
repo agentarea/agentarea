@@ -332,8 +332,8 @@ export const deleteMCPServerInstance = async (instanceId: string) => {
   return { data, error };
 };
 
-export const updateMCPServerInstance = async (instanceId: string, instance: Partial<components["schemas"]["MCPServerInstanceCreateRequest"]>) => {
-  const { data, error } = await client.PUT("/v1/mcp-server-instances/{instance_id}", {
+export const updateMCPServerInstance = async (instanceId: string, instance: components["schemas"]["MCPServerInstanceUpdate"]) => {
+  const { data, error } = await client.PATCH("/v1/mcp-server-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
     body: instance,
   });
