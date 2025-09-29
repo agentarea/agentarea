@@ -220,6 +220,7 @@ const ToolConfig = ({
                 />
                 <div className="font-semibold">Available MCP Servers</div>
                 <SelectableList
+                  disableExpand={true}
                   items={mcpServers}
                   prefix="mcp"
                   extractTitle={(server) => server.name}
