@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Accordion } from "@/components/ui/accordion";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 interface SelectableListProps<T extends { id: string }> {
@@ -26,6 +26,10 @@ interface SelectableListProps<T extends { id: string }> {
   prefix?: string;
   /** Translation namespace – defaults to 'AgentsPage' */
   translationNamespace?: string;
+  /** Label (button) for active items */
+  activeLabel?: string | React.ReactNode;
+  /** Label (button) for inactive items */
+  inactiveLabel?: string | React.ReactNode;
 }
 
 export function SelectableList<T extends { id: string }>({
@@ -39,6 +43,8 @@ export function SelectableList<T extends { id: string }>({
   openItemId,
   prefix = "item",
   translationNamespace = "AgentsPage",
+  activeLabel,
+  inactiveLabel,
 }: SelectableListProps<T>) {
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
   const t = useTranslations(translationNamespace);
@@ -73,7 +79,7 @@ export function SelectableList<T extends { id: string }>({
                   onClick={() => onRemove(item)}
                   className="cursor-pointer border hover:border-destructive"
                 >
-                  ✕ {t("create.remove")}
+                  {activeLabel || <><X className="h-4 w-4" /> {t("create.remove")}</>} 
                 </Badge>
               ) : (
                 <Badge
@@ -81,7 +87,7 @@ export function SelectableList<T extends { id: string }>({
                   onClick={() => onAdd(item)}
                   className="cursor-pointer border hover:border-primary hover:text-primary dark:hover:bg-primary dark:hover:text-white"
                 >
-                  <Plus className="h-4 w-4" /> {t("create.add")}
+                  {inactiveLabel || <><Plus className="h-4 w-4" /> {t("create.add")}</>}
                 </Badge>
               )
             }

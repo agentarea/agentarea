@@ -1,5 +1,5 @@
 import React from "react";
-import { Cpu, Calculator } from "lucide-react";
+import { Cpu, Calculator, Loader2, Info, CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { FieldErrors, UseFieldArrayReturn, UseFieldArrayAppend } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues, BuiltinToolConfig } from "../types";
@@ -12,6 +12,15 @@ import { useTranslations } from "next-intl";
 import ConfigSheet from "./ConfigSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BuiltinToolIconGrid } from "./BuiltinToolIconGrid";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { createMCPServerInstance, checkMCPServerInstanceConfiguration } from "@/lib/api";
+import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -48,6 +57,23 @@ const ToolConfig = ({
   const [scrollToolId, setScrollToolId] = useState<string | null>(null);
   const [loadingBuiltinTools, setLoadingBuiltinTools] = useState(false);
   const t = useTranslations('AgentsPage');
+
+  // Configure server overlay (like marketplace, but in sheet)
+  const [configureServerSheetOpen, setConfigureServerSheetOpen] = useState(false);
+  const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null);
+  const [instanceName, setInstanceName] = useState("");
+  const [instanceDescription, setInstanceDescription] = useState("");
+  const [envVars, setEnvVars] = useState<Record<string, string>>({});
+  const [isChecking, setIsChecking] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [validationResult, setValidationResult] = useState<{ valid: boolean; errors: string[]; warnings: string[] } | null>(null);
+
+  // Keep a local copy of active instances so the list updates immediately after creation
+  const [activeInstances, setActiveInstances] = useState<any[]>(mcpInstanceList || []);
+  useEffect(() => {
+    setActiveInstances(mcpInstanceList || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(mcpInstanceList)]);
 
 
   // Builtin tools helpers for unified selector
@@ -107,6 +133,24 @@ const ToolConfig = ({
     }
   };
 
+  const handleAddConfigurationTools = (server: MCPServer) => {
+    setSelectedServer(server);
+    const defaultName = `${server.name} Instance`;
+    const defaultDescription = `Instance of ${server.name}`;
+    setInstanceName(defaultName);
+    setInstanceDescription(defaultDescription);
+    const initialEnv: Record<string, string> = {};
+    (server.env_schema || []).forEach((envVar: any) => {
+      const name = (envVar && (envVar.name as string)) || "";
+      if (!name) return;
+      const defVal = (envVar.default as string | undefined) || "";
+      initialEnv[name] = defVal;
+    });
+    setEnvVars(initialEnv);
+    setValidationResult(null);
+    setConfigureServerSheetOpen(true);
+  };
+
   const editTool = (index: number) => {
     const tool = toolFields[index];
     if (!tool) return;
@@ -163,7 +207,7 @@ const ToolConfig = ({
               <div className="flex flex-col overflow-y-auto space-y-4">
                 <div className="font-semibold">Active MCP Servers</div>
                 <SelectableList
-                  items={mcpInstanceList}
+                  items={activeInstances}
                   prefix="active-mcp"
                   extractTitle={(instance) => instance.name || instance.id}
                   onAdd={(instance) => handleAddTools([instance])}
@@ -179,10 +223,11 @@ const ToolConfig = ({
                   items={mcpServers}
                   prefix="mcp"
                   extractTitle={(server) => server.name}
-                  onAdd={(server) => handleAddTools([server])}
+                  onAdd={(server) => handleAddConfigurationTools(server)}
                   onRemove={(server) => handleRemoveTool(server.id)}
                   selectedIds={toolFields.map((item) => item.mcp_server_id)}
                   openItemId={scrollToolId}
+                  inactiveLabel={<>Configure <ArrowRight className="h-3 w-3" /></>}
                   renderContent={() => (
                     <div className="p-4 text-sm text-muted-foreground">Available</div>
                   )}
@@ -224,6 +269,48 @@ const ToolConfig = ({
         <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'tools_config.builtin_tools')}</p>}
       {getNestedErrorMessage(errors, 'tools_config') && 
         <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'tools_config')}</p>}
+
+      {/* Configure Server Sheet overlay */}
+      <ConfigSheet
+        className="md:min-w-[500px]"
+        title={selectedServer ? `Configure ${selectedServer.name} Instance` : 'Configure MCP Server'}
+        description={selectedServer?.description || ''}
+        triggerClassName="hidden"
+        open={configureServerSheetOpen}
+        onOpenChange={setConfigureServerSheetOpen}
+      >
+        {selectedServer && (
+          <div className="flex flex-col gap-4 overflow-y-auto pb-4">
+            <MCPInstanceConfigForm
+              renderAsForm={false}
+              server={selectedServer}
+              instanceName={instanceName}
+              instanceDescription={instanceDescription}
+              envVars={envVars}
+              onChangeName={setInstanceName}
+              onChangeDescription={setInstanceDescription}
+              onChangeEnvVar={(name, value) => { setEnvVars((prev) => ({ ...prev, [name]: value })); if (validationResult) setValidationResult(null); }}
+              onValidate={async () => { if (!selectedServer) return; setIsChecking(true); try { const check = await checkMCPServerInstanceConfiguration({ json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (check.error) { toast.error('Failed to validate configuration'); } else { setValidationResult(check.data); if (check.data.valid) toast.success('Configuration is valid!'); else toast.warning(`Configuration has ${check.data.errors.length} error(s)`); } } catch (err) { console.error(err); toast.error('Validation failed'); } finally { setIsChecking(false); } }}
+              onForceCreate={async () => { if (!selectedServer) return; setIsCreating(true); try { const res = await createMCPServerInstance({ name: instanceName, description: instanceDescription, server_spec_id: selectedServer.id, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (res.error) throw new Error(typeof res.error.detail === 'string' ? res.error.detail : 'Failed to create instance'); toast.success(`Successfully created ${instanceName}`); if (res.data?.id) { setActiveInstances((prev) => { const exists = prev.some((i) => i.id === res.data!.id); return exists ? prev : [res.data!, ...prev]; }); appendTool([{ mcp_server_id: res.data.id, allowed_tools: [] } as any]); } setConfigureServerSheetOpen(false); } catch (err: any) { console.error(err); toast.error(err?.message || 'Failed to create instance'); } finally { setIsCreating(false); } }}
+              onSubmit={async () => { if (!selectedServer) return; if (!validationResult) { toast.warning('Please validate the configuration first'); return; } if (validationResult && !validationResult.valid) { toast.error('Configuration validation failed. Use "Force Create" to proceed.'); return; } setIsCreating(true); try { const res = await createMCPServerInstance({ name: instanceName, description: instanceDescription, server_spec_id: selectedServer.id, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (res.error) throw new Error(typeof res.error.detail === 'string' ? res.error.detail : 'Failed to create instance'); toast.success(`Successfully created ${instanceName}`); if (res.data?.id) { setActiveInstances((prev) => { const exists = prev.some((i) => i.id === res.data!.id); return exists ? prev : [res.data!, ...prev]; }); appendTool([{ mcp_server_id: res.data.id, allowed_tools: [] } as any]); } setConfigureServerSheetOpen(false); } catch (err: any) { console.error(err); toast.error(err?.message || 'Failed to create instance'); } finally { setIsCreating(false); } }}
+              submitDisabled={isCreating || !instanceName.trim() || (validationResult ? !validationResult.valid : false)}
+              validateDisabled={isChecking || !instanceName.trim()}
+              forceCreateDisabled={isCreating || !instanceName.trim()}
+              submitLabel={isCreating ? 'Creating...' : 'Create Instance'}
+              extraActions={(
+                <Button
+                  variant="outline"
+                  onClick={() => setConfigureServerSheetOpen(false)}
+                  disabled={isCreating}
+                  type="button"
+                >
+                  Cancel
+                </Button>
+              )}
+            />
+          </div>
+        )}
+      </ConfigSheet>
     </div>
   );
 };

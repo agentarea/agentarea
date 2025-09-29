@@ -29,7 +29,7 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
         {header && (
             <div className="
                 flex flex-row justify-between items-center min-h-[50px]
-                bg-white px-4 border-b border-zinc-200 dark:border-zinc-700"
+                bg-white dark:bg-zinc-800 px-4 border-b border-zinc-200 dark:border-zinc-700"
             >
                 {'title' in header ? (
                     <>
