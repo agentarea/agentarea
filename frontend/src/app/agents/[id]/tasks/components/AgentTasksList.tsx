@@ -4,13 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import {
-  listAgentTasks,
-  getAgentTaskStatus,
-  pauseAgentTask,
-  resumeAgentTask,
-  cancelAgentTask,
-} from "@/lib/api";
+// API вызовы теперь только на сервере
 import { AlertCircle, CheckCircle, FileText, Pause, Play, Square } from "lucide-react";
 
 interface Task {
@@ -22,91 +16,83 @@ interface Task {
 }
 
 interface TaskStatus {
-  status: string;
   task_id: string;
   agent_id: string;
+  execution_id: string;
+  status: string;
   start_time?: string;
   end_time?: string;
   execution_time?: string;
-  message?: string;
   error?: string;
+  result?: any;
+  message?: string;
+  artifacts?: any;
+  session_id?: string;
+  usage_metadata?: any;
 }
 
-export default function AgentTasksList({ agentId }: { agentId: string }) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
+interface TaskWithStatus extends Task {
+  taskStatus?: TaskStatus;
+}
 
+interface AgentTasksListProps {
+  agentId: string;
+  initialTasks: TaskWithStatus[];
+  onPauseTask: (taskId: string) => Promise<any>;
+  onResumeTask: (taskId: string) => Promise<any>;
+  onCancelTask: (taskId: string) => Promise<any>;
+}
+
+export default function AgentTasksList({ 
+  agentId, 
+  initialTasks, 
+  onPauseTask, 
+  onResumeTask, 
+  onCancelTask 
+}: AgentTasksListProps) {
+  const [tasks, setTasks] = useState<TaskWithStatus[]>(initialTasks);
+
+  // Обновляем задачи только при изменении initialTasks
   useEffect(() => {
-    loadTasks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId]);
+    setTasks(initialTasks);
+  }, [initialTasks]);
 
-  const loadTasks = async () => {
-    setTasksLoading(true);
+  const handleTaskPause = async (taskId: string) => {
     try {
-      const { data: tasksData, error } = await listAgentTasks(agentId);
-      if (!error && tasksData) {
-        setTasks(tasksData);
-        for (const task of tasksData) {
-          void loadTaskStatus(task.id);
-        }
+      const result = await onPauseTask(taskId);
+      if (result.error) {
+        console.error("Failed to pause task:", result.error);
       }
     } catch (error) {
-      console.error("Failed to load tasks:", error);
-    } finally {
-      setTasksLoading(false);
+      console.error("Failed to pause task:", error);
     }
   };
 
-  const loadTaskStatus = async (taskId: string) => {
+  const handleTaskResume = async (taskId: string) => {
     try {
-      const { data: statusData, error } = await getAgentTaskStatus(agentId, taskId);
-      if (!error && statusData) {
-        setTaskStatuses((prev) => ({
-          ...prev,
-          [taskId]: statusData as TaskStatus,
-        }));
+      const result = await onResumeTask(taskId);
+      if (result.error) {
+        console.error("Failed to resume task:", result.error);
       }
     } catch (error) {
-      console.error(`Failed to load status for task ${taskId}:`, error);
+      console.error("Failed to resume task:", error);
     }
   };
 
-  const handleTaskAction = async (taskId: string, action: "pause" | "resume" | "cancel") => {
+  const handleTaskCancel = async (taskId: string) => {
     try {
-      let result;
-      switch (action) {
-        case "pause":
-          result = await pauseAgentTask(agentId, taskId);
-          break;
-        case "resume":
-          result = await resumeAgentTask(agentId, taskId);
-          break;
-        case "cancel":
-          result = await cancelAgentTask(agentId, taskId);
-          break;
-      }
-
-      if (!result.error) {
-        void loadTaskStatus(taskId);
-        void loadTasks();
+      const result = await onCancelTask(taskId);
+      if (result.error) {
+        console.error("Failed to cancel task:", result.error);
       }
     } catch (error) {
-      console.error(`Failed to ${action} task:`, error);
+      console.error("Failed to cancel task:", error);
     }
   };
 
   return (
     <div className="space-y-2 h-full overflow-auto">
-      {tasksLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-gray-500">Loading tasks...</span>
-          </div>
-        </div>
-      ) : tasks.length === 0 ? (
+      {tasks.length === 0 ? (
         <div className="text-center py-8 bg-white border border-gray-200 rounded-lg">
           <div className="h-8 w-8 bg-gray-100 rounded flex items-center justify-center mx-auto mb-3">
             <CheckCircle className="h-4 w-4 text-gray-400" />
@@ -124,7 +110,7 @@ export default function AgentTasksList({ agentId }: { agentId: string }) {
       ) : (
         <div className="space-y-2">
           {tasks.map((task) => {
-            const status = taskStatuses[task.id];
+            const status = task.taskStatus;
             const isActive = ["running", "paused"].includes(task.status);
 
             return (
@@ -166,7 +152,7 @@ export default function AgentTasksList({ agentId }: { agentId: string }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleTaskAction(task.id, "pause")}
+                        onClick={() => handleTaskPause(task.id)}
                         className="h-7 px-2"
                       >
                         <Pause className="h-3 w-3" />
@@ -176,7 +162,7 @@ export default function AgentTasksList({ agentId }: { agentId: string }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleTaskAction(task.id, "resume")}
+                        onClick={() => handleTaskResume(task.id)}
                         className="h-7 px-2"
                       >
                         <Play className="h-3 w-3" />
@@ -186,7 +172,7 @@ export default function AgentTasksList({ agentId }: { agentId: string }) {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => handleTaskAction(task.id, "cancel")}
+                        onClick={() => handleTaskCancel(task.id)}
                         className="h-7 px-2"
                       >
                         <Square className="h-3 w-3" />

@@ -94,10 +94,34 @@ export const cancelAgentTask = async (agentId: string, taskId: string) => {
 };
 
 export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
-  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/status", {
-    params: { path: { agent_id: agentId, task_id: taskId } },
-  });
-  return { data, error };
+  try {
+    const response = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/status", {
+      params: { path: { agent_id: agentId, task_id: taskId } },
+    });
+    return { 
+      data: response.data as {
+        task_id: string;
+        agent_id: string;
+        execution_id: string;
+        status: string;
+        start_time?: string;
+        end_time?: string;
+        execution_time?: string;
+        error?: string;
+        result?: any;
+        message?: string;
+        artifacts?: any;
+        session_id?: string;
+        usage_metadata?: any;
+      } | undefined, 
+      error: response.error 
+    };
+  } catch (error) {
+    return { 
+      data: undefined, 
+      error: error as Error 
+    };
+  }
 };
 
 export const pauseAgentTask = async (agentId: string, taskId: string) => {
