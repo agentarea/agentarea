@@ -320,6 +320,7 @@
   "Agent": {
     "name": "Name",
     "status": "Status",
+    "settings": "Settings",
     "model": "Model",
     "description": "Description",
     "tools": "Tools",

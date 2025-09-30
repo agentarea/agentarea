@@ -26,10 +26,15 @@ export default async function AgentLayout({ params, children }: Props) {
           { label: t("browseAgents"), href: "/agents" },
           { label: agent.name, href: `/agents/${agent.id}` },
         ],
-        controls: <AgentHeaderTabs agentId={agent.id} />,
       }}
+      className="p-0"
     >
-      {children}
+      <div className="flex flex-col h-full">
+        <div className="bg-white dark:bg-zinc-800 px-4 border-b border-zinc-200 dark:border-zinc-700">
+          <AgentHeaderTabs agentId={agent.id} />
+        </div>
+        {children}
+      </div>
     </ContentBlock>
   );
 }

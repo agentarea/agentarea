@@ -18,6 +18,7 @@ export default function TaskDetails({ agent, isTaskRunning = false, isTaskActive
     return (
         <Card className="
             h-full flex flex-col overflow-auto gap-3
+            border-t-0 border-b-0 border-r-0 rounded-none
             md:min-w-[250px] lg:min-w-[300px] md:max-w-[250px] lg:max-w-[300px]
         ">
             <h3 className="">{t("agentDetails")}</h3>

@@ -91,7 +91,7 @@ export default function AgentTasksList({
   };
 
   return (
-    <div className="space-y-2 h-full overflow-auto">
+    <div className="space-y-2 h-full overflow-auto px-4 py-5">
       {tasks.length === 0 ? (
         <div className="text-center py-8 bg-white border border-gray-200 rounded-lg">
           <div className="h-8 w-8 bg-gray-100 rounded flex items-center justify-center mx-auto mb-3">

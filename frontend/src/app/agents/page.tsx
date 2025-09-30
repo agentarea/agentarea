@@ -1,33 +1,18 @@
 import Link from "next/link";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { listAgents, listModelInstances } from "@/lib/api";
-import AgentsList from "./components/AgentsList";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Plus } from "lucide-react";
+import AgentsContent from "@/app/agents/components/AgentsContent";
 
 export default async function AgentsBrowsePage() {
   const t = await getTranslations("Agent");
-  const [{ data: agents = [] }, { data: modelInstances = [] }] = await Promise.all([
-    listAgents(),
-    listModelInstances(),
-  ]);
-
-  const enrichedAgents = (agents as any[]).map((agent) => {
-    const model = (modelInstances as any[]).find((m) => m.id === agent.model_id);
-    const model_info = model
-      ? {
-          provider_name: model.provider_name || undefined,
-          model_display_name: model.model_display_name || undefined,
-          config_name: model.config_name || undefined,
-        }
-      : undefined;
-    return { ...agent, model_info };
-  });
 
   return (
     <ContentBlock 
+      className="pt-0 px-0"
       header={{
         breadcrumb: [
           {label: t("browseAgents")},
@@ -49,7 +34,7 @@ export default async function AgentsBrowsePage() {
           </div>
         )}
       >
-        <AgentsList initialAgents={enrichedAgents as any} />
+        <AgentsContent />
       </Suspense>
     </ContentBlock>
   );

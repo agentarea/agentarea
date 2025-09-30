@@ -3,9 +3,11 @@ import { ArrowLeft } from "lucide-react";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import React from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
 type ContentBlockProps = {  
   children: React.ReactNode;
+  className?: string;
   header?: {
     title: string;
     description?: string;
@@ -21,14 +23,12 @@ type ContentBlockProps = {
   }
 }
 
-export default function ContentBlock({ children, header }: ContentBlockProps) {
+export default function ContentBlock({ children, header, className }: ContentBlockProps) {
   return (
-    <div className="
-        h-full flex flex-col overflow-hidden
-    ">
+    <div className="h-full flex flex-col overflow-hidden">
         {header && (
             <div className="
-                flex flex-row justify-between items-center min-h-[50px]
+                flex flex-row justify-between items-center min-h-[40px]
                 bg-white dark:bg-zinc-800 px-4 border-b border-zinc-200 dark:border-zinc-700"
             >
                 {'title' in header ? (
@@ -104,7 +104,7 @@ export default function ContentBlock({ children, header }: ContentBlockProps) {
             </div>
         )}
 
-        <div className="px-4 py-5 overflow-auto h-full">
+        <div className={cn("px-4 py-5 overflow-auto h-full", className)}>
             {children}
         </div>
     </div>

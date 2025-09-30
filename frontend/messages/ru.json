@@ -286,6 +286,7 @@
     "model": "Модель",
     "description": "Описание",
     "tools": "Инструменты",
+    "settings": "Настройки",
     "noTools": "Нет инструментов",
     "createTask": "Создать задачу",
     "currentTasks": "Текущие задачи",

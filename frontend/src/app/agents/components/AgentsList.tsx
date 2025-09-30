@@ -152,7 +152,7 @@ export default function AgentsList({ initialAgents }: { initialAgents: Agent[] }
   const filteredAgents = useMemo(() => filterData(initialAgents), [filterData, initialAgents]);
 
   return (
-    <>
+    <div className="px-4 pt-3">
       {loading || (!isTabLoaded && !urlTab) ? (
         <div className="flex items-center justify-center h-32">
           <LoadingSpinner />
@@ -195,7 +195,7 @@ export default function AgentsList({ initialAgents }: { initialAgents: Agent[] }
           }
         />
       )}
-    </>
+    </div>
   );
 }
 
