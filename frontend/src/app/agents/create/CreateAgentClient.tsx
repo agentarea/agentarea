@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useActionState, useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { useForm, useFieldArray } from 'react-hook-form';
 import { addAgent } from './actions';
-import { initialState as agentInitialState } from './state';
+import { initialState as agentInitialState } from './types';
 import { generateAgentName } from './utils/agentNameGenerator';
 import type { components } from '@/api/schema';
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,6 @@ import {
   ToolConfig
 } from './components';
 import type { AgentFormValues, EventConfig } from './types';
-import { listModelInstances } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -24,28 +23,17 @@ type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 export default function CreateAgentClient({ 
   mcpServers, 
   llmModelInstances, 
-  mcpInstanceList
+  mcpInstanceList,
+  builtinTools
 }: { 
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: any[];
+  builtinTools: any[];
 }) {
   const [state, setState] = useState(agentInitialState);
-  const [currentModelInstances, setCurrentModelInstances] = useState(llmModelInstances);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
-
-  // Function to refresh model instances
-  const refreshModelInstances = async () => {
-    try {
-      const response = await listModelInstances();
-      if (response.data) {
-        setCurrentModelInstances(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to refresh model instances:', error);
-    }
-  };
 
   const { register, control, setValue, handleSubmit, formState: { errors } } = useForm<AgentFormValues>({
     defaultValues: {
@@ -105,8 +93,9 @@ export default function CreateAgentClient({
         setValue("tools_config.mcp_server_configs", configs);
       }
       
-      if (Array.isArray(state.fieldValues.tools_config?.builtin_tools)) {
-        const configs = state.fieldValues.tools_config.builtin_tools.map(config => ({
+      const builtinTools = (state.fieldValues as any)?.tools_config?.builtin_tools;
+      if (Array.isArray(builtinTools)) {
+        const configs = builtinTools.map((config: any) => ({
           tool_name: config.tool_name,
           requires_user_confirmation: config.requires_user_confirmation ?? false,
           enabled: config.enabled ?? true
@@ -120,14 +109,15 @@ export default function CreateAgentClient({
 
   // Handle successful creation and redirect
   useEffect(() => {
-    if (state?.message === 'Agent created successfully!' && state.fieldValues?.id) {
+    const createdId = (state.fieldValues as any)?.id;
+    if (state?.message === 'Agent created successfully!' && createdId && state.fieldValues) {
       toast.success('Agent created successfully!', {
         description: `Agent "${state.fieldValues.name}" has been created.`,
         duration: 3000,
       });
-      router.push(`/agents/${state.fieldValues.id}`);
+      router.push(`/agents/${createdId}`);
     }
-  }, [state?.message, state?.fieldValues?.id, state?.fieldValues?.name, router]);
+  }, [state?.message, state?.fieldValues, state?.fieldValues?.name, router]);
 
   // Handle errors
   useEffect(() => {
@@ -206,9 +196,9 @@ export default function CreateAgentClient({
               control={control} 
               errors={errors}
               setValue={setValue}
-              llmModelInstances={currentModelInstances}
+              llmModelInstances={llmModelInstances}
               onOpenConfigSheet={() => {}}
-              onRefreshModels={refreshModelInstances}
+              onRefreshModels={() => router.refresh()}
             />
           </div>
           <div className="space-y-[12px]">
@@ -232,6 +222,7 @@ export default function CreateAgentClient({
                   appendTool={appendTool} 
                   mcpServers={mcpServers} 
                   mcpInstanceList={mcpInstanceList}
+                  builtinTools={builtinTools}
                   builtinToolFields={builtinToolFields}
                   removeBuiltinTool={removeBuiltinTool}
                   appendBuiltinTool={appendBuiltinTool}

@@ -1,4 +1,5 @@
 import client from "./client";
+import { apiFetch } from "./utils";
 import type { components } from "../api/schema";
 
 // Agent API
@@ -355,8 +356,8 @@ export const deleteMCPServerInstance = async (instanceId: string) => {
   return { data, error };
 };
 
-export const updateMCPServerInstance = async (instanceId: string, instance: Partial<components["schemas"]["MCPServerInstanceCreateRequest"]>) => {
-  const { data, error } = await client.PUT("/v1/mcp-server-instances/{instance_id}", {
+export const updateMCPServerInstance = async (instanceId: string, instance: components["schemas"]["MCPServerInstanceUpdate"]) => {
+  const { data, error } = await client.PATCH("/v1/mcp-server-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
     body: instance,
   });
@@ -648,6 +649,26 @@ export const testPublicEndpoint = async () => {
 export const testProtectedEndpoint = async () => {
   const { data, error } = await client.GET("/v1/protected/test", {});
   return { data, error };
+};
+
+// Builtin Tools API (outside generated schema)
+export const listBuiltinTools = async () => {
+  try {
+    const response = await apiFetch("/v1/agents/tools/builtin");
+    if (!response.ok) {
+      let error: unknown = null;
+      try {
+        error = await response.json();
+      } catch {
+        error = { message: "Request failed" };
+      }
+      return { data: null as any, error };
+    }
+    const data = await response.json();
+    return { data, error: null };
+  } catch (error) {
+    return { data: null as any, error };
+  }
 };
 
 // Type exports for commonly used schemas

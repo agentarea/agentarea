@@ -1,15 +1,14 @@
 "use client";
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Textarea } from '@/components/ui/textarea';
 import type { components } from '@/api/schema';
 import { createMCPInstance, type CreateMCPInstanceState } from './actions';
+import { MCPInstanceConfigForm } from '@/components/MCPInstanceConfigForm';
+import { checkMCPServerInstanceConfiguration, createMCPServerInstance } from '@/lib/api';
+import { toast } from 'sonner';
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -21,7 +20,6 @@ interface EnvSchemaField {
   type?: string;
 }
 
-// Type guard to check if an unknown object has the expected env schema field structure
 function isEnvSchemaField(obj: unknown): obj is EnvSchemaField {
   return (
     typeof obj === 'object' &&
@@ -31,10 +29,8 @@ function isEnvSchemaField(obj: unknown): obj is EnvSchemaField {
   );
 }
 
-// Safe conversion function for env schema
 function convertToEnvSchemaFields(envSchema: { [key: string]: unknown }[]): EnvSchemaField[] {
   const validFields: EnvSchemaField[] = [];
-  
   envSchema.forEach((field) => {
     if (isEnvSchemaField(field)) {
       validFields.push({
@@ -46,7 +42,6 @@ function convertToEnvSchemaFields(envSchema: { [key: string]: unknown }[]): EnvS
       });
     }
   });
-  
   return validFields;
 }
 
@@ -61,26 +56,35 @@ const initialState: CreateMCPInstanceState = {
 
 export default function MCPInstanceForm({ server }: MCPInstanceFormProps) {
   const router = useRouter();
-  
-  // Bind the server action with the server ID and env schema
   const createMCPInstanceWithServer = createMCPInstance.bind(null, server.id, server.env_schema);
-  
-  // Use the useActionState hook for form handling
   const [state, formAction, pending] = useActionState(createMCPInstanceWithServer, initialState);
-  
-  // Handle redirect when success with redirect URL
+
   useEffect(() => {
     if (state?.success && state?.redirect) {
       const timer = setTimeout(() => {
         router.push(state.redirect!);
-      }, 1500); // Give user time to see the success message
-      
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [state?.success, state?.redirect, router]);
-  
-  // Convert environment schema to typed fields
+
   const envSchemaFields = convertToEnvSchemaFields(server.env_schema);
+
+  const [instanceName, setInstanceName] = useState<string>("");
+  const [instanceDescription, setInstanceDescription] = useState<string>("");
+  const [envVars, setEnvVars] = useState<Record<string, string>>({});
+  const [isChecking, setIsChecking] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [validationResult, setValidationResult] = useState<{ valid: boolean; errors: string[]; warnings: string[] } | null>(null);
+
+  useEffect(() => {
+    const initial: Record<string, string> = {};
+    envSchemaFields.forEach((f) => {
+      initial[f.name] = f.default || "";
+    });
+    setEnvVars(initial);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Card>
@@ -88,113 +92,74 @@ export default function MCPInstanceForm({ server }: MCPInstanceFormProps) {
         <CardTitle>Create {server.name} Instance</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="space-y-6">
-          {/* Show general form errors */}
-          {state?.errors?._form && (
-            <Alert variant="destructive">
-              <AlertDescription>
-                {state.errors._form.join(', ')}
-              </AlertDescription>
-            </Alert>
-          )}
+        {state?.errors?._form && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {state.errors._form.join(', ')}
+            </AlertDescription>
+          </Alert>
+        )}
 
-          {/* Show general message */}
-          {state?.message && !state?.errors?._form && (
-            <Alert variant={state.success ? "default" : "destructive"}>
-              <AlertDescription>{state.message}</AlertDescription>
-            </Alert>
-          )}
+        {state?.message && !state?.errors?._form && (
+          <Alert variant={state.success ? "default" : "destructive"}>
+            <AlertDescription>{state.message}</AlertDescription>
+          </Alert>
+        )}
 
-          {/* Basic Information */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="name">Instance Name *</Label>
-              <Input
-                id="name"
-                name="name"
-                placeholder="Enter instance name"
-                required
-                className={state?.errors?.name ? 'border-red-500' : ''}
-              />
-              {state?.errors?.name && (
-                <Alert variant="destructive" className="mt-2">
-                  <AlertDescription>{state.errors.name.join(', ')}</AlertDescription>
-                </Alert>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="description">Description (Optional)</Label>
-              <Textarea
-                id="description"
-                name="description"
-                placeholder="Enter instance description"
-                rows={3}
-              />
-            </div>
-          </div>
-
-          {/* Server Information */}
-          <div className="space-y-2 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-medium text-gray-900">Server: {server.name}</h3>
-            <p className="text-sm text-gray-600">{server.description}</p>
-          </div>
-
-          {/* Environment Variables */}
-          {envSchemaFields.length > 0 && (
-            <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
-              <h3 className="font-medium text-gray-900">Server Configuration</h3>
-              
-              <div>
-                <Label>Environment Variables</Label>
-                <div className="space-y-3 mt-2">
-                  {envSchemaFields.map((field, index) => {
-                    const fieldName = field.name;
-                    const fieldDescription = field.description || '';
-                    const isRequired = field.required || false;
-                    const isPasswordField = fieldName.toLowerCase().includes('password') || 
-                                          fieldName.toLowerCase().includes('secret') || 
-                                          fieldName.toLowerCase().includes('key') ||
-                                          fieldName.toLowerCase().includes('token');
-                    
-                    return (
-                      <div key={`${fieldName}_${index}`}>
-                        <Label htmlFor={`env_${fieldName}`}>
-                          {fieldName}
-                          {isRequired && <span className="text-red-500 ml-1">*</span>}
-                        </Label>
-                        <Input
-                          id={`env_${fieldName}`}
-                          name={`env_${fieldName}`}
-                          type={isPasswordField ? 'password' : 'text'}
-                          defaultValue={field.default || ''}
-                          placeholder={fieldDescription || `Enter ${fieldName}`}
-                          required={isRequired}
-                          className={state?.errors?.[`env_${fieldName}`] ? 'border-red-500' : ''}
-                        />
-                        {fieldDescription && (
-                          <p className="text-sm text-gray-500 mt-1">{fieldDescription}</p>
-                        )}
-                        {state?.errors?.[`env_${fieldName}`] && (
-                          <Alert variant="destructive" className="mt-2">
-                            <AlertDescription>
-                              {state.errors[`env_${fieldName}`].join(', ')}
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <Button type="submit" disabled={pending} className="w-full">
-            {pending ? 'Creating Instance...' : 'Create Instance'}
-          </Button>
-        </form>
+        <MCPInstanceConfigForm
+          formAction={formAction}
+          submitLabel={isCreating || pending ? 'Creating Instance...' : 'Create Instance'}
+          submitDisabled={isCreating || pending || !instanceName.trim() || (validationResult ? !validationResult.valid : false)}
+          server={server}
+          instanceName={instanceName}
+          instanceDescription={instanceDescription}
+          envVars={envVars}
+          onChangeName={(v) => { setInstanceName(v); if (validationResult) setValidationResult(null); }}
+          onChangeDescription={setInstanceDescription}
+          onChangeEnvVar={(key, value) => { setEnvVars((prev) => ({ ...prev, [key]: value })); if (validationResult) setValidationResult(null); }}
+          errors={state?.errors as Record<string, string[] | string | undefined>}
+          onValidate={async () => {
+            setIsChecking(true);
+            try {
+              const check = await checkMCPServerInstanceConfiguration({
+                json_spec: { image: server.docker_image_url, port: 8000, environment: envVars }
+              });
+              if (check.error) {
+                toast.error('Failed to validate configuration');
+              } else {
+                setValidationResult(check.data);
+                if (check.data.valid) toast.success('Configuration is valid!');
+                else toast.warning(`Configuration has ${check.data.errors.length} error(s)`);
+              }
+            } catch (err) {
+              console.error(err);
+              toast.error('Validation failed');
+            } finally {
+              setIsChecking(false);
+            }
+          }}
+          validateDisabled={isChecking || !instanceName.trim()}
+          onForceCreate={async () => {
+            setIsCreating(true);
+            try {
+              const res = await createMCPServerInstance({
+                name: instanceName,
+                description: instanceDescription,
+                server_spec_id: server.id,
+                json_spec: { image: server.docker_image_url, port: 8000, environment: envVars }
+              });
+              if (res.error) throw new Error(typeof res.error.detail === 'string' ? res.error.detail : 'Failed to create instance');
+              toast.success(`Successfully created ${instanceName}`);
+              router.refresh();
+            } catch (err: any) {
+              console.error(err);
+              toast.error(err?.message || 'Failed to create instance');
+            } finally {
+              setIsCreating(false);
+            }
+          }}
+          forceCreateDisabled={isCreating || !instanceName.trim()}
+        />
       </CardContent>
     </Card>
   );

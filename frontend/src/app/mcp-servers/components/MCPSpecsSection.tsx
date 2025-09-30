@@ -29,7 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateInstanceDialog } from "./CreateInstanceDialog";
 
-interface MCPServer {
+interface MCPSpec {
   id: string;
   name: string;
   description: string;
@@ -38,16 +38,14 @@ interface MCPServer {
   tags: string[];
   status: string;
   is_public: boolean;
-  env_schema?: Array<{
-    [key: string]: unknown;
-  }>;
+  env_schema?: unknown[];
   cmd?: string[] | null;
   created_at: string;
   updated_at: string;
 }
 
 interface MCPSpecsSectionProps {
-  mcpServers: MCPServer[];
+  mcpServers: MCPSpec[];
   searchParams: { [key: string]: string | string[] | undefined };
   isLoading?: boolean;
 }
@@ -87,13 +85,24 @@ const getCategoryColor = (category: string) => {
   }
 };
 
-// Get popularity badge
-const getPopularityInfo = (server: MCPServer) => {
-  // This would ideally come from server data
-  const randomFactor = Math.random();
-  if (randomFactor > 0.8) return { label: 'Popular', variant: 'default' as const, icon: Star };
-  if (randomFactor > 0.6) return { label: 'New', variant: 'secondary' as const, icon: Sparkles };
+// Deterministic helpers (hash, popularity, date)
+const hashStringToUnit = (value: string): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return (hash % 1000) / 1000;
+};
+
+const getPopularityInfo = (server: MCPSpec) => {
+  const score = hashStringToUnit(server.id + ":" + (server.name || ""));
+  if (score > 0.8) return { label: 'Popular', variant: 'default' as const, icon: Star };
+  if (score > 0.6) return { label: 'New', variant: 'secondary' as const, icon: Sparkles };
   return null;
+};
+
+const formatUpdatedDate = (isoDate: string) => {
+  try { const d = new Date(isoDate); return d.toISOString().slice(0, 10); } catch { return isoDate; }
 };
 
 export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }: MCPSpecsSectionProps) {
@@ -101,7 +110,7 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
   const [selectedCategory, setSelectedCategory] = useState(searchParams.category as string || 'All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null);
+  const [selectedServer, setSelectedServer] = useState<MCPSpec | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
   // Get unique categories from servers
@@ -128,7 +137,7 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
   }, [mcpServers, searchQuery, selectedCategory]);
 
   // Handle opening the configuration dialog
-  const handleConfigureInstance = (server: MCPServer) => {
+  const handleConfigureInstance = (server: MCPSpec) => {
     setSelectedServer(server);
     setDialogOpen(true);
   };
@@ -140,7 +149,7 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
   };
 
   // Enhanced List Item
-  const renderServerCard = (server: MCPServer) => {
+  const renderServerCard = (server: MCPSpec) => {
     const IconComponent = getCategoryIcon(server.tags || []);
     const category = getCategory(server.tags || []);
     const categoryColor = getCategoryColor(category);
@@ -225,7 +234,7 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
   };
 
   // Enhanced Grid Item
-  const renderServerGrid = (server: MCPServer) => {
+  const renderServerGrid = (server: MCPSpec) => {
     const IconComponent = getCategoryIcon(server.tags || []);
     const category = getCategory(server.tags || []);
     const categoryColor = getCategoryColor(category);
@@ -294,7 +303,7 @@ export function MCPSpecsSection({ mcpServers, searchParams, isLoading = false }:
             <Clock className="h-3 w-3" />
             <span>v{server.version}</span>
             <span>•</span>
-            <span>Updated {new Date(server.updated_at).toLocaleDateString()}</span>
+            <span>Updated {formatUpdatedDate(server.updated_at)}</span>
           </div>
           
           <Button 

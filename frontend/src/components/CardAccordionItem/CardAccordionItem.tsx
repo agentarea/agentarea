@@ -36,6 +36,9 @@ export type CardAccordionItemProps = {
   triggerClassName?: string;
   /** Override default chevron */
   chevron?: React.ReactNode;
+  onHeaderClick?: () => void;
+  headerClassName?: string;
+  hideChevron?: boolean;
 };
 
 export function CardAccordionItem({
@@ -48,13 +51,16 @@ export function CardAccordionItem({
   className,
   triggerClassName,
   chevron,
+  onHeaderClick,
+  headerClassName,
+  hideChevron = false,
 }: CardAccordionItemProps) {
 
   const generatedControls = controls;
 
   // Build default title node if title is plain text
   const titleNode = typeof title === "string" ? (
-    <div className="flex flex-row items-center gap-2 px-[7px] py-[7px]">
+    <div className={cn("flex flex-row items-center gap-2 px-[7px] py-[7px]", headerClassName)}>
       {iconSrc && <img src={iconSrc} className="w-5 h-5" />}
       <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent">
         {title}
@@ -80,10 +86,13 @@ export function CardAccordionItem({
         )}
         controls={generatedControls}
         chevron={
-          chevron || (
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all duration-300 group-hover:text-accent" />
-          )
+          hideChevron
+            ? null
+            : chevron || (
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all duration-300 group-hover:text-accent" />
+              )
         }
+        onClick={onHeaderClick}
       >
         {titleNode}
       </AccordionTrigger>

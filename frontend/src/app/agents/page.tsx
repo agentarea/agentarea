@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Bot } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { listAgents, listModelInstances } from "@/lib/api";
 import AgentsList from "./components/AgentsList";
@@ -36,8 +35,8 @@ export default async function AgentsBrowsePage() {
         description: t("mainDescriptionPage"),
         controls: (
           <Link href="/agents/create">
-            <Button className="shrink-0 gap-2 shadow-sm" data-test="deploy-button">
-              <Bot className="h-5 w-5" />
+            <Button className="shrink-0 gap-2" size="xs" data-test="deploy-button">
+              <Plus className="h-5 w-5" />
               {t("deployNewAgent")}
             </Button>
           </Link>

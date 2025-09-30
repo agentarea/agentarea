@@ -360,7 +360,7 @@
       }
     },
     "create": {
-      "agentName": "Agent Name",
+      "agentName": "Name",
       "agentNamePlaceholder": "Enter agent name",
       "description": "Description / Goal",
       "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
