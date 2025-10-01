@@ -5,7 +5,7 @@ export default function ModelsList({ models }: { models: any[] }) {
     return (
         <div>
             {models && models.length > 0 && (
-                <div className="flex items-center gap-1 ">
+                <div className="flex items-center gap-1 flex-wrap">
                     {models.slice(0, 2).map((model, index) => (
                         <Badge key={index} variant="default" className={cn(models.length === 1 ? 'max-w-full' : 'max-w-[110px]')}>
                             <span className="block overflow-hidden text-ellipsis whitespace-nowrap">
