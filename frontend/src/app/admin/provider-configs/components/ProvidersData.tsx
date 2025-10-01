@@ -2,13 +2,18 @@ import { listProviderConfigsWithModelInstances, listProviderSpecsWithModels } fr
 import { getTranslations } from 'next-intl/server';
 import { ProviderSpec, ProviderConfig } from "./types";
 import EmptyState from "@/components/EmptyState";
-import { ProviderConfigCard, ProviderSpecCard } from "./ProviderItem";
+import ProviderConfigsView from "./ProviderConfigsView";
+import ProviderSpecView from "./ProviderSpecView";
 
 interface ProvidersDataProps {
   searchQuery?: string;
+  viewMode?: string;
 }
 
-export default async function ProvidersData({ searchQuery = "" }: ProvidersDataProps) {
+export default async function ProvidersData({ 
+    searchQuery = "", 
+    viewMode = "grid" 
+}: ProvidersDataProps) {
     const t = await getTranslations("Models");
 
     // Fetch provider specs and configs with model instances
@@ -17,6 +22,7 @@ export default async function ProvidersData({ searchQuery = "" }: ProvidersDataP
         listProviderConfigsWithModelInstances()
     ]);
 
+    // Handle API errors
     if (specsResponse.error || configsResponse.error) {
         const specsError = specsResponse.error as any;
         const configsError = configsResponse.error as any;
@@ -37,18 +43,6 @@ export default async function ProvidersData({ searchQuery = "" }: ProvidersDataP
     const providerSpecs = (specsResponse.data || []) as ProviderSpec[];
     const providerConfigs = (configsResponse.data || []) as ProviderConfig[];
 
-    // Filter provider specs based on search query
-    let filteredProviderSpecs = providerSpecs;
-    if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        filteredProviderSpecs = providerSpecs.filter(spec => 
-            spec.name?.toLowerCase().includes(query) ||
-            spec.provider_key?.toLowerCase().includes(query) ||
-            spec.description?.toLowerCase().includes(query) ||
-            spec.provider_type?.toLowerCase().includes(query)
-        );
-    }
-
     // Create a map of provider specs for easy lookup
     const specsMap = new Map(providerSpecs.map(spec => [spec.id, spec]));
 
@@ -57,6 +51,18 @@ export default async function ProvidersData({ searchQuery = "" }: ProvidersDataP
         ...config,
         spec: specsMap.get(config.provider_spec_id)
     }));
+
+    // Filter provider specs based on search query
+    let filteredProviderSpecs = providerSpecs;
+    if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        filteredProviderSpecs = providerSpecs.filter(spec => 
+            spec.name?.toLowerCase().includes(query) ||
+            spec.provider_key?.toLowerCase().includes(query) ||
+            // spec.description?.toLowerCase().includes(query) ||
+            spec.provider_type?.toLowerCase().includes(query)
+        );
+    }
 
     // Filter configs based on search query
     let filteredConfigs = enhancedConfigs;
@@ -76,6 +82,7 @@ export default async function ProvidersData({ searchQuery = "" }: ProvidersDataP
     const hasNoData = hasNoConfigs && hasNoSpecs;
     const hasNoResults = filteredConfigs.length === 0 && filteredProviderSpecs.length === 0 && !hasNoData;
 
+    // Handle global empty states
     if (hasNoData) {
         return (
             <EmptyState 
@@ -96,55 +103,31 @@ export default async function ProvidersData({ searchQuery = "" }: ProvidersDataP
         );
     }
 
+    // Render both views
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             <div>
-                <h3 className="text-lg font-semibold mb-4">Provider Configs ({filteredConfigs.length})</h3>
-                {filteredConfigs.length === 0 ? (
-                    <div className="py-8">
-                        <EmptyState 
-                            title={hasNoConfigs ? "No provider configs" : "No matching configs"}
-                            description={hasNoConfigs 
-                                ? "No provider configurations are available" 
-                                : `No configs match your search query: "${searchQuery}"`
-                            }
-                            iconsType="llm"
-                        />
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                        {
-                            filteredConfigs.map((config) => (
-                                <ProviderConfigCard key={config.id} config={config} />
-                            ))
-                        }
-                    </div>
-                )}
+                <h4 className="mb-3 uppercase text-xs text-muted-foreground/80">
+                    {t("providerConfigsSection")} ({filteredConfigs.length})
+                </h4>
+                <ProviderConfigsView 
+                    configs={filteredConfigs}
+                    searchQuery={searchQuery}
+                    viewMode={viewMode}
+                    hasNoData={hasNoConfigs}
+                />
             </div>
-
             
             <div>
-                <h3 className="text-lg font-semibold mb-4">Provider Specs ({filteredProviderSpecs.length})</h3>
-                {filteredProviderSpecs.length === 0 ? (
-                    <div className="py-8">
-                        <EmptyState 
-                            title={hasNoSpecs ? "No provider specs" : "No matching specs"}
-                            description={hasNoSpecs 
-                                ? "No provider specifications are available" 
-                                : `No specs match your search query: "${searchQuery}"`
-                            }
-                            iconsType="llm"
-                        />
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                        {
-                            filteredProviderSpecs.map((spec) => (
-                                <ProviderSpecCard key={spec.id} spec={spec} />
-                            ))
-                        }
-                    </div>
-                )}
+                <h4 className="mb-3 uppercase text-xs text-muted-foreground/80">
+                    {t("providerSpecsSection")} ({filteredProviderSpecs.length})
+                </h4>
+                <ProviderSpecView 
+                    specs={filteredProviderSpecs}
+                    searchQuery={searchQuery}
+                    viewMode={viewMode}
+                    hasNoData={hasNoSpecs}
+                />
             </div>
         </div>
     );

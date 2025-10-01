@@ -183,6 +183,8 @@
     "editConfiguration": "Редактировать конфигурацию",
     "configureProvider": "Настроить провайдер",
     "availableProviders": "Доступные провайдеры",
+    "providerConfigsSection": "Конфигурации провайдеров",
+    "providerSpecsSection": "Спецификации провайдеров",
     "deleteProviderConfiguration": "Удалить конфигурацию провайдера",
     "deleteProviderConfigurationDescription": "Вы уверены, что хотите удалить конфигурацию провайдера \"{configName}\"? Это действие не может быть отменено и приведет к удалению конфигурации.",
     "thisProviderConfiguration": "эту конфигурацию провайдера",

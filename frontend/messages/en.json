@@ -239,6 +239,8 @@
     "editConfiguration": "Edit",
     "configureProvider": "Configure",
     "availableProviders": "Available Providers",
+    "providerConfigsSection": "Provider Configs",
+    "providerSpecsSection": "Provider Specs",
     "deleteProviderConfiguration": "Delete Provider Configuration",
     "deleteProviderConfigurationDescription": "Are you sure you want to delete the provider configuration \"{configName}\"? This action cannot be undone and will permanently remove the configuration.",
     "thisProviderConfiguration": "this provider configuration",
