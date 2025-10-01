@@ -686,6 +686,12 @@ export type ConversationResponse = components["schemas"]["ConversationResponse"]
 export type TaskResponse = components["schemas"]["TaskResponse"];
 export type AgentCard = components["schemas"]["AgentCard"];
 
+// Enhanced task type with agent information
+export type TaskWithAgent = TaskResponse & {
+  agent_name?: string;
+  agent_description?: string | null;
+};
+
 // MCP Health Monitoring
 export async function getMCPHealthStatus(): Promise<{
   health_checks: Array<{

@@ -349,5 +349,8 @@
       "executionTime": "Время выполнения",
       "result": "Результат"
     }
+  },
+  "TasksPage": {
+    "title": "Задачи"
   }
 }
