@@ -81,10 +81,9 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
         }
       } catch (error) {
         // Messages endpoint might not exist yet, that's okay
-        console.log("Task messages not available:", error);
       }
     } catch (error) {
-      console.error("Failed to load task data:", error);
+      // Failed to load task data
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import ActiveLink from "./ActiveLink";
-import { Plus, List, Settings } from "lucide-react";
+import { MessagesSquare, List, Settings } from "lucide-react";
 
 export default async function AgentHeaderTabs({ agentId }: { agentId: string }) {
   const t = await getTranslations("Agent");
@@ -9,7 +9,7 @@ export default async function AgentHeaderTabs({ agentId }: { agentId: string }) 
       <ActiveLink
         href={`/agents/${agentId}/new-task`}
       >
-        <Plus className="w-4 h-4" />
+        <MessagesSquare className="w-4 h-4" />
         {t("createTask")}
       </ActiveLink>
       <ActiveLink

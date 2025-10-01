@@ -46,10 +46,9 @@ export default function ModelDisplay({
             config_name: modelInstance.config_name || undefined
           });
         } else {
-          console.log('Model not found:', modelId);
         }
       } catch (err) {
-        console.error('Failed to fetch model info:', err);
+        // Model info fetch failed, continue without it
       } finally {
         setIsLoading(false);
       }

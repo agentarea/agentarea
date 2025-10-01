@@ -34,7 +34,6 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
   const t = useTranslations("Agent.create");
 
   const handleConfigSheetOpenChange = (open: boolean) => {
-    console.log('ConfigSheet open change:', open);
     setConfigSheetOpen(open);
     if (open) {
       // Close SearchableSelect when ConfigSheet opens

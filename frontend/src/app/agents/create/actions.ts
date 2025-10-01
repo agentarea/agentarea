@@ -216,7 +216,6 @@ export async function addAgent(
   const validatedFields = AgentSchema.safeParse(rawFormData);
 
   if (!validatedFields.success) {
-    console.error("Validation Errors:", validatedFields.error.flatten());
     // Attempt to map Zod errors to the nested structure
     const mappedErrors: { [key: string]: string[] } = {}; // Use the simplified error structure
     for (const issue of validatedFields.error.issues) {
@@ -246,7 +245,6 @@ export async function addAgent(
     });
 
     if (error) {
-      console.error("API error:", error);
       // If the error is from the API, extract field errors if possible
       const errorMessage = (error as any)?.message || (error as any)?.detail?.[0]?.msg || 'Unknown error';
       return {
@@ -268,7 +266,6 @@ export async function addAgent(
     }
   } catch (err) {
     // Handle unexpected errors (network, etc.)
-    console.error("Unexpected error:", err);
     return {
       message: 'Failed to create agent',
       errors: { _form: [`Unexpected error: ${err instanceof Error ? err.message : 'Unknown error'}`] },

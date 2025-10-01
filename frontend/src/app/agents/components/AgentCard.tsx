@@ -9,7 +9,6 @@ type AgentCardProps = {
 }
 
 export default function AgentCard({ agent }: AgentCardProps) {
-    console.log(agent);
 
     return (
         <div className="flex flex-col justify-between gap-6 h-full">
