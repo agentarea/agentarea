@@ -1,7 +1,10 @@
+'use client';
+
 import { ProviderConfig } from "./types";
 import EmptyState from "@/components/EmptyState";
 import { ProviderConfigCard } from "./ProviderItem";
 import Table from "@/components/Table/Table";
+import { useRouter } from "next/navigation";
 
 interface ProviderConfigsViewProps {
     configs: ProviderConfig[];
@@ -16,6 +19,7 @@ export default function ProviderConfigsView({
     viewMode,
     hasNoData 
 }: ProviderConfigsViewProps) {
+    const router = useRouter();
     
     // Define table columns for configs
     const configColumns = [
@@ -66,7 +70,15 @@ export default function ProviderConfigsView({
 
     // Render table view
     if (viewMode === "table") {
-        return <Table data={configs} columns={configColumns} />;
+        return (
+            <Table 
+                data={configs} 
+                columns={configColumns}
+                onRowClick={(config) => {
+                    router.push(`/admin/provider-configs/create?provider_spec_id=${config.id}&isEdit=true`);
+                }}
+            />
+        );
     }
 
     // Render grid view (default)

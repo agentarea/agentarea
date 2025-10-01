@@ -40,29 +40,26 @@ export default async function ProviderConfigsPage({ searchParams }: TasksPagePro
                 </Link>
             )
         }}
-      className="p-0"
-    >
-      <div className="flex flex-col h-full">
-        <div className="bg-white dark:bg-zinc-800 px-4 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3 md:gap-10">
+      subheader={
+        <>
             <SearchInput 
                 urlParamName="search"
                 urlPath="/admin/provider-configs"
             />
             <ProviderHeaderTabs />
-        </div>
-        <div className="px-4 py-5 overflow-auto h-full">
-          <Suspense 
+        </>
+      }
+    >
+        <Suspense 
             key={`${searchQuery}-${tab}`}
             fallback={
-              <div className="flex items-center justify-center h-32">
+                <div className="flex items-center justify-center h-32">
                 <LoadingSpinner />
-              </div>
+                </div>
             }
-          >
+        >
             <ProvidersData searchQuery={searchQuery} viewMode={tab} />
-          </Suspense>
-        </div>
-      </div>
+        </Suspense>
     </ContentBlock>
   );
 }

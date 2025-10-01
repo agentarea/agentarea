@@ -1,7 +1,10 @@
+'use client';
+
 import { ProviderSpec } from "./types";
 import EmptyState from "@/components/EmptyState";
 import { ProviderSpecCard } from "./ProviderItem";
 import Table from "@/components/Table/Table";
+import { useRouter } from "next/navigation";
 
 interface ProviderSpecViewProps {
     specs: ProviderSpec[];
@@ -16,6 +19,7 @@ export default function ProviderSpecView({
     viewMode,
     hasNoData 
 }: ProviderSpecViewProps) {
+    const router = useRouter();
     
     // Define table columns for specs
     const specColumns = [
@@ -62,7 +66,15 @@ export default function ProviderSpecView({
 
     // Render table view
     if (viewMode === "table") {
-        return <Table data={specs} columns={specColumns} />;
+        return (
+            <Table 
+                data={specs} 
+                columns={specColumns}
+                onRowClick={(spec) => {
+                    router.push(`/admin/provider-configs/create?provider_spec_id=${spec.id}`);
+                }}
+            />
+        );
     }
 
     // Render grid view (default)

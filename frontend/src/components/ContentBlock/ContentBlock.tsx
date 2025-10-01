@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 type ContentBlockProps = {  
   children: React.ReactNode;
+  subheader?: React.ReactNode;
   className?: string;
   header?: {
     title: string;
@@ -23,7 +24,7 @@ type ContentBlockProps = {
   }
 }
 
-export default function ContentBlock({ children, header, className }: ContentBlockProps) {
+export default function ContentBlock({ children, header, className, subheader }: ContentBlockProps) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
         {header && (
@@ -103,6 +104,13 @@ export default function ContentBlock({ children, header, className }: ContentBlo
                 }
             </div>
         )}
+        {
+            subheader && (
+                <div className="bg-white dark:bg-zinc-800 px-4 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3 md:gap-10">
+                    {subheader}
+                </div>
+            )
+        }
 
         <div className={cn("px-4 py-5 overflow-auto h-full", className)}>
             {children}

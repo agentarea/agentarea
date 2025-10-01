@@ -1,11 +1,9 @@
-'use client';
-
 import HeaderTabs from "@/components/HeaderTabs";
 import { LayoutDashboardIcon, TablePropertiesIcon } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 
-export default function ProviderHeaderTabs() {
-    const t = useTranslations("Common");
+export default async function ProviderHeaderTabs() {
+    const t = await getTranslations("Common");
     
     return (
         <HeaderTabs 

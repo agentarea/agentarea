@@ -21,28 +21,23 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           {label: t("title")},
         ],
       }}
-      className="p-0"
-    >
-      <div className="flex flex-col h-full">
-        <div className="bg-white dark:bg-zinc-800 px-4 border-b border-zinc-200 dark:border-zinc-700">
+      subheader={
         <SearchInput 
           urlParamName="search"
           urlPath="/tasks"
         />
-        </div>
-        <div className="px-4 py-5 overflow-auto h-full">
-          <Suspense 
-            key={searchQuery}
-            fallback={
-              <div className="flex items-center justify-center h-32">
-                <LoadingSpinner />
-              </div>
-            }
-          >
-            <TasksData searchQuery={searchQuery} />
-          </Suspense>
-        </div>
-      </div>
+      }
+    >
+      <Suspense 
+        key={searchQuery}
+        fallback={
+          <div className="flex items-center justify-center h-32">
+            <LoadingSpinner />
+          </div>
+        }
+      >
+        <TasksData searchQuery={searchQuery} />
+      </Suspense>
     </ContentBlock>
   );
 }

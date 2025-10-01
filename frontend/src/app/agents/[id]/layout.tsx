@@ -28,13 +28,11 @@ export default async function AgentLayout({ params, children }: Props) {
         ],
       }}
       className="p-0"
+      subheader={
+        <AgentHeaderTabs agentId={agent.id} />
+      }
     >
-      <div className="flex flex-col h-full">
-        <div className="bg-white dark:bg-zinc-800 px-4 border-b border-zinc-200 dark:border-zinc-700">
-          <AgentHeaderTabs agentId={agent.id} />
-        </div>
-        {children}
-      </div>
+      {children}
     </ContentBlock>
   );
 }
