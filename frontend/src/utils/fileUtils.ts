@@ -103,3 +103,28 @@ export function isImageFile(file: File): boolean {
   const extension = file.name.split('.').pop()?.toLowerCase() || '';
   return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico'].includes(extension);
 }
+
+/**
+ * Shorten file name to a maximum length while preserving the extension.
+ * Adds three dots ... before the extension when truncated.
+ */
+export function shortenFileName(name: string, maxLength: number = 24): string {
+  if (name.length <= maxLength) return name;
+  const lastDotIndex = name.lastIndexOf('.');
+  if (lastDotIndex <= 0 || lastDotIndex === name.length - 1) {
+    // No extension or dot at the end — simple truncate
+    return name.slice(0, Math.max(0, maxLength - 3)) + '...';
+  }
+
+  const base = name.slice(0, lastDotIndex);
+  const ext = name.slice(lastDotIndex); // includes dot
+
+  const available = maxLength - ext.length - 3; // space for ... + ext
+  if (available <= 0) {
+    // Extension itself is too long; fallback to generic truncate
+    return name.slice(0, Math.max(0, maxLength - 3)) + '...';
+  }
+
+  const truncatedBase = base.length > available ? base.slice(0, available) + '...' : base;
+  return truncatedBase + ext;
+}

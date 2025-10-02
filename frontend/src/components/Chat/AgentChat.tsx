@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bot, Send, User, MessageCircle, Paperclip, X, ChevronDown } from "lucide-react";
-import { FileCard } from "@/components/ui/file-card";
+import { AttachmentCard } from "@/components/ui/attachment-card";
 import { useSSE } from "@/hooks/useSSE";
 import { MessageRenderer, MessageComponentType } from "./MessageComponents";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
@@ -605,10 +605,11 @@ export default function AgentChat({
           {selectedFiles.length > 0 && (
             <div className="mb-3 flex flex-row flex-wrap gap-2">
               {selectedFiles.map((file, index) => (
-                <FileCard
+                <AttachmentCard
                   key={index}
                   file={file}
-                  onRemove={() => removeFile(index)}
+                  onAction={() => removeFile(index)}
+                  actionType="remove"
                 />
               ))}
             </div>

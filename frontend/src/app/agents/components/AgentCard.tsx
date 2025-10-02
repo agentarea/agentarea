@@ -2,7 +2,7 @@ import { Agent } from "@/types";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ArrowRight } from "lucide-react";
-import ModelDisplay from "@/app/agents/components/ModelDisplay";
+import ModelBadge from "@/components/ui/ModelBadge";
 import { getToolAvatarUrls } from "@/utils/toolsDisplay";
 
 type AgentCardProps = {
@@ -28,16 +28,14 @@ export default function AgentCard({ agent }: AgentCardProps) {
                             <h3>
                                 {agent.name}
                             </h3>
-                            <div className="note">
-                                <ModelDisplay 
-                                    modelId={agent.model_id} 
-                                />
+                            <div className="mt-2">
+                                <ModelBadge modelId={agent.model_id} />
                             </div>
                         </div>
                     </div>
-                    <StatusBadge status={agent.status} variant="agent" />
+                    {/* <StatusBadge status={agent.status} variant="agent" /> */}
                 </div>
-                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                     {agent.description || agent.instruction}
                 </p>
             </div>

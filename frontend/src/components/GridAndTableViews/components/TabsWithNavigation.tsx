@@ -39,7 +39,7 @@ export function TabsWithNavigation({
     return (
         <Tabs 
             value={activeTab} 
-            className="w-full" 
+            // className="w-full" 
             defaultValue="grid"
             onValueChange={handleTabChange}
         >

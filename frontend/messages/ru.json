@@ -290,6 +290,9 @@
     "createTask": "Создать задачу",
     "currentTasks": "Текущие задачи",
     "descriptionPage": {
+      "placeholderNewTask": "Напишите новую задачу для {agentName}...",
+      "agentDetails": "Детали агента",
+      "taskDetails": "Детали задачи",
       "time": "Время",
       "usage": "Использование",
       "kpi": "KPI",

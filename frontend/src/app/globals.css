@@ -9,6 +9,12 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  .line-clamp-4 {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }
 
 body {
@@ -151,7 +157,7 @@ body {
   }
 
   .card {
-    @apply bg-white dark:bg-zinc-800 rounded-2xl;
+    @apply bg-white dark:bg-zinc-800 rounded-lg;
     @apply p-[16px] md:p-[20px] lg:p-[24px] cursor-pointer;
     @apply border border-zinc-200 dark:border-zinc-700;
     @apply hover:shadow-md transition-all duration-300;
