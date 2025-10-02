@@ -218,6 +218,7 @@
     "noServers": "No MCP servers found",
     "addServer": "Add MCP Server",
     "emptyDescription": "Add a new MCP server to connect to AI services",
+    "createCustomButton": "Add Custom Server",
     "tools": {
       "title": "Tools",
       "description": "Tools for working with MCP servers"
