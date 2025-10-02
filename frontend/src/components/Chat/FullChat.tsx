@@ -55,6 +55,7 @@ export default function FullChat({
   onTaskCreated,
   onTaskStarted,
   onTaskFinished,
+  className,
 }: FullChatProps) {
   const t = useTranslations("Chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -608,6 +609,7 @@ export default function FullChat({
   return (
     <div className={cn('rounded-lg  w-full mx-auto h-full flex flex-col gap-0 overflow-hidden transition-all duration-700 ease-out', 'transition-all duration-700 ease-out', 
     // hasUserMessages ? 'justify-between border bg-chatBackground' : 'justify-center')}>
+    className,
     hasUserMessages ? 'justify-between border border-b-0 bg-chatBackground' : 'justify-between')}>
         {
             (!hasUserMessages && placeholder) ? (

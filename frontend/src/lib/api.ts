@@ -1,4 +1,5 @@
 import client from "./client";
+import { apiFetch } from "./utils";
 import type { components } from "../api/schema";
 
 // Agent API
@@ -93,10 +94,34 @@ export const cancelAgentTask = async (agentId: string, taskId: string) => {
 };
 
 export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
-  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/status", {
-    params: { path: { agent_id: agentId, task_id: taskId } },
-  });
-  return { data, error };
+  try {
+    const response = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/status", {
+      params: { path: { agent_id: agentId, task_id: taskId } },
+    });
+    return { 
+      data: response.data as {
+        task_id: string;
+        agent_id: string;
+        execution_id: string;
+        status: string;
+        start_time?: string;
+        end_time?: string;
+        execution_time?: string;
+        error?: string;
+        result?: any;
+        message?: string;
+        artifacts?: any;
+        session_id?: string;
+        usage_metadata?: any;
+      } | undefined, 
+      error: response.error 
+    };
+  } catch (error) {
+    return { 
+      data: undefined, 
+      error: error as Error 
+    };
+  }
 };
 
 export const pauseAgentTask = async (agentId: string, taskId: string) => {
@@ -331,8 +356,8 @@ export const deleteMCPServerInstance = async (instanceId: string) => {
   return { data, error };
 };
 
-export const updateMCPServerInstance = async (instanceId: string, instance: Partial<components["schemas"]["MCPServerInstanceCreateRequest"]>) => {
-  const { data, error } = await client.PUT("/v1/mcp-server-instances/{instance_id}", {
+export const updateMCPServerInstance = async (instanceId: string, instance: components["schemas"]["MCPServerInstanceUpdate"]) => {
+  const { data, error } = await client.PATCH("/v1/mcp-server-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
     body: instance,
   });
@@ -626,6 +651,26 @@ export const testProtectedEndpoint = async () => {
   return { data, error };
 };
 
+// Builtin Tools API (outside generated schema)
+export const listBuiltinTools = async () => {
+  try {
+    const response = await apiFetch("/v1/agents/tools/builtin");
+    if (!response.ok) {
+      let error: unknown = null;
+      try {
+        error = await response.json();
+      } catch {
+        error = { message: "Request failed" };
+      }
+      return { data: null as any, error };
+    }
+    const data = await response.json();
+    return { data, error: null };
+  } catch (error) {
+    return { data: null as any, error };
+  }
+};
+
 // Type exports for commonly used schemas
 export type Agent = components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
 export type MCPServer = components["schemas"]["MCPServerResponse"];
@@ -640,6 +685,12 @@ export type ChatResponse = components["schemas"]["ChatResponse"];
 export type ConversationResponse = components["schemas"]["ConversationResponse"];
 export type TaskResponse = components["schemas"]["TaskResponse"];
 export type AgentCard = components["schemas"]["AgentCard"];
+
+// Enhanced task type with agent information
+export type TaskWithAgent = TaskResponse & {
+  agent_name?: string;
+  agent_description?: string | null;
+};
 
 // MCP Health Monitoring
 export async function getMCPHealthStatus(): Promise<{

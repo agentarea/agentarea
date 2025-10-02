@@ -38,6 +38,7 @@ export interface AddAgentFormState {
   fieldValues?: Omit<components["schemas"]["AgentCreate"], 'description'> & { 
     description?: string;
     instruction: string;
+    id?: string;
   };
   // Field-specific errors
   name?: string[];
@@ -74,7 +75,13 @@ export async function addAgent(
   // Need to manually reconstruct the array/object structure for validation
   const mcpConfigs: Record<number, Partial<components["schemas"]["MCPConfig"]>> = {};
   const mcpToolConfigs: Record<number, Record<number, Partial<components["schemas"]["MCPToolConfig"]>>> = {};
-  const builtinToolConfigs: Record<number, Partial<{ tool_name: string; requires_user_confirmation: boolean; enabled: boolean; disabled_methods: Record<string, boolean>; }>> = {};
+  type BuiltinToolConfigMutable = {
+    tool_name?: string;
+    requires_user_confirmation?: boolean;
+    enabled?: boolean;
+    disabled_methods?: Record<string, boolean>;
+  };
+  const builtinToolConfigs: Record<number, BuiltinToolConfigMutable> = {};
   
   formData.forEach((value, key) => {
     // Handle MCP server configs
@@ -88,7 +95,7 @@ export async function addAgent(
     }
     
     // Handle allowed tools
-    const toolMatch = key.match(/tools_config\.mcp_server_configs\[(\d+)\]\.allowed_tools\[(\d+)\]\.(.*)/);
+    const toolMatch = key.match(/tools_config\.mcp_server_configs\[(\d+)\]\.allowed_tools\[(\d+)\]\.\(.*\)/);
     if (toolMatch) {
       const serverIndex = parseInt(toolMatch[1], 10);
       const toolIndex = parseInt(toolMatch[2], 10);
@@ -104,32 +111,39 @@ export async function addAgent(
       if (field === 'requires_user_confirmation') {
         mcpToolConfigs[serverIndex][toolIndex][field] = value === 'on' || value === 'true';
       } else {
-        mcpToolConfigs[serverIndex][toolIndex][field as string] = value as unknown;
+        (mcpToolConfigs[serverIndex][toolIndex] as any)[field] = value as unknown;
       }
     }
 
     // Handle builtin tools
-    const builtinMatch = key.match(/tools_config\.builtin_tools\[(\d+)\]\.(.*)/);
+    const builtinMatch = key.match(/tools_config\.builtin_tools\[(\d+)\]\.([^\]]+)/);
     if (builtinMatch) {
       const index = parseInt(builtinMatch[1], 10);
-      const field = builtinMatch[2] as keyof { tool_name: string; requires_user_confirmation: boolean; enabled: boolean; disabled_methods: any; };
+      const field = builtinMatch[2] as keyof BuiltinToolConfigMutable;
       
       if (!builtinToolConfigs[index]) {
         builtinToolConfigs[index] = {};
       }
       
-      if (field === 'requires_user_confirmation' || field === 'enabled') {
-        builtinToolConfigs[index][field] = value === 'on' || value === 'true';
-      } else if (field === 'disabled_methods') {
-        // Parse JSON for disabled_methods
-        try {
-          builtinToolConfigs[index][field] = JSON.parse(value as string);
-        } catch (parseError) {
-          console.error(`Failed to parse disabled_methods JSON for builtin tool ${index}:`, parseError);
-          builtinToolConfigs[index][field] = {};
-        }
-      } else {
-        builtinToolConfigs[index][field as string] = value as unknown;
+      switch (field) {
+        case 'requires_user_confirmation':
+        case 'enabled':
+          builtinToolConfigs[index][field] = value === 'on' || value === 'true';
+          break;
+        case 'disabled_methods':
+          try {
+            const parsed = JSON.parse(value as string) as Record<string, boolean>;
+            builtinToolConfigs[index].disabled_methods = parsed;
+          } catch (parseError) {
+            console.error(`Failed to parse disabled_methods JSON for builtin tool ${index}:`, parseError);
+            builtinToolConfigs[index].disabled_methods = {};
+          }
+          break;
+        case 'tool_name':
+          builtinToolConfigs[index].tool_name = value as string;
+          break;
+        default:
+          break;
       }
     }
   });
@@ -145,26 +159,35 @@ export async function addAgent(
   const mcpConfigsArray = Object.values(mcpConfigs).map(config => config as components["schemas"]["MCPConfig"]);
 
   // Convert builtin tools record to array
-  const builtinToolsArray = Object.values(builtinToolConfigs).map(config => config as { tool_name: string; requires_user_confirmation: boolean; enabled: boolean; disabled_methods?: Record<string, boolean>; });
+  const builtinToolsArray = Object.values(builtinToolConfigs).map(config => ({
+    tool_name: config.tool_name as string,
+    requires_user_confirmation: !!config.requires_user_confirmation,
+    enabled: config.enabled !== undefined ? config.enabled : true,
+    disabled_methods: config.disabled_methods,
+  }));
 
   // Reconstruct events array using new format
-  const eventConfigs: Record<number, { event_type: string, config?: Record<string, unknown>, enabled?: boolean }> = {};
+  const eventConfigs: Record<number, { event_type: string, config?: Record<string, unknown> | null, enabled: boolean }> = {};
   formData.forEach((value, key) => {
-    const match = key.match(/events_config\.events\[(\d+)\]\.(.*)/);
+    const match = key.match(/events_config\.events\[(\d+)\]\.([^\]]+)/);
     if (match) {
       const index = parseInt(match[1], 10);
-      const field = match[2];
+      const field = match[2] as 'event_type' | 'config' | 'enabled';
       if (!eventConfigs[index]) {
         eventConfigs[index] = { event_type: '', enabled: true };
       }
       // Handle potential JSON parsing for config
-      if (field === 'config' && typeof value === 'string' && value.trim()) {
-         try {
-            eventConfigs[index][field] = JSON.parse(value);
-         } catch (parseError) {
-            eventConfigs[index][field] = { error: "INVALID_JSON" };
+      if (field === 'config') {
+        if (typeof value === 'string' && value.trim()) {
+          try {
+            eventConfigs[index].config = JSON.parse(value);
+          } catch (parseError) {
             console.error(`Failed to parse event config JSON for index ${index}:`, parseError);
-         }
+            eventConfigs[index].config = { error: "INVALID_JSON" } as unknown as Record<string, unknown>;
+          }
+        } else {
+          eventConfigs[index].config = null;
+        }
       } else if (field === 'event_type') {
         eventConfigs[index].event_type = value as string;
       } else if (field === 'enabled') {
@@ -193,7 +216,6 @@ export async function addAgent(
   const validatedFields = AgentSchema.safeParse(rawFormData);
 
   if (!validatedFields.success) {
-    console.error("Validation Errors:", validatedFields.error.flatten());
     // Attempt to map Zod errors to the nested structure
     const mappedErrors: { [key: string]: string[] } = {}; // Use the simplified error structure
     for (const issue of validatedFields.error.issues) {
@@ -223,9 +245,8 @@ export async function addAgent(
     });
 
     if (error) {
-      console.error("API error:", error);
       // If the error is from the API, extract field errors if possible
-      const errorMessage = error.message || 'Unknown error';
+      const errorMessage = (error as any)?.message || (error as any)?.detail?.[0]?.msg || 'Unknown error';
       return {
         message: 'Failed to create agent',
         errors: { _form: [`API error: ${errorMessage}`] },
@@ -245,7 +266,6 @@ export async function addAgent(
     }
   } catch (err) {
     // Handle unexpected errors (network, etc.)
-    console.error("Unexpected error:", err);
     return {
       message: 'Failed to create agent',
       errors: { _form: [`Unexpected error: ${err instanceof Error ? err.message : 'Unknown error'}`] },

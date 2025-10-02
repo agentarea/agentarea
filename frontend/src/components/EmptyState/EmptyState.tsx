@@ -1,13 +1,13 @@
 "use client"
 
 import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
-import { Zap, BotOff, Ban, Unplug, Bot, Cpu, Blocks, Server, Network, Link, Shield, ChevronsLeftRightEllipsis, Brain, Sparkles } from "lucide-react";
+import { Zap, BotOff, Ban, Unplug, Bot, Cpu, Blocks, Server, Network, Link, Shield, ChevronsLeftRightEllipsis, Brain, Sparkles, List } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 type EmptyStateProps = {
     title: string;
     description?: string;
-    iconsType?: "404" | "agent" | "llm" | "mcp";
+    iconsType?: "404" | "agent" | "llm" | "mcp" | "tasks";
     action?: {
       label: string
       href?: string
@@ -29,6 +29,8 @@ export default function EmptyState({description, title, action, additionAction, 
           ? [Bot, Zap, Shield] 
           : iconsType === "llm" 
             ? [Sparkles, Cpu, Brain] 
+            : iconsType === "tasks"
+              ? [List, Bot, Blocks]
             : iconsType === "mcp"
               ? [Server, Network, Link]
               : [Bot, Blocks, ChevronsLeftRightEllipsis] 

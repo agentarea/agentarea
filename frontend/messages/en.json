@@ -218,6 +218,7 @@
     "noServers": "No MCP servers found",
     "addServer": "Add MCP Server",
     "emptyDescription": "Add a new MCP server to connect to AI services",
+    "createCustomButton": "Add Custom Server",
     "tools": {
       "title": "Tools",
       "description": "Tools for working with MCP servers"
@@ -239,6 +240,8 @@
     "editConfiguration": "Edit",
     "configureProvider": "Configure",
     "availableProviders": "Available Providers",
+    "providerConfigsSection": "Provider Configs",
+    "providerSpecsSection": "Provider Specs",
     "deleteProviderConfiguration": "Delete Provider Configuration",
     "deleteProviderConfigurationDescription": "Are you sure you want to delete the provider configuration \"{configName}\"? This action cannot be undone and will permanently remove the configuration.",
     "thisProviderConfiguration": "this provider configuration",
@@ -320,6 +323,7 @@
   "Agent": {
     "name": "Name",
     "status": "Status",
+    "settings": "Settings",
     "model": "Model",
     "description": "Description",
     "tools": "Tools",
@@ -350,6 +354,10 @@
     "noAgentsYet": "No agents yet",
     "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
     "addYourFirstAgent": "Add your first agent",
+    "noAgentsTitle": "No agents available",
+    "noAgentsDescription": "Get started by creating your first agent",
+    "noMatchingAgents": "No matching agents",
+    "noMatchingAgentsDescription": "No agents match your search query",
     "delete": {
       "deleteAgent": "Delete Agent",
       "agentDeletedSuccessfully": "Agent deleted successfully",
@@ -360,7 +368,7 @@
       }
     },
     "create": {
-      "agentName": "Agent Name",
+      "agentName": "Name",
       "agentNamePlaceholder": "Enter agent name",
       "description": "Description / Goal",
       "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
@@ -384,5 +392,13 @@
       "result": "Result"
       
     }
+  },
+
+  "TasksPage": {
+    "title": "Tasks",
+    "description": "Description",
+    "agent": "Agent",
+    "status": "Status",
+    "created": "Created"
   }
 }

@@ -28,16 +28,18 @@ export default function AgentNewTask({ agent }: Props) {
 
   return (
     <div className="flex flex-row items-start h-full w-full overflow-hidden gap-3 max-w-7xl mx-auto">
-      <FullChat
-        placeholder={t("placeholderNewTask", { agentName: agent.name })}
-        agent={{
-          id: agent.id,
-          name: agent.name,
-          description: agent.description || undefined
-        }}
-        onTaskStarted={handleTaskCreated}
-        onTaskFinished={handleTaskFinished}
-      />
+      <div className="py-5 pl-3 h-full w-full overflow-hidden">
+        <FullChat
+          placeholder={t("placeholderNewTask", { agentName: agent.name })}
+          agent={{
+            id: agent.id,
+            name: agent.name,
+            description: agent.description || undefined
+          }}
+          onTaskStarted={handleTaskCreated}
+          onTaskFinished={handleTaskFinished}
+        />
+      </div>
       <TaskDetails agent={agent} isTaskRunning={isTaskRunning} isTaskActive={isTaskActive} />
     </div>
   );
