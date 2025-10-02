@@ -357,6 +357,10 @@
     }
   },
   "TasksPage": {
-    "title": "Задачи"
+    "title": "Задачи",
+    "description": "Описание",
+    "agent": "Агент",
+    "status": "Статус",
+    "created": "Создано"
   }
 }

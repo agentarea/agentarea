@@ -394,6 +394,10 @@
   },
 
   "TasksPage": {
-    "title": "Tasks"
+    "title": "Tasks",
+    "description": "Description",
+    "agent": "Agent",
+    "status": "Status",
+    "created": "Created"
   }
 }

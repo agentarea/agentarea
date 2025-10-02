@@ -1,12 +1,13 @@
 import { getAllTasks, type TaskWithAgent } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
-import TaskItem from "./TaskItem";
+import TasksList from "./TasksList";
 
 interface TasksDataProps {
   searchQuery?: string;
+  viewMode?: string;
 }
 
-export async function TasksData({ searchQuery = "" }: TasksDataProps) {
+export async function TasksData({ searchQuery = "", viewMode = "grid" }: TasksDataProps) {
   // Fetch tasks on the server
   let allTasks: TaskWithAgent[] = [];
   let error: string | null = null;
@@ -55,19 +56,14 @@ export async function TasksData({ searchQuery = "" }: TasksDataProps) {
     );
   }
 
-  return (
-    // <div className="flex flex-col gap-2">
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        {error ? (
-            <div className="text-center py-6 text-red-500">
-                {error}
-            </div>
-        ) : (
-            filteredTasks.map((task) => (
-                <TaskItem key={task.id} task={task} />
-            ))
-        )}
-    </div>
-  );
+  if (error) {
+    return (
+      <div className="text-center py-6 text-red-500">
+        {error}
+      </div>
+    );
+  }
+
+  return <TasksList initialTasks={filteredTasks} viewMode={viewMode} />;
 }
 
