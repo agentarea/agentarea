@@ -1,0 +1,52 @@
+{{- if .Values.mcpManager.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-mcp-manager
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-manager
+spec:
+  replicas: {{ .Values.mcpManager.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mcp-manager
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mcp-manager
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: mcp-manager
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.mcpManager.image.repository }}:{{ .Values.mcpManager.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.mcpManager.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-mcp-manager-env
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.redis }}
+                  key: redis-password
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
+            {{- if .Values.mcpManager.extraEnv }}
+            {{- toYaml .Values.mcpManager.extraEnv | nindent 12 }}
+            {{- end }}
+          {{- with .Values.mcpManager.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

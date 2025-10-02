@@ -1,0 +1,84 @@
+{{- if .Values.backend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-backend
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: backend
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          # Load environment from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-backend-env
+          # Sensitive environment variables from secrets
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.redis }}
+                  key: redis-password
+            # Construct Redis URL with password
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-user
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-password
+            {{- if .Values.backend.extraEnv }}
+            # Extra environment variables from values
+            {{- toYaml .Values.backend.extraEnv | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

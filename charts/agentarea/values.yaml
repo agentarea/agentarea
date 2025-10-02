@@ -1,53 +1,158 @@
 # Default values for agentarea.
 # This is a YAML-formatted file.
 
-# AgentArea Backend dependency configuration
-agentarea-backend:
-  enabled: true
+# Global configuration shared across all components
+global:
+  # Image configuration
+  image:
+    pullPolicy: IfNotPresent
+    registry: ""  # Optional: Set custom registry (e.g., "myregistry.com")
 
-# AgentArea Frontend dependency configuration
-agentarea-frontend:
-  enabled: true
+  # Secret references - users can create these secrets before installation
+  # If secrets don't exist, they will be auto-generated
+  secrets:
+    # Main PostgreSQL database credentials
+    postgresql: "agentarea-postgresql-secret"
+    # Redis credentials
+    redis: "agentarea-redis-secret"
+    # MinIO/S3 credentials
+    minio: "agentarea-minio-secret"
+    # Application secrets (JWT, encryption keys)
+    application: "agentarea-app-secrets"
+    # Infisical secrets management
+    infisical: "agentarea-infisical-secret"
 
-# AgentArea Worker dependency configuration
-agentarea-worker:
-  enabled: true
+  # Database configuration
+  database:
+    host: ""  # Auto-set from postgresql.fullnameOverride if empty
+    port: 5432
+    database: "agentarea"
 
-# AgentArea MCP Manager dependency configuration
-agentarea-mcp-manager:
-  enabled: true
+  # Redis configuration
+  redis:
+    host: ""  # Auto-set from redis.fullnameOverride if empty
+    port: 6379
 
-# AgentArea Secrets Manager dependency configuration
-agentarea-secrets-manager:
-  enabled: true
+  # MinIO/S3 configuration
+  storage:
+    endpoint: ""  # Auto-set from minio service if empty
+    bucket: "agentarea-documents"
+    region: "us-east-1"
 
-# AgentArea Temporal dependency configuration
-agentarea-temporal:
-  enabled: true
+  # Temporal configuration
+  temporal:
+    host: ""  # Auto-set from temporal service if empty
+    port: 7233
+    namespace: "default"
+    taskQueue: "agent-tasks"
 
-# Bitnami Redis dependency configuration
-redis:
+# Backend API Service
+backend:
   enabled: true
-  auth:
-    enabled: false
-  master:
-    resources:
-      limits:
-        cpu: 250m
-        memory: 256Mi
-      requests:
-        cpu: 100m
-        memory: 128Mi
-    persistence:
-      enabled: false
+  replicaCount: 1
+  image:
+    repository: agentarea/agentarea-backend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 8000
+  resources: {}
+  # Extra environment variables
+  extraEnv: []
+  # - name: CUSTOM_VAR
+  #   value: "custom-value"
+
+# Frontend Service
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: agentarea/agentarea-frontend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 3000
+  resources: {}
+  extraEnv: []
+
+# Worker Service (Temporal worker)
+worker:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: agentarea/agentarea-worker
+    tag: "latest"
+  resources: {}
+  extraEnv: []
+
+# MCP Manager Service
+mcpManager:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: agentarea/mcp-manager
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 80
+  # Requires privileged mode for Podman
+  securityContext:
+    privileged: true
+    capabilities:
+      add:
+        - SYS_ADMIN
+  resources: {}
+  extraEnv: []
+
+# Temporal Workflow Engine
+temporal:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: temporalio/auto-setup
+    tag: "1.28"
+  service:
+    type: ClusterIP
+    port: 7233
+  resources: {}
+  extraEnv: []
+
+# Temporal UI
+temporalUi:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: temporalio/ui
+    tag: "2.39.0"
+  service:
+    type: ClusterIP
+    port: 8080
+  resources: {}
+  extraEnv: []
+
+# Infisical Secrets Management
+infisical:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: infisical/infisical
+    tag: "latest-postgres"
+  service:
+    type: ClusterIP
+    port: 8080
+  resources: {}
+  extraEnv: []
 
 # Bitnami PostgreSQL dependency configuration
 postgresql:
   enabled: true
   auth:
-    postgresPassword: "postgres"
+    # Reference to existing secret (created by agentarea chart or user)
+    existingSecret: "agentarea-postgresql-secret"
+    secretKeys:
+      adminPasswordKey: "postgres-password"
+      userPasswordKey: "password"
     username: "postgres"
-    password: "postgres"
     database: "agentarea"
   primary:
     resources:
@@ -60,3 +165,43 @@ postgresql:
     persistence:
       enabled: true
       size: 8Gi
+  # PostgreSQL init scripts to create additional databases
+  initdbScripts:
+    init_databases.sql: |
+      CREATE DATABASE IF NOT EXISTS temporal;
+      CREATE DATABASE IF NOT EXISTS infisical;
+
+# Bitnami Redis dependency configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    existingSecret: "agentarea-redis-secret"
+    existingSecretPasswordKey: "redis-password"
+  master:
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    persistence:
+      enabled: false  # Disable for development, enable for production
+
+# Bitnami MinIO dependency configuration
+minio:
+  enabled: true
+  auth:
+    existingSecret: "agentarea-minio-secret"
+  defaultBuckets: "agentarea-documents"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 10Gi

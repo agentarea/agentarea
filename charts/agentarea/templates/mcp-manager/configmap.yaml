@@ -1,0 +1,15 @@
+{{- if .Values.mcpManager.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-manager
+data:
+  LOG_LEVEL: "INFO"
+  REDIS_HOST: "{{ .Release.Name }}-redis-master"
+  REDIS_PORT: "{{ .Values.global.redis.port }}"
+  CORE_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
+  MCP_PROXY_HOST: "http://localhost:80"
+{{- end }}

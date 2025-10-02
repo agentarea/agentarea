@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-migration
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      name: {{ include "agentarea.fullname" . }}-migration
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command:
+            - python
+            - -m
+            - agentarea_api.cli
+            - migrate
+          env:
+            # Database configuration
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            - name: POSTGRES_HOST
+              value: "{{ .Release.Name }}-postgresql"
+            - name: POSTGRES_PORT
+              value: "{{ .Values.global.database.port }}"
+            - name: POSTGRES_DB
+              value: "{{ .Values.global.database.database }}"
+
+            # S3/MinIO configuration (required even for migrations)
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-user
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-password
+            - name: AWS_REGION
+              value: "{{ .Values.global.storage.region }}"
+            - name: S3_BUCKET_NAME
+              value: "{{ .Values.global.storage.bucket }}"
+            - name: AWS_ENDPOINT_URL
+              value: "http://{{ .Release.Name }}-minio:9000"

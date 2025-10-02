@@ -297,7 +297,7 @@ export function useTaskEvents(
     if (agentId && taskId) {
       loadHistoricalEvents();
     }
-  }, [loadHistoricalEvents]);
+  }, [agentId, taskId, loadHistoricalEvents]);
 
   // Update connection state from SSE hook
   useEffect(() => {

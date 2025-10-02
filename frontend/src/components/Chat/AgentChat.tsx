@@ -383,6 +383,7 @@ export default function AgentChat({
         // All other events are handled by the message parsing above
         break;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent.id]); // Remove dependencies that cause frequent recreation
 
   // SSE event handlers

@@ -23,29 +23,22 @@ version: 0.2.0
 # It is recommended to use it with quotes.
 appVersion: "1.0.0"
 
-# Dependencies for the chart
+# External dependencies - users can disable these and use their own infrastructure
 dependencies:
-  - name: agentarea-backend
-    version: "0.1.0"
-    repository: "file://../agentarea-backend"
-  - name: agentarea-frontend
-    version: "0.1.0"
-    repository: "file://../agentarea-frontend"
-  - name: agentarea-worker
-    version: "0.1.0"
-    repository: "file://../agentarea-worker"
-  - name: agentarea-mcp-manager
-    version: "0.1.0"
-    repository: "file://../agentarea-mcp-manager"
-  - name: agentarea-secrets-manager
-    version: "0.1.0"
-    repository: "file://../agentarea-secrets-manager"
-  - name: agentarea-temporal
-    version: "0.1.0"
-    repository: "file://../agentarea-temporal"
-  - name: redis
-    version: "18.10.0"
-    repository: "https://charts.bitnami.com/bitnami"
+  # PostgreSQL - main database for application, temporal, and infisical
   - name: postgresql
     version: "12.10.0"
     repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+
+  # Redis - for caching and event streaming
+  - name: redis
+    version: "18.10.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+
+  # MinIO - S3-compatible object storage
+  - name: minio
+    version: "14.7.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: minio.enabled

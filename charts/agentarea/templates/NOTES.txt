@@ -1,33 +1,60 @@
-Thank you for installing AgentArea!
+╔══════════════════════════════════════════════════════════════╗
+║          Thank you for installing AgentArea! 🚀              ║
+╚══════════════════════════════════════════════════════════════╝
 
-Your release is named {{ .Release.Name }}.
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
 
-To learn more about the release, try:
+Components deployed:
+✓ Backend API ({{ include "agentarea.fullname" . }}-backend:8000)
+✓ Frontend ({{ include "agentarea.fullname" . }}-frontend:3000)
+✓ Temporal Worker ({{ include "agentarea.fullname" . }}-worker)
+✓ MCP Manager ({{ include "agentarea.fullname" . }}-mcp-manager:80)
+✓ Temporal Server ({{ include "agentarea.fullname" . }}-temporal:7233)
+✓ Temporal UI ({{ include "agentarea.fullname" . }}-temporal-ui:8080)
+✓ Infisical ({{ include "agentarea.fullname" . }}-infisical:8080)
+{{- if .Values.postgresql.enabled }}
+✓ PostgreSQL ({{ .Release.Name }}-postgresql:5432)
+{{- end }}
+{{- if .Values.redis.enabled }}
+✓ Redis ({{ .Release.Name }}-redis-master:6379)
+{{- end }}
+{{- if .Values.minio.enabled }}
+✓ MinIO ({{ .Release.Name }}-minio:9000)
+{{- end }}
 
-  $ helm status {{ .Release.Name }}
-  $ helm get all {{ .Release.Name }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-This umbrella chart deploys the complete AgentArea platform including:
+📋 Getting Started:
 
-1. Backend API Service (agentarea-backend)
-2. Frontend Service (agentarea-frontend)
-3. Database Service (Bitnami PostgreSQL)
-4. Redis Service (Bitnami Redis)
-5. Worker Service (agentarea-worker)
-6. MCP Manager Service (agentarea-mcp-manager)
-7. Secrets Manager Service (agentarea-secrets-manager)
-8. Temporal Service (agentarea-temporal)
+1. Check deployment status:
+   kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
 
-Each component is managed by its own subchart with independent configurations.
+2. Access the Frontend:
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "agentarea.fullname" . }}-frontend 3000:3000
 
-To access the application, you'll need to create an Ingress or use port forwarding:
+   Then open: http://localhost:3000
 
-  $ kubectl port-forward service/agentarea-frontend 3000:3000
+3. Access the Backend API:
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "agentarea.fullname" . }}-backend 8000:8000
 
-Then visit http://localhost:3000 to view the application.
+   Then open: http://localhost:8000/docs
 
-For production deployments, consider:
-1. Setting up proper Ingress with TLS
-2. Configuring persistent storage for the database
-3. Setting up proper resource limits and requests
-4. Configuring health checks and monitoring
+4. Access Temporal UI:
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "agentarea.fullname" . }}-temporal-ui 8080:8080
+
+   Then open: http://localhost:8080
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 Troubleshooting:
+
+View logs:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} --all-containers=true -f
+
+Check specific component:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=backend -f
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 Documentation: https://github.com/yourusername/agentarea

@@ -62,7 +62,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
 
   useEffect(() => {
     loadTaskData();
-  }, [taskId]);
+  }, [agent.id, taskId]);
 
   const loadTaskData = async () => {
     setLoading(true);

@@ -1,0 +1,56 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-worker
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: worker
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-worker-env
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.redis }}
+                  key: redis-password
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
+            {{- if .Values.worker.extraEnv }}
+            {{- toYaml .Values.worker.extraEnv | nindent 12 }}
+            {{- end }}
+          {{- with .Values.worker.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

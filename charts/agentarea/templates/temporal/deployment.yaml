@@ -1,0 +1,110 @@
+{{- if .Values.temporal.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-temporal
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal
+spec:
+  replicas: {{ .Values.temporal.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: temporal
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: temporal
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: temporal
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporal.image.repository }}:{{ .Values.temporal.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: temporal
+              containerPort: 7233
+              protocol: TCP
+          env:
+            - name: DB
+              value: "postgres12"
+            - name: DB_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            - name: POSTGRES_SEEDS
+              value: "{{ .Release.Name }}-postgresql"
+            - name: DBNAME
+              value: "temporal"
+            - name: DYNAMIC_CONFIG_FILE_PATH
+              value: "config/dynamicconfig/development-sql.yaml"
+            - name: BIND_ON_IP
+              value: "0.0.0.0"
+            {{- if .Values.temporal.extraEnv }}
+            {{- toYaml .Values.temporal.extraEnv | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: temporal-config
+              mountPath: /etc/temporal/config/dynamicconfig
+          {{- with .Values.temporal.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: temporal-config
+          configMap:
+            name: {{ include "agentarea.fullname" . }}-temporal-config
+---
+{{- if .Values.temporalUi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-temporal-ui
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-ui
+spec:
+  replicas: {{ .Values.temporalUi.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: temporal-ui
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: temporal-ui
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: temporal-ui
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporalUi.image.repository }}:{{ .Values.temporalUi.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: "{{ include "agentarea.fullname" . }}-temporal:7233"
+            - name: TEMPORAL_CORS_ORIGINS
+              value: "http://localhost:3000"
+            {{- if .Values.temporalUi.extraEnv }}
+            {{- toYaml .Values.temporalUi.extraEnv | nindent 12 }}
+            {{- end }}
+          {{- with .Values.temporalUi.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
+{{- end }}
