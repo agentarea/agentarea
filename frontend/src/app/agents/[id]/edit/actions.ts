@@ -76,8 +76,8 @@ export async function updateAgent(
       
       if (field === 'requires_user_confirmation') {
         mcpToolConfigs[serverIndex][toolIndex][field] = value === 'on' || value === 'true';
-      } else {
-        mcpToolConfigs[serverIndex][toolIndex][field as string] = value as unknown;
+      } else if (field === 'tool_name') {
+        mcpToolConfigs[serverIndex][toolIndex].tool_name = value as string;
       }
     }
   });
@@ -94,7 +94,7 @@ export async function updateAgent(
   const mcpConfigsArray = Object.values(mcpConfigs).map(config => config as components["schemas"]["MCPConfig"]);
 
   // Reconstruct events array using new format
-  const eventConfigs: Record<number, { event_type: string, config?: Record<string, unknown>, enabled?: boolean }> = {};
+  const eventConfigs: Record<number, { event_type: string; config?: { [key: string]: unknown } | null; enabled: boolean }> = {};
   formData.forEach((value, key) => {
     const match = key.match(/events_config\.events\[(\d+)\]\.(.*)/);
     if (match) {
@@ -203,4 +203,4 @@ export async function updateAgent(
     errors: { _form: ['Unknown error occurred'] },
     fieldValues: validatedFields.data,
   };
-} 
+}

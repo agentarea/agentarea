@@ -11,7 +11,7 @@ import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews"
 export default async function ProviderSpecsPage({
     searchParams,
 }: {
-    searchParams: { [key: string]: string | string[] | undefined }
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
     const t = await getTranslations('Common');
     const tProviders = await getTranslations('ProvidersPage');
@@ -97,7 +97,7 @@ export default async function ProviderSpecsPage({
             }}
         >
             <GridAndTableViews 
-                searchParams={searchParams}
+                searchParams={await searchParams}
                 data={providerSpecs}
                 columns={columns}
                 emptyState={
@@ -158,4 +158,4 @@ export default async function ProviderSpecsPage({
             />
         </ContentBlock>
     );
-} 
+}

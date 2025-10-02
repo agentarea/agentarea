@@ -113,7 +113,6 @@ export function useTaskEvents(
       console.log("Raw SSE event received:", sseEvent);
       
       // Handle different SSE event formats
-      let eventData: SSEMessage;
       let parsedData: any;
       
       // Parse the data based on its type
@@ -137,7 +136,7 @@ export function useTaskEvents(
       const originalData = parsedData.original_data || {};
       const baseData = parsedData.data || parsedData;
       
-      eventData = {
+      const eventData: SSEMessage = {
         event: sseEvent.type,
         data: {
           event_type: parsedData.original_event_type || parsedData.event_type || sseEvent.type as any,

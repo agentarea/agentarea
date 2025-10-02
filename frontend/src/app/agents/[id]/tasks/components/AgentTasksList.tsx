@@ -113,7 +113,7 @@ export default function AgentTasksList({ agentId }: { agentId: string }) {
           </div>
           <h3 className="font-medium text-gray-900 mb-1">No tasks yet</h3>
           <p className="text-sm text-gray-500 mb-4">
-            This agent hasn't been assigned any tasks yet.
+            This agent hasn&apos;t been assigned any tasks yet.
           </p>
           <Link href={`./new`}>
             <Button size="sm" className="gap-2">

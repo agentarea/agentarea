@@ -12,7 +12,6 @@ Components deployed:
 ✓ MCP Manager ({{ include "agentarea.fullname" . }}-mcp-manager:80)
 ✓ Temporal Server ({{ include "agentarea.fullname" . }}-temporal:7233)
 ✓ Temporal UI ({{ include "agentarea.fullname" . }}-temporal-ui:8080)
-✓ Infisical ({{ include "agentarea.fullname" . }}-infisical:8080)
 {{- if .Values.postgresql.enabled }}
 ✓ PostgreSQL ({{ .Release.Name }}-postgresql:5432)
 {{- end }}

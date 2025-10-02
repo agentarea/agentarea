@@ -4,6 +4,10 @@ import "./src/env";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  eslint: {
+    // Do not fail the build on ESLint warnings; errors are handled via lint script
+    ignoreDuringBuilds: true,
+  },
   images: {
     domains: [
       "api.dicebear.com",

@@ -4,13 +4,14 @@ import EditAgentClient from './EditAgentClient';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
 
 interface Props {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function EditAgentPage({ params }: Props) {
+  const { id } = await params;
   try {
     const [agentResponse, mcpResponse, llmResponse] = await Promise.all([
-      getAgent(params.id),
+      getAgent(id),
       listMCPServers(),
       listModelInstances(),
     ]);
@@ -48,4 +49,4 @@ export default async function EditAgentPage({ params }: Props) {
     console.error('Error loading agent:', error);
     notFound();
   }
-} 
+}

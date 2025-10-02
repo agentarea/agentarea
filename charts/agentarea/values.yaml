@@ -1,6 +1,12 @@
 # Default values for agentarea.
 # This is a YAML-formatted file.
 
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
 # Global configuration shared across all components
 global:
   # Image configuration
@@ -19,8 +25,6 @@ global:
     minio: "agentarea-minio-secret"
     # Application secrets (JWT, encryption keys)
     application: "agentarea-app-secrets"
-    # Infisical secrets management
-    infisical: "agentarea-infisical-secret"
 
   # Database configuration
   database:
@@ -130,19 +134,6 @@ temporalUi:
   resources: {}
   extraEnv: []
 
-# Infisical Secrets Management
-infisical:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: infisical/infisical
-    tag: "latest-postgres"
-  service:
-    type: ClusterIP
-    port: 8080
-  resources: {}
-  extraEnv: []
-
 # Bitnami PostgreSQL dependency configuration
 postgresql:
   enabled: true
@@ -169,7 +160,6 @@ postgresql:
   initdbScripts:
     init_databases.sql: |
       CREATE DATABASE IF NOT EXISTS temporal;
-      CREATE DATABASE IF NOT EXISTS infisical;
 
 # Bitnami Redis dependency configuration
 redis:

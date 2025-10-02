@@ -146,7 +146,7 @@ export const ModelItemControl = ({
                             <div className="font-medium">{testResult.message}</div>
                             {testResult.success && testResult.response_content && (
                                 <div className="mt-1 text-green-600">
-                                    Response: "{testResult.response_content.slice(0, 100)}..."
+                                    Response: &quot;{testResult.response_content.slice(0, 100)}...&quot;
                                 </div>
                             )}
                             {testResult.success && testResult.cost && (

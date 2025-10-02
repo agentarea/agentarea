@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BuiltinToolIconGrid } from "./BuiltinToolIconGrid";
-import { client } from '@/lib/api';
+import client from '@/lib/client';
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -289,4 +289,4 @@ const ToolConfig = ({
   );
 };
 
-export default ToolConfig; 
+export default ToolConfig;
