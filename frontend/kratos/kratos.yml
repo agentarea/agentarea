@@ -29,50 +29,49 @@ serve:
     base_url: http://localhost:4434/
 
 selfservice:
-  default_browser_return_url: http://localhost:3000/
+  default_browser_return_url: http://localhost:3001/
   allowed_return_urls:
     - http://localhost:3000
     - http://localhost:3001
-    - http://localhost:3000
-    - http://localhost:3000/workplace
-    - http://localhost:3000/dashboard
+    - http://localhost:3001/workplace
+    - http://localhost:3001/dashboard
 
   flows:
     error:
-      ui_url: http://localhost:3000/auth/error
+      ui_url: http://localhost:3001/auth/error
 
     settings:
-      ui_url: http://localhost:3000/auth/settings
+      ui_url: http://localhost:3001/auth/settings
       privileged_session_max_age: 15m
       required_aal: highest_available
 
     recovery:
       enabled: true
-      ui_url: http://localhost:3000/auth/recovery
+      ui_url: http://localhost:3001/auth/recovery
       use: code
 
     verification:
       enabled: true
-      ui_url: http://localhost:3000/auth/verification
+      ui_url: http://localhost:3001/auth/verification
       use: code
       after:
-        default_browser_return_url: http://localhost:3000/workplace
+        default_browser_return_url: http://localhost:3001/workplace
 
     logout:
       after:
-        default_browser_return_url: http://localhost:3000/auth/signin
+        default_browser_return_url: http://localhost:3001/auth/signin
 
     login:
-      ui_url: http://localhost:3000/auth/login
+      ui_url: http://localhost:3001/auth/login
       lifespan: 10m
       after:
-        default_browser_return_url: http://localhost:3000/workplace
+        default_browser_return_url: http://localhost:3001/workplace
 
     registration:
       lifespan: 10m
-      ui_url: http://localhost:3000/auth/registration
+      ui_url: http://localhost:3001/auth/registration
       after:
-        default_browser_return_url: http://localhost:3000/workplace
+        default_browser_return_url: http://localhost:3001/workplace
 
   methods:
     password:
@@ -115,6 +114,7 @@ session:
   cookie:
     same_site: Lax
     domain: localhost
+    path: /
   whoami:
     tokenizer:
       templates:

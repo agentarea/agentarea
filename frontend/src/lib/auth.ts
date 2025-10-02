@@ -4,9 +4,10 @@ import { Configuration, FrontendApi } from "@ory/kratos-client";
 import { cookies } from "next/headers";
 import { env } from "@/env";
 
-// Create Kratos client for server-side calls
+// Create Kratos client for server-side calls via our proxy
 const kratosConfig = new Configuration({
-  basePath: env.ORY_ADMIN_URL,
+  basePath: env.NEXT_PUBLIC_URL || 'http://localhost:3001',
+  apiKey: '', // No API key needed for our proxy
 });
 const kratos = new FrontendApi(kratosConfig);
 
@@ -17,21 +18,31 @@ const kratos = new FrontendApi(kratosConfig);
 export async function getAuthToken(): Promise<string | null> {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('ory_kratos_session');
 
-    if (!sessionCookie) {
+    // Get all cookies to forward to Kratos
+    const allCookies = cookieStore.getAll();
+    const cookieHeader = allCookies
+      .map(cookie => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+
+    if (!cookieHeader) {
       return null;
     }
 
-    // Call Kratos to get JWT token
-    const sessionResponse = await kratos.toSession({
-      cookie: `ory_kratos_session=${sessionCookie.value}`,
-      tokenizeAs: 'agentarea_jwt'
+    // Call Kratos directly with fetch to get JWT token
+    const response = await fetch(`${env.NEXT_PUBLIC_ORY_SDK_URL}/sessions/whoami?tokenize_as=agentarea_jwt`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Cookie': cookieHeader
+      }
     });
 
-    if (sessionResponse.data?.tokenized) {
-      // Return the JWT token
-      return sessionResponse.data.tokenized;
+    if (response.ok) {
+      const data = await response.json();
+      if (data.tokenized) {
+        return data.tokenized;
+      }
     }
 
     return null;
@@ -49,24 +60,37 @@ export async function getAuthToken(): Promise<string | null> {
 export async function getCurrentUser() {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('ory_kratos_session');
 
-    if (!sessionCookie) {
+    // Get all cookies to forward to Kratos
+    const allCookies = cookieStore.getAll();
+    const cookieHeader = allCookies
+      .map(cookie => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+
+    if (!cookieHeader) {
       return null;
     }
 
-    const sessionResponse = await kratos.toSession({
-      cookie: `ory_kratos_session=${sessionCookie.value}`
+    // Call Kratos directly with fetch
+    const response = await fetch(`${env.NEXT_PUBLIC_ORY_SDK_URL}/sessions/whoami`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Cookie': cookieHeader
+      }
     });
 
-    if (sessionResponse.data?.identity) {
-      return {
-        id: sessionResponse.data.identity.id,
-        email: sessionResponse.data.identity.traits?.email,
-        name: sessionResponse.data.identity.traits?.name?.first
-          ? `${sessionResponse.data.identity.traits.name.first} ${sessionResponse.data.identity.traits.name.last || ''}`.trim()
-          : sessionResponse.data.identity.traits?.username || sessionResponse.data.identity.traits?.email,
-      };
+    if (response.ok) {
+      const data = await response.json();
+      if (data.identity) {
+        return {
+          id: data.identity.id,
+          email: data.identity.traits?.email,
+          name: data.identity.traits?.name?.first
+            ? `${data.identity.traits.name.first} ${data.identity.traits.name.last || ''}`.trim()
+            : data.identity.traits?.username || data.identity.traits?.email,
+        };
+      }
     }
 
     return null;

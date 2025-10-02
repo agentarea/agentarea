@@ -57,25 +57,8 @@ jobs:
       #     name: build.zip
 
   build-container:
-    if: github.ref == 'refs/heads/main'
-    needs:
-      - build
+    if: false
     runs-on: ubuntu-latest
     steps:
-      - name: Clone repository
-        uses: actions/checkout@v4
-
-      - name: Login to Yandex Cloud Container Registry
-        id: login-cr
-        uses: yc-actions/yc-cr-login@v2
-        with:
-          yc-sa-json-credentials: ${{ secrets.YANDEX_SA_KEY }}
-
-      - name: Build and push Docker image
-        run: |
-          echo "Packaging docker image ..."
-          tag="${DOCKER_REGISTRY}/${CONTAINER_NAME}"
-          docker build -t $tag:latest -t $tag:${{ github.sha }} .
-          docker push $tag --all-tags
-        env:
-          DOCKER_REGISTRY: agentarea
+      - name: Skipped (handled in unified CI workflow)
+        run: echo "Docker build/push moved to central CI workflow."

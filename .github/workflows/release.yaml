@@ -1,0 +1,159 @@
+name: Release Images and Helm Charts
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Select release type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  bump-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      VERSION: ${{ steps.get-version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install yq
+        uses: mikefarah/yq@v4
+
+      - name: Determine release version
+        id: get-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          version_no_v=${last_tag#v}
+          major=${version_no_v%%.*}
+          rest=${version_no_v#*.}
+          minor=${rest%%.*}
+          patch=${version_no_v##*.}
+          type="${{ github.event.inputs.release_type }}"
+          if [ "$type" = "minor" ]; then
+            minor=$((minor + 1))
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
+          new_version="v${major}.${minor}.${patch}"
+          echo "Computed next version: $new_version"
+          echo "VERSION=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Update Helm chart versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.get-version.outputs.VERSION }}"
+          echo "Bumping charts to ${version}"
+          for chart in charts/*/Chart.yaml; do
+            [ -f "$chart" ] || continue
+            # Strip leading 'v' for chart semver fields
+            chart_version="${version#v}"
+            yq -i ".version = \"${chart_version}\" | .appVersion = \"${chart_version}\"" "$chart"
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "release/${version}" || git checkout "release/${version}"
+          git add charts/*/Chart.yaml || true
+          git commit -m "chore(release): bump chart versions to ${version}" || echo "No changes to commit"
+          git push -u origin "release/${version}" || echo "Branch push skipped"
+
+      - name: Open PR for version bumps
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: "Release ${{ steps.get-version.outputs.VERSION }}: bump chart versions"
+          branch: "release/${{ steps.get-version.outputs.VERSION }}"
+          body: "Automated version bump for charts to ${{ steps.get-version.outputs.VERSION }}"
+          labels: release
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: bump-versions
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: core
+            file: core/apps/api/Dockerfile
+          - name: worker
+            context: core
+            file: core/apps/worker/Dockerfile
+          - name: frontend
+            context: frontend
+            file: frontend/Dockerfile
+          - name: bootstrap
+            context: bootstrap
+            file: bootstrap/Dockerfile
+          - name: mcp-manager
+            context: mcp-infrastructure/go-mcp-manager
+            file: mcp-infrastructure/go-mcp-manager/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Log in to Private Registry
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.PRIVATE_REGISTRY }}
+          username: ${{ secrets.PRIVATE_REGISTRY_USERNAME }}
+          password: ${{ secrets.PRIVATE_REGISTRY_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            agentarea/agentarea-${{ matrix.name }}
+            ${{ secrets.PRIVATE_REGISTRY }}/agentarea/agentarea-${{ matrix.name }}
+          tags: |
+            type=raw,value=${{ needs.bump-versions.outputs.VERSION }}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: ${{ env.ACT != 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  release-charts:
+    runs-on: ubuntu-latest
+    needs: [bump-versions, build-and-push]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run chart releaser
+        uses: helm/chart-releaser-action@v1.5.0
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          charts_dir: charts
