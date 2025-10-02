@@ -6,13 +6,26 @@ import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Plus } from "lucide-react";
 import AgentsContent from "@/app/agents/components/AgentsContent";
+import SearchInput from "@/components/SearchInput/SearchInput";
+import AgentsHeaderTabs from "@/app/agents/components/AgentsHeaderTabs";
+import { cookies } from 'next/headers';
 
-export default async function AgentsBrowsePage() {
+interface AgentsBrowsePageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function AgentsBrowsePage({ searchParams }: AgentsBrowsePageProps) {
   const t = await getTranslations("Agent");
+  const resolvedSearchParams = await searchParams;
+  const searchQuery = typeof resolvedSearchParams.search === 'string' ? resolvedSearchParams.search : "";
+  
+  // Read tab from URL or fallback to cookie
+  const cookieStore = await cookies();
+  const cookieTab = cookieStore.get('tab_agents')?.value;
+  const tab = typeof resolvedSearchParams.tab === 'string' ? resolvedSearchParams.tab : (cookieTab || "grid");
 
   return (
     <ContentBlock 
-      className="pt-0 px-0"
       header={{
         breadcrumb: [
           {label: t("browseAgents")},
@@ -25,16 +38,27 @@ export default async function AgentsBrowsePage() {
               {t("deployNewAgent")}
             </Button>
           </Link>
-        )
-    }}>
+        )}}
+        subheader={
+          <>
+            <SearchInput 
+              urlParamName="search"
+              urlPath="/agents"
+            />
+            <AgentsHeaderTabs />
+          </>
+          
+        }
+    >
       <Suspense
+        key={`${searchQuery}-${tab}`}
         fallback={(
           <div className="flex items-center justify-center h-32">
             <LoadingSpinner />
           </div>
         )}
       >
-        <AgentsContent />
+        <AgentsContent searchQuery={searchQuery} viewMode={tab} />
       </Suspense>
     </ContentBlock>
   );

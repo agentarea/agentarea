@@ -353,6 +353,10 @@
     "noAgentsYet": "No agents yet",
     "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
     "addYourFirstAgent": "Add your first agent",
+    "noAgentsTitle": "No agents available",
+    "noAgentsDescription": "Get started by creating your first agent",
+    "noMatchingAgents": "No matching agents",
+    "noMatchingAgentsDescription": "No agents match your search query",
     "delete": {
       "deleteAgent": "Delete Agent",
       "agentDeletedSuccessfully": "Agent deleted successfully",

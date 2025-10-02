@@ -88,7 +88,7 @@ export default function SearchInput({
 
             <input
             placeholder={placeholder || commonT("search")}
-            className="text-sm pl-6 py-2 w-full border-none hover:border-none focus:border-none focus:ring-0 focus:outline-none"
+            className="text-sm font-light pl-6 py-2 w-full border-none hover:border-none focus:border-none focus:ring-0 focus:outline-none"
             value={searchQuery}
             onChange={handleSearchChange}
             onKeyDown={handleKeyDown}

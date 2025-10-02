@@ -1,8 +1,8 @@
-import { getProviderConfig, listModelInstances } from '@/lib/api';
-import ProviderConfigForm from '@/components/ProviderConfigForm';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
-import DeleteProviderConfigButton from './components/DeleteProviderConfigButton';
 import { getTranslations } from 'next-intl/server';
+import { Suspense } from 'react';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
+import ProviderConfigFormWrapper from './components/ProviderConfigFormWrapper';
 
 export default async function CreateProviderConfigPage({
   searchParams,
@@ -21,61 +21,31 @@ export default async function CreateProviderConfigPage({
   // Check if this is edit mode
   const isEdit = resolvedSearchParams.isEdit === 'true';
 
-  // Load initial data if in edit mode
-  let initialData = undefined;
-  let existingModelInstances: any[] = [];
-  
-  if (isEdit && preselectedProviderId) {
-    try {
-      const [configResponse, instancesResponse] = await Promise.all([
-        getProviderConfig(preselectedProviderId),
-        listModelInstances({
-          provider_config_id: preselectedProviderId,
-          is_active: true
-        })
-      ]);
-      
-      initialData = configResponse;
-      existingModelInstances = instancesResponse.data || [];
-    } catch (error) {
-      console.error('Failed to load provider config for editing:', error);
-      return (
-        <div className="text-center py-10">
-          <p className="text-red-500">
-            {t("error.loadingDataEdit")}
-          </p>
-        </div>
-      );
-    }
-  }
-
   return (
     <ContentBlock 
       header={{
         breadcrumb: isEdit ? [
           {label: t("title"), href: "/admin/provider-configs"},
           {label: tCommon("edit")},
-          {label:  `${initialData?.name}`}
         ] : [
           {label: t("title"), href: "/admin/provider-configs"},
           {label: tCommon("create")},
           {label:  t("configureProvider")}
         ],
-        controls: isEdit && initialData ? (
-          <DeleteProviderConfigButton 
-            configId={initialData.id}
-            configName={initialData.name}
-          />
-        ) : undefined
     }}>
-      <div className="max-w-4xl mx-auto w-full">
-        <ProviderConfigForm 
+      <Suspense
+        key={`${preselectedProviderId}-${isEdit}`}
+        fallback={
+          <div className="flex items-center justify-center h-32">
+            <LoadingSpinner />
+          </div>
+        }
+      >
+        <ProviderConfigFormWrapper 
           preselectedProviderId={preselectedProviderId}
           isEdit={isEdit}
-          initialData={initialData}
-          existingModelInstances={existingModelInstances}
         />
-      </div>
+      </Suspense>
   </ContentBlock>
   );
 } 

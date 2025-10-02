@@ -327,6 +327,10 @@
     "noAgentsYet": "Нет агентов",
     "getStartedByAddingYourFirstAgent": "Начните работу, добавив своего первого агента.",
     "addYourFirstAgent": "Добавьте своего первого агента",
+    "noAgentsTitle": "Нет доступных агентов",
+    "noAgentsDescription": "Начните с создания вашего первого агента",
+    "noMatchingAgents": "Нет подходящих агентов",
+    "noMatchingAgentsDescription": "Ни один агент не соответствует вашему поисковому запросу",
     "create": {
       "agentName": "Имя",
       "agentNamePlaceholder": "Введите имя агента",

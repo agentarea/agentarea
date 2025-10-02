@@ -3,6 +3,8 @@ import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { ArrowRight } from "lucide-react";
 import ModelBadge from "@/components/ui/model-badge";
 import { getToolAvatarUrls } from "@/utils/toolsDisplay";
+import { Card } from "@/components/ui/card";
+import Link from "next/link";
 
 type AgentCardProps = {
   agent: Agent;
@@ -11,7 +13,8 @@ type AgentCardProps = {
 export default function AgentCard({ agent }: AgentCardProps) {
 
     return (
-        <div className="flex flex-col justify-between gap-6 h-full">
+        <Link href={`/agents/${agent.id}/new-task`}>
+        <Card className="flex flex-col justify-between gap-6 h-full px-0 pb-0 group">
             <div className="flex flex-col gap-2 px-[16px] md:px-[20px] lg:px-[24px]">
                 <div className="flex items-start gap-3 justify-between">
                     <div className="flex items-center gap-3">
@@ -67,6 +70,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
                     <ArrowRight className="h-4 w-4" />
                 </div>
             </div>
-        </div>
+        </Card>
+        </Link>
     );
 }

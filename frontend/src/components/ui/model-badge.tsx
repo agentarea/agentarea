@@ -35,7 +35,7 @@ export default function ModelBadge({
   };
 
   return (
-    <div className={cn("flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-md text-sm", className)} title={`Model: ${getModelName()}${providerName ? ` (${providerName})` : ''}`}>
+    <div className={cn("max-w-max flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-md text-sm", className)} title={`Model: ${getModelName()}${providerName ? ` (${providerName})` : ''}`}>
       <Image src={getProviderIcon()} alt={providerName || "Model"} width={16} height={16} className="rounded-sm" />
       <span className="text-xs font-medium text-gray-700">{getModelName()}</span>
       {providerName && <span className="text-xs text-gray-500">({providerName})</span>}

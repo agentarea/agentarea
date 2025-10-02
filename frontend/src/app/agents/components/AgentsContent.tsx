@@ -1,7 +1,19 @@
 import { listAgents, listModelInstances } from "@/lib/api";
 import AgentsList from "./AgentsList";
+import EmptyState from "@/components/EmptyState";
+import { getTranslations } from 'next-intl/server';
 
-export default async function AgentsContent() {
+interface AgentsContentProps {
+  searchQuery?: string;
+  viewMode?: string;
+}
+
+export default async function AgentsContent({ 
+  searchQuery = "", 
+  viewMode = "grid" 
+}: AgentsContentProps) {
+  const t = await getTranslations("Agent");
+  
   const [{ data: agents = [] }, { data: modelInstances = [] }] = await Promise.all([
     listAgents(),
     listModelInstances(),
@@ -19,5 +31,39 @@ export default async function AgentsContent() {
     return { ...agent, model_info };
   });
 
-  return <AgentsList initialAgents={enrichedAgents as any} />;
+  // Filter agents based on search query
+  let filteredAgents = enrichedAgents;
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filteredAgents = enrichedAgents.filter(agent => 
+      agent.name?.toLowerCase().includes(query) ||
+      agent.description?.toLowerCase().includes(query) ||
+      agent.model_info?.provider_name?.toLowerCase().includes(query) ||
+      agent.model_info?.model_display_name?.toLowerCase().includes(query) ||
+      agent.model_info?.config_name?.toLowerCase().includes(query)
+    );
+  }
+
+  // Handle empty states
+  if (enrichedAgents.length === 0) {
+    return (
+      <EmptyState 
+        title={t("noAgentsTitle")}
+        description={t("noAgentsDescription")}
+        iconsType="agent"
+      />
+    );
+  }
+
+  if (filteredAgents.length === 0) {
+    return (
+      <EmptyState 
+        title={t("noMatchingAgents")}
+        description={`${t("noMatchingAgentsDescription")}: "${searchQuery}"`}
+        iconsType="agent"
+      />
+    );
+  }
+
+  return <AgentsList initialAgents={filteredAgents as any} viewMode={viewMode} />;
 }

@@ -1,202 +1,103 @@
-"use client";
+'use client';
 
-import React, { useCallback, useMemo } from "react";
-import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import EmptyState from "@/components/EmptyState/EmptyState";
-import GridAndTableViews from "@/components/GridAndTableViews";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import React from "react";
 import { useTranslations } from "next-intl";
 import { Agent } from "@/types";
 import AgentCard from "./AgentCard";
-import { useSearchWithDebounce, useTabState } from "@/hooks";
-import { AvatarCircles } from "@/components/ui/avatar-circles";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { getToolAvatarUrls } from "@/utils/toolsDisplay";
+import Table from "@/components/Table/Table";
+import { useRouter } from "next/navigation";
 import ModelBadge from "@/components/ui/model-badge";
+import { getToolAvatars } from "@/utils/toolsDisplay";
+import { AvatarCircles } from "@/components/ui/avatar-circles";
 
-export default function AgentsList({ initialAgents }: { initialAgents: Agent[] }) {
+interface AgentsListProps {
+  initialAgents: Agent[];
+  viewMode?: string;
+}
+
+export default function AgentsList({ initialAgents, viewMode = "grid" }: AgentsListProps) {
   const t = useTranslations("Agent");
   const commonT = useTranslations("Common");
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const [loading] = React.useState(false);
 
-  const urlTab = searchParams.get("tab");
-  const initialSearchQuery = searchParams.get("search") || "";
-
-  const {
-    query: searchQuery,
-    debouncedQuery,
-    isSearching,
-    updateQuery,
-    forceUpdate,
-  } = useSearchWithDebounce(initialSearchQuery);
-
-  const { currentTab, isTabLoaded, updateTab } = useTabState(pathname, urlTab);
-
-  React.useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-
-    if (debouncedQuery.trim()) {
-      params.set("search", debouncedQuery);
-    } else {
-      params.delete("search");
-    }
-
-    if (urlTab) {
-      params.set("tab", urlTab);
-    }
-
-    const newUrl = params.toString() ? `?${params.toString()}` : "";
-    router.replace(`/agents${newUrl}`, { scroll: false });
-  }, [debouncedQuery, router, searchParams, urlTab]);
-
-  React.useEffect(() => {
-    if (urlTab) {
-      updateTab(urlTab);
-    }
-  }, [urlTab, updateTab]);
-
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      updateQuery(e.target.value);
-    },
-    [updateQuery]
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") {
-        forceUpdate();
-      }
-    },
-    [forceUpdate]
-  );
-
-  const columns = [
+  // Define table columns for agents
+  const agentColumns = [
     {
-      header: t("name"),
-      render: (value: string) => <div className="font-semibold truncate">{value}</div>,
       accessor: "name",
-    },
-    {
-      header: t("model"),
-      accessor: "model_id",
-      render: (_value: string, item: any) => (
-        <ModelBadge 
-          modelId={item.model_id} 
-          providerName={item.model_info?.provider_name}
-          modelDisplayName={item.model_info?.model_display_name}
-          configName={item.model_info?.config_name}
-          className="max-w-max" 
-        />
-      ),
-    },
-    {
-      header: t("description"),
-      accessor: "description",
-      render: (value: string) => (
-        <div className="max-w-xs truncate note" title={value}>
-          {value}
+      header: t("name") || "Name",
+      render: (value: string, item: Agent) => (
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium">{value}</span>
         </div>
       ),
     },
     {
-      header: t("tools"),
-      accessor: "tools",
-      render: (_value: string, item: Agent) => {
-        const toolAvatars = getToolAvatarUrls(item);
-        return toolAvatars.length > 0 ? (
-          <AvatarCircles maxDisplay={5} avatarUrls={toolAvatars} />
-        ) : (
-          <span className="text-xs text-muted-foreground">{t("noTools")}</span>
+      accessor: "description",
+      header: t("description") || "Description",
+      cellClassName: "max-w-[300px]",
+      render: (value: string) => (
+        <span className="truncate text-xs text-muted-foreground block">{value || '-'}</span>
+      ),
+    },
+    {
+      accessor: "model_info",
+      header: t("model") || "Model",
+      render: (value: any) => (
+        <ModelBadge 
+          providerName={value?.provider_name}
+          modelDisplayName={value?.model_display_name}
+          configName={value?.config_name}
+        />
+      ),
+    },
+    {
+      accessor: "tools_config",
+      header: t("tools") || "Tools",
+      render: (value: any, item: Agent) => {
+        const toolAvatars = getToolAvatars(item);
+        const toolUrls = toolAvatars.map(tool => ({ imageUrl: tool.imageUrl }));
+        
+        if (toolUrls.length === 0) {
+          return <span className="text-xs text-muted-foreground">-</span>;
+        }
+        
+        return (
+          <div className="flex items-center gap-2">
+            <AvatarCircles
+              maxDisplay={3}
+              avatarUrls={toolUrls}
+            />
+            <span className="text-xs text-muted-foreground">
+              {toolAvatars.length}
+            </span>
+          </div>
         );
       },
     },
-    {
-      header: "",
-      accessor: "id",
-      render: (_value: string, item: any) => (
-        <div className="flex gap-2">
-          <Link href={`/agents/${item.id}/new-task`} onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
-            Explore
-            </Button>
-          </Link>
-        </div>
-      ),
-    },
   ];
 
-  const filterData = useCallback(
-    (data: any[]) => {
-      if (!debouncedQuery.trim()) return data;
+  // Render table view
+  if (viewMode === "table") {
+    return (
+      <Table 
+        data={initialAgents} 
+        columns={agentColumns}
+        onRowClick={(agent) => {
+          router.push(`/agents/${agent.id}`);
+        }}
+      />
+    );
+  }
 
-      const query = debouncedQuery.toLowerCase();
-      return data.filter((item) => {
-        return (
-          item.name?.toLowerCase().includes(query) ||
-          item.description?.toLowerCase().includes(query) ||
-          item.model_id?.toLowerCase().includes(query) ||
-          item.status?.toLowerCase().includes(query)
-        );
-      });
-    },
-    [debouncedQuery]
-  );
-
-  const filteredAgents = useMemo(() => filterData(initialAgents), [filterData, initialAgents]);
-
+  // Render grid view (default)
   return (
-    <div className="px-4 pt-3">
-      {loading || (!isTabLoaded && !urlTab) ? (
-        <div className="flex items-center justify-center h-32">
-          <LoadingSpinner />
-        </div>
-      ) : (
-        <GridAndTableViews
-          isEmpty={filteredAgents.length === 0}
-          emptyState={
-            <EmptyState
-              iconsType="agent"
-              title={t("noAgentsYet")}
-              description={t("getStartedByAddingYourFirstAgent")}
-              action={{ label: t("addYourFirstAgent"), href: "/agents/create" }}
-            />
-          }
-          searchParams={{
-            ...Object.fromEntries(searchParams.entries()),
-            tab: currentTab,
-          }}
-          data={filteredAgents}
-          columns={columns}
-          routeChange="/agents"
-          cardContent={(item) => <AgentCard agent={item} />}
-          cardClassName="px-0 pb-0 overflow-hidden"
-          itemLink={(agent) => `/agents/${agent.id}/new-task`}
-          gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
-          leftComponent={
-            <div className="relative w-full focus-within:w-full max-w-full transition-all duration-300">
-              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-                {isSearching ? <LoadingSpinner size="sm" text="" /> : <Search className="h-4 w-4" />}
-              </div>
-              <Input
-                placeholder={commonT("search")}
-                className="pl-9 w-full"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-          }
-        />
-      )}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+      {
+        initialAgents.map((agent) => (
+          <AgentCard key={agent.id} agent={agent} />
+        ))
+      }
     </div>
   );
 }
-
 
