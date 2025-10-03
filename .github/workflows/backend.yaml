@@ -6,6 +6,12 @@ on:
       - ".github/**"
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "core/**"
+      - ".github/**"
 
 env:
   CONTAINER_NAME: agentarea-core
