@@ -161,6 +161,7 @@
     "description": "Подключите серверы MCP, которые предоставляют инструменты, контекст и возможности для ваших агентов",
     "noServers": "MCP серверы не найдены",
     "addServer": "Добавить MCP сервер",
+    "createCustomButton": "Новый MCP сервер",
     "emptyDescription": "Добавьте новый MCP сервер для подключения к AI сервисам",
     "tools": {
       "title": "Инструменты",
@@ -183,6 +184,8 @@
     "editConfiguration": "Редактировать конфигурацию",
     "configureProvider": "Настроить провайдер",
     "availableProviders": "Доступные провайдеры",
+    "providerConfigsSection": "Конфигурации провайдеров",
+    "providerSpecsSection": "Спецификации провайдеров",
     "deleteProviderConfiguration": "Удалить конфигурацию провайдера",
     "deleteProviderConfigurationDescription": "Вы уверены, что хотите удалить конфигурацию провайдера \"{configName}\"? Это действие не может быть отменено и приведет к удалению конфигурации.",
     "thisProviderConfiguration": "эту конфигурацию провайдера",
@@ -286,6 +289,7 @@
     "model": "Модель",
     "description": "Описание",
     "tools": "Инструменты",
+    "settings": "Настройки",
     "noTools": "Нет инструментов",
     "createTask": "Создать задачу",
     "currentTasks": "Текущие задачи",
@@ -324,8 +328,12 @@
     "noAgentsYet": "Нет агентов",
     "getStartedByAddingYourFirstAgent": "Начните работу, добавив своего первого агента.",
     "addYourFirstAgent": "Добавьте своего первого агента",
+    "noAgentsTitle": "Нет доступных агентов",
+    "noAgentsDescription": "Начните с создания вашего первого агента",
+    "noMatchingAgents": "Нет подходящих агентов",
+    "noMatchingAgentsDescription": "Ни один агент не соответствует вашему поисковому запросу",
     "create": {
-      "agentName": "Имя агента",
+      "agentName": "Имя",
       "agentNamePlaceholder": "Введите имя агента",
       "description": "Описание / Цель",
       "descriptionPlaceholder": "Опишите цель и задачи агента...",
@@ -348,5 +356,12 @@
       "executionTime": "Время выполнения",
       "result": "Результат"
     }
+  },
+  "TasksPage": {
+    "title": "Задачи",
+    "description": "Описание",
+    "agent": "Агент",
+    "status": "Статус",
+    "created": "Создано"
   }
 }

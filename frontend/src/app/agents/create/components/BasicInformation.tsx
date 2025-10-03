@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
-import { Bot, FileText, MessageSquare, Cpu, Brain } from "lucide-react";
+import { Bot, FileText, MessageSquare, Cpu } from "lucide-react";
 import { Controller, FieldErrors, UseFormRegister, UseFormSetValue } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
 import type { AgentFormValues } from "../../create/types";
@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import ConfigSheet from "./ConfigSheet";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { useTranslations } from "next-intl";
-import { getProviderIconUrl } from "@/lib/provider-icons";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
@@ -35,7 +34,6 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
   const t = useTranslations("Agent.create");
 
   const handleConfigSheetOpenChange = (open: boolean) => {
-    console.log('ConfigSheet open change:', open);
     setConfigSheetOpen(open);
     if (open) {
       // Close SearchableSelect when ConfigSheet opens

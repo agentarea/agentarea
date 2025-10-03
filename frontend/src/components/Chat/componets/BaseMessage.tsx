@@ -19,7 +19,7 @@ const BaseMessage = ( { children, headerLeft, headerRight, collapsed, isUser }: 
               <div className="">
                   {headerLeft}
               </div>
-              <div className="flex items-center gap-2 text-gray-400">
+              <div className="flex items-center font-normal text-xs gap-2 text-gray-400">
                   {headerRight}
               </div>
           </div>
