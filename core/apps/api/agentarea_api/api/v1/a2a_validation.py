@@ -122,9 +122,7 @@ class A2AValidator:
         try:
             return A2ATaskParams(**params)
         except ValidationError as e:
-            raise A2AValidationError(
-                f"Invalid task parameters: {e}", "INVALID_PARAMS"
-            ) from e
+            raise A2AValidationError(f"Invalid task parameters: {e}", "INVALID_PARAMS") from e
 
     @classmethod
     def validate_agent_id(cls, agent_id: str) -> UUID:

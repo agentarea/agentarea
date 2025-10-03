@@ -69,7 +69,6 @@ except ImportError as e:
         pass
 
 
-
 async def get_event_broker() -> EventBroker:
     """Get EventBroker instance - uses connection manager singleton."""
     from agentarea_common.infrastructure.connection_manager import get_connection_manager
