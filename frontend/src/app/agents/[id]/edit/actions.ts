@@ -173,7 +173,7 @@ export async function updateAgent(
     if (error) {
       console.error("API error:", error);
       // If the error is from the API, extract field errors if possible
-      const errorMessage = error.message || 'Unknown error';
+      const errorMessage = error.detail?.[0]?.msg || 'Unknown error';
       return {
         message: 'Failed to update agent',
         errors: { _form: [`API error: ${errorMessage}`] },

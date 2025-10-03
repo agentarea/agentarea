@@ -87,18 +87,8 @@ const ToolConfig = ({
     const fetchBuiltinTools = async () => {
       setLoadingBuiltinTools(true);
       try {
-        const response = await client.GET('/v1/agents/tools/builtin');
-        if (response.data) {
-          // Convert the object to array format
-          const toolsArray = Object.values(response.data).map((tool: any) => ({
-            name: tool.name,
-            display_name: tool.display_name,
-            description: tool.description,
-            category: tool.category,
-            available_methods: tool.available_methods || []
-          }));
-          setBuiltinTools(toolsArray);
-        }
+        // Fallback to static data since API endpoint may not be available yet
+        setBuiltinTools(BUILTIN_TOOLS);
       } catch (error) {
         console.error('Failed to fetch builtin tools:', error);
         // Fallback to static data

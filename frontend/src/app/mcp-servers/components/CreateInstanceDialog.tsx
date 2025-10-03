@@ -153,7 +153,17 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
       });
 
       if (instanceResult.error) {
-        throw new Error(instanceResult.error.detail || 'Failed to create MCP instance');
+        let errorMessage: string;
+        if (Array.isArray(instanceResult.error)) {
+          errorMessage = instanceResult.error.map(err => err.msg || err.message || String(err)).join(', ');
+        } else if (typeof instanceResult.error === 'string') {
+          errorMessage = instanceResult.error;
+        } else if (instanceResult.error && typeof instanceResult.error === 'object' && 'detail' in instanceResult.error) {
+          errorMessage = typeof instanceResult.error.detail === 'string' ? instanceResult.error.detail : 'Failed to create MCP instance';
+        } else {
+          errorMessage = 'Failed to create MCP instance';
+        }
+        throw new Error(errorMessage);
       }
 
       toast.success(`Successfully created ${instanceName}`);
@@ -352,7 +362,7 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
           
           <Button 
             onClick={() => handleCreateInstance(false)} 
-            disabled={isCreating || !instanceName.trim() || (validationResult && !validationResult.valid)}
+            disabled={isCreating || !instanceName.trim() || (validationResult !== null && !validationResult.valid)}
           >
             {isCreating ? (
               <>
@@ -367,4 +377,4 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
       </DialogContent>
     </Dialog>
   );
-} 
+}

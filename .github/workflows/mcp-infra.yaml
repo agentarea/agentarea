@@ -2,12 +2,12 @@ name: MCP Infra CI
 
 on:
   push:
-    branches: [main, develop, master]
+    branches: [main]
     paths:
       - 'mcp-infrastructure/**'
       - '.github/workflows/mcp-infra.yaml'
   pull_request:
-    branches: [main, develop, master]
+    branches: [main]
     paths:
       - 'mcp-infrastructure/**'
       - '.github/workflows/mcp-infra.yaml'

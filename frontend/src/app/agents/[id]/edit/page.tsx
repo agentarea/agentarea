@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getAgent, listMCPServers, listModelInstances } from '@/lib/api';
+import { getAgent, listMCPServers, listModelInstances, listMCPServerInstances } from '@/lib/api';
 import EditAgentClient from './EditAgentClient';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
 
@@ -10,10 +10,11 @@ interface Props {
 export default async function EditAgentPage({ params }: Props) {
   const { id } = await params;
   try {
-    const [agentResponse, mcpResponse, llmResponse] = await Promise.all([
+    const [agentResponse, mcpResponse, llmResponse, mcpInstancesResponse] = await Promise.all([
       getAgent(id),
       listMCPServers(),
       listModelInstances(),
+      listMCPServerInstances(),
     ]);
 
     if (!agentResponse.data) {
@@ -28,6 +29,7 @@ export default async function EditAgentPage({ params }: Props) {
         : "draft",
     }));
     const llmModelInstances = llmResponse.data || [];
+    const mcpInstanceList = mcpInstancesResponse.data || [];
 
     return (
       <ContentBlock 
@@ -41,7 +43,8 @@ export default async function EditAgentPage({ params }: Props) {
         <EditAgentClient 
           agent={agent}
           mcpServers={mcpServers} 
-          llmModelInstances={llmModelInstances} 
+          llmModelInstances={llmModelInstances}
+          mcpInstanceList={mcpInstanceList}
         />
       </ContentBlock>
     );

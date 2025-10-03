@@ -16,16 +16,19 @@ import type { AgentFormValues, EventConfig } from '../../create/types';
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
-type Agent = components["schemas"]["AgentResponse"];
+type Agent = components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+type MCPInstance = components["schemas"]["MCPServerInstanceResponse"];
 
 export default function EditAgentClient({ 
   agent,
   mcpServers, 
-  llmModelInstances 
+  llmModelInstances,
+  mcpInstanceList
 }: { 
   agent: Agent;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
+  mcpInstanceList: MCPInstance[];
 }) {
   const [state, formAction] = useActionState(updateAgent, agentInitialState);
 
@@ -34,7 +37,7 @@ export default function EditAgentClient({
       name: agent.name,
       description: agent.description || '',
       instruction: agent.instruction || '',
-      model_id: agent.model_id,
+      model_id: agent.model_id || '',
       tools_config: agent.tools_config || { mcp_server_configs: [] },
       events_config: agent.events_config || { events: [] },
       planning: agent.planning || false,
@@ -119,6 +122,7 @@ export default function EditAgentClient({
               register={register} 
               control={control} 
               errors={errors}
+              setValue={setValue}
               llmModelInstances={llmModelInstances}
             />
           </div>
@@ -141,7 +145,8 @@ export default function EditAgentClient({
                   toolFields={toolFields} 
                   removeTool={removeTool} 
                   appendTool={appendTool} 
-                  mcpServers={mcpServers} 
+                  mcpServers={mcpServers}
+                  mcpInstanceList={mcpInstanceList}
                 />
               </div>
             </Card>
@@ -166,4 +171,4 @@ export default function EditAgentClient({
 
     </form>
   );
-} 
+}

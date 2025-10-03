@@ -36,7 +36,7 @@ interface FullChatProps {
   agent: {
     id: string;
     name: string;
-    description?: string;
+    description?: string | null;
   };
   taskId?: string;
   initialMessages?: ChatMessage[];

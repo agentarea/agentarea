@@ -39,7 +39,10 @@ interface MCPServer {
   status: string;
   is_public: boolean;
   env_schema?: Array<{
-    [key: string]: unknown;
+    name: string;
+    description: string;
+    required: boolean;
+    default?: string;
   }>;
   cmd?: string[] | null;
   created_at: string;

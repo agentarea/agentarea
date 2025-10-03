@@ -12,7 +12,7 @@ export function getNestedErrorMessage(
 
   for (const key of keys) {
     if (current && typeof current === 'object' && key in current) {
-      current = current[key as keyof typeof current] as unknown as typeof current;
+      current = (current as any)[key];
     } else {
       return undefined;
     }
@@ -27,4 +27,4 @@ export function getNestedErrorMessage(
   }
 
   return undefined;
-} 
+}

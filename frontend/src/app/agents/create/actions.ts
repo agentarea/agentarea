@@ -28,16 +28,42 @@ const BuiltinToolConfigSchema = z.object({
 const EventConfigItemSchema = z.object({
   event_type: z.string().min(1, "Event type is required"), // e.g., 'text_input', 'cron'
   config: z.record(z.unknown()).optional().nullable(), // For future event-specific configs
-  enabled: z.boolean().optional().default(true), // Whether the event is enabled
+  enabled: z.boolean().default(true), // Whether the event is enabled - always boolean
 });
 
 // Extended type for form state that includes the instruction field
 export interface AddAgentFormState {
   message: string;
   errors?: { [key: string]: string[] };
-  fieldValues?: Omit<components["schemas"]["AgentCreate"], 'description'> & { 
+  fieldValues?: {
+    name?: string;
     description?: string;
-    instruction: string;
+    instruction?: string;
+    model_id?: string;
+    tools_config?: {
+      mcp_server_configs?: Array<{
+        mcp_server_id: string;
+        allowed_tools?: Array<{
+          tool_name: string;
+          requires_user_confirmation?: boolean;
+        }> | null;
+      }> | null;
+      builtin_tools?: Array<{
+        tool_name: string;
+        requires_user_confirmation?: boolean;
+        enabled?: boolean;
+        disabled_methods?: Record<string, boolean>;
+      }> | null;
+    } | null;
+    events_config?: {
+      events?: Array<{
+        event_type: string;
+        config?: Record<string, unknown> | null;
+        enabled?: boolean;
+      }> | null;
+    } | null;
+    planning?: boolean;
+    id?: string; // Add id property for successful creation
   };
   // Field-specific errors
   name?: string[];
@@ -103,8 +129,11 @@ export async function addAgent(
       
       if (field === 'requires_user_confirmation') {
         mcpToolConfigs[serverIndex][toolIndex][field] = value === 'on' || value === 'true';
+      } else if (field === 'tool_name') {
+        mcpToolConfigs[serverIndex][toolIndex][field] = value as string;
       } else {
-        mcpToolConfigs[serverIndex][toolIndex][field as string] = value as unknown;
+        // Handle any other fields that might be added in the future
+        (mcpToolConfigs[serverIndex][toolIndex] as any)[field] = value;
       }
     }
 
@@ -128,8 +157,15 @@ export async function addAgent(
           console.error(`Failed to parse disabled_methods JSON for builtin tool ${index}:`, parseError);
           builtinToolConfigs[index][field] = {};
         }
+      } else if (field === 'tool_name') {
+        builtinToolConfigs[index][field] = value as string;
+      } else if (field === 'requires_user_confirmation') {
+        (builtinToolConfigs[index] as any)[field] = value === 'on' || value === 'true';
+      } else if (field === 'enabled') {
+        (builtinToolConfigs[index] as any)[field] = value === 'on' || value === 'true';
       } else {
-        builtinToolConfigs[index][field as string] = value as unknown;
+        // Handle any other fields that might be added in the future
+        (builtinToolConfigs[index] as any)[field] = value;
       }
     }
   });
@@ -217,15 +253,17 @@ export async function addAgent(
       description: validatedFields.data.description || '',
       instruction: validatedFields.data.instruction,
       model_id: validatedFields.data.model_id,
-      tools_config: validatedFields.data.tools_config,
-      events_config: validatedFields.data.events_config,
-      planning: validatedFields.data.planning,
+      tools_config: validatedFields.data.tools_config || null,
+      events_config: validatedFields.data.events_config ? {
+        events: validatedFields.data.events_config.events || null
+      } : null,
+      planning: validatedFields.data.planning || null,
     });
 
     if (error) {
       console.error("API error:", error);
       // If the error is from the API, extract field errors if possible
-      const errorMessage = error.message || 'Unknown error';
+      const errorMessage = (error as any)?.message || 'Unknown error';
       return {
         message: 'Failed to create agent',
         errors: { _form: [`API error: ${errorMessage}`] },
@@ -258,4 +296,4 @@ export async function addAgent(
     errors: { _form: ['Unknown error occurred'] },
     fieldValues: validatedFields.data,
   };
-} 
+}

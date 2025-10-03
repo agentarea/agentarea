@@ -25,7 +25,7 @@ import AgentChat from "@/components/Chat/AgentChat";
 interface Agent {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   status: string;
 }
 
