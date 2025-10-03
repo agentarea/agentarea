@@ -29,7 +29,7 @@ async def test_react_framework_natural_response():
         provider_type="ollama_chat",
         model_name="qwen2.5",
         api_key=None,
-        endpoint_url="localhost:11434"
+        endpoint_url="localhost:11434",
     )
 
     # ReAct framework system prompt
@@ -49,7 +49,7 @@ IMPORTANT:
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": "Tell me a short joke about programming"}
+        {"role": "user", "content": "Tell me a short joke about programming"},
     ]
 
     tools = [
@@ -61,11 +61,14 @@ IMPORTANT:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "summary": {"type": "string", "description": "Summary of what was accomplished"}
+                        "summary": {
+                            "type": "string",
+                            "description": "Summary of what was accomplished",
+                        }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -81,10 +84,7 @@ IMPORTANT:
         logger.info(f"\n🧪 Testing: {config['name']}")
 
         request = LLMRequest(
-            messages=messages,
-            tools=config["tools"],
-            temperature=0.7,
-            max_tokens=500
+            messages=messages, tools=config["tools"], temperature=0.7, max_tokens=500
         )
 
         response = await llm_model.complete(request)
@@ -96,20 +96,19 @@ IMPORTANT:
         # Analyze response behavior
         has_content = len(response.content) > 10
         has_tool_calls = response.tool_calls and len(response.tool_calls) > 0
-        content_has_joke = any(word in response.content.lower() for word in ['joke', 'funny', 'programming'])
+        content_has_joke = any(
+            word in response.content.lower() for word in ["joke", "funny", "programming"]
+        )
 
         behavior = {
             "has_meaningful_content": has_content,
             "has_tool_calls": has_tool_calls,
             "content_contains_joke": content_has_joke,
             "immediate_tool_call": has_tool_calls and not has_content,
-            "proper_flow": has_content and content_has_joke
+            "proper_flow": has_content and content_has_joke,
         }
 
-        results[config["name"]] = {
-            "response": response,
-            "behavior": behavior
-        }
+        results[config["name"]] = {"response": response, "behavior": behavior}
 
         logger.info(f"📊 Behavior analysis: {behavior}")
 
@@ -118,12 +117,18 @@ IMPORTANT:
     with_tools_result = results["With Tools - Auto Choice"]
 
     # Without tools, should always provide content
-    assert no_tools_result["behavior"]["has_meaningful_content"], "Should provide content when no tools available"
-    assert no_tools_result["behavior"]["proper_flow"], "Should provide joke when no tools forcing behavior"
+    assert no_tools_result["behavior"]["has_meaningful_content"], (
+        "Should provide content when no tools available"
+    )
+    assert no_tools_result["behavior"]["proper_flow"], (
+        "Should provide joke when no tools forcing behavior"
+    )
 
     # With tools, check if it's following proper ReAct flow
     if with_tools_result["behavior"]["immediate_tool_call"]:
-        logger.warning("⚠️ IDENTIFIED ISSUE: LLM is immediately calling tools without providing reasoning!")
+        logger.warning(
+            "⚠️ IDENTIFIED ISSUE: LLM is immediately calling tools without providing reasoning!"
+        )
         logger.warning("This suggests the model or tool configuration is forcing tool usage")
 
         # This is the problematic behavior we want to document
@@ -139,7 +144,9 @@ IMPORTANT:
     else:
         logger.info("ℹ️ LLM provided response but didn't follow expected ReAct pattern")
         # This might be acceptable depending on the specific prompt
-        assert with_tools_result["behavior"]["has_meaningful_content"], "Should at least provide some content"
+        assert with_tools_result["behavior"]["has_meaningful_content"], (
+            "Should at least provide some content"
+        )
 
     return results
 
@@ -156,12 +163,9 @@ async def test_tool_choice_configurations():
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful assistant. Provide natural responses and only call tools when appropriate."
+            "content": "You are a helpful assistant. Provide natural responses and only call tools when appropriate.",
         },
-        {
-            "role": "user",
-            "content": "Tell me a programming joke"
-        }
+        {"role": "user", "content": "Tell me a programming joke"},
     ]
 
     tools = [
@@ -170,8 +174,8 @@ async def test_tool_choice_configurations():
             "function": {
                 "name": "task_complete",
                 "description": "Complete the task",
-                "parameters": {"type": "object", "properties": {}, "required": []}
-            }
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
         }
     ]
 
@@ -194,18 +198,18 @@ async def test_tool_choice_configurations():
                 tools=tools,
                 tool_choice=config["tool_choice"],
                 base_url="http://localhost:11434",
-                temperature=0.7
+                temperature=0.7,
             )
 
             message = response.choices[0].message
             content = message.content or ""
-            tool_calls = getattr(message, 'tool_calls', None) or []
+            tool_calls = getattr(message, "tool_calls", None) or []
 
             behavior = {
                 "content_length": len(content),
                 "has_content": len(content) > 10,
                 "tool_calls_count": len(tool_calls),
-                "immediate_tool_use": len(tool_calls) > 0 and len(content) < 10
+                "immediate_tool_use": len(tool_calls) > 0 and len(content) < 10,
             }
 
             results[config["name"]] = behavior
@@ -222,7 +226,9 @@ async def test_tool_choice_configurations():
     logger.info("\n📊 Tool Choice Analysis:")
     for name, result in results.items():
         if "error" not in result:
-            logger.info(f"  {name}: Content={result['has_content']}, Tools={result['tool_calls_count']}, Immediate={result['immediate_tool_use']}")
+            logger.info(
+                f"  {name}: Content={result['has_content']}, Tools={result['tool_calls_count']}, Immediate={result['immediate_tool_use']}"
+            )
         else:
             logger.info(f"  {name}: ERROR - {result['error']}")
 
@@ -243,6 +249,7 @@ async def test_tool_choice_configurations():
 
 if __name__ == "__main__":
     """Run ReAct framework behavior tests directly."""
+
     async def main():
         logger.info("🧪 Testing ReAct Framework Behavior")
         logger.info("=" * 50)
@@ -266,6 +273,7 @@ if __name__ == "__main__":
         except Exception as e:
             logger.error(f"❌ Test failed with error: {e}")
             import traceback
+
             traceback.print_exc()
 
     asyncio.run(main())

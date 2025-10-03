@@ -10,16 +10,17 @@ from .base_tool import BaseTool
 
 def tool_method(func: Callable = None):
     """Decorator to mark a method as a tool function.
-    
+
     The description is automatically extracted from the method's docstring.
     Can be used as @tool_method or @tool_method()
     """
+
     def decorator(f: Callable) -> Callable:
         f._is_tool_method = True
         # Extract description from docstring
         if f.__doc__:
             # Get first line of docstring as description
-            f._tool_description = f.__doc__.strip().split('\n')[0]
+            f._tool_description = f.__doc__.strip().split("\n")[0]
         else:
             f._tool_description = f"Method: {f.__name__}"
         return f
@@ -33,7 +34,7 @@ def tool_method(func: Callable = None):
 
 class Toolset(ABC):
     """Base class for toolsets using decorator-based method registration.
-    
+
     A toolset represents a collection of related tool methods that can be called individually.
     This approach automatically generates schemas from method signatures and docstrings,
     eliminating the need for manual schema definition.
@@ -47,7 +48,7 @@ class Toolset(ABC):
         """Discover all methods decorated with @tool_method."""
         methods = {}
         for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
-            if hasattr(method, '_is_tool_method'):
+            if hasattr(method, "_is_tool_method"):
                 methods[name] = method
         return methods
 
@@ -57,11 +58,12 @@ class Toolset(ABC):
         class_name = self.__class__.__name__
         # Convert CamelCase to snake_case
         import re
-        snake_case = re.sub(r'(?<!^)(?=[A-Z])', '_', class_name).lower()
+
+        snake_case = re.sub(r"(?<!^)(?=[A-Z])", "_", class_name).lower()
         # Remove common suffixes
-        for suffix in ['_toolset', '_tool']:
+        for suffix in ["_toolset", "_tool"]:
             if snake_case.endswith(suffix):
-                snake_case = snake_case[:-len(suffix)]
+                snake_case = snake_case[: -len(suffix)]
                 break
         return snake_case
 
@@ -82,7 +84,7 @@ class Toolset(ABC):
                 "action": {
                     "type": "string",
                     "description": "Action to perform",
-                    "enum": list(self._tool_methods.keys())
+                    "enum": list(self._tool_methods.keys()),
                 }
             }
 
@@ -90,18 +92,16 @@ class Toolset(ABC):
             for method_name, method in self._tool_methods.items():
                 method_schema = self._generate_method_schema(method)
                 if "parameters" in method_schema and "properties" in method_schema["parameters"]:
-                    for param_name, param_schema in method_schema["parameters"]["properties"].items():
+                    for param_name, param_schema in method_schema["parameters"][
+                        "properties"
+                    ].items():
                         properties[f"{method_name}_{param_name}"] = {
                             **param_schema,
-                            "description": f"[For {method_name}] {param_schema.get('description', '')}"
+                            "description": f"[For {method_name}] {param_schema.get('description', '')}",
                         }
 
             return {
-                "parameters": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": ["action"]
-                }
+                "parameters": {"type": "object", "properties": properties, "required": ["action"]}
             }
 
     def _generate_method_schema(self, method: Callable) -> dict[str, Any]:
@@ -113,7 +113,7 @@ class Toolset(ABC):
         required = []
 
         for param_name, param in sig.parameters.items():
-            if param_name == 'self':
+            if param_name == "self":
                 continue
 
             param_schema = self._get_parameter_schema(param, type_hints.get(param_name))
@@ -122,13 +122,7 @@ class Toolset(ABC):
             if param.default == inspect.Parameter.empty:
                 required.append(param_name)
 
-        return {
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": required
-            }
-        }
+        return {"parameters": {"type": "object", "properties": properties, "required": required}}
 
     def _get_parameter_schema(self, param: inspect.Parameter, type_hint: Any) -> dict[str, Any]:
         """Generate schema for a single parameter."""
@@ -161,13 +155,13 @@ class Toolset(ABC):
                 result = await self._execute_method(method, kwargs)
             else:
                 # Multiple methods - use action parameter
-                action = kwargs.get('action')
+                action = kwargs.get("action")
                 if not action or action not in self._tool_methods:
                     return {
                         "success": False,
                         "result": f"Invalid action. Available actions: {list(self._tool_methods.keys())}",
                         "tool_name": self.name,
-                        "error": "Invalid action"
+                        "error": "Invalid action",
                     }
 
                 method = self._tool_methods[action]
@@ -175,19 +169,14 @@ class Toolset(ABC):
                 method_kwargs = self._filter_kwargs_for_method(action, kwargs)
                 result = await self._execute_method(method, method_kwargs)
 
-            return {
-                "success": True,
-                "result": result,
-                "tool_name": self.name,
-                "error": None
-            }
+            return {"success": True, "result": result, "tool_name": self.name, "error": None}
 
         except Exception as e:
             return {
                 "success": False,
                 "result": f"Execution failed: {str(e)}",
                 "tool_name": self.name,
-                "error": str(e)
+                "error": str(e),
             }
 
     def _filter_kwargs_for_method(self, method_name: str, kwargs: dict) -> dict:
@@ -197,7 +186,7 @@ class Toolset(ABC):
 
         filtered_kwargs = {}
         for param_name in sig.parameters:
-            if param_name == 'self':
+            if param_name == "self":
                 continue
 
             # Check for method-specific parameter
@@ -220,11 +209,7 @@ class Toolset(ABC):
         """Get OpenAI-compatible function definition."""
         return {
             "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                **self.get_schema()
-            }
+            "function": {"name": self.name, "description": self.description, **self.get_schema()},
         }
 
 

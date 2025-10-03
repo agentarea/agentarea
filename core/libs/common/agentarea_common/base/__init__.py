@@ -20,5 +20,5 @@ __all__ = [
     "WorkspaceAwareMixin",
     "WorkspaceScopedMixin",
     "WorkspaceScopedRepository",
-    "get_repository_factory"
+    "get_repository_factory",
 ]

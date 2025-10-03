@@ -31,10 +31,12 @@ def login(ctx, user_id: str, admin: bool):
             # Import here to avoid import errors if agentarea_common is not available
             if admin:
                 from agentarea_common.auth.test_utils import create_admin_test_token
+
                 token = create_admin_test_token(user_id=user_id)
                 role = "Admin"
             else:
                 from agentarea_common.auth.test_utils import create_basic_test_token
+
                 token = create_basic_test_token(user_id=user_id)
                 role = "User"
 
@@ -101,7 +103,7 @@ def status(ctx):
             click.echo(f"   User ID: {result.get('user_id', 'Unknown')}")
 
             # Handle both single role and multiple roles
-            roles = result.get('roles', [])
+            roles = result.get("roles", [])
             if isinstance(roles, str):
                 roles = [roles]
             elif not isinstance(roles, list):

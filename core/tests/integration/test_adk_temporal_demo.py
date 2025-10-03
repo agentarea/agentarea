@@ -11,7 +11,7 @@ import sys
 import time
 
 # ADK-Temporal integration imports
-sys.path.append('libs/execution')
+sys.path.append("libs/execution")
 
 from agentarea_execution.adk_temporal.activities.adk_agent_activities import execute_agent_step
 
@@ -29,7 +29,7 @@ async def test_adk_activity_directly():
         "name": "demo_math_agent",
         "model": "ollama_chat/qwen2.5",
         "instructions": "You are a helpful math assistant. Answer mathematical questions clearly and briefly.",
-        "description": "Demo agent for ADK-Temporal integration testing"
+        "description": "Demo agent for ADK-Temporal integration testing",
     }
 
     # Create session data
@@ -38,14 +38,11 @@ async def test_adk_activity_directly():
         "session_id": f"demo_session_{int(time.time())}",
         "app_name": "adk_temporal_demo",
         "state": {},
-        "created_time": time.time()
+        "created_time": time.time(),
     }
 
     # User message
-    user_message_data = {
-        "role": "user",
-        "content": "What is 15 + 27? Please show your work."
-    }
+    user_message_data = {"role": "user", "content": "What is 15 + 27? Please show your work."}
 
     print(f"Agent: {agent_config['name']}")
     print(f"Model: {agent_config['model']}")
@@ -55,11 +52,7 @@ async def test_adk_activity_directly():
     try:
         # Execute activity directly (simulating Temporal activity context)
         print("Executing ADK agent activity...")
-        events = await execute_agent_step(
-            agent_config,
-            session_data,
-            user_message_data
-        )
+        events = await execute_agent_step(agent_config, session_data, user_message_data)
 
         print(f"✓ Activity completed with {len(events)} events")
 
@@ -87,6 +80,7 @@ async def test_adk_activity_directly():
     except Exception as e:
         print(f"\n❌ Activity test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -123,6 +117,7 @@ async def test_with_actual_worker():
     except Exception as e:
         print(f"\n❌ Worker test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

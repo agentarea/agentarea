@@ -1,4 +1,3 @@
-
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -7,9 +6,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     """Provider specification - defines available provider types (OpenAI, Anthropic, etc.)"""
+
     __tablename__ = "provider_specs"
 
-    provider_key: Mapped[str] = mapped_column(String, nullable=False, unique=True)  # openai, anthropic
+    provider_key: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True
+    )  # openai, anthropic
     name: Mapped[str] = mapped_column(String, nullable=False)  # OpenAI, Anthropic
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     provider_type: Mapped[str] = mapped_column(String, nullable=False)  # for LiteLLM compatibility
@@ -17,8 +19,12 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relationships
-    provider_configs = relationship("ProviderConfig", back_populates="provider_spec", cascade="all, delete-orphan")
-    model_specs = relationship("ModelSpec", back_populates="provider_spec", cascade="all, delete-orphan")
+    provider_configs = relationship(
+        "ProviderConfig", back_populates="provider_spec", cascade="all, delete-orphan"
+    )
+    model_specs = relationship(
+        "ModelSpec", back_populates="provider_spec", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<ProviderSpec {self.name} ({self.provider_key})>"
@@ -26,6 +32,7 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
 
 class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     """Provider configuration - user's configured instance of a provider with API key"""
+
     __tablename__ = "provider_configs"
 
     provider_spec_id: Mapped[str] = mapped_column(
@@ -40,7 +47,9 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
 
     # Relationships
     provider_spec = relationship("ProviderSpec", back_populates="provider_configs")
-    model_instances = relationship("ModelInstance", back_populates="provider_config", cascade="all, delete-orphan")
+    model_instances = relationship(
+        "ModelInstance", back_populates="provider_config", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<ProviderConfig {self.name} ({self.id})>"
@@ -48,9 +57,10 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
 
 class ModelSpec(BaseModel, WorkspaceScopedMixin):
     """Model specification - defines available models for each provider"""
+
     __tablename__ = "model_specs"
     __table_args__ = (
-        UniqueConstraint('provider_spec_id', 'model_name', name='uq_model_specs_provider_model'),
+        UniqueConstraint("provider_spec_id", "model_name", name="uq_model_specs_provider_model"),
     )
 
     provider_spec_id: Mapped[str] = mapped_column(
@@ -64,7 +74,9 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
 
     # Relationships
     provider_spec = relationship("ProviderSpec", back_populates="model_specs")
-    model_instances = relationship("ModelInstance", back_populates="model_spec", cascade="all, delete-orphan")
+    model_instances = relationship(
+        "ModelInstance", back_populates="model_spec", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<ModelSpec {self.display_name} ({self.model_name})>"
@@ -72,6 +84,7 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
 
 class ModelInstance(BaseModel, WorkspaceScopedMixin):
     """Model instance - active user model instances combining provider config and model spec"""
+
     __tablename__ = "model_instances"
 
     provider_config_id: Mapped[str] = mapped_column(
@@ -91,5 +104,3 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
 
     def __repr__(self):
         return f"<ModelInstance {self.name} ({self.id})>"
-
-

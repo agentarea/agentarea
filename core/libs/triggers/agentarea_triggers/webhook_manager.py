@@ -31,7 +31,7 @@ class WebhookRequestData:
         headers: dict[str, str],
         body: Any,
         query_params: dict[str, str],
-        received_at: datetime | None = None
+        received_at: datetime | None = None,
     ):
         self.webhook_id = webhook_id
         self.method = method.upper()
@@ -45,10 +45,7 @@ class WebhookValidationResult:
     """Result of webhook validation."""
 
     def __init__(
-        self,
-        is_valid: bool,
-        parsed_data: dict[str, Any],
-        error_message: str | None = None
+        self, is_valid: bool, parsed_data: dict[str, Any], error_message: str | None = None
     ):
         self.is_valid = is_valid
         self.parsed_data = parsed_data
@@ -60,9 +57,7 @@ class WebhookExecutionCallback(ABC):
 
     @abstractmethod
     async def execute_webhook_trigger(
-        self,
-        webhook_id: str,
-        request_data: dict[str, Any]
+        self, webhook_id: str, request_data: dict[str, Any]
     ) -> TriggerExecution:
         """Called when a webhook trigger should be executed."""
         pass
@@ -93,7 +88,7 @@ class WebhookManager(ABC):
         method: str,
         headers: dict[str, str],
         body: Any,
-        query_params: dict[str, str]
+        query_params: dict[str, str],
     ) -> dict[str, Any]:
         """Process incoming webhook request:
         1. Find trigger by webhook_id
@@ -110,10 +105,7 @@ class WebhookManager(ABC):
 
     @abstractmethod
     async def apply_validation_rules(
-        self,
-        trigger: WebhookTrigger,
-        headers: dict[str, str],
-        body: Any
+        self, trigger: WebhookTrigger, headers: dict[str, str], body: Any
     ) -> bool:
         """Apply trigger-specific validation rules to webhook request."""
         pass
@@ -125,9 +117,7 @@ class WebhookManager(ABC):
 
     @abstractmethod
     async def get_webhook_response(
-        self,
-        success: bool,
-        error_message: str | None = None
+        self, success: bool, error_message: str | None = None
     ) -> dict[str, Any]:
         """Generate appropriate HTTP response for webhook requests."""
         pass
@@ -145,17 +135,17 @@ class DefaultWebhookManager(WebhookManager):
         self,
         execution_callback: WebhookExecutionCallback,
         event_broker: EventBroker | None = None,
-        base_url: str = "/webhooks"
+        base_url: str = "/webhooks",
     ):
         self.execution_callback = execution_callback
         self.event_broker = event_broker
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self._registered_webhooks: dict[str, WebhookTrigger] = {}
 
     def generate_webhook_url(self, trigger_id: UUID) -> str:
         """Generate unique webhook URL for trigger."""
         # Use trigger ID as webhook ID for simplicity
-        webhook_id = str(trigger_id).replace('-', '')[:16]  # Shorter ID
+        webhook_id = str(trigger_id).replace("-", "")[:16]  # Shorter ID
         return f"{self.base_url}/{webhook_id}"
 
     async def register_webhook(self, trigger: WebhookTrigger) -> None:
@@ -175,7 +165,7 @@ class DefaultWebhookManager(WebhookManager):
         method: str,
         headers: dict[str, str],
         body: Any,
-        query_params: dict[str, str]
+        query_params: dict[str, str],
     ) -> dict[str, Any]:
         """Process incoming webhook request."""
         correlation_id = generate_correlation_id()
@@ -187,7 +177,7 @@ class DefaultWebhookManager(WebhookManager):
                 "Processing webhook request",
                 webhook_id=webhook_id,
                 method=method,
-                content_type=headers.get('content-type', 'unknown')
+                content_type=headers.get("content-type", "unknown"),
             )
 
             # Find the trigger
@@ -211,7 +201,7 @@ class DefaultWebhookManager(WebhookManager):
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
                     method=method,
-                    allowed_methods=trigger.allowed_methods
+                    allowed_methods=trigger.allowed_methods,
                 )
                 return await self.get_webhook_response(False, f"Method {method} not allowed")
 
@@ -224,16 +214,12 @@ class DefaultWebhookManager(WebhookManager):
                         error_msg,
                         webhook_id=webhook_id,
                         trigger_id=trigger.id,
-                        content_type=headers.get('content-type')
+                        content_type=headers.get("content-type"),
                     )
                     return await self.get_webhook_response(False, "Request validation failed")
             except Exception as validation_error:
                 error_msg = f"Validation error: {validation_error}"
-                logger.error(
-                    error_msg,
-                    webhook_id=webhook_id,
-                    trigger_id=trigger.id
-                )
+                logger.error(error_msg, webhook_id=webhook_id, trigger_id=trigger.id)
                 return await self.get_webhook_response(False, "Request validation failed")
 
             # Create request data
@@ -242,7 +228,7 @@ class DefaultWebhookManager(WebhookManager):
                 method=method,
                 headers=headers,
                 body=body,
-                query_params=query_params
+                query_params=query_params,
             )
 
             # Parse webhook data based on type
@@ -252,7 +238,7 @@ class DefaultWebhookManager(WebhookManager):
                     "Successfully parsed webhook data",
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value
+                    webhook_type=trigger.webhook_type.value,
                 )
             except Exception as parse_error:
                 error_msg = f"Failed to parse webhook data: {parse_error}"
@@ -260,15 +246,14 @@ class DefaultWebhookManager(WebhookManager):
                     error_msg,
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value
+                    webhook_type=trigger.webhook_type.value,
                 )
                 return await self.get_webhook_response(False, "Failed to parse request data")
 
             # Execute the webhook trigger
             try:
                 execution = await self.execution_callback.execute_webhook_trigger(
-                    webhook_id,
-                    parsed_data
+                    webhook_id, parsed_data
                 )
 
                 execution_time_ms = int((time.time() - start_time) * 1000)
@@ -277,7 +262,7 @@ class DefaultWebhookManager(WebhookManager):
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
                     execution_time_ms=execution_time_ms,
-                    status=execution.status.value if hasattr(execution, 'status') else 'unknown'
+                    status=execution.status.value if hasattr(execution, "status") else "unknown",
                 )
 
                 # Return success response
@@ -290,18 +275,14 @@ class DefaultWebhookManager(WebhookManager):
                     error_msg,
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    execution_time_ms=execution_time_ms
+                    execution_time_ms=execution_time_ms,
                 )
                 return await self.get_webhook_response(False, "Webhook execution failed")
 
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             error_msg = f"Unexpected error processing webhook: {e}"
-            logger.error(
-                error_msg,
-                webhook_id=webhook_id,
-                execution_time_ms=execution_time_ms
-            )
+            logger.error(error_msg, webhook_id=webhook_id, execution_time_ms=execution_time_ms)
             return await self.get_webhook_response(False, "Internal server error")
 
     async def validate_webhook_method(self, trigger: WebhookTrigger, method: str) -> bool:
@@ -309,17 +290,14 @@ class DefaultWebhookManager(WebhookManager):
         return method.upper() in [m.upper() for m in trigger.allowed_methods]
 
     async def apply_validation_rules(
-        self,
-        trigger: WebhookTrigger,
-        headers: dict[str, str],
-        body: Any
+        self, trigger: WebhookTrigger, headers: dict[str, str], body: Any
     ) -> bool:
         """Apply trigger-specific validation rules to webhook request."""
         if not trigger.validation_rules:
             logger.debug(
                 "No validation rules defined, allowing request",
                 webhook_id=trigger.webhook_id,
-                trigger_id=trigger.id
+                trigger_id=trigger.id,
             )
             return True
 
@@ -328,11 +306,11 @@ class DefaultWebhookManager(WebhookManager):
                 "Applying validation rules",
                 webhook_id=trigger.webhook_id,
                 trigger_id=trigger.id,
-                rules_count=len(trigger.validation_rules)
+                rules_count=len(trigger.validation_rules),
             )
 
             # Check required headers
-            required_headers = trigger.validation_rules.get('required_headers', [])
+            required_headers = trigger.validation_rules.get("required_headers", [])
             for header in required_headers:
                 if header.lower() not in [h.lower() for h in headers.keys()]:
                     logger.warning(
@@ -340,48 +318,46 @@ class DefaultWebhookManager(WebhookManager):
                         webhook_id=trigger.webhook_id,
                         trigger_id=trigger.id,
                         required_header=header,
-                        available_headers=list(headers.keys())
+                        available_headers=list(headers.keys()),
                     )
                     return False
 
             # Check content type if specified
-            expected_content_type = trigger.validation_rules.get('content_type')
+            expected_content_type = trigger.validation_rules.get("content_type")
             if expected_content_type:
-                actual_content_type = headers.get('content-type', '').lower()
+                actual_content_type = headers.get("content-type", "").lower()
                 if expected_content_type.lower() not in actual_content_type:
                     logger.warning(
                         "Content type mismatch",
                         webhook_id=trigger.webhook_id,
                         trigger_id=trigger.id,
                         expected_content_type=expected_content_type,
-                        actual_content_type=actual_content_type
+                        actual_content_type=actual_content_type,
                     )
                     return False
 
             # Check body format if specified
-            body_format = trigger.validation_rules.get('body_format')
-            if body_format == 'json' and body is not None:
+            body_format = trigger.validation_rules.get("body_format")
+            if body_format == "json" and body is not None:
                 if not isinstance(body, dict):
                     try:
                         json.loads(str(body))
                         logger.debug(
                             "Successfully validated JSON body format",
                             webhook_id=trigger.webhook_id,
-                            trigger_id=trigger.id
+                            trigger_id=trigger.id,
                         )
                     except (json.JSONDecodeError, TypeError) as json_error:
                         logger.warning(
                             f"Expected JSON body but got invalid JSON: {json_error}",
                             webhook_id=trigger.webhook_id,
                             trigger_id=trigger.id,
-                            body_type=type(body).__name__
+                            body_type=type(body).__name__,
                         )
                         return False
 
             logger.debug(
-                "All validation rules passed",
-                webhook_id=trigger.webhook_id,
-                trigger_id=trigger.id
+                "All validation rules passed", webhook_id=trigger.webhook_id, trigger_id=trigger.id
             )
             return True
 
@@ -389,24 +365,24 @@ class DefaultWebhookManager(WebhookManager):
             logger.error(
                 f"Error applying validation rules: {e}",
                 webhook_id=trigger.webhook_id,
-                trigger_id=trigger.id
+                trigger_id=trigger.id,
             )
             raise WebhookValidationError(
                 f"Validation rule processing failed: {e}",
                 webhook_id=trigger.webhook_id,
                 trigger_id=str(trigger.id),
-                original_error=str(e)
-            )
+                original_error=str(e),
+            ) from e
 
     async def apply_rate_limiting(self, webhook_id: str) -> bool:
         """Rate limiting is handled at infrastructure layer.
-        
+
         This method is kept for interface compatibility but always returns True
         since rate limiting is now handled by ingress/load balancer/API gateway.
-        
+
         Args:
             webhook_id: The webhook ID (unused)
-            
+
         Returns:
             Always True - rate limiting handled at infrastructure layer
         """
@@ -415,26 +391,21 @@ class DefaultWebhookManager(WebhookManager):
         return True
 
     async def get_webhook_response(
-        self,
-        success: bool,
-        error_message: str | None = None
+        self, success: bool, error_message: str | None = None
     ) -> dict[str, Any]:
         """Generate appropriate HTTP response for webhook requests."""
         if success:
             return {
                 "status_code": 200,
-                "body": {
-                    "status": "success",
-                    "message": "Webhook processed successfully"
-                }
+                "body": {"status": "success", "message": "Webhook processed successfully"},
             }
         else:
             return {
                 "status_code": 400,
                 "body": {
                     "status": "error",
-                    "message": error_message or "Webhook processing failed"
-                }
+                    "message": error_message or "Webhook processing failed",
+                },
             }
 
     async def is_healthy(self) -> bool:
@@ -447,9 +418,7 @@ class DefaultWebhookManager(WebhookManager):
             return False
 
     async def _parse_webhook_data(
-        self,
-        trigger: WebhookTrigger,
-        request_data: WebhookRequestData
+        self, trigger: WebhookTrigger, request_data: WebhookRequestData
     ) -> dict[str, Any]:
         """Parse webhook data based on webhook type."""
         base_data = {
@@ -458,7 +427,7 @@ class DefaultWebhookManager(WebhookManager):
             "headers": request_data.headers,
             "query_params": request_data.query_params,
             "received_at": request_data.received_at.isoformat(),
-            "webhook_type": trigger.webhook_type.value
+            "webhook_type": trigger.webhook_type.value,
         }
 
         # Parse body based on webhook type
@@ -470,16 +439,10 @@ class DefaultWebhookManager(WebhookManager):
             return await self._parse_github_webhook(request_data, base_data)
         else:
             # Generic webhook - just include raw body
-            return {
-                **base_data,
-                "body": request_data.body,
-                "raw_data": request_data.body
-            }
+            return {**base_data, "body": request_data.body, "raw_data": request_data.body}
 
     async def _parse_telegram_webhook(
-        self,
-        request_data: WebhookRequestData,
-        base_data: dict[str, Any]
+        self, request_data: WebhookRequestData, base_data: dict[str, Any]
     ) -> dict[str, Any]:
         """Parse Telegram webhook data."""
         try:
@@ -493,20 +456,22 @@ class DefaultWebhookManager(WebhookManager):
             parsed_data = {
                 **base_data,
                 "telegram_update_id": telegram_data.get("update_id"),
-                "raw_data": telegram_data
+                "raw_data": telegram_data,
             }
 
             # Extract message data if present
             if "message" in telegram_data:
                 message = telegram_data["message"]
-                parsed_data.update({
-                    "chat_id": message.get("chat", {}).get("id"),
-                    "user_id": message.get("from", {}).get("id"),
-                    "username": message.get("from", {}).get("username"),
-                    "text": message.get("text"),
-                    "message_id": message.get("message_id"),
-                    "date": message.get("date")
-                })
+                parsed_data.update(
+                    {
+                        "chat_id": message.get("chat", {}).get("id"),
+                        "user_id": message.get("from", {}).get("id"),
+                        "username": message.get("from", {}).get("username"),
+                        "text": message.get("text"),
+                        "message_id": message.get("message_id"),
+                        "date": message.get("date"),
+                    }
+                )
 
                 # Check for document/file
                 if "document" in message:
@@ -522,16 +487,10 @@ class DefaultWebhookManager(WebhookManager):
 
         except Exception as e:
             logger.error(f"Error parsing Telegram webhook: {e}")
-            return {
-                **base_data,
-                "body": request_data.body,
-                "parse_error": str(e)
-            }
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_slack_webhook(
-        self,
-        request_data: WebhookRequestData,
-        base_data: dict[str, Any]
+        self, request_data: WebhookRequestData, base_data: dict[str, Any]
     ) -> dict[str, Any]:
         """Parse Slack webhook data."""
         try:
@@ -552,23 +511,17 @@ class DefaultWebhookManager(WebhookManager):
                 "slack_user_id": slack_data.get("user_id"),
                 "slack_text": slack_data.get("text"),
                 "slack_timestamp": slack_data.get("ts"),
-                "raw_data": slack_data
+                "raw_data": slack_data,
             }
 
             return parsed_data
 
         except Exception as e:
             logger.error(f"Error parsing Slack webhook: {e}")
-            return {
-                **base_data,
-                "body": request_data.body,
-                "parse_error": str(e)
-            }
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_github_webhook(
-        self,
-        request_data: WebhookRequestData,
-        base_data: dict[str, Any]
+        self, request_data: WebhookRequestData, base_data: dict[str, Any]
     ) -> dict[str, Any]:
         """Parse GitHub webhook data."""
         try:
@@ -588,15 +541,11 @@ class DefaultWebhookManager(WebhookManager):
                 "repository": github_data.get("repository", {}).get("full_name"),
                 "sender": github_data.get("sender", {}).get("login"),
                 "action": github_data.get("action"),
-                "raw_data": github_data
+                "raw_data": github_data,
             }
 
             return parsed_data
 
         except Exception as e:
             logger.error(f"Error parsing GitHub webhook: {e}")
-            return {
-                **base_data,
-                "body": request_data.body,
-                "parse_error": str(e)
-            }
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}

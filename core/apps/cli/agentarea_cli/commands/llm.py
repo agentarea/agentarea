@@ -22,7 +22,13 @@ def llm():
 
 
 @llm.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.option("--provider", help="Filter by provider")
 @click.option("--status", help="Filter by status")
 @click.pass_context
@@ -58,14 +64,18 @@ def list(ctx, output_format: str, provider: str | None, status: str | None):
             rows = []
 
             for model in models:
-                rows.append([
-                    safe_get_field(model, "id", "Unknown"),
-                    safe_get_field(model, "name", "Unknown"),
-                    safe_get_field(model, "provider", "Unknown"),
-                    safe_get_field(model, "model_type", "Unknown"),
-                    safe_get_field(model, "status", "Unknown"),
-                    safe_get_field(model, "created_at", "Unknown")[:19] if safe_get_field(model, "created_at") else "Unknown"
-                ])
+                rows.append(
+                    [
+                        safe_get_field(model, "id", "Unknown"),
+                        safe_get_field(model, "name", "Unknown"),
+                        safe_get_field(model, "provider", "Unknown"),
+                        safe_get_field(model, "model_type", "Unknown"),
+                        safe_get_field(model, "status", "Unknown"),
+                        safe_get_field(model, "created_at", "Unknown")[:19]
+                        if safe_get_field(model, "created_at")
+                        else "Unknown",
+                    ]
+                )
 
             click.echo(format_table(headers, rows))
 
@@ -84,11 +94,25 @@ def list(ctx, output_format: str, provider: str | None, status: str | None):
 @click.option("--description", help="Model description")
 @click.option("--api-key", help="API key for the model (if required)")
 @click.option("--base-url", help="Base URL for the model API")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.pass_context
-def create(ctx, name: str, provider: str, model_type: str, config: str | None,
-          description: str | None, api_key: str | None, base_url: str | None,
-          output_format: str):
+def create(
+    ctx,
+    name: str,
+    provider: str,
+    model_type: str,
+    config: str | None,
+    description: str | None,
+    api_key: str | None,
+    base_url: str | None,
+    output_format: str,
+):
     """Create a new LLM model."""
 
     async def _create_model():
@@ -119,7 +143,7 @@ def create(ctx, name: str, provider: str, model_type: str, config: str | None,
                 "name": name,
                 "provider": provider,
                 "model_type": model_type,
-                "config": model_config
+                "config": model_config,
             }
 
             if description:
@@ -156,7 +180,13 @@ def create(ctx, name: str, provider: str, model_type: str, config: str | None,
 
 @llm.command()
 @click.argument("model_id")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.pass_context
 def show(ctx, model_id: str, output_format: str):
     """Show detailed information about a model."""
@@ -208,11 +238,25 @@ def show(ctx, model_id: str, output_format: str):
 @click.option("--api-key", help="New API key")
 @click.option("--base-url", help="New base URL")
 @click.option("--status", help="New status")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.pass_context
-def update(ctx, model_id: str, name: str | None, description: str | None,
-          config: str | None, api_key: str | None, base_url: str | None,
-          status: str | None, output_format: str):
+def update(
+    ctx,
+    model_id: str,
+    name: str | None,
+    description: str | None,
+    config: str | None,
+    api_key: str | None,
+    base_url: str | None,
+    status: str | None,
+    output_format: str,
+):
     """Update an existing model."""
 
     async def _update_model():
@@ -314,10 +358,22 @@ def delete(ctx, model_id: str, force: bool):
 @click.option("--prompt", required=True, help="Test prompt to send to the model")
 @click.option("--max-tokens", type=int, help="Maximum tokens to generate")
 @click.option("--temperature", type=float, help="Temperature for generation")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.pass_context
-def test(ctx, model_id: str, prompt: str, max_tokens: int | None,
-        temperature: float | None, output_format: str):
+def test(
+    ctx,
+    model_id: str,
+    prompt: str,
+    max_tokens: int | None,
+    temperature: float | None,
+    output_format: str,
+):
     """Test a model with a prompt."""
 
     async def _test_model():
@@ -330,9 +386,7 @@ def test(ctx, model_id: str, prompt: str, max_tokens: int | None,
             raise click.Abort()
 
         try:
-            payload = {
-                "prompt": prompt
-            }
+            payload = {"prompt": prompt}
 
             if max_tokens:
                 payload["max_tokens"] = max_tokens
@@ -352,7 +406,9 @@ def test(ctx, model_id: str, prompt: str, max_tokens: int | None,
                     usage = result["usage"]
                     click.echo("   Usage:")
                     click.echo(f"     Prompt tokens: {usage.get('prompt_tokens', 'Unknown')}")
-                    click.echo(f"     Completion tokens: {usage.get('completion_tokens', 'Unknown')}")
+                    click.echo(
+                        f"     Completion tokens: {usage.get('completion_tokens', 'Unknown')}"
+                    )
                     click.echo(f"     Total tokens: {usage.get('total_tokens', 'Unknown')}")
 
                 if "latency" in result:
@@ -369,7 +425,13 @@ def test(ctx, model_id: str, prompt: str, max_tokens: int | None,
 
 
 @llm.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.pass_context
 def providers(ctx, output_format: str):
     """List available LLM providers."""
@@ -398,12 +460,14 @@ def providers(ctx, output_format: str):
 
             for provider in providers:
                 supported_types = ", ".join(provider.get("supported_types", []))
-                rows.append([
-                    safe_get_field(provider, "name", "Unknown"),
-                    safe_get_field(provider, "description", "No description"),
-                    supported_types or "Unknown",
-                    safe_get_field(provider, "status", "Unknown")
-                ])
+                rows.append(
+                    [
+                        safe_get_field(provider, "name", "Unknown"),
+                        safe_get_field(provider, "description", "No description"),
+                        supported_types or "Unknown",
+                        safe_get_field(provider, "status", "Unknown"),
+                    ]
+                )
 
             click.echo(format_table(headers, rows))
 

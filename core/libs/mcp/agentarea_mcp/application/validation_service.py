@@ -28,10 +28,10 @@ class MCPConfigurationValidator:
     @staticmethod
     def validate_json_spec(json_spec: dict[str, Any]) -> list[str]:
         """Validate a JSON specification for MCP instance creation.
-        
+
         Args:
             json_spec: The JSON specification to validate
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -63,7 +63,9 @@ class MCPConfigurationValidator:
             else:
                 for key, value in env_vars.items():
                     if not isinstance(key, str) or not key.strip():
-                        errors.append(f"Environment variable key '{key}' must be a non-empty string")
+                        errors.append(
+                            f"Environment variable key '{key}' must be a non-empty string"
+                        )
                     if not isinstance(value, str):
                         errors.append(f"Environment variable '{key}' value must be a string")
 
@@ -85,15 +87,15 @@ class MCPConfigurationValidator:
         cls,
         json_spec: dict[str, Any],
         instance_id: str = "validation-check",
-        name: str = "validation-check"
+        name: str = "validation-check",
     ) -> list[str]:
         """Validate configuration using the golang MCP manager.
-        
+
         Args:
             json_spec: The JSON specification to validate
             instance_id: Instance ID for validation
             name: Service name for validation
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -108,7 +110,7 @@ class MCPConfigurationValidator:
                     "instance_id": instance_id,
                     "name": name,
                     "json_spec": json_spec,
-                    "dry_run": True
+                    "dry_run": True,
                 }
 
                 logger.info(f"Validating configuration with golang manager: {validation_url}")
@@ -132,17 +134,23 @@ class MCPConfigurationValidator:
                         # Handle error response
                         try:
                             error_data = response.json()
-                            error_message = error_data.get("message", f"Validation failed with status {response.status_code}")
+                            error_message = error_data.get(
+                                "message", f"Validation failed with status {response.status_code}"
+                            )
                             errors.append(f"Container validation failed: {error_message}")
                         except:
                             errors.append(f"Validation failed with status {response.status_code}")
 
                 except httpx.ConnectError:
                     # If golang manager is not available, log warning but continue with basic validation
-                    logger.warning("Golang MCP manager not available for validation, using basic validation only")
+                    logger.warning(
+                        "Golang MCP manager not available for validation, using basic validation only"
+                    )
 
                 except httpx.TimeoutException:
-                    logger.warning("Golang MCP manager validation timed out, using basic validation only")
+                    logger.warning(
+                        "Golang MCP manager validation timed out, using basic validation only"
+                    )
 
                 except Exception as e:
                     logger.error(f"Error during golang manager validation: {e}")
@@ -155,16 +163,14 @@ class MCPConfigurationValidator:
 
     @classmethod
     async def validate_full_configuration_async(
-        cls,
-        json_spec: dict[str, Any],
-        provider_schema: dict[str, Any] = None
+        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] = None
     ) -> list[str]:
         """Perform complete async validation of MCP configuration.
-        
+
         Args:
             json_spec: The JSON specification to validate
             provider_schema: Optional provider schema for additional validation
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -187,15 +193,14 @@ class MCPConfigurationValidator:
 
     @staticmethod
     def validate_against_provider_schema(
-        json_spec: dict[str, Any],
-        provider_schema: dict[str, Any]
+        json_spec: dict[str, Any], provider_schema: dict[str, Any]
     ) -> list[str]:
         """Validate JSON spec against a specific provider schema.
-        
+
         Args:
             json_spec: The JSON specification to validate
             provider_schema: Provider schema from mcp_providers.yaml
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -224,22 +229,22 @@ class MCPConfigurationValidator:
         schema_var_names = {var.get("name") for var in env_schema}
         for provided_var in provided_env:
             if provided_var not in schema_var_names:
-                errors.append(f"Unknown environment variable '{provided_var}' not defined in schema")
+                errors.append(
+                    f"Unknown environment variable '{provided_var}' not defined in schema"
+                )
 
         return errors
 
     @classmethod
     def validate_full_configuration(
-        cls,
-        json_spec: dict[str, Any],
-        provider_schema: dict[str, Any] = None
+        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] = None
     ) -> list[str]:
         """Perform complete validation of MCP configuration (sync wrapper).
-        
+
         Args:
             json_spec: The JSON specification to validate
             provider_schema: Optional provider schema for additional validation
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -255,23 +260,23 @@ class MCPConfigurationValidator:
                     errors.extend(cls.validate_against_provider_schema(json_spec, provider_schema))
                 return errors
             else:
-                return loop.run_until_complete(cls.validate_full_configuration_async(json_spec, provider_schema))
+                return loop.run_until_complete(
+                    cls.validate_full_configuration_async(json_spec, provider_schema)
+                )
         except RuntimeError:
             # No event loop running, create a new one
             return asyncio.run(cls.validate_full_configuration_async(json_spec, provider_schema))
 
     @classmethod
     def is_valid_configuration(
-        cls,
-        json_spec: dict[str, Any],
-        provider_schema: dict[str, Any] = None
+        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] = None
     ) -> bool:
         """Check if configuration is valid.
-        
+
         Args:
             json_spec: The JSON specification to validate
             provider_schema: Optional provider schema for additional validation
-            
+
         Returns:
             True if valid, False otherwise
         """

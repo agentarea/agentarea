@@ -13,7 +13,9 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 
 async def diagnose_workflow(workflow_id: str, namespace: str = "default") -> dict[str, Any]:
     """Diagnose a workflow execution to identify why it might not be finishing."""
-    client = await Client.connect("localhost:7233", namespace=namespace, data_converter=pydantic_data_converter)
+    client = await Client.connect(
+        "localhost:7233", namespace=namespace, data_converter=pydantic_data_converter
+    )
 
     try:
         # Get workflow handle
@@ -25,18 +27,22 @@ async def diagnose_workflow(workflow_id: str, namespace: str = "default") -> dic
         # Get workflow history
         history_events = []
         async for event in handle.fetch_history():
-            history_events.append({
-                "event_id": event.event_id,
-                "event_type": event.event_type.name,
-                "timestamp": event.event_time.isoformat() if event.event_time else None,
-            })
+            history_events.append(
+                {
+                    "event_id": event.event_id,
+                    "event_type": event.event_type.name,
+                    "timestamp": event.event_time.isoformat() if event.event_time else None,
+                }
+            )
 
         # Analyze workflow state
         diagnosis = {
             "workflow_id": workflow_id,
             "status": description.status.name,
             "start_time": description.start_time.isoformat() if description.start_time else None,
-            "execution_time": str(datetime.now() - description.start_time) if description.start_time else None,
+            "execution_time": str(datetime.now() - description.start_time)
+            if description.start_time
+            else None,
             "task_queue": description.task_queue,
             "workflow_type": description.workflow_type,
             "run_id": description.run_id,
@@ -67,7 +73,9 @@ async def diagnose_workflow(workflow_id: str, namespace: str = "default") -> dic
                     issues.append(f"Workflow has been running for {runtime} - possibly stuck")
 
         if len(history_events) > 1000:
-            issues.append(f"Very long history ({len(history_events)} events) - possible infinite loop")
+            issues.append(
+                f"Very long history ({len(history_events)} events) - possible infinite loop"
+            )
 
         # Check for repeated patterns in recent events
         recent_event_types = [e["event_type"] for e in history_events[-50:]]
@@ -79,11 +87,7 @@ async def diagnose_workflow(workflow_id: str, namespace: str = "default") -> dic
         return diagnosis
 
     except Exception as e:
-        return {
-            "workflow_id": workflow_id,
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
+        return {"workflow_id": workflow_id, "error": str(e), "error_type": type(e).__name__}
     finally:
         await client.close()
 

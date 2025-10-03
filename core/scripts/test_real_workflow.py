@@ -9,11 +9,11 @@ from datetime import timedelta
 from uuid import uuid4
 
 from temporalio.client import Client
-from temporalio.worker import Worker
 from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.worker import Worker
 
 # Add the core directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agentarea_execution.activities.agent_execution_activities import make_agent_activities
 from agentarea_execution.models import AgentExecutionRequest
@@ -62,10 +62,10 @@ async def test_workflow_completion():
         task_query="Write a simple hello world program in Python",
         task_parameters={
             "success_criteria": ["Program written and explained"],
-            "max_iterations": 5  # Reasonable limit
+            "max_iterations": 5,  # Reasonable limit
         },
         budget_usd=0.50,  # Small budget to test budget termination
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     workflow_id = f"test-workflow-{uuid4()}"
@@ -89,7 +89,7 @@ async def test_workflow_completion():
                 execution_request,
                 id=workflow_id,
                 task_queue="test-queue",
-                execution_timeout=timedelta(minutes=5)  # 5 minute timeout
+                execution_timeout=timedelta(minutes=5),  # 5 minute timeout
             )
 
             logger.info("✅ Workflow completed successfully!")

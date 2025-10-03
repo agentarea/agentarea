@@ -26,10 +26,7 @@ class AgentAreaClient:
 
     def _get_headers(self) -> dict[str, str]:
         """Get headers including authentication."""
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "AgentArea-CLI/1.0"
-        }
+        headers = {"Content-Type": "application/json", "User-Agent": "AgentArea-CLI/1.0"}
 
         token = self.auth_config.get_token()
         if token:
@@ -49,7 +46,7 @@ class AgentAreaClient:
         method: str,
         endpoint: str,
         data: dict[str, Any] | None = None,
-        params: dict[str, Any] | None = None
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Make HTTP request to the API."""
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -57,9 +54,7 @@ class AgentAreaClient:
             headers = self._get_headers()
 
             try:
-                response = await self._make_request(
-                    client, method, url, headers, data, params
-                )
+                response = await self._make_request(client, method, url, headers, data, params)
                 return await self._handle_response(response)
 
             except httpx.ConnectError as e:
@@ -79,7 +74,7 @@ class AgentAreaClient:
         url: str,
         headers: dict[str, str],
         data: dict[str, Any] | None,
-        params: dict[str, Any] | None
+        params: dict[str, Any] | None,
     ) -> httpx.Response:
         """Make the actual HTTP request."""
         method = method.upper()

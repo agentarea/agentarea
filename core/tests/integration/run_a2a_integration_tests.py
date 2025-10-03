@@ -14,13 +14,13 @@ core_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(core_dir))
 
 from tests.integration.test_a2a_task_execution_comprehensive import (
-    test_a2a_task_creation_through_jsonrpc,
-    test_a2a_message_send_creates_temporal_task,
-    test_a2a_task_streaming_with_real_events,
-    test_a2a_task_management_endpoints,
     test_a2a_authentication_failures,
     test_a2a_error_scenarios,
     test_a2a_jsonrpc_protocol_compliance,
+    test_a2a_message_send_creates_temporal_task,
+    test_a2a_task_creation_through_jsonrpc,
+    test_a2a_task_management_endpoints,
+    test_a2a_task_streaming_with_real_events,
     test_a2a_task_workflow_status_integration,
 )
 
@@ -37,13 +37,13 @@ async def run_all_tests():
         ("A2A JSON-RPC Protocol Compliance", test_a2a_jsonrpc_protocol_compliance),
         ("A2A Task Workflow Status Integration", test_a2a_task_workflow_status_integration),
     ]
-    
+
     passed = 0
     failed = 0
-    
+
     print("🚀 Running A2A Integration Tests")
     print("=" * 50)
-    
+
     for test_name, test_func in tests:
         try:
             print(f"Running: {test_name}...", end=" ")
@@ -53,10 +53,10 @@ async def run_all_tests():
         except Exception as e:
             print(f"❌ FAILED: {e}")
             failed += 1
-    
+
     print("=" * 50)
     print(f"Results: {passed} passed, {failed} failed")
-    
+
     if failed == 0:
         print("🎉 All A2A integration tests passed!")
         return True

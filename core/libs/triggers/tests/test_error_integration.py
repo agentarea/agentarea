@@ -25,13 +25,13 @@ class TestErrorHandlingIntegration:
     def mock_dependencies(self):
         """Create comprehensive mock dependencies."""
         return {
-            'trigger_repository': AsyncMock(),
-            'trigger_execution_repository': AsyncMock(),
-            'event_broker': AsyncMock(),
-            'agent_repository': AsyncMock(),
-            'task_service': AsyncMock(),
-            'llm_condition_evaluator': AsyncMock(),
-            'temporal_schedule_manager': AsyncMock()
+            "trigger_repository": AsyncMock(),
+            "trigger_execution_repository": AsyncMock(),
+            "event_broker": AsyncMock(),
+            "agent_repository": AsyncMock(),
+            "task_service": AsyncMock(),
+            "llm_condition_evaluator": AsyncMock(),
+            "temporal_schedule_manager": AsyncMock(),
         }
 
     @pytest.fixture
@@ -42,8 +42,10 @@ class TestErrorHandlingIntegration:
     async def test_end_to_end_error_propagation(self, trigger_service, mock_dependencies):
         """Test that errors propagate correctly through the entire system."""
         # Setup - simulate database connection failure
-        mock_dependencies['trigger_repository'].create_from_model.side_effect = Exception("Database connection lost")
-        mock_dependencies['agent_repository'].get.return_value = MagicMock()  # Agent exists
+        mock_dependencies["trigger_repository"].create_from_model.side_effect = Exception(
+            "Database connection lost"
+        )
+        mock_dependencies["agent_repository"].get.return_value = MagicMock()  # Agent exists
 
         trigger_data = TriggerCreate(
             name="Test Trigger",
@@ -51,7 +53,7 @@ class TestErrorHandlingIntegration:
             agent_id=uuid4(),
             trigger_type=TriggerType.WEBHOOK,
             webhook_id="test_webhook",
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Execute and verify error propagation
@@ -79,7 +81,7 @@ class TestErrorHandlingIntegration:
             method="POST",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         # Verify error response
@@ -93,13 +95,13 @@ class TestErrorHandlingIntegration:
         """Test graceful degradation when multiple dependencies are unavailable."""
         # Setup - create service with minimal dependencies
         trigger_service = TriggerService(
-            trigger_repository=mock_dependencies['trigger_repository'],
-            trigger_execution_repository=mock_dependencies['trigger_execution_repository'],
-            event_broker=mock_dependencies['event_broker'],
+            trigger_repository=mock_dependencies["trigger_repository"],
+            trigger_execution_repository=mock_dependencies["trigger_execution_repository"],
+            event_broker=mock_dependencies["event_broker"],
             agent_repository=None,  # Missing
-            task_service=None,      # Missing
+            task_service=None,  # Missing
             llm_condition_evaluator=None,  # Missing
-            temporal_schedule_manager=None  # Missing
+            temporal_schedule_manager=None,  # Missing
         )
 
         trigger_data = TriggerCreate(
@@ -108,7 +110,7 @@ class TestErrorHandlingIntegration:
             agent_id=uuid4(),
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Should fail gracefully with clear error message
@@ -121,7 +123,7 @@ class TestErrorHandlingIntegration:
         """Test that error context is preserved through multiple layers."""
         # Setup - simulate agent repository error with specific context
         original_error = Exception("Connection timeout after 30 seconds")
-        mock_dependencies['agent_repository'].get.side_effect = original_error
+        mock_dependencies["agent_repository"].get.side_effect = original_error
 
         trigger_data = TriggerCreate(
             name="Test Trigger",
@@ -129,7 +131,7 @@ class TestErrorHandlingIntegration:
             agent_id=uuid4(),
             trigger_type=TriggerType.WEBHOOK,
             webhook_id="test_webhook",
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Execute and verify context preservation
@@ -138,10 +140,10 @@ class TestErrorHandlingIntegration:
 
         # Verify original error context is preserved
         error_dict = exc_info.value.to_dict()
-        assert error_dict['error_type'] == 'TriggerExecutionError'
-        assert error_dict['correlation_id'] is not None
-        assert 'trigger_name' in error_dict['context']
-        assert 'agent_id' in error_dict['context']
+        assert error_dict["error_type"] == "TriggerExecutionError"
+        assert error_dict["correlation_id"] is not None
+        assert "trigger_name" in error_dict["context"]
+        assert "agent_id" in error_dict["context"]
 
     async def test_concurrent_error_handling(self, trigger_service, mock_dependencies):
         """Test error handling under concurrent operations."""
@@ -149,6 +151,7 @@ class TestErrorHandlingIntegration:
 
         # Setup - simulate intermittent failures
         call_count = 0
+
         def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -156,7 +159,7 @@ class TestErrorHandlingIntegration:
                 raise Exception(f"Intermittent failure #{call_count}")
             return MagicMock()
 
-        mock_dependencies['agent_repository'].get.side_effect = side_effect
+        mock_dependencies["agent_repository"].get.side_effect = side_effect
 
         # Create multiple trigger creation tasks
         tasks = []
@@ -167,7 +170,7 @@ class TestErrorHandlingIntegration:
                 agent_id=uuid4(),
                 trigger_type=TriggerType.WEBHOOK,
                 webhook_id=f"test_webhook_{i}",
-                created_by="test_user"
+                created_by="test_user",
             )
             tasks.append(trigger_service.create_trigger(trigger_data))
 
@@ -224,13 +227,13 @@ class TestLoggingIntegration:
             "Test error message",
             trigger_id=str(trigger_id),
             operation="test_operation",
-            additional_context="test_value"
+            additional_context="test_value",
         )
 
         # Verify structured error data
         error_dict = error.to_dict()
-        assert error_dict['error_type'] == 'TriggerError'
-        assert error_dict['message'] == 'Test error message'
-        assert error_dict['context']['trigger_id'] == str(trigger_id)
-        assert error_dict['context']['operation'] == 'test_operation'
-        assert error_dict['context']['additional_context'] == 'test_value'
+        assert error_dict["error_type"] == "TriggerError"
+        assert error_dict["message"] == "Test error message"
+        assert error_dict["context"]["trigger_id"] == str(trigger_id)
+        assert error_dict["context"]["operation"] == "test_operation"
+        assert error_dict["context"]["additional_context"] == "test_value"

@@ -39,7 +39,7 @@ def llm_evaluator(mock_model_instance_service, mock_secret_manager):
     return LLMConditionEvaluator(
         model_instance_service=mock_model_instance_service,
         secret_manager=mock_secret_manager,
-        default_model_id=uuid4()
+        default_model_id=uuid4(),
     )
 
 
@@ -51,18 +51,11 @@ class TestLLMConditionEvaluator:
         """Test simple rule condition evaluation with matching data."""
         condition = {
             "type": "rule",
-            "rules": [
-                {"field": "request.method", "operator": "eq", "value": "POST"}
-            ],
-            "logic": "AND"
+            "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}],
+            "logic": "AND",
         }
 
-        event_data = {
-            "request": {
-                "method": "POST",
-                "body": {"message": "test"}
-            }
-        }
+        event_data = {"request": {"method": "POST", "body": {"message": "test"}}}
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
         assert result is True
@@ -72,18 +65,11 @@ class TestLLMConditionEvaluator:
         """Test simple rule condition evaluation with non-matching data."""
         condition = {
             "type": "rule",
-            "rules": [
-                {"field": "request.method", "operator": "eq", "value": "POST"}
-            ],
-            "logic": "AND"
+            "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}],
+            "logic": "AND",
         }
 
-        event_data = {
-            "request": {
-                "method": "GET",
-                "body": {"message": "test"}
-            }
-        }
+        event_data = {"request": {"method": "GET", "body": {"message": "test"}}}
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
         assert result is False
@@ -95,16 +81,13 @@ class TestLLMConditionEvaluator:
             "type": "rule",
             "rules": [
                 {"field": "request.method", "operator": "eq", "value": "POST"},
-                {"field": "request.body.type", "operator": "eq", "value": "file"}
+                {"field": "request.body.type", "operator": "eq", "value": "file"},
             ],
-            "logic": "AND"
+            "logic": "AND",
         }
 
         event_data = {
-            "request": {
-                "method": "POST",
-                "body": {"type": "file", "name": "document.pdf"}
-            }
+            "request": {"method": "POST", "body": {"type": "file", "name": "document.pdf"}}
         }
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
@@ -117,17 +100,12 @@ class TestLLMConditionEvaluator:
             "type": "rule",
             "rules": [
                 {"field": "request.method", "operator": "eq", "value": "POST"},
-                {"field": "request.method", "operator": "eq", "value": "PUT"}
+                {"field": "request.method", "operator": "eq", "value": "PUT"},
             ],
-            "logic": "OR"
+            "logic": "OR",
         }
 
-        event_data = {
-            "request": {
-                "method": "PUT",
-                "body": {"message": "test"}
-            }
-        }
+        event_data = {"request": {"method": "PUT", "body": {"message": "test"}}}
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
         assert result is True
@@ -138,16 +116,10 @@ class TestLLMConditionEvaluator:
         # Test contains operator
         condition = {
             "type": "rule",
-            "rules": [
-                {"field": "request.body.message", "operator": "contains", "value": "file"}
-            ]
+            "rules": [{"field": "request.body.message", "operator": "contains", "value": "file"}],
         }
 
-        event_data = {
-            "request": {
-                "body": {"message": "I have a file to upload"}
-            }
-        }
+        event_data = {"request": {"body": {"message": "I have a file to upload"}}}
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
         assert result is True
@@ -155,22 +127,16 @@ class TestLLMConditionEvaluator:
         # Test exists operator
         condition = {
             "type": "rule",
-            "rules": [
-                {"field": "request.body.attachment", "operator": "exists"}
-            ]
+            "rules": [{"field": "request.body.attachment", "operator": "exists"}],
         }
 
-        event_data = {
-            "request": {
-                "body": {"attachment": {"name": "file.pdf"}}
-            }
-        }
+        event_data = {"request": {"body": {"attachment": {"name": "file.pdf"}}}}
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
         assert result is True
 
     @pytest.mark.asyncio
-    @patch('agentarea_triggers.llm_condition_evaluator.litellm.acompletion')
+    @patch("agentarea_triggers.llm_condition_evaluator.litellm.acompletion")
     async def test_evaluate_llm_condition_true(self, mock_completion, llm_evaluator):
         """Test LLM condition evaluation returning true."""
         # Mock LLM response
@@ -182,15 +148,12 @@ class TestLLMConditionEvaluator:
         condition = {
             "type": "llm",
             "description": "when user sends a file attachment",
-            "context_fields": ["request.body"]
+            "context_fields": ["request.body"],
         }
 
         event_data = {
             "request": {
-                "body": {
-                    "document": {"file_name": "report.pdf"},
-                    "message": "Here's the report"
-                }
+                "body": {"document": {"file_name": "report.pdf"}, "message": "Here's the report"}
             }
         }
 
@@ -201,7 +164,7 @@ class TestLLMConditionEvaluator:
         mock_completion.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('agentarea_triggers.llm_condition_evaluator.litellm.acompletion')
+    @patch("agentarea_triggers.llm_condition_evaluator.litellm.acompletion")
     async def test_evaluate_llm_condition_false(self, mock_completion, llm_evaluator):
         """Test LLM condition evaluation returning false."""
         # Mock LLM response
@@ -213,16 +176,10 @@ class TestLLMConditionEvaluator:
         condition = {
             "type": "llm",
             "description": "when user sends a file attachment",
-            "context_fields": ["request.body"]
+            "context_fields": ["request.body"],
         }
 
-        event_data = {
-            "request": {
-                "body": {
-                    "message": "Hello, how are you?"
-                }
-            }
-        }
+        event_data = {"request": {"body": {"message": "Hello, how are you?"}}}
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
         assert result is False
@@ -235,21 +192,18 @@ class TestLLMConditionEvaluator:
             "conditions": [
                 {
                     "type": "rule",
-                    "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}]
+                    "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}],
                 },
                 {
                     "type": "rule",
-                    "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}]
-                }
+                    "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}],
+                },
             ],
-            "logic": "AND"
+            "logic": "AND",
         }
 
         event_data = {
-            "request": {
-                "method": "POST",
-                "body": {"type": "file", "name": "document.pdf"}
-            }
+            "request": {"method": "POST", "body": {"type": "file", "name": "document.pdf"}}
         }
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
@@ -263,48 +217,38 @@ class TestLLMConditionEvaluator:
             "conditions": [
                 {
                     "type": "rule",
-                    "rules": [{"field": "request.method", "operator": "eq", "value": "GET"}]
+                    "rules": [{"field": "request.method", "operator": "eq", "value": "GET"}],
                 },
                 {
                     "type": "rule",
-                    "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}]
-                }
+                    "rules": [{"field": "request.body.type", "operator": "eq", "value": "file"}],
+                },
             ],
-            "logic": "OR"
+            "logic": "OR",
         }
 
         event_data = {
-            "request": {
-                "method": "POST",
-                "body": {"type": "file", "name": "document.pdf"}
-            }
+            "request": {"method": "POST", "body": {"type": "file", "name": "document.pdf"}}
         }
 
         result = await llm_evaluator.evaluate_condition(condition, event_data)
         assert result is True
 
     @pytest.mark.asyncio
-    @patch('agentarea_triggers.llm_condition_evaluator.litellm.acompletion')
+    @patch("agentarea_triggers.llm_condition_evaluator.litellm.acompletion")
     async def test_extract_task_parameters(self, mock_completion, llm_evaluator):
         """Test LLM-based task parameter extraction."""
         # Mock LLM response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({
-            "user_id": "123",
-            "file_name": "report.pdf",
-            "action": "analyze_document"
-        })
+        mock_response.choices[0].message.content = json.dumps(
+            {"user_id": "123", "file_name": "report.pdf", "action": "analyze_document"}
+        )
         mock_completion.return_value = mock_response
 
         instruction = "analyze the uploaded file and respond with insights"
         event_data = {
-            "request": {
-                "body": {
-                    "user": {"id": "123"},
-                    "document": {"file_name": "report.pdf"}
-                }
-            }
+            "request": {"body": {"user": {"id": "123"}, "document": {"file_name": "report.pdf"}}}
         }
 
         result = await llm_evaluator.extract_task_parameters(instruction, event_data)
@@ -314,7 +258,7 @@ class TestLLMConditionEvaluator:
         assert result["action"] == "analyze_document"
 
     @pytest.mark.asyncio
-    @patch('agentarea_triggers.llm_condition_evaluator.litellm.acompletion')
+    @patch("agentarea_triggers.llm_condition_evaluator.litellm.acompletion")
     async def test_extract_task_parameters_invalid_json(self, mock_completion, llm_evaluator):
         """Test parameter extraction with invalid JSON response."""
         # Mock LLM response with invalid JSON
@@ -338,22 +282,15 @@ class TestLLMConditionEvaluator:
         # Valid condition
         valid_condition = {
             "type": "rule",
-            "rules": [
-                {"field": "request.method", "operator": "eq", "value": "POST"}
-            ],
-            "logic": "AND"
+            "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}],
+            "logic": "AND",
         }
 
         errors = llm_evaluator._validate_rule_condition(valid_condition)
         assert len(errors) == 0
 
         # Invalid condition - missing field
-        invalid_condition = {
-            "type": "rule",
-            "rules": [
-                {"operator": "eq", "value": "POST"}
-            ]
-        }
+        invalid_condition = {"type": "rule", "rules": [{"operator": "eq", "value": "POST"}]}
 
         errors = llm_evaluator._validate_rule_condition(invalid_condition)
         assert len(errors) > 0
@@ -366,19 +303,14 @@ class TestLLMConditionEvaluator:
             "type": "llm",
             "description": "when user sends a file",
             "context_fields": ["request.body"],
-            "examples": [
-                {"input": {"body": {"file": "test.pdf"}}, "expected": True}
-            ]
+            "examples": [{"input": {"body": {"file": "test.pdf"}}, "expected": True}],
         }
 
         errors = llm_evaluator._validate_llm_condition(valid_condition)
         assert len(errors) == 0
 
         # Invalid condition - missing description
-        invalid_condition = {
-            "type": "llm",
-            "context_fields": ["request.body"]
-        }
+        invalid_condition = {"type": "llm", "context_fields": ["request.body"]}
 
         errors = llm_evaluator._validate_llm_condition(invalid_condition)
         assert len(errors) > 0
@@ -386,14 +318,7 @@ class TestLLMConditionEvaluator:
 
     def test_get_nested_value(self, llm_evaluator):
         """Test nested value extraction."""
-        data = {
-            "request": {
-                "body": {
-                    "user": {"id": "123", "name": "John"},
-                    "message": "Hello"
-                }
-            }
-        }
+        data = {"request": {"body": {"user": {"id": "123", "name": "John"}, "message": "Hello"}}}
 
         # Test successful extraction
         assert llm_evaluator._get_nested_value(data, "request.body.user.id") == "123"
@@ -423,10 +348,7 @@ class TestLLMConditionEvaluator:
     @pytest.mark.asyncio
     async def test_llm_call_failure(self, llm_evaluator):
         """Test handling of LLM call failures."""
-        condition = {
-            "type": "llm",
-            "description": "test condition"
-        }
+        condition = {"type": "llm", "description": "test condition"}
 
         event_data = {"test": "data"}
 
@@ -439,10 +361,7 @@ class TestLLMConditionEvaluator:
     @pytest.mark.asyncio
     async def test_unknown_condition_type(self, llm_evaluator):
         """Test handling of unknown condition types."""
-        condition = {
-            "type": "unknown_type",
-            "description": "test condition"
-        }
+        condition = {"type": "unknown_type", "description": "test condition"}
 
         event_data = {"test": "data"}
 
@@ -456,16 +375,10 @@ class TestLLMConditionEvaluator:
         valid_condition = {
             "type": "combined",
             "conditions": [
-                {
-                    "type": "rule",
-                    "rules": [{"field": "test", "operator": "eq", "value": "value"}]
-                },
-                {
-                    "type": "llm",
-                    "description": "test description"
-                }
+                {"type": "rule", "rules": [{"field": "test", "operator": "eq", "value": "value"}]},
+                {"type": "llm", "description": "test description"},
             ],
-            "logic": "AND"
+            "logic": "AND",
         }
 
         errors = await llm_evaluator.validate_condition_syntax(valid_condition)
@@ -477,10 +390,10 @@ class TestLLMConditionEvaluator:
             "conditions": [
                 {
                     "type": "rule",
-                    "rules": [{"operator": "eq", "value": "value"}]  # Missing field
+                    "rules": [{"operator": "eq", "value": "value"}],  # Missing field
                 }
             ],
-            "logic": "INVALID"  # Invalid logic
+            "logic": "INVALID",  # Invalid logic
         }
 
         errors = await llm_evaluator.validate_condition_syntax(invalid_condition)

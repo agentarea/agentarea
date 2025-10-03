@@ -1,15 +1,17 @@
 """Session service dependencies for Google ADK."""
 
-from abc import ABC
-from typing import Annotated
+from abc import ABC, abstractmethod
+from typing import Annotated, Any
 
 from fastapi import Depends
 
 
 class BaseSessionService(ABC):
     @abstractmethod
-    async def get_session(self, session_id: str) -> Session:
-        pass
+    async def get_session(self, session_id: str) -> Any:
+        """Retrieve a session by ID."""
+        raise NotImplementedError
+
 
 async def get_session_service() -> BaseSessionService:
     """Get Google ADK session service.

@@ -5,8 +5,8 @@ This service is backend-agnostic and can be swapped with other implementations l
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict
-from typing import Iterable
 from uuid import UUID
 
 from agentarea_agents_sdk.tasks import Task, TaskStatus
@@ -19,8 +19,21 @@ class InMemoryTaskService:
         self._tasks: dict[UUID, Task] = {}
 
     # CRUD operations
-    def create(self, title: str, description: str = "", parent_id: UUID | None = None, priority: int = 1, metadata: dict | None = None) -> Task:
-        task = Task(title=title, description=description, parent_id=parent_id, priority=priority, metadata=metadata or {})
+    def create(
+        self,
+        title: str,
+        description: str = "",
+        parent_id: UUID | None = None,
+        priority: int = 1,
+        metadata: dict | None = None,
+    ) -> Task:
+        task = Task(
+            title=title,
+            description=description,
+            parent_id=parent_id,
+            priority=priority,
+            metadata=metadata or {},
+        )
         self._tasks[task.id] = task
         return task
 
@@ -32,6 +45,7 @@ class InMemoryTaskService:
         if not task:
             return None
         import datetime
+
         for k, v in updates.items():
             if hasattr(task, k):
                 setattr(task, k, v)
@@ -45,10 +59,23 @@ class InMemoryTaskService:
         return self._tasks.pop(task_id, None) is not None
 
     # Relations and queries
-    def add_subtask(self, parent_id: UUID, title: str, description: str = "", priority: int = 1, metadata: dict | None = None) -> Task | None:
+    def add_subtask(
+        self,
+        parent_id: UUID,
+        title: str,
+        description: str = "",
+        priority: int = 1,
+        metadata: dict | None = None,
+    ) -> Task | None:
         if parent_id not in self._tasks:
             return None
-        return self.create(title=title, description=description, parent_id=parent_id, priority=priority, metadata=metadata)
+        return self.create(
+            title=title,
+            description=description,
+            parent_id=parent_id,
+            priority=priority,
+            metadata=metadata,
+        )
 
     def list_tasks(self, parent_id: UUID | None = None) -> list[Task]:
         if parent_id is None:
@@ -76,7 +103,11 @@ class InMemoryTaskService:
 
     def search(self, text: str) -> list[Task]:
         q = text.lower()
-        return [t for t in self._tasks.values() if q in t.title.lower() or q in (t.description or "").lower()]
+        return [
+            t
+            for t in self._tasks.values()
+            if q in t.title.lower() or q in (t.description or "").lower()
+        ]
 
     # Serialization helpers
     @staticmethod

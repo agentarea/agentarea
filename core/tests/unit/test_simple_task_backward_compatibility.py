@@ -22,7 +22,7 @@ class TestSimpleTaskBackwardCompatibility:
             user_id="user123",
             agent_id=agent_id,
             task_parameters={"param1": "value1"},
-            status="submitted"
+            status="submitted",
         )
 
         # Verify all original fields work as expected
@@ -70,10 +70,10 @@ class TestSimpleTaskBackwardCompatibility:
         assert retrieved_task.title == "Repository Test"
 
         # Verify enhanced fields don't break the pattern
-        assert hasattr(retrieved_task, 'metadata')
-        assert hasattr(retrieved_task, 'started_at')
-        assert hasattr(retrieved_task, 'completed_at')
-        assert hasattr(retrieved_task, 'execution_id')
+        assert hasattr(retrieved_task, "metadata")
+        assert hasattr(retrieved_task, "started_at")
+        assert hasattr(retrieved_task, "completed_at")
+        assert hasattr(retrieved_task, "execution_id")
 
     def test_filtering_patterns_still_work(self):
         """Test that filtering patterns from existing tests still work."""
@@ -126,7 +126,7 @@ class TestSimpleTaskBackwardCompatibility:
             description="Test defaults",
             query="test query",
             user_id="test_user",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         # These defaults should match the original SimpleTask behavior
@@ -150,7 +150,7 @@ class TestSimpleTaskBackwardCompatibility:
             query="serialize this",
             user_id="serialize_user",
             agent_id=uuid4(),
-            task_parameters={"key": "value"}
+            task_parameters={"key": "value"},
         )
 
         # Test dict conversion (common pattern)

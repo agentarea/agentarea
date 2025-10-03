@@ -23,9 +23,9 @@ bearer_scheme = HTTPBearer(auto_error=False)
 class JWTMiddleware(BaseHTTPMiddleware):
     """JWT Authentication Middleware for FastAPI."""
 
-    def __init__(self, app, jwks_uri: str = None, algorithms: list = None):
+    def __init__(self, app, jwks_uri: str | None = None, algorithms: list[str] | None = None):
         """Initialize JWT middleware.
-        
+
         Args:
             app: FastAPI application instance
             jwks_uri: URI to fetch JWKS for token verification (for OIDC)
@@ -38,11 +38,11 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """Process incoming requests and validate JWT tokens.
-        
+
         Args:
             request: Incoming HTTP request
             call_next: Next middleware or endpoint handler
-            
+
         Returns:
             Response from the next middleware or endpoint
         """
@@ -56,7 +56,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
             # For non-public routes, require authentication
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Authorization header missing"}
+                content={"detail": "Authorization header missing"},
             )
 
         # Parse bearer token
@@ -64,7 +64,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
             if not auth_header.startswith("Bearer "):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid authorization header format"
+                    detail="Invalid authorization header format",
                 )
 
             token = auth_header[7:]  # Remove "Bearer " prefix
@@ -78,19 +78,18 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
         except jwt.ExpiredSignatureError:
             return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Token has expired"}
+                status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": "Token has expired"}
             )
         except jwt.InvalidTokenError as e:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": f"Invalid token: {e!s}"}
+                content={"detail": f"Invalid token: {e!s}"},
             )
         except Exception as e:
             logger.error(f"Unexpected error during JWT validation: {e}")
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={"detail": "Internal server error"}
+                content={"detail": "Internal server error"},
             )
 
         # Continue with the request
@@ -99,13 +98,13 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
     async def _verify_token(self, token: str) -> dict[str, Any]:
         """Verify JWT token using JWKS from OIDC provider.
-        
+
         Args:
             token: JWT token to verify
-            
+
         Returns:
             Decoded token payload
-            
+
         Raises:
             jwt.InvalidTokenError: If token verification fails
         """
@@ -145,10 +144,10 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
     def _is_public_route(self, request: Request) -> bool:
         """Check if the request is for a public route.
-        
+
         Args:
             request: Incoming HTTP request
-            
+
         Returns:
             True if the route is public, False otherwise
         """

@@ -116,7 +116,9 @@ class TestTriggerRepository:
         # Assert
         assert result is None
 
-    async def test_list_triggers(self, trigger_repository, sample_cron_trigger, sample_webhook_trigger):
+    async def test_list_triggers(
+        self, trigger_repository, sample_cron_trigger, sample_webhook_trigger
+    ):
         """Test listing all triggers."""
         # Arrange
         await trigger_repository.create(sample_cron_trigger)
@@ -216,7 +218,9 @@ class TestTriggerRepository:
         assert updated_trigger.description == "Updated description"
         assert updated_trigger.is_active is False
 
-    async def test_list_by_agent(self, trigger_repository, sample_cron_trigger, sample_webhook_trigger):
+    async def test_list_by_agent(
+        self, trigger_repository, sample_cron_trigger, sample_webhook_trigger
+    ):
         """Test listing triggers by agent ID."""
         # Arrange
         agent_id = uuid4()
@@ -244,7 +248,9 @@ class TestTriggerRepository:
         for trigger in agent_triggers:
             assert trigger.agent_id == agent_id
 
-    async def test_list_by_type(self, trigger_repository, sample_cron_trigger, sample_webhook_trigger):
+    async def test_list_by_type(
+        self, trigger_repository, sample_cron_trigger, sample_webhook_trigger
+    ):
         """Test listing triggers by type."""
         # Arrange
         await trigger_repository.create(sample_cron_trigger)
@@ -260,7 +266,9 @@ class TestTriggerRepository:
         assert cron_triggers[0].trigger_type == TriggerType.CRON
         assert webhook_triggers[0].trigger_type == TriggerType.WEBHOOK
 
-    async def test_list_active_triggers(self, trigger_repository, sample_cron_trigger, sample_webhook_trigger):
+    async def test_list_active_triggers(
+        self, trigger_repository, sample_cron_trigger, sample_webhook_trigger
+    ):
         """Test listing active triggers."""
         # Arrange
         sample_webhook_trigger.is_active = False  # Make one inactive
@@ -334,9 +342,7 @@ class TestTriggerRepository:
 
         # Act
         updated = await trigger_repository.update_execution_tracking(
-            sample_cron_trigger.id,
-            execution_time,
-            consecutive_failures=2
+            sample_cron_trigger.id, execution_time, consecutive_failures=2
         )
 
         # Assert

@@ -35,9 +35,7 @@ def mock_execution_callback():
 def webhook_manager(mock_execution_callback):
     """Create a DefaultWebhookManager instance for testing."""
     return DefaultWebhookManager(
-        execution_callback=mock_execution_callback,
-        event_broker=None,
-        base_url="/webhooks"
+        execution_callback=mock_execution_callback, event_broker=None, base_url="/webhooks"
     )
 
 
@@ -53,7 +51,7 @@ def sample_webhook_trigger():
         allowed_methods=["POST"],
         webhook_type=WebhookType.GENERIC,
         created_by="test_user",
-        is_active=True
+        is_active=True,
     )
 
 
@@ -70,10 +68,7 @@ def sample_telegram_trigger():
         webhook_type=WebhookType.TELEGRAM,
         created_by="test_user",
         is_active=True,
-        validation_rules={
-            "required_headers": ["content-type"],
-            "content_type": "application/json"
-        }
+        validation_rules={"required_headers": ["content-type"], "content_type": "application/json"},
     )
 
 
@@ -87,7 +82,7 @@ class TestWebhookRequestData:
             method="POST",
             headers={"content-type": "application/json"},
             body={"message": "test"},
-            query_params={"param": "value"}
+            query_params={"param": "value"},
         )
 
         assert data.webhook_id == "test_123"
@@ -100,11 +95,7 @@ class TestWebhookRequestData:
     def test_webhook_request_data_method_uppercase(self):
         """Test that HTTP method is converted to uppercase."""
         data = WebhookRequestData(
-            webhook_id="test_123",
-            method="post",
-            headers={},
-            body=None,
-            query_params={}
+            webhook_id="test_123", method="post", headers={}, body=None, query_params={}
         )
 
         assert data.method == "POST"
@@ -115,10 +106,7 @@ class TestWebhookValidationResult:
 
     def test_valid_result(self):
         """Test creating a valid validation result."""
-        result = WebhookValidationResult(
-            is_valid=True,
-            parsed_data={"key": "value"}
-        )
+        result = WebhookValidationResult(is_valid=True, parsed_data={"key": "value"})
 
         assert result.is_valid is True
         assert result.parsed_data == {"key": "value"}
@@ -127,9 +115,7 @@ class TestWebhookValidationResult:
     def test_invalid_result(self):
         """Test creating an invalid validation result."""
         result = WebhookValidationResult(
-            is_valid=False,
-            parsed_data={},
-            error_message="Validation failed"
+            is_valid=False, parsed_data={}, error_message="Validation failed"
         )
 
         assert result.is_valid is False
@@ -154,7 +140,10 @@ class TestDefaultWebhookManager:
         await webhook_manager.register_webhook(sample_webhook_trigger)
 
         assert sample_webhook_trigger.webhook_id in webhook_manager._registered_webhooks
-        assert webhook_manager._registered_webhooks[sample_webhook_trigger.webhook_id] == sample_webhook_trigger
+        assert (
+            webhook_manager._registered_webhooks[sample_webhook_trigger.webhook_id]
+            == sample_webhook_trigger
+        )
 
     @pytest.mark.asyncio
     async def test_unregister_webhook(self, webhook_manager, sample_webhook_trigger):
@@ -174,13 +163,17 @@ class TestDefaultWebhookManager:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_validate_webhook_method_not_allowed(self, webhook_manager, sample_webhook_trigger):
+    async def test_validate_webhook_method_not_allowed(
+        self, webhook_manager, sample_webhook_trigger
+    ):
         """Test validating disallowed HTTP method."""
         result = await webhook_manager.validate_webhook_method(sample_webhook_trigger, "GET")
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_validate_webhook_method_case_insensitive(self, webhook_manager, sample_webhook_trigger):
+    async def test_validate_webhook_method_case_insensitive(
+        self, webhook_manager, sample_webhook_trigger
+    ):
         """Test that method validation is case insensitive."""
         result = await webhook_manager.validate_webhook_method(sample_webhook_trigger, "post")
         assert result is True
@@ -191,53 +184,57 @@ class TestDefaultWebhookManager:
         sample_webhook_trigger.validation_rules = {}
 
         result = await webhook_manager.apply_validation_rules(
-            sample_webhook_trigger,
-            {"content-type": "application/json"},
-            {"test": "data"}
+            sample_webhook_trigger, {"content-type": "application/json"}, {"test": "data"}
         )
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_apply_validation_rules_required_headers_present(self, webhook_manager, sample_telegram_trigger):
+    async def test_apply_validation_rules_required_headers_present(
+        self, webhook_manager, sample_telegram_trigger
+    ):
         """Test validation when required headers are present."""
         result = await webhook_manager.apply_validation_rules(
             sample_telegram_trigger,
             {"content-type": "application/json", "user-agent": "test"},
-            {"test": "data"}
+            {"test": "data"},
         )
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_apply_validation_rules_required_headers_missing(self, webhook_manager, sample_telegram_trigger):
+    async def test_apply_validation_rules_required_headers_missing(
+        self, webhook_manager, sample_telegram_trigger
+    ):
         """Test validation when required headers are missing."""
         result = await webhook_manager.apply_validation_rules(
             sample_telegram_trigger,
             {"user-agent": "test"},  # Missing content-type
-            {"test": "data"}
+            {"test": "data"},
         )
 
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_apply_validation_rules_content_type_match(self, webhook_manager, sample_telegram_trigger):
+    async def test_apply_validation_rules_content_type_match(
+        self, webhook_manager, sample_telegram_trigger
+    ):
         """Test validation when content type matches."""
         result = await webhook_manager.apply_validation_rules(
             sample_telegram_trigger,
             {"content-type": "application/json; charset=utf-8"},
-            {"test": "data"}
+            {"test": "data"},
         )
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_apply_validation_rules_content_type_mismatch(self, webhook_manager, sample_telegram_trigger):
+    async def test_apply_validation_rules_content_type_mismatch(
+        self, webhook_manager, sample_telegram_trigger
+    ):
         """Test validation when content type doesn't match."""
         result = await webhook_manager.apply_validation_rules(
-            sample_telegram_trigger,
-            {"content-type": "text/plain"},
-            {"test": "data"}
+            sample_telegram_trigger, {"content-type": "text/plain"}, {"test": "data"}
         )
 
         assert result is False
@@ -276,14 +273,16 @@ class TestDefaultWebhookManager:
             method="POST",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         assert response["status_code"] == 400
         assert "not found" in response["body"]["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_handle_webhook_request_inactive_trigger(self, webhook_manager, sample_webhook_trigger):
+    async def test_handle_webhook_request_inactive_trigger(
+        self, webhook_manager, sample_webhook_trigger
+    ):
         """Test handling request for inactive webhook trigger."""
         sample_webhook_trigger.is_active = False
         await webhook_manager.register_webhook(sample_webhook_trigger)
@@ -293,14 +292,16 @@ class TestDefaultWebhookManager:
             method="POST",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         assert response["status_code"] == 400
         assert "inactive" in response["body"]["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_handle_webhook_request_method_not_allowed(self, webhook_manager, sample_webhook_trigger):
+    async def test_handle_webhook_request_method_not_allowed(
+        self, webhook_manager, sample_webhook_trigger
+    ):
         """Test handling request with disallowed method."""
         await webhook_manager.register_webhook(sample_webhook_trigger)
 
@@ -309,14 +310,16 @@ class TestDefaultWebhookManager:
             method="GET",  # Only POST is allowed
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         assert response["status_code"] == 400
         assert "not allowed" in response["body"]["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_handle_webhook_request_success(self, webhook_manager, sample_webhook_trigger, mock_execution_callback):
+    async def test_handle_webhook_request_success(
+        self, webhook_manager, sample_webhook_trigger, mock_execution_callback
+    ):
         """Test successful webhook request handling."""
         # Setup mock execution
         mock_execution = TriggerExecution(
@@ -324,7 +327,7 @@ class TestDefaultWebhookManager:
             trigger_id=sample_webhook_trigger.id,
             executed_at=datetime.utcnow(),
             status=ExecutionStatus.SUCCESS,
-            execution_time_ms=100
+            execution_time_ms=100,
         )
         mock_execution_callback.execute_webhook_trigger.return_value = mock_execution
 
@@ -335,7 +338,7 @@ class TestDefaultWebhookManager:
             method="POST",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={"param": "value"}
+            query_params={"param": "value"},
         )
 
         assert response["status_code"] == 200
@@ -356,16 +359,11 @@ class TestDefaultWebhookManager:
             "update_id": 123456,
             "message": {
                 "message_id": 789,
-                "from": {
-                    "id": 12345,
-                    "username": "testuser"
-                },
-                "chat": {
-                    "id": -67890
-                },
+                "from": {"id": 12345, "username": "testuser"},
+                "chat": {"id": -67890},
                 "date": 1640995200,
-                "text": "Hello, bot!"
-            }
+                "text": "Hello, bot!",
+            },
         }
 
         request_data = WebhookRequestData(
@@ -373,10 +371,12 @@ class TestDefaultWebhookManager:
             method="POST",
             headers={"content-type": "application/json"},
             body=telegram_data,
-            query_params={}
+            query_params={},
         )
 
-        parsed_data = await webhook_manager._parse_webhook_data(sample_telegram_trigger, request_data)
+        parsed_data = await webhook_manager._parse_webhook_data(
+            sample_telegram_trigger, request_data
+        )
 
         assert parsed_data["webhook_type"] == "telegram"
         assert parsed_data["telegram_update_id"] == 123456
@@ -395,10 +395,12 @@ class TestDefaultWebhookManager:
             method="POST",
             headers={"content-type": "application/json"},
             body={"custom": "data", "value": 42},
-            query_params={"param": "test"}
+            query_params={"param": "test"},
         )
 
-        parsed_data = await webhook_manager._parse_webhook_data(sample_webhook_trigger, request_data)
+        parsed_data = await webhook_manager._parse_webhook_data(
+            sample_webhook_trigger, request_data
+        )
 
         assert parsed_data["webhook_type"] == "generic"
         assert parsed_data["body"] == {"custom": "data", "value": 42}

@@ -27,12 +27,14 @@ class LLMErrorHandler:
             if model_id not in self.auth_failures:
                 self.auth_failures[model_id] = []
 
-            self.auth_failures[model_id].append({
-                "timestamp": event.timestamp,
-                "error": error_message,
-                "iteration": iteration,
-                "task_id": event.aggregate_id
-            })
+            self.auth_failures[model_id].append(
+                {
+                    "timestamp": event.timestamp,
+                    "error": error_message,
+                    "iteration": iteration,
+                    "task_id": event.aggregate_id,
+                }
+            )
 
             logger.error(
                 f"LLM Authentication failure for model {model_id} in task {event.aggregate_id}: {error_message}"
@@ -113,10 +115,9 @@ class LLMErrorHandler:
         """Get summary of error patterns."""
         return {
             "auth_failures": {
-                model_id: len(failures)
-                for model_id, failures in self.auth_failures.items()
+                model_id: len(failures) for model_id, failures in self.auth_failures.items()
             },
-            "total_auth_failures": sum(len(failures) for failures in self.auth_failures.values())
+            "total_auth_failures": sum(len(failures) for failures in self.auth_failures.values()),
         }
 
 

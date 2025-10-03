@@ -13,7 +13,7 @@ class AuditLogQuery:
 
     def __init__(self, log_file_path: str = "audit.log"):
         """Initialize audit log query utility.
-        
+
         Args:
             log_file_path: Path to the audit log file
         """
@@ -21,10 +21,10 @@ class AuditLogQuery:
 
     def _parse_log_line(self, line: str) -> dict[str, Any] | None:
         """Parse a log line into a structured dictionary.
-        
+
         Args:
             line: Raw log line
-            
+
         Returns:
             Parsed log entry or None if parsing fails
         """
@@ -35,21 +35,21 @@ class AuditLogQuery:
 
     def _matches_filters(self, log_entry: dict[str, Any], **filters: Any) -> bool:
         """Check if log entry matches the given filters.
-        
+
         Args:
             log_entry: Parsed log entry
             **filters: Filter criteria
-            
+
         Returns:
             True if entry matches all filters
         """
         for key, value in filters.items():
             if key == "start_time" and "timestamp" in log_entry:
-                entry_time = datetime.fromisoformat(log_entry["timestamp"].replace('Z', '+00:00'))
+                entry_time = datetime.fromisoformat(log_entry["timestamp"].replace("Z", "+00:00"))
                 if entry_time < value:
                     return False
             elif key == "end_time" and "timestamp" in log_entry:
-                entry_time = datetime.fromisoformat(log_entry["timestamp"].replace('Z', '+00:00'))
+                entry_time = datetime.fromisoformat(log_entry["timestamp"].replace("Z", "+00:00"))
                 if entry_time > value:
                     return False
             elif key in log_entry:
@@ -74,10 +74,10 @@ class AuditLogQuery:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         limit: int | None = None,
-        **additional_filters: Any
+        **additional_filters: Any,
     ) -> list[dict[str, Any]]:
         """Query audit logs with filtering support.
-        
+
         Args:
             workspace_id: Filter by workspace ID
             user_id: Filter by user ID (created_by)
@@ -88,7 +88,7 @@ class AuditLogQuery:
             end_time: Filter by end time
             limit: Maximum number of results to return
             **additional_filters: Additional filter criteria
-            
+
         Returns:
             List of matching log entries
         """
@@ -134,16 +134,16 @@ class AuditLogQuery:
         user_context: UserContext,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        limit: int | None = None
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
         """Get activity logs for a specific user in their workspace.
-        
+
         Args:
             user_context: User and workspace context
             start_time: Filter by start time
             end_time: Filter by end time
             limit: Maximum number of results
-            
+
         Returns:
             List of user's activity log entries
         """
@@ -152,7 +152,7 @@ class AuditLogQuery:
             user_id=user_context.user_id,
             start_time=start_time,
             end_time=end_time,
-            limit=limit
+            limit=limit,
         )
 
     def get_workspace_activity(
@@ -160,24 +160,21 @@ class AuditLogQuery:
         workspace_id: str,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        limit: int | None = None
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
         """Get activity logs for an entire workspace.
-        
+
         Args:
             workspace_id: Workspace ID to filter by
             start_time: Filter by start time
             end_time: Filter by end time
             limit: Maximum number of results
-            
+
         Returns:
             List of workspace activity log entries
         """
         return self.query_logs(
-            workspace_id=workspace_id,
-            start_time=start_time,
-            end_time=end_time,
-            limit=limit
+            workspace_id=workspace_id, start_time=start_time, end_time=end_time, limit=limit
         )
 
     def get_resource_history(
@@ -185,16 +182,16 @@ class AuditLogQuery:
         resource_type: str,
         resource_id: str | UUID,
         workspace_id: str | None = None,
-        limit: int | None = None
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
         """Get history for a specific resource.
-        
+
         Args:
             resource_type: Type of resource
             resource_id: ID of the resource
             workspace_id: Optional workspace filter
             limit: Maximum number of results
-            
+
         Returns:
             List of resource history log entries
         """
@@ -202,7 +199,7 @@ class AuditLogQuery:
             resource_type=resource_type,
             resource_id=resource_id,
             workspace_id=workspace_id,
-            limit=limit
+            limit=limit,
         )
 
     def get_error_logs(
@@ -211,17 +208,17 @@ class AuditLogQuery:
         user_id: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        limit: int | None = None
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
         """Get error logs with optional filtering.
-        
+
         Args:
             workspace_id: Filter by workspace ID
             user_id: Filter by user ID
             start_time: Filter by start time
             end_time: Filter by end time
             limit: Maximum number of results
-            
+
         Returns:
             List of error log entries
         """
@@ -231,5 +228,5 @@ class AuditLogQuery:
             user_id=user_id,
             start_time=start_time,
             end_time=end_time,
-            limit=limit
+            limit=limit,
         )

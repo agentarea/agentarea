@@ -48,7 +48,7 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
         "TriggerExecutionORM",
         back_populates="trigger",
         cascade="all, delete-orphan",
-        order_by="TriggerExecutionORM.executed_at.desc()"
+        order_by="TriggerExecutionORM.executed_at.desc()",
     )
 
     def __repr__(self) -> str:
@@ -63,9 +63,7 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
 
     # Basic execution fields
     trigger_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("triggers.id", ondelete="CASCADE"),
-        nullable=False
+        PG_UUID(as_uuid=True), ForeignKey("triggers.id", ondelete="CASCADE"), nullable=False
     )
     executed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -79,10 +77,7 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
     run_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationship to trigger
-    trigger: Mapped["TriggerORM"] = relationship(
-        "TriggerORM",
-        back_populates="executions"
-    )
+    trigger: Mapped["TriggerORM"] = relationship("TriggerORM", back_populates="executions")
 
     def __repr__(self) -> str:
         """Return string representation."""

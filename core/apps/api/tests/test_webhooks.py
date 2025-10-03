@@ -47,17 +47,14 @@ class TestWebhookEndpoints:
         # Setup mock response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 200,
-            "body": {
-                "status": "success",
-                "message": "Webhook processed successfully"
-            }
+            "body": {"status": "success", "message": "Webhook processed successfully"},
         }
 
         # Make request
         response = client.post(
             "/webhooks/test123",
             json={"message": "test data"},
-            headers={"content-type": "application/json"}
+            headers={"content-type": "application/json"},
         )
 
         # Verify response
@@ -76,10 +73,7 @@ class TestWebhookEndpoints:
         # Setup mock response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 200,
-            "body": {
-                "status": "success",
-                "message": "Webhook processed successfully"
-            }
+            "body": {"status": "success", "message": "Webhook processed successfully"},
         }
 
         # Make request
@@ -101,17 +95,14 @@ class TestWebhookEndpoints:
         # Setup mock response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 200,
-            "body": {
-                "status": "success",
-                "message": "Webhook processed successfully"
-            }
+            "body": {"status": "success", "message": "Webhook processed successfully"},
         }
 
         # Make request with form data
         response = client.post(
             "/webhooks/test123",
             data={"field1": "value1", "field2": "value2"},
-            headers={"content-type": "application/x-www-form-urlencoded"}
+            headers={"content-type": "application/x-www-form-urlencoded"},
         )
 
         # Verify response
@@ -130,17 +121,11 @@ class TestWebhookEndpoints:
         # Setup mock error response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 400,
-            "body": {
-                "status": "error",
-                "message": "Webhook validation failed"
-            }
+            "body": {"status": "error", "message": "Webhook validation failed"},
         }
 
         # Make request
-        response = client.post(
-            "/webhooks/test123",
-            json={"invalid": "data"}
-        )
+        response = client.post("/webhooks/test123", json={"invalid": "data"})
 
         # Verify response
         assert response.status_code == 400
@@ -165,14 +150,14 @@ class TestWebhookEndpoints:
         # Setup mock response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 200,
-            "body": {"status": "success"}
+            "body": {"status": "success"},
         }
 
         # Make request with invalid JSON
         response = client.post(
             "/webhooks/test123",
             content='{"invalid": json}',
-            headers={"content-type": "application/json"}
+            headers={"content-type": "application/json"},
         )
 
         # Should still process (body will be None)
@@ -244,7 +229,7 @@ class TestWebhookEndpoints:
         # Setup mock response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 200,
-            "body": {"status": "success"}
+            "body": {"status": "success"},
         }
 
         methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
@@ -261,7 +246,7 @@ class TestWebhookEndpoints:
         # Setup mock response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 200,
-            "body": {"status": "success"}
+            "body": {"status": "success"},
         }
 
         # Make request with query parameters
@@ -285,21 +270,17 @@ class TestWebhookEndpoints:
         # Setup mock response
         mock_webhook_manager.handle_webhook_request.return_value = {
             "status_code": 200,
-            "body": {"status": "success"}
+            "body": {"status": "success"},
         }
 
         # Make request with custom headers
         custom_headers = {
             "x-custom-header": "custom-value",
             "x-webhook-signature": "signature123",
-            "user-agent": "TestBot/1.0"
+            "user-agent": "TestBot/1.0",
         }
 
-        response = client.post(
-            "/webhooks/test123",
-            json={"test": "data"},
-            headers=custom_headers
-        )
+        response = client.post("/webhooks/test123", json={"test": "data"}, headers=custom_headers)
 
         # Verify response
         assert response.status_code == 200

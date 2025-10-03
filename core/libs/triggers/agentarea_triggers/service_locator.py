@@ -12,7 +12,7 @@ _services: dict[str, Any] = {}
 
 def register_service(name: str, service: Any) -> None:
     """Register a service in the service locator.
-    
+
     Args:
         name: The name to register the service under
         service: The service instance to register
@@ -22,13 +22,13 @@ def register_service(name: str, service: Any) -> None:
 
 def get_service(name: str) -> Any:
     """Get a service from the service locator.
-    
+
     Args:
         name: The name of the service to retrieve
-        
+
     Returns:
         The service instance
-        
+
     Raises:
         KeyError: If the service is not registered
     """
@@ -44,10 +44,10 @@ def clear_services() -> None:
 
 def is_service_registered(name: str) -> bool:
     """Check if a service is registered.
-    
+
     Args:
         name: The name of the service to check
-        
+
     Returns:
         True if the service is registered, False otherwise
     """

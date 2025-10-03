@@ -24,12 +24,9 @@ async def test_workflow_with_malformed_tool_calls_in_content():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete a simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 5
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 5},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     activity_calls = []
@@ -57,8 +54,8 @@ async def test_workflow_with_malformed_tool_calls_in_content():
                 "function": {
                     "name": "task_complete",
                     "description": "Mark task as completed",
-                    "parameters": {"type": "object", "properties": {}, "required": []}
-                }
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
             }
         ]
 
@@ -75,7 +72,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
                 "cost": 0,
                 "role": "assistant",
                 "tool_calls": None,  # This is the bug - should contain the tool call
-                "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
+                "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0},
             }
         else:
             # Second call: Another malformed response with arguments
@@ -84,7 +81,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
                 "cost": 0,
                 "role": "assistant",
                 "tool_calls": None,  # Still malformed
-                "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
+                "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0},
             }
 
     @activity.defn(name="execute_mcp_tool_activity")
@@ -96,7 +93,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
                 "success": True,
                 "completed": True,
                 "result": tool_args.get("result", "Task completed"),
-                "tool_name": "task_complete"
+                "tool_name": "task_complete",
             }
             logger.info(f"Mock task_complete returning: {result}")
             return result
@@ -120,7 +117,7 @@ async def test_workflow_with_malformed_tool_calls_in_content():
             mock_call_llm,
             mock_execute_tool,
             mock_evaluate_goal,
-            mock_publish_events
+            mock_publish_events,
         ]
 
         async with Worker(
@@ -136,16 +133,22 @@ async def test_workflow_with_malformed_tool_calls_in_content():
                 execution_request,
                 id=f"test-workflow-{uuid4()}",
                 task_queue="test-queue",
-                execution_timeout=timedelta(seconds=15)
+                execution_timeout=timedelta(seconds=15),
             )
 
-            logger.info(f"Workflow completed: success={result.success}, iterations={result.reasoning_iterations_used}")
+            logger.info(
+                f"Workflow completed: success={result.success}, iterations={result.reasoning_iterations_used}"
+            )
             logger.info(f"Activity calls: {activity_calls}")
 
             # Should complete successfully despite malformed responses
             assert result.success is True, f"Expected success=True, got {result.success}"
-            assert "execute_tool_task_complete" in activity_calls, "Should have executed task_complete tool"
-            assert result.reasoning_iterations_used >= 1, "Should have completed at least 1 iteration"
+            assert "execute_tool_task_complete" in activity_calls, (
+                "Should have executed task_complete tool"
+            )
+            assert result.reasoning_iterations_used >= 1, (
+                "Should have completed at least 1 iteration"
+            )
 
     finally:
         await env.shutdown()
@@ -160,12 +163,9 @@ async def test_workflow_with_various_malformed_formats():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Test malformed responses",
-        task_parameters={
-            "success_criteria": ["Task completed"],
-            "max_iterations": 10
-        },
+        task_parameters={"success_criteria": ["Task completed"], "max_iterations": 10},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     activity_calls = []
@@ -179,7 +179,7 @@ async def test_workflow_with_various_malformed_formats():
             "tool_calls": None,
             "role": "assistant",
             "cost": 0,
-            "usage": {"total_tokens": 0}
+            "usage": {"total_tokens": 0},
         },
         # Format 2: Partial JSON in content
         {
@@ -187,7 +187,7 @@ async def test_workflow_with_various_malformed_formats():
             "tool_calls": None,
             "role": "assistant",
             "cost": 0,
-            "usage": {"total_tokens": 0}
+            "usage": {"total_tokens": 0},
         },
         # Format 3: Just mention task_complete
         {
@@ -195,7 +195,7 @@ async def test_workflow_with_various_malformed_formats():
             "tool_calls": None,
             "role": "assistant",
             "cost": 0,
-            "usage": {"total_tokens": 0}
+            "usage": {"total_tokens": 0},
         },
         # Format 4: Malformed JSON
         {
@@ -203,7 +203,7 @@ async def test_workflow_with_various_malformed_formats():
             "tool_calls": None,
             "role": "assistant",
             "cost": 0,
-            "usage": {"total_tokens": 0}
+            "usage": {"total_tokens": 0},
         },
         # Format 5: Finally a proper completion
         {
@@ -211,8 +211,8 @@ async def test_workflow_with_various_malformed_formats():
             "tool_calls": None,
             "role": "assistant",
             "cost": 0,
-            "usage": {"total_tokens": 0}
-        }
+            "usage": {"total_tokens": 0},
+        },
     ]
 
     @activity.defn(name="build_agent_config_activity")
@@ -235,8 +235,8 @@ async def test_workflow_with_various_malformed_formats():
                 "function": {
                     "name": "task_complete",
                     "description": "Mark task as completed",
-                    "parameters": {"type": "object", "properties": {}, "required": []}
-                }
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
             }
         ]
 
@@ -256,7 +256,7 @@ async def test_workflow_with_various_malformed_formats():
                 "tool_calls": None,
                 "role": "assistant",
                 "cost": 0,
-                "usage": {"total_tokens": 0}
+                "usage": {"total_tokens": 0},
             }
 
     @activity.defn(name="execute_mcp_tool_activity")
@@ -267,7 +267,7 @@ async def test_workflow_with_various_malformed_formats():
                 "success": True,
                 "completed": True,
                 "result": tool_args.get("result", "Task completed"),
-                "tool_name": "task_complete"
+                "tool_name": "task_complete",
             }
         return {"success": False, "result": "Unknown tool"}
 
@@ -287,7 +287,7 @@ async def test_workflow_with_various_malformed_formats():
             mock_call_llm,
             mock_execute_tool,
             mock_evaluate_goal,
-            mock_publish_events
+            mock_publish_events,
         ]
 
         async with Worker(
@@ -301,14 +301,18 @@ async def test_workflow_with_various_malformed_formats():
                 execution_request,
                 id=f"test-workflow-{uuid4()}",
                 task_queue="test-queue",
-                execution_timeout=timedelta(seconds=20)
+                execution_timeout=timedelta(seconds=20),
             )
 
-            logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
+            logger.info(
+                f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}"
+            )
             logger.info(f"Activity calls: {activity_calls}")
 
             # Should eventually complete by parsing malformed responses
-            assert "execute_tool_task_complete" in activity_calls, "Should have executed task_complete despite malformed responses"
+            assert "execute_tool_task_complete" in activity_calls, (
+                "Should have executed task_complete despite malformed responses"
+            )
 
     finally:
         await env.shutdown()
@@ -324,12 +328,14 @@ def test_tool_call_extractor_with_production_data():
         "cost": 0,
         "role": "assistant",
         "tool_calls": None,
-        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
+        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0},
     }
 
     tool_calls1 = ToolCallExtractor.extract_tool_calls(message1)
     assert len(tool_calls1) == 1, f"Expected 1 tool call, got {len(tool_calls1)}"
-    assert tool_calls1[0].function["name"] == "task_complete", f"Expected task_complete, got {tool_calls1[0].function['name']}"
+    assert tool_calls1[0].function["name"] == "task_complete", (
+        f"Expected task_complete, got {tool_calls1[0].function['name']}"
+    )
 
     # Test case 2: Production data - second call
     message2 = {
@@ -337,12 +343,14 @@ def test_tool_call_extractor_with_production_data():
         "cost": 0,
         "role": "assistant",
         "tool_calls": None,
-        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
+        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0},
     }
 
     tool_calls2 = ToolCallExtractor.extract_tool_calls(message2)
     assert len(tool_calls2) == 1, f"Expected 1 tool call, got {len(tool_calls2)}"
-    assert tool_calls2[0].function["name"] == "task_complete", f"Expected task_complete, got {tool_calls2[0].function['name']}"
+    assert tool_calls2[0].function["name"] == "task_complete", (
+        f"Expected task_complete, got {tool_calls2[0].function['name']}"
+    )
 
     # Verify arguments are properly extracted
     args = json.loads(tool_calls2[0].function["arguments"])

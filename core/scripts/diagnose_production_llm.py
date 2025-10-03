@@ -8,7 +8,7 @@ import os
 import sys
 
 # Add the core directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
 
@@ -16,10 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 async def test_production_llm_config(
-    provider_type: str,
-    model_name: str,
-    endpoint_url: str = None,
-    api_key: str = None
+    provider_type: str, model_name: str, endpoint_url: str = None, api_key: str = None
 ):
     """Test LLM configuration that matches production."""
     print("🧪 Testing LLM Configuration")
@@ -34,19 +31,16 @@ async def test_production_llm_config(
         provider_type=provider_type,
         model_name=model_name,
         endpoint_url=endpoint_url,
-        api_key=api_key
+        api_key=api_key,
     )
 
     # Test messages that match production
     messages = [
         {
             "role": "system",
-            "content": "You are Test Agent, an AI agent that follows the ReAct (Reasoning + Acting) framework.\n\nComplete tasks efficiently\n\n## Current Task\nGoal: test\n\nSuccess Criteria:\n- Task completed successfully\n\n## Available Tools\n- task_complete: Mark task as completed\n- task_complete: Mark the task as completed when all success criteria are met\n\n## ReAct Framework Instructions\nYou MUST follow this exact pattern for EVERY action you take:\n\n1. **Thought**: First, analyze the current situation and what needs to be done\n2. **Observation**: Note what information you have and what you're missing  \n3. **Action**: Decide on the next action (tool call or response)\n4. **Result**: After a tool call, observe and interpret the results\n\nFor each step, explicitly state your reasoning process using these markers:\n\n**Thought:** [Your reasoning about the current situation]\n**Observation:** [What you observe from previous results or current context]\n**Action:** [What action you decide to take and why]\n\nAfter receiving tool results, always provide:\n**Result Analysis:** [Interpretation of the tool results and what they mean]\n\nExample flow:\n**Thought:** I need to search for information about X to complete the task.\n**Observation:** I don't have current information about X in my knowledge.\n**Action:** I'll use the web_search tool to find recent information.\n[Tool call happens]\n**Result Analysis:** The search returned Y, which shows that...\n**Thought:** Now that I have Y, I need to...\n\nCRITICAL RULES:\n- NEVER call tools without first showing your **Thought** and **Observation**\n- NEVER call task_complete without first demonstrating your work step-by-step\n- You must show your reasoning process for EVERY action, including the final completion\n- The task_complete tool requires detailed summary, reasoning, and result - prepare these thoughtfully\n\nContinue this pattern until the task is complete, then use the task_complete tool with comprehensive details.\n\nRemember: ALWAYS show your reasoning before taking actions. Users want to see your thought process."
+            "content": "You are Test Agent, an AI agent that follows the ReAct (Reasoning + Acting) framework.\n\nComplete tasks efficiently\n\n## Current Task\nGoal: test\n\nSuccess Criteria:\n- Task completed successfully\n\n## Available Tools\n- task_complete: Mark task as completed\n- task_complete: Mark the task as completed when all success criteria are met\n\n## ReAct Framework Instructions\nYou MUST follow this exact pattern for EVERY action you take:\n\n1. **Thought**: First, analyze the current situation and what needs to be done\n2. **Observation**: Note what information you have and what you're missing  \n3. **Action**: Decide on the next action (tool call or response)\n4. **Result**: After a tool call, observe and interpret the results\n\nFor each step, explicitly state your reasoning process using these markers:\n\n**Thought:** [Your reasoning about the current situation]\n**Observation:** [What you observe from previous results or current context]\n**Action:** [What action you decide to take and why]\n\nAfter receiving tool results, always provide:\n**Result Analysis:** [Interpretation of the tool results and what they mean]\n\nExample flow:\n**Thought:** I need to search for information about X to complete the task.\n**Observation:** I don't have current information about X in my knowledge.\n**Action:** I'll use the web_search tool to find recent information.\n[Tool call happens]\n**Result Analysis:** The search returned Y, which shows that...\n**Thought:** Now that I have Y, I need to...\n\nCRITICAL RULES:\n- NEVER call tools without first showing your **Thought** and **Observation**\n- NEVER call task_complete without first demonstrating your work step-by-step\n- You must show your reasoning process for EVERY action, including the final completion\n- The task_complete tool requires detailed summary, reasoning, and result - prepare these thoughtfully\n\nContinue this pattern until the task is complete, then use the task_complete tool with comprehensive details.\n\nRemember: ALWAYS show your reasoning before taking actions. Users want to see your thought process.",
         },
-        {
-            "role": "user",
-            "content": "test"
-        }
+        {"role": "user", "content": "test"},
     ]
 
     tools = [
@@ -60,12 +54,12 @@ async def test_production_llm_config(
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary of what was accomplished"
+                            "description": "Optional final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -73,7 +67,7 @@ async def test_production_llm_config(
         messages=messages,
         tools=tools,
         temperature=None,  # Use model defaults
-        max_tokens=None    # Use model defaults
+        max_tokens=None,  # Use model defaults
     )
 
     try:
@@ -90,7 +84,9 @@ async def test_production_llm_config(
 
             if chunk.content:
                 complete_content += chunk.content
-                print(f"📝 Chunk {chunk_count}: '{chunk.content[:50]}{'...' if len(chunk.content) > 50 else ''}'")
+                print(
+                    f"📝 Chunk {chunk_count}: '{chunk.content[:50]}{'...' if len(chunk.content) > 50 else ''}'"
+                )
 
             if chunk.tool_calls:
                 complete_tool_calls = chunk.tool_calls
@@ -119,6 +115,7 @@ async def test_production_llm_config(
                 try:
                     # Look for JSON patterns
                     import re
+
                     json_patterns = [
                         r'\{\s*"name"\s*:\s*"task_complete"[^}]*\}',
                         r'\{\s*"name"\s*:\s*"task_complete"[^}]*"arguments"[^}]*\}',
@@ -148,17 +145,13 @@ async def test_production_llm_config(
             "tool_calls": complete_tool_calls,
             "cost": final_cost,
             "chunks": chunk_count,
-            "malformed": not complete_tool_calls and "task_complete" in complete_content.lower()
+            "malformed": not complete_tool_calls and "task_complete" in complete_content.lower(),
         }
 
     except Exception as e:
         print(f"\n❌ LLM call failed: {e}")
         print(f"Error type: {type(e).__name__}")
-        return {
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
+        return {"success": False, "error": str(e), "error_type": type(e).__name__}
 
 
 async def main():
@@ -173,22 +166,22 @@ async def main():
             "provider_type": "ollama_chat",
             "model_name": "qwen2.5",
             "endpoint_url": f"http://{os.environ.get('LLM_DOCKER_HOST', 'localhost')}:11434",
-            "api_key": None
+            "api_key": None,
         },
         {
             "name": "OpenAI GPT-3.5 (if API key provided)",
             "provider_type": "openai",
             "model_name": "gpt-3.5-turbo",
             "endpoint_url": None,
-            "api_key": os.environ.get("OPENAI_API_KEY")
+            "api_key": os.environ.get("OPENAI_API_KEY"),
         },
         {
             "name": "Claude (if API key provided)",
             "provider_type": "anthropic",
             "model_name": "claude-3-haiku-20240307",
             "endpoint_url": None,
-            "api_key": os.environ.get("ANTHROPIC_API_KEY")
-        }
+            "api_key": os.environ.get("ANTHROPIC_API_KEY"),
+        },
     ]
 
     # Allow custom configuration via command line
@@ -198,7 +191,7 @@ async def main():
             "provider_type": sys.argv[1],
             "model_name": sys.argv[2],
             "endpoint_url": sys.argv[3] if len(sys.argv) > 3 else None,
-            "api_key": sys.argv[4] if len(sys.argv) > 4 else None
+            "api_key": sys.argv[4] if len(sys.argv) > 4 else None,
         }
         test_configs = [custom_config]
         print(f"Using custom configuration: {sys.argv[1]}/{sys.argv[2]}")
@@ -217,7 +210,7 @@ async def main():
             provider_type=config["provider_type"],
             model_name=config["model_name"],
             endpoint_url=config["endpoint_url"],
-            api_key=config["api_key"]
+            api_key=config["api_key"],
         )
 
         result["config"] = config
@@ -247,7 +240,9 @@ async def main():
             working_configs.append(config_name)
             print(f"✅ {config_name}: WORKING CORRECTLY")
 
-    print(f"\n📊 Results: {len(working_configs)} working, {len(malformed_configs)} malformed, {len(failed_configs)} failed")
+    print(
+        f"\n📊 Results: {len(working_configs)} working, {len(malformed_configs)} malformed, {len(failed_configs)} failed"
+    )
 
     if malformed_configs:
         print(f"\n🎯 MALFORMED RESPONSE SOURCES: {', '.join(malformed_configs)}")
@@ -263,8 +258,12 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help"]:
         print("Usage:")
-        print("  python diagnose_production_llm.py                                    # Test all known configurations")
-        print("  python diagnose_production_llm.py <provider> <model> [endpoint] [key] # Test custom configuration")
+        print(
+            "  python diagnose_production_llm.py                                    # Test all known configurations"
+        )
+        print(
+            "  python diagnose_production_llm.py <provider> <model> [endpoint] [key] # Test custom configuration"
+        )
         print("")
         print("Examples:")
         print("  python diagnose_production_llm.py                                    # Test all")

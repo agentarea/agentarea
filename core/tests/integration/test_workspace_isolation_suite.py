@@ -30,20 +30,27 @@ def run_test_suite():
         print("-" * 40)
 
         try:
-            result = subprocess.run([
-                sys.executable, "-m", "pytest",
-                test_file,
-                "-v",
-                "--tb=short",
-                "--disable-warnings"
-            ], capture_output=True, text=True, cwd=Path(__file__).parent)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    test_file,
+                    "-v",
+                    "--tb=short",
+                    "--disable-warnings",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=Path(__file__).parent,
+            )
 
             if result.returncode == 0:
                 print(f"✅ {test_file} - ALL TESTS PASSED")
                 # Count passed tests from output
-                lines = result.stdout.split('\n')
+                lines = result.stdout.split("\n")
                 for line in lines:
-                    if 'passed' in line and 'failed' not in line:
+                    if "passed" in line and "failed" not in line:
                         try:
                             passed = int(line.split()[0])
                             total_passed += passed
@@ -54,13 +61,13 @@ def run_test_suite():
                 print(f"❌ {test_file} - SOME TESTS FAILED")
                 failed_files.append(test_file)
                 # Count failed and passed tests
-                lines = result.stdout.split('\n')
+                lines = result.stdout.split("\n")
                 for line in lines:
-                    if 'failed' in line and 'passed' in line:
+                    if "failed" in line and "passed" in line:
                         try:
                             parts = line.split()
                             failed = int(parts[0])
-                            passed_idx = parts.index('passed,') - 1
+                            passed_idx = parts.index("passed,") - 1
                             passed = int(parts[passed_idx])
                             total_failed += failed
                             total_passed += passed

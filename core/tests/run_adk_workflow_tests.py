@@ -18,8 +18,7 @@ sys.path.insert(0, str(core_dir))
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ def check_database():
                     port=5432,
                     user="postgres",
                     password="postgres",
-                    database="aiagents"
+                    database="aiagents",
                 )
                 await conn.close()
                 return True
@@ -69,13 +68,7 @@ def run_unit_tests():
 
     test_file = core_dir / "tests" / "unit" / "test_adk_agent_workflow_unit.py"
 
-    cmd = [
-        sys.executable, "-m", "pytest",
-        str(test_file),
-        "-v",
-        "-m", "unit",
-        "--tb=short"
-    ]
+    cmd = [sys.executable, "-m", "pytest", str(test_file), "-v", "-m", "unit", "--tb=short"]
 
     result = subprocess.run(cmd, cwd=core_dir)
     return result.returncode == 0
@@ -101,12 +94,15 @@ def run_integration_tests():
     test_file = core_dir / "tests" / "integration" / "test_adk_agent_workflow_comprehensive.py"
 
     cmd = [
-        sys.executable, "-m", "pytest",
+        sys.executable,
+        "-m",
+        "pytest",
         str(test_file),
         "-v",
-        "-m", "integration",
+        "-m",
+        "integration",
         "--tb=short",
-        "-x"  # Stop on first failure
+        "-x",  # Stop on first failure
     ]
 
     # Set environment variables
@@ -184,10 +180,10 @@ def main():
         elif test_type == "all":
             logger.info("🎯 Running all tests...")
             success = (
-                run_unit_tests() and
-                run_integration_tests() and
-                run_test_worker() and
-                run_math_test()
+                run_unit_tests()
+                and run_integration_tests()
+                and run_test_worker()
+                and run_math_test()
             )
         else:
             logger.error(f"❌ Unknown test type: {test_type}")

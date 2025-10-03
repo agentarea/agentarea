@@ -29,10 +29,10 @@ class TaskEventService:
         event_type: str,
         data: dict,
         workspace_id: str = "default",
-        created_by: str = "workflow"
+        created_by: str = "workflow",
     ) -> TaskEvent:
         """Create and persist a workflow event.
-        
+
         This is the proper way to handle workflow events instead of
         direct database access in activities.
         """
@@ -43,7 +43,7 @@ class TaskEventService:
                 event_type=event_type,
                 data=data,
                 workspace_id=workspace_id,
-                created_by=created_by
+                created_by=created_by,
             )
 
             # Persist using repository
@@ -58,31 +58,22 @@ class TaskEventService:
             raise
 
     async def get_task_events(
-        self,
-        task_id: UUID,
-        limit: int = 100,
-        offset: int = 0
+        self, task_id: UUID, limit: int = 100, offset: int = 0
     ) -> list[TaskEvent]:
         """Get events for a specific task."""
         task_event_repository = self.repository_factory.create_repository(TaskEventRepository)
         return await task_event_repository.get_events_for_task(task_id, limit, offset)
 
     async def get_events_by_type(
-        self,
-        event_type: str,
-        limit: int = 100,
-        offset: int = 0
+        self, event_type: str, limit: int = 100, offset: int = 0
     ) -> list[TaskEvent]:
         """Get events by type."""
         task_event_repository = self.repository_factory.create_repository(TaskEventRepository)
         return await task_event_repository.get_events_by_type(event_type, limit, offset)
 
-    async def create_multiple_events(
-        self,
-        events_data: list[dict]
-    ) -> list[TaskEvent]:
+    async def create_multiple_events(self, events_data: list[dict]) -> list[TaskEvent]:
         """Create multiple workflow events efficiently.
-        
+
         This is useful for batch processing workflow events.
         """
         created_events = []
@@ -94,12 +85,14 @@ class TaskEventService:
                     event_type=event_data["event_type"],
                     data=event_data.get("data", {}),
                     workspace_id=event_data.get("workspace_id", "default"),
-                    created_by=event_data.get("created_by", "workflow")
+                    created_by=event_data.get("created_by", "workflow"),
                 )
                 created_events.append(event)
 
             except Exception as e:
-                logger.error(f"Failed to create event {event_data.get('event_type', 'unknown')}: {e}")
+                logger.error(
+                    f"Failed to create event {event_data.get('event_type', 'unknown')}: {e}"
+                )
                 # Continue processing other events
                 continue
 

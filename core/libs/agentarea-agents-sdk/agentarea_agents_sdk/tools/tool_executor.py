@@ -46,9 +46,7 @@ class ToolExecutor:
             # If not found, try to create MCP tool dynamically
             if server_instance_id and mcp_server_instance_service:
                 mcp_tool = await self._create_mcp_tool(
-                    tool_name,
-                    server_instance_id,
-                    mcp_server_instance_service
+                    tool_name, server_instance_id, mcp_server_instance_service
                 )
                 if mcp_tool:
                     logger.info(f"Executing MCP tool '{tool_name}' with args: {tool_args}")
@@ -76,14 +74,23 @@ class ToolExecutor:
             # Ensure instance exists and is running
             instance = await mcp_server_instance_service.get(server_instance_id)
             if not instance:
-                logger.warning(f"MCP instance {server_instance_id} not found for dynamic tool creation")
+                logger.warning(
+                    f"MCP instance {server_instance_id} not found for dynamic tool creation"
+                )
                 return None
             if getattr(instance, "status", None) != "running":
-                logger.info(f"MCP instance {server_instance_id} is not running; cannot create tool '{tool_name}'")
+                logger.info(
+                    f"MCP instance {server_instance_id} is not running; cannot create tool '{tool_name}'"
+                )
                 return None
 
             # Attempt to fetch tool definitions from service
-            discovery_methods = ("list_tools", "get_tools", "discover_tools", "discover_available_tools")
+            discovery_methods = (
+                "list_tools",
+                "get_tools",
+                "discover_tools",
+                "discover_available_tools",
+            )
             tools_payload = None
             for method in discovery_methods:
                 fn = getattr(mcp_server_instance_service, method, None)

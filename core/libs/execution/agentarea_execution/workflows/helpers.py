@@ -14,7 +14,9 @@ from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
 class EventManager:
     """Manages workflow events with consistent formatting."""
 
-    def __init__(self, task_id: str, agent_id: str, execution_id: str, publish_immediately: bool = True):
+    def __init__(
+        self, task_id: str, agent_id: str, execution_id: str, publish_immediately: bool = True
+    ):
         self.task_id = task_id
         self.agent_id = agent_id
         self.execution_id = execution_id
@@ -32,8 +34,8 @@ class EventManager:
                 "task_id": self.task_id,
                 "agent_id": self.agent_id,
                 "execution_id": self.execution_id,
-                **data
-            }
+                **data,
+            },
         }
         self._events.append(event)
 
@@ -105,22 +107,17 @@ class BudgetTracker:
     def get_warning_message(self) -> str:
         """Get budget warning message."""
         return MessageTemplates.BUDGET_WARNING.format(
-            percentage=self.get_usage_percentage(),
-            used=self.cost,
-            total=self.budget_limit
+            percentage=self.get_usage_percentage(), used=self.cost, total=self.budget_limit
         )
 
     def get_exceeded_message(self) -> str:
         """Get budget exceeded message."""
-        return MessageTemplates.BUDGET_EXCEEDED.format(
-            used=self.cost,
-            total=self.budget_limit
-        )
+        return MessageTemplates.BUDGET_EXCEEDED.format(used=self.cost, total=self.budget_limit)
 
 
 class MessageBuilder:
     """Enhanced message builder with ReAct framework support.
-    
+
     Provides improved prompting strategies including ReAct (Reasoning + Acting) framework
     for better agent reasoning and decision-making.
     """
@@ -128,13 +125,13 @@ class MessageBuilder:
     @staticmethod
     def normalize_message_dict(message_dict: dict[str, Any]) -> dict[str, Any]:
         """Normalize message dict by removing None values to match agent SDK format.
-        
+
         This ensures consistent message formatting between the agent SDK and execution workflow.
         The agent SDK only includes fields with actual values, so we follow the same pattern.
-        
+
         Args:
             message_dict: Raw message dictionary that may contain None values
-            
+
         Returns:
             Normalized message dictionary with None values filtered out
         """
@@ -157,7 +154,7 @@ class MessageBuilder:
         agent_instruction: str,
         goal_description: str,
         success_criteria: list[str],
-        available_tools: list[dict[str, Any]]
+        available_tools: list[dict[str, Any]],
     ) -> str:
         """Build system prompt with ReAct framework instructions."""
         return PromptBuilder.build_react_system_prompt(
@@ -165,7 +162,7 @@ class MessageBuilder:
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=success_criteria,
-            available_tools=available_tools
+            available_tools=available_tools,
         )
 
     @staticmethod
@@ -223,7 +220,7 @@ class ToolCallExtractor:
     @staticmethod
     def extract_tool_calls(message: Any) -> list[Any]:
         """Extract tool calls from LLM response message and return ToolCall objects.
-        
+
         Handles multiple formats:
         1. Standard format: tool_calls field contains proper tool call objects
         2. Malformed format: tool_calls is null but content contains JSON tool call data
@@ -239,15 +236,15 @@ class ToolCallExtractor:
         tool_calls = None
         content = None
 
-        if hasattr(message, 'tool_calls'):
+        if hasattr(message, "tool_calls"):
             tool_calls = message.tool_calls
-        elif isinstance(message, dict) and 'tool_calls' in message:
-            tool_calls = message['tool_calls']
+        elif isinstance(message, dict) and "tool_calls" in message:
+            tool_calls = message["tool_calls"]
 
-        if hasattr(message, 'content'):
+        if hasattr(message, "content"):
             content = message.content
-        elif isinstance(message, dict) and 'content' in message:
-            content = message['content']
+        elif isinstance(message, dict) and "content" in message:
+            content = message["content"]
 
         result = []
 
@@ -256,24 +253,28 @@ class ToolCallExtractor:
             for i, tool_call in enumerate(tool_calls):
                 if isinstance(tool_call, dict):
                     # Handle dict format from LLM activity
-                    result.append(ToolCall(
-                        id=tool_call.get("id", f"call_{i}"),
-                        type=tool_call.get("type", "function"),
-                        function={
-                            "name": tool_call.get("function", {}).get("name", ""),
-                            "arguments": tool_call.get("function", {}).get("arguments", "{}"),
-                        }
-                    ))
+                    result.append(
+                        ToolCall(
+                            id=tool_call.get("id", f"call_{i}"),
+                            type=tool_call.get("type", "function"),
+                            function={
+                                "name": tool_call.get("function", {}).get("name", ""),
+                                "arguments": tool_call.get("function", {}).get("arguments", "{}"),
+                            },
+                        )
+                    )
                 else:
                     # Handle object format (if any)
-                    result.append(ToolCall(
-                        id=getattr(tool_call, 'id', f"call_{i}"),
-                        type=getattr(tool_call, 'type', "function"),
-                        function={
-                            "name": getattr(tool_call.function, 'name', ''),
-                            "arguments": getattr(tool_call.function, 'arguments', '{}'),
-                        }
-                    ))
+                    result.append(
+                        ToolCall(
+                            id=getattr(tool_call, "id", f"call_{i}"),
+                            type=getattr(tool_call, "type", "function"),
+                            function={
+                                "name": getattr(tool_call.function, "name", ""),
+                                "arguments": getattr(tool_call.function, "arguments", "{}"),
+                            },
+                        )
+                    )
 
         # Method 2: Extract from malformed content field (for production bug)
         if not result and content and isinstance(content, str):
@@ -288,14 +289,13 @@ class ToolCallExtractor:
                     elif not isinstance(arguments, str):
                         arguments = json.dumps(arguments)
 
-                    result.append(ToolCall(
-                        id="call_from_content_0",
-                        type="function",
-                        function={
-                            "name": parsed_content["name"],
-                            "arguments": arguments
-                        }
-                    ))
+                    result.append(
+                        ToolCall(
+                            id="call_from_content_0",
+                            type="function",
+                            function={"name": parsed_content["name"], "arguments": arguments},
+                        )
+                    )
             except (json.JSONDecodeError, KeyError, TypeError):
                 # Method 3: Extract using regex patterns for embedded JSON
                 try:
@@ -308,24 +308,25 @@ class ToolCallExtractor:
                         try:
                             # Validate arguments JSON
                             json.loads(args_str)
-                            result.append(ToolCall(
-                                id=f"call_from_regex_{i}",
-                                type="function",
-                                function={
-                                    "name": tool_name,
-                                    "arguments": args_str
-                                }
-                            ))
+                            result.append(
+                                ToolCall(
+                                    id=f"call_from_regex_{i}",
+                                    type="function",
+                                    function={"name": tool_name, "arguments": args_str},
+                                )
+                            )
                         except json.JSONDecodeError:
                             # If arguments aren't valid JSON, wrap them
-                            result.append(ToolCall(
-                                id=f"call_from_regex_{i}",
-                                type="function",
-                                function={
-                                    "name": tool_name,
-                                    "arguments": json.dumps({"raw_args": args_str})
-                                }
-                            ))
+                            result.append(
+                                ToolCall(
+                                    id=f"call_from_regex_{i}",
+                                    type="function",
+                                    function={
+                                        "name": tool_name,
+                                        "arguments": json.dumps({"raw_args": args_str}),
+                                    },
+                                )
+                            )
 
                     # Pattern 2: Look for task_complete specifically (common case)
                     if not result and "task_complete" in content.lower():
@@ -339,58 +340,53 @@ class ToolCallExtractor:
                             # No arguments found, use empty object
                             args_str = "{}"
 
-                        result.append(ToolCall(
-                            id="call_task_complete_fallback",
-                            type="function",
-                            function={
-                                "name": "task_complete",
-                                "arguments": args_str
-                            }
-                        ))
+                        result.append(
+                            ToolCall(
+                                id="call_task_complete_fallback",
+                                type="function",
+                                function={"name": "task_complete", "arguments": args_str},
+                            )
+                        )
 
                 except Exception:
                     # If all parsing fails, but we detect task_complete, create a basic call
                     if "task_complete" in content.lower():
-                        result.append(ToolCall(
-                            id="call_task_complete_emergency",
-                            type="function",
-                            function={
-                                "name": "task_complete",
-                                "arguments": "{}"
-                            }
-                        ))
+                        result.append(
+                            ToolCall(
+                                id="call_task_complete_emergency",
+                                type="function",
+                                function={"name": "task_complete", "arguments": "{}"},
+                            )
+                        )
 
         return result
 
     @staticmethod
     def extract_usage_info(response: Any) -> dict[str, Any]:
         """Extract usage and cost information from LLM response."""
-        usage_info = {
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-            "cost": 0.0
-        }
+        usage_info = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0}
 
-        if not hasattr(response, 'usage') or not response.usage:
+        if not hasattr(response, "usage") or not response.usage:
             return usage_info
 
         usage = response.usage
-        usage_info.update({
-            "prompt_tokens": getattr(usage, 'prompt_tokens', 0),
-            "completion_tokens": getattr(usage, 'completion_tokens', 0),
-            "total_tokens": getattr(usage, 'total_tokens', 0),
-        })
+        usage_info.update(
+            {
+                "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+                "completion_tokens": getattr(usage, "completion_tokens", 0),
+                "total_tokens": getattr(usage, "total_tokens", 0),
+            }
+        )
 
         # Calculate cost
         cost = 0.0
-        if hasattr(usage, 'completion_tokens_cost'):
-            cost += getattr(usage, 'completion_tokens_cost', 0.0)
-        if hasattr(usage, 'prompt_tokens_cost'):
-            cost += getattr(usage, 'prompt_tokens_cost', 0.0)
-        elif hasattr(usage, 'total_tokens'):
+        if hasattr(usage, "completion_tokens_cost"):
+            cost += getattr(usage, "completion_tokens_cost", 0.0)
+        if hasattr(usage, "prompt_tokens_cost"):
+            cost += getattr(usage, "prompt_tokens_cost", 0.0)
+        elif hasattr(usage, "total_tokens"):
             # Fallback estimate: $0.01 per 1K tokens
-            cost = getattr(usage, 'total_tokens', 0) * 0.00001
+            cost = getattr(usage, "total_tokens", 0) * 0.00001
 
         usage_info["cost"] = cost
         return usage_info

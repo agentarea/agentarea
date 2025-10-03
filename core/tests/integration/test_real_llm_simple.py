@@ -20,6 +20,7 @@ class SimpleMockedDependencies:
 
     class TestSecretManager:
         """Real secret manager for LLM providers."""
+
         async def get_secret(self, secret_name: str) -> str:
             # For Ollama, return empty string (no API key needed)
             if "ollama" in secret_name.lower():
@@ -29,6 +30,7 @@ class SimpleMockedDependencies:
 
     class TestEventBroker:
         """Real event broker that logs events."""
+
         def __init__(self):
             self.published_events = []
             self.broker = self  # Add broker attribute to avoid errors
@@ -65,7 +67,7 @@ async def test_real_llm_with_activity_mocking():
             "model_id": "66666666-6666-6666-6666-666666666666",
             "tools_config": {},
             "events_config": {},
-            "planning": False
+            "planning": False,
         }
 
     # Mock the discover_tools activity
@@ -82,24 +84,24 @@ async def test_real_llm_with_activity_mocking():
                         "properties": {
                             "result": {
                                 "type": "string",
-                                "description": "Optional final result or summary of what was accomplished"
+                                "description": "Optional final result or summary of what was accomplished",
                             }
                         },
-                        "required": []
-                    }
-                }
+                        "required": [],
+                    },
+                },
             }
         ]
 
     # Mock the call_llm activity to use real LLM but with mocked model lookup
     original_call_llm = None
     for i, activity_func in enumerate(activities):
-        if hasattr(activity_func, '__name__'):
-            if 'build_agent_config' in activity_func.__name__:
+        if hasattr(activity_func, "__name__"):
+            if "build_agent_config" in activity_func.__name__:
                 activities[i] = mock_build_agent_config
-            elif 'discover_tools' in activity_func.__name__:
+            elif "discover_tools" in activity_func.__name__:
                 activities[i] = mock_discover_tools
-            elif 'call_llm' in activity_func.__name__:
+            elif "call_llm" in activity_func.__name__:
                 original_call_llm = activity_func
 
     if not original_call_llm:
@@ -107,8 +109,15 @@ async def test_real_llm_with_activity_mocking():
 
     # Create a wrapper for the LLM activity that mocks the model lookup
     async def mock_call_llm_with_real_inference(
-        messages, model_id, tools, workspace_id, temperature=0.1, max_tokens=500,
-        task_id=None, agent_id=None, execution_id=None
+        messages,
+        model_id,
+        tools,
+        workspace_id,
+        temperature=0.1,
+        max_tokens=500,
+        task_id=None,
+        agent_id=None,
+        execution_id=None,
     ):
         logger.info("🚀 Real LLM call with mocked model lookup")
         logger.info(f"📝 Messages: {len(messages)} messages")
@@ -116,29 +125,33 @@ async def test_real_llm_with_activity_mocking():
         logger.info(f"🎯 Model ID: {model_id} (will use real Ollama)")
 
         # Mock the model instance lookup to return Ollama configuration
-        with patch('agentarea_llm.infrastructure.model_instance_repository.ModelInstanceRepository') as mock_repo:
+        with patch(
+            "agentarea_llm.infrastructure.model_instance_repository.ModelInstanceRepository"
+        ) as mock_repo:
             mock_instance = mock_repo.return_value
-            mock_instance.get_model_with_provider = AsyncMock(return_value={
-                "id": model_id,
-                "name": "Test Qwen 2.5",
-                "config": {},
-                "provider_config": {
-                    "id": "ollama-provider-config",
-                    "name": "Local Ollama",
-                    "config": {"endpoint_url": "http://localhost:11434"},
-                    "api_key": None
-                },
-                "provider_spec": {
-                    "id": "ollama-provider-spec",
-                    "provider_type": "ollama_chat",
-                    "name": "Ollama Chat"
-                },
-                "model_spec": {
-                    "id": "qwen25-model-spec",
-                    "model_name": "qwen2.5",
-                    "description": "Qwen 2.5 model"
+            mock_instance.get_model_with_provider = AsyncMock(
+                return_value={
+                    "id": model_id,
+                    "name": "Test Qwen 2.5",
+                    "config": {},
+                    "provider_config": {
+                        "id": "ollama-provider-config",
+                        "name": "Local Ollama",
+                        "config": {"endpoint_url": "http://localhost:11434"},
+                        "api_key": None,
+                    },
+                    "provider_spec": {
+                        "id": "ollama-provider-spec",
+                        "provider_type": "ollama_chat",
+                        "name": "Ollama Chat",
+                    },
+                    "model_spec": {
+                        "id": "qwen25-model-spec",
+                        "model_name": "qwen2.5",
+                        "description": "Qwen 2.5 model",
+                    },
                 }
-            })
+            )
 
             logger.info("📡 Starting real LLM call...")
 
@@ -152,15 +165,15 @@ async def test_real_llm_with_activity_mocking():
                 max_tokens=max_tokens,
                 task_id=task_id,
                 agent_id=agent_id,
-                execution_id=execution_id
+                execution_id=execution_id,
             )
 
             logger.info("✅ Real LLM call completed")
 
             # Analyze the result
-            content = result.get('content', '')
-            tool_calls = result.get('tool_calls', [])
-            cost = result.get('cost', 0)
+            content = result.get("content", "")
+            tool_calls = result.get("tool_calls", [])
+            cost = result.get("cost", 0)
 
             logger.info("=" * 60)
             logger.info("🎯 REAL LLM RESPONSE ANALYSIS")
@@ -173,7 +186,7 @@ async def test_real_llm_with_activity_mocking():
                 logger.info("✅ Response format is CORRECT - tool calls properly returned")
                 for i, tc in enumerate(tool_calls):
                     logger.info(f"   Tool {i}: {tc.get('function', {}).get('name', 'unknown')}")
-            elif content and ('task_complete' in content or '"function"' in content):
+            elif content and ("task_complete" in content or '"function"' in content):
                 logger.warning("🚨 Response format is MALFORMED - tool calls in content")
                 logger.warning(f"Content preview: {content[:200]}...")
             else:
@@ -185,7 +198,7 @@ async def test_real_llm_with_activity_mocking():
 
     # Replace the call_llm activity
     for i, activity_func in enumerate(activities):
-        if hasattr(activity_func, '__name__') and 'call_llm' in activity_func.__name__:
+        if hasattr(activity_func, "__name__") and "call_llm" in activity_func.__name__:
             activities[i] = mock_call_llm_with_real_inference
             break
 
@@ -195,12 +208,9 @@ async def test_real_llm_with_activity_mocking():
         task_id=str(uuid4()),
         user_id="test-user-id",
         task_query="test",  # Simple task like production
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     logger.info(f"🤖 Agent ID: {execution_request.agent_id}")
@@ -225,7 +235,7 @@ async def test_real_llm_with_activity_mocking():
                     execution_request,
                     id=f"simple-llm-test-{uuid4()}",
                     task_queue="simple-llm-test-queue",
-                    execution_timeout=timedelta(minutes=2)
+                    execution_timeout=timedelta(minutes=2),
                 )
 
                 logger.info("=" * 60)
@@ -243,20 +253,24 @@ async def test_real_llm_with_activity_mocking():
                 proper_tool_calls = 0
 
                 for i, msg in enumerate(result.conversation_history):
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')
-                    tool_calls = msg.get('tool_calls', [])
+                    role = msg.get("role", "unknown")
+                    content = msg.get("content", "")
+                    tool_calls = msg.get("tool_calls", [])
 
-                    if role == 'assistant':
+                    if role == "assistant":
                         content_len = len(content) if content else 0
                         has_tool_calls = bool(tool_calls)
 
-                        logger.info(f"📝 Message {i} ({role}): {content_len} chars, tool_calls: {has_tool_calls}")
+                        logger.info(
+                            f"📝 Message {i} ({role}): {content_len} chars, tool_calls: {has_tool_calls}"
+                        )
 
                         if has_tool_calls:
                             proper_tool_calls += 1
                             logger.info(f"✅ Message {i}: Proper tool calls detected")
-                        elif content and ('task_complete' in content or 'function' in content.lower()):
+                        elif content and (
+                            "task_complete" in content or "function" in content.lower()
+                        ):
                             malformed_responses += 1
                             logger.warning(f"🚨 Message {i}: Potential malformed response detected")
                             logger.warning(f"   Content preview: {content[:200]}...")
@@ -313,7 +327,7 @@ async def test_direct_real_llm_call():
     # Find the call_llm activity
     call_llm_activity = None
     for activity_func in activities:
-        if hasattr(activity_func, '__name__') and 'call_llm' in activity_func.__name__:
+        if hasattr(activity_func, "__name__") and "call_llm" in activity_func.__name__:
             call_llm_activity = activity_func
             break
 
@@ -324,12 +338,12 @@ async def test_direct_real_llm_call():
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool to mark it as completed."
+            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool to mark it as completed.",
         },
         {
             "role": "user",
-            "content": "test"  # Same simple query as production
-        }
+            "content": "test",  # Same simple query as production
+        },
     ]
 
     tools = [
@@ -343,12 +357,12 @@ async def test_direct_real_llm_call():
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary of what was accomplished"
+                            "description": "Optional final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -357,29 +371,33 @@ async def test_direct_real_llm_call():
     logger.info(f"🔧 Tools: {len(tools)} tools")
 
     # Mock the model instance lookup
-    with patch('agentarea_llm.infrastructure.model_instance_repository.ModelInstanceRepository') as mock_repo:
+    with patch(
+        "agentarea_llm.infrastructure.model_instance_repository.ModelInstanceRepository"
+    ) as mock_repo:
         mock_instance = mock_repo.return_value
-        mock_instance.get_model_with_provider = AsyncMock(return_value={
-            "id": "66666666-6666-6666-6666-666666666666",
-            "name": "Test Qwen 2.5",
-            "config": {},
-            "provider_config": {
-                "id": "ollama-provider-config",
-                "name": "Local Ollama",
-                "config": {"endpoint_url": "http://localhost:11434"},
-                "api_key": None
-            },
-            "provider_spec": {
-                "id": "ollama-provider-spec",
-                "provider_type": "ollama_chat",
-                "name": "Ollama Chat"
-            },
-            "model_spec": {
-                "id": "qwen25-model-spec",
-                "model_name": "qwen2.5",
-                "description": "Qwen 2.5 model"
+        mock_instance.get_model_with_provider = AsyncMock(
+            return_value={
+                "id": "66666666-6666-6666-6666-666666666666",
+                "name": "Test Qwen 2.5",
+                "config": {},
+                "provider_config": {
+                    "id": "ollama-provider-config",
+                    "name": "Local Ollama",
+                    "config": {"endpoint_url": "http://localhost:11434"},
+                    "api_key": None,
+                },
+                "provider_spec": {
+                    "id": "ollama-provider-spec",
+                    "provider_type": "ollama_chat",
+                    "name": "Ollama Chat",
+                },
+                "model_spec": {
+                    "id": "qwen25-model-spec",
+                    "model_name": "qwen2.5",
+                    "description": "Qwen 2.5 model",
+                },
             }
-        })
+        )
 
         try:
             result = await call_llm_activity(
@@ -391,16 +409,16 @@ async def test_direct_real_llm_call():
                 max_tokens=500,
                 task_id="test-task",
                 agent_id="test-agent",
-                execution_id="test-execution"
+                execution_id="test-execution",
             )
 
             logger.info("=" * 60)
             logger.info("🎯 DIRECT REAL LLM CALL RESULT")
             logger.info("=" * 60)
 
-            content = result.get('content', '')
-            tool_calls = result.get('tool_calls', [])
-            cost = result.get('cost', 0)
+            content = result.get("content", "")
+            tool_calls = result.get("tool_calls", [])
+            cost = result.get("cost", 0)
 
             logger.info(f"📝 Content length: {len(content)} chars")
             logger.info(f"🔧 Tool calls: {tool_calls}")
@@ -415,7 +433,7 @@ async def test_direct_real_llm_call():
                 for i, tc in enumerate(tool_calls):
                     logger.info(f"   Tool {i}: {tc.get('function', {}).get('name', 'unknown')}")
                     logger.info(f"   Args: {tc.get('function', {}).get('arguments', 'none')}")
-            elif content and ('task_complete' in content or '"function"' in content):
+            elif content and ("task_complete" in content or '"function"' in content):
                 logger.warning("🚨 Response format is MALFORMED - tool calls in content")
                 logger.warning("This indicates the LLM is not properly formatting tool calls")
             else:

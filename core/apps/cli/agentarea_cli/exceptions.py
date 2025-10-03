@@ -5,16 +5,19 @@ from agentarea_common.exceptions import WorkspaceError
 
 class AgentAreaError(WorkspaceError):
     """Base exception for AgentArea CLI errors."""
+
     pass
 
 
 class AuthenticationError(AgentAreaError):
     """Raised when authentication fails."""
+
     pass
 
 
 class ConfigurationError(AgentAreaError):
     """Raised when configuration is invalid."""
+
     pass
 
 
@@ -28,4 +31,5 @@ class APIError(AgentAreaError):
 
 class ValidationError(AgentAreaError):
     """Raised when input validation fails."""
+
     pass

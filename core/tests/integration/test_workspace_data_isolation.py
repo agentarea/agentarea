@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class TestWorkspaceModel(BaseModel, WorkspaceScopedMixin):
     """Test model for workspace isolation testing."""
+
     __tablename__ = "test_workspace_isolation_model"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -59,11 +60,13 @@ async def test_session_factory(test_engine):
 def user_contexts():
     """Create test user contexts for different workspaces and users."""
     return {
-        'workspace1_user1': UserContext(user_id="user1", workspace_id="workspace1", roles=["user"]),
-        'workspace1_user2': UserContext(user_id="user2", workspace_id="workspace1", roles=["user"]),
-        'workspace2_user1': UserContext(user_id="user1", workspace_id="workspace2", roles=["user"]),
-        'workspace2_user3': UserContext(user_id="user3", workspace_id="workspace2", roles=["user"]),
-        'workspace3_admin': UserContext(user_id="admin", workspace_id="workspace3", roles=["admin"]),
+        "workspace1_user1": UserContext(user_id="user1", workspace_id="workspace1", roles=["user"]),
+        "workspace1_user2": UserContext(user_id="user2", workspace_id="workspace1", roles=["user"]),
+        "workspace2_user1": UserContext(user_id="user1", workspace_id="workspace2", roles=["user"]),
+        "workspace2_user3": UserContext(user_id="user3", workspace_id="workspace2", roles=["user"]),
+        "workspace3_admin": UserContext(
+            user_id="admin", workspace_id="workspace3", roles=["admin"]
+        ),
     }
 
 
@@ -74,37 +77,29 @@ class TestWorkspaceDataIsolation:
         """Test complete isolation between different workspaces."""
         async with test_session_factory() as session:
             # Create repositories for different workspaces
-            repo_w1_u1 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user1'])
-            repo_w1_u2 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user2'])
-            repo_w2_u1 = TestWorkspaceModelRepository(session, user_contexts['workspace2_user1'])
-            repo_w2_u3 = TestWorkspaceModelRepository(session, user_contexts['workspace2_user3'])
-            repo_w3_admin = TestWorkspaceModelRepository(session, user_contexts['workspace3_admin'])
+            repo_w1_u1 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user1"])
+            repo_w1_u2 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user2"])
+            repo_w2_u1 = TestWorkspaceModelRepository(session, user_contexts["workspace2_user1"])
+            repo_w2_u3 = TestWorkspaceModelRepository(session, user_contexts["workspace2_user3"])
+            repo_w3_admin = TestWorkspaceModelRepository(session, user_contexts["workspace3_admin"])
 
             # Create records in different workspaces
             record_w1_u1 = await repo_w1_u1.create(
-                name="Record W1 U1",
-                description="Created by user1 in workspace1",
-                category="test"
+                name="Record W1 U1", description="Created by user1 in workspace1", category="test"
             )
             record_w1_u2 = await repo_w1_u2.create(
-                name="Record W1 U2",
-                description="Created by user2 in workspace1",
-                category="test"
+                name="Record W1 U2", description="Created by user2 in workspace1", category="test"
             )
             record_w2_u1 = await repo_w2_u1.create(
-                name="Record W2 U1",
-                description="Created by user1 in workspace2",
-                category="test"
+                name="Record W2 U1", description="Created by user1 in workspace2", category="test"
             )
             record_w2_u3 = await repo_w2_u3.create(
-                name="Record W2 U3",
-                description="Created by user3 in workspace2",
-                category="test"
+                name="Record W2 U3", description="Created by user3 in workspace2", category="test"
             )
             record_w3_admin = await repo_w3_admin.create(
                 name="Record W3 Admin",
                 description="Created by admin in workspace3",
-                category="admin"
+                category="admin",
             )
 
             # Test workspace1 isolation
@@ -142,11 +137,13 @@ class TestWorkspaceDataIsolation:
             w3_cannot_see_w1 = await repo_w3_admin.get_by_id(record_w1_u1.id)
             assert w3_cannot_see_w1 is None
 
-    async def test_creator_scoped_vs_workspace_scoped_filtering(self, test_session_factory, user_contexts):
+    async def test_creator_scoped_vs_workspace_scoped_filtering(
+        self, test_session_factory, user_contexts
+    ):
         """Test the difference between creator-scoped and workspace-scoped filtering."""
         async with test_session_factory() as session:
-            repo_u1 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user1'])
-            repo_u2 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user2'])
+            repo_u1 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user1"])
+            repo_u2 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user2"])
 
             # Create records by different users in same workspace
             record_u1_1 = await repo_u1.create(name="User1 Record 1", category="shared")
@@ -181,14 +178,18 @@ class TestWorkspaceDataIsolation:
             assert u1_can_access_u2_record.name == "User2 Record 1"
 
             # User1 cannot access user2's record with creator scoping
-            u1_cannot_access_u2_creator = await repo_u1.get_by_id(record_u2_1.id, creator_scoped=True)
+            u1_cannot_access_u2_creator = await repo_u1.get_by_id(
+                record_u2_1.id, creator_scoped=True
+            )
             assert u1_cannot_access_u2_creator is None
 
-    async def test_workspace_isolation_with_custom_queries(self, test_session_factory, user_contexts):
+    async def test_workspace_isolation_with_custom_queries(
+        self, test_session_factory, user_contexts
+    ):
         """Test workspace isolation with custom repository methods."""
         async with test_session_factory() as session:
-            repo_w1 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user1'])
-            repo_w2 = TestWorkspaceModelRepository(session, user_contexts['workspace2_user1'])
+            repo_w1 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user1"])
+            repo_w2 = TestWorkspaceModelRepository(session, user_contexts["workspace2_user1"])
 
             # Create records with same category in different workspaces
             await repo_w1.create(name="W1 Category A", category="categoryA")
@@ -214,12 +215,14 @@ class TestWorkspaceDataIsolation:
             w2_count = await repo_w2.count(category="categoryA")
             assert w2_count == 1
 
-    async def test_workspace_isolation_with_updates_and_deletes(self, test_session_factory, user_contexts):
+    async def test_workspace_isolation_with_updates_and_deletes(
+        self, test_session_factory, user_contexts
+    ):
         """Test workspace isolation for update and delete operations."""
         async with test_session_factory() as session:
-            repo_w1_u1 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user1'])
-            repo_w1_u2 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user2'])
-            repo_w2_u1 = TestWorkspaceModelRepository(session, user_contexts['workspace2_user1'])
+            repo_w1_u1 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user1"])
+            repo_w1_u2 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user2"])
+            repo_w2_u1 = TestWorkspaceModelRepository(session, user_contexts["workspace2_user1"])
 
             # Create records in different workspaces
             record_w1_u1 = await repo_w1_u1.create(name="W1 U1 Record", description="Original")
@@ -229,34 +232,28 @@ class TestWorkspaceDataIsolation:
             # Test workspace-scoped updates
             # User1 in workspace1 can update any record in workspace1
             updated_u2_record = await repo_w1_u1.update(
-                record_w1_u2.id,
-                description="Updated by U1"
+                record_w1_u2.id, description="Updated by U1"
             )
             assert updated_u2_record is not None
             assert updated_u2_record.description == "Updated by U1"
 
             # User1 in workspace1 cannot update record in workspace2
             cannot_update_w2 = await repo_w1_u1.update(
-                record_w2_u1.id,
-                description="Should not work"
+                record_w2_u1.id, description="Should not work"
             )
             assert cannot_update_w2 is None
 
             # Test creator-scoped updates
             # User2 in workspace1 can only update their own record with creator scoping
             updated_own = await repo_w1_u2.update(
-                record_w1_u2.id,
-                creator_scoped=True,
-                description="Updated by owner"
+                record_w1_u2.id, creator_scoped=True, description="Updated by owner"
             )
             assert updated_own is not None
             assert updated_own.description == "Updated by owner"
 
             # User2 cannot update user1's record with creator scoping
             cannot_update_other = await repo_w1_u2.update(
-                record_w1_u1.id,
-                creator_scoped=True,
-                description="Should not work"
+                record_w1_u1.id, creator_scoped=True, description="Should not work"
             )
             assert cannot_update_other is None
 
@@ -277,12 +274,14 @@ class TestWorkspaceDataIsolation:
             w2_record_exists = await repo_w2_u1.get_by_id(record_w2_u1.id)
             assert w2_record_exists is not None
 
-    async def test_repository_factory_workspace_isolation(self, test_session_factory, user_contexts):
+    async def test_repository_factory_workspace_isolation(
+        self, test_session_factory, user_contexts
+    ):
         """Test workspace isolation through repository factory."""
         async with test_session_factory() as session:
             # Create repository factories for different workspaces
-            factory_w1 = RepositoryFactory(session, user_contexts['workspace1_user1'])
-            factory_w2 = RepositoryFactory(session, user_contexts['workspace2_user1'])
+            factory_w1 = RepositoryFactory(session, user_contexts["workspace1_user1"])
+            factory_w2 = RepositoryFactory(session, user_contexts["workspace2_user1"])
 
             # Create repositories through factories
             repo_w1 = factory_w1.create_repository(TestWorkspaceModelRepository)
@@ -314,27 +313,23 @@ class TestWorkspaceDataIsolation:
             assert w1_cannot_see_w2 is None
             assert w2_cannot_see_w1 is None
 
-    async def test_workspace_isolation_with_large_dataset(self, test_session_factory, user_contexts):
+    async def test_workspace_isolation_with_large_dataset(
+        self, test_session_factory, user_contexts
+    ):
         """Test workspace isolation with larger datasets and pagination."""
         async with test_session_factory() as session:
-            repo_w1 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user1'])
-            repo_w2 = TestWorkspaceModelRepository(session, user_contexts['workspace2_user1'])
+            repo_w1 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user1"])
+            repo_w2 = TestWorkspaceModelRepository(session, user_contexts["workspace2_user1"])
 
             # Create many records in each workspace
             w1_records = []
             w2_records = []
 
             for i in range(25):
-                w1_record = await repo_w1.create(
-                    name=f"W1 Record {i:02d}",
-                    category="bulk_test"
-                )
+                w1_record = await repo_w1.create(name=f"W1 Record {i:02d}", category="bulk_test")
                 w1_records.append(w1_record)
 
-                w2_record = await repo_w2.create(
-                    name=f"W2 Record {i:02d}",
-                    category="bulk_test"
-                )
+                w2_record = await repo_w2.create(name=f"W2 Record {i:02d}", category="bulk_test")
                 w2_records.append(w2_record)
 
             # Test pagination with workspace isolation
@@ -368,8 +363,8 @@ class TestWorkspaceDataIsolation:
     async def test_workspace_isolation_edge_cases(self, test_session_factory, user_contexts):
         """Test edge cases for workspace isolation."""
         async with test_session_factory() as session:
-            repo_w1 = TestWorkspaceModelRepository(session, user_contexts['workspace1_user1'])
-            repo_w2 = TestWorkspaceModelRepository(session, user_contexts['workspace2_user1'])
+            repo_w1 = TestWorkspaceModelRepository(session, user_contexts["workspace1_user1"])
+            repo_w2 = TestWorkspaceModelRepository(session, user_contexts["workspace2_user1"])
 
             # Test with empty workspaces
             empty_w1 = await repo_w1.list_all()

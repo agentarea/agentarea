@@ -30,7 +30,7 @@ class TestTrigger:
             name="Test Trigger",
             agent_id=agent_id,
             trigger_type=TriggerType.CRON,
-            created_by="test_user"
+            created_by="test_user",
         )
 
         assert trigger.name == "Test Trigger"
@@ -69,7 +69,7 @@ class TestTrigger:
             created_by="custom_user",
             failure_threshold=10,
             consecutive_failures=3,
-            last_execution_at=last_execution
+            last_execution_at=last_execution,
         )
 
         assert trigger.id == trigger_id
@@ -91,20 +91,14 @@ class TestTrigger:
         # Empty name should raise error
         with pytest.raises(ValidationError) as exc_info:
             Trigger(
-                name="",
-                agent_id=agent_id,
-                trigger_type=TriggerType.CRON,
-                created_by="test_user"
+                name="", agent_id=agent_id, trigger_type=TriggerType.CRON, created_by="test_user"
             )
         assert "String should have at least 1 character" in str(exc_info.value)
 
         # Whitespace-only name should raise error
         with pytest.raises(ValidationError) as exc_info:
             Trigger(
-                name="   ",
-                agent_id=agent_id,
-                trigger_type=TriggerType.CRON,
-                created_by="test_user"
+                name="   ", agent_id=agent_id, trigger_type=TriggerType.CRON, created_by="test_user"
             )
         assert "Trigger name cannot be empty" in str(exc_info.value)
 
@@ -113,7 +107,7 @@ class TestTrigger:
             name="  Test Trigger  ",
             agent_id=agent_id,
             trigger_type=TriggerType.CRON,
-            created_by="test_user"
+            created_by="test_user",
         )
         assert trigger.name == "Test Trigger"
 
@@ -130,7 +124,7 @@ class TestTrigger:
                 trigger_type=TriggerType.CRON,
                 created_by="test_user",
                 created_at=created_at,
-                updated_at=updated_at
+                updated_at=updated_at,
             )
         assert "updated_at cannot be before created_at" in str(exc_info.value)
 
@@ -145,7 +139,7 @@ class TestTrigger:
             agent_id=agent_id,
             trigger_type=TriggerType.CRON,
             created_by="test_user",
-            failure_threshold=3
+            failure_threshold=3,
         )
 
         # No failures - should not disable
@@ -171,7 +165,7 @@ class TestTrigger:
             agent_id=agent_id,
             trigger_type=TriggerType.CRON,
             created_by="test_user",
-            consecutive_failures=3
+            consecutive_failures=3,
         )
 
         # Record success
@@ -201,7 +195,7 @@ class TestCronTrigger:
             agent_id=agent_id,
             created_by="test_user",
             cron_expression="0 9 * * *",
-            timezone="America/New_York"
+            timezone="America/New_York",
         )
 
         assert trigger.trigger_type == TriggerType.CRON
@@ -216,29 +210,20 @@ class TestCronTrigger:
         # Empty expression should raise error
         with pytest.raises(ValidationError) as exc_info:
             CronTrigger(
-                name="Cron Test",
-                agent_id=agent_id,
-                created_by="test_user",
-                cron_expression=""
+                name="Cron Test", agent_id=agent_id, created_by="test_user", cron_expression=""
             )
         assert "String should have at least 1 character" in str(exc_info.value)
 
         # Invalid format (too few parts) should raise error
         with pytest.raises(ValidationError) as exc_info:
             CronTrigger(
-                name="Cron Test",
-                agent_id=agent_id,
-                created_by="test_user",
-                cron_expression="0 9 *"
+                name="Cron Test", agent_id=agent_id, created_by="test_user", cron_expression="0 9 *"
             )
         assert "Cron expression must have 5 or 6 parts" in str(exc_info.value)
 
         # Valid 5-part expression
         trigger = CronTrigger(
-            name="Cron Test",
-            agent_id=agent_id,
-            created_by="test_user",
-            cron_expression="0 9 * * *"
+            name="Cron Test", agent_id=agent_id, created_by="test_user", cron_expression="0 9 * * *"
         )
         assert trigger.cron_expression == "0 9 * * *"
 
@@ -247,7 +232,7 @@ class TestCronTrigger:
             name="Cron Test",
             agent_id=agent_id,
             created_by="test_user",
-            cron_expression="0 0 9 * * *"
+            cron_expression="0 0 9 * * *",
         )
         assert trigger.cron_expression == "0 0 9 * * *"
 
@@ -262,7 +247,7 @@ class TestCronTrigger:
                 agent_id=agent_id,
                 created_by="test_user",
                 cron_expression="0 9 * * *",
-                timezone=""
+                timezone="",
             )
         assert "Timezone cannot be empty" in str(exc_info.value)
 
@@ -272,7 +257,7 @@ class TestCronTrigger:
             agent_id=agent_id,
             created_by="test_user",
             cron_expression="0 9 * * *",
-            timezone="  UTC  "
+            timezone="  UTC  ",
         )
         assert trigger.timezone == "UTC"
 
@@ -289,7 +274,7 @@ class TestWebhookTrigger:
             created_by="test_user",
             webhook_id="webhook_123",
             allowed_methods=["POST", "PUT"],
-            webhook_type=WebhookType.TELEGRAM
+            webhook_type=WebhookType.TELEGRAM,
         )
 
         assert trigger.trigger_type == TriggerType.WEBHOOK
@@ -305,10 +290,7 @@ class TestWebhookTrigger:
         # Empty webhook_id should raise error
         with pytest.raises(ValidationError) as exc_info:
             WebhookTrigger(
-                name="Webhook Test",
-                agent_id=agent_id,
-                created_by="test_user",
-                webhook_id=""
+                name="Webhook Test", agent_id=agent_id, created_by="test_user", webhook_id=""
             )
         assert "String should have at least 1 character" in str(exc_info.value)
 
@@ -317,7 +299,7 @@ class TestWebhookTrigger:
             name="Webhook Test",
             agent_id=agent_id,
             created_by="test_user",
-            webhook_id="  webhook_123  "
+            webhook_id="  webhook_123  ",
         )
         assert trigger.webhook_id == "webhook_123"
 
@@ -332,7 +314,7 @@ class TestWebhookTrigger:
                 agent_id=agent_id,
                 created_by="test_user",
                 webhook_id="webhook_123",
-                allowed_methods=[]
+                allowed_methods=[],
             )
         assert "At least one HTTP method must be allowed" in str(exc_info.value)
 
@@ -343,7 +325,7 @@ class TestWebhookTrigger:
                 agent_id=agent_id,
                 created_by="test_user",
                 webhook_id="webhook_123",
-                allowed_methods=["INVALID"]
+                allowed_methods=["INVALID"],
             )
         assert "Invalid HTTP method: INVALID" in str(exc_info.value)
 
@@ -353,7 +335,7 @@ class TestWebhookTrigger:
             agent_id=agent_id,
             created_by="test_user",
             webhook_id="webhook_123",
-            allowed_methods=["post", "get"]
+            allowed_methods=["post", "get"],
         )
         assert trigger.allowed_methods == ["POST", "GET"]
 
@@ -372,7 +354,7 @@ class TestTriggerExecution:
             execution_time_ms=1500,
             trigger_data={"key": "value"},
             workflow_id="workflow_123",
-            run_id="run_456"
+            run_id="run_456",
         )
 
         assert execution.trigger_id == trigger_id
@@ -392,17 +374,13 @@ class TestTriggerExecution:
         # Negative execution time should raise error
         with pytest.raises(ValidationError) as exc_info:
             TriggerExecution(
-                trigger_id=trigger_id,
-                status=ExecutionStatus.SUCCESS,
-                execution_time_ms=-100
+                trigger_id=trigger_id, status=ExecutionStatus.SUCCESS, execution_time_ms=-100
             )
         assert "Input should be greater than or equal to 0" in str(exc_info.value)
 
         # Zero execution time should be valid
         execution = TriggerExecution(
-            trigger_id=trigger_id,
-            status=ExecutionStatus.SUCCESS,
-            execution_time_ms=0
+            trigger_id=trigger_id, status=ExecutionStatus.SUCCESS, execution_time_ms=0
         )
         assert execution.execution_time_ms == 0
 
@@ -412,9 +390,7 @@ class TestTriggerExecution:
 
         # Successful execution
         execution = TriggerExecution(
-            trigger_id=trigger_id,
-            status=ExecutionStatus.SUCCESS,
-            execution_time_ms=1000
+            trigger_id=trigger_id, status=ExecutionStatus.SUCCESS, execution_time_ms=1000
         )
         assert execution.is_successful()
         assert not execution.has_error()
@@ -424,16 +400,14 @@ class TestTriggerExecution:
             trigger_id=trigger_id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=500,
-            error_message="Test error"
+            error_message="Test error",
         )
         assert not execution.is_successful()
         assert execution.has_error()
 
         # Timeout execution
         execution = TriggerExecution(
-            trigger_id=trigger_id,
-            status=ExecutionStatus.TIMEOUT,
-            execution_time_ms=30000
+            trigger_id=trigger_id, status=ExecutionStatus.TIMEOUT, execution_time_ms=30000
         )
         assert not execution.is_successful()
         assert execution.has_error()
@@ -451,7 +425,7 @@ class TestTriggerCreate:
             trigger_type=TriggerType.CRON,
             created_by="test_user",
             cron_expression="0 9 * * *",
-            timezone="UTC"
+            timezone="UTC",
         )
 
         assert create_model.name == "Test Cron"
@@ -468,7 +442,7 @@ class TestTriggerCreate:
             trigger_type=TriggerType.WEBHOOK,
             created_by="test_user",
             webhook_id="webhook_123",
-            webhook_type=WebhookType.SLACK
+            webhook_type=WebhookType.SLACK,
         )
 
         assert create_model.name == "Test Webhook"
@@ -486,7 +460,7 @@ class TestTriggerCreate:
                 name="Test Cron",
                 agent_id=agent_id,
                 trigger_type=TriggerType.CRON,
-                created_by="test_user"
+                created_by="test_user",
             )
         assert "cron_expression is required for CRON triggers" in str(exc_info.value)
 
@@ -496,7 +470,7 @@ class TestTriggerCreate:
                 name="Test Webhook",
                 agent_id=agent_id,
                 trigger_type=TriggerType.WEBHOOK,
-                created_by="test_user"
+                created_by="test_user",
             )
         assert "webhook_id is required for WEBHOOK triggers" in str(exc_info.value)
 
@@ -507,9 +481,7 @@ class TestTriggerUpdate:
     def test_trigger_update_creation(self):
         """Test creating a trigger update model."""
         update_model = TriggerUpdate(
-            name="Updated Name",
-            description="Updated description",
-            is_active=False
+            name="Updated Name", description="Updated description", is_active=False
         )
 
         assert update_model.name == "Updated Name"

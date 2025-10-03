@@ -21,7 +21,7 @@ class TestSimpleTaskModel:
             description="Test Description",
             query="test query",
             user_id="test_user",
-            agent_id=agent_id
+            agent_id=agent_id,
         )
 
         # Verify required fields
@@ -73,7 +73,7 @@ class TestSimpleTaskModel:
             started_at=started_at,
             completed_at=completed_at,
             execution_id="exec_123",
-            metadata={"priority": "high"}
+            metadata={"priority": "high"},
         )
 
         # Verify all fields are set correctly
@@ -108,7 +108,7 @@ class TestSimpleTaskModel:
                 user_id="test_user",
                 agent_id=uuid4(),
                 created_at=created_at,
-                started_at=started_at
+                started_at=started_at,
             )
 
     def test_datetime_validation_completed_at_before_started_at(self):
@@ -127,7 +127,7 @@ class TestSimpleTaskModel:
                 agent_id=uuid4(),
                 created_at=created_at,
                 started_at=started_at,
-                completed_at=completed_at
+                completed_at=completed_at,
             )
 
     def test_datetime_validation_completed_at_before_created_at(self):
@@ -144,7 +144,7 @@ class TestSimpleTaskModel:
                 user_id="test_user",
                 agent_id=uuid4(),
                 created_at=created_at,
-                completed_at=completed_at
+                completed_at=completed_at,
             )
 
     def test_is_completed_method(self):
@@ -155,7 +155,7 @@ class TestSimpleTaskModel:
             description="Test Description",
             query="test query",
             user_id="test_user",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         # Test non-completed statuses
@@ -186,7 +186,7 @@ class TestSimpleTaskModel:
             description="Test Description",
             query="test query",
             user_id="test_user",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         # Test non-running statuses
@@ -211,7 +211,7 @@ class TestSimpleTaskModel:
             description="Test Description",
             query="test query",
             user_id="test_user",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         original_updated_at = task.updated_at
@@ -230,7 +230,7 @@ class TestSimpleTaskModel:
             description="Test Description",
             query="test query",
             user_id="test_user",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         # Update to running - should set started_at
@@ -256,15 +256,11 @@ class TestSimpleTaskModel:
             description="Test Description",
             query="test query",
             user_id="test_user",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         # Update status with additional fields
-        task.update_status(
-            "completed",
-            result={"output": "success"},
-            execution_id="exec_456"
-        )
+        task.update_status("completed", result={"output": "success"}, execution_id="exec_456")
 
         assert task.status == "completed"
         assert task.result == {"output": "success"}
@@ -285,7 +281,7 @@ class TestSimpleTaskModel:
             agent_id=uuid4(),
             created_at=created_at,
             started_at=started_at,
-            status="running"
+            status="running",
         )
 
         # Update to completed - should not change existing started_at
@@ -310,7 +306,7 @@ class TestSimpleTaskModel:
             status="submitted",
             task_parameters={"legacy": "param"},
             result={"legacy": "result"},
-            error_message="legacy error"
+            error_message="legacy error",
         )
 
         # All original fields should work as before
@@ -343,8 +339,8 @@ class TestSimpleTaskModel:
                 "priority": "high",
                 "tags": ["urgent", "customer"],
                 "retry_count": 0,
-                "custom_config": {"timeout": 300}
-            }
+                "custom_config": {"timeout": 300},
+            },
         )
 
         assert task.metadata["priority"] == "high"

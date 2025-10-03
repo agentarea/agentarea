@@ -13,13 +13,12 @@ from fastapi import Depends, Header, HTTPException, status
 logger = logging.getLogger(__name__)
 
 
-
 async def get_workspace_id(
     x_workspace_id: str | None = Header(
         None,
         description="Workspace ID for data isolation. Required for most endpoints.",
-        alias="X-Workspace-ID"
-    )
+        alias="X-Workspace-ID",
+    ),
 ) -> str:
     """Get the workspace ID from the request header.
 
@@ -34,10 +33,6 @@ async def get_workspace_id(
 
 # Type alias for workspace dependency
 WorkspaceDep = Annotated[str, Depends(get_workspace_id)]
-
-
-
-
 
 
 # New context-based dependencies
@@ -59,8 +54,7 @@ async def get_admin_user_context(
     # For now, check if user has admin role in their roles list
     if "admin" not in user_context.roles:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to perform this action"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform this action"
         )
 
     return user_context

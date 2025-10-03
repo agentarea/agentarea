@@ -18,10 +18,10 @@ class MockModel(WorkspaceScopedMixin):
     """Mock model for testing."""
 
     def __init__(self, **kwargs):
-        self.id = kwargs.get('id', str(uuid4()))
-        self.created_by = kwargs.get('created_by')
-        self.workspace_id = kwargs.get('workspace_id')
-        self.name = kwargs.get('name', 'Test')
+        self.id = kwargs.get("id", str(uuid4()))
+        self.created_by = kwargs.get("created_by")
+        self.workspace_id = kwargs.get("workspace_id")
+        self.name = kwargs.get("name", "Test")
 
     @classmethod
     def __name__(cls):
@@ -59,7 +59,7 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_create_logs_audit_event(self, repository, user_context):
         """Test that create operation logs audit event."""
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -69,7 +69,7 @@ class TestAuditLoggingIntegration:
             repository.session.commit = AsyncMock()
             repository.session.refresh = AsyncMock()
 
-            with patch.object(MockModel, '__call__', return_value=mock_model):
+            with patch.object(MockModel, "__call__", return_value=mock_model):
                 result = await repository.create(name="Test Model")
 
             # Verify audit logging was called
@@ -83,7 +83,7 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_update_logs_audit_event(self, repository, user_context):
         """Test that update operation logs audit event."""
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -106,7 +106,7 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_delete_logs_audit_event(self, repository, user_context):
         """Test that delete operation logs audit event."""
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -129,7 +129,7 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_get_by_id_logs_read_event(self, repository, user_context):
         """Test that get_by_id operation logs read event."""
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -150,14 +150,14 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_list_all_logs_list_event(self, repository, user_context):
         """Test that list_all operation logs list event."""
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
             # Mock finding records
             mock_models = [
                 MockModel(id="test1", name="Model 1"),
-                MockModel(id="test2", name="Model 2")
+                MockModel(id="test2", name="Model 2"),
             ]
             mock_result = Mock()
             mock_result.scalars.return_value.all.return_value = mock_models
@@ -174,7 +174,7 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_error_logs_error_event(self, repository, user_context):
         """Test that errors log error events."""
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -192,15 +192,13 @@ class TestAuditLoggingIntegration:
 
     def test_audit_log_contains_workspace_context(self, user_context):
         """Test that audit logs contain workspace context."""
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
             audit_logger = get_audit_logger()
             audit_logger.log_create(
-                resource_type="test",
-                user_context=user_context,
-                resource_id="test123"
+                resource_type="test", user_context=user_context, resource_id="test123"
             )
 
             # Verify workspace context is included
@@ -230,7 +228,7 @@ class TestAuditLoggingIntegration:
             lineno=0,
             msg="AUDIT: CREATE test",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         # Add workspace context and audit event
@@ -241,7 +239,7 @@ class TestAuditLoggingIntegration:
             "resource_type": "test",
             "resource_id": "test123",
             "user_id": user_context.user_id,
-            "workspace_id": user_context.workspace_id
+            "workspace_id": user_context.workspace_id,
         }
 
         # Format the record

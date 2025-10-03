@@ -1,7 +1,7 @@
 """
 Интеграционные тесты для AgentExecutionWorkflow.
 
-Основная цель: убедиться что workflow исполняется без зацикливания 
+Основная цель: убедиться что workflow исполняется без зацикливания
 и корректно завершается во всех сценариях.
 """
 
@@ -61,33 +61,32 @@ class MockResponses:
                     "type": "object",
                     "properties": {
                         "result": {"type": "string", "description": "Task result"},
-                        "success": {"type": "boolean", "description": "Whether task was successful"}
+                        "success": {
+                            "type": "boolean",
+                            "description": "Whether task was successful",
+                        },
                     },
-                    "required": ["result", "success"]
-                }
+                    "required": ["result", "success"],
+                },
             },
             {
                 "name": "search_web",
                 "description": "Search the web for information",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Search query"}
-                    },
-                    "required": ["query"]
-                }
+                    "properties": {"query": {"type": "string", "description": "Search query"}},
+                    "required": ["query"],
+                },
             },
             {
                 "name": "analyze_data",
                 "description": "Analyze provided data",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "data": {"type": "string", "description": "Data to analyze"}
-                    },
-                    "required": ["data"]
-                }
-            }
+                    "properties": {"data": {"type": "string", "description": "Data to analyze"}},
+                    "required": ["data"],
+                },
+            },
         ]
 
     def get_llm_response_success_scenario(self) -> dict[str, Any]:
@@ -105,12 +104,12 @@ class MockResponses:
                         "type": "function",
                         "function": {
                             "name": "search_web",
-                            "arguments": json.dumps({"query": "task information"})
-                        }
+                            "arguments": json.dumps({"query": "task information"}),
+                        },
                     }
                 ],
                 "cost": 0.01,
-                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
             }
         elif self.llm_call_count == 2:
             # Вторая итерация: завершение задачи
@@ -123,15 +122,17 @@ class MockResponses:
                         "type": "function",
                         "function": {
                             "name": "task_complete",
-                            "arguments": json.dumps({
-                                "result": "Task completed successfully with search results",
-                                "success": True
-                            })
-                        }
+                            "arguments": json.dumps(
+                                {
+                                    "result": "Task completed successfully with search results",
+                                    "success": True,
+                                }
+                            ),
+                        },
                     }
                 ],
                 "cost": 0.015,
-                "usage": {"prompt_tokens": 120, "completion_tokens": 60, "total_tokens": 180}
+                "usage": {"prompt_tokens": 120, "completion_tokens": 60, "total_tokens": 180},
             }
         else:
             # Fallback - не должно происходить в успешном сценарии
@@ -140,7 +141,7 @@ class MockResponses:
                 "content": "I'm not sure what to do next.",
                 "tool_calls": [],
                 "cost": 0.005,
-                "usage": {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70}
+                "usage": {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70},
             }
 
     def get_llm_response_max_iterations_scenario(self) -> dict[str, Any]:
@@ -156,12 +157,12 @@ class MockResponses:
                     "type": "function",
                     "function": {
                         "name": "search_web",
-                        "arguments": json.dumps({"query": f"search query {self.llm_call_count}"})
-                    }
+                        "arguments": json.dumps({"query": f"search query {self.llm_call_count}"}),
+                    },
                 }
             ],
             "cost": 0.02,  # Относительно дорогие вызовы
-            "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+            "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
         }
 
     def get_llm_response_expensive_scenario(self) -> dict[str, Any]:
@@ -177,12 +178,12 @@ class MockResponses:
                     "type": "function",
                     "function": {
                         "name": "analyze_data",
-                        "arguments": json.dumps({"data": f"large dataset {self.llm_call_count}"})
-                    }
+                        "arguments": json.dumps({"data": f"large dataset {self.llm_call_count}"}),
+                    },
                 }
             ],
             "cost": 3.0,  # Очень дорогой вызов
-            "usage": {"prompt_tokens": 2000, "completion_tokens": 1000, "total_tokens": 3000}
+            "usage": {"prompt_tokens": 2000, "completion_tokens": 1000, "total_tokens": 3000},
         }
 
     def get_llm_response_empty_scenario(self) -> dict[str, Any]:
@@ -196,7 +197,7 @@ class MockResponses:
                 "content": "",
                 "tool_calls": [],
                 "cost": 0.001,
-                "usage": {"prompt_tokens": 50, "completion_tokens": 0, "total_tokens": 50}
+                "usage": {"prompt_tokens": 50, "completion_tokens": 0, "total_tokens": 50},
             }
         else:
             # Третья итерация - успешное завершение
@@ -209,15 +210,17 @@ class MockResponses:
                         "type": "function",
                         "function": {
                             "name": "task_complete",
-                            "arguments": json.dumps({
-                                "result": "Task completed after handling empty responses",
-                                "success": True
-                            })
-                        }
+                            "arguments": json.dumps(
+                                {
+                                    "result": "Task completed after handling empty responses",
+                                    "success": True,
+                                }
+                            ),
+                        },
                     }
                 ],
                 "cost": 0.01,
-                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
             }
 
     def get_tool_result(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
@@ -228,22 +231,22 @@ class MockResponses:
             return {
                 "result": tool_args.get("result", "Task completed"),
                 "success": tool_args.get("success", True),
-                "completed": True  # Дополнительный флаг для совместимости
+                "completed": True,  # Дополнительный флаг для совместимости
             }
         elif tool_name == "search_web":
             return {
                 "result": f"Search results for '{tool_args.get('query', 'unknown')}': Found relevant information.",
-                "success": True
+                "success": True,
             }
         elif tool_name == "analyze_data":
             return {
                 "result": f"Analysis of '{tool_args.get('data', 'unknown')}': Data processed successfully.",
-                "success": True
+                "success": True,
             }
         else:
             return {
                 "result": f"Unknown tool '{tool_name}' executed with args: {tool_args}",
-                "success": False
+                "success": False,
             }
 
 
@@ -270,7 +273,7 @@ class TestAgentExecutionWorkflow:
         self,
         max_iterations: int = 5,
         budget_usd: float = 10.0,
-        task_query: str = "Complete a test task"
+        task_query: str = "Complete a test task",
     ) -> AgentExecutionRequest:
         """Создает тестовый запрос на выполнение."""
         return AgentExecutionRequest(
@@ -280,10 +283,10 @@ class TestAgentExecutionWorkflow:
             task_query=task_query,
             task_parameters={
                 "success_criteria": ["Task should be completed successfully"],
-                "max_iterations": max_iterations
+                "max_iterations": max_iterations,
             },
             budget_usd=budget_usd,
-            requires_human_approval=False
+            requires_human_approval=False,
         )
 
     def create_mock_activities(self, mock_responses: MockResponses, scenario: str = "success"):
@@ -317,11 +320,7 @@ class TestAgentExecutionWorkflow:
         @activity.defn
         async def evaluate_goal_progress_activity(*args, **kwargs):
             # Всегда возвращаем False - пусть task_complete управляет завершением
-            return {
-                "goal_achieved": False,
-                "final_response": None,
-                "confidence": 0.5
-            }
+            return {"goal_achieved": False, "final_response": None, "confidence": 0.5}
 
         @activity.defn
         async def publish_workflow_events_activity(*args, **kwargs):
@@ -333,18 +332,16 @@ class TestAgentExecutionWorkflow:
             call_llm_activity,
             execute_mcp_tool_activity,
             evaluate_goal_progress_activity,
-            publish_workflow_events_activity
+            publish_workflow_events_activity,
         ]
 
     @pytest.mark.asyncio
     async def test_workflow_completes_successfully_with_task_complete(
-        self,
-        workflow_environment,
-        mock_responses
+        self, workflow_environment, mock_responses
     ):
         """
         КРИТИЧЕСКИЙ ТЕСТ: Workflow должен завершиться успешно когда LLM вызывает task_complete.
-        
+
         Проверяет:
         - Workflow завершается с success=True
         - final_response устанавливается корректно
@@ -357,7 +354,7 @@ class TestAgentExecutionWorkflow:
             workflow_environment.client,
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
-            activities=activities
+            activities=activities,
         ):
             request = self.create_test_request()
 
@@ -365,31 +362,33 @@ class TestAgentExecutionWorkflow:
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-success-{uuid4()}",
-                task_queue="test-queue"
+                task_queue="test-queue",
             )
 
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
             assert result.success is True, "Workflow должен завершиться успешно"
             assert result.final_response == "Task completed successfully with search results"
-            assert result.reasoning_iterations_used == 2, f"Ожидалось 2 итерации, получено {result.reasoning_iterations_used}"
+            assert result.reasoning_iterations_used == 2, (
+                f"Ожидалось 2 итерации, получено {result.reasoning_iterations_used}"
+            )
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
             assert result.total_cost > 0, "Стоимость должна быть больше 0"
 
             # Проверки счетчиков мок-объектов
-            assert mock_responses.llm_call_count == 2, f"Ожидалось 2 вызова LLM, получено {mock_responses.llm_call_count}"
-            assert mock_responses.tool_call_count == 2, f"Ожидалось 2 вызова инструментов, получено {mock_responses.tool_call_count}"
+            assert mock_responses.llm_call_count == 2, (
+                f"Ожидалось 2 вызова LLM, получено {mock_responses.llm_call_count}"
+            )
+            assert mock_responses.tool_call_count == 2, (
+                f"Ожидалось 2 вызова инструментов, получено {mock_responses.tool_call_count}"
+            )
 
     @pytest.mark.asyncio
-    async def test_workflow_stops_at_max_iterations(
-        self,
-        workflow_environment,
-        mock_responses
-    ):
+    async def test_workflow_stops_at_max_iterations(self, workflow_environment, mock_responses):
         """
         КРИТИЧЕСКИЙ ТЕСТ: Workflow должен остановиться при достижении max_iterations.
-        
+
         Проверяет:
         - Workflow останавливается точно на max_iterations
         - success=False при превышении лимита
@@ -401,7 +400,7 @@ class TestAgentExecutionWorkflow:
             workflow_environment.client,
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
-            activities=activities
+            activities=activities,
         ):
             # Устанавливаем низкий лимит итераций для быстрого тестирования
             request = self.create_test_request(max_iterations=3)
@@ -410,30 +409,34 @@ class TestAgentExecutionWorkflow:
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-max-iterations-{uuid4()}",
-                task_queue="test-queue"
+                task_queue="test-queue",
             )
 
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
-            assert result.success is False, "Workflow не должен быть успешным при превышении лимита итераций"
+            assert result.success is False, (
+                "Workflow не должен быть успешным при превышении лимита итераций"
+            )
             # При max_iterations=3 выполняется только 2 итерации (логика проверяет ДО выполнения)
-            assert result.reasoning_iterations_used == 2, f"Ожидалось 2 итерации (max_iterations-1), получено {result.reasoning_iterations_used}"
+            assert result.reasoning_iterations_used == 2, (
+                f"Ожидалось 2 итерации (max_iterations-1), получено {result.reasoning_iterations_used}"
+            )
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
 
             # Проверки счетчиков - должно быть max_iterations-1 вызовов
-            assert mock_responses.llm_call_count == 2, f"Ожидалось 2 вызова LLM, получено {mock_responses.llm_call_count}"
-            assert mock_responses.tool_call_count == 2, f"Ожидалось 2 вызова инструментов, получено {mock_responses.tool_call_count}"
+            assert mock_responses.llm_call_count == 2, (
+                f"Ожидалось 2 вызова LLM, получено {mock_responses.llm_call_count}"
+            )
+            assert mock_responses.tool_call_count == 2, (
+                f"Ожидалось 2 вызова инструментов, получено {mock_responses.tool_call_count}"
+            )
 
     @pytest.mark.asyncio
-    async def test_workflow_stops_when_budget_exceeded(
-        self,
-        workflow_environment,
-        mock_responses
-    ):
+    async def test_workflow_stops_when_budget_exceeded(self, workflow_environment, mock_responses):
         """
         КРИТИЧЕСКИЙ ТЕСТ: Workflow должен остановиться при превышении бюджета.
-        
+
         Проверяет:
         - Workflow останавливается при превышении budget_usd
         - success=False при превышении бюджета
@@ -446,7 +449,7 @@ class TestAgentExecutionWorkflow:
             workflow_environment.client,
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
-            activities=activities
+            activities=activities,
         ):
             # Устанавливаем низкий бюджет (каждый вызов стоит 3.0)
             request = self.create_test_request(budget_usd=5.0, max_iterations=10)
@@ -455,29 +458,33 @@ class TestAgentExecutionWorkflow:
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-budget-exceeded-{uuid4()}",
-                task_queue="test-queue"
+                task_queue="test-queue",
             )
 
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
-            assert result.success is False, "Workflow не должен быть успешным при превышении бюджета"
-            assert result.total_cost >= request.budget_usd, f"Стоимость {result.total_cost} должна превышать бюджет {request.budget_usd}"
-            assert result.reasoning_iterations_used <= 3, f"Не должно быть больше 3 итераций при таком бюджете, получено {result.reasoning_iterations_used}"
+            assert result.success is False, (
+                "Workflow не должен быть успешным при превышении бюджета"
+            )
+            assert result.total_cost >= request.budget_usd, (
+                f"Стоимость {result.total_cost} должна превышать бюджет {request.budget_usd}"
+            )
+            assert result.reasoning_iterations_used <= 3, (
+                f"Не должно быть больше 3 итераций при таком бюджете, получено {result.reasoning_iterations_used}"
+            )
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
 
             # Проверки счетчиков - должно остановиться рано из-за бюджета
-            assert mock_responses.llm_call_count <= 3, f"Не должно быть больше 3 вызовов LLM, получено {mock_responses.llm_call_count}"
+            assert mock_responses.llm_call_count <= 3, (
+                f"Не должно быть больше 3 вызовов LLM, получено {mock_responses.llm_call_count}"
+            )
 
     @pytest.mark.asyncio
-    async def test_workflow_handles_empty_llm_responses(
-        self,
-        workflow_environment,
-        mock_responses
-    ):
+    async def test_workflow_handles_empty_llm_responses(self, workflow_environment, mock_responses):
         """
         КРИТИЧЕСКИЙ ТЕСТ: Workflow должен корректно обрабатывать пустые ответы LLM.
-        
+
         Проверяет:
         - Workflow продолжает работу при пустых ответах
         - Пустые сообщения не вызывают зацикливание
@@ -489,7 +496,7 @@ class TestAgentExecutionWorkflow:
             workflow_environment.client,
             task_queue="test-queue",
             workflows=[AgentExecutionWorkflow],
-            activities=activities
+            activities=activities,
         ):
             request = self.create_test_request(max_iterations=5)
 
@@ -497,21 +504,29 @@ class TestAgentExecutionWorkflow:
                 AgentExecutionWorkflow.run,
                 request,
                 id=f"test-empty-responses-{uuid4()}",
-                task_queue="test-queue"
+                task_queue="test-queue",
             )
 
             # Проверки результата
             assert isinstance(result, AgentExecutionResult)
-            assert result.success is True, "Workflow должен завершиться успешно после обработки пустых ответов"
+            assert result.success is True, (
+                "Workflow должен завершиться успешно после обработки пустых ответов"
+            )
             assert result.final_response == "Task completed after handling empty responses"
-            assert result.reasoning_iterations_used == 3, f"Ожидалось 3 итерации, получено {result.reasoning_iterations_used}"
+            assert result.reasoning_iterations_used == 3, (
+                f"Ожидалось 3 итерации, получено {result.reasoning_iterations_used}"
+            )
             assert result.task_id == request.task_id
             assert result.agent_id == request.agent_id
 
             # Проверки счетчиков
-            assert mock_responses.llm_call_count == 3, f"Ожидалось 3 вызова LLM, получено {mock_responses.llm_call_count}"
+            assert mock_responses.llm_call_count == 3, (
+                f"Ожидалось 3 вызова LLM, получено {mock_responses.llm_call_count}"
+            )
             # Только 1 tool call (task_complete), пустые ответы не вызывают инструменты
-            assert mock_responses.tool_call_count == 1, f"Ожидался 1 вызов инструмента, получено {mock_responses.tool_call_count}"
+            assert mock_responses.tool_call_count == 1, (
+                f"Ожидался 1 вызов инструмента, получено {mock_responses.tool_call_count}"
+            )
 
 
 if __name__ == "__main__":

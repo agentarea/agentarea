@@ -14,9 +14,7 @@ class TestMCPServerInstanceRepository:
     def user_context(self):
         """Create a test user context."""
         return UserContext(
-            user_id="test-user-123",
-            workspace_id="test-workspace-456",
-            roles=["user"]
+            user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"]
         )
 
     def create_test_instance(
@@ -41,7 +39,9 @@ class TestMCPServerInstanceRepository:
         )
 
     @pytest.mark.asyncio
-    async def test_create_and_get_instance(self, db_session: AsyncSession, user_context: UserContext):
+    async def test_create_and_get_instance(
+        self, db_session: AsyncSession, user_context: UserContext
+    ):
         """Test creating and retrieving an MCP server instance."""
         repository = MCPServerInstanceRepository(db_session, user_context)
 
@@ -121,7 +121,7 @@ class TestMCPServerInstanceRepository:
             name="Updated Server",
             description="Updated description",
             status="active",
-            json_spec={"env_vars": ["NEW_KEY", "ANOTHER_KEY"], "updated": True}
+            json_spec={"env_vars": ["NEW_KEY", "ANOTHER_KEY"], "updated": True},
         )
 
         assert updated_instance.name == "Updated Server"
@@ -142,7 +142,9 @@ class TestMCPServerInstanceRepository:
         repository = MCPServerInstanceRepository(db_session, user_context)
 
         # Create instance using the new workspace-scoped create method
-        created_instance = await repository.create(name="Temporary Server", description="Will be deleted")
+        created_instance = await repository.create(
+            name="Temporary Server", description="Will be deleted"
+        )
 
         # Delete the instance
         delete_result = await repository.delete(created_instance.id)
@@ -153,7 +155,9 @@ class TestMCPServerInstanceRepository:
         assert retrieved_instance is None
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_instance(self, db_session: AsyncSession, user_context: UserContext):
+    async def test_get_nonexistent_instance(
+        self, db_session: AsyncSession, user_context: UserContext
+    ):
         """Test retrieving a non-existent instance returns None."""
         repository = MCPServerInstanceRepository(db_session, user_context)
 
@@ -163,7 +167,9 @@ class TestMCPServerInstanceRepository:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_delete_nonexistent_instance(self, db_session: AsyncSession, user_context: UserContext):
+    async def test_delete_nonexistent_instance(
+        self, db_session: AsyncSession, user_context: UserContext
+    ):
         """Test deleting a non-existent instance returns False."""
         repository = MCPServerInstanceRepository(db_session, user_context)
 
@@ -173,7 +179,9 @@ class TestMCPServerInstanceRepository:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_list_instances_by_status(self, db_session: AsyncSession, user_context: UserContext):
+    async def test_list_instances_by_status(
+        self, db_session: AsyncSession, user_context: UserContext
+    ):
         """Test filtering instances by status."""
         repository = MCPServerInstanceRepository(db_session, user_context)
 
@@ -190,7 +198,9 @@ class TestMCPServerInstanceRepository:
         assert "Inactive Server" not in active_names
 
     @pytest.mark.asyncio
-    async def test_list_instances_by_server_spec_id(self, db_session: AsyncSession, user_context: UserContext):
+    async def test_list_instances_by_server_spec_id(
+        self, db_session: AsyncSession, user_context: UserContext
+    ):
         """Test filtering instances by server_spec_id."""
         repository = MCPServerInstanceRepository(db_session, user_context)
 
@@ -227,7 +237,9 @@ class TestMCPServerInstanceRepository:
         )
 
         # Filter with multiple criteria using the new list_all method
-        filtered_instances = await repository.list_all(server_spec_id="target_spec", status="active")
+        filtered_instances = await repository.list_all(
+            server_spec_id="target_spec", status="active"
+        )
 
         assert len(filtered_instances) == 1
         assert filtered_instances[0].name == "Target Server"
@@ -244,7 +256,9 @@ class TestMCPServerInstanceRepository:
             "metadata": {"version": "1.2.3", "author": "AgentArea Team"},
         }
 
-        created_instance = await repository.create(name="JSON Test Server", json_spec=complex_json_spec)
+        created_instance = await repository.create(
+            name="JSON Test Server", json_spec=complex_json_spec
+        )
 
         # Verify JSON spec is stored and retrieved correctly
         retrieved_instance = await repository.get_by_id(created_instance.id)

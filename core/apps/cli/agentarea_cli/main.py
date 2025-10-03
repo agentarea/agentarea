@@ -19,6 +19,7 @@ from agentarea_cli.exceptions import AgentAreaError
 # Global config instance
 config = Config()
 
+
 @click.group()
 @click.option("--api-url", help="AgentArea API URL (overrides stored config)")
 @click.option("--debug", is_flag=True, help="Enable debug mode")
@@ -71,6 +72,7 @@ def main():
         # Check if debug mode is enabled via environment variable
         if os.getenv("AGENTAREA_DEBUG", "").lower() in ("true", "1", "yes"):
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 

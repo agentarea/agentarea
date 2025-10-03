@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class MCPTool(BaseTool):
     """Wrapper for MCP (Model Context Protocol) tools.
-    
+
     This provides a unified interface for MCP tools to work with
     the same flow as built-in tools.
     """
@@ -25,7 +25,7 @@ class MCPTool(BaseTool):
         mcp_server_instance_service,
     ):
         """Initialize MCP tool wrapper.
-        
+
         Args:
             name: Tool name
             description: Tool description
@@ -65,8 +65,7 @@ class MCPTool(BaseTool):
             server_instance = await self.mcp_server_instance_service.get(self.server_instance_id)
             if not server_instance:
                 raise ToolExecutionError(
-                    self.name,
-                    f"MCP server instance {self.server_instance_id} not found"
+                    self.name, f"MCP server instance {self.server_instance_id} not found"
                 )
 
             # Basic safety: ensure instance is running before attempting execution
@@ -74,7 +73,7 @@ class MCPTool(BaseTool):
             if status != "running":
                 raise ToolExecutionError(
                     self.name,
-                    f"MCP server instance {self.server_instance_id} is not running (status: {status})"
+                    f"MCP server instance {self.server_instance_id} is not running (status: {status})",
                 )
 
             # Prefer a dedicated execute method on the service if available
@@ -125,7 +124,7 @@ class MCPTool(BaseTool):
                 "result": f"MCP tool {self.name} executed successfully (placeholder)",
                 "tool_name": self.name,
                 "error": None,
-                "server_instance_id": str(self.server_instance_id)
+                "server_instance_id": str(self.server_instance_id),
             }
 
         except ToolExecutionError:
@@ -145,21 +144,25 @@ class MCPToolFactory:
         mcp_server_instance_service,
     ) -> list[MCPTool]:
         """Create MCP tool instances from a server.
-        
+
         Args:
             server_instance_id: MCP server instance ID
             mcp_server_instance_service: Service for MCP operations
-            
+
         Returns:
             List of MCP tool instances
         """
         try:
             server_instance = await mcp_server_instance_service.get(server_instance_id)
             if not server_instance:
-                logger.warning(f"MCP server instance {server_instance_id} not found during tool discovery")
+                logger.warning(
+                    f"MCP server instance {server_instance_id} not found during tool discovery"
+                )
                 return []
             if getattr(server_instance, "status", None) != "running":
-                logger.info(f"MCP server instance {server_instance_id} not running; skipping tool discovery")
+                logger.info(
+                    f"MCP server instance {server_instance_id} not running; skipping tool discovery"
+                )
                 return []
 
             # Try multiple discovery method names to maximize compatibility
@@ -173,14 +176,18 @@ class MCPToolFactory:
             for method_name in discovery_method_names:
                 fn = getattr(mcp_server_instance_service, method_name, None)
                 if callable(fn):
-                    logger.info(f"Discovering MCP tools via service.{method_name} for {server_instance_id}")
+                    logger.info(
+                        f"Discovering MCP tools via service.{method_name} for {server_instance_id}"
+                    )
                     try:
                         maybe_tools = await fn(server_instance_id)
                         if maybe_tools:
                             tools_data = maybe_tools
                             break
                     except Exception as e:  # continue trying other methods
-                        logger.warning(f"Service.{method_name} failed for {server_instance_id}: {e}")
+                        logger.warning(
+                            f"Service.{method_name} failed for {server_instance_id}: {e}"
+                        )
 
             if tools_data is None:
                 logger.warning(
@@ -189,12 +196,18 @@ class MCPToolFactory:
                 return []
 
             # Normalize tools list shape
-            if isinstance(tools_data, dict) and "tools" in tools_data and isinstance(tools_data["tools"], list):
+            if (
+                isinstance(tools_data, dict)
+                and "tools" in tools_data
+                and isinstance(tools_data["tools"], list)
+            ):
                 tools_list = tools_data["tools"]
             elif isinstance(tools_data, list):
                 tools_list = tools_data
             else:
-                logger.warning(f"Unexpected tools payload for server {server_instance_id}: {type(tools_data)}")
+                logger.warning(
+                    f"Unexpected tools payload for server {server_instance_id}: {type(tools_data)}"
+                )
                 return []
 
             mcp_tools: list[MCPTool] = []
@@ -225,7 +238,9 @@ class MCPToolFactory:
                         )
                     )
                 except Exception as e:
-                    logger.warning(f"Skipping invalid tool entry from server {server_instance_id}: {e}")
+                    logger.warning(
+                        f"Skipping invalid tool entry from server {server_instance_id}: {e}"
+                    )
 
             return mcp_tools
 

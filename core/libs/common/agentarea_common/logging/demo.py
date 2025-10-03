@@ -14,11 +14,7 @@ async def demo_audit_logging():
     print("=== AgentArea Audit Logging Demo ===\n")
 
     # Setup logging
-    setup_logging(
-        level="INFO",
-        enable_structured_logging=True,
-        enable_audit_logging=True
-    )
+    setup_logging(level="INFO", enable_structured_logging=True, enable_audit_logging=True)
 
     # Create user contexts for different users/workspaces
     user1_context = UserContext(user_id="alice", workspace_id="workspace-alpha")
@@ -43,7 +39,7 @@ async def demo_audit_logging():
         resource_id="agent-001",
         resource_data={"name": "Alice's Agent", "model": "gpt-4"},
         endpoint="/api/v1/agents",
-        method="POST"
+        method="POST",
     )
 
     # Bob creates a task
@@ -53,7 +49,7 @@ async def demo_audit_logging():
         resource_id="task-001",
         resource_data={"description": "Process documents", "agent_id": "agent-002"},
         endpoint="/api/v1/tasks",
-        method="POST"
+        method="POST",
     )
 
     # Alice updates her agent
@@ -63,7 +59,7 @@ async def demo_audit_logging():
         resource_id="agent-001",
         resource_data={"name": "Alice's Updated Agent"},
         endpoint="/api/v1/agents/agent-001",
-        method="PUT"
+        method="PUT",
     )
 
     # Bob reads a task
@@ -72,7 +68,7 @@ async def demo_audit_logging():
         user_context=user2_context,
         resource_id="task-001",
         endpoint="/api/v1/tasks/task-001",
-        method="GET"
+        method="GET",
     )
 
     # Alice lists her agents
@@ -82,7 +78,7 @@ async def demo_audit_logging():
         count=3,
         filters={"status": "active"},
         endpoint="/api/v1/agents",
-        method="GET"
+        method="GET",
     )
 
     # Simulate an error
@@ -93,7 +89,7 @@ async def demo_audit_logging():
         resource_id="agent-001",
         endpoint="/api/v1/agents/agent-001",
         method="DELETE",
-        error_code="DB_TIMEOUT"
+        error_code="DB_TIMEOUT",
     )
 
     # Alice deletes an agent
@@ -102,7 +98,7 @@ async def demo_audit_logging():
         user_context=user1_context,
         resource_id="agent-002",
         endpoint="/api/v1/agents/agent-002",
-        method="DELETE"
+        method="DELETE",
     )
 
     print()

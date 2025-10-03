@@ -57,7 +57,7 @@ class TestJWTTokenHandler:
             "sub": "test-user-123",
             "workspace_id": "test-workspace-456",
             "email": "test@example.com",
-            "roles": ["user", "admin"]
+            "roles": ["user", "admin"],
         }
         token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -95,10 +95,7 @@ class TestJWTTokenHandler:
     @pytest.mark.asyncio
     async def test_extract_user_context_missing_sub_claim(self, jwt_handler, mock_request):
         """Test user context extraction when 'sub' claim is missing."""
-        payload = {
-            "workspace_id": "test-workspace-456",
-            "email": "test@example.com"
-        }
+        payload = {"workspace_id": "test-workspace-456", "email": "test@example.com"}
         token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
@@ -111,10 +108,7 @@ class TestJWTTokenHandler:
     @pytest.mark.asyncio
     async def test_extract_user_context_missing_workspace_claim(self, jwt_handler, mock_request):
         """Test user context extraction when 'workspace_id' claim is missing."""
-        payload = {
-            "sub": "test-user-123",
-            "email": "test@example.com"
-        }
+        payload = {"sub": "test-user-123", "email": "test@example.com"}
         token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
@@ -127,10 +121,7 @@ class TestJWTTokenHandler:
     @pytest.mark.asyncio
     async def test_extract_user_context_minimal_claims(self, jwt_handler, mock_request):
         """Test user context extraction with minimal required claims."""
-        payload = {
-            "sub": "test-user-123",
-            "workspace_id": "test-workspace-456"
-        }
+        payload = {"sub": "test-user-123", "workspace_id": "test-workspace-456"}
         token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
@@ -153,9 +144,11 @@ class TestGetUserContext:
         return request
 
     @pytest.mark.asyncio
-    @patch('agentarea_common.auth.dependencies.get_jwt_handler')
-    @patch('agentarea_common.auth.dependencies.ContextManager')
-    async def test_get_user_context_success(self, mock_context_manager, mock_get_jwt_handler, mock_request):
+    @patch("agentarea_common.auth.dependencies.get_jwt_handler")
+    @patch("agentarea_common.auth.dependencies.ContextManager")
+    async def test_get_user_context_success(
+        self, mock_context_manager, mock_get_jwt_handler, mock_request
+    ):
         """Test successful user context extraction and context manager setting."""
         # Setup mocks
         mock_jwt_handler = Mock()
@@ -165,11 +158,13 @@ class TestGetUserContext:
             user_id="test-user",
             workspace_id="test-workspace",
             email="test@example.com",
-            roles=["user"]
+            roles=["user"],
         )
+
         # Make the extract_user_context method async
         async def mock_extract_user_context(request):
             return expected_context
+
         mock_jwt_handler.extract_user_context = mock_extract_user_context
 
         # Call the dependency
@@ -180,7 +175,7 @@ class TestGetUserContext:
         mock_context_manager.set_context.assert_called_once_with(expected_context)
 
     @pytest.mark.asyncio
-    @patch('agentarea_common.auth.dependencies.get_jwt_handler')
+    @patch("agentarea_common.auth.dependencies.get_jwt_handler")
     async def test_get_user_context_jwt_error_propagation(self, mock_get_jwt_handler, mock_request):
         """Test that JWT errors are properly propagated."""
         # Setup mocks
@@ -202,7 +197,7 @@ class TestIntegration:
     """Integration tests for the complete authentication flow."""
 
     @pytest.mark.asyncio
-    @patch('agentarea_common.auth.jwt_handler.get_settings')
+    @patch("agentarea_common.auth.jwt_handler.get_settings")
     async def test_end_to_end_authentication_flow(self, mock_get_settings):
         """Test the complete authentication flow from request to context."""
         # Setup settings mock
@@ -216,7 +211,7 @@ class TestIntegration:
             "sub": "integration-user-123",
             "workspace_id": "integration-workspace-456",
             "email": "integration@example.com",
-            "roles": ["user", "developer"]
+            "roles": ["user", "developer"],
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
 
@@ -244,7 +239,7 @@ class TestIntegration:
         assert context_from_manager.workspace_id == "integration-workspace-456"
 
     @pytest.mark.asyncio
-    @patch('agentarea_common.auth.jwt_handler.get_settings')
+    @patch("agentarea_common.auth.jwt_handler.get_settings")
     async def test_context_isolation_between_requests(self, mock_get_settings):
         """Test that context is properly isolated between different requests."""
         # Setup settings mock
@@ -254,10 +249,7 @@ class TestIntegration:
         mock_get_settings.return_value = mock_settings
 
         # First request
-        payload1 = {
-            "sub": "user-1",
-            "workspace_id": "workspace-1"
-        }
+        payload1 = {"sub": "user-1", "workspace_id": "workspace-1"}
         token1 = jwt.encode(payload1, "test-secret-key", algorithm="HS256")
         mock_request1 = Mock(spec=Request)
         mock_request1.headers = {"authorization": f"Bearer {token1}"}
@@ -267,10 +259,7 @@ class TestIntegration:
         assert result1.workspace_id == "workspace-1"
 
         # Second request (simulating different context)
-        payload2 = {
-            "sub": "user-2",
-            "workspace_id": "workspace-2"
-        }
+        payload2 = {"sub": "user-2", "workspace_id": "workspace-2"}
         token2 = jwt.encode(payload2, "test-secret-key", algorithm="HS256")
         mock_request2 = Mock(spec=Request)
         mock_request2.headers = {"authorization": f"Bearer {token2}"}

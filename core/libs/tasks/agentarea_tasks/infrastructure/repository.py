@@ -25,7 +25,9 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             return None
         return self._orm_to_domain(task_orm)
 
-    async def list_tasks(self, limit: int = 100, offset: int = 0, creator_scoped: bool = False) -> list[Task]:
+    async def list_tasks(
+        self, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+    ) -> list[Task]:
         """List all tasks in workspace and convert to domain models."""
         task_orms = await self.list_all(creator_scoped=creator_scoped, limit=limit, offset=offset)
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
@@ -40,23 +42,23 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         # Extract fields from domain model
         task_data = {
-            'id': entity.id,
-            'agent_id': entity.agent_id,
-            'description': entity.description,
-            'parameters': entity.parameters,
-            'status': entity.status,
-            'result': entity.result,
-            'error': entity.error,
-            'started_at': entity.started_at,
-            'completed_at': entity.completed_at,
-            'execution_id': entity.execution_id,
-            'task_metadata': metadata,
+            "id": entity.id,
+            "agent_id": entity.agent_id,
+            "description": entity.description,
+            "parameters": entity.parameters,
+            "status": entity.status,
+            "result": entity.result,
+            "error": entity.error,
+            "started_at": entity.started_at,
+            "completed_at": entity.completed_at,
+            "execution_id": entity.execution_id,
+            "task_metadata": metadata,
         }
 
         # Remove None values and system fields that will be auto-populated
         task_data = {k: v for k, v in task_data.items() if v is not None}
-        task_data.pop('created_at', None)
-        task_data.pop('updated_at', None)
+        task_data.pop("created_at", None)
+        task_data.pop("updated_at", None)
 
         task_orm = await self.create(**task_data)
         return self._orm_to_domain(task_orm)
@@ -71,16 +73,16 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         # Extract fields from domain model
         task_data = {
-            'agent_id': entity.agent_id,
-            'description': entity.description,
-            'parameters': entity.parameters,
-            'status': entity.status,
-            'result': entity.result,
-            'error': entity.error,
-            'started_at': entity.started_at,
-            'completed_at': entity.completed_at,
-            'execution_id': entity.execution_id,
-            'task_metadata': metadata,
+            "agent_id": entity.agent_id,
+            "description": entity.description,
+            "parameters": entity.parameters,
+            "status": entity.status,
+            "result": entity.result,
+            "error": entity.error,
+            "started_at": entity.started_at,
+            "completed_at": entity.completed_at,
+            "execution_id": entity.execution_id,
+            "task_metadata": metadata,
         }
 
         # Remove None values
@@ -114,7 +116,6 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             workspace_id=task_data.workspace_id or self.user_context.workspace_id,
             task_metadata=metadata,
         )
-
 
         self.session.add(task_orm)
         await self.session.flush()
@@ -160,7 +161,9 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> list[Task]:
+    async def get_by_agent_id(
+        self, agent_id: UUID, limit: int = 100, offset: int = 0
+    ) -> list[Task]:
         """Get tasks by agent ID with pagination."""
         stmt = (
             select(TaskORM)
@@ -174,16 +177,9 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-
-
-
     async def get_by_status(self, status: str) -> list[Task]:
         """Get tasks by status."""
-        stmt = (
-            select(TaskORM)
-            .where(TaskORM.status == status)
-            .order_by(TaskORM.created_at.desc())
-        )
+        stmt = select(TaskORM).where(TaskORM.status == status).order_by(TaskORM.created_at.desc())
         result = await self.session.execute(stmt)
         task_orms = result.scalars().all()
 
@@ -221,23 +217,25 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         if not isinstance(task_metadata, dict):
             task_metadata = {}
 
-        return Task.model_validate({
-            'id': task_orm.id,
-            'agent_id': task_orm.agent_id,
-            'description': task_orm.description,
-            'parameters': task_orm.parameters or {},
-            'status': task_orm.status,
-            'result': task_orm.result,
-            'error': task_orm.error,
-            'created_at': task_orm.created_at,
-            'updated_at': task_orm.updated_at,  # Added to match BaseModel
-            'started_at': task_orm.started_at,
-            'completed_at': task_orm.completed_at,
-            'execution_id': task_orm.execution_id,
-            'user_id': task_orm.created_by,
-            'workspace_id': task_orm.workspace_id,
-            'metadata': task_metadata,
-        })
+        return Task.model_validate(
+            {
+                "id": task_orm.id,
+                "agent_id": task_orm.agent_id,
+                "description": task_orm.description,
+                "parameters": task_orm.parameters or {},
+                "status": task_orm.status,
+                "result": task_orm.result,
+                "error": task_orm.error,
+                "created_at": task_orm.created_at,
+                "updated_at": task_orm.updated_at,  # Added to match BaseModel
+                "started_at": task_orm.started_at,
+                "completed_at": task_orm.completed_at,
+                "execution_id": task_orm.execution_id,
+                "user_id": task_orm.created_by,
+                "workspace_id": task_orm.workspace_id,
+                "metadata": task_metadata,
+            }
+        )
 
     def _domain_to_orm(self, task) -> TaskORM:
         """Convert domain model to ORM model.
@@ -245,7 +243,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         Handles both Task and SimpleTask domain models.
         """
         # Handle different domain model types
-        if hasattr(task, 'task_parameters'):
+        if hasattr(task, "task_parameters"):
             # SimpleTask model
             parameters = task.task_parameters
             error = task.error_message
@@ -299,10 +297,7 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         return self._orm_to_domain(event_orm)
 
     async def get_events_for_task(
-        self,
-        task_id: UUID,
-        limit: int = 100,
-        offset: int = 0
+        self, task_id: UUID, limit: int = 100, offset: int = 0
     ) -> list[TaskEvent]:
         """Get events for a specific task."""
         stmt = (
@@ -319,10 +314,7 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         return [self._orm_to_domain(event_orm) for event_orm in event_orms]
 
     async def get_events_by_type(
-        self,
-        event_type: str,
-        limit: int = 100,
-        offset: int = 0
+        self, event_type: str, limit: int = 100, offset: int = 0
     ) -> list[TaskEvent]:
         """Get events by type."""
         stmt = (
@@ -340,13 +332,15 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
 
     def _orm_to_domain(self, event_orm: TaskEventORM) -> TaskEvent:
         """Convert ORM model to domain model."""
-        return TaskEvent.model_validate({
-            'id': event_orm.id,
-            'task_id': event_orm.task_id,
-            'event_type': event_orm.event_type,
-            'timestamp': event_orm.timestamp,
-            'data': event_orm.data or {},
-            'metadata': event_orm.metadata or {},
-            'workspace_id': event_orm.workspace_id,
-            'created_by': event_orm.created_by,
-        })
+        return TaskEvent.model_validate(
+            {
+                "id": event_orm.id,
+                "task_id": event_orm.task_id,
+                "event_type": event_orm.event_type,
+                "timestamp": event_orm.timestamp,
+                "data": event_orm.data or {},
+                "metadata": event_orm.metadata or {},
+                "workspace_id": event_orm.workspace_id,
+                "created_by": event_orm.created_by,
+            }
+        )

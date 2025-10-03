@@ -20,7 +20,13 @@ def system():
 
 
 @system.command()
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.option("--detailed", is_flag=True, help="Show detailed system information")
 @click.pass_context
 def status(ctx, output_format: str, detailed: bool):
@@ -90,7 +96,9 @@ def status(ctx, output_format: str, detailed: bool):
                         system_stats = stats_result["system"]
                         click.echo("   System:")
                         click.echo(f"     CPU Usage: {system_stats.get('cpu_usage', 'Unknown')}%")
-                        click.echo(f"     Memory Usage: {system_stats.get('memory_usage', 'Unknown')}%")
+                        click.echo(
+                            f"     Memory Usage: {system_stats.get('memory_usage', 'Unknown')}%"
+                        )
                         click.echo(f"     Disk Usage: {system_stats.get('disk_usage', 'Unknown')}%")
 
                 except AgentAreaAPIError as e:
@@ -104,7 +112,13 @@ def status(ctx, output_format: str, detailed: bool):
 
 
 @system.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.pass_context
 def info(ctx, output_format: str):
     """Show system information."""
@@ -137,9 +151,13 @@ def info(ctx, output_format: str):
             if "runtime" in result:
                 runtime_info = result["runtime"]
                 click.echo("Runtime:")
-                click.echo(f"   Python Version: {safe_get_field(runtime_info, 'python_version', 'Unknown')}")
+                click.echo(
+                    f"   Python Version: {safe_get_field(runtime_info, 'python_version', 'Unknown')}"
+                )
                 click.echo(f"   Platform: {safe_get_field(runtime_info, 'platform', 'Unknown')}")
-                click.echo(f"   Architecture: {safe_get_field(runtime_info, 'architecture', 'Unknown')}")
+                click.echo(
+                    f"   Architecture: {safe_get_field(runtime_info, 'architecture', 'Unknown')}"
+                )
                 click.echo()
 
             # Database info
@@ -157,7 +175,10 @@ def info(ctx, output_format: str):
                 click.echo("Configuration:")
                 for key, value in config_info.items():
                     # Hide sensitive values
-                    if any(sensitive in key.lower() for sensitive in ['key', 'secret', 'password', 'token']):
+                    if any(
+                        sensitive in key.lower()
+                        for sensitive in ["key", "secret", "password", "token"]
+                    ):
                         value = "***hidden***"
                     click.echo(f"   {key}: {value}")
 
@@ -169,7 +190,13 @@ def info(ctx, output_format: str):
 
 
 @system.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.option("--limit", default=100, help="Maximum number of logs to retrieve")
 @click.option("--level", help="Filter by log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
 @click.option("--component", help="Filter by component name")
@@ -211,12 +238,14 @@ def logs(ctx, output_format: str, limit: int, level: str, component: str):
                 if len(message) > 60:
                     message = message[:57] + "..."
 
-                rows.append([
-                    safe_get_field(log_entry, "timestamp", "Unknown")[:19],
-                    safe_get_field(log_entry, "level", "Unknown"),
-                    safe_get_field(log_entry, "component", "Unknown"),
-                    message
-                ])
+                rows.append(
+                    [
+                        safe_get_field(log_entry, "timestamp", "Unknown")[:19],
+                        safe_get_field(log_entry, "level", "Unknown"),
+                        safe_get_field(log_entry, "component", "Unknown"),
+                        message,
+                    ]
+                )
 
             click.echo(format_table(headers, rows))
 
@@ -228,7 +257,13 @@ def logs(ctx, output_format: str, limit: int, level: str, component: str):
 
 
 @system.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.pass_context
 def metrics(ctx, output_format: str):
     """Show system metrics."""
@@ -251,7 +286,9 @@ def metrics(ctx, output_format: str):
             if "performance" in result:
                 perf = result["performance"]
                 click.echo("Performance:")
-                click.echo(f"   Average Response Time: {perf.get('avg_response_time', 'Unknown')}ms")
+                click.echo(
+                    f"   Average Response Time: {perf.get('avg_response_time', 'Unknown')}ms"
+                )
                 click.echo(f"   Requests per Second: {perf.get('requests_per_second', 'Unknown')}")
                 click.echo(f"   Error Rate: {perf.get('error_rate', 'Unknown')}%")
                 click.echo()
@@ -333,7 +370,13 @@ def restart(ctx, component: str, force: bool):
 
 
 @system.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.pass_context
 def components(ctx, output_format: str):
     """List system components and their status."""
@@ -364,13 +407,15 @@ def components(ctx, output_format: str):
                 status_emoji = "✅" if component.get("status") == "running" else "❌"
                 health_emoji = "💚" if component.get("health") == "healthy" else "💔"
 
-                rows.append([
-                    safe_get_field(component, "name", "Unknown"),
-                    f"{status_emoji} {safe_get_field(component, 'status', 'Unknown')}",
-                    safe_get_field(component, "version", "Unknown"),
-                    safe_get_field(component, "uptime", "Unknown"),
-                    f"{health_emoji} {safe_get_field(component, 'health', 'Unknown')}"
-                ])
+                rows.append(
+                    [
+                        safe_get_field(component, "name", "Unknown"),
+                        f"{status_emoji} {safe_get_field(component, 'status', 'Unknown')}",
+                        safe_get_field(component, "version", "Unknown"),
+                        safe_get_field(component, "uptime", "Unknown"),
+                        f"{health_emoji} {safe_get_field(component, 'health', 'Unknown')}",
+                    ]
+                )
 
             click.echo(format_table(headers, rows))
 

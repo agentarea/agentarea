@@ -50,7 +50,7 @@ def sample_task_event():
         data={"model": "gpt-4", "tokens": 150},
         metadata={"source": "workflow"},
         workspace_id="test-workspace",
-        created_by="workflow"
+        created_by="workflow",
     )
 
 
@@ -63,7 +63,7 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
-        sample_task_event
+        sample_task_event,
     ):
         """Test successful workflow event creation."""
         # Setup
@@ -80,7 +80,7 @@ class TestTaskEventService:
             event_type=event_type,
             data=data,
             workspace_id="test-workspace",
-            created_by="workflow"
+            created_by="workflow",
         )
 
         # Verify
@@ -102,7 +102,7 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
-        sample_task_event
+        sample_task_event,
     ):
         """Test workflow event creation with default parameters."""
         # Setup
@@ -115,9 +115,7 @@ class TestTaskEventService:
 
         # Execute (using defaults for workspace_id and created_by)
         result = await task_event_service.create_workflow_event(
-            task_id=task_id,
-            event_type=event_type,
-            data=data
+            task_id=task_id, event_type=event_type, data=data
         )
 
         # Verify
@@ -128,10 +126,7 @@ class TestTaskEventService:
 
     @pytest.mark.asyncio
     async def test_create_workflow_event_repository_error(
-        self,
-        task_event_service,
-        mock_repository_factory,
-        mock_task_event_repository
+        self, task_event_service, mock_repository_factory, mock_task_event_repository
     ):
         """Test handling of repository errors during event creation."""
         # Setup
@@ -145,9 +140,7 @@ class TestTaskEventService:
         # Execute & Verify
         with pytest.raises(Exception, match="Database error"):
             await task_event_service.create_workflow_event(
-                task_id=task_id,
-                event_type=event_type,
-                data=data
+                task_id=task_id, event_type=event_type, data=data
             )
 
     @pytest.mark.asyncio
@@ -156,7 +149,7 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
-        sample_task_event
+        sample_task_event,
     ):
         """Test retrieving events for a specific task."""
         # Setup
@@ -179,7 +172,7 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
-        sample_task_event
+        sample_task_event,
     ):
         """Test retrieving events by type."""
         # Setup
@@ -202,7 +195,7 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
-        sample_task_event
+        sample_task_event,
     ):
         """Test creating multiple events successfully."""
         # Setup
@@ -212,15 +205,15 @@ class TestTaskEventService:
                 "event_type": "LLMCallStarted",
                 "data": {"model": "gpt-4"},
                 "workspace_id": "test-workspace",
-                "created_by": "workflow"
+                "created_by": "workflow",
             },
             {
                 "task_id": str(uuid4()),
                 "event_type": "LLMCallCompleted",
                 "data": {"tokens": 150},
                 "workspace_id": "test-workspace",
-                "created_by": "workflow"
-            }
+                "created_by": "workflow",
+            },
         ]
 
         mock_repository_factory.create_repository.return_value = mock_task_event_repository
@@ -240,7 +233,7 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
-        sample_task_event
+        sample_task_event,
     ):
         """Test creating multiple events with some failures."""
         # Setup
@@ -259,7 +252,7 @@ class TestTaskEventService:
                 "task_id": str(uuid4()),
                 "event_type": "TaskCompleted",
                 "data": {"result": "success"},
-            }
+            },
         ]
 
         mock_repository_factory.create_repository.return_value = mock_task_event_repository
@@ -290,7 +283,7 @@ class TestTaskEventDomainModel:
             data={"model": "gpt-4", "tokens": 150},
             metadata={"source": "workflow"},
             workspace_id="test-workspace",
-            created_by="workflow"
+            created_by="workflow",
         )
 
         assert event.id == event_id
@@ -315,7 +308,7 @@ class TestTaskEventDomainModel:
             event_type=event_type,
             data=data,
             workspace_id=workspace_id,
-            created_by=created_by
+            created_by=created_by,
         )
 
         assert event.task_id == task_id
@@ -334,11 +327,7 @@ class TestTaskEventDomainModel:
         event_type = "TaskCompleted"
         data = {"result": "success"}
 
-        event = TaskEvent.create_workflow_event(
-            task_id=task_id,
-            event_type=event_type,
-            data=data
-        )
+        event = TaskEvent.create_workflow_event(task_id=task_id, event_type=event_type, data=data)
 
         assert event.workspace_id == "default"
         assert event.created_by == "workflow"

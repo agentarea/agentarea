@@ -64,7 +64,7 @@ async def create_test_event(task_id: UUID, event_type: str) -> dict:
             "agent_id": str(uuid4()),
             "execution_id": f"agent-task-{task_id}",
             "message": f"Test {event_type} event",
-        }
+        },
     }
 
 
@@ -79,9 +79,7 @@ async def test_task_service_event_streaming():
 
     # Create TaskService instance
     task_service = TaskService(
-        task_repository=task_repo,
-        event_broker=event_broker,
-        task_manager=task_manager
+        task_repository=task_repo, event_broker=event_broker, task_manager=task_manager
     )
 
     # Create a test task
@@ -116,14 +114,14 @@ async def test_task_service_event_streaming():
             logger.info(f"Received event: {event['event_type']}")
 
             # Stop after receiving a few events or heartbeat
-            if len(events_received) >= 3 or event['event_type'] == 'heartbeat':
+            if len(events_received) >= 3 or event["event_type"] == "heartbeat":
                 break
 
         logger.info(f"Successfully received {len(events_received)} events")
         assert len(events_received) > 0, "Should receive at least historical events"
 
         # Check that we got a historical event
-        historical_events = [e for e in events_received if e['event_type'] == 'task_created']
+        historical_events = [e for e in events_received if e["event_type"] == "task_created"]
         assert len(historical_events) > 0, "Should receive historical task_created event"
 
         logger.info("✅ TaskService event streaming test passed!")
@@ -152,8 +150,8 @@ async def test_redis_event_publishing():
                 "task_id": str(uuid4()),
                 "agent_id": str(uuid4()),
                 "model": "test-model",
-                "cost": 0.01
-            }
+                "cost": 0.01,
+            },
         )
 
         # Try to publish
@@ -180,7 +178,7 @@ async def test_sse_event_format():
         test_data = {
             "task_id": str(uuid4()),
             "status": "running",
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         sse_formatted = _format_sse_event("task_status_changed", test_data)
@@ -208,13 +206,13 @@ async def run_all_tests():
     results = {}
 
     # Test 1: TaskService event streaming
-    results['task_service'] = await test_task_service_event_streaming()
+    results["task_service"] = await test_task_service_event_streaming()
 
     # Test 2: Redis event publishing
-    results['redis_publishing'] = await test_redis_event_publishing()
+    results["redis_publishing"] = await test_redis_event_publishing()
 
     # Test 3: SSE formatting
-    results['sse_format'] = await test_sse_event_format()
+    results["sse_format"] = await test_sse_event_format()
 
     # Summary
     logger.info("=" * 50)

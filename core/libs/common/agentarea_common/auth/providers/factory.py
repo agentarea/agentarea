@@ -15,16 +15,18 @@ class AuthProviderFactory:
     """Factory for creating authentication providers."""
 
     @staticmethod
-    def create_provider(provider_name: str, config: dict[str, Any] | None = None) -> AuthProviderInterface:
+    def create_provider(
+        provider_name: str, config: dict[str, Any] | None = None
+    ) -> AuthProviderInterface:
         """Create an authentication provider based on the provider name.
-        
+
         Args:
             provider_name: Name of the provider to create
             config: Configuration dictionary for the provider
-            
+
         Returns:
             AuthProviderInterface instance
-            
+
         Raises:
             ValueError: If the provider name is not supported
         """
@@ -55,7 +57,7 @@ class AuthProviderFactory:
     @staticmethod
     def create_provider_from_env() -> AuthProviderInterface:
         """Create an authentication provider based on environment variables.
-        
+
         Returns:
             AuthProviderInterface instance
         """

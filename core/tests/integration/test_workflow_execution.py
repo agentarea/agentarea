@@ -76,12 +76,12 @@ def sample_tools():
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Final result or summary of what was accomplished"
+                            "description": "Final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -94,12 +94,9 @@ def execution_request():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete a simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 5
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 5},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
 
@@ -130,12 +127,12 @@ class TestWorkflowExecution:
                         "type": "function",
                         "function": {
                             "name": "task_complete",
-                            "arguments": json.dumps({"result": "Task completed successfully"})
-                        }
+                            "arguments": json.dumps({"result": "Task completed successfully"}),
+                        },
                     }
                 ],
                 "cost": 0.001,
-                "usage": {"total_tokens": 50}
+                "usage": {"total_tokens": 50},
             }
 
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
@@ -144,7 +141,7 @@ class TestWorkflowExecution:
                     "success": True,
                     "completed": True,
                     "result": tool_args.get("result", "Task completed"),
-                    "tool_name": "task_complete"
+                    "tool_name": "task_complete",
                 }
             return {"success": False, "result": "Unknown tool"}
 
@@ -159,7 +156,7 @@ class TestWorkflowExecution:
                 mock_discover_tools,
                 mock_call_llm,
                 mock_execute_tool,
-                mock_publish_events
+                mock_publish_events,
             ]
 
             # Start worker
@@ -175,7 +172,7 @@ class TestWorkflowExecution:
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=30)
+                    execution_timeout=timedelta(seconds=30),
                 )
 
                 # Verify workflow completed successfully
@@ -209,7 +206,7 @@ class TestWorkflowExecution:
                     "content": "I need to analyze this task first.",
                     "tool_calls": None,
                     "cost": 0.001,
-                    "usage": {"total_tokens": 30}
+                    "usage": {"total_tokens": 30},
                 }
             elif call_count == 2:
                 # Second call - still working
@@ -218,7 +215,7 @@ class TestWorkflowExecution:
                     "content": "Let me work on this step by step.",
                     "tool_calls": None,
                     "cost": 0.001,
-                    "usage": {"total_tokens": 40}
+                    "usage": {"total_tokens": 40},
                 }
             else:
                 # Third call - complete the task
@@ -231,12 +228,14 @@ class TestWorkflowExecution:
                             "type": "function",
                             "function": {
                                 "name": "task_complete",
-                                "arguments": json.dumps({"result": "Task completed after analysis"})
-                            }
+                                "arguments": json.dumps(
+                                    {"result": "Task completed after analysis"}
+                                ),
+                            },
                         }
                     ],
                     "cost": 0.001,
-                    "usage": {"total_tokens": 45}
+                    "usage": {"total_tokens": 45},
                 }
 
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
@@ -245,7 +244,7 @@ class TestWorkflowExecution:
                     "success": True,
                     "completed": True,
                     "result": tool_args.get("result", "Task completed"),
-                    "tool_name": "task_complete"
+                    "tool_name": "task_complete",
                 }
             return {"success": False, "result": "Unknown tool"}
 
@@ -259,7 +258,7 @@ class TestWorkflowExecution:
                 mock_discover_tools,
                 mock_call_llm,
                 mock_execute_tool,
-                mock_publish_events
+                mock_publish_events,
             ]
 
             async with Worker(
@@ -273,7 +272,7 @@ class TestWorkflowExecution:
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=30)
+                    execution_timeout=timedelta(seconds=30),
                 )
 
                 # Verify workflow completed after multiple iterations
@@ -304,7 +303,7 @@ class TestWorkflowExecution:
                 "content": "I'm still working on this task...",
                 "tool_calls": None,
                 "cost": 0.001,
-                "usage": {"total_tokens": 30}
+                "usage": {"total_tokens": 30},
             }
 
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
@@ -323,7 +322,7 @@ class TestWorkflowExecution:
                 mock_call_llm,
                 mock_execute_tool,
                 mock_evaluate_goal,
-                mock_publish_events
+                mock_publish_events,
             ]
 
             async with Worker(
@@ -337,7 +336,7 @@ class TestWorkflowExecution:
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=30)
+                    execution_timeout=timedelta(seconds=30),
                 )
 
                 # Verify workflow stopped at max iterations
@@ -367,7 +366,7 @@ class TestWorkflowExecution:
                 "content": "This is an expensive call.",
                 "tool_calls": None,
                 "cost": 0.01,  # Exceeds budget of 0.001
-                "usage": {"total_tokens": 1000}
+                "usage": {"total_tokens": 1000},
             }
 
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
@@ -382,7 +381,7 @@ class TestWorkflowExecution:
                 mock_discover_tools,
                 mock_call_llm,
                 mock_execute_tool,
-                mock_publish_events
+                mock_publish_events,
             ]
 
             async with Worker(
@@ -396,7 +395,7 @@ class TestWorkflowExecution:
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=30)
+                    execution_timeout=timedelta(seconds=30),
                 )
 
                 # Verify workflow stopped due to budget
@@ -423,7 +422,7 @@ class TestWorkflowStateManagement:
             success_criteria=["Complete task"],
             max_iterations=5,
             requires_human_approval=False,
-            context={}
+            context={},
         )
 
         # Initially not successful
@@ -450,7 +449,7 @@ class TestWorkflowStateManagement:
             success_criteria=["Complete task"],
             max_iterations=3,
             requires_human_approval=False,
-            context={}
+            context={},
         )
         workflow_instance.budget_tracker = BudgetTracker(1.0)
 

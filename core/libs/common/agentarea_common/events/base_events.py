@@ -18,6 +18,7 @@ class DomainEvent:
         self.event_type = kwargs.get("event_type", self.__class__.__name__)
         self.data = kwargs
 
+
 # --- Pydantic models for event envelope (non-breaking addition) ---
 # We keep the legacy DomainEvent dataclass while introducing a typed Pydantic
 # envelope that can be used across brokers, SSE, and persistence layers.
@@ -44,7 +45,9 @@ class EventEnvelope(BaseModel):
     """
 
     event_id: UUID = Field(default_factory=uuid4, description="Unique event identifier")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Event timestamp (UTC)")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Event timestamp (UTC)"
+    )
     event_type: str = Field(..., description="Type of the event")
     data: dict[str, Any] = Field(default_factory=dict, description="Event payload")
 
@@ -75,7 +78,12 @@ class EventEnvelope(BaseModel):
         # If the payload looks like a DomainEvent.data dict (no top-level metadata), wrap it
         if data == {}:
             # Heuristic: treat payload as data when it contains aggregate_id/original_event_type etc.
-            known_keys = {"aggregate_id", "original_event_type", "original_timestamp", "original_data"}
+            known_keys = {
+                "aggregate_id",
+                "original_event_type",
+                "original_timestamp",
+                "original_data",
+            }
             if any(k in payload for k in known_keys):
                 data = payload
         return cls(event_id=event_id, timestamp=timestamp, event_type=event_type, data=data)

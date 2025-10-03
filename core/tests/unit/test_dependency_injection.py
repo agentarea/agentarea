@@ -54,7 +54,7 @@ class TestDependencyInjection:
     @pytest.mark.asyncio
     async def test_get_task_manager(self, mock_db_session):
         """Test that get_task_manager returns a TemporalTaskManager instance."""
-        with patch('agentarea_api.api.deps.services.get_task_repository') as mock_get_repo:
+        with patch("agentarea_api.api.deps.services.get_task_repository") as mock_get_repo:
             mock_task_repo = AsyncMock(spec=TaskRepository)
             mock_get_repo.return_value = mock_task_repo
 
@@ -67,9 +67,10 @@ class TestDependencyInjection:
     @pytest.mark.asyncio
     async def test_get_task_service(self, mock_db_session, mock_event_broker):
         """Test that get_task_service returns a TaskService instance with all dependencies."""
-        with patch('agentarea_api.api.deps.services.get_task_repository') as mock_get_task_repo, \
-             patch('agentarea_api.api.deps.services.get_agent_repository') as mock_get_agent_repo:
-
+        with (
+            patch("agentarea_api.api.deps.services.get_task_repository") as mock_get_task_repo,
+            patch("agentarea_api.api.deps.services.get_agent_repository") as mock_get_agent_repo,
+        ):
             # Setup mocks
             mock_task_repo = AsyncMock(spec=TaskRepository)
             mock_agent_repo = AsyncMock(spec=AgentRepository)
@@ -91,11 +92,14 @@ class TestDependencyInjection:
             mock_get_agent_repo.assert_called_once_with(mock_db_session)
 
     @pytest.mark.asyncio
-    async def test_task_service_dependencies_are_properly_injected(self, mock_db_session, mock_event_broker):
+    async def test_task_service_dependencies_are_properly_injected(
+        self, mock_db_session, mock_event_broker
+    ):
         """Test that TaskService can be instantiated with all required dependencies."""
-        with patch('agentarea_api.api.deps.services.get_task_repository') as mock_get_task_repo, \
-             patch('agentarea_api.api.deps.services.get_agent_repository') as mock_get_agent_repo:
-
+        with (
+            patch("agentarea_api.api.deps.services.get_task_repository") as mock_get_task_repo,
+            patch("agentarea_api.api.deps.services.get_agent_repository") as mock_get_agent_repo,
+        ):
             # Setup mocks
             mock_task_repo = AsyncMock(spec=TaskRepository)
             mock_agent_repo = AsyncMock(spec=AgentRepository)
@@ -107,13 +111,14 @@ class TestDependencyInjection:
 
             # Test that the service can perform basic operations
             # This verifies that all dependencies are properly wired
-            assert hasattr(task_service, 'task_repository')
-            assert hasattr(task_service, 'event_broker')
-            assert hasattr(task_service, 'task_manager')
-            assert hasattr(task_service, 'agent_repository')
+            assert hasattr(task_service, "task_repository")
+            assert hasattr(task_service, "event_broker")
+            assert hasattr(task_service, "task_manager")
+            assert hasattr(task_service, "agent_repository")
 
             # Test that the service inherits from BaseTaskService
             from agentarea_tasks.domain.base_service import BaseTaskService
+
             assert isinstance(task_service, BaseTaskService)
 
     @pytest.mark.asyncio
@@ -124,13 +129,13 @@ class TestDependencyInjection:
         event_broker = await get_event_broker()
 
         # Verify the result is an EventBroker instance
-        assert hasattr(event_broker, 'publish')
+        assert hasattr(event_broker, "publish")
         assert isinstance(event_broker, EventBroker)
 
     @pytest.mark.asyncio
     async def test_dependency_injection_chain(self, mock_db_session):
         """Test the complete dependency injection chain works correctly."""
-        with patch('agentarea_api.api.deps.services.get_event_broker') as mock_get_broker:
+        with patch("agentarea_api.api.deps.services.get_event_broker") as mock_get_broker:
             # Setup event broker mock
             mock_broker = AsyncMock(spec=EventBroker)
             mock_get_broker.return_value = mock_broker

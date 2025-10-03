@@ -27,22 +27,21 @@ class TriggerActivities:
 
 # Import Pydantic models for trigger activities
 from ..models import (
+    EvaluateTriggerConditionsRequest,
+    EvaluateTriggerConditionsResult,
     ExecuteTriggerRequest,
     ExecuteTriggerResult,
     RecordTriggerExecutionRequest,
-    RecordTriggerExecutionResult,
-    EvaluateTriggerConditionsRequest,
-    EvaluateTriggerConditionsResult,
 )
 
 
 @workflow.defn
 class TriggerExecutionWorkflow:
     """Workflow for executing a single trigger instance.
-    
+
     This workflow is started by Temporal Schedules when cron triggers fire.
     It executes the trigger and records the execution result.
-    
+
     Enhanced Safety features:
     - Configurable execution timeout (default 15 minutes, max 30 minutes)
     - Enhanced retry policies with exponential backoff and jitter
@@ -60,11 +59,11 @@ class TriggerExecutionWorkflow:
     @workflow.run
     async def run(self, trigger_id: UUID, execution_data: dict[str, Any]) -> dict[str, Any]:
         """Execute a trigger and return the execution result.
-        
+
         Args:
             trigger_id: The ID of the trigger to execute
             execution_data: Additional data about the execution (timestamp, source, etc.)
-            
+
         Returns:
             Dictionary containing execution result and metadata
         """
@@ -83,18 +82,24 @@ class TriggerExecutionWorkflow:
         try:
             # Check for cancellation before starting
             if self.is_cancelled:
-                workflow.logger.info(f"Trigger execution {trigger_id} was cancelled before starting")
+                workflow.logger.info(
+                    f"Trigger execution {trigger_id} was cancelled before starting"
+                )
                 return {
                     "trigger_id": str(trigger_id),
                     "status": "cancelled",
                     "reason": "workflow_cancelled",
                     "execution_time_ms": 0,
-                    "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60
+                    "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
                 }
             # Step 1: Evaluate trigger conditions with enhanced retry policy and circuit breaker
             conditions_result: EvaluateTriggerConditionsResult = await workflow.execute_activity(
                 TriggerActivities.evaluate_trigger_conditions,
-                args=[EvaluateTriggerConditionsRequest(trigger_id=trigger_id, event_data=execution_data)],
+                args=[
+                    EvaluateTriggerConditionsRequest(
+                        trigger_id=trigger_id, event_data=execution_data
+                    )
+                ],
                 start_to_close_timeout=timedelta(minutes=3),  # Increased timeout for LLM evaluation
                 heartbeat_timeout=timedelta(seconds=30),  # Heartbeat for condition evaluation
                 retry_policy=RetryPolicy(
@@ -109,27 +114,31 @@ class TriggerExecutionWorkflow:
                         "TriggerDisabledError",  # Don't retry if trigger was disabled
                         "AgentNotFoundError",
                         "AuthenticationError",
-                        "AuthorizationError"
-                    ]
-                )
+                        "AuthorizationError",
+                    ],
+                ),
             )
 
             if not conditions_result.conditions_met:
                 workflow.logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
-                execution_time_ms = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
+                execution_time_ms = int(
+                    (workflow.now() - self.execution_start_time).total_seconds() * 1000
+                )
                 return {
                     "trigger_id": str(trigger_id),
                     "status": "skipped",
                     "reason": "conditions_not_met",
                     "execution_time_ms": execution_time_ms,
-                    "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60
+                    "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
                 }
 
             # Step 2: Execute the trigger with enhanced retry policy and safety mechanisms
             execution_result_model: ExecuteTriggerResult = await workflow.execute_activity(
                 TriggerActivities.execute_trigger,
                 args=[ExecuteTriggerRequest(trigger_id=trigger_id, execution_data=execution_data)],
-                start_to_close_timeout=timedelta(minutes=12),  # Increased timeout for complex triggers
+                start_to_close_timeout=timedelta(
+                    minutes=12
+                ),  # Increased timeout for complex triggers
                 heartbeat_timeout=timedelta(minutes=2),  # Heartbeat for long-running activities
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=2),  # Start with 2 second delay
@@ -145,9 +154,9 @@ class TriggerExecutionWorkflow:
                         "AuthenticationError",
                         "AuthorizationError",
                         "RateLimitExceededError",  # Don't retry rate limit errors
-                        "CircuitBreakerOpenError"  # Don't retry when circuit breaker is open
-                    ]
-                )
+                        "CircuitBreakerOpenError",  # Don't retry when circuit breaker is open
+                    ],
+                ),
             )
 
             workflow.logger.info(f"Trigger {trigger_id} executed successfully")
@@ -158,45 +167,58 @@ class TriggerExecutionWorkflow:
             if execution_result.get("trigger_id") is not None:
                 execution_result["trigger_id"] = str(execution_result["trigger_id"])
             if execution_result.get("task_id") is not None:
-                execution_result["task_id"] = str(execution_result["task_id"]) if execution_result["task_id"] else None
+                execution_result["task_id"] = (
+                    str(execution_result["task_id"]) if execution_result["task_id"] else None
+                )
             if execution_result.get("execution_id") is not None:
-                execution_result["execution_id"] = str(execution_result["execution_id"]) if execution_result["execution_id"] else None
+                execution_result["execution_id"] = (
+                    str(execution_result["execution_id"])
+                    if execution_result["execution_id"]
+                    else None
+                )
 
             execution_result["workflow_timeout_minutes"] = workflow_timeout.total_seconds() / 60
-            execution_result["total_workflow_time_ms"] = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
+            execution_result["total_workflow_time_ms"] = int(
+                (workflow.now() - self.execution_start_time).total_seconds() * 1000
+            )
 
             return execution_result
 
         except ApplicationError as e:
             workflow.logger.error(f"Trigger {trigger_id} execution failed: {e}")
 
-            execution_time_ms = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
+            execution_time_ms = int(
+                (workflow.now() - self.execution_start_time).total_seconds() * 1000
+            )
 
             # Record the failure with enhanced retry policy and safety mechanisms
             await workflow.execute_activity(
                 TriggerActivities.record_trigger_execution,
-                args=[RecordTriggerExecutionRequest(
-                    trigger_id=trigger_id,
-                    execution_data={
-                        "status": "failed",
-                        "error_message": str(e),
-                        "execution_time_ms": execution_time_ms,
-                        "executed_at": execution_data.get("execution_time", datetime.utcnow().isoformat()),
-                        "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
-                        "error_type": type(e).__name__
-                    }
-                )],
-                start_to_close_timeout=timedelta(minutes=2),  # Increased timeout for failure recording
+                args=[
+                    RecordTriggerExecutionRequest(
+                        trigger_id=trigger_id,
+                        execution_data={
+                            "status": "failed",
+                            "error_message": str(e),
+                            "execution_time_ms": execution_time_ms,
+                            "executed_at": execution_data.get(
+                                "execution_time", datetime.utcnow().isoformat()
+                            ),
+                            "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
+                            "error_type": type(e).__name__,
+                        },
+                    )
+                ],
+                start_to_close_timeout=timedelta(
+                    minutes=2
+                ),  # Increased timeout for failure recording
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=1),
                     maximum_interval=timedelta(seconds=30),  # Increased max interval
                     backoff_coefficient=2.0,
                     maximum_attempts=5,  # More attempts for critical failure recording
-                    non_retryable_error_types=[
-                        "DatabaseConnectionError",
-                        "PermanentDatabaseError"
-                    ]
-                )
+                    non_retryable_error_types=["DatabaseConnectionError", "PermanentDatabaseError"],
+                ),
             )
 
             # Re-raise the error to mark workflow as failed
@@ -205,34 +227,39 @@ class TriggerExecutionWorkflow:
         except Exception as e:
             workflow.logger.error(f"Unexpected error in trigger {trigger_id} execution: {e}")
 
-            execution_time_ms = int((workflow.now() - self.execution_start_time).total_seconds() * 1000)
+            execution_time_ms = int(
+                (workflow.now() - self.execution_start_time).total_seconds() * 1000
+            )
 
             # Record the unexpected failure with enhanced retry policy and safety mechanisms
             await workflow.execute_activity(
                 TriggerActivities.record_trigger_execution,
-                args=[RecordTriggerExecutionRequest(
-                    trigger_id=trigger_id,
-                    execution_data={
-                        "status": "failed",
-                        "error_message": f"Unexpected error: {e!s}",
-                        "execution_time_ms": execution_time_ms,
-                        "executed_at": execution_data.get("execution_time", datetime.utcnow().isoformat()),
-                        "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
-                        "error_type": type(e).__name__,
-                        "is_unexpected_error": True
-                    }
-                )],
-                start_to_close_timeout=timedelta(minutes=2),  # Increased timeout for failure recording
+                args=[
+                    RecordTriggerExecutionRequest(
+                        trigger_id=trigger_id,
+                        execution_data={
+                            "status": "failed",
+                            "error_message": f"Unexpected error: {e!s}",
+                            "execution_time_ms": execution_time_ms,
+                            "executed_at": execution_data.get(
+                                "execution_time", datetime.utcnow().isoformat()
+                            ),
+                            "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
+                            "error_type": type(e).__name__,
+                            "is_unexpected_error": True,
+                        },
+                    )
+                ],
+                start_to_close_timeout=timedelta(
+                    minutes=2
+                ),  # Increased timeout for failure recording
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=1),
                     maximum_interval=timedelta(seconds=30),  # Increased max interval
                     backoff_coefficient=2.0,
                     maximum_attempts=5,  # More attempts for critical failure recording
-                    non_retryable_error_types=[
-                        "DatabaseConnectionError",
-                        "PermanentDatabaseError"
-                    ]
-                )
+                    non_retryable_error_types=["DatabaseConnectionError", "PermanentDatabaseError"],
+                ),
             )
 
             # Convert to ApplicationError for proper workflow failure handling
@@ -241,7 +268,7 @@ class TriggerExecutionWorkflow:
     @workflow.signal
     async def cancel_execution(self) -> None:
         """Signal to cancel the trigger execution.
-        
+
         This allows for graceful cancellation of long-running trigger executions.
         """
         workflow.logger.info("Received cancellation signal for trigger execution")
@@ -250,7 +277,7 @@ class TriggerExecutionWorkflow:
     @workflow.query
     def get_execution_status(self) -> dict[str, Any]:
         """Query to get current execution status.
-        
+
         Returns:
             Dictionary with current execution status information
         """
@@ -258,12 +285,16 @@ class TriggerExecutionWorkflow:
         execution_duration_ms = 0
 
         if self.execution_start_time:
-            execution_duration_ms = int((current_time - self.execution_start_time).total_seconds() * 1000)
+            execution_duration_ms = int(
+                (current_time - self.execution_start_time).total_seconds() * 1000
+            )
 
         return {
             "is_cancelled": self.is_cancelled,
             "workflow_time": current_time.isoformat(),
-            "execution_start_time": self.execution_start_time.isoformat() if self.execution_start_time else None,
+            "execution_start_time": self.execution_start_time.isoformat()
+            if self.execution_start_time
+            else None,
             "execution_duration_ms": execution_duration_ms,
-            "is_running": self.execution_start_time is not None
+            "is_running": self.execution_start_time is not None,
         }

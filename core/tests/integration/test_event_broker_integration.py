@@ -73,8 +73,8 @@ async def test_event_publishing(event_broker: RedisEventBroker, task_id: UUID):
                 "agent_id": str(uuid4()),
                 "execution_id": f"agent-task-{task_id}",
                 "iteration": 1,
-                "message_count": 2
-            }
+                "message_count": 2,
+            },
         )
 
         logger.info(f"Created test event: {test_event.event_type}")
@@ -95,7 +95,9 @@ async def test_event_publishing(event_broker: RedisEventBroker, task_id: UUID):
         # Log detailed information about the event broker
         logger.error(f"EventBroker type: {type(event_broker)}")
         logger.error(f"EventBroker.redis_broker type: {type(event_broker.redis_broker)}")
-        logger.error(f"Available methods on redis_broker: {[m for m in dir(event_broker.redis_broker) if not m.startswith('_')]}")
+        logger.error(
+            f"Available methods on redis_broker: {[m for m in dir(event_broker.redis_broker) if not m.startswith('_')]}"
+        )
 
         return False
 
@@ -115,7 +117,7 @@ async def test_event_subscription(event_broker: RedisEventBroker, task_id: UUID)
                 logger.info("Starting event listener...")
 
                 # Access the underlying RedisBroker for subscription
-                if hasattr(event_broker, 'redis_broker'):
+                if hasattr(event_broker, "redis_broker"):
                     redis_broker = event_broker.redis_broker
 
                     # Check if it's connected
@@ -124,13 +126,15 @@ async def test_event_subscription(event_broker: RedisEventBroker, task_id: UUID)
                         logger.info("Redis broker connected")
 
                     # Try to access Redis connection for pubsub
-                    connection_attrs = ['_connection', 'connection', 'client', '_client', 'redis']
+                    connection_attrs = ["_connection", "connection", "client", "_client", "redis"]
                     redis_connection = None
 
                     for attr in connection_attrs:
                         if hasattr(redis_broker, attr):
                             redis_connection = getattr(redis_broker, attr)
-                            logger.info(f"Found Redis connection via '{attr}': {type(redis_connection)}")
+                            logger.info(
+                                f"Found Redis connection via '{attr}': {type(redis_connection)}"
+                            )
                             break
 
                     if redis_connection:
@@ -157,32 +161,46 @@ async def test_event_subscription(event_broker: RedisEventBroker, task_id: UUID)
                                     # Handle different data formats
                                     if isinstance(raw_data, (bytes, str)):
                                         if isinstance(raw_data, bytes):
-                                            raw_data = raw_data.decode('utf-8')
+                                            raw_data = raw_data.decode("utf-8")
                                         event_data = json.loads(raw_data)
                                     else:
                                         event_data = raw_data
 
                                     logger.info(f"Parsed event_data type: {type(event_data)}")
-                                    logger.info(f"Parsed event_data keys: {list(event_data.keys()) if isinstance(event_data, dict) else 'not a dict'}")
+                                    logger.info(
+                                        f"Parsed event_data keys: {list(event_data.keys()) if isinstance(event_data, dict) else 'not a dict'}"
+                                    )
 
                                     # Handle FastStream message structure: {"data": "JSON_STRING", "headers": {...}}
                                     actual_event_data = event_data
-                                    if isinstance(event_data, dict) and "data" in event_data and isinstance(event_data["data"], str):
+                                    if (
+                                        isinstance(event_data, dict)
+                                        and "data" in event_data
+                                        and isinstance(event_data["data"], str)
+                                    ):
                                         # The actual event is a JSON string inside the "data" field
                                         try:
                                             actual_event_data = json.loads(event_data["data"])
-                                            logger.info(f"Unwrapped inner event data: {actual_event_data}")
+                                            logger.info(
+                                                f"Unwrapped inner event data: {actual_event_data}"
+                                            )
                                         except json.JSONDecodeError as e:
                                             logger.warning(f"Failed to parse inner JSON: {e}")
                                             continue
 
                                     # Filter by task_id (check in the nested data structure)
-                                    aggregate_id = actual_event_data.get("data", {}).get("aggregate_id")
-                                    logger.info(f"Looking for aggregate_id: {aggregate_id}, task_id: {task_id!s}")
+                                    aggregate_id = actual_event_data.get("data", {}).get(
+                                        "aggregate_id"
+                                    )
+                                    logger.info(
+                                        f"Looking for aggregate_id: {aggregate_id}, task_id: {task_id!s}"
+                                    )
 
                                     if aggregate_id == str(task_id):
                                         received_events.append(actual_event_data)
-                                        logger.info(f"✅ Received filtered event for task {task_id}")
+                                        logger.info(
+                                            f"✅ Received filtered event for task {task_id}"
+                                        )
                                         break  # Got our event, exit
 
                                 except (json.JSONDecodeError, AttributeError) as e:
@@ -231,8 +249,8 @@ async def test_event_subscription(event_broker: RedisEventBroker, task_id: UUID)
         if received_events:
             logger.info(f"✅ Successfully received {len(received_events)} events via subscription")
             for event in received_events:
-                event_type = event.get('event_type', 'unknown')
-                aggregate_id = event.get('data', {}).get('aggregate_id', 'unknown')
+                event_type = event.get("event_type", "unknown")
+                aggregate_id = event.get("data", {}).get("aggregate_id", "unknown")
                 logger.info(f"  Event: {event_type} for task {aggregate_id}")
             return True
         else:
@@ -265,7 +283,7 @@ async def test_full_integration():
         subscribe_success = await test_event_subscription(event_broker, task_id)
 
         # Step 4: Cleanup
-        if hasattr(event_broker, '_connected') and event_broker._connected:
+        if hasattr(event_broker, "_connected") and event_broker._connected:
             await event_broker.redis_broker.close()
             logger.info("Closed Redis connection")
 
@@ -286,6 +304,7 @@ async def test_full_integration():
     except Exception as e:
         logger.error(f"❌ Integration test failed with exception: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

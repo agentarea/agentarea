@@ -4,10 +4,11 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'core'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "core"))
 
 try:
     from core.apps.cli.agentarea_cli.main import AgentAreaClient, AuthConfig, cli
+
     print("✅ CLI module imported successfully")
 
     # Test AuthConfig

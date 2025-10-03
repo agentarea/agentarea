@@ -134,7 +134,7 @@ class LLMReasoningResult(BaseModel):
 
 class AgentConfigRequest(BaseModel):
     """Request for building agent configuration."""
-    
+
     agent_id: UUID
     user_context_data: dict[str, Any]
     execution_context: dict[str, Any] | None = None
@@ -144,7 +144,7 @@ class AgentConfigRequest(BaseModel):
 
 class AgentConfigResult(BaseModel):
     """Agent configuration result."""
-    
+
     id: str
     name: str
     description: str
@@ -159,27 +159,27 @@ class AgentConfigResult(BaseModel):
 
 class ToolDiscoveryRequest(BaseModel):
     """Request for discovering available tools."""
-    
+
     agent_id: UUID
     user_context_data: dict[str, Any]
 
 
 class ToolDefinition(BaseModel):
     """OpenAI-compatible tool definition."""
-    
+
     type: str = "function"
     function: dict[str, Any]
 
 
 class ToolDiscoveryResult(BaseModel):
     """Tools discovery result."""
-    
+
     tools: list[ToolDefinition]
 
 
 class LLMCallRequest(BaseModel):
     """Request for LLM call."""
-    
+
     messages: list[dict[str, Any]]
     model_id: str
     tools: list[dict[str, Any]] | None = None
@@ -194,7 +194,7 @@ class LLMCallRequest(BaseModel):
 
 class LLMUsage(BaseModel):
     """LLM usage statistics."""
-    
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -202,7 +202,7 @@ class LLMUsage(BaseModel):
 
 class LLMCallResult(BaseModel):
     """LLM call result."""
-    
+
     role: str = "assistant"
     content: str = ""
     tool_calls: list[dict[str, Any]] | None = None
@@ -212,7 +212,7 @@ class LLMCallResult(BaseModel):
 
 class MCPToolRequest(BaseModel):
     """Request for MCP tool execution."""
-    
+
     tool_name: str
     tool_args: dict[str, Any]
     server_instance_id: UUID | None = None
@@ -222,7 +222,7 @@ class MCPToolRequest(BaseModel):
 
 class MCPToolResult(BaseModel):
     """MCP tool execution result."""
-    
+
     success: bool = True
     result: str = ""
     execution_time: str = ""
@@ -231,7 +231,7 @@ class MCPToolResult(BaseModel):
 
 class ExecutionPlanRequest(BaseModel):
     """Request for creating execution plan."""
-    
+
     goal: dict[str, Any]
     available_tools: list[dict[str, Any]]
     messages: list[dict[str, Any]]
@@ -239,7 +239,7 @@ class ExecutionPlanRequest(BaseModel):
 
 class ExecutionPlanResult(BaseModel):
     """Execution plan result."""
-    
+
     plan: str
     estimated_steps: int
     key_tools: list[str]
@@ -248,7 +248,7 @@ class ExecutionPlanResult(BaseModel):
 
 class GoalEvaluationRequest(BaseModel):
     """Request for goal progress evaluation."""
-    
+
     goal: dict[str, Any]
     messages: list[dict[str, Any]]
     current_iteration: int
@@ -256,7 +256,7 @@ class GoalEvaluationRequest(BaseModel):
 
 class GoalEvaluationResult(BaseModel):
     """Goal evaluation result."""
-    
+
     goal_achieved: bool = False
     confidence: float = 0.0
     final_response: str | None = None
@@ -266,13 +266,13 @@ class GoalEvaluationResult(BaseModel):
 
 class WorkflowEventsRequest(BaseModel):
     """Request for publishing workflow events."""
-    
+
     events_json: list[str]
 
 
 class WorkflowEventsResult(BaseModel):
     """Workflow events publishing result."""
-    
+
     success: bool
     events_published: int
     errors: list[str] = Field(default_factory=list)
@@ -283,14 +283,14 @@ class WorkflowEventsResult(BaseModel):
 
 class ExecuteTriggerRequest(BaseModel):
     """Request to execute a trigger."""
-    
+
     trigger_id: UUID
     execution_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecuteTriggerResult(BaseModel):
     """Trigger execution result."""
-    
+
     trigger_id: UUID
     status: str
     task_id: UUID | None = None
@@ -302,14 +302,14 @@ class ExecuteTriggerResult(BaseModel):
 
 class RecordTriggerExecutionRequest(BaseModel):
     """Request to record trigger execution."""
-    
+
     trigger_id: UUID
     execution_data: dict[str, Any]
 
 
 class RecordTriggerExecutionResult(BaseModel):
     """Record trigger execution result."""
-    
+
     execution_id: UUID
     trigger_id: UUID
     status: str
@@ -318,28 +318,28 @@ class RecordTriggerExecutionResult(BaseModel):
 
 class EvaluateTriggerConditionsRequest(BaseModel):
     """Request to evaluate trigger conditions."""
-    
+
     trigger_id: UUID
     event_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class EvaluateTriggerConditionsResult(BaseModel):
     """Trigger conditions evaluation result."""
-    
+
     conditions_met: bool = False
     trigger_id: UUID | None = None
 
 
 class CreateTaskFromTriggerRequest(BaseModel):
     """Request to create task from trigger."""
-    
+
     trigger_id: UUID
     execution_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class CreateTaskFromTriggerResult(BaseModel):
     """Create task from trigger result."""
-    
+
     task_id: UUID | None = None
     trigger_id: UUID
     status: str

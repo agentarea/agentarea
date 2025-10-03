@@ -23,24 +23,45 @@ class WorkspaceContextFormatter(logging.Formatter):
         }
 
         # Add workspace context if available
-        if hasattr(record, 'user_id'):
+        if hasattr(record, "user_id"):
             log_entry["user_id"] = record.user_id
-        if hasattr(record, 'workspace_id'):
+        if hasattr(record, "workspace_id"):
             log_entry["workspace_id"] = record.workspace_id
 
         # Add audit event data if present
-        if hasattr(record, 'audit_event'):
+        if hasattr(record, "audit_event"):
             log_entry["audit_event"] = record.audit_event
 
         # Add any extra fields
         for key, value in record.__dict__.items():
-            if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
-                          'filename', 'module', 'lineno', 'funcName', 'created',
-                          'msecs', 'relativeCreated', 'thread', 'threadName',
-                          'processName', 'process', 'getMessage', 'exc_info',
-                          'exc_text', 'stack_info', 'user_id', 'workspace_id',
-                          'audit_event', 'user_id_added']:
-                if not key.startswith('_'):
+            if key not in [
+                "name",
+                "msg",
+                "args",
+                "levelname",
+                "levelno",
+                "pathname",
+                "filename",
+                "module",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+                "getMessage",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "user_id",
+                "workspace_id",
+                "audit_event",
+                "user_id_added",
+            ]:
+                if not key.startswith("_"):
                     log_entry[key] = value
 
         return json.dumps(log_entry, default=str)
@@ -50,10 +71,10 @@ def setup_logging(
     level: str = "INFO",
     enable_structured_logging: bool = True,
     enable_audit_logging: bool = True,
-    user_context: UserContext | None = None
+    user_context: UserContext | None = None,
 ) -> None:
     """Set up logging configuration with workspace context support.
-    
+
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         enable_structured_logging: Whether to use structured JSON logging
@@ -64,12 +85,10 @@ def setup_logging(
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
-            "standard": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            },
+            "standard": {"format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"},
             "structured": {
                 "()": WorkspaceContextFormatter,
-            }
+            },
         },
         "filters": {
             "workspace_context": {
@@ -83,25 +102,18 @@ def setup_logging(
                 "level": level,
                 "formatter": "structured" if enable_structured_logging else "standard",
                 "filters": ["workspace_context"] if user_context else [],
-                "stream": "ext://sys.stdout"
+                "stream": "ext://sys.stdout",
             }
         },
         "loggers": {
-            "agentarea": {
-                "level": level,
-                "handlers": ["console"],
-                "propagate": False
-            },
+            "agentarea": {"level": level, "handlers": ["console"], "propagate": False},
             "agentarea.audit": {
                 "level": "INFO" if enable_audit_logging else "WARNING",
                 "handlers": ["console"],
-                "propagate": False
-            }
+                "propagate": False,
+            },
         },
-        "root": {
-            "level": level,
-            "handlers": ["console"]
-        }
+        "root": {"level": level, "handlers": ["console"]},
     }
 
     # Add audit file handler if audit logging is enabled
@@ -122,7 +134,7 @@ def setup_logging(
 
 def update_logging_context(user_context: UserContext) -> None:
     """Update the workspace context for all existing loggers.
-    
+
     Args:
         user_context: New user context to apply
     """

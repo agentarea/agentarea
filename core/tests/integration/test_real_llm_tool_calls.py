@@ -22,9 +22,7 @@ async def test_ollama_qwen25_tool_calls_direct():
 
     # Create LLM model
     llm_model = LLMModel(
-        provider_type="ollama_chat",
-        model_name="qwen2.5",
-        endpoint_url=endpoint_url
+        provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=endpoint_url
     )
 
     # Define tools (same as production)
@@ -39,12 +37,12 @@ async def test_ollama_qwen25_tool_calls_direct():
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary of what was accomplished"
+                            "description": "Optional final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -52,20 +50,15 @@ async def test_ollama_qwen25_tool_calls_direct():
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool."
+            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool.",
         },
         {
             "role": "user",
-            "content": "Please complete this simple test task by calling the task_complete tool."
-        }
+            "content": "Please complete this simple test task by calling the task_complete tool.",
+        },
     ]
 
-    request = LLMRequest(
-        messages=messages,
-        tools=tools,
-        temperature=0.1,
-        max_tokens=100
-    )
+    request = LLMRequest(messages=messages, tools=tools, temperature=0.1, max_tokens=100)
 
     logger.info("=== Testing Non-Streaming LLM Call ===")
     try:
@@ -137,9 +130,7 @@ async def test_ollama_qwen25_various_prompts():
     endpoint_url = f"http://{docker_host}:11434"
 
     llm_model = LLMModel(
-        provider_type="ollama_chat",
-        model_name="qwen2.5",
-        endpoint_url=endpoint_url
+        provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=endpoint_url
     )
 
     tools = [
@@ -150,12 +141,10 @@ async def test_ollama_qwen25_various_prompts():
                 "description": "Mark task as completed",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "result": {"type": "string", "description": "Result"}
-                    },
-                    "required": []
-                }
-            }
+                    "properties": {"result": {"type": "string", "description": "Result"}},
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -164,31 +153,23 @@ async def test_ollama_qwen25_various_prompts():
             "name": "Simple completion request",
             "messages": [
                 {"role": "user", "content": "Complete this task using the task_complete tool."}
-            ]
+            ],
         },
-        {
-            "name": "Vague task (like production)",
-            "messages": [
-                {"role": "user", "content": "test"}
-            ]
-        },
+        {"name": "Vague task (like production)", "messages": [{"role": "user", "content": "test"}]},
         {
             "name": "Explicit tool instruction",
             "messages": [
                 {"role": "system", "content": "You must use the task_complete tool when done."},
-                {"role": "user", "content": "Do a simple task and complete it."}
-            ]
-        }
+                {"role": "user", "content": "Do a simple task and complete it."},
+            ],
+        },
     ]
 
     for test_case in test_cases:
         logger.info(f"\n=== Testing: {test_case['name']} ===")
 
         request = LLMRequest(
-            messages=test_case["messages"],
-            tools=tools,
-            temperature=0.1,
-            max_tokens=150
+            messages=test_case["messages"], tools=tools, temperature=0.1, max_tokens=150
         )
 
         try:
@@ -216,6 +197,7 @@ async def test_ollama_qwen25_various_prompts():
                     try:
                         # Look for JSON patterns
                         import re
+
                         json_pattern = r'\{[^}]*"name"[^}]*\}'
                         matches = re.findall(json_pattern, complete_content)
                         if matches:
@@ -246,18 +228,14 @@ async def test_litellm_direct_ollama():
                 "description": "Mark task as completed",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "result": {"type": "string", "description": "Result"}
-                    },
-                    "required": []
-                }
-            }
+                    "properties": {"result": {"type": "string", "description": "Result"}},
+                    "required": [],
+                },
+            },
         }
     ]
 
-    messages = [
-        {"role": "user", "content": "Complete this task using the task_complete tool."}
-    ]
+    messages = [{"role": "user", "content": "Complete this task using the task_complete tool."}]
 
     try:
         # Test non-streaming
@@ -268,7 +246,7 @@ async def test_litellm_direct_ollama():
             tools=tools,
             base_url=base_url,
             temperature=0.1,
-            max_tokens=100
+            max_tokens=100,
         )
 
         message = response.choices[0].message
@@ -284,7 +262,7 @@ async def test_litellm_direct_ollama():
             base_url=base_url,
             temperature=0.1,
             max_tokens=100,
-            stream=True
+            stream=True,
         )
 
         complete_content = ""
@@ -300,10 +278,10 @@ async def test_litellm_direct_ollama():
                 logger.info(f"    Content: '{getattr(delta, 'content', '')}'")
                 logger.info(f"    Tool calls: {getattr(delta, 'tool_calls', None)}")
 
-                if hasattr(delta, 'content') and delta.content:
+                if hasattr(delta, "content") and delta.content:
                     complete_content += delta.content
 
-                if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                if hasattr(delta, "tool_calls") and delta.tool_calls:
                     tool_calls_seen = True
                     logger.info(f"    Tool call details: {delta.tool_calls}")
 

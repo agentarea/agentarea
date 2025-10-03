@@ -98,7 +98,9 @@ async def run_agent(
     max_iterations: int,
 ) -> None:
     if "/" not in model:
-        raise ValueError("--model must be in format 'provider/model_name', e.g., 'ollama_chat/qwen2.5'")
+        raise ValueError(
+            "--model must be in format 'provider/model_name', e.g., 'ollama_chat/qwen2.5'"
+        )
     model_provider, model_name = model.split("/", 1)
 
     agent = Agent(
@@ -146,4 +148,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

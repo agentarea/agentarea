@@ -2,12 +2,17 @@
 
 import os
 import sys
-
-import pytest
 import warnings
 
+import pytest
+
 # Add the parent directory to the path so we can import the SDK modules
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agentarea_agents_sdk"))
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agentarea_agents_sdk"
+    ),
+)
 
 # Prevent pytest from trying to import the main __init__.py with relative imports
 collect_ignore = ["__init__.py"]
@@ -22,19 +27,19 @@ def test_model():
 @pytest.fixture
 def skip_if_no_llm():
     """Skip test if LLM is not available."""
+
     def _skip_if_no_llm():
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel
-            model = LLMModel(
-                provider_type="ollama_chat",
-                model_name="qwen2.5",
-                endpoint_url=None
-            )
+
+            model = LLMModel(provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=None)
             # Try a simple request to check if model is available
             return False  # Don't skip
         except Exception:
             pytest.skip("LLM model not available")
+
     return _skip_if_no_llm
+
 
 # Suppress noisy Pydantic serializer warnings coming from LiteLLM provider model types
 warnings.filterwarnings(

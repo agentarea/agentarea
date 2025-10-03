@@ -27,8 +27,7 @@ from temporalio.worker import Worker
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -49,9 +48,7 @@ class ADKTestWorker:
         secret_manager = get_real_secret_manager()
 
         return ActivityDependencies(
-            settings=settings,
-            event_broker=event_broker,
-            secret_manager=secret_manager
+            settings=settings, event_broker=event_broker, secret_manager=secret_manager
         )
 
     async def connect(self) -> None:
@@ -79,7 +76,7 @@ class ADKTestWorker:
             workflows=[ADKAgentWorkflow],
             activities=activities,
             max_concurrent_workflow_tasks=2,
-            max_concurrent_activities=10
+            max_concurrent_activities=10,
         )
 
         logger.info(f"✅ Test worker created for task queue: {self.task_queue}")
@@ -95,7 +92,7 @@ class ADKTestWorker:
                 ADKAgentWorkflow.run,
                 request,
                 id=f"test-workflow-{request.task_id}",
-                task_queue=self.task_queue
+                task_queue=self.task_queue,
             )
 
             logger.info(f"🚀 Started test workflow: {handle.id}")
@@ -170,6 +167,7 @@ async def run_single_test():
 
         # Create test request using existing agent
         from uuid import UUID
+
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
 
         test_request = AgentExecutionRequest(
@@ -178,7 +176,7 @@ async def run_single_test():
             user_id="test-worker-user",
             task_query="Hello! This is a test from the test worker. Please respond with 'Test worker execution successful!' and tell me what you are.",
             timeout_seconds=120,
-            max_reasoning_iterations=3
+            max_reasoning_iterations=3,
         )
 
         # Run worker in background
@@ -234,6 +232,7 @@ async def run_math_test():
 
         # Create math test request using existing agent
         from uuid import UUID
+
         existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
 
         math_request = AgentExecutionRequest(
@@ -242,7 +241,7 @@ async def run_math_test():
             user_id="math-test-user",
             task_query="What is 15 + 27? Please provide just the number as your answer.",
             timeout_seconds=60,
-            max_reasoning_iterations=2
+            max_reasoning_iterations=2,
         )
 
         # Run worker in background

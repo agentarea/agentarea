@@ -4,7 +4,7 @@ Comprehensive integration test for CLI → Workflow → SSE event flow.
 
 This test demonstrates the complete AgentArea workflow:
 1. Create agent via CLI interface
-2. Submit task via CLI interface  
+2. Submit task via CLI interface
 3. Workflow executes and publishes events to event bus
 4. SSE endpoint streams events in real-time
 5. Verify event flow end-to-end
@@ -99,7 +99,7 @@ class MockTaskManager(BaseTaskManager):
         user_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> list[SimpleTask]:
         """Mock list tasks."""
         tasks = list(self.tasks.values())
@@ -109,7 +109,7 @@ class MockTaskManager(BaseTaskManager):
             tasks = [t for t in tasks if t.user_id == user_id]
         if status:
             tasks = [t for t in tasks if t.status == status]
-        return tasks[offset:offset + limit]
+        return tasks[offset : offset + limit]
 
     async def get_task_status(self, task_id: UUID) -> str | None:
         """Mock get task status."""
@@ -139,56 +139,44 @@ class CLITestHelper:
 
             # Run command
             result = subprocess.run(
-                full_command,
-                cwd=self.base_dir,
-                capture_output=True,
-                text=True,
-                timeout=timeout
+                full_command, cwd=self.base_dir, capture_output=True, text=True, timeout=timeout
             )
 
             return {
                 "returncode": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "success": result.returncode == 0
+                "success": result.returncode == 0,
             }
 
         except subprocess.TimeoutExpired:
             logger.error(f"CLI command timed out after {timeout}s")
-            return {
-                "returncode": -1,
-                "stdout": "",
-                "stderr": "Command timed out",
-                "success": False
-            }
+            return {"returncode": -1, "stdout": "", "stderr": "Command timed out", "success": False}
         except Exception as e:
             logger.error(f"CLI command failed: {e}")
-            return {
-                "returncode": -1,
-                "stdout": "",
-                "stderr": str(e),
-                "success": False
-            }
+            return {"returncode": -1, "stdout": "", "stderr": str(e), "success": False}
 
-    def create_agent_via_cli(self, name: str, description: str, instruction: str, model_id: str) -> dict[str, Any]:
+    def create_agent_via_cli(
+        self, name: str, description: str, instruction: str, model_id: str
+    ) -> dict[str, Any]:
         """Create agent via CLI."""
         command = [
-            "agent", "create",
-            "--name", name,
-            "--description", description,
-            "--instruction", instruction,
-            "--model-id", model_id
+            "agent",
+            "create",
+            "--name",
+            name,
+            "--description",
+            description,
+            "--instruction",
+            instruction,
+            "--model-id",
+            model_id,
         ]
         return self.run_cli_command(command)
 
     def send_chat_message(self, agent_id: str, message: str) -> dict[str, Any]:
         """Send chat message via CLI."""
-        command = [
-            "chat", "send",
-            agent_id,
-            "--message", message,
-            "--format", "json"
-        ]
+        command = ["chat", "send", agent_id, "--message", message, "--format", "json"]
         return self.run_cli_command(command)
 
     def list_agents(self) -> dict[str, Any]:
@@ -207,13 +195,13 @@ class WorkflowEventCollector:
     def add_event(self, event: dict[str, Any]):
         """Add event to collection."""
         self.events.append(event)
-        event_type = event.get('event_type', 'unknown')
+        event_type = event.get("event_type", "unknown")
         self.event_types_seen.add(event_type)
         logger.info(f"📝 Collected event: {event_type}")
 
     def get_events_by_type(self, event_type: str) -> list[dict[str, Any]]:
         """Get events of specific type."""
-        return [e for e in self.events if e.get('event_type') == event_type]
+        return [e for e in self.events if e.get("event_type") == event_type]
 
     def has_event_type(self, event_type: str) -> bool:
         """Check if event type was seen."""
@@ -224,7 +212,9 @@ class WorkflowEventCollector:
         return {
             "total_events": len(self.events),
             "event_types": list(self.event_types_seen),
-            "event_type_counts": {et: len(self.get_events_by_type(et)) for et in self.event_types_seen}
+            "event_type_counts": {
+                et: len(self.get_events_by_type(et)) for et in self.event_types_seen
+            },
         }
 
 
@@ -232,7 +222,9 @@ async def create_mock_workflow_activities():
     """Create mock activities for workflow testing."""
 
     @activity.defn
-    async def build_agent_config_activity(agent_id: UUID, user_context: dict[str, Any]) -> dict[str, Any]:
+    async def build_agent_config_activity(
+        agent_id: UUID, user_context: dict[str, Any]
+    ) -> dict[str, Any]:
         """Mock agent config activity."""
         return {
             "id": str(agent_id),
@@ -246,7 +238,9 @@ async def create_mock_workflow_activities():
         }
 
     @activity.defn
-    async def discover_available_tools_activity(agent_config: dict[str, Any], user_context: dict[str, Any]) -> list[dict[str, Any]]:
+    async def discover_available_tools_activity(
+        agent_config: dict[str, Any], user_context: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Mock tools discovery activity."""
         return [
             {
@@ -256,10 +250,13 @@ async def create_mock_workflow_activities():
                     "type": "object",
                     "properties": {
                         "result": {"type": "string", "description": "Task result"},
-                        "success": {"type": "boolean", "description": "Whether task was successful"}
+                        "success": {
+                            "type": "boolean",
+                            "description": "Whether task was successful",
+                        },
                     },
-                    "required": ["result", "success"]
-                }
+                    "required": ["result", "success"],
+                },
             }
         ]
 
@@ -275,25 +272,29 @@ async def create_mock_workflow_activities():
                     "type": "function",
                     "function": {
                         "name": "task_complete",
-                        "arguments": json.dumps({
-                            "result": "Task completed successfully via CLI integration test",
-                            "success": True
-                        })
-                    }
+                        "arguments": json.dumps(
+                            {
+                                "result": "Task completed successfully via CLI integration test",
+                                "success": True,
+                            }
+                        ),
+                    },
                 }
             ],
             "cost": 0.01,
-            "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+            "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
         }
 
     @activity.defn
-    async def execute_mcp_tool_activity(tool_name: str, tool_args: dict[str, Any], *args, **kwargs) -> dict[str, Any]:
+    async def execute_mcp_tool_activity(
+        tool_name: str, tool_args: dict[str, Any], *args, **kwargs
+    ) -> dict[str, Any]:
         """Mock tool execution activity."""
         if tool_name == "task_complete":
             return {
                 "success": True,
                 "result": tool_args.get("result", "Task completed"),
-                "completed": True
+                "completed": True,
             }
         return {"success": True, "result": f"Executed {tool_name}"}
 
@@ -304,7 +305,7 @@ async def create_mock_workflow_activities():
             "completed": True,
             "success": True,
             "confidence": 0.95,
-            "reasoning": "Task completed successfully"
+            "reasoning": "Task completed successfully",
         }
 
     @activity.defn
@@ -316,7 +317,7 @@ async def create_mock_workflow_activities():
         try:
             # Get event broker from global state (set up in test)
             global _test_event_broker
-            event_broker = globals().get('_test_event_broker')
+            event_broker = globals().get("_test_event_broker")
             if not event_broker:
                 logger.warning("No event broker available for publishing")
                 return True
@@ -355,11 +356,17 @@ async def create_mock_workflow_activities():
         call_llm_activity,
         execute_mcp_tool_activity,
         evaluate_goal_progress_activity,
-        publish_workflow_events_activity
+        publish_workflow_events_activity,
     ]
 
 
-async def simulate_sse_streaming(task_service: TaskService, task_id: UUID, collector: WorkflowEventCollector, max_events: int = 10, timeout: int = 30):
+async def simulate_sse_streaming(
+    task_service: TaskService,
+    task_id: UUID,
+    collector: WorkflowEventCollector,
+    max_events: int = 10,
+    timeout: int = 30,
+):
     """Simulate SSE endpoint streaming events."""
     logger.info(f"📡 Starting SSE streaming for task {task_id}")
 
@@ -380,8 +387,13 @@ async def simulate_sse_streaming(task_service: TaskService, task_id: UUID, colle
                 break
 
             # Check for terminal events
-            event_type = event.get('event_type', '')
-            if event_type in ['task_completed', 'task_failed', 'workflow_completed', 'workflow_failed']:
+            event_type = event.get("event_type", "")
+            if event_type in [
+                "task_completed",
+                "task_failed",
+                "workflow_completed",
+                "workflow_failed",
+            ]:
                 logger.info(f"Terminal event received: {event_type}")
                 break
 
@@ -419,7 +431,7 @@ async def test_cli_workflow_sse_integration():
         agent_creation_result = {
             "success": True,
             "agent_id": str(agent_id),
-            "message": "Agent created successfully (simulated)"
+            "message": "Agent created successfully (simulated)",
         }
 
         logger.info(f"✅ Agent creation simulated: {agent_creation_result['message']}")
@@ -441,7 +453,7 @@ async def test_cli_workflow_sse_integration():
                 self.user_context = UserContext(user_id="test_user", workspace_id="test_workspace")
 
             def create_repository(self, repository_class):
-                if repository_class.__name__ == 'TaskRepository':
+                if repository_class.__name__ == "TaskRepository":
                     return MockTaskRepository()
                 return None
 
@@ -463,7 +475,7 @@ async def test_cli_workflow_sse_integration():
             user_id="test_user",
             agent_id=agent_id,
             status="running",
-            execution_id=f"agent-task-{task_id}"
+            execution_id=f"agent-task-{task_id}",
         )
         # Add task to task manager
         task_manager.tasks[task_id] = test_task
@@ -520,7 +532,7 @@ async def test_cli_workflow_sse_integration():
                 task_id=task_id,
                 user_id="test_user",
                 task_query="Complete this CLI integration test task",
-                budget_usd=1.0
+                budget_usd=1.0,
             )
 
             # Start workflow
@@ -562,11 +574,13 @@ async def test_cli_workflow_sse_integration():
         logger.info(f"Total events collected: {summary['total_events']}")
         logger.info(f"Event types seen: {summary['event_types']}")
 
-        for event_type, count in summary['event_type_counts'].items():
+        for event_type, count in summary["event_type_counts"].items():
             logger.info(f"  - {event_type}: {count} events")
 
         # Verify we got workflow events
-        workflow_events = [e for e in event_collector.events if e.get('event_type', '').startswith('workflow.')]
+        workflow_events = [
+            e for e in event_collector.events if e.get("event_type", "").startswith("workflow.")
+        ]
 
         logger.info(f"\nWorkflow events received: {len(workflow_events)}")
 
@@ -577,7 +591,7 @@ async def test_cli_workflow_sse_integration():
         success = True
 
         # Check if we received any events
-        if summary['total_events'] == 0:
+        if summary["total_events"] == 0:
             logger.error("❌ No events received via SSE")
             success = False
         else:
@@ -585,12 +599,18 @@ async def test_cli_workflow_sse_integration():
 
         # Check for workflow events specifically
         if len(workflow_events) == 0:
-            logger.warning("⚠️ No workflow events received (may be expected if events are transformed)")
+            logger.warning(
+                "⚠️ No workflow events received (may be expected if events are transformed)"
+            )
         else:
             logger.info(f"✅ Received {len(workflow_events)} workflow events")
 
         # Check for expected event types
-        expected_events = ['workflow.WorkflowStarted', 'workflow.LLMCallStarted', 'workflow.LLMCallCompleted']
+        expected_events = [
+            "workflow.WorkflowStarted",
+            "workflow.LLMCallStarted",
+            "workflow.LLMCallCompleted",
+        ]
         for expected_event in expected_events:
             if event_collector.has_event_type(expected_event):
                 logger.info(f"✅ Found expected event: {expected_event}")
@@ -613,13 +633,18 @@ async def test_cli_workflow_sse_integration():
     except Exception as e:
         logger.error(f"❌ Integration test failed with exception: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
     finally:
         # Cleanup
         try:
-            if 'event_broker' in locals() and hasattr(event_broker, '_connected') and event_broker._connected:
+            if (
+                "event_broker" in locals()
+                and hasattr(event_broker, "_connected")
+                and event_broker._connected
+            ):
                 await event_broker.redis_broker.close()
                 logger.info("🧹 Cleaned up Redis connection")
         except Exception as e:

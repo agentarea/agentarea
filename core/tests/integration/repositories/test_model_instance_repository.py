@@ -119,33 +119,28 @@ class TestModelInstanceRepository:
     """Test cases for ModelInstanceRepository."""
 
     @pytest.mark.asyncio
-    async def test_create_and_get_model_instance(self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository):
+    async def test_create_and_get_model_instance(
+        self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository
+    ):
         """Test creating and retrieving a model instance."""
         # Arrange - Create dependencies
         provider_spec = create_test_provider_spec(provider_key="openai", name="OpenAI")
         db_session.add(provider_spec)
         await db_session.flush()
 
-        provider_config = create_test_provider_config(
-            provider_spec.id,
-            name="My OpenAI Config"
-        )
+        provider_config = create_test_provider_config(provider_spec.id, name="My OpenAI Config")
         db_session.add(provider_config)
         await db_session.flush()
 
         model_spec = create_test_model_spec(
-            provider_spec.id,
-            model_name="gpt-4",
-            display_name="GPT-4"
+            provider_spec.id, model_name="gpt-4", display_name="GPT-4"
         )
         db_session.add(model_spec)
         await db_session.flush()
 
         # Create model instance
         model_instance = create_test_model_instance(
-            provider_config.id,
-            model_spec.id,
-            name="My GPT-4 Instance"
+            provider_config.id, model_spec.id, name="My GPT-4 Instance"
         )
 
         # Act - Create
@@ -166,7 +161,9 @@ class TestModelInstanceRepository:
         assert retrieved_instance.name == "My GPT-4 Instance"
 
     @pytest.mark.asyncio
-    async def test_list_model_instances(self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository):
+    async def test_list_model_instances(
+        self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository
+    ):
         """Test listing model instances."""
         # Arrange - Create dependencies
         provider_spec = create_test_provider_spec()
@@ -182,12 +179,8 @@ class TestModelInstanceRepository:
         await db_session.flush()
 
         # Create multiple instances
-        instance1 = create_test_model_instance(
-            provider_config.id, model_spec.id, name="Instance 1"
-        )
-        instance2 = create_test_model_instance(
-            provider_config.id, model_spec.id, name="Instance 2"
-        )
+        instance1 = create_test_model_instance(provider_config.id, model_spec.id, name="Instance 1")
+        instance2 = create_test_model_instance(provider_config.id, model_spec.id, name="Instance 2")
 
         await model_instance_repository.create(instance1)
         await model_instance_repository.create(instance2)
@@ -202,7 +195,9 @@ class TestModelInstanceRepository:
         assert "Instance 2" in instance_names
 
     @pytest.mark.asyncio
-    async def test_list_by_provider_config(self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository):
+    async def test_list_by_provider_config(
+        self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository
+    ):
         """Test listing model instances by provider config."""
         # Arrange
         provider_spec = create_test_provider_spec()
@@ -234,7 +229,9 @@ class TestModelInstanceRepository:
         assert config1_instances[0].provider_config_id == config1.id
 
     @pytest.mark.asyncio
-    async def test_list_by_model_spec(self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository):
+    async def test_list_by_model_spec(
+        self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository
+    ):
         """Test listing model instances by model spec."""
         # Arrange
         provider_spec = create_test_provider_spec()
@@ -251,8 +248,12 @@ class TestModelInstanceRepository:
         await db_session.flush()
 
         # Create instances for different model specs
-        instance1 = create_test_model_instance(provider_config.id, model_spec1.id, name="GPT-4 Instance")
-        instance2 = create_test_model_instance(provider_config.id, model_spec2.id, name="GPT-3.5 Instance")
+        instance1 = create_test_model_instance(
+            provider_config.id, model_spec1.id, name="GPT-4 Instance"
+        )
+        instance2 = create_test_model_instance(
+            provider_config.id, model_spec2.id, name="GPT-3.5 Instance"
+        )
 
         await model_instance_repository.create(instance1)
         await model_instance_repository.create(instance2)
@@ -266,7 +267,9 @@ class TestModelInstanceRepository:
         assert gpt4_instances[0].model_spec_id == model_spec1.id
 
     @pytest.mark.asyncio
-    async def test_update_model_instance(self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository):
+    async def test_update_model_instance(
+        self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository
+    ):
         """Test updating a model instance."""
         # Arrange
         provider_spec = create_test_provider_spec()
@@ -302,7 +305,9 @@ class TestModelInstanceRepository:
         assert retrieved_instance.name == "Updated Name"
 
     @pytest.mark.asyncio
-    async def test_delete_model_instance(self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository):
+    async def test_delete_model_instance(
+        self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository
+    ):
         """Test deleting a model instance."""
         # Arrange
         provider_spec = create_test_provider_spec()
@@ -331,7 +336,9 @@ class TestModelInstanceRepository:
         assert deleted_instance is None
 
     @pytest.mark.asyncio
-    async def test_list_active_instances(self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository):
+    async def test_list_active_instances(
+        self, db_session: AsyncSession, model_instance_repository: ModelInstanceRepository
+    ):
         """Test listing only active model instances."""
         # Arrange
         provider_spec = create_test_provider_spec()

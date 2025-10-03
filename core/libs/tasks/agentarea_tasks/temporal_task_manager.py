@@ -33,7 +33,7 @@ class TemporalTaskManager(BaseTaskManager):
         settings = get_settings()
         self.temporal_executor = TemporalWorkflowExecutor(
             namespace=settings.workflow.TEMPORAL_NAMESPACE,
-            server_url=settings.workflow.TEMPORAL_SERVER_URL
+            server_url=settings.workflow.TEMPORAL_SERVER_URL,
         )
 
     def _task_to_simple_task(self, task) -> SimpleTask:
@@ -41,11 +41,11 @@ class TemporalTaskManager(BaseTaskManager):
         from .domain.models import SimpleTask
 
         # Handle different field names between Task domain model and TaskORM
-        user_id = getattr(task, 'user_id', None) or getattr(task, 'created_by', None) or "system"
-        workspace_id = getattr(task, 'workspace_id', None) or "system"
+        user_id = getattr(task, "user_id", None) or getattr(task, "created_by", None) or "system"
+        workspace_id = getattr(task, "workspace_id", None) or "system"
 
         # Handle metadata field - could be dict, SQLAlchemy MetaData, or None
-        metadata_raw = getattr(task, 'metadata', None) or getattr(task, 'task_metadata', None)
+        metadata_raw = getattr(task, "metadata", None) or getattr(task, "task_metadata", None)
         if metadata_raw is None:
             metadata = {}
         elif isinstance(metadata_raw, dict):
@@ -71,7 +71,7 @@ class TemporalTaskManager(BaseTaskManager):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
-            metadata=metadata
+            metadata=metadata,
         )
 
     def _simple_task_to_task(self, simple_task: SimpleTask):
@@ -93,7 +93,7 @@ class TemporalTaskManager(BaseTaskManager):
             execution_id=simple_task.execution_id,
             user_id=simple_task.user_id,  # This will be mapped to created_by in the repository
             workspace_id=simple_task.workspace_id,
-            metadata=simple_task.metadata
+            metadata=simple_task.metadata,
         )
 
     async def submit_task(self, task: SimpleTask) -> SimpleTask:
@@ -114,9 +114,13 @@ class TemporalTaskManager(BaseTaskManager):
                 user_id=task.user_id,
                 task_query=task.query,
                 task_parameters=task.task_parameters or {},
-                enable_agent_communication=bool((task.metadata or {}).get("enable_agent_communication", False)),
-                requires_human_approval=bool((task.metadata or {}).get("requires_human_approval", False)),
-                workflow_metadata=task.metadata or {}
+                enable_agent_communication=bool(
+                    (task.metadata or {}).get("enable_agent_communication", False)
+                ),
+                requires_human_approval=bool(
+                    (task.metadata or {}).get("requires_human_approval", False)
+                ),
+                workflow_metadata=task.metadata or {},
             )
 
             # Start the workflow using the correct workflow name and arguments
@@ -131,7 +135,7 @@ class TemporalTaskManager(BaseTaskManager):
                 "max_reasoning_iterations": execution_request.max_reasoning_iterations,
                 "enable_agent_communication": execution_request.enable_agent_communication,
                 "requires_human_approval": execution_request.requires_human_approval,
-                "workflow_metadata": execution_request.workflow_metadata
+                "workflow_metadata": execution_request.workflow_metadata,
             }
 
             # Create workflow config with task queue
@@ -143,7 +147,7 @@ class TemporalTaskManager(BaseTaskManager):
                 workflow_name="AgentExecutionWorkflow",
                 workflow_id=workflow_id,
                 args=args_dict,
-                config=config
+                config=config,
             )
 
             # Update task status to running (not submitted) since workflow started successfully
@@ -209,7 +213,7 @@ class TemporalTaskManager(BaseTaskManager):
         user_id: str | None = None,
         status: str | None = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> list[SimpleTask]:
         """List tasks with optional filtering."""
         # Get tasks from repository and convert to SimpleTask

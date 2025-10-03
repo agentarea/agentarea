@@ -23,7 +23,7 @@ class WorkflowEventHandler:
 
     async def handle_workflow_event(self, event: DomainEvent) -> None:
         """Handle workflow events by persisting to database using TaskEventService.
-        
+
         This is called by the event system, not directly from activities.
         """
         try:
@@ -35,10 +35,7 @@ class WorkflowEventHandler:
 
             async with self.database.async_session_factory() as session:
                 # Create proper user context
-                user_context = UserContext(
-                    user_id="event_handler",
-                    workspace_id=workspace_id
-                )
+                user_context = UserContext(user_id="event_handler", workspace_id=workspace_id)
 
                 # Create service with dependencies
                 repository_factory = RepositoryFactory(session, user_context)
@@ -51,11 +48,13 @@ class WorkflowEventHandler:
                     event_type=event.original_event_type or event.event_type,
                     data=event.original_data or {},
                     workspace_id=workspace_id,
-                    created_by="event_handler"
+                    created_by="event_handler",
                 )
 
                 await session.commit()
-                logger.debug(f"Persisted workflow event using service: {event.event_type} for task {task_id}")
+                logger.debug(
+                    f"Persisted workflow event using service: {event.event_type} for task {task_id}"
+                )
 
         except Exception as e:
             logger.error(f"Failed to persist workflow event using service: {e}")
@@ -73,7 +72,7 @@ class LLMErrorEventHandler:
 
     async def handle_llm_error(self, event: DomainEvent) -> None:
         """Handle LLM error events with specialized logic.
-        
+
         This can include:
         - Alerting
         - Metrics collection

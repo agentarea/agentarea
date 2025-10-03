@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class ComprehensiveTestModel(BaseModel, WorkspaceScopedMixin):
     """Comprehensive test model for full workspace isolation testing."""
+
     __tablename__ = "comprehensive_test_model"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -37,11 +38,7 @@ class ComprehensiveTestRepository(WorkspaceScopedRepository[ComprehensiveTestMod
 
     async def find_active_by_category(self, category: str, creator_scoped: bool = False):
         """Custom method to find active records by category."""
-        return await self.find_by(
-            creator_scoped=creator_scoped,
-            category=category,
-            is_active=True
-        )
+        return await self.find_by(creator_scoped=creator_scoped, category=category, is_active=True)
 
     async def get_high_priority_count(self, creator_scoped: bool = False):
         """Custom method to count high priority records."""
@@ -72,33 +69,57 @@ def comprehensive_contexts():
     """Create comprehensive test contexts for various scenarios."""
     return {
         # Enterprise A - Multiple departments
-        'enterprise_a_hr': UserContext(user_id="hr_manager", workspace_id="enterprise-a-hr", roles=["manager"]),
-        'enterprise_a_hr_emp': UserContext(user_id="hr_employee", workspace_id="enterprise-a-hr", roles=["employee"]),
-        'enterprise_a_finance': UserContext(user_id="finance_manager", workspace_id="enterprise-a-finance", roles=["manager"]),
-        'enterprise_a_it': UserContext(user_id="it_admin", workspace_id="enterprise-a-it", roles=["admin"]),
-
+        "enterprise_a_hr": UserContext(
+            user_id="hr_manager", workspace_id="enterprise-a-hr", roles=["manager"]
+        ),
+        "enterprise_a_hr_emp": UserContext(
+            user_id="hr_employee", workspace_id="enterprise-a-hr", roles=["employee"]
+        ),
+        "enterprise_a_finance": UserContext(
+            user_id="finance_manager", workspace_id="enterprise-a-finance", roles=["manager"]
+        ),
+        "enterprise_a_it": UserContext(
+            user_id="it_admin", workspace_id="enterprise-a-it", roles=["admin"]
+        ),
         # Enterprise B - Competitor company
-        'enterprise_b_hr': UserContext(user_id="hr_manager_b", workspace_id="enterprise-b-hr", roles=["manager"]),
-        'enterprise_b_finance': UserContext(user_id="finance_manager_b", workspace_id="enterprise-b-finance", roles=["manager"]),
-
+        "enterprise_b_hr": UserContext(
+            user_id="hr_manager_b", workspace_id="enterprise-b-hr", roles=["manager"]
+        ),
+        "enterprise_b_finance": UserContext(
+            user_id="finance_manager_b", workspace_id="enterprise-b-finance", roles=["manager"]
+        ),
         # Startup C - Small company
-        'startup_c_main': UserContext(user_id="founder", workspace_id="startup-c-main", roles=["owner"]),
-        'startup_c_dev': UserContext(user_id="developer", workspace_id="startup-c-main", roles=["developer"]),
-
+        "startup_c_main": UserContext(
+            user_id="founder", workspace_id="startup-c-main", roles=["owner"]
+        ),
+        "startup_c_dev": UserContext(
+            user_id="developer", workspace_id="startup-c-main", roles=["developer"]
+        ),
         # Government Agency
-        'gov_agency_public': UserContext(user_id="public_officer", workspace_id="gov-agency-public", roles=["officer"]),
-        'gov_agency_classified': UserContext(user_id="classified_officer", workspace_id="gov-agency-classified", roles=["officer", "classified"]),
-
+        "gov_agency_public": UserContext(
+            user_id="public_officer", workspace_id="gov-agency-public", roles=["officer"]
+        ),
+        "gov_agency_classified": UserContext(
+            user_id="classified_officer",
+            workspace_id="gov-agency-classified",
+            roles=["officer", "classified"],
+        ),
         # Malicious actors
-        'external_attacker': UserContext(user_id="attacker", workspace_id="attacker-workspace", roles=["user"]),
-        'insider_threat': UserContext(user_id="insider", workspace_id="compromised-workspace", roles=["user"]),
+        "external_attacker": UserContext(
+            user_id="attacker", workspace_id="attacker-workspace", roles=["user"]
+        ),
+        "insider_threat": UserContext(
+            user_id="insider", workspace_id="compromised-workspace", roles=["user"]
+        ),
     }
 
 
 class TestComprehensiveWorkspaceIsolation:
     """Comprehensive test suite for complete workspace isolation."""
 
-    async def test_end_to_end_jwt_to_repository_isolation(self, test_session_factory, comprehensive_contexts):
+    async def test_end_to_end_jwt_to_repository_isolation(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test complete end-to-end isolation from JWT token to repository operations."""
         async with test_session_factory() as session:
             jwt_handler = JWTTokenHandler(secret_key="test-secret", algorithm="HS256")
@@ -108,14 +129,14 @@ class TestComprehensiveWorkspaceIsolation:
                 user_id="hr_manager",
                 workspace_id="enterprise-a-hr",
                 roles=["manager"],
-                secret_key="test-secret"
+                secret_key="test-secret",
             )
 
             finance_token = generate_test_jwt_token(
                 user_id="finance_manager",
                 workspace_id="enterprise-a-finance",
                 roles=["manager"],
-                secret_key="test-secret"
+                secret_key="test-secret",
             )
 
             # Create mock requests with JWT tokens
@@ -138,14 +159,14 @@ class TestComprehensiveWorkspaceIsolation:
                 name="Employee Salary Data",
                 description="Confidential salary information",
                 category="confidential",
-                priority=3
+                priority=3,
             )
 
             finance_record = await finance_repo.create(
                 name="Financial Projections",
                 description="Q4 financial projections",
                 category="confidential",
-                priority=3
+                priority=3,
             )
 
             # Verify complete isolation
@@ -175,14 +196,24 @@ class TestComprehensiveWorkspaceIsolation:
             assert hr_high_priority == 1
             assert finance_high_priority == 1
 
-    async def test_multi_tenant_enterprise_isolation(self, test_session_factory, comprehensive_contexts):
+    async def test_multi_tenant_enterprise_isolation(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test isolation between multiple enterprise tenants."""
         async with test_session_factory() as session:
             # Create repositories for different enterprises
-            ent_a_hr_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_hr'])
-            ent_a_finance_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_finance'])
-            ent_b_hr_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_b_hr'])
-            ent_b_finance_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_b_finance'])
+            ent_a_hr_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_hr"]
+            )
+            ent_a_finance_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_finance"]
+            )
+            ent_b_hr_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_b_hr"]
+            )
+            ent_b_finance_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_b_finance"]
+            )
 
             # Create data in each enterprise workspace
             await ent_a_hr_repo.create(name="Enterprise A HR Data", category="hr")
@@ -215,23 +246,29 @@ class TestComprehensiveWorkspaceIsolation:
             assert ent_a_hr_count == 1  # Only sees own data
             assert ent_b_hr_count == 1  # Only sees own data
 
-    async def test_government_classified_workspace_isolation(self, test_session_factory, comprehensive_contexts):
+    async def test_government_classified_workspace_isolation(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test isolation for government classified vs public workspaces."""
         async with test_session_factory() as session:
-            public_repo = ComprehensiveTestRepository(session, comprehensive_contexts['gov_agency_public'])
-            classified_repo = ComprehensiveTestRepository(session, comprehensive_contexts['gov_agency_classified'])
+            public_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["gov_agency_public"]
+            )
+            classified_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["gov_agency_classified"]
+            )
 
             # Create public and classified data
             public_record = await public_repo.create(
                 name="Public Information",
                 description="Publicly available government data",
-                category="public"
+                category="public",
             )
 
             classified_record = await classified_repo.create(
                 name="Classified Information",
                 description="Top secret government data",
-                category="classified"
+                category="classified",
             )
 
             # Test that public workspace cannot access classified data
@@ -251,23 +288,29 @@ class TestComprehensiveWorkspaceIsolation:
             assert public_list[0].category == "public"
             assert classified_list[0].category == "classified"
 
-    async def test_startup_vs_enterprise_isolation(self, test_session_factory, comprehensive_contexts):
+    async def test_startup_vs_enterprise_isolation(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test isolation between startup and enterprise workspaces."""
         async with test_session_factory() as session:
-            startup_repo = ComprehensiveTestRepository(session, comprehensive_contexts['startup_c_main'])
-            enterprise_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_hr'])
+            startup_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["startup_c_main"]
+            )
+            enterprise_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_hr"]
+            )
 
             # Create startup and enterprise data
             startup_record = await startup_repo.create(
                 name="Startup Innovation",
                 description="Innovative startup product",
-                category="innovation"
+                category="innovation",
             )
 
             enterprise_record = await enterprise_repo.create(
                 name="Enterprise Process",
                 description="Established enterprise process",
-                category="process"
+                category="process",
             )
 
             # Test complete isolation
@@ -281,18 +324,32 @@ class TestComprehensiveWorkspaceIsolation:
         """Test that malicious actors cannot access any legitimate workspace data."""
         async with test_session_factory() as session:
             # Create repositories for legitimate workspaces
-            hr_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_hr'])
-            finance_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_finance'])
-            gov_repo = ComprehensiveTestRepository(session, comprehensive_contexts['gov_agency_classified'])
-            startup_repo = ComprehensiveTestRepository(session, comprehensive_contexts['startup_c_main'])
+            hr_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_hr"]
+            )
+            finance_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_finance"]
+            )
+            gov_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["gov_agency_classified"]
+            )
+            startup_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["startup_c_main"]
+            )
 
             # Create repositories for malicious actors
-            attacker_repo = ComprehensiveTestRepository(session, comprehensive_contexts['external_attacker'])
-            insider_repo = ComprehensiveTestRepository(session, comprehensive_contexts['insider_threat'])
+            attacker_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["external_attacker"]
+            )
+            insider_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["insider_threat"]
+            )
 
             # Create sensitive data in legitimate workspaces
             hr_secret = await hr_repo.create(name="HR Secret", category="confidential")
-            finance_secret = await finance_repo.create(name="Finance Secret", category="confidential")
+            finance_secret = await finance_repo.create(
+                name="Finance Secret", category="confidential"
+            )
             gov_secret = await gov_repo.create(name="Gov Secret", category="classified")
             startup_secret = await startup_repo.create(name="Startup Secret", category="innovation")
 
@@ -325,7 +382,9 @@ class TestComprehensiveWorkspaceIsolation:
             assert len(attacker_list) == 0
             assert len(insider_list) == 0
 
-    async def test_repository_factory_comprehensive_isolation(self, test_session_factory, comprehensive_contexts):
+    async def test_repository_factory_comprehensive_isolation(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test comprehensive isolation through repository factory pattern."""
         async with test_session_factory() as session:
             # Create repository factories for different contexts
@@ -334,7 +393,9 @@ class TestComprehensiveWorkspaceIsolation:
 
             for context_name, context in comprehensive_contexts.items():
                 factories[context_name] = RepositoryFactory(session, context)
-                repos[context_name] = factories[context_name].create_repository(ComprehensiveTestRepository)
+                repos[context_name] = factories[context_name].create_repository(
+                    ComprehensiveTestRepository
+                )
 
             # Create unique data in each workspace
             created_records = {}
@@ -342,7 +403,7 @@ class TestComprehensiveWorkspaceIsolation:
                 record = await repo.create(
                     name=f"Record for {context_name}",
                     description=f"Data specific to {context_name}",
-                    category=context_name.split('_')[0]  # enterprise, startup, gov, etc.
+                    category=context_name.split("_")[0],  # enterprise, startup, gov, etc.
                 )
                 created_records[context_name] = record
 
@@ -359,26 +420,34 @@ class TestComprehensiveWorkspaceIsolation:
                     if context1_name != context2_name:
                         # Repo1 should not be able to see record2
                         cannot_see = await repo1.get_by_id(record2.id)
-                        assert cannot_see is None, f"{context1_name} should not see {context2_name} data"
+                        assert cannot_see is None, (
+                            f"{context1_name} should not see {context2_name} data"
+                        )
 
-    async def test_workspace_isolation_under_load(self, test_session_factory, comprehensive_contexts):
+    async def test_workspace_isolation_under_load(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test workspace isolation under high load with concurrent operations."""
         async with test_session_factory() as session:
             import asyncio
 
             # Create repositories for different workspaces
-            hr_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_hr'])
-            finance_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_finance'])
-            startup_repo = ComprehensiveTestRepository(session, comprehensive_contexts['startup_c_main'])
+            hr_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_hr"]
+            )
+            finance_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_finance"]
+            )
+            startup_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["startup_c_main"]
+            )
 
             # Define concurrent operations
             async def create_hr_records():
                 records = []
                 for i in range(20):
                     record = await hr_repo.create(
-                        name=f"HR Record {i:03d}",
-                        category="hr",
-                        priority=i % 3 + 1
+                        name=f"HR Record {i:03d}", category="hr", priority=i % 3 + 1
                     )
                     records.append(record)
                 return records
@@ -387,9 +456,7 @@ class TestComprehensiveWorkspaceIsolation:
                 records = []
                 for i in range(15):
                     record = await finance_repo.create(
-                        name=f"Finance Record {i:03d}",
-                        category="finance",
-                        priority=i % 3 + 1
+                        name=f"Finance Record {i:03d}", category="finance", priority=i % 3 + 1
                     )
                     records.append(record)
                 return records
@@ -398,18 +465,14 @@ class TestComprehensiveWorkspaceIsolation:
                 records = []
                 for i in range(10):
                     record = await startup_repo.create(
-                        name=f"Startup Record {i:03d}",
-                        category="startup",
-                        priority=i % 3 + 1
+                        name=f"Startup Record {i:03d}", category="startup", priority=i % 3 + 1
                     )
                     records.append(record)
                 return records
 
             # Run concurrent operations
             hr_records, finance_records, startup_records = await asyncio.gather(
-                create_hr_records(),
-                create_finance_records(),
-                create_startup_records()
+                create_hr_records(), create_finance_records(), create_startup_records()
             )
 
             # Verify isolation after concurrent operations
@@ -433,11 +496,17 @@ class TestComprehensiveWorkspaceIsolation:
                 assert hr_cannot_see is None
                 assert startup_cannot_see is None
 
-    async def test_workspace_isolation_with_complex_queries(self, test_session_factory, comprehensive_contexts):
+    async def test_workspace_isolation_with_complex_queries(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test workspace isolation with complex filtering and search operations."""
         async with test_session_factory() as session:
-            hr_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_hr'])
-            finance_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_finance'])
+            hr_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_hr"]
+            )
+            finance_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_finance"]
+            )
 
             # Create overlapping data patterns in different workspaces
             categories = ["urgent", "normal", "low"]
@@ -448,14 +517,14 @@ class TestComprehensiveWorkspaceIsolation:
                     name=f"HR Task {i:03d}",
                     category=categories[i % 3],
                     priority=priorities[i % 3],
-                    is_active=(i % 2 == 0)
+                    is_active=(i % 2 == 0),
                 )
 
                 await finance_repo.create(
                     name=f"Finance Task {i:03d}",
                     category=categories[i % 3],
                     priority=priorities[i % 3],
-                    is_active=(i % 2 == 0)
+                    is_active=(i % 2 == 0),
                 )
 
             # Test complex filtering maintains workspace isolation
@@ -486,11 +555,17 @@ class TestComprehensiveWorkspaceIsolation:
             assert all(r.workspace_id == "enterprise-a-hr" for r in hr_page1 + hr_page2)
             assert all(r.workspace_id == "enterprise-a-finance" for r in finance_page1)
 
-    async def test_workspace_isolation_data_integrity(self, test_session_factory, comprehensive_contexts):
+    async def test_workspace_isolation_data_integrity(
+        self, test_session_factory, comprehensive_contexts
+    ):
         """Test that workspace isolation maintains data integrity across operations."""
         async with test_session_factory() as session:
-            hr_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_hr'])
-            finance_repo = ComprehensiveTestRepository(session, comprehensive_contexts['enterprise_a_finance'])
+            hr_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_hr"]
+            )
+            finance_repo = ComprehensiveTestRepository(
+                session, comprehensive_contexts["enterprise_a_finance"]
+            )
 
             # Create initial data
             hr_record = await hr_repo.create(name="HR Original", priority=1)
@@ -498,7 +573,9 @@ class TestComprehensiveWorkspaceIsolation:
 
             # Test that updates don't affect other workspaces
             updated_hr = await hr_repo.update(hr_record.id, name="HR Updated", priority=3)
-            updated_finance = await finance_repo.update(finance_record.id, name="Finance Updated", priority=2)
+            updated_finance = await finance_repo.update(
+                finance_record.id, name="Finance Updated", priority=2
+            )
 
             assert updated_hr.name == "HR Updated"
             assert updated_hr.priority == 3

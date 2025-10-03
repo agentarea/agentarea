@@ -20,7 +20,7 @@ def start_api_server():
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
         )
 
         print("⏳ Waiting for API server to start...")
@@ -52,7 +52,7 @@ def start_api_server():
                 [sys.executable, "cli.py", "serve", "--reload"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True
+                text=True,
             )
 
             print("⏳ Waiting for direct Python server startup...")

@@ -97,7 +97,9 @@ class TaskWithAgent(BaseModel):
 @global_tasks_router.get("/", response_model=list[TaskWithAgent])
 async def get_all_tasks(
     status: str | None = Query(None, description="Filter by task status"),
-    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's tasks only"),
+    created_by: str | None = Query(
+        None, description="Filter by creator: 'me' for current user's tasks only"
+    ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_agent_service),
@@ -191,6 +193,7 @@ class TaskSSEEvent(BaseModel):
 
     type: str
     data: dict[str, Any]
+
 
 @router.post("/")
 async def create_task_for_agent_with_stream(
@@ -370,7 +373,9 @@ async def create_task_for_agent_sync(
 async def list_agent_tasks(
     agent_id: UUID,
     status: str | None = Query(None, description="Filter by task status"),
-    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's tasks only"),
+    created_by: str | None = Query(
+        None, description="Filter by creator: 'me' for current user's tasks only"
+    ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     offset: int = Query(0, ge=0, description="Number of tasks to skip"),
     agent_service: AgentService = Depends(get_agent_service),
@@ -686,10 +691,7 @@ async def get_task_events(
                 LIMIT :limit OFFSET :offset
             """
 
-            params.update({
-                "limit": page_size,
-                "offset": (page - 1) * page_size
-            })
+            params.update({"limit": page_size, "offset": (page - 1) * page_size})
 
             # Execute query
             result = await session.execute(text(base_query), params)
@@ -710,16 +712,18 @@ async def get_task_events(
         events = []
 
         for row in rows:
-            events.append(TaskEvent(
-                id=str(row.id),
-                task_id=str(row.task_id),
-                agent_id=str(agent_id),
-                execution_id=row.event_metadata.get("execution_id", "unknown"),
-                timestamp=row.timestamp,
-                event_type=row.event_type,
-                message=row.data.get("message", f"Event: {row.event_type}"),
-                metadata=dict(row.event_metadata) if row.event_metadata else {},
-            ))
+            events.append(
+                TaskEvent(
+                    id=str(row.id),
+                    task_id=str(row.task_id),
+                    agent_id=str(agent_id),
+                    execution_id=row.event_metadata.get("execution_id", "unknown"),
+                    timestamp=row.timestamp,
+                    event_type=row.event_type,
+                    message=row.data.get("message", f"Event: {row.event_type}"),
+                    metadata=dict(row.event_metadata) if row.event_metadata else {},
+                )
+            )
 
         # Calculate pagination info
         has_next = (page * page_size) < total_events
@@ -843,9 +847,11 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
     # For tool events and LLM events, preserve original_data as it contains essential display information
     if "original_event_type" in data:
         original_event_type = data.get("original_event_type", "")
-        if (original_event_type.startswith("ToolCall") or
-            original_event_type.startswith("LLMCall") or
-            "tool_name" in str(data.get("original_data", {}))):
+        if (
+            original_event_type.startswith("ToolCall")
+            or original_event_type.startswith("LLMCall")
+            or "tool_name" in str(data.get("original_data", {}))
+        ):
             # Keep original_data for tool and LLM events
             return {k: v for k, v in data.items() if k != "original_event_type"}
 

@@ -15,16 +15,16 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and set logging context.
-        
+
         Args:
             request: The incoming request
             call_next: The next middleware/handler in the chain
-            
+
         Returns:
             The response from the handler
         """
         # Try to get user context from request state
-        user_context: UserContext = getattr(request.state, 'user_context', None)
+        user_context: UserContext = getattr(request.state, "user_context", None)
 
         if user_context:
             # Update logging context for this request
@@ -41,7 +41,7 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
                     "path": request.url.path,
                     "query_params": str(request.query_params),
                     "client_ip": request.client.host if request.client else None,
-                }
+                },
             )
 
         try:
@@ -56,7 +56,7 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
                         "status_code": response.status_code,
                         "method": request.method,
                         "path": request.url.path,
-                    }
+                    },
                 )
 
             return response
@@ -71,6 +71,6 @@ class LoggingContextMiddleware(BaseHTTPMiddleware):
                         "method": request.method,
                         "path": request.url.path,
                         "exception_type": type(e).__name__,
-                    }
+                    },
                 )
             raise

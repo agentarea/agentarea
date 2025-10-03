@@ -95,6 +95,7 @@ lint = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+exclude = ["tests", "scripts", "test_tools_display.py", "libs/triggers/examples"]
 
 [tool.ruff.lint]
 select = [
@@ -121,6 +122,8 @@ ignore = [
     "D104",    # Missing docstring in public package
     "D203",    # One blank line required before class docstring
     "D213",    # Multi-line docstring summary should start at the second line
+    "D205",    # Blank line required between summary line and description
+    "D415",    # First line should end with punctuation
     "E501",    # Line too long
 ]
 
@@ -128,7 +131,7 @@ ignore = [
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D"]
+"tests/*" = ["D", "S101"]
 
 [tool.ruff.format]
 quote-style = "double"

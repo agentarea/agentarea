@@ -55,9 +55,7 @@ class ProviderService:
 
     # Provider Specs methods
 
-    async def list_provider_specs(
-        self, is_builtin: bool | None = None
-    ) -> list[ProviderSpec]:
+    async def list_provider_specs(self, is_builtin: bool | None = None) -> list[ProviderSpec]:
         """List all available provider specifications.
 
         Args:
@@ -215,9 +213,7 @@ class ProviderService:
 
     # Model Specs methods
 
-    async def list_model_specs(
-        self, provider_spec_id: UUID | None = None
-    ) -> list[ModelSpec]:
+    async def list_model_specs(self, provider_spec_id: UUID | None = None) -> list[ModelSpec]:
         """List model specifications with optional filtering by provider specification.
 
         Args:
@@ -316,9 +312,7 @@ class ProviderService:
 
     # Helper methods
 
-    async def get_model_instance_with_config(
-        self, instance_id: UUID
-    ) -> dict[str, Any] | None:
+    async def get_model_instance_with_config(self, instance_id: UUID) -> dict[str, Any] | None:
         """Retrieve a model instance along with its provider configuration details and API key.
 
         Args:

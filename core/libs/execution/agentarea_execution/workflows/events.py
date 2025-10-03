@@ -209,5 +209,5 @@ def event_to_dict(event: BaseWorkflowEvent) -> dict[str, Any]:
         "event_type": event_type,
         "event_id": event_dict.pop("event_id"),
         "timestamp": event_dict.pop("timestamp"),
-        "data": event_dict
+        "data": event_dict,
     }

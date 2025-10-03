@@ -79,10 +79,13 @@ class TestAgentExecutionWorkflowIntegration:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "expression": {"type": "string", "description": "Math expression to calculate"}
+                                "expression": {
+                                    "type": "string",
+                                    "description": "Math expression to calculate",
+                                }
                             },
-                            "required": ["expression"]
-                        }
+                            "required": ["expression"],
+                        },
                     }
                 ]
 
@@ -110,8 +113,8 @@ class TestAgentExecutionWorkflowIntegration:
                                 "type": "function",
                                 "function": {
                                     "name": "calculator",
-                                    "arguments": '{"expression": "2 + 2"}'
-                                }
+                                    "arguments": '{"expression": "2 + 2"}',
+                                },
                             }
                         ],
                         "finish_reason": "tool_call",
@@ -120,7 +123,7 @@ class TestAgentExecutionWorkflowIntegration:
                             "prompt_tokens": 20,
                             "completion_tokens": 25,
                             "total_tokens": 45,
-                        }
+                        },
                     }
 
                 # Second call - LLM provides final answer after tool execution
@@ -135,7 +138,7 @@ class TestAgentExecutionWorkflowIntegration:
                             "prompt_tokens": 25,
                             "completion_tokens": 15,
                             "total_tokens": 40,
-                        }
+                        },
                     }
 
                 # Fallback
@@ -149,7 +152,7 @@ class TestAgentExecutionWorkflowIntegration:
                         "prompt_tokens": 10,
                         "completion_tokens": 10,
                         "total_tokens": 20,
-                    }
+                    },
                 }
 
             @activity.defn(name="execute_mcp_tool_activity")
@@ -195,7 +198,7 @@ class TestAgentExecutionWorkflowIntegration:
                     "plan": "Execute the task step by step",
                     "estimated_steps": 3,
                     "key_tools": [],
-                    "risk_factors": ["None"]
+                    "risk_factors": ["None"],
                 }
 
             @activity.defn(name="evaluate_goal_progress_activity")
@@ -215,14 +218,14 @@ class TestAgentExecutionWorkflowIntegration:
                             "tool_calls": 1,  # We expect 1 tool call
                             "assistant_responses": 2,
                             "iteration": current_iteration,
-                        }
+                        },
                     }
 
                 return {
                     "goal_achieved": False,
                     "final_response": None,
                     "success_criteria_met": [],
-                    "progress_indicators": {}
+                    "progress_indicators": {},
                 }
 
             @activity.defn(name="publish_workflow_events_activity")
@@ -334,7 +337,7 @@ class TestAgentExecutionWorkflowIntegration:
                         "prompt_tokens": 15,
                         "completion_tokens": 12,
                         "total_tokens": 27,
-                    }
+                    },
                 }
 
             @activity.defn(name="execute_mcp_tool_activity")
@@ -366,7 +369,7 @@ class TestAgentExecutionWorkflowIntegration:
                     "plan": "Execute the task step by step",
                     "estimated_steps": 3,
                     "key_tools": [],
-                    "risk_factors": ["None"]
+                    "risk_factors": ["None"],
                 }
 
             @activity.defn(name="evaluate_goal_progress_activity")
@@ -386,13 +389,13 @@ class TestAgentExecutionWorkflowIntegration:
                             "tool_calls": 0,
                             "assistant_responses": 1,
                             "iteration": current_iteration,
-                        }
+                        },
                     }
                 return {
                     "goal_achieved": False,
                     "final_response": None,
                     "success_criteria_met": [],
-                    "progress_indicators": {}
+                    "progress_indicators": {},
                 }
 
             @activity.defn(name="publish_workflow_events_activity")
@@ -498,7 +501,7 @@ class TestAgentExecutionWorkflowIntegration:
                         "prompt_tokens": 10,
                         "completion_tokens": 15,
                         "total_tokens": 25,
-                    }
+                    },
                 }
 
             @activity.defn(name="execute_mcp_tool_activity")
@@ -519,7 +522,7 @@ class TestAgentExecutionWorkflowIntegration:
                     "plan": "Execute the task step by step",
                     "estimated_steps": 3,
                     "key_tools": [],
-                    "risk_factors": ["None"]
+                    "risk_factors": ["None"],
                 }
 
             @activity.defn(name="evaluate_goal_progress_activity")
@@ -539,13 +542,13 @@ class TestAgentExecutionWorkflowIntegration:
                             "tool_calls": 0,
                             "assistant_responses": 1,
                             "iteration": current_iteration,
-                        }
+                        },
                     }
                 return {
                     "goal_achieved": False,
                     "final_response": None,
                     "success_criteria_met": [],
-                    "progress_indicators": {}
+                    "progress_indicators": {},
                 }
 
             @activity.defn(name="publish_workflow_events_activity")
@@ -567,8 +570,10 @@ class TestAgentExecutionWorkflowIntegration:
                     domain_event = DomainEvent(
                         event_id=uuid4(),
                         event_type=f"workflow.{event_data['event_type']}",
-                        timestamp=datetime.fromisoformat(event_data["timestamp"].replace("Z", "+00:00")),
-                        data=event_data["data"]
+                        timestamp=datetime.fromisoformat(
+                            event_data["timestamp"].replace("Z", "+00:00")
+                        ),
+                        data=event_data["data"],
                     )
 
                     await mock_event_broker.publish(domain_event)
@@ -629,9 +634,15 @@ class TestAgentExecutionWorkflowIntegration:
                     assert len(mock_event_broker.published_events) > 0, "No events were captured!"
 
                     # ✅ VERIFY SPECIFIC EVENT TYPES
-                    workflow_started_events = mock_event_broker.get_events_by_type("workflow.WorkflowStarted")
-                    workflow_finished_events = mock_event_broker.get_events_by_type("workflow.WorkflowFinished")
-                    iteration_completed_events = mock_event_broker.get_events_by_type("workflow.IterationCompleted")
+                    workflow_started_events = mock_event_broker.get_events_by_type(
+                        "workflow.WorkflowStarted"
+                    )
+                    workflow_finished_events = mock_event_broker.get_events_by_type(
+                        "workflow.WorkflowFinished"
+                    )
+                    iteration_completed_events = mock_event_broker.get_events_by_type(
+                        "workflow.IterationCompleted"
+                    )
 
                     print(f"Workflow started events: {len(workflow_started_events)}")
                     print(f"Workflow finished events: {len(workflow_finished_events)}")
@@ -642,35 +653,51 @@ class TestAgentExecutionWorkflowIntegration:
 
                     # Check if we have finished events (may not always be present if workflow is cut short)
                     if len(workflow_finished_events) == 0:
-                        print("⚠️ No WorkflowFinished events found - this might be expected for quick completion")
+                        print(
+                            "⚠️ No WorkflowFinished events found - this might be expected for quick completion"
+                        )
 
                     # ✅ VERIFY EVENT STRUCTURE FOR SSE COMPATIBILITY
                     for event in mock_event_broker.published_events:
                         # Each event should have required fields for SSE streaming
-                        assert hasattr(event, 'event_id'), "Event missing event_id"
-                        assert hasattr(event, 'event_type'), "Event missing event_type"
-                        assert hasattr(event, 'timestamp'), "Event missing timestamp"
-                        assert hasattr(event, 'data'), "Event missing data"
+                        assert hasattr(event, "event_id"), "Event missing event_id"
+                        assert hasattr(event, "event_type"), "Event missing event_type"
+                        assert hasattr(event, "timestamp"), "Event missing timestamp"
+                        assert hasattr(event, "data"), "Event missing data"
 
                         # Data should contain task identifiers (nested in data.data)
-                        event_data = event.data.get('data', {})
-                        assert 'task_id' in event_data, f"Event data missing task_id: {event_data}"
-                        assert 'agent_id' in event_data, f"Event data missing agent_id: {event_data}"
+                        event_data = event.data.get("data", {})
+                        assert "task_id" in event_data, f"Event data missing task_id: {event_data}"
+                        assert "agent_id" in event_data, (
+                            f"Event data missing agent_id: {event_data}"
+                        )
 
-                        print(f"✅ Event verified: {event.event_type} - {event_data.get('task_id', 'no_task_id')}")
+                        print(
+                            f"✅ Event verified: {event.event_type} - {event_data.get('task_id', 'no_task_id')}"
+                        )
 
                     # ✅ VERIFY EVENT SEQUENCE
                     event_types = [event.event_type for event in mock_event_broker.published_events]
                     print(f"Event sequence: {event_types}")
 
                     # Should start with WorkflowStarted
-                    assert event_types[0] == "workflow.WorkflowStarted", f"First event should be WorkflowStarted, got: {event_types[0]}"
+                    assert event_types[0] == "workflow.WorkflowStarted", (
+                        f"First event should be WorkflowStarted, got: {event_types[0]}"
+                    )
 
                     # Check the last event - it could be WorkflowFinished or IterationCompleted
                     last_event_type = event_types[-1]
-                    valid_final_events = ["workflow.WorkflowFinished", "workflow.IterationCompleted", "workflow.GoalAchieved"]
-                    assert last_event_type in valid_final_events, f"Last event should be one of {valid_final_events}, got: {last_event_type}"
+                    valid_final_events = [
+                        "workflow.WorkflowFinished",
+                        "workflow.IterationCompleted",
+                        "workflow.GoalAchieved",
+                    ]
+                    assert last_event_type in valid_final_events, (
+                        f"Last event should be one of {valid_final_events}, got: {last_event_type}"
+                    )
 
                     print("✅ Event publishing test passed!")
-                    print(f"✅ All {len(mock_event_broker.published_events)} events are properly formatted for SSE streaming")
+                    print(
+                        f"✅ All {len(mock_event_broker.published_events)} events are properly formatted for SSE streaming"
+                    )
                     print("✅ Event sequence is correct: START → EXECUTION → FINISH")

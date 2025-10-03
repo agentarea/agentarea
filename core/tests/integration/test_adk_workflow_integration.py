@@ -38,7 +38,7 @@ class TestADKWorkflowIntegration:
             user_id="integration-test-user",
             task_query="Hello, this is an integration test. Please respond with 'Integration test successful!'",
             timeout_seconds=120,
-            max_reasoning_iterations=3
+            max_reasoning_iterations=3,
         )
 
     @pytest.mark.asyncio
@@ -56,10 +56,7 @@ class TestADKWorkflowIntegration:
                 client,
                 task_queue="test-adk-integration",
                 workflows=[ADKAgentWorkflow],
-                activities=[
-                    build_agent_config_activity,
-                    execute_adk_agent_with_temporal_backbone
-                ]
+                activities=[build_agent_config_activity, execute_adk_agent_with_temporal_backbone],
             )
 
             logger.info("🚀 Starting integration test worker...")
@@ -70,7 +67,7 @@ class TestADKWorkflowIntegration:
                     ADKAgentWorkflow.run,
                     sample_request,
                     id=f"integration-test-{sample_request.task_id}",
-                    task_queue="test-adk-integration"
+                    task_queue="test-adk-integration",
                 )
 
                 logger.info(f"📋 Workflow started with ID: {handle.id}")
@@ -81,10 +78,10 @@ class TestADKWorkflowIntegration:
 
                     # Verify result
                     assert result is not None
-                    assert hasattr(result, 'success')
-                    assert hasattr(result, 'final_response')
-                    assert hasattr(result, 'task_id')
-                    assert hasattr(result, 'agent_id')
+                    assert hasattr(result, "success")
+                    assert hasattr(result, "final_response")
+                    assert hasattr(result, "task_id")
+                    assert hasattr(result, "agent_id")
 
                     logger.info("✅ Workflow completed successfully!")
                     logger.info(f"   Success: {result.success}")
@@ -101,6 +98,7 @@ class TestADKWorkflowIntegration:
         except Exception as e:
             logger.error(f"❌ Integration test failed: {e}")
             import traceback
+
             logger.error(f"   Traceback: {traceback.format_exc()}")
             pytest.fail(f"Integration test failed: {e}")
 
@@ -116,10 +114,7 @@ class TestADKWorkflowIntegration:
                 client,
                 task_queue="test-adk-queries",
                 workflows=[ADKAgentWorkflow],
-                activities=[
-                    build_agent_config_activity,
-                    execute_adk_agent_with_temporal_backbone
-                ]
+                activities=[build_agent_config_activity, execute_adk_agent_with_temporal_backbone],
             )
 
             async with worker:
@@ -128,7 +123,7 @@ class TestADKWorkflowIntegration:
                     ADKAgentWorkflow.run,
                     sample_request,
                     id=f"query-test-{sample_request.task_id}",
-                    task_queue="test-adk-queries"
+                    task_queue="test-adk-queries",
                 )
 
                 logger.info(f"📋 Testing queries on workflow: {handle.id}")
@@ -185,6 +180,7 @@ class TestADKWorkflowIntegration:
         try:
             # Try to get an existing agent ID
             from uuid import UUID
+
             existing_agent_id = UUID("8bd81439-21d2-41bb-8035-02f87641056a")
 
             request = AgentExecutionRequest(
@@ -193,7 +189,7 @@ class TestADKWorkflowIntegration:
                 user_id="integration-test-existing",
                 task_query="Hello from integration test with existing agent!",
                 timeout_seconds=120,
-                max_reasoning_iterations=3
+                max_reasoning_iterations=3,
             )
 
             client = await Client.connect("localhost:7233")
@@ -202,10 +198,7 @@ class TestADKWorkflowIntegration:
                 client,
                 task_queue="test-adk-existing",
                 workflows=[ADKAgentWorkflow],
-                activities=[
-                    build_agent_config_activity,
-                    execute_adk_agent_with_temporal_backbone
-                ]
+                activities=[build_agent_config_activity, execute_adk_agent_with_temporal_backbone],
             )
 
             async with worker:
@@ -213,7 +206,7 @@ class TestADKWorkflowIntegration:
                     ADKAgentWorkflow.run,
                     request,
                     id=f"existing-agent-test-{request.task_id}",
-                    task_queue="test-adk-existing"
+                    task_queue="test-adk-existing",
                 )
 
                 logger.info(f"📋 Testing with existing agent: {existing_agent_id}")
@@ -247,7 +240,7 @@ class TestADKWorkflowIntegration:
                 user_id="error-test-user",
                 task_query="This should fail gracefully",
                 timeout_seconds=60,
-                max_reasoning_iterations=1
+                max_reasoning_iterations=1,
             )
 
             client = await Client.connect("localhost:7233")
@@ -256,10 +249,7 @@ class TestADKWorkflowIntegration:
                 client,
                 task_queue="test-adk-errors",
                 workflows=[ADKAgentWorkflow],
-                activities=[
-                    build_agent_config_activity,
-                    execute_adk_agent_with_temporal_backbone
-                ]
+                activities=[build_agent_config_activity, execute_adk_agent_with_temporal_backbone],
             )
 
             async with worker:
@@ -267,7 +257,7 @@ class TestADKWorkflowIntegration:
                     ADKAgentWorkflow.run,
                     invalid_request,
                     id=f"error-test-{invalid_request.task_id}",
-                    task_queue="test-adk-errors"
+                    task_queue="test-adk-errors",
                 )
 
                 logger.info("🧪 Testing error handling...")
@@ -276,7 +266,7 @@ class TestADKWorkflowIntegration:
                     result = await asyncio.wait_for(handle.result(), timeout=60.0)
 
                     # If we get a result, it should indicate failure
-                    if hasattr(result, 'success'):
+                    if hasattr(result, "success"):
                         assert result.success is False
                         logger.info("✅ Error handled gracefully with success=False")
                     else:

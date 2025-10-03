@@ -48,6 +48,7 @@ router = APIRouter(prefix="/triggers", tags=["triggers"])
 
 # API Response Models
 
+
 class TriggerResponse(BaseModel):
     """Response model for trigger data."""
 
@@ -96,7 +97,7 @@ class TriggerResponse(BaseModel):
                 updated_at=datetime.utcnow(),
                 created_by="system",
                 failure_threshold=5,
-                consecutive_failures=0
+                consecutive_failures=0,
             )
 
         # Base fields
@@ -105,7 +106,9 @@ class TriggerResponse(BaseModel):
             "name": trigger.name,
             "description": trigger.description,
             "agent_id": trigger.agent_id,
-            "trigger_type": trigger.trigger_type.value if hasattr(trigger.trigger_type, 'value') else str(trigger.trigger_type),
+            "trigger_type": trigger.trigger_type.value
+            if hasattr(trigger.trigger_type, "value")
+            else str(trigger.trigger_type),
             "is_active": trigger.is_active,
             "task_parameters": trigger.task_parameters,
             "conditions": trigger.conditions,
@@ -118,21 +121,27 @@ class TriggerResponse(BaseModel):
         }
 
         # Add type-specific fields
-        if hasattr(trigger, 'cron_expression'):
-            response_data.update({
-                "cron_expression": trigger.cron_expression,
-                "timezone": trigger.timezone,
-                "next_run_time": getattr(trigger, 'next_run_time', None),
-            })
+        if hasattr(trigger, "cron_expression"):
+            response_data.update(
+                {
+                    "cron_expression": trigger.cron_expression,
+                    "timezone": trigger.timezone,
+                    "next_run_time": getattr(trigger, "next_run_time", None),
+                }
+            )
 
-        if hasattr(trigger, 'webhook_id'):
-            response_data.update({
-                "webhook_id": trigger.webhook_id,
-                "allowed_methods": trigger.allowed_methods,
-                "webhook_type": trigger.webhook_type.value if hasattr(trigger.webhook_type, 'value') else str(trigger.webhook_type),
-                "validation_rules": trigger.validation_rules,
-                "webhook_config": trigger.webhook_config,
-            })
+        if hasattr(trigger, "webhook_id"):
+            response_data.update(
+                {
+                    "webhook_id": trigger.webhook_id,
+                    "allowed_methods": trigger.allowed_methods,
+                    "webhook_type": trigger.webhook_type.value
+                    if hasattr(trigger.webhook_type, "value")
+                    else str(trigger.webhook_type),
+                    "validation_rules": trigger.validation_rules,
+                    "webhook_config": trigger.webhook_config,
+                }
+            )
 
         return cls(**response_data)
 
@@ -163,14 +172,16 @@ class TriggerExecutionResponse(BaseModel):
                 status="failed",
                 execution_time_ms=0,
                 error_message="Triggers service not available",
-                trigger_data={}
+                trigger_data={},
             )
 
         return cls(
             id=execution.id,
             trigger_id=execution.trigger_id,
             executed_at=execution.executed_at,
-            status=execution.status.value if hasattr(execution.status, 'value') else str(execution.status),
+            status=execution.status.value
+            if hasattr(execution.status, "value")
+            else str(execution.status),
             task_id=execution.task_id,
             execution_time_ms=execution.execution_time_ms,
             error_message=execution.error_message,
@@ -204,7 +215,7 @@ class TriggerCreateRequest(BaseModel):
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: dict[str, Any] | None = None
 
-    @field_validator('trigger_type')
+    @field_validator("trigger_type")
     @classmethod
     def validate_trigger_type(cls, v: str) -> str:
         """Validate trigger type."""
@@ -213,7 +224,7 @@ class TriggerCreateRequest(BaseModel):
             raise ValueError(f"Invalid trigger type. Must be one of: {valid_types}")
         return v.lower()
 
-    @field_validator('webhook_type')
+    @field_validator("webhook_type")
     @classmethod
     def validate_webhook_type(cls, v: str) -> str:
         """Validate webhook type."""
@@ -245,7 +256,7 @@ class TriggerUpdateRequest(BaseModel):
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
 
-    @field_validator('webhook_type')
+    @field_validator("webhook_type")
     @classmethod
     def validate_webhook_type(cls, v: str | None) -> str | None:
         """Validate webhook type."""
@@ -316,12 +327,13 @@ class ExecutionCorrelationResponse(BaseModel):
 
 # Utility Functions
 
+
 def _check_triggers_availability():
     """Check if triggers service is available and raise appropriate error."""
     if not TRIGGERS_AVAILABLE:
         raise HTTPException(
             status_code=503,
-            detail="Triggers service is not available. Please check system configuration."
+            detail="Triggers service is not available. Please check system configuration.",
         )
 
 
@@ -334,7 +346,9 @@ def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) ->
 
     # Convert string enums to domain enums
     trigger_type = TriggerType.CRON if request.trigger_type == "cron" else TriggerType.WEBHOOK
-    webhook_type = WebhookType(request.webhook_type) if request.webhook_type else WebhookType.GENERIC
+    webhook_type = (
+        WebhookType(request.webhook_type) if request.webhook_type else WebhookType.GENERIC
+    )
 
     return TriggerCreate(
         name=request.name,
@@ -385,6 +399,7 @@ def _convert_to_domain_update(request: TriggerUpdateRequest) -> Any:
 
 # API Endpoints
 
+
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
     request: TriggerCreateRequest,
@@ -392,18 +407,18 @@ async def create_trigger(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerResponse:
     """Create a new trigger.
-    
+
     Creates a new trigger with the specified configuration. The trigger will be
     validated and, if it's a cron trigger, automatically scheduled.
-    
+
     Args:
         request: Trigger creation request data
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         The created trigger
-        
+
     Raises:
         HTTPException: If validation fails or creation errors occur
     """
@@ -434,16 +449,18 @@ async def list_triggers(
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
     trigger_type: str | None = Query(None, description="Filter by trigger type (cron, webhook)"),
     active_only: bool = Query(False, description="Only return active triggers"),
-    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's triggers only"),
+    created_by: str | None = Query(
+        None, description="Filter by creator: 'me' for current user's triggers only"
+    ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of triggers to return"),
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> list[TriggerResponse]:
     """List triggers with optional filtering.
-    
+
     Returns a list of triggers that match the specified criteria. Supports
     filtering by agent ID, trigger type, and active status.
-    
+
     Args:
         agent_id: Optional agent ID filter
         trigger_type: Optional trigger type filter
@@ -451,7 +468,7 @@ async def list_triggers(
         limit: Maximum number of triggers to return
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         List of triggers matching the criteria
     """
@@ -465,12 +482,15 @@ async def list_triggers(
                 domain_trigger_type = None
             else:
                 from agentarea_triggers.domain.enums import TriggerType
+
                 if trigger_type.lower() == "cron":
                     domain_trigger_type = TriggerType.CRON
                 elif trigger_type.lower() == "webhook":
                     domain_trigger_type = TriggerType.WEBHOOK
                 else:
-                    raise HTTPException(status_code=400, detail=f"Invalid trigger type: {trigger_type}")
+                    raise HTTPException(
+                        status_code=400, detail=f"Invalid trigger type: {trigger_type}"
+                    )
 
         # Determine if we should filter by creator
         creator_scoped = created_by == "me"
@@ -481,7 +501,7 @@ async def list_triggers(
             trigger_type=domain_trigger_type,
             active_only=active_only,
             creator_scoped=creator_scoped,
-            limit=limit
+            limit=limit,
         )
 
         logger.info(f"Listed {len(triggers)} triggers")
@@ -502,15 +522,15 @@ async def get_trigger(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerResponse:
     """Get a specific trigger by ID.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         The trigger data
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -539,19 +559,19 @@ async def update_trigger(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerResponse:
     """Update an existing trigger.
-    
+
     Updates the specified trigger with the provided data. Only non-null fields
     in the request will be updated.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         request: Trigger update request data
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         The updated trigger
-        
+
     Raises:
         HTTPException: If trigger not found or validation fails
     """
@@ -585,15 +605,15 @@ async def delete_trigger(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> None:
     """Delete a trigger.
-    
+
     Permanently deletes the specified trigger and all its execution history.
     If it's a cron trigger, the schedule will also be removed.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -621,18 +641,18 @@ async def enable_trigger(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Enable a trigger.
-    
+
     Enables the specified trigger, allowing it to execute when conditions are met.
     For cron triggers, this will resume the schedule.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         Success status
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -650,7 +670,7 @@ async def enable_trigger(
             "status": "success",
             "message": f"Trigger {trigger_id} enabled successfully",
             "trigger_id": str(trigger_id),
-            "is_active": True
+            "is_active": True,
         }
 
     except HTTPException:
@@ -667,18 +687,18 @@ async def disable_trigger(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Disable a trigger.
-    
+
     Disables the specified trigger, preventing it from executing.
     For cron triggers, this will pause the schedule.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         Success status
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -696,7 +716,7 @@ async def disable_trigger(
             "status": "success",
             "message": f"Trigger {trigger_id} disabled successfully",
             "trigger_id": str(trigger_id),
-            "is_active": False
+            "is_active": False,
         }
 
     except HTTPException:
@@ -711,18 +731,20 @@ async def get_execution_history(
     trigger_id: UUID,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of executions per page"),
-    status: str | None = Query(None, description="Filter by execution status (success, failed, timeout)"),
+    status: str | None = Query(
+        None, description="Filter by execution status (success, failed, timeout)"
+    ),
     start_time: datetime | None = Query(None, description="Filter executions after this time"),
     end_time: datetime | None = Query(None, description="Filter executions before this time"),
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionHistoryResponse:
     """Get execution history for a trigger with filtering and pagination.
-    
+
     Returns paginated execution history for the specified trigger, including
     success/failure status, execution times, and error messages. Supports
     filtering by status and time range.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         page: Page number for pagination
@@ -732,10 +754,10 @@ async def get_execution_history(
         end_time: Optional end time filter
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         Paginated execution history
-        
+
     Raises:
         HTTPException: If trigger not found or invalid parameters
     """
@@ -754,6 +776,7 @@ async def get_execution_history(
                 status_enum = None
             else:
                 from agentarea_triggers.domain.enums import ExecutionStatus
+
                 try:
                     status_enum = ExecutionStatus(status.upper())
                 except ValueError:
@@ -769,7 +792,7 @@ async def get_execution_history(
             start_time=start_time,
             end_time=end_time,
             limit=page_size,
-            offset=offset
+            offset=offset,
         )
 
         # Check if there's a next page
@@ -777,8 +800,7 @@ async def get_execution_history(
 
         # Convert to response models
         execution_responses = [
-            TriggerExecutionResponse.from_domain_model(execution)
-            for execution in executions
+            TriggerExecutionResponse.from_domain_model(execution) for execution in executions
         ]
 
         return ExecutionHistoryResponse(
@@ -786,7 +808,7 @@ async def get_execution_history(
             total=total,
             page=page,
             page_size=page_size,
-            has_next=has_next
+            has_next=has_next,
         )
 
     except HTTPException:
@@ -803,18 +825,18 @@ async def get_trigger_status(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerStatusResponse:
     """Get trigger status and schedule information.
-    
+
     Returns detailed status information about the trigger, including execution
     status, rate limiting, and schedule information for cron triggers.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         Trigger status information
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -828,7 +850,7 @@ async def get_trigger_status(
 
         # Get schedule info for cron triggers
         schedule_info = None
-        if hasattr(trigger, 'cron_expression'):
+        if hasattr(trigger, "cron_expression"):
             schedule_info = await trigger_service.get_cron_schedule_info(trigger_id)
 
         return TriggerStatusResponse(
@@ -837,7 +859,7 @@ async def get_trigger_status(
             last_execution_at=trigger.last_execution_at,
             consecutive_failures=trigger.consecutive_failures,
             should_disable_due_to_failures=trigger.should_disable_due_to_failures(),
-            schedule_info=schedule_info
+            schedule_info=schedule_info,
         )
 
     except HTTPException:
@@ -855,19 +877,19 @@ async def get_execution_metrics(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionMetricsResponse:
     """Get execution metrics for a trigger.
-    
+
     Returns aggregated metrics including success rate, average execution time,
     and failure counts for the specified time period.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         hours: Time period in hours to analyze (default 24, max 168)
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         Execution metrics for the trigger
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -882,10 +904,7 @@ async def get_execution_metrics(
         # Get execution metrics
         metrics = await trigger_service.get_execution_metrics(trigger_id, hours)
 
-        return ExecutionMetricsResponse(
-            trigger_id=trigger_id,
-            **metrics
-        )
+        return ExecutionMetricsResponse(trigger_id=trigger_id, **metrics)
 
     except HTTPException:
         raise
@@ -903,20 +922,20 @@ async def get_execution_timeline(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionTimelineResponse:
     """Get execution timeline for a trigger.
-    
+
     Returns time-bucketed execution counts and success rates for visualization
     and trend analysis.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         hours: Time period in hours to analyze (default 24, max 168)
         bucket_size_minutes: Size of time buckets in minutes (default 60)
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         Execution timeline data
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -934,9 +953,7 @@ async def get_execution_timeline(
         )
 
         return ExecutionTimelineResponse(
-            trigger_id=trigger_id,
-            period_hours=hours,
-            timeline=timeline
+            trigger_id=trigger_id, period_hours=hours, timeline=timeline
         )
 
     except HTTPException:
@@ -955,20 +972,20 @@ async def get_execution_correlations(
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionCorrelationResponse:
     """Get execution correlation data for a trigger.
-    
+
     Returns execution data with correlation information to created tasks
     and workflows for debugging and monitoring purposes.
-    
+
     Args:
         trigger_id: The unique identifier of the trigger
         page: Page number for pagination
         page_size: Number of executions per page
         auth_context: Authentication context
         trigger_service: Injected trigger service
-        
+
     Returns:
         Execution correlation data
-        
+
     Raises:
         HTTPException: If trigger not found
     """
@@ -992,11 +1009,7 @@ async def get_execution_correlations(
         has_next = (offset + page_size) < total
 
         return ExecutionCorrelationResponse(
-            executions=correlations,
-            total=total,
-            page=page,
-            page_size=page_size,
-            has_next=has_next
+            executions=correlations, total=total, page=page, page_size=page_size, has_next=has_next
         )
 
     except HTTPException:
@@ -1009,16 +1022,16 @@ async def get_execution_correlations(
 # Health check endpoint
 @router.get("/health", response_model=dict[str, Any])
 async def triggers_health_check(
-    health_checker = Depends(get_trigger_health_check),
+    health_checker=Depends(get_trigger_health_check),
 ) -> dict[str, Any]:
     """Comprehensive health check endpoint for trigger system.
-    
+
     Checks all trigger system components including:
     - Database connectivity
     - Temporal schedule manager
     - Webhook manager
     - Execution metrics
-    
+
     Returns:
         Dictionary with detailed health status information
     """
@@ -1029,7 +1042,7 @@ async def triggers_health_check(
                 "service": "triggers",
                 "message": "Triggers service not available",
                 "timestamp": datetime.utcnow().isoformat(),
-                "components": {}
+                "components": {},
             }
 
         # Run comprehensive health check
@@ -1045,5 +1058,5 @@ async def triggers_health_check(
             "service": "triggers",
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat(),
-            "components": {}
+            "components": {},
         }

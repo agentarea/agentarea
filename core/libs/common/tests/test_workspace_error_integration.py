@@ -27,15 +27,13 @@ def app():
             resource_type="agent",
             resource_id="agent-123",
             current_workspace_id="ws-current",
-            resource_workspace_id="ws-other"
+            resource_workspace_id="ws-other",
         )
 
     @app.get("/test/resource-not-found")
     async def test_resource_not_found():
         raise WorkspaceResourceNotFound(
-            resource_type="task",
-            resource_id="task-123",
-            workspace_id="ws-123"
+            resource_type="task", resource_id="task-123", workspace_id="ws-123"
         )
 
     @app.get("/test/missing-context")

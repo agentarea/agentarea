@@ -5,7 +5,7 @@ import os
 import sys
 
 # Add the core directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agentarea_execution.workflows.helpers import ToolCallExtractor
 
@@ -21,7 +21,7 @@ def test_production_data():
         "cost": 0,
         "role": "assistant",
         "tool_calls": None,  # This is the bug!
-        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
+        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0},
     }
 
     print("📥 First Production Message:")
@@ -42,7 +42,7 @@ def test_production_data():
         "cost": 0,
         "role": "assistant",
         "tool_calls": None,  # Still the bug!
-        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0}
+        "usage": {"completion_tokens": 0, "prompt_tokens": 0, "total_tokens": 0},
     }
 
     print("📥 Second Production Message:")
@@ -59,11 +59,11 @@ def test_production_data():
 
     # Verify the fix works
     success = True
-    if len(tool_calls1) != 1 or tool_calls1[0].function['name'] != 'task_complete':
+    if len(tool_calls1) != 1 or tool_calls1[0].function["name"] != "task_complete":
         print("❌ First message parsing failed")
         success = False
 
-    if len(tool_calls2) != 1 or tool_calls2[0].function['name'] != 'task_complete':
+    if len(tool_calls2) != 1 or tool_calls2[0].function["name"] != "task_complete":
         print("❌ Second message parsing failed")
         success = False
 

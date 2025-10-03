@@ -20,7 +20,7 @@ class BaseAuthProvider(AuthProviderInterface):
 
     def __init__(self, config: dict[str, Any] | None = None):
         """Initialize the base auth provider.
-        
+
         Args:
             config: Configuration dictionary for the provider
         """
@@ -32,10 +32,10 @@ class BaseAuthProvider(AuthProviderInterface):
     @abstractmethod
     async def verify_token(self, token: str) -> AuthResult:
         """Verify an authentication token.
-        
+
         Args:
             token: The token to verify
-            
+
         Returns:
             AuthResult containing the verification result
         """
@@ -44,10 +44,10 @@ class BaseAuthProvider(AuthProviderInterface):
     @abstractmethod
     async def get_user_info(self, user_id: str) -> dict[str, Any] | None:
         """Get user information by user ID.
-        
+
         Args:
             user_id: The user ID to look up
-            
+
         Returns:
             Dictionary containing user information or None if not found
         """
@@ -56,7 +56,7 @@ class BaseAuthProvider(AuthProviderInterface):
     @abstractmethod
     def get_provider_name(self) -> str:
         """Get the name of this authentication provider.
-        
+
         Returns:
             The provider name
         """
@@ -64,10 +64,10 @@ class BaseAuthProvider(AuthProviderInterface):
 
     async def _fetch_jwks(self, jwks_url: str) -> dict[str, Any]:
         """Fetch JWKS (JSON Web Key Set) from the provider.
-        
+
         Args:
             jwks_url: URL to fetch JWKS from
-            
+
         Returns:
             Dictionary containing the JWKS
         """
@@ -82,11 +82,11 @@ class BaseAuthProvider(AuthProviderInterface):
 
     def _find_key_by_kid(self, jwks: dict[str, Any], kid: str) -> dict[str, Any] | None:
         """Find a key in JWKS by key ID.
-        
+
         Args:
             jwks: The JWKS dictionary
             kid: The key ID to find
-            
+
         Returns:
             The key dictionary or None if not found
         """
@@ -98,11 +98,11 @@ class BaseAuthProvider(AuthProviderInterface):
 
     def _validate_claims(self, payload: dict[str, Any], issuer: str | None = None) -> bool:
         """Validate JWT claims.
-        
+
         Args:
             payload: The JWT payload
             issuer: Expected issuer (optional)
-            
+
         Returns:
             True if claims are valid, False otherwise
         """

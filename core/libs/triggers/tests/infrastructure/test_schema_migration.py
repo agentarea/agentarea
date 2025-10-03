@@ -29,20 +29,13 @@ class TestSchemaMigration:
     def sample_webhook_config(self):
         """Create sample webhook configuration data."""
         return {
-            "telegram": {
-                "bot_token": "test_token",
-                "chat_id": "123456789",
-                "parse_mode": "HTML"
-            },
+            "telegram": {"bot_token": "test_token", "chat_id": "123456789", "parse_mode": "HTML"},
             "slack": {
                 "webhook_url": "https://hooks.slack.com/test",
                 "channel": "#general",
-                "username": "bot"
+                "username": "bot",
             },
-            "github": {
-                "secret": "webhook_secret",
-                "events": ["push", "pull_request"]
-            }
+            "github": {"secret": "webhook_secret", "events": ["push", "pull_request"]},
         }
 
     @pytest.fixture
@@ -74,7 +67,7 @@ class TestSchemaMigration:
     def test_webhook_config_field_exists(self, sample_webhook_trigger_orm):
         """Test that webhook_config field exists and can store data."""
         # Verify the field exists and contains expected data
-        assert hasattr(sample_webhook_trigger_orm, 'webhook_config')
+        assert hasattr(sample_webhook_trigger_orm, "webhook_config")
         assert sample_webhook_trigger_orm.webhook_config is not None
         assert isinstance(sample_webhook_trigger_orm.webhook_config, dict)
 
@@ -92,7 +85,7 @@ class TestSchemaMigration:
         telegram_only_config = {
             "bot_token": "test_token_123",
             "chat_id": "987654321",
-            "parse_mode": "Markdown"
+            "parse_mode": "Markdown",
         }
 
         trigger_orm = TriggerORM(
@@ -139,7 +132,9 @@ class TestSchemaMigration:
         # Verify empty configuration is supported
         assert generic_trigger_orm.webhook_config is None
 
-    def test_orm_to_domain_conversion_with_webhook_config(self, repository, sample_webhook_trigger_orm):
+    def test_orm_to_domain_conversion_with_webhook_config(
+        self, repository, sample_webhook_trigger_orm
+    ):
         """Test converting ORM with webhook_config to domain model."""
         # Execute conversion
         domain_trigger = repository._orm_to_domain(sample_webhook_trigger_orm)
@@ -185,14 +180,11 @@ class TestSchemaMigration:
     def test_backward_compatibility_migration_scenario(self):
         """Test backward compatibility scenarios during migration."""
         # Simulate old data structure (what would exist before migration)
-        old_telegram_config = {
-            "bot_token": "old_token",
-            "chat_id": "old_chat_id"
-        }
+        old_telegram_config = {"bot_token": "old_token", "chat_id": "old_chat_id"}
 
         old_slack_config = {
             "webhook_url": "https://old.slack.com/webhook",
-            "channel": "#old-channel"
+            "channel": "#old-channel",
         }
 
         # Test migration logic (this would be handled by the migration script)
@@ -201,10 +193,7 @@ class TestSchemaMigration:
         assert migrated_config_1["bot_token"] == "old_token"
 
         # Scenario 2: Multiple configs exist - should be merged
-        migrated_config_2 = {
-            "telegram": old_telegram_config,
-            "slack": old_slack_config
-        }
+        migrated_config_2 = {"telegram": old_telegram_config, "slack": old_slack_config}
         assert migrated_config_2["telegram"]["bot_token"] == "old_token"
         assert migrated_config_2["slack"]["webhook_url"] == "https://old.slack.com/webhook"
 
@@ -215,7 +204,7 @@ class TestSchemaMigration:
         webhook_config = {
             "api_key": "test_api_key",
             "endpoint": "https://api.example.com/webhook",
-            "headers": {"Content-Type": "application/json"}
+            "headers": {"Content-Type": "application/json"},
         }
 
         trigger_create = TriggerCreate(
@@ -257,7 +246,7 @@ class TestSchemaMigration:
         async def mock_refresh(obj):
             # Simulate database refresh by copying values from created_orm
             for attr, value in created_orm.__dict__.items():
-                if not attr.startswith('_'):
+                if not attr.startswith("_"):
                     setattr(obj, attr, value)
 
         mock_session.refresh = AsyncMock(side_effect=mock_refresh)
@@ -291,23 +280,17 @@ class TestSchemaMigration:
             "service_a": {
                 "auth": {
                     "type": "oauth2",
-                    "credentials": {
-                        "client_id": "test_client_id",
-                        "client_secret": "test_secret"
-                    }
+                    "credentials": {"client_id": "test_client_id", "client_secret": "test_secret"},
                 },
                 "endpoints": {
                     "webhook": "https://api.service-a.com/webhook",
-                    "callback": "https://api.service-a.com/callback"
+                    "callback": "https://api.service-a.com/callback",
                 },
                 "settings": {
                     "retry_count": 3,
                     "timeout": 30,
-                    "rate_limit": {
-                        "requests_per_minute": 60,
-                        "burst_limit": 10
-                    }
-                }
+                    "rate_limit": {"requests_per_minute": 60, "burst_limit": 10},
+                },
             }
         }
 
@@ -340,18 +323,18 @@ class TestSchemaMigration:
         webhook_config = {
             "validation": {
                 "required_headers": ["X-Webhook-Signature"],
-                "allowed_ips": ["192.168.1.0/24", "10.0.0.0/8"]
+                "allowed_ips": ["192.168.1.0/24", "10.0.0.0/8"],
             },
             "processing": {
                 "parse_json": True,
-                "extract_fields": ["event_type", "timestamp", "data"]
-            }
+                "extract_fields": ["event_type", "timestamp", "data"],
+            },
         }
 
         validation_rules = {
             "signature_header": "X-Webhook-Signature",
             "signature_algorithm": "sha256",
-            "required_fields": ["event_type"]
+            "required_fields": ["event_type"],
         }
 
         trigger_orm = TriggerORM(
@@ -374,7 +357,9 @@ class TestSchemaMigration:
 
         # Verify both fields coexist and complement each other
         assert trigger_orm.validation_rules["signature_header"] == "X-Webhook-Signature"
-        assert trigger_orm.webhook_config["validation"]["required_headers"] == ["X-Webhook-Signature"]
+        assert trigger_orm.webhook_config["validation"]["required_headers"] == [
+            "X-Webhook-Signature"
+        ]
         assert trigger_orm.webhook_config["processing"]["parse_json"] is True
 
 
@@ -386,10 +371,7 @@ class TestWebhookConfigIntegration:
         from agentarea_triggers.domain.models import TriggerUpdate
 
         updated_config = {
-            "new_service": {
-                "api_key": "new_api_key",
-                "endpoint": "https://new-service.com/webhook"
-            }
+            "new_service": {"api_key": "new_api_key", "endpoint": "https://new-service.com/webhook"}
         }
 
         update_data = TriggerUpdate(webhook_config=updated_config)
@@ -397,7 +379,10 @@ class TestWebhookConfigIntegration:
         # Verify the update data structure
         assert update_data.webhook_config == updated_config
         assert update_data.webhook_config["new_service"]["api_key"] == "new_api_key"
-        assert update_data.webhook_config["new_service"]["endpoint"] == "https://new-service.com/webhook"
+        assert (
+            update_data.webhook_config["new_service"]["endpoint"]
+            == "https://new-service.com/webhook"
+        )
 
     def test_webhook_config_query_compatibility(self):
         """Test that webhook_config is compatible with query operations."""
@@ -408,11 +393,12 @@ class TestWebhookConfigIntegration:
             {"telegram": {"bot_token": "token1", "chat_id": "123"}},
             {"slack": {"webhook_url": "https://slack.com/webhook", "channel": "#general"}},
             {"github": {"secret": "webhook_secret", "events": ["push", "pull_request"]}},
-            {"custom": {"api_key": "custom_key", "endpoint": "https://custom.api.com"}}
+            {"custom": {"api_key": "custom_key", "endpoint": "https://custom.api.com"}},
         ]
 
         # Verify all configs are JSON serializable (required for database storage)
         import json
+
         for config in sample_configs:
             serialized = json.dumps(config)
             deserialized = json.loads(serialized)

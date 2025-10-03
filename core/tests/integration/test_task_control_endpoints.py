@@ -36,9 +36,12 @@ class TestTaskControlEndpoints:
         """Test pause endpoint validation without actual workflow."""
         async with httpx.AsyncClient() as client:
             # Mock the agent service and workflow service to avoid database dependencies
-            with patch('agentarea_api.api.deps.services.get_agent_service') as mock_agent_service, \
-                 patch('agentarea_api.api.deps.services.get_temporal_workflow_service') as mock_workflow_service:
-
+            with (
+                patch("agentarea_api.api.deps.services.get_agent_service") as mock_agent_service,
+                patch(
+                    "agentarea_api.api.deps.services.get_temporal_workflow_service"
+                ) as mock_workflow_service,
+            ):
                 # Setup mocks
                 mock_agent = AsyncMock()
                 mock_agent.id = test_agent_id
@@ -57,16 +60,23 @@ class TestTaskControlEndpoints:
 
                 # Note: This will likely fail with connection error since we don't have the server running
                 # But we can at least verify the endpoint structure is correct
-                assert response.status_code in [200, 404, 500]  # Any of these are acceptable for this test
+                assert response.status_code in [
+                    200,
+                    404,
+                    500,
+                ]  # Any of these are acceptable for this test
 
     @pytest.mark.asyncio
     async def test_resume_endpoint_validation(self, base_url, test_agent_id, test_task_id):
         """Test resume endpoint validation without actual workflow."""
         async with httpx.AsyncClient() as client:
             # Mock the agent service and workflow service to avoid database dependencies
-            with patch('agentarea_api.api.deps.services.get_agent_service') as mock_agent_service, \
-                 patch('agentarea_api.api.deps.services.get_temporal_workflow_service') as mock_workflow_service:
-
+            with (
+                patch("agentarea_api.api.deps.services.get_agent_service") as mock_agent_service,
+                patch(
+                    "agentarea_api.api.deps.services.get_temporal_workflow_service"
+                ) as mock_workflow_service,
+            ):
                 # Setup mocks
                 mock_agent = AsyncMock()
                 mock_agent.id = test_agent_id
@@ -85,7 +95,11 @@ class TestTaskControlEndpoints:
 
                 # Note: This will likely fail with connection error since we don't have the server running
                 # But we can at least verify the endpoint structure is correct
-                assert response.status_code in [200, 404, 500]  # Any of these are acceptable for this test
+                assert response.status_code in [
+                    200,
+                    404,
+                    500,
+                ]  # Any of these are acceptable for this test
 
     def test_endpoint_routes_exist(self):
         """Test that the pause/resume routes are properly registered."""
@@ -110,7 +124,7 @@ class TestTaskControlEndpoints:
         resume_route = None
 
         for route in router.routes:
-            if hasattr(route, 'path') and hasattr(route, 'methods'):
+            if hasattr(route, "path") and hasattr(route, "methods"):
                 if "pause" in route.path:
                     pause_route = route
                 elif "resume" in route.path:
@@ -132,8 +146,12 @@ class TestWorkflowSignalIntegration:
         from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 
         # Check that the workflow class has the signal methods
-        assert hasattr(AgentExecutionWorkflow, 'pause_execution'), "Workflow missing pause_execution signal"
-        assert hasattr(AgentExecutionWorkflow, 'resume_execution'), "Workflow missing resume_execution signal"
+        assert hasattr(AgentExecutionWorkflow, "pause_execution"), (
+            "Workflow missing pause_execution signal"
+        )
+        assert hasattr(AgentExecutionWorkflow, "resume_execution"), (
+            "Workflow missing resume_execution signal"
+        )
 
         # Check that they are decorated as signals
         pause_method = AgentExecutionWorkflow.pause_execution
@@ -141,11 +159,23 @@ class TestWorkflowSignalIntegration:
 
         # Temporal signals have specific attributes when decorated
         # Check for any temporal-related attributes (the exact name may vary)
-        pause_attrs = [attr for attr in dir(pause_method) if 'temporal' in attr.lower() or 'signal' in attr.lower()]
-        resume_attrs = [attr for attr in dir(resume_method) if 'temporal' in attr.lower() or 'signal' in attr.lower()]
+        pause_attrs = [
+            attr
+            for attr in dir(pause_method)
+            if "temporal" in attr.lower() or "signal" in attr.lower()
+        ]
+        resume_attrs = [
+            attr
+            for attr in dir(resume_method)
+            if "temporal" in attr.lower() or "signal" in attr.lower()
+        ]
 
-        assert len(pause_attrs) > 0, f"pause_execution not properly decorated as signal. Available attrs: {dir(pause_method)}"
-        assert len(resume_attrs) > 0, f"resume_execution not properly decorated as signal. Available attrs: {dir(resume_method)}"
+        assert len(pause_attrs) > 0, (
+            f"pause_execution not properly decorated as signal. Available attrs: {dir(pause_method)}"
+        )
+        assert len(resume_attrs) > 0, (
+            f"resume_execution not properly decorated as signal. Available attrs: {dir(resume_method)}"
+        )
 
     def test_workflow_pause_state_tracking(self):
         """Test that the workflow properly tracks pause state."""
@@ -155,8 +185,8 @@ class TestWorkflowSignalIntegration:
         workflow = AgentExecutionWorkflow()
 
         # Check initial state
-        assert hasattr(workflow, '_is_paused'), "Workflow missing _is_paused attribute"
-        assert hasattr(workflow, '_pause_reason'), "Workflow missing _pause_reason attribute"
+        assert hasattr(workflow, "_is_paused"), "Workflow missing _is_paused attribute"
+        assert hasattr(workflow, "_pause_reason"), "Workflow missing _pause_reason attribute"
 
         # Check initial values
         assert workflow._is_paused is False, "Workflow should start unpaused"

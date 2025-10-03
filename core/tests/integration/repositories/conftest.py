@@ -274,7 +274,9 @@ class ModelFactory:
         return ModelSpec(**defaults)
 
     @staticmethod
-    def create_model_instance(provider_config_id: UUID = None, model_spec_id: UUID = None, **kwargs) -> ModelInstance:
+    def create_model_instance(
+        provider_config_id: UUID = None, model_spec_id: UUID = None, **kwargs
+    ) -> ModelInstance:
         """Create a test model instance."""
         if provider_config_id is None:
             provider_config_id = uuid4()
@@ -436,11 +438,7 @@ async def model_factory():
 @pytest_asyncio.fixture
 def user_context():
     """Create a test user context."""
-    return UserContext(
-        user_id="test-user-123",
-        workspace_id="test-workspace-456",
-        roles=["user"]
-    )
+    return UserContext(user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"])
 
 
 # Repository Fixtures

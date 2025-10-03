@@ -67,7 +67,7 @@ class TestTriggerService:
         mock_agent_repository,
         mock_task_service,
         mock_llm_service,
-        mock_temporal_client
+        mock_temporal_client,
     ):
         """Create TriggerService instance with mocked dependencies."""
         # Create a mock temporal schedule manager
@@ -81,7 +81,7 @@ class TestTriggerService:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=mock_llm_service,
-            temporal_schedule_manager=mock_temporal_schedule_manager
+            temporal_schedule_manager=mock_temporal_schedule_manager,
         )
 
         # Make schedule manager accessible for tests
@@ -105,7 +105,7 @@ class TestTriggerService:
             cron_expression="0 9 * * *",
             timezone="UTC",
             created_by="test_user",
-            task_parameters={"report_type": "daily"}
+            task_parameters={"report_type": "daily"},
         )
 
     @pytest.fixture
@@ -120,7 +120,7 @@ class TestTriggerService:
             allowed_methods=["POST"],
             webhook_type=WebhookType.GENERIC,
             created_by="test_user",
-            task_parameters={"handler": "generic"}
+            task_parameters={"handler": "generic"},
         )
 
     @pytest.fixture
@@ -134,7 +134,7 @@ class TestTriggerService:
             cron_expression="0 9 * * *",
             timezone="UTC",
             created_by="test_user",
-            task_parameters={"report_type": "daily"}
+            task_parameters={"report_type": "daily"},
         )
 
     @pytest.fixture
@@ -149,7 +149,7 @@ class TestTriggerService:
             allowed_methods=["POST"],
             webhook_type=WebhookType.GENERIC,
             created_by="test_user",
-            task_parameters={"handler": "generic"}
+            task_parameters={"handler": "generic"},
         )
 
     # Test CRUD Operations
@@ -161,7 +161,7 @@ class TestTriggerService:
         mock_agent_repository,
         mock_trigger_repository,
         sample_cron_trigger_data,
-        sample_cron_trigger
+        sample_cron_trigger,
     ):
         """Test successful trigger creation."""
         # Setup mocks
@@ -178,10 +178,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_create_trigger_agent_not_found(
-        self,
-        trigger_service,
-        mock_agent_repository,
-        sample_cron_trigger_data
+        self, trigger_service, mock_agent_repository, sample_cron_trigger_data
     ):
         """Test trigger creation fails when agent doesn't exist."""
         # Setup mocks
@@ -193,10 +190,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_create_trigger_invalid_cron_expression(
-        self,
-        trigger_service,
-        mock_agent_repository,
-        sample_agent_id
+        self, trigger_service, mock_agent_repository, sample_agent_id
     ):
         """Test trigger creation fails with invalid cron expression."""
         # Setup mocks
@@ -208,7 +202,7 @@ class TestTriggerService:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="invalid",  # Invalid cron expression
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Execute and verify
@@ -217,10 +211,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_create_trigger_missing_webhook_id(
-        self,
-        trigger_service,
-        mock_agent_repository,
-        sample_agent_id
+        self, trigger_service, mock_agent_repository, sample_agent_id
     ):
         """Test trigger creation fails when webhook ID is missing."""
         # Setup mocks
@@ -232,15 +223,12 @@ class TestTriggerService:
                 name="Invalid Webhook",
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.WEBHOOK,
-                created_by="test_user"
+                created_by="test_user",
             )
 
     @pytest.mark.asyncio
     async def test_get_trigger_success(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test successful trigger retrieval."""
         # Setup mocks
@@ -254,11 +242,7 @@ class TestTriggerService:
         mock_trigger_repository.get.assert_called_once_with(sample_cron_trigger.id)
 
     @pytest.mark.asyncio
-    async def test_get_trigger_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
-    ):
+    async def test_get_trigger_not_found(self, trigger_service, mock_trigger_repository):
         """Test trigger retrieval when trigger doesn't exist."""
         # Setup mocks
         mock_trigger_repository.get.return_value = None
@@ -273,10 +257,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_update_trigger_success(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test successful trigger update."""
         # Setup mocks
@@ -299,11 +280,7 @@ class TestTriggerService:
         )
 
     @pytest.mark.asyncio
-    async def test_update_trigger_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
-    ):
+    async def test_update_trigger_not_found(self, trigger_service, mock_trigger_repository):
         """Test trigger update when trigger doesn't exist."""
         # Setup mocks
         mock_trigger_repository.get.return_value = None
@@ -316,10 +293,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_delete_trigger_success(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test successful trigger deletion."""
         # Setup mocks
@@ -335,11 +309,7 @@ class TestTriggerService:
         mock_trigger_repository.delete.assert_called_once_with(sample_cron_trigger.id)
 
     @pytest.mark.asyncio
-    async def test_delete_trigger_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
-    ):
+    async def test_delete_trigger_not_found(self, trigger_service, mock_trigger_repository):
         """Test trigger deletion when trigger doesn't exist."""
         # Setup mocks
         mock_trigger_repository.get.return_value = None
@@ -355,11 +325,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_list_triggers_all(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger,
-        sample_webhook_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger, sample_webhook_trigger
     ):
         """Test listing all triggers."""
         # Setup mocks
@@ -375,11 +341,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_list_triggers_by_agent(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger,
-        sample_agent_id
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger, sample_agent_id
     ):
         """Test listing triggers by agent ID."""
         # Setup mocks
@@ -395,10 +357,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_list_triggers_by_type(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test listing triggers by type."""
         # Setup mocks
@@ -414,10 +373,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_list_triggers_active_only(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test listing only active triggers."""
         # Setup mocks
@@ -434,11 +390,7 @@ class TestTriggerService:
     # Test Lifecycle Management
 
     @pytest.mark.asyncio
-    async def test_enable_trigger_success(
-        self,
-        trigger_service,
-        mock_trigger_repository
-    ):
+    async def test_enable_trigger_success(self, trigger_service, mock_trigger_repository):
         """Test successful trigger enabling."""
         # Setup mocks
         trigger_id = uuid4()
@@ -452,11 +404,7 @@ class TestTriggerService:
         mock_trigger_repository.enable_trigger.assert_called_once_with(trigger_id)
 
     @pytest.mark.asyncio
-    async def test_enable_trigger_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
-    ):
+    async def test_enable_trigger_not_found(self, trigger_service, mock_trigger_repository):
         """Test trigger enabling when trigger doesn't exist."""
         # Setup mocks
         trigger_id = uuid4()
@@ -470,11 +418,7 @@ class TestTriggerService:
         mock_trigger_repository.enable_trigger.assert_called_once_with(trigger_id)
 
     @pytest.mark.asyncio
-    async def test_disable_trigger_success(
-        self,
-        trigger_service,
-        mock_trigger_repository
-    ):
+    async def test_disable_trigger_success(self, trigger_service, mock_trigger_repository):
         """Test successful trigger disabling."""
         # Setup mocks
         trigger_id = uuid4()
@@ -488,11 +432,7 @@ class TestTriggerService:
         mock_trigger_repository.disable_trigger.assert_called_once_with(trigger_id)
 
     @pytest.mark.asyncio
-    async def test_disable_trigger_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
-    ):
+    async def test_disable_trigger_not_found(self, trigger_service, mock_trigger_repository):
         """Test trigger disabling when trigger doesn't exist."""
         # Setup mocks
         trigger_id = uuid4()
@@ -508,19 +448,13 @@ class TestTriggerService:
     # Test Execution History
 
     @pytest.mark.asyncio
-    async def test_get_execution_history(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository
-    ):
+    async def test_get_execution_history(self, trigger_service, mock_trigger_execution_repository):
         """Test getting execution history."""
         # Setup mocks
         trigger_id = uuid4()
         executions = [
             TriggerExecution(
-                trigger_id=trigger_id,
-                status=ExecutionStatus.SUCCESS,
-                execution_time_ms=100
+                trigger_id=trigger_id, status=ExecutionStatus.SUCCESS, execution_time_ms=100
             )
         ]
         mock_trigger_execution_repository.list_by_trigger.return_value = executions
@@ -536,10 +470,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_record_execution_success(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository,
-        mock_trigger_repository
+        self, trigger_service, mock_trigger_execution_repository, mock_trigger_repository
     ):
         """Test recording successful execution."""
         # Setup mocks
@@ -549,7 +480,7 @@ class TestTriggerService:
             trigger_id=trigger_id,
             status=ExecutionStatus.SUCCESS,
             execution_time_ms=100,
-            task_id=task_id
+            task_id=task_id,
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.update_execution_tracking.return_value = True
@@ -559,7 +490,7 @@ class TestTriggerService:
             trigger_id=trigger_id,
             status=ExecutionStatus.SUCCESS,
             execution_time_ms=100,
-            task_id=task_id
+            task_id=task_id,
         )
 
         # Verify
@@ -574,7 +505,7 @@ class TestTriggerService:
         trigger_service,
         mock_trigger_execution_repository,
         mock_trigger_repository,
-        sample_cron_trigger
+        sample_cron_trigger,
     ):
         """Test recording failed execution that triggers auto-disable."""
         # Setup mocks - trigger at failure threshold
@@ -586,7 +517,7 @@ class TestTriggerService:
             trigger_id=trigger_id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Test error"
+            error_message="Test error",
         )
 
         mock_trigger_execution_repository.create.return_value = execution
@@ -599,7 +530,7 @@ class TestTriggerService:
             trigger_id=trigger_id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Test error"
+            error_message="Test error",
         )
 
         # Verify
@@ -612,10 +543,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_get_trigger_by_webhook_id(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_webhook_trigger
+        self, trigger_service, mock_trigger_repository, sample_webhook_trigger
     ):
         """Test getting trigger by webhook ID."""
         # Setup mocks
@@ -630,10 +558,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_get_trigger_by_webhook_id_not_webhook_trigger(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test getting trigger by webhook ID when trigger is not a webhook trigger."""
         # Setup mocks - return cron trigger instead of webhook trigger
@@ -648,10 +573,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_list_cron_triggers_due(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test listing cron triggers due for execution."""
         # Setup mocks
@@ -667,19 +589,13 @@ class TestTriggerService:
         mock_trigger_repository.list_cron_triggers_due.assert_called_once_with(current_time)
 
     @pytest.mark.asyncio
-    async def test_get_recent_executions(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository
-    ):
+    async def test_get_recent_executions(self, trigger_service, mock_trigger_execution_repository):
         """Test getting recent executions."""
         # Setup mocks
         trigger_id = uuid4()
         executions = [
             TriggerExecution(
-                trigger_id=trigger_id,
-                status=ExecutionStatus.SUCCESS,
-                execution_time_ms=100
+                trigger_id=trigger_id, status=ExecutionStatus.SUCCESS, execution_time_ms=100
             )
         ]
         mock_trigger_execution_repository.get_recent_executions.return_value = executions
@@ -695,9 +611,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_count_executions_in_period(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository
+        self, trigger_service, mock_trigger_execution_repository
     ):
         """Test counting executions in a time period."""
         # Setup mocks
@@ -707,9 +621,7 @@ class TestTriggerService:
         mock_trigger_execution_repository.count_executions_in_period.return_value = 5
 
         # Execute
-        result = await trigger_service.count_executions_in_period(
-            trigger_id, start_time, end_time
-        )
+        result = await trigger_service.count_executions_in_period(trigger_id, start_time, end_time)
 
         # Verify
         assert result == 5
@@ -721,10 +633,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_create_trigger_empty_name(
-        self,
-        trigger_service,
-        mock_agent_repository,
-        sample_agent_id
+        self, trigger_service, mock_agent_repository, sample_agent_id
     ):
         """Test trigger creation fails with empty name."""
         # Setup mocks
@@ -737,15 +646,12 @@ class TestTriggerService:
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
                 cron_expression="0 9 * * *",
-                created_by="test_user"
+                created_by="test_user",
             )
 
     @pytest.mark.asyncio
     async def test_create_trigger_empty_created_by(
-        self,
-        trigger_service,
-        mock_agent_repository,
-        sample_agent_id
+        self, trigger_service, mock_agent_repository, sample_agent_id
     ):
         """Test trigger creation fails with empty created_by."""
         # Setup mocks
@@ -757,7 +663,7 @@ class TestTriggerService:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by=""  # Empty created_by
+            created_by="",  # Empty created_by
         )
 
         # Execute and verify
@@ -766,10 +672,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_create_trigger_invalid_http_method(
-        self,
-        trigger_service,
-        mock_agent_repository,
-        sample_agent_id
+        self, trigger_service, mock_agent_repository, sample_agent_id
     ):
         """Test trigger creation fails with invalid HTTP method."""
         # Setup mocks
@@ -782,7 +685,7 @@ class TestTriggerService:
             trigger_type=TriggerType.WEBHOOK,
             webhook_id="webhook_123",
             allowed_methods=["INVALID"],  # Invalid HTTP method
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Execute and verify
@@ -791,10 +694,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_update_trigger_empty_name(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test trigger update fails with empty name."""
         # Setup mocks
@@ -806,10 +706,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_update_trigger_invalid_cron_expression(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test trigger update fails with invalid cron expression."""
         # Setup mocks
@@ -828,7 +725,7 @@ class TestTriggerService:
         mock_trigger_repository,
         mock_trigger_execution_repository,
         mock_event_broker,
-        sample_cron_trigger_data
+        sample_cron_trigger_data,
     ):
         """Test trigger creation when agent repository is not available."""
         # Create service without agent repository
@@ -836,7 +733,7 @@ class TestTriggerService:
             trigger_repository=mock_trigger_repository,
             trigger_execution_repository=mock_trigger_execution_repository,
             event_broker=mock_event_broker,
-            agent_repository=None  # No agent repository
+            agent_repository=None,  # No agent repository
         )
 
         # Setup mocks
@@ -856,7 +753,7 @@ class TestTriggerService:
         trigger_service,
         mock_trigger_repository,
         sample_cron_trigger_data,
-        sample_cron_trigger
+        sample_cron_trigger,
     ):
         """Test that creating a cron trigger schedules it."""
         # Setup mocks
@@ -870,10 +767,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_update_cron_trigger_updates_schedule(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test that updating a cron trigger updates its schedule."""
         # Setup mocks
@@ -891,10 +785,7 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_delete_cron_trigger_deletes_schedule(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test that deleting a cron trigger deletes its schedule."""
         # Setup mocks
@@ -906,14 +797,13 @@ class TestTriggerService:
 
         # Verify
         assert result is True
-        trigger_service._mock_temporal_schedule_manager.delete_cron_schedule.assert_called_once_with(sample_cron_trigger.id)
+        trigger_service._mock_temporal_schedule_manager.delete_cron_schedule.assert_called_once_with(
+            sample_cron_trigger.id
+        )
 
     @pytest.mark.asyncio
     async def test_enable_cron_trigger_unpauses_schedule(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test that enabling a cron trigger unpauses its schedule."""
         # Setup mocks
@@ -925,14 +815,13 @@ class TestTriggerService:
 
         # Verify
         assert result is True
-        trigger_service._mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once_with(sample_cron_trigger.id)
+        trigger_service._mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once_with(
+            sample_cron_trigger.id
+        )
 
     @pytest.mark.asyncio
     async def test_disable_cron_trigger_pauses_schedule(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_cron_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test that disabling a cron trigger pauses its schedule."""
         # Setup mocks
@@ -944,7 +833,9 @@ class TestTriggerService:
 
         # Verify
         assert result is True
-        trigger_service._mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once_with(sample_cron_trigger.id)
+        trigger_service._mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once_with(
+            sample_cron_trigger.id
+        )
 
     @pytest.mark.asyncio
     async def test_execute_trigger_success(
@@ -953,16 +844,14 @@ class TestTriggerService:
         mock_trigger_repository,
         mock_trigger_execution_repository,
         mock_task_service,
-        sample_cron_trigger
+        sample_cron_trigger,
     ):
         """Test successful trigger execution."""
         # Setup mocks
         mock_trigger_repository.get.return_value = sample_cron_trigger
         mock_task_service.create_task_from_params.return_value = MagicMock(id=uuid4())
         mock_trigger_execution_repository.create.return_value = MagicMock(
-            id=uuid4(),
-            trigger_id=sample_cron_trigger.id,
-            status=ExecutionStatus.SUCCESS
+            id=uuid4(), trigger_id=sample_cron_trigger.id, status=ExecutionStatus.SUCCESS
         )
 
         # Execute
@@ -981,7 +870,7 @@ class TestTriggerService:
         trigger_service,
         mock_trigger_repository,
         mock_trigger_execution_repository,
-        sample_cron_trigger
+        sample_cron_trigger,
     ):
         """Test executing an inactive trigger."""
         # Setup mocks - inactive trigger
@@ -992,7 +881,7 @@ class TestTriggerService:
             id=uuid4(),
             trigger_id=sample_cron_trigger.id,
             status=ExecutionStatus.FAILED,
-            error_message="Trigger is inactive"
+            error_message="Trigger is inactive",
         )
 
         # Execute
@@ -1010,7 +899,7 @@ class TestTriggerService:
         mock_trigger_repository,
         mock_trigger_execution_repository,
         mock_task_service,
-        sample_cron_trigger
+        sample_cron_trigger,
     ):
         """Test trigger execution with task creation error."""
         # Setup mocks
@@ -1020,7 +909,7 @@ class TestTriggerService:
             id=uuid4(),
             trigger_id=sample_cron_trigger.id,
             status=ExecutionStatus.FAILED,
-            error_message="Task creation failed"
+            error_message="Task creation failed",
         )
 
         # Execute
@@ -1031,6 +920,7 @@ class TestTriggerService:
         assert result.status == ExecutionStatus.FAILED
         assert "failed" in result.error_message.lower()
         mock_trigger_repository.update.assert_called_once()  # For execution tracking
+
 
 class TestTriggerServiceMonitoring:
     """Test cases for TriggerService monitoring and execution history enhancements."""
@@ -1052,16 +942,13 @@ class TestTriggerServiceMonitoring:
 
     @pytest.fixture
     def trigger_service(
-        self,
-        mock_trigger_repository,
-        mock_trigger_execution_repository,
-        mock_event_broker
+        self, mock_trigger_repository, mock_trigger_execution_repository, mock_event_broker
     ):
         """Create TriggerService instance with mocked dependencies."""
         return TriggerService(
             trigger_repository=mock_trigger_repository,
             trigger_execution_repository=mock_trigger_execution_repository,
-            event_broker=mock_event_broker
+            event_broker=mock_event_broker,
         )
 
     @pytest.fixture
@@ -1080,7 +967,7 @@ class TestTriggerServiceMonitoring:
                 status=ExecutionStatus.SUCCESS,
                 task_id=uuid4(),
                 execution_time_ms=1200,
-                trigger_data={"key": "value1"}
+                trigger_data={"key": "value1"},
             ),
             TriggerExecution(
                 id=uuid4(),
@@ -1090,7 +977,7 @@ class TestTriggerServiceMonitoring:
                 task_id=None,
                 execution_time_ms=800,
                 error_message="Test error",
-                trigger_data={"key": "value2"}
+                trigger_data={"key": "value2"},
             ),
             TriggerExecution(
                 id=uuid4(),
@@ -1099,7 +986,7 @@ class TestTriggerServiceMonitoring:
                 status=ExecutionStatus.SUCCESS,
                 task_id=uuid4(),
                 execution_time_ms=1500,
-                trigger_data={"key": "value3"}
+                trigger_data={"key": "value3"},
             ),
         ]
 
@@ -1109,18 +996,18 @@ class TestTriggerServiceMonitoring:
         trigger_service,
         mock_trigger_execution_repository,
         sample_trigger_id,
-        sample_executions
+        sample_executions,
     ):
         """Test getting paginated execution history."""
         # Setup mocks
-        mock_trigger_execution_repository.list_executions_paginated.return_value = sample_executions[:2]
+        mock_trigger_execution_repository.list_executions_paginated.return_value = (
+            sample_executions[:2]
+        )
         mock_trigger_execution_repository.count_executions_filtered.return_value = 10
 
         # Execute
         executions, total = await trigger_service.get_execution_history_paginated(
-            trigger_id=sample_trigger_id,
-            limit=2,
-            offset=0
+            trigger_id=sample_trigger_id, limit=2, offset=0
         )
 
         # Verify
@@ -1132,13 +1019,10 @@ class TestTriggerServiceMonitoring:
             start_time=None,
             end_time=None,
             limit=2,
-            offset=0
+            offset=0,
         )
         mock_trigger_execution_repository.count_executions_filtered.assert_called_once_with(
-            trigger_id=sample_trigger_id,
-            status=None,
-            start_time=None,
-            end_time=None
+            trigger_id=sample_trigger_id, status=None, start_time=None, end_time=None
         )
 
     @pytest.mark.asyncio
@@ -1147,12 +1031,16 @@ class TestTriggerServiceMonitoring:
         trigger_service,
         mock_trigger_execution_repository,
         sample_trigger_id,
-        sample_executions
+        sample_executions,
     ):
         """Test getting paginated execution history with status filter."""
         # Setup mocks - only successful executions
-        successful_executions = [exec for exec in sample_executions if exec.status == ExecutionStatus.SUCCESS]
-        mock_trigger_execution_repository.list_executions_paginated.return_value = successful_executions
+        successful_executions = [
+            exec for exec in sample_executions if exec.status == ExecutionStatus.SUCCESS
+        ]
+        mock_trigger_execution_repository.list_executions_paginated.return_value = (
+            successful_executions
+        )
         mock_trigger_execution_repository.count_executions_filtered.return_value = 2
 
         # Execute
@@ -1164,7 +1052,7 @@ class TestTriggerServiceMonitoring:
             start_time=start_time,
             end_time=end_time,
             limit=10,
-            offset=0
+            offset=0,
         )
 
         # Verify
@@ -1177,29 +1065,26 @@ class TestTriggerServiceMonitoring:
             start_time=start_time,
             end_time=end_time,
             limit=10,
-            offset=0
+            offset=0,
         )
 
     @pytest.mark.asyncio
     async def test_get_execution_metrics(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository,
-        sample_trigger_id
+        self, trigger_service, mock_trigger_execution_repository, sample_trigger_id
     ):
         """Test getting execution metrics."""
         # Setup mock metrics data
         metrics_data = {
-            'total_executions': 10,
-            'successful_executions': 8,
-            'failed_executions': 1,
-            'timeout_executions': 1,
-            'success_rate': 80.0,
-            'failure_rate': 20.0,
-            'avg_execution_time_ms': 1250.5,
-            'min_execution_time_ms': 800,
-            'max_execution_time_ms': 2000,
-            'period_hours': 24
+            "total_executions": 10,
+            "successful_executions": 8,
+            "failed_executions": 1,
+            "timeout_executions": 1,
+            "success_rate": 80.0,
+            "failure_rate": 20.0,
+            "avg_execution_time_ms": 1250.5,
+            "min_execution_time_ms": 800,
+            "max_execution_time_ms": 2000,
+            "period_hours": 24,
         }
         mock_trigger_execution_repository.get_execution_metrics.return_value = metrics_data
 
@@ -1214,30 +1099,27 @@ class TestTriggerServiceMonitoring:
 
     @pytest.mark.asyncio
     async def test_get_execution_timeline(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository,
-        sample_trigger_id
+        self, trigger_service, mock_trigger_execution_repository, sample_trigger_id
     ):
         """Test getting execution timeline."""
         # Setup mock timeline data
         timeline_data = [
             {
-                'time_bucket': datetime.utcnow() - timedelta(hours=2),
-                'total_count': 5,
-                'success_count': 4,
-                'failed_count': 1,
-                'timeout_count': 0,
-                'success_rate': 80.0
+                "time_bucket": datetime.utcnow() - timedelta(hours=2),
+                "total_count": 5,
+                "success_count": 4,
+                "failed_count": 1,
+                "timeout_count": 0,
+                "success_rate": 80.0,
             },
             {
-                'time_bucket': datetime.utcnow() - timedelta(hours=1),
-                'total_count': 3,
-                'success_count': 2,
-                'failed_count': 0,
-                'timeout_count': 1,
-                'success_rate': 66.67
-            }
+                "time_bucket": datetime.utcnow() - timedelta(hours=1),
+                "total_count": 3,
+                "success_count": 2,
+                "failed_count": 0,
+                "timeout_count": 1,
+                "success_rate": 66.67,
+            },
         ]
         mock_trigger_execution_repository.get_execution_timeline.return_value = timeline_data
 
@@ -1249,52 +1131,51 @@ class TestTriggerServiceMonitoring:
         # Verify
         assert result == timeline_data
         assert len(result) == 2
-        assert result[0]['total_count'] == 5
-        assert result[0]['success_rate'] == 80.0
+        assert result[0]["total_count"] == 5
+        assert result[0]["success_rate"] == 80.0
         mock_trigger_execution_repository.get_execution_timeline.assert_called_once_with(
             sample_trigger_id, 24, 60
         )
 
     @pytest.mark.asyncio
     async def test_get_execution_correlations(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository,
-        sample_trigger_id
+        self, trigger_service, mock_trigger_execution_repository, sample_trigger_id
     ):
         """Test getting execution correlations."""
         # Setup mock correlation data
         correlation_data = [
             {
-                'id': uuid4(),
-                'trigger_id': sample_trigger_id,
-                'executed_at': datetime.utcnow() - timedelta(minutes=30),
-                'status': 'success',
-                'task_id': uuid4(),
-                'execution_time_ms': 1200,
-                'error_message': None,
-                'trigger_data': {'key': 'value1'},
-                'workflow_id': 'workflow_1',
-                'run_id': 'run_1',
-                'has_task_correlation': True,
-                'has_workflow_correlation': True
+                "id": uuid4(),
+                "trigger_id": sample_trigger_id,
+                "executed_at": datetime.utcnow() - timedelta(minutes=30),
+                "status": "success",
+                "task_id": uuid4(),
+                "execution_time_ms": 1200,
+                "error_message": None,
+                "trigger_data": {"key": "value1"},
+                "workflow_id": "workflow_1",
+                "run_id": "run_1",
+                "has_task_correlation": True,
+                "has_workflow_correlation": True,
             },
             {
-                'id': uuid4(),
-                'trigger_id': sample_trigger_id,
-                'executed_at': datetime.utcnow() - timedelta(minutes=20),
-                'status': 'failed',
-                'task_id': None,
-                'execution_time_ms': 800,
-                'error_message': 'Test error',
-                'trigger_data': {'key': 'value2'},
-                'workflow_id': 'workflow_2',
-                'run_id': 'run_2',
-                'has_task_correlation': False,
-                'has_workflow_correlation': True
-            }
+                "id": uuid4(),
+                "trigger_id": sample_trigger_id,
+                "executed_at": datetime.utcnow() - timedelta(minutes=20),
+                "status": "failed",
+                "task_id": None,
+                "execution_time_ms": 800,
+                "error_message": "Test error",
+                "trigger_data": {"key": "value2"},
+                "workflow_id": "workflow_2",
+                "run_id": "run_2",
+                "has_task_correlation": False,
+                "has_workflow_correlation": True,
+            },
         ]
-        mock_trigger_execution_repository.get_executions_with_task_correlation.return_value = correlation_data
+        mock_trigger_execution_repository.get_executions_with_task_correlation.return_value = (
+            correlation_data
+        )
         mock_trigger_execution_repository.count_executions_filtered.return_value = 5
 
         # Execute
@@ -1306,9 +1187,9 @@ class TestTriggerServiceMonitoring:
         assert correlations == correlation_data
         assert total == 5
         assert len(correlations) == 2
-        assert correlations[0]['has_task_correlation'] is True
-        assert correlations[1]['has_task_correlation'] is False
-        assert all(corr['has_workflow_correlation'] is True for corr in correlations)
+        assert correlations[0]["has_task_correlation"] is True
+        assert correlations[1]["has_task_correlation"] is False
+        assert all(corr["has_workflow_correlation"] is True for corr in correlations)
 
         mock_trigger_execution_repository.get_executions_with_task_correlation.assert_called_once_with(
             sample_trigger_id, 10, 0
@@ -1319,24 +1200,21 @@ class TestTriggerServiceMonitoring:
 
     @pytest.mark.asyncio
     async def test_get_execution_metrics_no_data(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository,
-        sample_trigger_id
+        self, trigger_service, mock_trigger_execution_repository, sample_trigger_id
     ):
         """Test getting execution metrics when no data exists."""
         # Setup mock for no data
         empty_metrics = {
-            'total_executions': 0,
-            'successful_executions': 0,
-            'failed_executions': 0,
-            'timeout_executions': 0,
-            'success_rate': 0.0,
-            'failure_rate': 0.0,
-            'avg_execution_time_ms': 0.0,
-            'min_execution_time_ms': 0,
-            'max_execution_time_ms': 0,
-            'period_hours': 24
+            "total_executions": 0,
+            "successful_executions": 0,
+            "failed_executions": 0,
+            "timeout_executions": 0,
+            "success_rate": 0.0,
+            "failure_rate": 0.0,
+            "avg_execution_time_ms": 0.0,
+            "min_execution_time_ms": 0,
+            "max_execution_time_ms": 0,
+            "period_hours": 24,
         }
         mock_trigger_execution_repository.get_execution_metrics.return_value = empty_metrics
 
@@ -1345,18 +1223,15 @@ class TestTriggerServiceMonitoring:
 
         # Verify
         assert result == empty_metrics
-        assert result['total_executions'] == 0
-        assert result['success_rate'] == 0.0
+        assert result["total_executions"] == 0
+        assert result["success_rate"] == 0.0
         mock_trigger_execution_repository.get_execution_metrics.assert_called_once_with(
             sample_trigger_id, 24
         )
 
     @pytest.mark.asyncio
     async def test_get_execution_timeline_empty(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository,
-        sample_trigger_id
+        self, trigger_service, mock_trigger_execution_repository, sample_trigger_id
     ):
         """Test getting execution timeline when no data exists."""
         # Setup mock for empty timeline
@@ -1375,10 +1250,7 @@ class TestTriggerServiceMonitoring:
 
     @pytest.mark.asyncio
     async def test_get_execution_correlations_empty(
-        self,
-        trigger_service,
-        mock_trigger_execution_repository,
-        sample_trigger_id
+        self, trigger_service, mock_trigger_execution_repository, sample_trigger_id
     ):
         """Test getting execution correlations when no data exists."""
         # Setup mock for empty correlations

@@ -58,7 +58,7 @@ class TestSimpleTaskIntegration:
             user_id="a2a_user",
             agent_id=agent_id,
             status="submitted",
-            task_parameters={}
+            task_parameters={},
         )
 
         # Verify the task was created correctly
@@ -142,9 +142,7 @@ class TestSimpleTaskIntegration:
 
         # Simulate workflow completion
         task.update_status(
-            "completed",
-            result={"workflow_result": "success"},
-            metadata={"workflow_duration": 30.5}
+            "completed", result={"workflow_result": "success"}, metadata={"workflow_duration": 30.5}
         )
 
         assert task.status == "completed"
@@ -172,7 +170,7 @@ class TestSimpleTaskIntegration:
         task.update_status(
             "failed",
             error_message="Execution failed",
-            metadata={"error_code": "E001", "retry_count": 1}
+            metadata={"error_code": "E001", "retry_count": 1},
         )
 
         assert task.status == "failed"

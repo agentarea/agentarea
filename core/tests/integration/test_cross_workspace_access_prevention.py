@@ -15,6 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class CrossWorkspaceTestModel(BaseModel, WorkspaceScopedMixin):
     """Test model for cross-workspace access prevention testing."""
+
     __tablename__ = "cross_workspace_test_model"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -53,45 +54,66 @@ def workspace_contexts():
     """Create test contexts for different workspaces and users."""
     return {
         # Company A workspaces
-        'company_a_dev': UserContext(user_id="dev1", workspace_id="company-a-dev", roles=["developer"]),
-        'company_a_prod': UserContext(user_id="dev1", workspace_id="company-a-prod", roles=["developer"]),
-        'company_a_admin': UserContext(user_id="admin1", workspace_id="company-a-dev", roles=["admin"]),
-
+        "company_a_dev": UserContext(
+            user_id="dev1", workspace_id="company-a-dev", roles=["developer"]
+        ),
+        "company_a_prod": UserContext(
+            user_id="dev1", workspace_id="company-a-prod", roles=["developer"]
+        ),
+        "company_a_admin": UserContext(
+            user_id="admin1", workspace_id="company-a-dev", roles=["admin"]
+        ),
         # Company B workspaces
-        'company_b_dev': UserContext(user_id="dev2", workspace_id="company-b-dev", roles=["developer"]),
-        'company_b_prod': UserContext(user_id="dev2", workspace_id="company-b-prod", roles=["developer"]),
-        'company_b_admin': UserContext(user_id="admin2", workspace_id="company-b-dev", roles=["admin"]),
-
+        "company_b_dev": UserContext(
+            user_id="dev2", workspace_id="company-b-dev", roles=["developer"]
+        ),
+        "company_b_prod": UserContext(
+            user_id="dev2", workspace_id="company-b-prod", roles=["developer"]
+        ),
+        "company_b_admin": UserContext(
+            user_id="admin2", workspace_id="company-b-dev", roles=["admin"]
+        ),
         # Shared service workspace
-        'shared_service': UserContext(user_id="service", workspace_id="shared-service", roles=["service"]),
-
+        "shared_service": UserContext(
+            user_id="service", workspace_id="shared-service", roles=["service"]
+        ),
         # Malicious user trying to access other workspaces
-        'malicious_user': UserContext(user_id="hacker", workspace_id="hacker-workspace", roles=["user"]),
+        "malicious_user": UserContext(
+            user_id="hacker", workspace_id="hacker-workspace", roles=["user"]
+        ),
     }
 
 
 class TestCrossWorkspaceAccessPrevention:
     """Test suite for preventing cross-workspace access."""
 
-    async def test_complete_workspace_isolation_between_companies(self, test_session_factory, workspace_contexts):
+    async def test_complete_workspace_isolation_between_companies(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test complete isolation between different company workspaces."""
         async with test_session_factory() as session:
             # Create repositories for different companies
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
-            repo_malicious = CrossWorkspaceTestRepository(session, workspace_contexts['malicious_user'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
+            repo_malicious = CrossWorkspaceTestRepository(
+                session, workspace_contexts["malicious_user"]
+            )
 
             # Create sensitive data in each company's workspace
             company_a_secret = await repo_company_a.create(
                 name="Company A Secret",
                 sensitive_data="Company A's confidential information",
-                category="confidential"
+                category="confidential",
             )
 
             company_b_secret = await repo_company_b.create(
                 name="Company B Secret",
                 sensitive_data="Company B's confidential information",
-                category="confidential"
+                category="confidential",
             )
 
             # Test that Company A cannot access Company B's data
@@ -120,46 +142,48 @@ class TestCrossWorkspaceAccessPrevention:
             assert company_a_list[0].name == "Company A Secret"
             assert company_b_list[0].name == "Company B Secret"
 
-    async def test_cross_workspace_update_prevention(self, test_session_factory, workspace_contexts):
+    async def test_cross_workspace_update_prevention(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test that users cannot update records in other workspaces."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
-            repo_malicious = CrossWorkspaceTestRepository(session, workspace_contexts['malicious_user'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
+            repo_malicious = CrossWorkspaceTestRepository(
+                session, workspace_contexts["malicious_user"]
+            )
 
             # Create records in each workspace
             company_a_record = await repo_company_a.create(
-                name="Company A Record",
-                sensitive_data="Original A data"
+                name="Company A Record", sensitive_data="Original A data"
             )
 
             company_b_record = await repo_company_b.create(
-                name="Company B Record",
-                sensitive_data="Original B data"
+                name="Company B Record", sensitive_data="Original B data"
             )
 
             # Test that Company A cannot update Company B's record
             company_a_cannot_update_b = await repo_company_a.update(
-                company_b_record.id,
-                sensitive_data="Hacked by Company A"
+                company_b_record.id, sensitive_data="Hacked by Company A"
             )
             assert company_a_cannot_update_b is None
 
             # Test that Company B cannot update Company A's record
             company_b_cannot_update_a = await repo_company_b.update(
-                company_a_record.id,
-                sensitive_data="Hacked by Company B"
+                company_a_record.id, sensitive_data="Hacked by Company B"
             )
             assert company_b_cannot_update_a is None
 
             # Test that malicious user cannot update any records
             malicious_cannot_update_a = await repo_malicious.update(
-                company_a_record.id,
-                sensitive_data="Hacked by malicious user"
+                company_a_record.id, sensitive_data="Hacked by malicious user"
             )
             malicious_cannot_update_b = await repo_malicious.update(
-                company_b_record.id,
-                sensitive_data="Hacked by malicious user"
+                company_b_record.id, sensitive_data="Hacked by malicious user"
             )
             assert malicious_cannot_update_a is None
             assert malicious_cannot_update_b is None
@@ -171,12 +195,20 @@ class TestCrossWorkspaceAccessPrevention:
             assert original_a.sensitive_data == "Original A data"
             assert original_b.sensitive_data == "Original B data"
 
-    async def test_cross_workspace_delete_prevention(self, test_session_factory, workspace_contexts):
+    async def test_cross_workspace_delete_prevention(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test that users cannot delete records in other workspaces."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
-            repo_malicious = CrossWorkspaceTestRepository(session, workspace_contexts['malicious_user'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
+            repo_malicious = CrossWorkspaceTestRepository(
+                session, workspace_contexts["malicious_user"]
+            )
 
             # Create records in each workspace
             company_a_record = await repo_company_a.create(name="Company A Record")
@@ -203,11 +235,17 @@ class TestCrossWorkspaceAccessPrevention:
             assert a_still_exists is not None
             assert b_still_exists is not None
 
-    async def test_cross_workspace_search_and_filter_isolation(self, test_session_factory, workspace_contexts):
+    async def test_cross_workspace_search_and_filter_isolation(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test that search and filter operations don't leak data across workspaces."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
 
             # Create records with same names/categories in different workspaces
             await repo_company_a.create(name="Shared Name", category="shared_category")
@@ -244,9 +282,15 @@ class TestCrossWorkspaceAccessPrevention:
     async def test_cross_workspace_count_isolation(self, test_session_factory, workspace_contexts):
         """Test that count operations are isolated by workspace."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
-            repo_malicious = CrossWorkspaceTestRepository(session, workspace_contexts['malicious_user'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
+            repo_malicious = CrossWorkspaceTestRepository(
+                session, workspace_contexts["malicious_user"]
+            )
 
             # Create different numbers of records in each workspace
             for i in range(5):
@@ -274,8 +318,12 @@ class TestCrossWorkspaceAccessPrevention:
     async def test_cross_workspace_exists_isolation(self, test_session_factory, workspace_contexts):
         """Test that exists operations are isolated by workspace."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
 
             # Create record in Company A
             company_a_record = await repo_company_a.create(name="Company A Record")
@@ -287,16 +335,21 @@ class TestCrossWorkspaceAccessPrevention:
             assert exists_in_a is True
             assert exists_in_b is False  # Should not exist in Company B's workspace
 
-    async def test_admin_users_cannot_cross_workspace_boundaries(self, test_session_factory, workspace_contexts):
+    async def test_admin_users_cannot_cross_workspace_boundaries(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test that even admin users cannot access other workspaces."""
         async with test_session_factory() as session:
-            repo_company_a_admin = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_admin'])
-            repo_company_b_admin = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_admin'])
+            repo_company_a_admin = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_admin"]
+            )
+            repo_company_b_admin = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_admin"]
+            )
 
             # Create sensitive record in Company B
             company_b_secret = await repo_company_b_admin.create(
-                name="Company B Admin Secret",
-                sensitive_data="Top secret Company B data"
+                name="Company B Admin Secret", sensitive_data="Top secret Company B data"
             )
 
             # Test that Company A admin cannot access Company B's data
@@ -305,8 +358,7 @@ class TestCrossWorkspaceAccessPrevention:
 
             # Test that Company A admin cannot update Company B's data
             company_a_admin_cannot_update = await repo_company_a_admin.update(
-                company_b_secret.id,
-                sensitive_data="Hacked by Company A admin"
+                company_b_secret.id, sensitive_data="Hacked by Company A admin"
             )
             assert company_a_admin_cannot_update is None
 
@@ -314,22 +366,26 @@ class TestCrossWorkspaceAccessPrevention:
             company_a_admin_cannot_delete = await repo_company_a_admin.delete(company_b_secret.id)
             assert company_a_admin_cannot_delete is False
 
-    async def test_same_user_different_workspaces_isolation(self, test_session_factory, workspace_contexts):
+    async def test_same_user_different_workspaces_isolation(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test isolation when same user operates in different workspaces."""
         async with test_session_factory() as session:
             # Same user (dev1) in different workspaces
-            repo_dev_workspace = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_prod_workspace = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_prod'])
+            repo_dev_workspace = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_prod_workspace = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_prod"]
+            )
 
             # Create records in each workspace
             dev_record = await repo_dev_workspace.create(
-                name="Development Record",
-                sensitive_data="Dev environment data"
+                name="Development Record", sensitive_data="Dev environment data"
             )
 
             prod_record = await repo_prod_workspace.create(
-                name="Production Record",
-                sensitive_data="Production environment data"
+                name="Production Record", sensitive_data="Production environment data"
             )
 
             # Test that dev workspace cannot see prod data
@@ -349,11 +405,17 @@ class TestCrossWorkspaceAccessPrevention:
             assert dev_list[0].name == "Development Record"
             assert prod_list[0].name == "Production Record"
 
-    async def test_workspace_isolation_with_or_raise_methods(self, test_session_factory, workspace_contexts):
+    async def test_workspace_isolation_with_or_raise_methods(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test that *_or_raise methods properly handle cross-workspace access."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
 
             # Create record in Company A
             company_a_record = await repo_company_a.create(name="Company A Record")
@@ -373,9 +435,15 @@ class TestCrossWorkspaceAccessPrevention:
     async def test_workspace_isolation_stress_test(self, test_session_factory, workspace_contexts):
         """Stress test workspace isolation with many records and operations."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
-            repo_malicious = CrossWorkspaceTestRepository(session, workspace_contexts['malicious_user'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
+            repo_malicious = CrossWorkspaceTestRepository(
+                session, workspace_contexts["malicious_user"]
+            )
 
             # Create many records in each workspace
             company_a_records = []
@@ -383,14 +451,12 @@ class TestCrossWorkspaceAccessPrevention:
 
             for i in range(50):
                 a_record = await repo_company_a.create(
-                    name=f"Company A Record {i:03d}",
-                    category=f"category_{i % 5}"
+                    name=f"Company A Record {i:03d}", category=f"category_{i % 5}"
                 )
                 company_a_records.append(a_record)
 
                 b_record = await repo_company_b.create(
-                    name=f"Company B Record {i:03d}",
-                    category=f"category_{i % 5}"
+                    name=f"Company B Record {i:03d}", category=f"category_{i % 5}"
                 )
                 company_b_records.append(b_record)
 
@@ -405,6 +471,7 @@ class TestCrossWorkspaceAccessPrevention:
 
             # Test random access attempts across workspaces
             import random
+
             for _ in range(20):
                 # Pick random records from each workspace
                 a_record = random.choice(company_a_records)
@@ -425,11 +492,17 @@ class TestCrossWorkspaceAccessPrevention:
             assert all(r.workspace_id == "company-a-dev" for r in a_category_0)
             assert all(r.workspace_id == "company-b-dev" for r in b_category_0)
 
-    async def test_workspace_isolation_with_pagination(self, test_session_factory, workspace_contexts):
+    async def test_workspace_isolation_with_pagination(
+        self, test_session_factory, workspace_contexts
+    ):
         """Test workspace isolation with paginated queries."""
         async with test_session_factory() as session:
-            repo_company_a = CrossWorkspaceTestRepository(session, workspace_contexts['company_a_dev'])
-            repo_company_b = CrossWorkspaceTestRepository(session, workspace_contexts['company_b_dev'])
+            repo_company_a = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_a_dev"]
+            )
+            repo_company_b = CrossWorkspaceTestRepository(
+                session, workspace_contexts["company_b_dev"]
+            )
 
             # Create records in both workspaces
             for i in range(25):

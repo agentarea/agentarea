@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class BaseRepository(Generic[T]):
@@ -21,6 +21,7 @@ class BaseRepository(Generic[T]):
     async def list(self) -> list[T]:
         """List all records."""
         from sqlalchemy import select
+
         query = select(self.model_class)
         result = await self.session.execute(query)
         return list(result.scalars().all())

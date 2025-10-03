@@ -14,16 +14,14 @@ class TestPromptBuilder:
         agent_instruction = "You are a test agent."
         goal_description = "Complete a test task"
         success_criteria = ["Do something", "Complete the task"]
-        available_tools = [
-            {"name": "test_tool", "description": "A test tool"}
-        ]
+        available_tools = [{"name": "test_tool", "description": "A test tool"}]
 
         prompt = PromptBuilder.build_react_system_prompt(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=success_criteria,
-            available_tools=available_tools
+            available_tools=available_tools,
         )
 
         assert agent_name in prompt
@@ -98,16 +96,12 @@ class TestLLMModel:
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
 
-            model = LLMModel(
-                provider_type="ollama_chat",
-                model_name="qwen2.5",
-                endpoint_url=None
-            )
+            model = LLMModel(provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=None)
 
             request = LLMRequest(
                 messages=[{"role": "user", "content": "Hello, respond with just 'Hi!'"}],
                 temperature=0.3,
-                max_tokens=50
+                max_tokens=50,
             )
 
             response_stream = model.ainvoke_stream(request)
@@ -127,9 +121,7 @@ class TestLLMModel:
         from agentarea_agents_sdk.models.llm_model import LLMRequest
 
         request = LLMRequest(
-            messages=[{"role": "user", "content": "test"}],
-            temperature=0.5,
-            max_tokens=100
+            messages=[{"role": "user", "content": "test"}], temperature=0.5, max_tokens=100
         )
 
         assert request.messages == [{"role": "user", "content": "test"}]
@@ -149,7 +141,7 @@ class TestTools:
 
         # Test basic properties
         assert tool.name == "calculate"
-        assert hasattr(tool, 'description')
+        assert hasattr(tool, "description")
 
         # Test execution
         result = await tool.execute(expression="10 + 5")
@@ -165,7 +157,7 @@ class TestTools:
 
         # Test basic properties
         assert tool.name == "completion"
-        assert hasattr(tool, 'description')
+        assert hasattr(tool, "description")
 
         # Test execution (no parameters needed)
         result = await tool.execute()

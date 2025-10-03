@@ -83,7 +83,9 @@ class TestTriggerServiceLLMIntegration:
     """Test cases for trigger service LLM integration."""
 
     @pytest.mark.asyncio
-    async def test_create_trigger_with_llm_condition(self, trigger_service, mock_trigger_repository):
+    async def test_create_trigger_with_llm_condition(
+        self, trigger_service, mock_trigger_repository
+    ):
         """Test creating a trigger with LLM-based condition."""
         agent_id = uuid4()
 
@@ -96,12 +98,12 @@ class TestTriggerServiceLLMIntegration:
             conditions={
                 "type": "llm",
                 "description": "when user sends a file attachment or document",
-                "context_fields": ["request.body", "request.headers"]
+                "context_fields": ["request.body", "request.headers"],
             },
             task_parameters={
                 "llm_parameter_extraction": "analyze the uploaded file and respond with insights"
             },
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Mock repository response
@@ -114,7 +116,7 @@ class TestTriggerServiceLLMIntegration:
             webhook_id="webhook_123",
             conditions=trigger_data.conditions,
             task_parameters=trigger_data.task_parameters,
-            created_by="test_user"
+            created_by="test_user",
         )
         mock_trigger_repository.create_from_data.return_value = created_trigger
 
@@ -128,7 +130,9 @@ class TestTriggerServiceLLMIntegration:
         mock_trigger_repository.create_from_data.assert_called_once_with(trigger_data)
 
     @pytest.mark.asyncio
-    async def test_evaluate_trigger_conditions_with_llm(self, trigger_service, mock_llm_condition_evaluator):
+    async def test_evaluate_trigger_conditions_with_llm(
+        self, trigger_service, mock_llm_condition_evaluator
+    ):
         """Test trigger condition evaluation using LLM."""
         trigger = WebhookTrigger(
             id=uuid4(),
@@ -138,17 +142,14 @@ class TestTriggerServiceLLMIntegration:
             conditions={
                 "type": "llm",
                 "description": "when user sends a file attachment",
-                "context_fields": ["request.body"]
+                "context_fields": ["request.body"],
             },
-            created_by="test_user"
+            created_by="test_user",
         )
 
         event_data = {
             "request": {
-                "body": {
-                    "document": {"file_name": "report.pdf"},
-                    "message": "Here's the report"
-                }
+                "body": {"document": {"file_name": "report.pdf"}, "message": "Here's the report"}
             }
         }
 
@@ -167,31 +168,27 @@ class TestTriggerServiceLLMIntegration:
         assert "trigger_id" in call_args[1]["trigger_context"]
 
     @pytest.mark.asyncio
-    async def test_evaluate_trigger_conditions_llm_failure_fallback(self, trigger_service, mock_llm_condition_evaluator):
+    async def test_evaluate_trigger_conditions_llm_failure_fallback(
+        self, trigger_service, mock_llm_condition_evaluator
+    ):
         """Test fallback to simple evaluation when LLM fails."""
         trigger = WebhookTrigger(
             id=uuid4(),
             name="Test Trigger",
             agent_id=uuid4(),
             webhook_id="webhook_123",
-            conditions={
-                "field_matches": {
-                    "request.method": "POST"
-                }
-            },
-            created_by="test_user"
+            conditions={"field_matches": {"request.method": "POST"}},
+            created_by="test_user",
         )
 
-        event_data = {
-            "request": {
-                "method": "POST",
-                "body": {"message": "test"}
-            }
-        }
+        event_data = {"request": {"method": "POST", "body": {"message": "test"}}}
 
         # Mock LLM evaluator to raise an exception
         from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
-        mock_llm_condition_evaluator.evaluate_condition.side_effect = LLMConditionEvaluationError("LLM failed")
+
+        mock_llm_condition_evaluator.evaluate_condition.side_effect = LLMConditionEvaluationError(
+            "LLM failed"
+        )
 
         result = await trigger_service.evaluate_trigger_conditions(trigger, event_data)
 
@@ -199,7 +196,9 @@ class TestTriggerServiceLLMIntegration:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_build_task_parameters_with_llm_extraction(self, trigger_service, mock_llm_condition_evaluator):
+    async def test_build_task_parameters_with_llm_extraction(
+        self, trigger_service, mock_llm_condition_evaluator
+    ):
         """Test task parameter building with LLM extraction."""
         trigger = WebhookTrigger(
             id=uuid4(),
@@ -208,16 +207,16 @@ class TestTriggerServiceLLMIntegration:
             webhook_id="webhook_123",
             task_parameters={
                 "base_param": "base_value",
-                "llm_parameter_extraction": "extract user information and file details"
+                "llm_parameter_extraction": "extract user information and file details",
             },
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger_data = {
             "request": {
                 "body": {
                     "user": {"id": "123", "name": "John"},
-                    "document": {"file_name": "report.pdf"}
+                    "document": {"file_name": "report.pdf"},
                 }
             }
         }
@@ -227,7 +226,7 @@ class TestTriggerServiceLLMIntegration:
             "user_id": "123",
             "user_name": "John",
             "file_name": "report.pdf",
-            "action": "process_document"
+            "action": "process_document",
         }
 
         result = await trigger_service._build_task_parameters(trigger, trigger_data)
@@ -245,7 +244,9 @@ class TestTriggerServiceLLMIntegration:
         trigger_service.llm_condition_evaluator.extract_task_parameters.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_execute_trigger_with_llm_conditions(self, trigger_service, mock_llm_condition_evaluator, mock_task_service):
+    async def test_execute_trigger_with_llm_conditions(
+        self, trigger_service, mock_llm_condition_evaluator, mock_task_service
+    ):
         """Test trigger execution with LLM condition evaluation."""
         trigger_id = uuid4()
         trigger = WebhookTrigger(
@@ -253,21 +254,16 @@ class TestTriggerServiceLLMIntegration:
             name="File Processing Trigger",
             agent_id=uuid4(),
             webhook_id="webhook_123",
-            conditions={
-                "type": "llm",
-                "description": "when user uploads a document for analysis"
-            },
-            task_parameters={
-                "llm_parameter_extraction": "extract file details and user intent"
-            },
-            created_by="test_user"
+            conditions={"type": "llm", "description": "when user uploads a document for analysis"},
+            task_parameters={"llm_parameter_extraction": "extract file details and user intent"},
+            created_by="test_user",
         )
 
         trigger_data = {
             "request": {
                 "body": {
                     "document": {"file_name": "analysis.pdf"},
-                    "message": "Please analyze this document"
+                    "message": "Please analyze this document",
                 }
             }
         }
@@ -281,7 +277,7 @@ class TestTriggerServiceLLMIntegration:
         # Mock parameter extraction
         mock_llm_condition_evaluator.extract_task_parameters.return_value = {
             "file_name": "analysis.pdf",
-            "user_intent": "document_analysis"
+            "user_intent": "document_analysis",
         }
 
         # Mock task creation
@@ -306,7 +302,9 @@ class TestTriggerServiceLLMIntegration:
         assert task_params["trigger_id"] == str(trigger_id)
 
     @pytest.mark.asyncio
-    async def test_execute_trigger_conditions_not_met(self, trigger_service, mock_llm_condition_evaluator):
+    async def test_execute_trigger_conditions_not_met(
+        self, trigger_service, mock_llm_condition_evaluator
+    ):
         """Test trigger execution when conditions are not met."""
         trigger_id = uuid4()
         trigger = WebhookTrigger(
@@ -314,18 +312,11 @@ class TestTriggerServiceLLMIntegration:
             name="Test Trigger",
             agent_id=uuid4(),
             webhook_id="webhook_123",
-            conditions={
-                "type": "llm",
-                "description": "when user sends a file attachment"
-            },
-            created_by="test_user"
+            conditions={"type": "llm", "description": "when user sends a file attachment"},
+            created_by="test_user",
         )
 
-        trigger_data = {
-            "request": {
-                "body": {"message": "Hello, how are you?"}
-            }
-        }
+        trigger_data = {"request": {"body": {"message": "Hello, how are you?"}}}
 
         # Mock repository to return the trigger
         trigger_service.trigger_repository.get.return_value = trigger
@@ -353,7 +344,7 @@ class TestTriggerServiceLLMIntegration:
         conditions = {
             "type": "llm",
             "description": "when user sends a file",
-            "context_fields": ["request.body"]
+            "context_fields": ["request.body"],
         }
 
         # Mock validation to return no errors
@@ -365,7 +356,9 @@ class TestTriggerServiceLLMIntegration:
         mock_llm_condition_evaluator.validate_condition_syntax.assert_called_once_with(conditions)
 
     @pytest.mark.asyncio
-    async def test_validate_condition_syntax_with_errors(self, trigger_service, mock_llm_condition_evaluator):
+    async def test_validate_condition_syntax_with_errors(
+        self, trigger_service, mock_llm_condition_evaluator
+    ):
         """Test condition syntax validation with errors."""
         conditions = {
             "type": "llm"
@@ -383,7 +376,9 @@ class TestTriggerServiceLLMIntegration:
         assert "must have a 'description'" in errors[0]
 
     @pytest.mark.asyncio
-    async def test_cron_trigger_with_time_conditions(self, trigger_service, mock_llm_condition_evaluator):
+    async def test_cron_trigger_with_time_conditions(
+        self, trigger_service, mock_llm_condition_evaluator
+    ):
         """Test cron trigger with time-based conditions."""
         trigger = CronTrigger(
             id=uuid4(),
@@ -395,22 +390,17 @@ class TestTriggerServiceLLMIntegration:
                 "conditions": [
                     {
                         "type": "rule",
-                        "rules": [
-                            {"field": "time_conditions.hour_range", "operator": "exists"}
-                        ]
+                        "rules": [{"field": "time_conditions.hour_range", "operator": "exists"}],
                     },
-                    {
-                        "type": "llm",
-                        "description": "during business hours on weekdays"
-                    }
+                    {"type": "llm", "description": "during business hours on weekdays"},
                 ],
-                "logic": "AND"
+                "logic": "AND",
             },
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Mock current time to be during business hours
-        with patch('agentarea_triggers.trigger_service.datetime') as mock_datetime:
+        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
             mock_datetime.utcnow.return_value = datetime(2024, 1, 15, 10, 0, 0)  # Monday 10 AM
             mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
@@ -424,24 +414,27 @@ class TestTriggerServiceLLMIntegration:
             assert result is True
 
     @pytest.mark.asyncio
-    async def test_extract_task_parameters_with_llm_failure(self, trigger_service, mock_llm_condition_evaluator):
+    async def test_extract_task_parameters_with_llm_failure(
+        self, trigger_service, mock_llm_condition_evaluator
+    ):
         """Test task parameter extraction with LLM failure."""
         trigger = WebhookTrigger(
             id=uuid4(),
             name="Test Trigger",
             agent_id=uuid4(),
             webhook_id="webhook_123",
-            task_parameters={
-                "llm_parameter_extraction": "extract parameters"
-            },
-            created_by="test_user"
+            task_parameters={"llm_parameter_extraction": "extract parameters"},
+            created_by="test_user",
         )
 
         trigger_data = {"test": "data"}
 
         # Mock LLM extraction to fail
         from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
-        mock_llm_condition_evaluator.extract_task_parameters.side_effect = LLMConditionEvaluationError("Extraction failed")
+
+        mock_llm_condition_evaluator.extract_task_parameters.side_effect = (
+            LLMConditionEvaluationError("Extraction failed")
+        )
 
         result = await trigger_service._build_task_parameters(trigger, trigger_data)
 
@@ -470,17 +463,11 @@ class TestTriggerServiceLLMIntegration:
             name="Test Trigger",
             agent_id=uuid4(),
             webhook_id="webhook_123",
-            conditions={
-                "field_matches": {
-                    "request.method": "POST"
-                }
-            },
-            created_by="test_user"
+            conditions={"field_matches": {"request.method": "POST"}},
+            created_by="test_user",
         )
 
-        event_data = {
-            "request": {"method": "POST"}
-        }
+        event_data = {"request": {"method": "POST"}}
 
         # Should fallback to simple evaluation
         result = await service.evaluate_trigger_conditions(trigger, event_data)

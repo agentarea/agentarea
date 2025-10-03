@@ -273,13 +273,17 @@ class BaseTaskService(ABC):
             List of tasks matching the criteria
         """
         if workspace_id and user_id:
-            tasks = await self.task_repository.list_tasks(creator_scoped=True, limit=limit, offset=offset)
+            tasks = await self.task_repository.list_tasks(
+                creator_scoped=True, limit=limit, offset=offset
+            )
         elif workspace_id:
             tasks = await self.task_repository.list_tasks(limit=limit, offset=offset)
         elif agent_id:
             tasks = await self.task_repository.get_by_agent_id(agent_id, limit, offset)
         elif user_id:
-            tasks = await self.task_repository.list_tasks(creator_scoped=True, limit=limit, offset=offset)
+            tasks = await self.task_repository.list_tasks(
+                creator_scoped=True, limit=limit, offset=offset
+            )
         elif status:
             tasks = await self.task_repository.get_by_status(status)
         else:

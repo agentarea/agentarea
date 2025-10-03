@@ -72,13 +72,13 @@ class TestProviderSpecRepository:
     """Test cases for ProviderSpecRepository."""
 
     @pytest.mark.asyncio
-    async def test_create_and_get_provider_spec(self, provider_spec_repository: ProviderSpecRepository):
+    async def test_create_and_get_provider_spec(
+        self, provider_spec_repository: ProviderSpecRepository
+    ):
         """Test creating and retrieving a provider spec."""
         # Arrange
         provider_spec = create_test_provider_spec(
-            provider_key="openai",
-            name="OpenAI",
-            provider_type="openai"
+            provider_key="openai", name="OpenAI", provider_type="openai"
         )
 
         # Act - Create
@@ -103,9 +103,7 @@ class TestProviderSpecRepository:
         """Test getting provider spec by provider key."""
         # Arrange
         provider_spec = create_test_provider_spec(
-            provider_key="anthropic",
-            name="Anthropic",
-            provider_type="anthropic"
+            provider_key="anthropic", name="Anthropic", provider_type="anthropic"
         )
         await provider_spec_repository.create(provider_spec)
 
@@ -141,14 +139,10 @@ class TestProviderSpecRepository:
         """Test listing only builtin provider specs."""
         # Arrange
         builtin_spec = create_test_provider_spec(
-            provider_key="openai",
-            name="OpenAI",
-            is_builtin=True
+            provider_key="openai", name="OpenAI", is_builtin=True
         )
         custom_spec = create_test_provider_spec(
-            provider_key="custom",
-            name="Custom Provider",
-            is_builtin=False
+            provider_key="custom", name="Custom Provider", is_builtin=False
         )
 
         await provider_spec_repository.create(builtin_spec)
@@ -167,9 +161,7 @@ class TestProviderSpecRepository:
         """Test updating a provider spec."""
         # Arrange
         provider_spec = create_test_provider_spec(
-            provider_key="openai",
-            name="OpenAI",
-            description="Original description"
+            provider_key="openai", name="OpenAI", description="Original description"
         )
         created_spec = await provider_spec_repository.create(provider_spec)
 
@@ -206,13 +198,12 @@ class TestProviderSpecRepository:
         assert deleted_spec is None
 
     @pytest.mark.asyncio
-    async def test_upsert_by_provider_key_create(self, provider_spec_repository: ProviderSpecRepository):
+    async def test_upsert_by_provider_key_create(
+        self, provider_spec_repository: ProviderSpecRepository
+    ):
         """Test upserting a new provider spec by provider key."""
         # Arrange
-        provider_spec = create_test_provider_spec(
-            provider_key="new_provider",
-            name="New Provider"
-        )
+        provider_spec = create_test_provider_spec(provider_key="new_provider", name="New Provider")
 
         # Act
         upserted_spec = await provider_spec_repository.upsert_by_provider_key(provider_spec)
@@ -227,13 +218,13 @@ class TestProviderSpecRepository:
         assert retrieved_spec is not None
 
     @pytest.mark.asyncio
-    async def test_upsert_by_provider_key_update(self, provider_spec_repository: ProviderSpecRepository):
+    async def test_upsert_by_provider_key_update(
+        self, provider_spec_repository: ProviderSpecRepository
+    ):
         """Test upserting an existing provider spec by provider key."""
         # Arrange - Create initial spec
         initial_spec = create_test_provider_spec(
-            provider_key="existing_provider",
-            name="Initial Name",
-            description="Initial description"
+            provider_key="existing_provider", name="Initial Name", description="Initial description"
         )
         await provider_spec_repository.create(initial_spec)
 
@@ -241,7 +232,7 @@ class TestProviderSpecRepository:
         updated_spec = create_test_provider_spec(
             provider_key="existing_provider",  # Same key
             name="Updated Name",
-            description="Updated description"
+            description="Updated description",
         )
 
         # Act

@@ -15,19 +15,13 @@ from sqlalchemy import MetaData
 @pytest.fixture
 def test_user_context():
     """Create a test user context."""
-    return create_test_user_context(
-        user_id="test-user-123",
-        workspace_id="test-workspace-456"
-    )
+    return create_test_user_context(user_id="test-user-123", workspace_id="test-workspace-456")
 
 
 @pytest.fixture
 def test_user_context_different_workspace():
     """Create a test user context in a different workspace."""
-    return create_test_user_context(
-        user_id="test-user-789",
-        workspace_id="different-workspace-789"
-    )
+    return create_test_user_context(user_id="test-user-789", workspace_id="different-workspace-789")
 
 
 @pytest.fixture
@@ -46,22 +40,16 @@ async def test_get_by_agent_id_workspace_scoped(workspace_scoped_repository, tes
 
     # Create tasks for agent1 - these will be automatically scoped to workspace
     task1 = await workspace_scoped_repository.create(
-        agent_id=agent1_id,
-        description="Task 1 for agent 1",
-        parameters={"param": "value1"}
+        agent_id=agent1_id, description="Task 1 for agent 1", parameters={"param": "value1"}
     )
 
     task2 = await workspace_scoped_repository.create(
-        agent_id=agent1_id,
-        description="Task 2 for agent 1",
-        parameters={"param": "value2"}
+        agent_id=agent1_id, description="Task 2 for agent 1", parameters={"param": "value2"}
     )
 
     # Create task for agent2
     task3 = await workspace_scoped_repository.create(
-        agent_id=agent2_id,
-        description="Task 1 for agent 2",
-        parameters={"param": "value3"}
+        agent_id=agent2_id, description="Task 1 for agent 2", parameters={"param": "value3"}
     )
 
     # Test getting tasks for agent1 - should only return workspace tasks
@@ -84,7 +72,9 @@ async def test_get_by_agent_id_workspace_scoped(workspace_scoped_repository, tes
 
 
 @pytest.mark.asyncio
-async def test_workspace_isolation(db_session, test_user_context, test_user_context_different_workspace):
+async def test_workspace_isolation(
+    db_session, test_user_context, test_user_context_different_workspace
+):
     """Test that tasks are isolated by workspace."""
     # Create repositories for different workspaces
     factory1 = RepositoryFactory(db_session, test_user_context)
@@ -97,16 +87,12 @@ async def test_workspace_isolation(db_session, test_user_context, test_user_cont
 
     # Create task in workspace 1
     task1 = await repo1.create(
-        agent_id=agent_id,
-        description="Task in workspace 1",
-        parameters={"workspace": "1"}
+        agent_id=agent_id, description="Task in workspace 1", parameters={"workspace": "1"}
     )
 
     # Create task in workspace 2
     task2 = await repo2.create(
-        agent_id=agent_id,
-        description="Task in workspace 2",
-        parameters={"workspace": "2"}
+        agent_id=agent_id, description="Task in workspace 2", parameters={"workspace": "2"}
     )
 
     # Verify workspace isolation
@@ -127,7 +113,10 @@ async def test_workspace_isolation(db_session, test_user_context, test_user_cont
     our_repo2_tasks = [t for t in repo2_tasks if t.id == task2.id]
     assert len(our_repo2_tasks) == 1
     assert our_repo2_tasks[0].id == task2.id
-    assert all(task.workspace_id == test_user_context_different_workspace.workspace_id for task in our_repo2_tasks)
+    assert all(
+        task.workspace_id == test_user_context_different_workspace.workspace_id
+        for task in our_repo2_tasks
+    )
 
     # Cross-workspace access should return None
     task1_from_repo2 = await repo2.get_by_id(task1.id)
@@ -144,21 +133,15 @@ async def test_get_by_status_workspace_scoped(workspace_scoped_repository, test_
 
     # Create tasks with different statuses - all automatically scoped to workspace
     pending_task = await workspace_scoped_repository.create(
-        agent_id=agent_id,
-        description="Pending task for status test",
-        status="pending"
+        agent_id=agent_id, description="Pending task for status test", status="pending"
     )
 
     running_task = await workspace_scoped_repository.create(
-        agent_id=agent_id,
-        description="Running task for status test",
-        status="running"
+        agent_id=agent_id, description="Running task for status test", status="running"
     )
 
     completed_task = await workspace_scoped_repository.create(
-        agent_id=agent_id,
-        description="Completed task for status test",
-        status="completed"
+        agent_id=agent_id, description="Completed task for status test", status="completed"
     )
 
     # Test getting tasks by status - should only return workspace tasks
@@ -196,16 +179,12 @@ async def test_update_workspace_scoped(workspace_scoped_repository, test_user_co
 
     # Create test task
     task = await workspace_scoped_repository.create(
-        agent_id=agent_id,
-        description="Test task for update",
-        parameters={"initial": "value"}
+        agent_id=agent_id, description="Test task for update", parameters={"initial": "value"}
     )
 
     # Test basic update
     updated_task = await workspace_scoped_repository.update(
-        task.id,
-        status="running",
-        parameters={"updated": "value"}
+        task.id, status="running", parameters={"updated": "value"}
     )
 
     assert updated_task is not None
@@ -215,10 +194,7 @@ async def test_update_workspace_scoped(workspace_scoped_repository, test_user_co
     assert updated_task.created_by == test_user_context.user_id
 
     # Test updating non-existent task
-    non_existent_result = await workspace_scoped_repository.update(
-        uuid4(),
-        status="failed"
-    )
+    non_existent_result = await workspace_scoped_repository.update(uuid4(), status="failed")
     assert non_existent_result is None
 
 
@@ -231,7 +207,7 @@ async def test_creator_scoped_filtering(workspace_scoped_repository, test_user_c
     task1 = await workspace_scoped_repository.create(
         agent_id=agent_id,
         description="Task created by current user",
-        parameters={"creator": "current"}
+        parameters={"creator": "current"},
     )
 
     # Simulate another user in same workspace creating a task
@@ -240,7 +216,7 @@ async def test_creator_scoped_filtering(workspace_scoped_repository, test_user_c
     different_user_task = await workspace_scoped_repository.create(
         agent_id=agent_id,
         description="Task created by different user",
-        parameters={"creator": "different"}
+        parameters={"creator": "different"},
     )
     # Manually change created_by to simulate different user
     different_user_task.created_by = "different-user-id"
@@ -249,7 +225,9 @@ async def test_creator_scoped_filtering(workspace_scoped_repository, test_user_c
     # Test workspace-scoped listing (should return all workspace tasks)
     all_workspace_tasks = await workspace_scoped_repository.list_all(creator_scoped=False)
     # Filter to only our test tasks
-    our_workspace_tasks = [t for t in all_workspace_tasks if t.id in [task1.id, different_user_task.id]]
+    our_workspace_tasks = [
+        t for t in all_workspace_tasks if t.id in [task1.id, different_user_task.id]
+    ]
     assert len(our_workspace_tasks) == 2
     assert all(task.workspace_id == test_user_context.workspace_id for task in our_workspace_tasks)
 
@@ -262,14 +240,15 @@ async def test_creator_scoped_filtering(workspace_scoped_repository, test_user_c
     assert our_creator_tasks[0].created_by == test_user_context.user_id
 
     # Test creator-scoped get_by_id
-    task1_creator_scoped = await workspace_scoped_repository.get_by_id(task1.id, creator_scoped=True)
+    task1_creator_scoped = await workspace_scoped_repository.get_by_id(
+        task1.id, creator_scoped=True
+    )
     assert task1_creator_scoped is not None
     assert task1_creator_scoped.id == task1.id
 
     # Should not be able to get different user's task with creator_scoped=True
     different_task_creator_scoped = await workspace_scoped_repository.get_by_id(
-        different_user_task.id,
-        creator_scoped=True
+        different_user_task.id, creator_scoped=True
     )
     assert different_task_creator_scoped is None
 
@@ -281,9 +260,7 @@ async def test_workspace_scoped_crud_operations(workspace_scoped_repository, tes
 
     # Create
     task = await workspace_scoped_repository.create(
-        agent_id=agent_id,
-        description="Test CRUD task",
-        parameters={"operation": "create"}
+        agent_id=agent_id, description="Test CRUD task", parameters={"operation": "create"}
     )
 
     assert task.id is not None
@@ -298,9 +275,7 @@ async def test_workspace_scoped_crud_operations(workspace_scoped_repository, tes
 
     # Update
     updated_task = await workspace_scoped_repository.update(
-        task.id,
-        description="Updated CRUD task",
-        parameters={"operation": "update"}
+        task.id, description="Updated CRUD task", parameters={"operation": "update"}
     )
 
     assert updated_task is not None
@@ -319,7 +294,9 @@ async def test_workspace_scoped_crud_operations(workspace_scoped_repository, tes
 
 
 @pytest.mark.asyncio
-async def test_metadata_serialization_fix_create_task(workspace_scoped_repository, test_user_context):
+async def test_metadata_serialization_fix_create_task(
+    workspace_scoped_repository, test_user_context
+):
     """Test that create_task handles non-dict metadata correctly."""
     agent_id = uuid4()
 
@@ -339,7 +316,7 @@ async def test_metadata_serialization_fix_create_task(workspace_scoped_repositor
         execution_id=None,
         user_id=test_user_context.user_id,
         workspace_id=test_user_context.workspace_id,
-        metadata={"priority": "high", "category": "test"}
+        metadata={"priority": "high", "category": "test"},
     )
 
     created_task = await workspace_scoped_repository.create_task(valid_metadata_task)
@@ -363,7 +340,7 @@ async def test_metadata_serialization_fix_create_task(workspace_scoped_repositor
         execution_id=None,
         user_id=test_user_context.user_id,
         workspace_id=test_user_context.workspace_id,
-        metadata={}  # Start with empty dict
+        metadata={},  # Start with empty dict
     )
 
     # Test the metadata fix logic by simulating what happens in create_task
@@ -393,15 +370,15 @@ async def test_metadata_serialization_fix_create_task(workspace_scoped_repositor
 
 
 @pytest.mark.asyncio
-async def test_metadata_serialization_fix_update_task(workspace_scoped_repository, test_user_context):
+async def test_metadata_serialization_fix_update_task(
+    workspace_scoped_repository, test_user_context
+):
     """Test that update_task handles non-dict metadata correctly."""
     agent_id = uuid4()
 
     # Create a task first
     original_task = await workspace_scoped_repository.create(
-        agent_id=agent_id,
-        description="Task for metadata update test",
-        parameters={"test": "value"}
+        agent_id=agent_id, description="Task for metadata update test", parameters={"test": "value"}
     )
 
     # Test updating with valid dict metadata
@@ -420,7 +397,7 @@ async def test_metadata_serialization_fix_update_task(workspace_scoped_repositor
         execution_id="test-execution-id",
         user_id=test_user_context.user_id,
         workspace_id=test_user_context.workspace_id,
-        metadata={"updated": True, "priority": "medium"}
+        metadata={"updated": True, "priority": "medium"},
     )
 
     updated_task = await workspace_scoped_repository.update_task(valid_metadata_update)
@@ -462,7 +439,7 @@ async def test_metadata_serialization_fix_update_task(workspace_scoped_repositor
         execution_id="test-execution-id",
         user_id=test_user_context.user_id,
         workspace_id=test_user_context.workspace_id,
-        metadata=fixed_metadata  # Use the fixed metadata
+        metadata=fixed_metadata,  # Use the fixed metadata
     )
 
     # This should not raise a JSON serialization error
@@ -475,7 +452,9 @@ async def test_metadata_serialization_fix_update_task(workspace_scoped_repositor
 
 
 @pytest.mark.asyncio
-async def test_metadata_serialization_repository_fix_logic(workspace_scoped_repository, test_user_context):
+async def test_metadata_serialization_repository_fix_logic(
+    workspace_scoped_repository, test_user_context
+):
     """Test that the repository fix logic handles various invalid metadata types correctly."""
 
     # Test the fix logic directly by simulating what happens in create_task and update_task
@@ -496,7 +475,9 @@ async def test_metadata_serialization_repository_fix_logic(workspace_scoped_repo
             fixed_metadata = invalid_metadata
 
         # Verify the fix works correctly
-        assert fixed_metadata == {}, f"Invalid {test_name} metadata should be converted to empty dict"
+        assert fixed_metadata == {}, (
+            f"Invalid {test_name} metadata should be converted to empty dict"
+        )
         assert isinstance(fixed_metadata, dict), "Fixed metadata should be a dict"
 
         # Test that the fixed metadata is JSON serializable
@@ -545,7 +526,7 @@ async def test_metadata_serialization_edge_cases(workspace_scoped_repository, te
         execution_id=None,
         user_id=test_user_context.user_id,
         workspace_id=test_user_context.workspace_id,
-        metadata={}
+        metadata={},
     )
 
     created_empty_dict_task = await workspace_scoped_repository.create_task(empty_dict_task)
@@ -567,11 +548,15 @@ async def test_metadata_serialization_edge_cases(workspace_scoped_repository, te
         execution_id=None,
         user_id=test_user_context.user_id,
         workspace_id=test_user_context.workspace_id,
-        metadata={"nested": {"key": "value"}, "array": [1, 2, 3], "string": "test"}
+        metadata={"nested": {"key": "value"}, "array": [1, 2, 3], "string": "test"},
     )
 
     created_nested_dict_task = await workspace_scoped_repository.create_task(nested_dict_task)
-    assert created_nested_dict_task.metadata == {"nested": {"key": "value"}, "array": [1, 2, 3], "string": "test"}
+    assert created_nested_dict_task.metadata == {
+        "nested": {"key": "value"},
+        "array": [1, 2, 3],
+        "string": "test",
+    }
 
     # Verify complex metadata is JSON serializable
     try:
@@ -582,6 +567,7 @@ async def test_metadata_serialization_edge_cases(workspace_scoped_repository, te
 
 def test_metadata_fix_logic_unit():
     """Unit test for the metadata fix logic without database operations."""
+
     # Test the fix logic directly
     def apply_metadata_fix(metadata):
         """Replicate the fix logic from the repository."""
@@ -603,7 +589,9 @@ def test_metadata_fix_logic_unit():
 
     for input_metadata, expected_output in test_cases:
         result = apply_metadata_fix(input_metadata)
-        assert result == expected_output, f"Failed for input {input_metadata}: expected {expected_output}, got {result}"
+        assert result == expected_output, (
+            f"Failed for input {input_metadata}: expected {expected_output}, got {result}"
+        )
 
         # Verify result is JSON serializable (except for None)
         if result is not None:

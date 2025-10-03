@@ -19,13 +19,14 @@ from sqlalchemy.exc import NoResultFound
 
 class MockErrorModel(BaseModel, WorkspaceScopedMixin):
     """Mock model for error handling tests."""
+
     __tablename__ = "mock_error_model"
 
     def __init__(self, **kwargs):
-        self.id = kwargs.get('id', uuid4())
-        self.workspace_id = kwargs.get('workspace_id')
-        self.created_by = kwargs.get('created_by')
-        self.name = kwargs.get('name', 'test')
+        self.id = kwargs.get("id", uuid4())
+        self.workspace_id = kwargs.get("workspace_id")
+        self.created_by = kwargs.get("created_by")
+        self.name = kwargs.get("name", "test")
 
 
 class TestWorkspaceErrorHandling:
@@ -51,19 +52,13 @@ class TestWorkspaceErrorHandling:
     @pytest.fixture
     def user_context(self):
         """Create test user context."""
-        return UserContext(
-            user_id="test-user",
-            workspace_id="test-workspace",
-            roles=["user"]
-        )
+        return UserContext(user_id="test-user", workspace_id="test-workspace", roles=["user"])
 
     @pytest.fixture
     def repository(self, mock_session, user_context):
         """Create test repository."""
         return WorkspaceScopedRepository(
-            session=mock_session,
-            model_class=MockErrorModel,
-            user_context=user_context
+            session=mock_session, model_class=MockErrorModel, user_context=user_context
         )
 
     async def test_missing_authorization_header_error(self, jwt_handler, mock_request):
@@ -125,7 +120,7 @@ class TestWorkspaceErrorHandling:
         # Test missing 'sub' claim
         payload_no_sub = {
             "workspace_id": "test-workspace",
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token_no_sub = jwt.encode(payload_no_sub, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token_no_sub}"}
@@ -139,7 +134,7 @@ class TestWorkspaceErrorHandling:
         # Test missing 'workspace_id' claim
         payload_no_workspace = {
             "sub": "test-user",
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token_no_workspace = jwt.encode(payload_no_workspace, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token_no_workspace}"}
@@ -160,7 +155,7 @@ class TestWorkspaceErrorHandling:
         payload_empty_sub = {
             "sub": "",
             "workspace_id": "test-workspace",
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token_empty_sub = jwt.encode(payload_empty_sub, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token_empty_sub}"}
@@ -175,9 +170,11 @@ class TestWorkspaceErrorHandling:
         payload_empty_workspace = {
             "sub": "test-user",
             "workspace_id": "",
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
-        token_empty_workspace = jwt.encode(payload_empty_workspace, "test-secret", algorithm="HS256")
+        token_empty_workspace = jwt.encode(
+            payload_empty_workspace, "test-secret", algorithm="HS256"
+        )
         mock_request.headers = {"authorization": f"Bearer {token_empty_workspace}"}
 
         with pytest.raises(HTTPException) as exc_info:
@@ -196,7 +193,7 @@ class TestWorkspaceErrorHandling:
         payload = {
             "sub": "test-user",
             "workspace_id": "test-workspace",
-            "exp": datetime.now(UTC) - timedelta(minutes=30)  # Expired
+            "exp": datetime.now(UTC) - timedelta(minutes=30),  # Expired
         }
         expired_token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {expired_token}"}
@@ -217,7 +214,7 @@ class TestWorkspaceErrorHandling:
         payload = {
             "sub": "test-user",
             "workspace_id": "test-workspace",
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         wrong_secret_token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {wrong_secret_token}"}
@@ -307,17 +304,20 @@ class TestWorkspaceErrorHandling:
         # Assert - Should return False, not raise an error
         assert result is False
 
-    @patch('agentarea_common.auth.dependencies.ContextManager')
-    async def test_dependency_context_manager_error_handling(self, mock_context_manager, mock_request):
+    @patch("agentarea_common.auth.dependencies.ContextManager")
+    async def test_dependency_context_manager_error_handling(
+        self, mock_context_manager, mock_request
+    ):
         """Test error handling in get_user_context dependency."""
         # Arrange
         mock_jwt_handler = AsyncMock()
         mock_jwt_handler.extract_user_context.side_effect = HTTPException(
-            status_code=401,
-            detail="Test error"
+            status_code=401, detail="Test error"
         )
 
-        with patch('agentarea_common.auth.dependencies.get_jwt_handler', return_value=mock_jwt_handler):
+        with patch(
+            "agentarea_common.auth.dependencies.get_jwt_handler", return_value=mock_jwt_handler
+        ):
             # Act & Assert
             with pytest.raises(HTTPException) as exc_info:
                 await get_user_context(mock_request)
@@ -353,9 +353,7 @@ class TestWorkspaceErrorHandling:
         # Arrange
         test_id = uuid4()
         existing_record = MockErrorModel(
-            id=test_id,
-            workspace_id="test-workspace",
-            created_by="test-user"
+            id=test_id, workspace_id="test-workspace", created_by="test-user"
         )
         repository.get_by_id = AsyncMock(return_value=existing_record)
         mock_session.commit.side_effect = Exception("Database update error")
@@ -371,9 +369,7 @@ class TestWorkspaceErrorHandling:
         # Arrange
         test_id = uuid4()
         existing_record = MockErrorModel(
-            id=test_id,
-            workspace_id="test-workspace",
-            created_by="test-user"
+            id=test_id, workspace_id="test-workspace", created_by="test-user"
         )
         repository.get_by_id = AsyncMock(return_value=existing_record)
         mock_session.delete.side_effect = Exception("Database delete error")
@@ -387,6 +383,7 @@ class TestWorkspaceErrorHandling:
     async def test_jwt_handler_logging_on_errors(self, jwt_handler, mock_request, caplog):
         """Test that JWT handler logs errors appropriately."""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         # Test missing token logging
@@ -408,6 +405,7 @@ class TestWorkspaceErrorHandling:
 
     async def test_repository_invalid_model_class_error(self, mock_session, user_context):
         """Test error handling with invalid model class."""
+
         # Arrange - Create repository with invalid model class
         class InvalidModel:
             pass
@@ -415,9 +413,7 @@ class TestWorkspaceErrorHandling:
         # Act & Assert
         with pytest.raises(AttributeError):
             repository = WorkspaceScopedRepository(
-                session=mock_session,
-                model_class=InvalidModel,
-                user_context=user_context
+                session=mock_session, model_class=InvalidModel, user_context=user_context
             )
             # This should fail when trying to access model attributes
             await repository.get_by_id(uuid4())
@@ -427,9 +423,7 @@ class TestWorkspaceErrorHandling:
         # Act & Assert
         with pytest.raises(AttributeError):
             repository = WorkspaceScopedRepository(
-                session=mock_session,
-                model_class=MockErrorModel,
-                user_context=None
+                session=mock_session, model_class=MockErrorModel, user_context=None
             )
             # This should fail when trying to access user_context attributes
             await repository.create(name="test")

@@ -30,10 +30,7 @@ def mock_secret_manager():
 @pytest.fixture
 def activity_dependencies(mock_event_broker, mock_secret_manager):
     """Create activity dependencies."""
-    return ActivityDependencies(
-        event_broker=mock_event_broker,
-        secret_manager=mock_secret_manager
-    )
+    return ActivityDependencies(event_broker=mock_event_broker, secret_manager=mock_secret_manager)
 
 
 @pytest.fixture
@@ -60,33 +57,36 @@ class TestPublishWorkflowEventsActivity:
         # Setup test data
         task_id = str(uuid4())
         events_json = [
-            json.dumps({
-                "event_id": str(uuid4()),
-                "event_type": "LLMCallStarted",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "data": {
-                    "task_id": task_id,
-                    "agent_id": str(uuid4()),
-                    "model": "gpt-4"
+            json.dumps(
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "LLMCallStarted",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "data": {"task_id": task_id, "agent_id": str(uuid4()), "model": "gpt-4"},
                 }
-            }),
-            json.dumps({
-                "event_id": str(uuid4()),
-                "event_type": "LLMCallCompleted",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "data": {
-                    "task_id": task_id,
-                    "agent_id": str(uuid4()),
-                    "tokens": 150
+            ),
+            json.dumps(
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "LLMCallCompleted",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "data": {"task_id": task_id, "agent_id": str(uuid4()), "tokens": 150},
                 }
-            })
+            ),
         ]
 
         # Mock the dependencies
-        with patch('agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router') as mock_create_broker, \
-             patch('agentarea_execution.activities.agent_execution_activities.get_database') as mock_get_db, \
-             patch('agentarea_execution.activities.agent_execution_activities.TaskEventService') as mock_service_class:
-
+        with (
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router"
+            ) as mock_create_broker,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.get_database"
+            ) as mock_get_db,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.TaskEventService"
+            ) as mock_service_class,
+        ):
             # Setup mocks
             mock_redis_broker = AsyncMock()
             mock_create_broker.return_value = mock_redis_broker
@@ -131,7 +131,9 @@ class TestPublishWorkflowEventsActivity:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_publish_workflow_events_invalid_json(self, workflow_activities, mock_event_broker):
+    async def test_publish_workflow_events_invalid_json(
+        self, workflow_activities, mock_event_broker
+    ):
         """Test handling of invalid JSON in events."""
         # Get the publish activity
         publish_activity = None
@@ -143,18 +145,27 @@ class TestPublishWorkflowEventsActivity:
         # Setup test data with invalid JSON
         events_json = [
             "invalid json string",
-            json.dumps({
-                "event_type": "ValidEvent",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "data": {"task_id": str(uuid4())}
-            })
+            json.dumps(
+                {
+                    "event_type": "ValidEvent",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "data": {"task_id": str(uuid4())},
+                }
+            ),
         ]
 
         # Mock the dependencies
-        with patch('agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router') as mock_create_broker, \
-             patch('agentarea_execution.activities.agent_execution_activities.get_database') as mock_get_db, \
-             patch('agentarea_execution.activities.agent_execution_activities.TaskEventService') as mock_service_class:
-
+        with (
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router"
+            ) as mock_create_broker,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.get_database"
+            ) as mock_get_db,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.TaskEventService"
+            ) as mock_service_class,
+        ):
             # Setup mocks
             mock_redis_broker = AsyncMock()
             mock_create_broker.return_value = mock_redis_broker
@@ -174,7 +185,9 @@ class TestPublishWorkflowEventsActivity:
             assert result is False
 
     @pytest.mark.asyncio
-    async def test_publish_workflow_events_database_error(self, workflow_activities, mock_event_broker):
+    async def test_publish_workflow_events_database_error(
+        self, workflow_activities, mock_event_broker
+    ):
         """Test handling of database errors during event persistence."""
         # Get the publish activity
         publish_activity = None
@@ -186,23 +199,28 @@ class TestPublishWorkflowEventsActivity:
         # Setup test data
         task_id = str(uuid4())
         events_json = [
-            json.dumps({
-                "event_id": str(uuid4()),
-                "event_type": "LLMCallStarted",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "data": {
-                    "task_id": task_id,
-                    "agent_id": str(uuid4()),
-                    "model": "gpt-4"
+            json.dumps(
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "LLMCallStarted",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "data": {"task_id": task_id, "agent_id": str(uuid4()), "model": "gpt-4"},
                 }
-            })
+            )
         ]
 
         # Mock the dependencies
-        with patch('agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router') as mock_create_broker, \
-             patch('agentarea_execution.activities.agent_execution_activities.get_database') as mock_get_db, \
-             patch('agentarea_execution.activities.agent_execution_activities.TaskEventService') as mock_service_class:
-
+        with (
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router"
+            ) as mock_create_broker,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.get_database"
+            ) as mock_get_db,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.TaskEventService"
+            ) as mock_service_class,
+        ):
             # Setup mocks
             mock_redis_broker = AsyncMock()
             mock_create_broker.return_value = mock_redis_broker
@@ -227,7 +245,9 @@ class TestPublishWorkflowEventsActivity:
             mock_redis_broker.publish.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_publish_workflow_events_redis_error(self, workflow_activities, mock_event_broker):
+    async def test_publish_workflow_events_redis_error(
+        self, workflow_activities, mock_event_broker
+    ):
         """Test handling of Redis publishing errors."""
         # Get the publish activity
         publish_activity = None
@@ -239,21 +259,20 @@ class TestPublishWorkflowEventsActivity:
         # Setup test data
         task_id = str(uuid4())
         events_json = [
-            json.dumps({
-                "event_id": str(uuid4()),
-                "event_type": "LLMCallStarted",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "data": {
-                    "task_id": task_id,
-                    "agent_id": str(uuid4()),
-                    "model": "gpt-4"
+            json.dumps(
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "LLMCallStarted",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "data": {"task_id": task_id, "agent_id": str(uuid4()), "model": "gpt-4"},
                 }
-            })
+            )
         ]
 
         # Mock the dependencies
-        with patch('agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router') as mock_create_broker:
-
+        with patch(
+            "agentarea_execution.activities.agent_execution_activities.create_event_broker_from_router"
+        ) as mock_create_broker:
             # Setup mocks - Redis broker fails
             mock_redis_broker = AsyncMock()
             mock_redis_broker.publish.side_effect = Exception("Redis connection failed")
@@ -287,10 +306,17 @@ class TestCallLLMActivity:
         workspace_id = "test-workspace"
 
         # Mock the dependencies
-        with patch('agentarea_execution.activities.agent_execution_activities.get_database') as mock_get_db, \
-             patch('agentarea_execution.activities.agent_execution_activities.ModelInstanceService') as mock_service_class, \
-             patch('agentarea_execution.activities.agent_execution_activities.LLMModel') as mock_llm_class:
-
+        with (
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.get_database"
+            ) as mock_get_db,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.ModelInstanceService"
+            ) as mock_service_class,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.LLMModel"
+            ) as mock_llm_class,
+        ):
             # Setup database mock
             mock_database = MagicMock()
             mock_session = AsyncMock()
@@ -321,9 +347,7 @@ class TestCallLLMActivity:
 
             # Execute
             result = await call_llm_activity(
-                messages=messages,
-                model_id=model_id,
-                workspace_id=workspace_id
+                messages=messages, model_id=model_id, workspace_id=workspace_id
             )
 
             # Verify
@@ -351,11 +375,7 @@ class TestCallLLMActivity:
 
         # Execute & Verify
         with pytest.raises(ValueError, match="Invalid model_id"):
-            await call_llm_activity(
-                messages=messages,
-                model_id=model_id,
-                workspace_id=workspace_id
-            )
+            await call_llm_activity(messages=messages, model_id=model_id, workspace_id=workspace_id)
 
     @pytest.mark.asyncio
     async def test_call_llm_activity_model_not_found(self, workflow_activities):
@@ -373,9 +393,14 @@ class TestCallLLMActivity:
         workspace_id = "test-workspace"
 
         # Mock the dependencies
-        with patch('agentarea_execution.activities.agent_execution_activities.get_database') as mock_get_db, \
-             patch('agentarea_execution.activities.agent_execution_activities.ModelInstanceService') as mock_service_class:
-
+        with (
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.get_database"
+            ) as mock_get_db,
+            patch(
+                "agentarea_execution.activities.agent_execution_activities.ModelInstanceService"
+            ) as mock_service_class,
+        ):
             # Setup database mock
             mock_database = MagicMock()
             mock_session = AsyncMock()
@@ -390,7 +415,5 @@ class TestCallLLMActivity:
             # Execute & Verify
             with pytest.raises(ValueError, match="Model instance.*not found"):
                 await call_llm_activity(
-                    messages=messages,
-                    model_id=model_id,
-                    workspace_id=workspace_id
+                    messages=messages, model_id=model_id, workspace_id=workspace_id
                 )

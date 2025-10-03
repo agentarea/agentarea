@@ -31,14 +31,14 @@ class TriggerSystemHealthCheck:
 
     async def check_all_components(self) -> dict[str, Any]:
         """Check health of all trigger system components.
-        
+
         Returns:
             Dictionary with health status of each component
         """
         health_status = {
             "overall_status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
-            "components": {}
+            "components": {},
         }
 
         # Check database connectivity
@@ -58,9 +58,7 @@ class TriggerSystemHealthCheck:
         health_status["components"]["execution_metrics"] = metrics_health
 
         # Determine overall status
-        component_statuses = [
-            comp["status"] for comp in health_status["components"].values()
-        ]
+        component_statuses = [comp["status"] for comp in health_status["components"].values()]
 
         if any(status == "unhealthy" for status in component_statuses):
             health_status["overall_status"] = "unhealthy"
@@ -76,7 +74,7 @@ class TriggerSystemHealthCheck:
                 return {
                     "status": "unknown",
                     "message": "Trigger repository not available",
-                    "details": {}
+                    "details": {},
                 }
 
             # Test basic database connectivity
@@ -99,8 +97,8 @@ class TriggerSystemHealthCheck:
                 "details": {
                     "trigger_count": trigger_count,
                     "recent_executions": execution_count,
-                    "response_time_ms": round(response_time, 2)
-                }
+                    "response_time_ms": round(response_time, 2),
+                },
             }
 
         except Exception as e:
@@ -108,7 +106,7 @@ class TriggerSystemHealthCheck:
             return {
                 "status": "unhealthy",
                 "message": f"Database connectivity failed: {e!s}",
-                "details": {"error": str(e)}
+                "details": {"error": str(e)},
             }
 
     async def _check_temporal_health(self) -> dict[str, Any]:
@@ -118,7 +116,7 @@ class TriggerSystemHealthCheck:
                 return {
                     "status": "unknown",
                     "message": "Temporal schedule manager not available",
-                    "details": {}
+                    "details": {},
                 }
 
             # Check if temporal client is healthy
@@ -134,14 +132,14 @@ class TriggerSystemHealthCheck:
                     "details": {
                         "active_schedules": active_schedules,
                         "namespace": self.settings.TEMPORAL_SCHEDULE_NAMESPACE,
-                        "task_queue": self.settings.TEMPORAL_SCHEDULE_TASK_QUEUE
-                    }
+                        "task_queue": self.settings.TEMPORAL_SCHEDULE_TASK_QUEUE,
+                    },
                 }
             else:
                 return {
                     "status": "unhealthy",
                     "message": "Temporal client not responding",
-                    "details": {}
+                    "details": {},
                 }
 
         except Exception as e:
@@ -149,7 +147,7 @@ class TriggerSystemHealthCheck:
             return {
                 "status": "unhealthy",
                 "message": f"Temporal health check failed: {e!s}",
-                "details": {"error": str(e)}
+                "details": {"error": str(e)},
             }
 
     async def _check_webhook_health(self) -> dict[str, Any]:
@@ -159,7 +157,7 @@ class TriggerSystemHealthCheck:
                 return {
                     "status": "unknown",
                     "message": "Webhook manager not available",
-                    "details": {}
+                    "details": {},
                 }
 
             # Check webhook manager health
@@ -171,14 +169,14 @@ class TriggerSystemHealthCheck:
                     "message": "Webhook manager operational",
                     "details": {
                         "base_url": self.settings.WEBHOOK_BASE_URL,
-                        "rate_limit_per_minute": self.settings.WEBHOOK_RATE_LIMIT_PER_MINUTE
-                    }
+                        "rate_limit_per_minute": self.settings.WEBHOOK_RATE_LIMIT_PER_MINUTE,
+                    },
                 }
             else:
                 return {
                     "status": "degraded",
                     "message": "Webhook manager reporting issues",
-                    "details": {}
+                    "details": {},
                 }
 
         except Exception as e:
@@ -186,7 +184,7 @@ class TriggerSystemHealthCheck:
             return {
                 "status": "unhealthy",
                 "message": f"Webhook health check failed: {e!s}",
-                "details": {"error": str(e)}
+                "details": {"error": str(e)},
             }
 
     async def _check_execution_metrics(self) -> dict[str, Any]:
@@ -196,7 +194,7 @@ class TriggerSystemHealthCheck:
                 return {
                     "status": "unknown",
                     "message": "Execution repository not available",
-                    "details": {}
+                    "details": {},
                 }
 
             # Check recent execution patterns
@@ -209,8 +207,12 @@ class TriggerSystemHealthCheck:
             executions_last_day = await self.trigger_execution_repository.count_since(last_day)
 
             # Get failure rates
-            failures_last_hour = await self.trigger_execution_repository.count_failures_since(last_hour)
-            failures_last_day = await self.trigger_execution_repository.count_failures_since(last_day)
+            failures_last_hour = await self.trigger_execution_repository.count_failures_since(
+                last_hour
+            )
+            failures_last_day = await self.trigger_execution_repository.count_failures_since(
+                last_day
+            )
 
             # Calculate failure rates
             failure_rate_hour = (failures_last_hour / max(executions_last_hour, 1)) * 100
@@ -236,8 +238,8 @@ class TriggerSystemHealthCheck:
                     "failure_rate_hour_percent": round(failure_rate_hour, 1),
                     "failure_rate_day_percent": round(failure_rate_day, 1),
                     "failures_last_hour": failures_last_hour,
-                    "failures_last_day": failures_last_day
-                }
+                    "failures_last_day": failures_last_day,
+                },
             }
 
         except Exception as e:
@@ -245,7 +247,7 @@ class TriggerSystemHealthCheck:
             return {
                 "status": "unhealthy",
                 "message": f"Execution metrics check failed: {e!s}",
-                "details": {"error": str(e)}
+                "details": {"error": str(e)},
             }
 
 

@@ -16,7 +16,7 @@ class FileToolset(Toolset):
         search_files: bool = True,
     ):
         """Initialize the FileToolset.
-        
+
         Args:
             base_dir: Base directory for file operations. Defaults to current working directory.
             save_files: Enable save_file method.
@@ -34,12 +34,12 @@ class FileToolset(Toolset):
     @tool_method
     async def save_file(self, contents: str, file_name: str, overwrite: bool = True) -> str:
         """Saves the contents to a file called `file_name` and returns the file name if successful.
-        
+
         Args:
             contents: The contents to save.
             file_name: The name of the file to save to.
             overwrite: Overwrite the file if it already exists.
-            
+
         Returns:
             The file name if successful, otherwise returns an error message.
         """
@@ -67,10 +67,10 @@ class FileToolset(Toolset):
     @tool_method
     async def read_file(self, file_name: str) -> str:
         """Reads the contents of the file `file_name` and returns the contents if successful.
-        
+
         Args:
             file_name: The name of the file to read.
-            
+
         Returns:
             The contents of the file if successful, otherwise returns an error message.
         """
@@ -95,10 +95,10 @@ class FileToolset(Toolset):
     @tool_method
     async def list_files(self, pattern: str = "*") -> str:
         """Returns a list of files in the base directory matching the optional pattern.
-        
+
         Args:
             pattern: Optional glob pattern to filter files (e.g., "*.txt", "*.py"). Defaults to "*".
-            
+
         Returns:
             JSON formatted list of file paths, or error message.
         """
@@ -113,13 +113,17 @@ class FileToolset(Toolset):
             matching_files = list(self.base_dir.glob(pattern))
 
             # Filter to only include files (not directories)
-            file_paths = [str(file_path.relative_to(self.base_dir)) for file_path in matching_files if file_path.is_file()]
+            file_paths = [
+                str(file_path.relative_to(self.base_dir))
+                for file_path in matching_files
+                if file_path.is_file()
+            ]
 
             result = {
                 "base_directory": str(self.base_dir),
                 "pattern": pattern,
                 "files_found": len(file_paths),
-                "files": sorted(file_paths)
+                "files": sorted(file_paths),
             }
 
             return json.dumps(result, indent=2)
@@ -130,10 +134,10 @@ class FileToolset(Toolset):
     @tool_method
     async def search_files(self, pattern: str) -> str:
         """Searches for files in the base directory that match the pattern.
-        
+
         Args:
             pattern: The pattern to search for, e.g. "*.txt", "file*.csv", "**/*.py".
-            
+
         Returns:
             JSON formatted list of matching file paths, or error message.
         """
@@ -165,7 +169,7 @@ class FileToolset(Toolset):
                 "pattern": pattern,
                 "base_directory": str(self.base_dir),
                 "matches_found": len(file_paths),
-                "files": sorted(file_paths)
+                "files": sorted(file_paths),
             }
 
             return json.dumps(result, indent=2)

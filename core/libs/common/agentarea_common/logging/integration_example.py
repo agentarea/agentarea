@@ -15,11 +15,7 @@ from .middleware import LoggingContextMiddleware
 async def lifespan(app: FastAPI):
     """Application lifespan with logging setup."""
     # Setup logging on startup
-    setup_logging(
-        level="INFO",
-        enable_structured_logging=True,
-        enable_audit_logging=True
-    )
+    setup_logging(level="INFO", enable_structured_logging=True, enable_audit_logging=True)
 
     logger = get_context_logger("agentarea.startup")
     logger.info("Application starting up")
@@ -35,7 +31,7 @@ def create_app_with_audit_logging() -> FastAPI:
         title="AgentArea API",
         description="AI Agent Orchestration Platform",
         version="1.0.0",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
 
     # Add logging middleware
@@ -52,10 +48,7 @@ def example_endpoint_with_audit_logging():
     router = APIRouter()
 
     @router.post("/agents")
-    async def create_agent(
-        agent_data: dict,
-        user_context: UserContext = Depends(get_user_context)
-    ):
+    async def create_agent(agent_data: dict, user_context: UserContext = Depends(get_user_context)):
         """Create agent with audit logging."""
         # Get context logger for this request
         logger = get_context_logger("agentarea.agents", user_context)
@@ -74,7 +67,7 @@ def example_endpoint_with_audit_logging():
                 resource_id=agent_id,
                 resource_data=agent_data,
                 endpoint="/agents",
-                method="POST"
+                method="POST",
             )
 
             logger.info("Agent created successfully", extra={"agent_id": agent_id})
@@ -89,17 +82,14 @@ def example_endpoint_with_audit_logging():
                 error=str(e),
                 endpoint="/agents",
                 method="POST",
-                request_data=agent_data
+                request_data=agent_data,
             )
 
             logger.error("Failed to create agent", extra={"error": str(e)})
             raise
 
     @router.get("/agents/{agent_id}")
-    async def get_agent(
-        agent_id: str,
-        user_context: UserContext = Depends(get_user_context)
-    ):
+    async def get_agent(agent_id: str, user_context: UserContext = Depends(get_user_context)):
         """Get agent with audit logging."""
         logger = get_context_logger("agentarea.agents", user_context)
         audit_logger = get_audit_logger()
@@ -116,7 +106,7 @@ def example_endpoint_with_audit_logging():
                 user_context=user_context,
                 resource_id=agent_id,
                 endpoint=f"/agents/{agent_id}",
-                method="GET"
+                method="GET",
             )
 
             return agent_data
@@ -128,15 +118,13 @@ def example_endpoint_with_audit_logging():
                 error=str(e),
                 resource_id=agent_id,
                 endpoint=f"/agents/{agent_id}",
-                method="GET"
+                method="GET",
             )
             raise
 
     @router.put("/agents/{agent_id}")
     async def update_agent(
-        agent_id: str,
-        agent_data: dict,
-        user_context: UserContext = Depends(get_user_context)
+        agent_id: str, agent_data: dict, user_context: UserContext = Depends(get_user_context)
     ):
         """Update agent with audit logging."""
         logger = get_context_logger("agentarea.agents", user_context)
@@ -152,7 +140,7 @@ def example_endpoint_with_audit_logging():
                 resource_id=agent_id,
                 resource_data=agent_data,
                 endpoint=f"/agents/{agent_id}",
-                method="PUT"
+                method="PUT",
             )
 
             return {"id": agent_id, "status": "updated"}
@@ -165,15 +153,12 @@ def example_endpoint_with_audit_logging():
                 resource_id=agent_id,
                 endpoint=f"/agents/{agent_id}",
                 method="PUT",
-                request_data=agent_data
+                request_data=agent_data,
             )
             raise
 
     @router.delete("/agents/{agent_id}")
-    async def delete_agent(
-        agent_id: str,
-        user_context: UserContext = Depends(get_user_context)
-    ):
+    async def delete_agent(agent_id: str, user_context: UserContext = Depends(get_user_context)):
         """Delete agent with audit logging."""
         logger = get_context_logger("agentarea.agents", user_context)
         audit_logger = get_audit_logger()
@@ -187,7 +172,7 @@ def example_endpoint_with_audit_logging():
                 user_context=user_context,
                 resource_id=agent_id,
                 endpoint=f"/agents/{agent_id}",
-                method="DELETE"
+                method="DELETE",
             )
 
             return {"status": "deleted"}
@@ -199,7 +184,7 @@ def example_endpoint_with_audit_logging():
                 error=str(e),
                 resource_id=agent_id,
                 endpoint=f"/agents/{agent_id}",
-                method="DELETE"
+                method="DELETE",
             )
             raise
 
@@ -216,6 +201,7 @@ def example_repository_with_audit_logging():
 
     class ExampleModel(WorkspaceScopedMixin):
         """Example model for demonstration."""
+
         __tablename__ = "examples"
 
         name: str
@@ -261,8 +247,7 @@ def example_audit_log_queries():
     # Get all activity for a workspace in the last 24 hours
     yesterday = datetime.now() - timedelta(days=1)
     workspace_activity = query.get_workspace_activity(
-        workspace_id="workspace123",
-        start_time=yesterday
+        workspace_id="workspace123", start_time=yesterday
     )
 
     # Get all activity for a specific user
@@ -271,20 +256,15 @@ def example_audit_log_queries():
 
     # Get history for a specific resource
     agent_history = query.get_resource_history(
-        resource_type="agent",
-        resource_id="agent123",
-        workspace_id="workspace123"
+        resource_type="agent", resource_id="agent123", workspace_id="workspace123"
     )
 
     # Get error logs for troubleshooting
-    error_logs = query.get_error_logs(
-        workspace_id="workspace123",
-        start_time=yesterday
-    )
+    error_logs = query.get_error_logs(workspace_id="workspace123", start_time=yesterday)
 
     return {
         "workspace_activity": workspace_activity,
         "user_activity": user_activity,
         "agent_history": agent_history,
-        "error_logs": error_logs
+        "error_logs": error_logs,
     }

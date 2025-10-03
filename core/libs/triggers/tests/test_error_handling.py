@@ -30,13 +30,13 @@ class TestTriggerServiceErrorHandling:
     def mock_dependencies(self):
         """Create mock dependencies for TriggerService."""
         return {
-            'trigger_repository': AsyncMock(),
-            'trigger_execution_repository': AsyncMock(),
-            'event_broker': AsyncMock(),
-            'agent_repository': AsyncMock(),
-            'task_service': AsyncMock(),
-            'llm_condition_evaluator': AsyncMock(),
-            'temporal_schedule_manager': AsyncMock()
+            "trigger_repository": AsyncMock(),
+            "trigger_execution_repository": AsyncMock(),
+            "event_broker": AsyncMock(),
+            "agent_repository": AsyncMock(),
+            "task_service": AsyncMock(),
+            "llm_condition_evaluator": AsyncMock(),
+            "temporal_schedule_manager": AsyncMock(),
         }
 
     @pytest.fixture
@@ -54,7 +54,7 @@ class TestTriggerServiceErrorHandling:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             timezone="UTC",
-            created_by="test_user"
+            created_by="test_user",
         )
 
     async def test_create_trigger_agent_repository_unavailable(
@@ -76,21 +76,23 @@ class TestTriggerServiceErrorHandling:
     ):
         """Test trigger creation when agent doesn't exist."""
         # Setup - agent not found
-        mock_dependencies['agent_repository'].get.return_value = None
+        mock_dependencies["agent_repository"].get.return_value = None
 
         # Execute and verify - TriggerValidationError should bubble up
         with pytest.raises(TriggerValidationError) as exc_info:
             await trigger_service.create_trigger(sample_cron_trigger_data)
 
         assert "does not exist" in str(exc_info.value)
-        assert exc_info.value.context['agent_id'] == str(sample_cron_trigger_data.agent_id)
+        assert exc_info.value.context["agent_id"] == str(sample_cron_trigger_data.agent_id)
 
     async def test_create_trigger_agent_repository_error(
         self, trigger_service, sample_cron_trigger_data, mock_dependencies
     ):
         """Test trigger creation when agent repository throws error."""
         # Setup - agent repository throws exception
-        mock_dependencies['agent_repository'].get.side_effect = Exception("Database connection failed")
+        mock_dependencies["agent_repository"].get.side_effect = Exception(
+            "Database connection failed"
+        )
 
         # Execute and verify - should get TriggerExecutionError wrapping DependencyUnavailableError
         with pytest.raises(TriggerExecutionError) as exc_info:
@@ -104,8 +106,8 @@ class TestTriggerServiceErrorHandling:
     ):
         """Test cron trigger creation when temporal schedule manager is unavailable."""
         # Setup - valid agent but no temporal schedule manager
-        mock_dependencies['agent_repository'].get.return_value = MagicMock()
-        mock_dependencies['trigger_repository'].create_from_model.return_value = CronTrigger(
+        mock_dependencies["agent_repository"].get.return_value = MagicMock()
+        mock_dependencies["trigger_repository"].create_from_model.return_value = CronTrigger(
             id=uuid4(),
             name=sample_cron_trigger_data.name,
             description=sample_cron_trigger_data.description,
@@ -118,7 +120,7 @@ class TestTriggerServiceErrorHandling:
             updated_at=datetime.utcnow(),
             created_by=sample_cron_trigger_data.created_by,
             cron_expression=sample_cron_trigger_data.cron_expression,
-            timezone=sample_cron_trigger_data.timezone
+            timezone=sample_cron_trigger_data.timezone,
         )
         trigger_service.temporal_schedule_manager = None
 
@@ -127,24 +129,22 @@ class TestTriggerServiceErrorHandling:
         assert trigger is not None
         assert trigger.trigger_type == TriggerType.CRON
 
-    async def test_record_execution_repository_error(
-        self, trigger_service, mock_dependencies
-    ):
+    async def test_record_execution_repository_error(self, trigger_service, mock_dependencies):
         """Test execution recording when repository throws error."""
         # Setup - repository throws exception
         trigger_id = uuid4()
-        mock_dependencies['trigger_execution_repository'].create.side_effect = Exception("Database error")
+        mock_dependencies["trigger_execution_repository"].create.side_effect = Exception(
+            "Database error"
+        )
 
         # Execute and verify
         with pytest.raises(TriggerExecutionError) as exc_info:
             await trigger_service.record_execution(
-                trigger_id=trigger_id,
-                status=ExecutionStatus.SUCCESS,
-                execution_time_ms=1000
+                trigger_id=trigger_id, status=ExecutionStatus.SUCCESS, execution_time_ms=1000
             )
 
         assert "Failed to record trigger execution" in str(exc_info.value)
-        assert exc_info.value.context['trigger_id'] == str(trigger_id)
+        assert exc_info.value.context["trigger_id"] == str(trigger_id)
 
     async def test_schedule_cron_trigger_temporal_unavailable(self, trigger_service):
         """Test cron trigger scheduling when temporal manager is unavailable."""
@@ -163,7 +163,7 @@ class TestTriggerServiceErrorHandling:
             updated_at=datetime.utcnow(),
             created_by="test",
             cron_expression="0 9 * * *",
-            timezone="UTC"
+            timezone="UTC",
         )
 
         # Execute and verify
@@ -171,7 +171,7 @@ class TestTriggerServiceErrorHandling:
             await trigger_service.schedule_cron_trigger(trigger)
 
         assert "Temporal schedule manager not available" in str(exc_info.value)
-        assert exc_info.value.context['dependency'] == 'temporal_schedule_manager'
+        assert exc_info.value.context["dependency"] == "temporal_schedule_manager"
 
 
 class TestWebhookManagerErrorHandling:
@@ -208,8 +208,8 @@ class TestWebhookManagerErrorHandling:
             validation_rules={
                 "required_headers": ["content-type"],
                 "content_type": "application/json",
-                "body_format": "json"
-            }
+                "body_format": "json",
+            },
         )
 
     async def test_handle_webhook_request_not_found(self, webhook_manager):
@@ -220,7 +220,7 @@ class TestWebhookManagerErrorHandling:
             method="POST",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         # Verify
@@ -241,7 +241,7 @@ class TestWebhookManagerErrorHandling:
             method="POST",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         # Verify
@@ -261,7 +261,7 @@ class TestWebhookManagerErrorHandling:
             method="GET",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         # Verify
@@ -281,7 +281,7 @@ class TestWebhookManagerErrorHandling:
             method="POST",
             headers={},  # Missing content-type header
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         # Verify
@@ -302,7 +302,7 @@ class TestWebhookManagerErrorHandling:
             method="POST",
             headers={"content-type": "application/json"},
             body={"test": "data"},
-            query_params={}
+            query_params={},
         )
 
         # Verify
@@ -320,7 +320,7 @@ class TestWebhookManagerErrorHandling:
         result = await webhook_manager.apply_validation_rules(
             sample_webhook_trigger,
             {"content-type": "application/json"},
-            "invalid json {"  # Invalid JSON
+            "invalid json {",  # Invalid JSON
         )
 
         # Verify
@@ -336,9 +336,7 @@ class TestWebhookManagerErrorHandling:
         # Execute and verify
         with pytest.raises(WebhookValidationError):
             await webhook_manager.apply_validation_rules(
-                sample_webhook_trigger,
-                {"content-type": "application/json"},
-                {"test": "data"}
+                sample_webhook_trigger, {"content-type": "application/json"}, {"test": "data"}
             )
 
 
@@ -364,35 +362,30 @@ class TestTemporalScheduleManagerErrorHandling:
         # Execute and verify
         with pytest.raises(DependencyUnavailableError) as exc_info:
             await schedule_manager.create_cron_schedule(
-                trigger_id=trigger_id,
-                cron_expression="0 9 * * *"
+                trigger_id=trigger_id, cron_expression="0 9 * * *"
             )
 
         assert "Temporal client not available" in str(exc_info.value)
-        assert exc_info.value.context['dependency'] == 'temporal_client'
+        assert exc_info.value.context["dependency"] == "temporal_client"
 
-    async def test_create_cron_schedule_temporal_error(
-        self, schedule_manager, temporal_client
-    ):
+    async def test_create_cron_schedule_temporal_error(self, schedule_manager, temporal_client):
         """Test schedule creation when Temporal throws error."""
         # Setup - Temporal client throws error
         from temporalio.exceptions import TemporalError
+
         temporal_client.create_schedule.side_effect = TemporalError("Schedule already exists")
         trigger_id = uuid4()
 
         # Execute and verify
         with pytest.raises(TriggerExecutionError) as exc_info:
             await schedule_manager.create_cron_schedule(
-                trigger_id=trigger_id,
-                cron_expression="0 9 * * *"
+                trigger_id=trigger_id, cron_expression="0 9 * * *"
             )
 
         assert "Temporal error creating schedule" in str(exc_info.value)
-        assert exc_info.value.context['trigger_id'] == str(trigger_id)
+        assert exc_info.value.context["trigger_id"] == str(trigger_id)
 
-    async def test_create_cron_schedule_unexpected_error(
-        self, schedule_manager, temporal_client
-    ):
+    async def test_create_cron_schedule_unexpected_error(self, schedule_manager, temporal_client):
         """Test schedule creation with unexpected error."""
         # Setup - unexpected error
         temporal_client.create_schedule.side_effect = ValueError("Invalid argument")
@@ -401,12 +394,11 @@ class TestTemporalScheduleManagerErrorHandling:
         # Execute and verify
         with pytest.raises(TriggerExecutionError) as exc_info:
             await schedule_manager.create_cron_schedule(
-                trigger_id=trigger_id,
-                cron_expression="0 9 * * *"
+                trigger_id=trigger_id, cron_expression="0 9 * * *"
             )
 
         assert "Unexpected error creating schedule" in str(exc_info.value)
-        assert exc_info.value.context['original_error'] == "Invalid argument"
+        assert exc_info.value.context["original_error"] == "Invalid argument"
 
 
 class TestCorrelationIdLogging:
@@ -434,7 +426,7 @@ class TestCorrelationIdLogging:
         set_correlation_id(correlation_id)
 
         # Test message formatting
-        with patch.object(logger.logger, 'info') as mock_info:
+        with patch.object(logger.logger, "info") as mock_info:
             logger.info("Test message", trigger_id=uuid4())
 
             # Verify correlation ID is included in log message
@@ -453,12 +445,12 @@ class TestCorrelationIdLogging:
         # Test error creation
         error = TriggerError("Test error", test_context="value")
         assert error.correlation_id == correlation_id
-        assert error.context['test_context'] == "value"
+        assert error.context["test_context"] == "value"
 
         # Test error dictionary conversion
         error_dict = error.to_dict()
-        assert error_dict['correlation_id'] == correlation_id
-        assert error_dict['context']['test_context'] == "value"
+        assert error_dict["correlation_id"] == correlation_id
+        assert error_dict["context"]["test_context"] == "value"
 
 
 class TestGracefulDegradation:
@@ -472,9 +464,9 @@ class TestGracefulDegradation:
             trigger_execution_repository=AsyncMock(),
             event_broker=AsyncMock(),
             agent_repository=None,  # Missing
-            task_service=None,      # Missing
+            task_service=None,  # Missing
             llm_condition_evaluator=None,  # Missing
-            temporal_schedule_manager=None  # Missing
+            temporal_schedule_manager=None,  # Missing
         )
 
     async def test_graceful_degradation_missing_agent_repository(
@@ -487,16 +479,14 @@ class TestGracefulDegradation:
             agent_id=uuid4(),
             trigger_type=TriggerType.WEBHOOK,
             webhook_id="test_webhook",
-            created_by="test"
+            created_by="test",
         )
 
         # Should raise DependencyUnavailableError, not crash
         with pytest.raises(DependencyUnavailableError):
             await trigger_service_partial_deps.create_trigger(trigger_data)
 
-    async def test_graceful_degradation_missing_task_service(
-        self, trigger_service_partial_deps
-    ):
+    async def test_graceful_degradation_missing_task_service(self, trigger_service_partial_deps):
         """Test graceful handling when task service is missing."""
         # This would be tested in the execute_trigger method
         # For now, we verify the service can be created without task_service
@@ -523,7 +513,7 @@ class TestGracefulDegradation:
             updated_at=datetime.utcnow(),
             created_by="test",
             cron_expression="0 9 * * *",
-            timezone="UTC"
+            timezone="UTC",
         )
 
         with pytest.raises(DependencyUnavailableError):

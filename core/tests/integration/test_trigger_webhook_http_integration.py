@@ -23,6 +23,7 @@ try:
     )
     from agentarea_triggers.trigger_service import TriggerService
     from agentarea_triggers.webhook_manager import WebhookManager
+
     TRIGGERS_AVAILABLE = True
 except ImportError:
     TRIGGERS_AVAILABLE = False
@@ -78,11 +79,7 @@ class TestWebhookHTTPIntegration:
 
     @pytest.fixture
     async def trigger_service(
-        self,
-        trigger_repositories,
-        mock_event_broker,
-        mock_agent_repository,
-        mock_task_service
+        self, trigger_repositories, mock_event_broker, mock_agent_repository, mock_task_service
     ):
         """Create trigger service with real repositories."""
         trigger_repo, execution_repo = trigger_repositories
@@ -94,16 +91,13 @@ class TestWebhookHTTPIntegration:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
     @pytest.fixture
     async def webhook_manager(self, trigger_service, mock_event_broker):
         """Create webhook manager for testing."""
-        return WebhookManager(
-            trigger_service=trigger_service,
-            event_broker=mock_event_broker
-        )
+        return WebhookManager(trigger_service=trigger_service, event_broker=mock_event_broker)
 
     @pytest.fixture
     def webhook_app(self, webhook_manager):
@@ -164,11 +158,7 @@ class TestWebhookHTTPIntegration:
     # Generic Webhook Tests
 
     async def test_generic_webhook_post_request(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test generic webhook with POST request."""
         # Create generic webhook trigger
@@ -180,7 +170,7 @@ class TestWebhookHTTPIntegration:
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST"],
             task_parameters={"webhook_type": "generic", "action": "process"},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -190,7 +180,7 @@ class TestWebhookHTTPIntegration:
         payload = {
             "message": "Hello webhook",
             "timestamp": datetime.utcnow().isoformat(),
-            "data": {"key": "value", "number": 42}
+            "data": {"key": "value", "number": 42},
         }
 
         response = webhook_client.post(
@@ -199,8 +189,8 @@ class TestWebhookHTTPIntegration:
             headers={
                 "Content-Type": "application/json",
                 "X-Custom-Header": "test-value",
-                "User-Agent": "TestClient/1.0"
-            }
+                "User-Agent": "TestClient/1.0",
+            },
         )
 
         # Verify response
@@ -230,11 +220,7 @@ class TestWebhookHTTPIntegration:
         assert trigger_data["request"]["headers"]["x-custom-header"] == "test-value"
 
     async def test_generic_webhook_multiple_methods(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test generic webhook supporting multiple HTTP methods."""
         # Create webhook trigger supporting multiple methods
@@ -245,7 +231,7 @@ class TestWebhookHTTPIntegration:
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST", "PUT", "PATCH"],
             task_parameters={"supports_multiple_methods": True},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -253,22 +239,19 @@ class TestWebhookHTTPIntegration:
 
         # Test POST
         post_response = webhook_client.post(
-            f"/webhooks/{webhook_id}",
-            json={"method": "POST", "data": "post_data"}
+            f"/webhooks/{webhook_id}", json={"method": "POST", "data": "post_data"}
         )
         assert post_response.status_code == 200
 
         # Test PUT
         put_response = webhook_client.put(
-            f"/webhooks/{webhook_id}",
-            json={"method": "PUT", "data": "put_data"}
+            f"/webhooks/{webhook_id}", json={"method": "PUT", "data": "put_data"}
         )
         assert put_response.status_code == 200
 
         # Test PATCH
         patch_response = webhook_client.patch(
-            f"/webhooks/{webhook_id}",
-            json={"method": "PATCH", "data": "patch_data"}
+            f"/webhooks/{webhook_id}", json={"method": "PATCH", "data": "patch_data"}
         )
         assert patch_response.status_code == 200
 
@@ -282,11 +265,7 @@ class TestWebhookHTTPIntegration:
     # GitHub Webhook Tests
 
     async def test_github_webhook_push_event(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test GitHub webhook with push event."""
         # Create GitHub webhook trigger
@@ -299,7 +278,7 @@ class TestWebhookHTTPIntegration:
             allowed_methods=["POST"],
             task_parameters={"action": "deploy", "environment": "staging"},
             validation_rules={"required_headers": ["X-GitHub-Event"]},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -314,20 +293,17 @@ class TestWebhookHTTPIntegration:
                 "id": 123456,
                 "name": "test-repo",
                 "full_name": "testuser/test-repo",
-                "html_url": "https://github.com/testuser/test-repo"
+                "html_url": "https://github.com/testuser/test-repo",
             },
-            "pusher": {
-                "name": "testuser",
-                "email": "test@example.com"
-            },
+            "pusher": {"name": "testuser", "email": "test@example.com"},
             "commits": [
                 {
                     "id": "def456",
                     "message": "Fix critical bug",
                     "author": {"name": "testuser", "email": "test@example.com"},
-                    "url": "https://github.com/testuser/test-repo/commit/def456"
+                    "url": "https://github.com/testuser/test-repo/commit/def456",
                 }
-            ]
+            ],
         }
 
         # Send GitHub webhook request
@@ -339,8 +315,8 @@ class TestWebhookHTTPIntegration:
                 "X-GitHub-Event": "push",
                 "X-GitHub-Delivery": "12345-67890",
                 "X-Hub-Signature-256": "sha256=dummy_signature",
-                "User-Agent": "GitHub-Hookshot/abc123"
-            }
+                "User-Agent": "GitHub-Hookshot/abc123",
+            },
         )
 
         # Verify response
@@ -364,10 +340,7 @@ class TestWebhookHTTPIntegration:
         assert trigger_data["request"]["headers"]["x-github-event"] == "push"
 
     async def test_github_webhook_validation_failure(
-        self,
-        webhook_client,
-        trigger_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, sample_agent_id
     ):
         """Test GitHub webhook with validation failure."""
         # Create GitHub webhook trigger with validation
@@ -377,7 +350,7 @@ class TestWebhookHTTPIntegration:
             trigger_type=TriggerType.WEBHOOK,
             webhook_type=WebhookType.GITHUB,
             validation_rules={"required_headers": ["X-GitHub-Event", "X-GitHub-Delivery"]},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -389,9 +362,9 @@ class TestWebhookHTTPIntegration:
             json={"ref": "refs/heads/main"},
             headers={
                 "Content-Type": "application/json",
-                "X-GitHub-Event": "push"
+                "X-GitHub-Event": "push",
                 # Missing X-GitHub-Delivery header
-            }
+            },
         )
 
         # Verify validation failure
@@ -403,11 +376,7 @@ class TestWebhookHTTPIntegration:
     # Slack Webhook Tests
 
     async def test_slack_webhook_slash_command(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test Slack webhook with slash command."""
         # Create Slack webhook trigger
@@ -419,7 +388,7 @@ class TestWebhookHTTPIntegration:
             webhook_type=WebhookType.SLACK,
             allowed_methods=["POST"],
             task_parameters={"platform": "slack", "response_type": "ephemeral"},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -437,7 +406,7 @@ class TestWebhookHTTPIntegration:
             "command": "/deploy",
             "text": "staging main",
             "response_url": "https://hooks.slack.com/commands/1234/5678",
-            "trigger_id": "13345224609.738474920.8088930838d88f008e0"
+            "trigger_id": "13345224609.738474920.8088930838d88f008e0",
         }
 
         # Send Slack webhook request
@@ -446,8 +415,8 @@ class TestWebhookHTTPIntegration:
             data=slack_payload,  # Form data
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Slackbot 1.0 (+https://api.slack.com/robots)"
-            }
+                "User-Agent": "Slackbot 1.0 (+https://api.slack.com/robots)",
+            },
         )
 
         # Verify response
@@ -471,11 +440,7 @@ class TestWebhookHTTPIntegration:
     # Telegram Webhook Tests
 
     async def test_telegram_webhook_message(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test Telegram webhook with message update."""
         # Create Telegram webhook trigger
@@ -487,7 +452,7 @@ class TestWebhookHTTPIntegration:
             webhook_type=WebhookType.TELEGRAM,
             allowed_methods=["POST"],
             task_parameters={"platform": "telegram", "auto_reply": True},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -503,18 +468,18 @@ class TestWebhookHTTPIntegration:
                     "is_bot": False,
                     "first_name": "Test",
                     "last_name": "User",
-                    "username": "testuser"
+                    "username": "testuser",
                 },
                 "chat": {
                     "id": 987654321,
                     "first_name": "Test",
                     "last_name": "User",
                     "username": "testuser",
-                    "type": "private"
+                    "type": "private",
                 },
                 "date": 1640995200,
-                "text": "Hello bot! Can you help me?"
-            }
+                "text": "Hello bot! Can you help me?",
+            },
         }
 
         # Send Telegram webhook request
@@ -523,8 +488,8 @@ class TestWebhookHTTPIntegration:
             json=telegram_payload,
             headers={
                 "Content-Type": "application/json",
-                "User-Agent": "TelegramBot (like TwitterBot)"
-            }
+                "User-Agent": "TelegramBot (like TwitterBot)",
+            },
         )
 
         # Verify response
@@ -551,20 +516,14 @@ class TestWebhookHTTPIntegration:
         """Test webhook request to non-existent webhook."""
         fake_webhook_id = f"fake_{uuid4().hex[:8]}"
 
-        response = webhook_client.post(
-            f"/webhooks/{fake_webhook_id}",
-            json={"test": "data"}
-        )
+        response = webhook_client.post(f"/webhooks/{fake_webhook_id}", json={"test": "data"})
 
         assert response.status_code == 404
         result = response.json()
         assert "not found" in result["message"].lower()
 
     async def test_webhook_method_not_allowed(
-        self,
-        webhook_client,
-        trigger_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, sample_agent_id
     ):
         """Test webhook with unsupported HTTP method."""
         # Create webhook that only allows POST
@@ -573,7 +532,7 @@ class TestWebhookHTTPIntegration:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             allowed_methods=["POST"],
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -586,19 +545,14 @@ class TestWebhookHTTPIntegration:
         result = response.json()
         assert "method not allowed" in result["message"].lower()
 
-    async def test_webhook_malformed_json(
-        self,
-        webhook_client,
-        trigger_service,
-        sample_agent_id
-    ):
+    async def test_webhook_malformed_json(self, webhook_client, trigger_service, sample_agent_id):
         """Test webhook with malformed JSON payload."""
         # Create webhook trigger
         trigger_data = TriggerCreate(
             name="JSON Webhook",
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -608,18 +562,14 @@ class TestWebhookHTTPIntegration:
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
             data='{"invalid": json}',  # Malformed JSON
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
 
         # Should handle gracefully and still process
         assert response.status_code in [200, 400]  # Depends on implementation
 
     async def test_webhook_large_payload(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test webhook with large payload."""
         # Create webhook trigger
@@ -627,7 +577,7 @@ class TestWebhookHTTPIntegration:
             name="Large Payload Webhook",
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -637,13 +587,11 @@ class TestWebhookHTTPIntegration:
         large_data = {
             "message": "Large payload test",
             "data": ["item_" + str(i) for i in range(1000)],  # 1000 items
-            "metadata": {f"key_{i}": f"value_{i}" for i in range(100)}  # 100 key-value pairs
+            "metadata": {f"key_{i}": f"value_{i}" for i in range(100)},  # 100 key-value pairs
         }
 
         response = webhook_client.post(
-            f"/webhooks/{webhook_id}",
-            json=large_data,
-            headers={"Content-Type": "application/json"}
+            f"/webhooks/{webhook_id}", json=large_data, headers={"Content-Type": "application/json"}
         )
 
         # Should handle large payload successfully
@@ -655,11 +603,7 @@ class TestWebhookHTTPIntegration:
         mock_task_service.create_task_from_params.assert_called_once()
 
     async def test_concurrent_webhook_requests(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test concurrent webhook requests to the same endpoint."""
         # Create webhook trigger
@@ -667,7 +611,7 @@ class TestWebhookHTTPIntegration:
             name="Concurrent Webhook",
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -677,12 +621,14 @@ class TestWebhookHTTPIntegration:
         async def send_request(request_id: int):
             return webhook_client.post(
                 f"/webhooks/{webhook_id}",
-                json={"request_id": request_id, "timestamp": datetime.utcnow().isoformat()}
+                json={"request_id": request_id, "timestamp": datetime.utcnow().isoformat()},
             )
 
         # Send 5 concurrent requests
         tasks = [send_request(i) for i in range(5)]
-        responses = await asyncio.gather(*[asyncio.create_task(asyncio.to_thread(task)) for task in tasks])
+        responses = await asyncio.gather(
+            *[asyncio.create_task(asyncio.to_thread(task)) for task in tasks]
+        )
 
         # Verify all requests were processed successfully
         for response in responses:
@@ -694,11 +640,7 @@ class TestWebhookHTTPIntegration:
         assert mock_task_service.create_task_from_params.call_count == 5
 
     async def test_webhook_with_query_parameters(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test webhook with query parameters."""
         # Create webhook trigger
@@ -706,7 +648,7 @@ class TestWebhookHTTPIntegration:
             name="Query Params Webhook",
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -716,7 +658,7 @@ class TestWebhookHTTPIntegration:
         response = webhook_client.post(
             f"/webhooks/{webhook_id}?source=external&version=1.0&debug=true",
             json={"message": "Test with query params"},
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
 
         # Verify response
@@ -738,11 +680,7 @@ class TestWebhookHTTPIntegration:
         assert query_params["debug"] == "true"
 
     async def test_webhook_custom_headers_preservation(
-        self,
-        webhook_client,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_client, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test that custom headers are preserved in webhook processing."""
         # Create webhook trigger
@@ -750,7 +688,7 @@ class TestWebhookHTTPIntegration:
             name="Custom Headers Webhook",
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -763,13 +701,13 @@ class TestWebhookHTTPIntegration:
             "X-Request-ID": "req-12345",
             "X-Timestamp": datetime.utcnow().isoformat(),
             "Authorization": "Bearer token123",
-            "User-Agent": "CustomClient/2.0"
+            "User-Agent": "CustomClient/2.0",
         }
 
         response = webhook_client.post(
             f"/webhooks/{webhook_id}",
             json={"message": "Test custom headers"},
-            headers=custom_headers
+            headers=custom_headers,
         )
 
         # Verify response

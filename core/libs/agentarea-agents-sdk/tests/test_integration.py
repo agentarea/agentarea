@@ -15,7 +15,7 @@ class TestAgentIntegration:
             agent = create_agent(
                 name="Math Assistant",
                 instruction="You are a helpful math assistant that solves problems step by step.",
-                model="ollama_chat/qwen2.5"
+                model="ollama_chat/qwen2.5",
             )
 
             # Test a simple math problem
@@ -48,7 +48,7 @@ class TestAgentIntegration:
             agent = create_agent(
                 name="Logic Assistant",
                 instruction="You are a logical reasoning assistant.",
-                model="ollama_chat/qwen2.5"
+                model="ollama_chat/qwen2.5",
             )
 
             task = "If I have 6 apples and eat half of them, how many do I have left?"
@@ -71,7 +71,7 @@ class TestAgentIntegration:
             agent = create_agent(
                 name="Goal-Oriented Agent",
                 instruction="You are a systematic problem solver.",
-                model="ollama_chat/qwen2.5"
+                model="ollama_chat/qwen2.5",
             )
 
             task = "Help me with math"
@@ -79,7 +79,7 @@ class TestAgentIntegration:
             criteria = [
                 "Identify the formula for square area",
                 "Apply the formula with the given value",
-                "Provide the final answer"
+                "Provide the final answer",
             ]
 
             result = await agent.run(task, goal=goal, success_criteria=criteria)
@@ -104,7 +104,7 @@ class TestAgentIntegration:
                 temperature=0.1,
                 max_tokens=100,
                 max_iterations=2,
-                include_default_tools=True
+                include_default_tools=True,
             )
 
             result = await agent.run("What is 2 + 2?")
@@ -125,7 +125,7 @@ class TestAgentIntegration:
                 name="Consistency Test Agent",
                 instruction="You are a helpful assistant. Be concise.",
                 model="ollama_chat/qwen2.5",
-                max_iterations=1  # Limit to one iteration for consistency
+                max_iterations=1,  # Limit to one iteration for consistency
             )
 
             task = "What is 1 + 1?"
@@ -134,7 +134,7 @@ class TestAgentIntegration:
             streaming_parts = []
             async for content in agent.run_stream(task):
                 streaming_parts.append(content)
-            streaming_result = ''.join(streaming_parts)
+            streaming_result = "".join(streaming_parts)
 
             # Get non-streaming result
             non_streaming_result = await agent.run(task)
@@ -160,11 +160,7 @@ class TestErrorHandling:
         from agentarea_agents_sdk.agents.agent import create_agent
 
         with pytest.raises(ValueError, match="Model must be in format 'provider/model_name'"):
-            create_agent(
-                name="Test Agent",
-                instruction="Test instruction",
-                model="invalid_format"
-            )
+            create_agent(name="Test Agent", instruction="Test instruction", model="invalid_format")
 
     @pytest.mark.asyncio
     async def test_tool_execution_error_handling(self):

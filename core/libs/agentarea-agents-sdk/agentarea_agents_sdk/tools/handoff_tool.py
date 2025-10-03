@@ -15,10 +15,10 @@ class AgentHandoffTool(BaseTool):
     def __init__(
         self,
         available_agents: dict[str, dict[str, Any]] | None = None,
-        handoff_callback = None,
+        handoff_callback=None,
     ):
         """Initialize the handoff tool.
-        
+
         Args:
             available_agents: Dict mapping agent_id to agent metadata (name, description, capabilities)
             handoff_callback: Async callback function to execute the handoff
@@ -38,12 +38,14 @@ class AgentHandoffTool(BaseTool):
         """Get the OpenAI function schema for agent handoff."""
         agent_options = []
         for agent_id, metadata in self.available_agents.items():
-            agent_options.append({
-                "id": agent_id,
-                "name": metadata.get("name", agent_id),
-                "description": metadata.get("description", ""),
-                "capabilities": metadata.get("capabilities", [])
-            })
+            agent_options.append(
+                {
+                    "id": agent_id,
+                    "name": metadata.get("name", agent_id),
+                    "description": metadata.get("description", ""),
+                    "capabilities": metadata.get("capabilities", []),
+                }
+            )
 
         return {
             "parameters": {
@@ -52,41 +54,41 @@ class AgentHandoffTool(BaseTool):
                     "target_agent_id": {
                         "type": "string",
                         "description": f"ID of the target agent to hand off to. Available agents: {json.dumps(agent_options, indent=2)}",
-                        "enum": list(self.available_agents.keys()) if self.available_agents else []
+                        "enum": list(self.available_agents.keys()) if self.available_agents else [],
                     },
                     "handoff_reason": {
                         "type": "string",
-                        "description": "Explanation of why this agent is better suited for the task"
+                        "description": "Explanation of why this agent is better suited for the task",
                     },
                     "task_context": {
                         "type": "string",
-                        "description": "Current task context and any relevant information to pass to the target agent"
+                        "description": "Current task context and any relevant information to pass to the target agent",
                     },
                     "priority": {
                         "type": "string",
                         "description": "Task priority level",
                         "enum": ["low", "medium", "high", "urgent"],
-                        "default": "medium"
+                        "default": "medium",
                     },
                     "expected_deliverable": {
                         "type": "string",
-                        "description": "What the target agent should deliver or accomplish"
-                    }
+                        "description": "What the target agent should deliver or accomplish",
+                    },
                 },
-                "required": ["target_agent_id", "handoff_reason", "task_context"]
+                "required": ["target_agent_id", "handoff_reason", "task_context"],
             }
         }
 
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Execute the agent handoff.
-        
+
         Args:
             target_agent_id: ID of the target agent
             handoff_reason: Reason for handoff
             task_context: Context to pass to target agent
             priority: Task priority level
             expected_deliverable: What the target agent should accomplish
-            
+
         Returns:
             Dict containing handoff execution results
         """
@@ -98,15 +100,11 @@ class AgentHandoffTool(BaseTool):
             expected_deliverable = kwargs.get("expected_deliverable", "")
 
             if not target_agent_id:
-                raise ToolExecutionError(
-                    self.name,
-                    "target_agent_id is required for handoff"
-                )
+                raise ToolExecutionError(self.name, "target_agent_id is required for handoff")
 
             if target_agent_id not in self.available_agents:
                 raise ToolExecutionError(
-                    self.name,
-                    f"Target agent {target_agent_id} not found in available agents"
+                    self.name, f"Target agent {target_agent_id} not found in available agents"
                 )
 
             # Prepare handoff payload
@@ -118,7 +116,7 @@ class AgentHandoffTool(BaseTool):
                 "task_context": task_context,
                 "priority": priority,
                 "expected_deliverable": expected_deliverable,
-                "timestamp": None  # Would be set during actual handoff
+                "timestamp": None,  # Would be set during actual handoff
             }
 
             # Execute handoff if callback is provided
@@ -136,11 +134,11 @@ class AgentHandoffTool(BaseTool):
                     "target_agent_id": target_agent_id,
                     "handoff_reason": handoff_reason,
                     "task_context": task_context,
-                    "handoff_result": handoff_result
+                    "handoff_result": handoff_result,
                 },
                 "error": None,
                 "tool_name": self.name,
-                "message": f"Task handed off to {self.available_agents[target_agent_id]['name']} agent"
+                "message": f"Task handed off to {self.available_agents[target_agent_id]['name']} agent",
             }
 
         except Exception as e:
@@ -153,7 +151,7 @@ class AgentRegistryTool(BaseTool):
 
     def __init__(self, available_agents: dict[str, dict[str, Any]] | None = None):
         """Initialize the agent registry tool.
-        
+
         Args:
             available_agents: Dict mapping agent_id to agent metadata
         """
@@ -176,19 +174,19 @@ class AgentRegistryTool(BaseTool):
                     "filter_by_capability": {
                         "type": "string",
                         "description": "Optional capability to filter agents by",
-                        "default": None
+                        "default": None,
                     }
                 },
-                "required": []
+                "required": [],
             }
         }
 
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Execute agent discovery.
-        
+
         Args:
             filter_by_capability: Optional capability to filter by
-            
+
         Returns:
             Dict containing available agents information
         """
@@ -202,23 +200,25 @@ class AgentRegistryTool(BaseTool):
                     if filter_capability not in capabilities:
                         continue
 
-                agents_list.append({
-                    "id": agent_id,
-                    "name": metadata.get("name", agent_id),
-                    "description": metadata.get("description", ""),
-                    "capabilities": metadata.get("capabilities", []),
-                    "status": metadata.get("status", "available")
-                })
+                agents_list.append(
+                    {
+                        "id": agent_id,
+                        "name": metadata.get("name", agent_id),
+                        "description": metadata.get("description", ""),
+                        "capabilities": metadata.get("capabilities", []),
+                        "status": metadata.get("status", "available"),
+                    }
+                )
 
             return {
                 "success": True,
                 "result": {
                     "available_agents": agents_list,
                     "total_count": len(agents_list),
-                    "filtered_by": filter_capability
+                    "filtered_by": filter_capability,
                 },
                 "error": None,
-                "tool_name": self.name
+                "tool_name": self.name,
             }
 
         except Exception as e:

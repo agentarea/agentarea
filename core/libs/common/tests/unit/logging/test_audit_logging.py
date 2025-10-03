@@ -26,7 +26,7 @@ class TestAuditEvent:
             user_context=user_context,
             resource_id="agent123",
             resource_data={"name": "Test Agent"},
-            additional_context={"source": "api"}
+            additional_context={"source": "api"},
         )
 
         assert event.action == AuditAction.CREATE
@@ -47,7 +47,7 @@ class TestAuditEvent:
             resource_type="task",
             user_context=user_context,
             resource_id="task123",
-            error="Something went wrong"
+            error="Something went wrong",
         )
 
         event_dict = event.to_dict()
@@ -68,7 +68,7 @@ class TestAuditEvent:
             action=AuditAction.DELETE,
             resource_type="trigger",
             user_context=user_context,
-            resource_id="trigger123"
+            resource_id="trigger123",
         )
 
         json_str = event.to_json()
@@ -92,7 +92,7 @@ class TestAuditLogger:
         """Test logging create events."""
         user_context = UserContext(user_id="user123", workspace_id="workspace456")
 
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -101,7 +101,7 @@ class TestAuditLogger:
                 resource_type="agent",
                 user_context=user_context,
                 resource_id="agent123",
-                resource_data={"name": "Test Agent"}
+                resource_data={"name": "Test Agent"},
             )
 
             mock_logger.info.assert_called_once()
@@ -115,7 +115,7 @@ class TestAuditLogger:
         """Test logging update events."""
         user_context = UserContext(user_id="user123", workspace_id="workspace456")
 
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -124,7 +124,7 @@ class TestAuditLogger:
                 resource_type="task",
                 user_context=user_context,
                 resource_id="task123",
-                resource_data={"status": "completed"}
+                resource_data={"status": "completed"},
             )
 
             mock_logger.info.assert_called_once()
@@ -136,15 +136,13 @@ class TestAuditLogger:
         """Test logging delete events."""
         user_context = UserContext(user_id="user123", workspace_id="workspace456")
 
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
             audit_logger = AuditLogger("test.audit")
             audit_logger.log_delete(
-                resource_type="trigger",
-                user_context=user_context,
-                resource_id="trigger123"
+                resource_type="trigger", user_context=user_context, resource_id="trigger123"
             )
 
             mock_logger.info.assert_called_once()
@@ -156,7 +154,7 @@ class TestAuditLogger:
         """Test logging error events."""
         user_context = UserContext(user_id="user123", workspace_id="workspace456")
 
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -165,7 +163,7 @@ class TestAuditLogger:
                 resource_type="agent",
                 user_context=user_context,
                 error="Database connection failed",
-                resource_id="agent123"
+                resource_id="agent123",
             )
 
             mock_logger.info.assert_called_once()
@@ -229,7 +227,7 @@ class TestContextLogger:
         """Test get_context_logger function."""
         user_context = UserContext(user_id="user123", workspace_id="workspace456")
 
-        with patch('logging.getLogger') as mock_get_logger:
+        with patch("logging.getLogger") as mock_get_logger:
             mock_logger = Mock()
             mock_get_logger.return_value = mock_logger
 
@@ -254,7 +252,7 @@ class TestWorkspaceContextFilter:
             lineno=0,
             msg="Test message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         result = filter_obj.filter(record)
@@ -276,14 +274,14 @@ class TestWorkspaceContextFilter:
             lineno=0,
             msg="Test message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         result = filter_obj.filter(record)
 
         assert result is True
-        assert not hasattr(record, 'user_id')
-        assert not hasattr(record, 'workspace_id')
+        assert not hasattr(record, "user_id")
+        assert not hasattr(record, "workspace_id")
         assert record.msg == "Test message"
 
 
@@ -301,7 +299,7 @@ class TestWorkspaceContextFormatter:
             lineno=0,
             msg="Test message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         record.user_id = "user123"
         record.workspace_id = "workspace456"
@@ -327,12 +325,12 @@ class TestWorkspaceContextFormatter:
             lineno=0,
             msg="AUDIT: CREATE agent",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         record.audit_event = {
             "action": "create",
             "resource_type": "agent",
-            "resource_id": "agent123"
+            "resource_id": "agent123",
         }
 
         formatted = formatter.format(record)
@@ -349,7 +347,7 @@ class TestAuditLogQuery:
     def test_query_logs_with_filters(self):
         """Test querying logs with filters."""
         # Create temporary log file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
             # Write test log entries
             log_entries = [
                 {
@@ -361,8 +359,8 @@ class TestAuditLogQuery:
                     "audit_event": {
                         "action": "create",
                         "resource_type": "agent",
-                        "resource_id": "agent123"
-                    }
+                        "resource_id": "agent123",
+                    },
                 },
                 {
                     "timestamp": "2024-01-01T11:00:00Z",
@@ -373,13 +371,13 @@ class TestAuditLogQuery:
                     "audit_event": {
                         "action": "update",
                         "resource_type": "task",
-                        "resource_id": "task123"
-                    }
-                }
+                        "resource_id": "task123",
+                    },
+                },
             ]
 
             for entry in log_entries:
-                f.write(json.dumps(entry) + '\n')
+                f.write(json.dumps(entry) + "\n")
 
             temp_file = f.name
 
@@ -411,20 +409,21 @@ class TestAuditLogQuery:
 
         finally:
             import os
+
             os.unlink(temp_file)
 
     def test_get_user_activity(self):
         """Test getting user activity."""
         user_context = UserContext(user_id="user123", workspace_id="workspace456")
 
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
             log_entry = {
                 "timestamp": "2024-01-01T10:00:00Z",
                 "user_id": "user123",
                 "workspace_id": "workspace456",
-                "audit_event": {"action": "create", "resource_type": "agent"}
+                "audit_event": {"action": "create", "resource_type": "agent"},
             }
-            f.write(json.dumps(log_entry) + '\n')
+            f.write(json.dumps(log_entry) + "\n")
             temp_file = f.name
 
         try:
@@ -437,18 +436,19 @@ class TestAuditLogQuery:
 
         finally:
             import os
+
             os.unlink(temp_file)
 
     def test_get_workspace_activity(self):
         """Test getting workspace activity."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
             log_entry = {
                 "timestamp": "2024-01-01T10:00:00Z",
                 "user_id": "user123",
                 "workspace_id": "workspace456",
-                "audit_event": {"action": "create", "resource_type": "agent"}
+                "audit_event": {"action": "create", "resource_type": "agent"},
             }
-            f.write(json.dumps(log_entry) + '\n')
+            f.write(json.dumps(log_entry) + "\n")
             temp_file = f.name
 
         try:
@@ -460,11 +460,12 @@ class TestAuditLogQuery:
 
         finally:
             import os
+
             os.unlink(temp_file)
 
     def test_get_resource_history(self):
         """Test getting resource history."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
             log_entry = {
                 "timestamp": "2024-01-01T10:00:00Z",
                 "user_id": "user123",
@@ -472,10 +473,10 @@ class TestAuditLogQuery:
                 "audit_event": {
                     "action": "create",
                     "resource_type": "agent",
-                    "resource_id": "agent123"
-                }
+                    "resource_id": "agent123",
+                },
             }
-            f.write(json.dumps(log_entry) + '\n')
+            f.write(json.dumps(log_entry) + "\n")
             temp_file = f.name
 
         try:
@@ -487,11 +488,12 @@ class TestAuditLogQuery:
 
         finally:
             import os
+
             os.unlink(temp_file)
 
     def test_get_error_logs(self):
         """Test getting error logs."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
             log_entry = {
                 "timestamp": "2024-01-01T10:00:00Z",
                 "user_id": "user123",
@@ -499,10 +501,10 @@ class TestAuditLogQuery:
                 "audit_event": {
                     "action": "error",
                     "resource_type": "agent",
-                    "error": "Database connection failed"
-                }
+                    "error": "Database connection failed",
+                },
             }
-            f.write(json.dumps(log_entry) + '\n')
+            f.write(json.dumps(log_entry) + "\n")
             temp_file = f.name
 
         try:
@@ -514,4 +516,5 @@ class TestAuditLogQuery:
 
         finally:
             import os
+
             os.unlink(temp_file)

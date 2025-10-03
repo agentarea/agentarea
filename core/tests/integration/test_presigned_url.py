@@ -23,7 +23,7 @@ def test_presigned_url_flow():
     api_url = os.environ.get("API_URL", "http://localhost:8000")
 
     # Create a temporary test file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:
         temp_file.write("This is a test file for presigned URL upload.")
         test_file_path = temp_file.name
 
@@ -36,7 +36,7 @@ def test_presigned_url_flow():
                 "file_type": "txt",
                 "content_type": "text/plain",
             },
-            timeout=10
+            timeout=10,
         )
 
         assert presigned_response.ok, f"Error getting presigned URL: {presigned_response.text}"
@@ -55,13 +55,12 @@ def test_presigned_url_flow():
         with open(test_file_path, "rb") as f:
             file_content = f.read()
             upload_response = requests.put(
-                presigned_url,
-                data=file_content,
-                headers={"Content-Type": "text/plain"},
-                timeout=30
+                presigned_url, data=file_content, headers={"Content-Type": "text/plain"}, timeout=30
             )
 
-        assert upload_response.ok, f"Error uploading file: {upload_response.status_code} - {upload_response.text}"
+        assert upload_response.ok, (
+            f"Error uploading file: {upload_response.status_code} - {upload_response.text}"
+        )
 
         # Step 3: Create the source record
         source_response = requests.post(
@@ -76,14 +75,14 @@ def test_presigned_url_flow():
                 "description": "Test file uploaded via presigned URL",
                 "owner": "test_script",
             },
-            timeout=10
+            timeout=10,
         )
 
         assert source_response.ok, f"Error creating source record: {source_response.text}"
 
         source_data = source_response.json()
-        assert source_data['source_id'] == source_id
-        assert source_data['name'] == "test_file.txt"
+        assert source_data["source_id"] == source_id
+        assert source_data["name"] == "test_file.txt"
 
     finally:
         # Cleanup: remove temporary file

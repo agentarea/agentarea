@@ -35,7 +35,7 @@ class MockProviderService:
             "provider_type": "ollama",
             "model_name": "ollama/nomic-embed-text",  # LiteLLM format for Ollama
             "api_key": "ollama",  # Ollama doesn't need API key
-            "endpoint_url": "http://localhost:11434"  # Default Ollama endpoint
+            "endpoint_url": "http://localhost:11434",  # Default Ollama endpoint
         }
 
 
@@ -52,7 +52,7 @@ async def test_embedding_service():
         texts = [
             "The user prefers detailed technical explanations",
             "This task involves API integration with REST endpoints",
-            "The agent is good at Python programming"
+            "The agent is good at Python programming",
         ]
 
         print(f"📝 Generating embeddings for {len(texts)} texts...")
@@ -63,8 +63,12 @@ async def test_embedding_service():
 
         # Verify embedding properties
         assert len(embeddings) == 3, "Should have 3 embeddings"
-        assert all(len(emb) == len(embeddings[0]) for emb in embeddings), "All embeddings should have same dimension"
-        assert all(isinstance(val, float) for emb in embeddings for val in emb), "Embeddings should be floats"
+        assert all(len(emb) == len(embeddings[0]) for emb in embeddings), (
+            "All embeddings should have same dimension"
+        )
+        assert all(isinstance(val, float) for emb in embeddings for val in emb), (
+            "Embeddings should be floats"
+        )
 
         # Test dimension retrieval
         dimension = await embedding_service.get_embedding_dimension(model_instance_id)
@@ -87,6 +91,7 @@ async def test_context_integration():
     test_data_dir = Path("./test_data")
     if test_data_dir.exists():
         import shutil
+
         shutil.rmtree(test_data_dir)
     test_data_dir.mkdir(exist_ok=True)
 
@@ -101,6 +106,7 @@ async def test_context_integration():
         # Register embedding service
         def create_embedding_service():
             return EmbeddingService(provider_service)
+
         container.register_factory(EmbeddingService, create_embedding_service)
 
         # Setup context DI
@@ -127,10 +133,7 @@ async def test_context_integration():
         stored_ids = []
         for content, ctx_type, tid, aid in contexts_to_store:
             context_id = await context_service.store_context(
-                content=content,
-                context_type=ctx_type,
-                task_id=tid,
-                agent_id=aid
+                content=content, context_type=ctx_type, task_id=tid, agent_id=aid
             )
             stored_ids.append(context_id)
             print(f"  ✅ Stored: {content[:50]}...")
@@ -142,9 +145,7 @@ async def test_context_integration():
 
         # Test 1: Task-specific context
         task_contexts = await context_service.get_context(
-            query="API development REST",
-            task_id=task_id,
-            limit=5
+            query="API development REST", task_id=task_id, limit=5
         )
         print(f"🎯 Found {len(task_contexts)} task contexts")
         for ctx in task_contexts:
@@ -152,9 +153,7 @@ async def test_context_integration():
 
         # Test 2: Agent-specific context
         agent_contexts = await context_service.get_context(
-            query="Python programming skills",
-            agent_id=agent_id,
-            limit=5
+            query="Python programming skills", agent_id=agent_id, limit=5
         )
         print(f"🤖 Found {len(agent_contexts)} agent contexts")
         for ctx in agent_contexts:
@@ -162,10 +161,7 @@ async def test_context_integration():
 
         # Test 3: Combined hierarchical context
         combined_contexts = await context_service.get_combined_context(
-            task_id=task_id,
-            agent_id=agent_id,
-            query="API development with Python",
-            limit=10
+            task_id=task_id, agent_id=agent_id, query="API development with Python", limit=10
         )
         print(f"🔄 Found {len(combined_contexts)} combined contexts")
         for ctx in combined_contexts:
@@ -177,6 +173,7 @@ async def test_context_integration():
     except Exception as e:
         print(f"❌ Context integration test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -193,6 +190,7 @@ async def test_faiss_similarity_search():
 
         def create_embedding_service():
             return EmbeddingService(provider_service)
+
         container.register_factory(EmbeddingService, create_embedding_service)
 
         setup_context_di(container)
@@ -228,11 +226,7 @@ async def test_faiss_similarity_search():
         print("\n🔍 Testing similarity search...")
 
         query = "Python web framework development"
-        results = await context_service.get_context(
-            query=query,
-            task_id=task_id,
-            limit=6
-        )
+        results = await context_service.get_context(query=query, task_id=task_id, limit=6)
 
         print(f"🔍 Query: '{query}'")
         print(f"📊 Found {len(results)} results (ordered by relevance):")
@@ -242,8 +236,9 @@ async def test_faiss_similarity_search():
 
         # Verify that Python web development contexts rank higher
         top_results = results[:3]
-        python_web_count = sum(1 for ctx in top_results
-                              if "Python" in ctx.content and "web" in ctx.content)
+        python_web_count = sum(
+            1 for ctx in top_results if "Python" in ctx.content and "web" in ctx.content
+        )
 
         print(f"\n📈 Top 3 results contain {python_web_count} Python web development contexts")
 
@@ -257,6 +252,7 @@ async def test_faiss_similarity_search():
     except Exception as e:
         print(f"❌ FAISS similarity search test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -268,6 +264,7 @@ async def main():
     # Check Ollama availability
     try:
         import subprocess
+
         result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
         if "nomic-embed-text" not in result.stdout:
             print("❌ nomic-embed-text model not found. Please run: ollama pull nomic-embed-text")

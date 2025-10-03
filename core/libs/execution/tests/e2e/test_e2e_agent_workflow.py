@@ -13,8 +13,8 @@ from agentarea_execution import ActivityDependencies, create_activities_for_work
 from agentarea_execution.models import AgentExecutionRequest, AgentExecutionResult
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio.client import Client
-from temporalio.worker import Worker
 from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.worker import Worker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -66,12 +66,18 @@ class E2ETemporalTest:
         from agentarea_llm.infrastructure.llm_model_repository import LLMModelRepository
 
         class DummyEventBroker(EventBroker):
-            async def publish(self, event): pass
+            async def publish(self, event):
+                pass
 
         class DummySecretManager(BaseSecretManager):
-            async def get_secret(self, _): return "test-api-key"
-            async def set_secret(self, *_): pass
-            async def delete_secret(self, _): pass
+            async def get_secret(self, _):
+                return "test-api-key"
+
+            async def set_secret(self, *_):
+                pass
+
+            async def delete_secret(self, _):
+                pass
 
         db = Database(self.settings.database)
         async with db.get_db() as session:
@@ -122,6 +128,7 @@ class E2ETemporalTest:
     async def _setup_activity_dependencies(self):
         from agentarea_common.events.router import get_event_router
         from agentarea_secrets import get_real_secret_manager
+
         self.activity_dependencies = ActivityDependencies(
             settings=self.settings,
             event_broker=get_event_router(self.settings.broker),
@@ -130,6 +137,7 @@ class E2ETemporalTest:
 
     async def _check_temporal_server(self):
         import socket
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(5)
             if sock.connect_ex(("localhost", 7233)) != 0:
@@ -138,6 +146,7 @@ class E2ETemporalTest:
     async def _check_database(self):
         from agentarea_agents.infrastructure.repository import AgentRepository
         from sqlalchemy import text
+
         db = Database(self.settings.database)
         async with db.get_db() as session:
             await session.execute(text("SELECT 1"))
@@ -148,6 +157,7 @@ class E2ETemporalTest:
 
     async def _check_redis(self):
         import redis.asyncio as redis
+
         redis_url = getattr(self.settings.broker, "REDIS_URL", "redis://localhost:6379")
         redis_client = redis.from_url(redis_url)
         await redis_client.ping()
@@ -170,23 +180,29 @@ class E2ETemporalTest:
         def run_worker():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+
             async def run_with_shutdown():
                 worker_task = asyncio.create_task(self.worker.run())
+
                 def monitor_shutdown():
                     self.worker_shutdown_event.wait()
                     loop.call_soon_threadsafe(worker_task.cancel)
+
                 threading.Thread(target=monitor_shutdown, daemon=True).start()
                 try:
                     await worker_task
                 except asyncio.CancelledError:
                     if self.worker:
                         await self.worker.shutdown()
+
             try:
                 loop.run_until_complete(run_with_shutdown())
             finally:
                 for task in asyncio.all_tasks(loop):
                     task.cancel()
-                loop.run_until_complete(asyncio.gather(*asyncio.all_tasks(loop), return_exceptions=True))
+                loop.run_until_complete(
+                    asyncio.gather(*asyncio.all_tasks(loop), return_exceptions=True)
+                )
                 loop.close()
 
         self.worker_thread = threading.Thread(target=run_worker)
@@ -207,7 +223,8 @@ class E2ETemporalTest:
         from agentarea_common.events.broker import EventBroker
 
         class DummyEventBroker(EventBroker):
-            async def publish(self, event): pass
+            async def publish(self, event):
+                pass
 
         db = Database(self.settings.database)
         async with db.get_db() as session:
@@ -242,14 +259,17 @@ class E2ETemporalTest:
         from agentarea_common.events.broker import EventBroker
 
         class DummyEventBroker(EventBroker):
-            async def publish(self, event): pass
+            async def publish(self, event):
+                pass
 
         db = Database(self.settings.database)
         async with db.get_db() as session:
             agent_repository = AgentRepository(session)
             agent_service = AgentService(agent_repository, DummyEventBroker())
             existing_agents = await agent_repository.list()
-            tool_agents = [a for a in existing_agents if "tool" in a.name.lower() and "test" in a.name.lower()]
+            tool_agents = [
+                a for a in existing_agents if "tool" in a.name.lower() and "test" in a.name.lower()
+            ]
             agent = tool_agents[0] if tool_agents else None
             tools_config = {
                 "mcp_servers": [
@@ -361,21 +381,29 @@ class TestE2EAgentWorkflow:
         test_query = "What's 25 + 17? Please show your reasoning."
         result = await e2e_test.execute_workflow_test(test_agent_id, test_query)
         await e2e_test.verify_execution_result(result, test_query)
-        assert result.final_response and ("42" in result.final_response or "forty" in result.final_response.lower())
+        assert result.final_response and (
+            "42" in result.final_response or "forty" in result.final_response.lower()
+        )
 
     @pytest.mark.asyncio
-    async def test_multiple_concurrent_executions(self, e2e_test: E2ETemporalTest, test_agent_id: UUID):
+    async def test_multiple_concurrent_executions(
+        self, e2e_test: E2ETemporalTest, test_agent_id: UUID
+    ):
         test_queries = [
             "Count from 1 to 5",
             "What are the primary colors?",
             "Name three planets in our solar system",
         ]
-        results = await asyncio.gather(*(e2e_test.execute_workflow_test(test_agent_id, q) for q in test_queries))
+        results = await asyncio.gather(
+            *(e2e_test.execute_workflow_test(test_agent_id, q) for q in test_queries)
+        )
         for result, query in zip(results, test_queries, strict=False):
             await e2e_test.verify_execution_result(result, query)
 
     @pytest.mark.asyncio
-    async def test_workflow_with_error_handling(self, e2e_test: E2ETemporalTest, test_agent_id: UUID):
+    async def test_workflow_with_error_handling(
+        self, e2e_test: E2ETemporalTest, test_agent_id: UUID
+    ):
         test_query = "Please explain quantum physics in exactly 10 words."
         result = await e2e_test.execute_workflow_test(test_agent_id, test_query)
         if result.success:
@@ -390,10 +418,15 @@ class TestE2EAgentWorkflow:
         result = await e2e_test.execute_workflow_test(agent_id, test_query)
         await e2e_test.verify_execution_result(result, test_query)
         assert result.total_tool_calls > 0
-        assert any("tool" in str(msg).lower() or "mcp" in str(msg).lower() for msg in result.conversation_history)
+        assert any(
+            "tool" in str(msg).lower() or "mcp" in str(msg).lower()
+            for msg in result.conversation_history
+        )
 
     @pytest.mark.asyncio
-    async def test_workflow_requiring_user_input(self, e2e_test: E2ETemporalTest, test_agent_id: UUID):
+    async def test_workflow_requiring_user_input(
+        self, e2e_test: E2ETemporalTest, test_agent_id: UUID
+    ):
         test_query = "I need to make a decision but I'll need your input. Please ask me what my favorite color is."
         if not e2e_test.client:
             raise RuntimeError("Client not initialized")
@@ -461,7 +494,9 @@ class TestE2EAgentWorkflow:
             logger.info(f"Signal test encountered expected exception: {e}")
 
     @pytest.mark.asyncio
-    async def test_workflow_signal_handling_patterns(self, e2e_test: E2ETemporalTest, test_agent_id: UUID):
+    async def test_workflow_signal_handling_patterns(
+        self, e2e_test: E2ETemporalTest, test_agent_id: UUID
+    ):
         test_query = "Start a task and wait for my instructions on how to proceed."
         if not e2e_test.client:
             raise RuntimeError("Client not initialized")
@@ -525,7 +560,9 @@ class TestE2EAgentWorkflow:
         test_query = "Please help me: 1) list the current directory, 2) check if there's a README file, and 3) tell me the current time"
         result = await e2e_test.execute_workflow_test(agent_id, test_query)
         await e2e_test.verify_execution_result(result, test_query)
-        assert result.total_tool_calls >= 2, f"Expected multiple tool calls, got {result.total_tool_calls}"
+        assert result.total_tool_calls >= 2, (
+            f"Expected multiple tool calls, got {result.total_tool_calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_workflow_tool_timeout_handling(self, e2e_test: E2ETemporalTest):
@@ -536,7 +573,9 @@ class TestE2EAgentWorkflow:
             await e2e_test.verify_execution_result(result, test_query)
         else:
             assert result.error_message
-            assert "timeout" in result.error_message.lower() or "time" in result.error_message.lower()
+            assert (
+                "timeout" in result.error_message.lower() or "time" in result.error_message.lower()
+            )
 
     @pytest.mark.asyncio
     async def test_workflow_tools_with_user_interaction(self, e2e_test: E2ETemporalTest):

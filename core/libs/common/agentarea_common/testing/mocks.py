@@ -26,9 +26,9 @@ class TestEventBroker(EventBroker):
     def __init__(self):
         self.published_events: list[object] = []
 
-    async def publish(self, event: DomainEvent | EventEnvelope | "BaseEvent") -> None:
+    async def publish(self, event: DomainEvent | EventEnvelope | BaseEvent) -> None:
         """Store published events for test verification.
-        
+
         We intentionally keep the event object as-is to allow tests to assert
         identity/equality with mock events or legacy DomainEvent instances.
         """

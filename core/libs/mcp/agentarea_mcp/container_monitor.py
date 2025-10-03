@@ -38,7 +38,7 @@ class MCPContainerMonitor:
 
     def __init__(self, event_broker: EventBroker, check_interval: int = 30):
         """Initialize the container monitor.
-        
+
         Args:
             event_broker: Event broker for publishing status changes
             check_interval: How often to check container health (seconds)
@@ -50,7 +50,7 @@ class MCPContainerMonitor:
         self.settings = get_settings()
 
         # MCP Manager URL from settings
-        self.mcp_manager_url = getattr(self.settings, 'MCP_MANAGER_URL', "http://localhost:7999")
+        self.mcp_manager_url = getattr(self.settings, "MCP_MANAGER_URL", "http://localhost:7999")
 
         logger.info(f"MCPContainerMonitor initialized with check_interval={check_interval}s")
 
@@ -97,7 +97,9 @@ class MCPContainerMonitor:
         except Exception as e:
             logger.error(f"Failed to check containers: {e}")
 
-    async def _check_container_health(self, container_data: dict[str, Any], client: httpx.AsyncClient):
+    async def _check_container_health(
+        self, container_data: dict[str, Any], client: httpx.AsyncClient
+    ):
         """Check health of a specific container."""
         service_name = container_data.get("service_name")
         if not service_name:
@@ -116,7 +118,9 @@ class MCPContainerMonitor:
                 is_healthy = False
                 status = health_data.get("status", "unhealthy")
             else:
-                logger.warning(f"Unexpected health check response for {service_name}: {response.status_code}")
+                logger.warning(
+                    f"Unexpected health check response for {service_name}: {response.status_code}"
+                )
                 is_healthy = False
                 status = "error"
 
@@ -124,7 +128,7 @@ class MCPContainerMonitor:
                 service_name=service_name,
                 is_healthy=is_healthy,
                 status=status,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
 
             # Check if status changed
@@ -137,7 +141,7 @@ class MCPContainerMonitor:
                 service_name=service_name,
                 is_healthy=False,
                 status="error",
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
             await self._handle_status_change(error_status)
 
@@ -154,9 +158,13 @@ class MCPContainerMonitor:
             logger.info(f"Initial status for {service_name}: {new_status}")
             # Publish initial status
             await self._publish_status_event(new_status, "initial")
-        elif (previous_status.is_healthy != new_status.is_healthy or
-              previous_status.status != new_status.status):
-            logger.info(f"Status change for {service_name}: {previous_status.status} -> {new_status.status}")
+        elif (
+            previous_status.is_healthy != new_status.is_healthy
+            or previous_status.status != new_status.status
+        ):
+            logger.info(
+                f"Status change for {service_name}: {previous_status.status} -> {new_status.status}"
+            )
             await self._publish_status_event(new_status, "changed")
         else:
             logger.debug(f"No change for {service_name}: {new_status}")
@@ -170,25 +178,28 @@ class MCPContainerMonitor:
                 "stopped": "stopped",
                 "error": "error",
                 "starting": "pending",
-                "stopping": "stopping"
+                "stopping": "stopping",
             }
             mapped_status = status_mapping.get(status.status, "error")
 
             # Publish MCPServerInstanceUpdated event
             # Generate a UUID from service name for consistency
             import hashlib
+
             service_uuid = UUID(hashlib.md5(status.service_name.encode()).hexdigest())
 
             event = MCPServerInstanceUpdated(
                 instance_id=service_uuid,
                 server_spec_id=None,  # We don't have this information from container data
                 name=status.service_name,
-                status=mapped_status
+                status=mapped_status,
             )
 
             await self.event_broker.publish(event)
 
-            logger.info(f"Published status event for {status.service_name}: {mapped_status} ({change_type})")
+            logger.info(
+                f"Published status event for {status.service_name}: {mapped_status} ({change_type})"
+            )
 
         except Exception as e:
             logger.error(f"Failed to publish status event for {status.service_name}: {e}")
@@ -214,9 +225,8 @@ class MCPContainerMonitor:
             "is_monitoring": self.is_running,
             "check_interval": self.check_interval,
             "last_check": max(
-                (status.last_check for status in self.container_statuses.values()),
-                default=None
-            )
+                (status.last_check for status in self.container_statuses.values()), default=None
+            ),
         }
 
 

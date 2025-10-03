@@ -14,13 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
-    """Thread-safe singleton connection manager that reuses expensive connections.
-    """
+    """Thread-safe singleton connection manager that reuses expensive connections."""
 
-    _instance: Optional['ConnectionManager'] = None
+    _instance: Optional["ConnectionManager"] = None
     _lock = Lock()
 
-    def __new__(cls) -> 'ConnectionManager':
+    def __new__(cls) -> "ConnectionManager":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -56,7 +55,9 @@ class ConnectionManager:
                 settings = get_settings()
                 router = get_event_router(settings.broker)
                 self._event_broker_singleton = create_event_broker_from_router(router)
-                logger.info(f"Created Redis event broker singleton: {type(self._event_broker_singleton).__name__}")
+                logger.info(
+                    f"Created Redis event broker singleton: {type(self._event_broker_singleton).__name__}"
+                )
             except Exception as e:
                 logger.error(f"Failed to create Redis event broker: {e}")
                 raise e
@@ -99,11 +100,15 @@ class ConnectionManager:
             "environment": self._environment,
             "status": "healthy",
             "services": {
-                "event_broker": "initialized" if self._event_broker_singleton else "not_initialized",
-                "execution_service": "initialized" if self._execution_service_singleton else "not_initialized"
+                "event_broker": "initialized"
+                if self._event_broker_singleton
+                else "not_initialized",
+                "execution_service": "initialized"
+                if self._execution_service_singleton
+                else "not_initialized",
             },
             "connection_reuse": True,
-            "singleton_pattern": True
+            "singleton_pattern": True,
         }
 
     async def shutdown(self) -> None:
@@ -114,15 +119,15 @@ class ConnectionManager:
         if self._event_broker_singleton:
             try:
                 # Try async context manager exit first
-                if hasattr(self._event_broker_singleton, '__aexit__'):
+                if hasattr(self._event_broker_singleton, "__aexit__"):
                     await self._event_broker_singleton.__aexit__(None, None, None)
 
                 # Also try to close the underlying Redis broker directly
-                if hasattr(self._event_broker_singleton, 'redis_broker'):
+                if hasattr(self._event_broker_singleton, "redis_broker"):
                     redis_broker = self._event_broker_singleton.redis_broker
-                    if hasattr(redis_broker, 'close'):
+                    if hasattr(redis_broker, "close"):
                         await redis_broker.close()
-                    elif hasattr(redis_broker, '_connection') and redis_broker._connection:
+                    elif hasattr(redis_broker, "_connection") and redis_broker._connection:
                         # Force close the connection if it exists
                         try:
                             await redis_broker._connection.close()
@@ -139,15 +144,17 @@ class ConnectionManager:
         if self._execution_service_singleton:
             try:
                 # Close Temporal client if available
-                if (hasattr(self._execution_service_singleton, 'orchestrator') and
-                    hasattr(self._execution_service_singleton.orchestrator, '_client')):
+                if hasattr(self._execution_service_singleton, "orchestrator") and hasattr(
+                    self._execution_service_singleton.orchestrator, "_client"
+                ):
                     client = self._execution_service_singleton.orchestrator._client
-                    if client and hasattr(client, 'close'):
+                    if client and hasattr(client, "close"):
                         await client.close()
 
                 # Also try to close the orchestrator itself
-                if (hasattr(self._execution_service_singleton, 'orchestrator') and
-                    hasattr(self._execution_service_singleton.orchestrator, 'close')):
+                if hasattr(self._execution_service_singleton, "orchestrator") and hasattr(
+                    self._execution_service_singleton.orchestrator, "close"
+                ):
                     await self._execution_service_singleton.orchestrator.close()
 
                 logger.info("Cleaned up execution service singleton")
@@ -158,6 +165,7 @@ class ConnectionManager:
 
         # Force garbage collection to help clean up any remaining references
         import gc
+
         gc.collect()
 
         logger.info("Connection manager shutdown completed")

@@ -44,11 +44,13 @@ class TestTemporalScheduleManager:
             cron_expression="0 9 * * *",
             timezone="UTC",
             created_by="test_user",
-            task_parameters={"report_type": "daily"}
+            task_parameters={"report_type": "daily"},
         )
 
     @pytest.mark.asyncio
-    async def test_create_schedule_new(self, schedule_manager, mock_temporal_client, sample_cron_trigger):
+    async def test_create_schedule_new(
+        self, schedule_manager, mock_temporal_client, sample_cron_trigger
+    ):
         """Test creating a new schedule."""
         # Setup mocks
         mock_temporal_client.get_schedule_handle.side_effect = ScheduleNotFoundError("Not found")
@@ -78,7 +80,9 @@ class TestTemporalScheduleManager:
         assert action.task_queue == "trigger-task-queue"
 
     @pytest.mark.asyncio
-    async def test_create_schedule_existing(self, schedule_manager, mock_temporal_client, sample_cron_trigger):
+    async def test_create_schedule_existing(
+        self, schedule_manager, mock_temporal_client, sample_cron_trigger
+    ):
         """Test creating a schedule that already exists."""
         # Setup mocks
         mock_handle = AsyncMock(spec=ScheduleHandle)
@@ -92,7 +96,9 @@ class TestTemporalScheduleManager:
         mock_handle.update.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_update_schedule(self, schedule_manager, mock_temporal_client, sample_cron_trigger):
+    async def test_update_schedule(
+        self, schedule_manager, mock_temporal_client, sample_cron_trigger
+    ):
         """Test updating an existing schedule."""
         # Setup mocks
         mock_handle = AsyncMock(spec=ScheduleHandle)
@@ -102,16 +108,13 @@ class TestTemporalScheduleManager:
                 "TriggerExecutionWorkflow",
                 args=[str(sample_cron_trigger.id), {}],
                 id=f"trigger-execution-{sample_cron_trigger.id}",
-                task_queue="trigger-task-queue"
+                task_queue="trigger-task-queue",
             ),
             spec=ScheduleSpec(
                 cron_expressions=["0 8 * * *"],  # Different cron expression
-                timezone="UTC"
+                timezone="UTC",
             ),
-            state=ScheduleState(
-                paused=True,
-                note="Old note"
-            )
+            state=ScheduleState(paused=True, note="Old note"),
         )
         mock_handle.describe.return_value = mock_description
         mock_temporal_client.get_schedule_handle.return_value = mock_handle
@@ -203,23 +206,17 @@ class TestTemporalScheduleManager:
                 "TriggerExecutionWorkflow",
                 args=["trigger_id", {}],
                 id="trigger-execution-id",
-                task_queue="trigger-task-queue"
+                task_queue="trigger-task-queue",
             ),
-            spec=ScheduleSpec(
-                cron_expressions=["0 9 * * *"],
-                timezone="UTC"
-            ),
-            state=ScheduleState(
-                paused=False,
-                note="Trigger: Test"
-            )
+            spec=ScheduleSpec(cron_expressions=["0 9 * * *"], timezone="UTC"),
+            state=ScheduleState(paused=False, note="Trigger: Test"),
         )
         mock_description.info = MagicMock(
             next_execution_time=datetime.utcnow(),
             last_completion_time=datetime.utcnow(),
             recent_executions=[],
             created_time=datetime.utcnow(),
-            last_updated_time=datetime.utcnow()
+            last_updated_time=datetime.utcnow(),
         )
         mock_handle.describe.return_value = mock_description
         mock_temporal_client.get_schedule_handle.return_value = mock_handle

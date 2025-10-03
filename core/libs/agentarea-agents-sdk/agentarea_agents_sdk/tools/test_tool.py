@@ -7,7 +7,7 @@ from .base_tool import BaseTool
 
 class TestTool(BaseTool):
     """Test tool that simulates tool execution with configurable responses.
-    
+
     This tool is designed for testing agent ReAct patterns and can simulate
     various scenarios like data retrieval, calculations, or status checks.
     """
@@ -18,8 +18,10 @@ class TestTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return ("Test tool for agent validation. Can simulate data retrieval, calculations, "
-               "or status checks. Returns realistic responses for testing agent behavior.")
+        return (
+            "Test tool for agent validation. Can simulate data retrieval, calculations, "
+            "or status checks. Returns realistic responses for testing agent behavior."
+        )
 
     def get_schema(self) -> dict[str, Any]:
         """Get the tool parameter schema."""
@@ -30,24 +32,21 @@ class TestTool(BaseTool):
                     "action": {
                         "type": "string",
                         "description": "Action to perform: 'get_data', 'calculate', 'check_status', 'search'",
-                        "enum": ["get_data", "calculate", "check_status", "search"]
+                        "enum": ["get_data", "calculate", "check_status", "search"],
                     },
-                    "query": {
-                        "type": "string",
-                        "description": "Query or parameter for the action"
-                    }
+                    "query": {"type": "string", "description": "Query or parameter for the action"},
                 },
-                "required": ["action"]
+                "required": ["action"],
             }
         }
 
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Execute the test tool with realistic responses.
-        
+
         Args:
             action: The action to perform
             query: Optional query parameter
-            
+
         Returns:
             Dict containing realistic test results
         """
@@ -62,7 +61,7 @@ class TestTool(BaseTool):
                 "data_count": 42,
                 "size_mb": 1.2,
                 "tool_name": self.name,
-                "error": None
+                "error": None,
             }
 
         elif action == "calculate":
@@ -74,7 +73,7 @@ class TestTool(BaseTool):
                 "calculation_result": 73.5,
                 "confidence": 0.95,
                 "tool_name": self.name,
-                "error": None
+                "error": None,
             }
 
         elif action == "check_status":
@@ -86,7 +85,7 @@ class TestTool(BaseTool):
                 "memory_usage": 62,
                 "disk_usage": 78,
                 "tool_name": self.name,
-                "error": None
+                "error": None,
             }
 
         elif action == "search":
@@ -97,7 +96,7 @@ class TestTool(BaseTool):
                 "top_result": "Advanced Analytics Guide",
                 "relevance": 0.89,
                 "tool_name": self.name,
-                "error": None
+                "error": None,
             }
 
         else:
@@ -105,5 +104,5 @@ class TestTool(BaseTool):
                 "success": False,
                 "result": f"Unknown action: {action}",
                 "tool_name": self.name,
-                "error": f"Unsupported action: {action}"
+                "error": f"Unsupported action: {action}",
             }

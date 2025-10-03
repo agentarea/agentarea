@@ -22,7 +22,18 @@ with workflow.unsafe.imports_passed_through():
         ToolCall,
     )
 
-from ..models import AgentExecutionRequest, AgentExecutionResult, AgentConfigRequest, AgentConfigResult, ToolDiscoveryRequest, ToolDiscoveryResult, LLMCallRequest, LLMCallResult, MCPToolRequest, MCPToolResult, WorkflowEventsRequest, WorkflowEventsResult
+from ..models import (
+    AgentConfigRequest,
+    AgentConfigResult,
+    AgentExecutionRequest,
+    AgentExecutionResult,
+    LLMCallRequest,
+    LLMCallResult,
+    MCPToolRequest,
+    ToolDiscoveryRequest,
+    ToolDiscoveryResult,
+    WorkflowEventsRequest,
+)
 from .constants import (
     ACTIVITY_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
@@ -115,8 +126,7 @@ class AgentExecutionWorkflow:
 
         # Build agent config using Pydantic request model
         agent_config_request = AgentConfigRequest(
-            agent_id=UUID(self.state.agent_id),
-            user_context_data=self.state.user_context_data
+            agent_id=UUID(self.state.agent_id), user_context_data=self.state.user_context_data
         )
         agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
@@ -124,7 +134,7 @@ class AgentExecutionWorkflow:
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )
-        
+
         # Convert result to dict for state storage (supports Pydantic BaseModel or plain dict)
         try:
             self.state.agent_config = agent_config_result.model_dump()
@@ -137,8 +147,7 @@ class AgentExecutionWorkflow:
 
         # Discover available tools using Pydantic request model
         tools_request = ToolDiscoveryRequest(
-            agent_id=UUID(self.state.agent_id),
-            user_context_data=self.state.user_context_data
+            agent_id=UUID(self.state.agent_id), user_context_data=self.state.user_context_data
         )
         tools_result: ToolDiscoveryResult = await workflow.execute_activity(
             Activities.DISCOVER_AVAILABLE_TOOLS,
@@ -235,9 +244,7 @@ class AgentExecutionWorkflow:
             return False, "Goal achieved successfully"
 
         # Check maximum iterations
-        max_iterations = (
-            self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS
-        )
+        max_iterations = self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS
         if self.state.current_iteration >= max_iterations:
             workflow.logger.info(
                 f"Max iterations reached ({max_iterations}) - terminating workflow"
@@ -310,9 +317,7 @@ class AgentExecutionWorkflow:
             # Add system message and user message if first iteration
             if iteration == 1:
                 # Create messages directly using the Message class
-                self.state.messages.append(
-                    Message(role="system", content=system_prompt)
-                )
+                self.state.messages.append(Message(role="system", content=system_prompt))
                 self.state.messages.append(
                     Message(role="user", content=self.state.goal.description)
                 )
@@ -544,10 +549,9 @@ class AgentExecutionWorkflow:
             tool_args = {}
 
         # Approval gating before starting the tool activity
-        approval_required = (
-            bool(self.state.goal and getattr(self.state.goal, "requires_human_approval", False))
-            or self._tool_requires_approval(tool_name)
-        )
+        approval_required = bool(
+            self.state.goal and getattr(self.state.goal, "requires_human_approval", False)
+        ) or self._tool_requires_approval(tool_name)
         if approval_required:
             # Update status and pause
             self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
@@ -613,7 +617,7 @@ class AgentExecutionWorkflow:
 
             # Normalize result to a dict for robust access
             result_dict: dict[str, Any]
-            if hasattr(result_obj, "model_dump") and callable(getattr(result_obj, "model_dump")):
+            if hasattr(result_obj, "model_dump") and callable(result_obj.model_dump):
                 try:
                     result_dict = result_obj.model_dump()  # type: ignore[attr-defined]
                 except Exception:
@@ -632,9 +636,10 @@ class AgentExecutionWorkflow:
             result_text = str(result_text) if result_text is not None else ""
 
             # Execution time may be named differently
-            execution_time = (
-                result_dict.get("execution_time", getattr(result_obj, "execution_time", None))
-                or result_dict.get("execution_time_seconds", getattr(result_obj, "execution_time_seconds", None))
+            execution_time = result_dict.get(
+                "execution_time", getattr(result_obj, "execution_time", None)
+            ) or result_dict.get(
+                "execution_time_seconds", getattr(result_obj, "execution_time_seconds", None)
             )
 
             # Add tool result to conversation
@@ -694,9 +699,7 @@ class AgentExecutionWorkflow:
         try:
             # If already marked as complete by completion signal, skip evaluation
             if self.state.success:
-                workflow.logger.info(
-                    "Goal already marked as achieved - skipping evaluation"
-                )
+                workflow.logger.info("Goal already marked as achieved - skipping evaluation")
                 return
 
             # Regular goal evaluation
@@ -802,6 +805,7 @@ class AgentExecutionWorkflow:
             start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=1),  # Single attempt only
         )
+
     async def _finalize_execution(self, result: dict[str, Any]) -> AgentExecutionResult:
         """Finalize workflow execution and return result."""
         workflow.logger.info("Finalizing workflow execution")
@@ -871,9 +875,7 @@ class AgentExecutionWorkflow:
             success_criteria=request.task_parameters.get(
                 "success_criteria", ["Task completed successfully"]
             ),
-            max_iterations=request.task_parameters.get(
-                "max_iterations", MAX_ITERATIONS
-            ),
+            max_iterations=request.task_parameters.get("max_iterations", MAX_ITERATIONS),
             requires_human_approval=request.requires_human_approval,
             context=request.task_parameters,
         )
@@ -919,7 +921,6 @@ class AgentExecutionWorkflow:
             "pause_reason": self._pause_reason,
         }
 
-
     def _tool_requires_approval(self, tool_name: str) -> bool:
         """Check agent tools_config for per-tool user confirmation requirement."""
         try:
@@ -931,7 +932,9 @@ class AgentExecutionWorkflow:
         builtin_tools = tools_config.get("builtin_tools") or []
         for t in builtin_tools:
             if isinstance(t, dict):
-                if t.get("tool_name") == tool_name and bool(t.get("requires_user_confirmation", False)):
+                if t.get("tool_name") == tool_name and bool(
+                    t.get("requires_user_confirmation", False)
+                ):
                     return True
 
         # Check MCP server configs (new shape)
@@ -939,7 +942,11 @@ class AgentExecutionWorkflow:
         for server in mcp_server_configs:
             allowed = server.get("allowed_tools") or []
             for m in allowed:
-                if isinstance(m, dict) and m.get("tool_name") == tool_name and bool(m.get("requires_user_confirmation", False)):
+                if (
+                    isinstance(m, dict)
+                    and m.get("tool_name") == tool_name
+                    and bool(m.get("requires_user_confirmation", False))
+                ):
                     return True
 
         # Check MCP servers (legacy shape)
@@ -947,7 +954,11 @@ class AgentExecutionWorkflow:
         for server in mcp_servers:
             allowed = server.get("allowed_tools") or []
             for m in allowed:
-                if isinstance(m, dict) and m.get("tool_name") == tool_name and bool(m.get("requires_user_confirmation", False)):
+                if (
+                    isinstance(m, dict)
+                    and m.get("tool_name") == tool_name
+                    and bool(m.get("requires_user_confirmation", False))
+                ):
                     return True
 
         return False

@@ -48,7 +48,7 @@ print(litellm.supports_function_calling("ollama_chat/qwen2.5"))
 
 def create_activity_dependencies() -> ActivityDependencies:
     """Create basic dependencies needed by activities.
-    
+
     Activities will create their own database sessions and services
     using these basic dependencies for better retryability.
     """
@@ -63,9 +63,7 @@ def create_activity_dependencies() -> ActivityDependencies:
 
     # Create dependency container
     return ActivityDependencies(
-        settings=settings,
-        event_broker=event_broker,
-        secret_manager=secret_manager
+        settings=settings, event_broker=event_broker, secret_manager=secret_manager
     )
 
 

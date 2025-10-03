@@ -59,9 +59,7 @@ class ContextService:
     ) -> list[Context]:
         """Get hierarchical context combining task and agent scopes."""
         # Get task-specific context first (highest priority)
-        task_contexts = await self.get_context(
-            query=query, task_id=task_id, limit=limit // 2
-        )
+        task_contexts = await self.get_context(query=query, task_id=task_id, limit=limit // 2)
 
         # Get agent-specific context
         agent_contexts = await self.get_context(query=query, agent_id=agent_id, limit=limit // 2)

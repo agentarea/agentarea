@@ -103,12 +103,18 @@ async def _start_temporal_workflow_for_task(
         )
         execution_id = result.get("execution_id")
 
-        logger.info(f"Started Temporal workflow for task {task_id} with execution ID: {execution_id}")
+        logger.info(
+            f"Started Temporal workflow for task {task_id} with execution ID: {execution_id}"
+        )
 
     except Exception as e:
         # Handle workflow already started error gracefully
-        if "Workflow execution already started" in str(e) or "WorkflowAlreadyStartedError" in str(e):
-            logger.info(f"Workflow for task {task_id} is already running - this is expected for duplicate events")
+        if "Workflow execution already started" in str(e) or "WorkflowAlreadyStartedError" in str(
+            e
+        ):
+            logger.info(
+                f"Workflow for task {task_id} is already running - this is expected for duplicate events"
+            )
         else:
             logger.error(f"Error starting Temporal workflow for task {task_id}: {e}", exc_info=True)
             raise

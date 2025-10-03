@@ -1,5 +1,4 @@
-"""
-Comprehensive Pydantic event models for the AgentArea system.
+"""Comprehensive Pydantic event models for the AgentArea system.
 
 This module provides unified event models that replace scattered event definitions
 across the codebase. It establishes a type-safe event system that integrates with
@@ -18,7 +17,7 @@ from .base_events import EventEnvelope
 
 class EventType(str, Enum):
     """Unified event types for the AgentArea system."""
-    
+
     # Task lifecycle events
     TASK_CREATED = "task.created"
     TASK_UPDATED = "task.updated"
@@ -28,7 +27,7 @@ class EventType(str, Enum):
     TASK_CANCELLED = "task.cancelled"
     TASK_PAUSED = "task.paused"
     TASK_RESUMED = "task.resumed"
-    
+
     # Workflow execution events
     WORKFLOW_STARTED = "workflow.started"
     WORKFLOW_COMPLETED = "workflow.completed"
@@ -36,23 +35,23 @@ class EventType(str, Enum):
     WORKFLOW_PAUSED = "workflow.paused"
     WORKFLOW_RESUMED = "workflow.resumed"
     WORKFLOW_CANCELLED = "workflow.cancelled"
-    
+
     # LLM execution events
     LLM_CALL_STARTED = "workflow.LLMCallStarted"
-    LLM_CALL_COMPLETED = "workflow.LLMCallCompleted" 
+    LLM_CALL_COMPLETED = "workflow.LLMCallCompleted"
     LLM_CALL_FAILED = "workflow.LLMCallFailed"
     LLM_CALL_CHUNK = "workflow.LLMCallChunk"
-    
+
     # Tool execution events
     TOOL_EXECUTION_STARTED = "workflow.ToolExecutionStarted"
     TOOL_EXECUTION_COMPLETED = "workflow.ToolExecutionCompleted"
     TOOL_EXECUTION_FAILED = "workflow.ToolExecutionFailed"
-    
+
     # Agent communication events
     AGENT_MESSAGE_SENT = "workflow.AgentMessageSent"
     AGENT_MESSAGE_RECEIVED = "workflow.AgentMessageReceived"
     AGENT_COMMUNICATION_FAILED = "workflow.AgentCommunicationFailed"
-    
+
     # MCP server events
     MCP_SERVER_CREATE_REQUESTED = "mcp.server.create.requested"
     MCP_SERVER_CREATING = "mcp.server.creating"
@@ -65,7 +64,7 @@ class EventType(str, Enum):
     MCP_SERVER_HEALTH_CHECK = "mcp.server.health.check"
     MCP_SERVER_UNHEALTHY = "mcp.server.unhealthy"
     MCP_SERVER_RECOVERED = "mcp.server.recovered"
-    
+
     # System and heartbeat events
     HEARTBEAT = "heartbeat"
     SYSTEM_ERROR = "system.error"
@@ -73,40 +72,47 @@ class EventType(str, Enum):
 
 class BaseEvent(BaseModel):
     """Base event model compatible with EventEnvelope."""
-    
+
     event_id: UUID = Field(default_factory=uuid4, description="Unique event identifier")
     event_type: EventType = Field(..., description="Type of the event")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Event timestamp (UTC)")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Event timestamp (UTC)"
+    )
     aggregate_id: str = Field(..., description="ID of the aggregate this event relates to")
-    aggregate_type: str = Field(..., description="Type of the aggregate (task, workflow, mcp_server)")
+    aggregate_type: str = Field(
+        ..., description="Type of the aggregate (task, workflow, mcp_server)"
+    )
     correlation_id: str | None = Field(None, description="Request correlation ID for tracing")
-    
+
     @field_serializer("timestamp")
     def serialize_timestamp(self, value: datetime, _info):
         return value.isoformat()
-    
+
     def to_envelope(self) -> EventEnvelope:
         """Convert to EventEnvelope format for broker compatibility."""
         return EventEnvelope(
             event_id=self.event_id,
             event_type=self.event_type.value,
             timestamp=self.timestamp,
-            data=self.model_dump(exclude={"event_id", "timestamp", "event_type"})
+            data=self.model_dump(exclude={"event_id", "timestamp", "event_type"}),
         )
 
 
 # --- Task Events ---
 
+
 class TaskEvent(BaseEvent):
     """Base class for task-related events."""
+
     aggregate_type: Literal["task"] = "task"
     task_id: UUID = Field(..., description="Task identifier")
     user_id: str | None = Field(None, description="User who owns the task")
     agent_id: UUID | None = Field(None, description="Agent executing the task")
-    
+
 
 class TaskCreatedEvent(TaskEvent):
     """Event emitted when a task is created."""
+
     event_type: Literal[EventType.TASK_CREATED] = EventType.TASK_CREATED
     title: str = Field(..., description="Task title")
     description: str = Field(..., description="Task description")
@@ -116,6 +122,7 @@ class TaskCreatedEvent(TaskEvent):
 
 class TaskUpdatedEvent(TaskEvent):
     """Event emitted when a task is updated."""
+
     event_type: Literal[EventType.TASK_UPDATED] = EventType.TASK_UPDATED
     changes: dict[str, Any] = Field(..., description="Fields that were changed")
     previous_status: str | None = Field(None, description="Previous task status")
@@ -124,12 +131,14 @@ class TaskUpdatedEvent(TaskEvent):
 
 class TaskStartedEvent(TaskEvent):
     """Event emitted when task execution starts."""
+
     event_type: Literal[EventType.TASK_STARTED] = EventType.TASK_STARTED
     execution_id: str = Field(..., description="Workflow execution ID")
 
 
 class TaskCompletedEvent(TaskEvent):
     """Event emitted when a task completes successfully."""
+
     event_type: Literal[EventType.TASK_COMPLETED] = EventType.TASK_COMPLETED
     execution_id: str = Field(..., description="Workflow execution ID")
     result: dict[str, Any] = Field(..., description="Task execution result")
@@ -138,6 +147,7 @@ class TaskCompletedEvent(TaskEvent):
 
 class TaskFailedEvent(TaskEvent):
     """Event emitted when a task fails."""
+
     event_type: Literal[EventType.TASK_FAILED] = EventType.TASK_FAILED
     execution_id: str | None = Field(None, description="Workflow execution ID")
     error_message: str = Field(..., description="Error message")
@@ -148,6 +158,7 @@ class TaskFailedEvent(TaskEvent):
 
 class TaskCancelledEvent(TaskEvent):
     """Event emitted when a task is cancelled."""
+
     event_type: Literal[EventType.TASK_CANCELLED] = EventType.TASK_CANCELLED
     execution_id: str | None = Field(None, description="Workflow execution ID")
     cancelled_by: str = Field(..., description="User who cancelled the task")
@@ -156,8 +167,10 @@ class TaskCancelledEvent(TaskEvent):
 
 # --- Workflow Events ---
 
+
 class WorkflowEvent(BaseEvent):
     """Base class for workflow execution events."""
+
     aggregate_type: Literal["workflow"] = "workflow"
     task_id: UUID = Field(..., description="Associated task ID")
     execution_id: str = Field(..., description="Workflow execution ID")
@@ -167,6 +180,7 @@ class WorkflowEvent(BaseEvent):
 
 class LLMCallStartedEvent(WorkflowEvent):
     """Event emitted when an LLM call starts."""
+
     event_type: Literal[EventType.LLM_CALL_STARTED] = EventType.LLM_CALL_STARTED
     model_id: str = Field(..., description="LLM model identifier")
     provider_type: str | None = Field(None, description="LLM provider type")
@@ -176,6 +190,7 @@ class LLMCallStartedEvent(WorkflowEvent):
 
 class LLMCallCompletedEvent(WorkflowEvent):
     """Event emitted when an LLM call completes successfully."""
+
     event_type: Literal[EventType.LLM_CALL_COMPLETED] = EventType.LLM_CALL_COMPLETED
     model_id: str = Field(..., description="LLM model identifier")
     provider_type: str | None = Field(None, description="LLM provider type")
@@ -188,6 +203,7 @@ class LLMCallCompletedEvent(WorkflowEvent):
 
 class LLMCallFailedEvent(WorkflowEvent):
     """Event emitted when an LLM call fails."""
+
     event_type: Literal[EventType.LLM_CALL_FAILED] = EventType.LLM_CALL_FAILED
     model_id: str = Field(..., description="LLM model identifier")
     provider_type: str | None = Field(None, description="LLM provider type")
@@ -206,6 +222,7 @@ class LLMCallFailedEvent(WorkflowEvent):
 
 class LLMCallChunkEvent(WorkflowEvent):
     """Event emitted for streaming LLM response chunks."""
+
     event_type: Literal[EventType.LLM_CALL_CHUNK] = EventType.LLM_CALL_CHUNK
     chunk: str = Field(..., description="Response chunk content")
     chunk_index: int = Field(..., description="Chunk sequence number")
@@ -214,6 +231,7 @@ class LLMCallChunkEvent(WorkflowEvent):
 
 class ToolExecutionStartedEvent(WorkflowEvent):
     """Event emitted when tool execution starts."""
+
     event_type: Literal[EventType.TOOL_EXECUTION_STARTED] = EventType.TOOL_EXECUTION_STARTED
     tool_name: str = Field(..., description="Name of the tool being executed")
     arguments: dict[str, Any] = Field(..., description="Tool execution arguments")
@@ -221,6 +239,7 @@ class ToolExecutionStartedEvent(WorkflowEvent):
 
 class ToolExecutionCompletedEvent(WorkflowEvent):
     """Event emitted when tool execution completes."""
+
     event_type: Literal[EventType.TOOL_EXECUTION_COMPLETED] = EventType.TOOL_EXECUTION_COMPLETED
     tool_name: str = Field(..., description="Name of the executed tool")
     arguments: dict[str, Any] = Field(..., description="Tool execution arguments")
@@ -230,6 +249,7 @@ class ToolExecutionCompletedEvent(WorkflowEvent):
 
 class ToolExecutionFailedEvent(WorkflowEvent):
     """Event emitted when tool execution fails."""
+
     event_type: Literal[EventType.TOOL_EXECUTION_FAILED] = EventType.TOOL_EXECUTION_FAILED
     tool_name: str = Field(..., description="Name of the failed tool")
     arguments: dict[str, Any] = Field(..., description="Tool execution arguments")
@@ -240,6 +260,7 @@ class ToolExecutionFailedEvent(WorkflowEvent):
 
 class AgentMessageSentEvent(WorkflowEvent):
     """Event emitted when an agent sends a message."""
+
     event_type: Literal[EventType.AGENT_MESSAGE_SENT] = EventType.AGENT_MESSAGE_SENT
     target_agent_id: UUID = Field(..., description="Target agent ID")
     message_content: str = Field(..., description="Message content")
@@ -248,6 +269,7 @@ class AgentMessageSentEvent(WorkflowEvent):
 
 class AgentMessageReceivedEvent(WorkflowEvent):
     """Event emitted when an agent receives a message."""
+
     event_type: Literal[EventType.AGENT_MESSAGE_RECEIVED] = EventType.AGENT_MESSAGE_RECEIVED
     source_agent_id: UUID = Field(..., description="Source agent ID")
     message_content: str = Field(..., description="Message content")
@@ -256,8 +278,10 @@ class AgentMessageReceivedEvent(WorkflowEvent):
 
 # --- MCP Events ---
 
+
 class MCPEvent(BaseEvent):
     """Base class for MCP server events."""
+
     aggregate_type: Literal["mcp_server"] = "mcp_server"
     config_id: UUID = Field(..., description="MCP server configuration ID")
     agent_id: UUID | None = Field(None, description="Associated agent ID")
@@ -265,7 +289,10 @@ class MCPEvent(BaseEvent):
 
 class MCPServerCreateRequestedEvent(MCPEvent):
     """Event emitted when MCP server creation is requested."""
-    event_type: Literal[EventType.MCP_SERVER_CREATE_REQUESTED] = EventType.MCP_SERVER_CREATE_REQUESTED
+
+    event_type: Literal[EventType.MCP_SERVER_CREATE_REQUESTED] = (
+        EventType.MCP_SERVER_CREATE_REQUESTED
+    )
     template: str = Field(..., description="MCP server template name")
     environment: dict[str, Any] = Field(default_factory=dict, description="Environment variables")
     replicas: int = Field(default=1, description="Number of replicas")
@@ -274,6 +301,7 @@ class MCPServerCreateRequestedEvent(MCPEvent):
 
 class MCPServerReadyEvent(MCPEvent):
     """Event emitted when MCP server is ready."""
+
     event_type: Literal[EventType.MCP_SERVER_READY] = EventType.MCP_SERVER_READY
     runtime_id: str = Field(..., description="Container/Pod runtime ID")
     endpoint: str = Field(..., description="Public endpoint URL")
@@ -283,6 +311,7 @@ class MCPServerReadyEvent(MCPEvent):
 
 class MCPServerFailedEvent(MCPEvent):
     """Event emitted when MCP server deployment fails."""
+
     event_type: Literal[EventType.MCP_SERVER_FAILED] = EventType.MCP_SERVER_FAILED
     error: str = Field(..., description="Error message")
     error_code: str = Field(..., description="Error code")
@@ -292,8 +321,10 @@ class MCPServerFailedEvent(MCPEvent):
 
 # --- System Events ---
 
+
 class HeartbeatEvent(BaseEvent):
     """Heartbeat event for keeping connections alive."""
+
     event_type: Literal[EventType.HEARTBEAT] = EventType.HEARTBEAT
     aggregate_type: Literal["system"] = "system"
     service_name: str = Field(..., description="Service sending the heartbeat")
@@ -302,6 +333,7 @@ class HeartbeatEvent(BaseEvent):
 
 class SystemErrorEvent(BaseEvent):
     """System-level error event."""
+
     event_type: Literal[EventType.SYSTEM_ERROR] = EventType.SYSTEM_ERROR
     aggregate_type: Literal["system"] = "system"
     service_name: str = Field(..., description="Service that encountered the error")
@@ -313,17 +345,31 @@ class SystemErrorEvent(BaseEvent):
 
 # Union type for all events
 DomainEventModel = (
-    TaskCreatedEvent | TaskUpdatedEvent | TaskStartedEvent | TaskCompletedEvent |
-    TaskFailedEvent | TaskCancelledEvent |
-    LLMCallStartedEvent | LLMCallCompletedEvent | LLMCallFailedEvent | LLMCallChunkEvent |
-    ToolExecutionStartedEvent | ToolExecutionCompletedEvent | ToolExecutionFailedEvent |
-    AgentMessageSentEvent | AgentMessageReceivedEvent |
-    MCPServerCreateRequestedEvent | MCPServerReadyEvent | MCPServerFailedEvent |
-    HeartbeatEvent | SystemErrorEvent
+    TaskCreatedEvent
+    | TaskUpdatedEvent
+    | TaskStartedEvent
+    | TaskCompletedEvent
+    | TaskFailedEvent
+    | TaskCancelledEvent
+    | LLMCallStartedEvent
+    | LLMCallCompletedEvent
+    | LLMCallFailedEvent
+    | LLMCallChunkEvent
+    | ToolExecutionStartedEvent
+    | ToolExecutionCompletedEvent
+    | ToolExecutionFailedEvent
+    | AgentMessageSentEvent
+    | AgentMessageReceivedEvent
+    | MCPServerCreateRequestedEvent
+    | MCPServerReadyEvent
+    | MCPServerFailedEvent
+    | HeartbeatEvent
+    | SystemErrorEvent
 )
 
 
 # Utility functions for backward compatibility
+
 
 def create_task_event_envelope(
     event_type: str,
@@ -343,8 +389,8 @@ def create_task_event_envelope(
             "task_id": str(task_id),
             "user_id": user_id,
             "agent_id": str(agent_id) if agent_id else None,
-            **data
-        }
+            **data,
+        },
     )
 
 
@@ -371,6 +417,6 @@ def create_workflow_event_envelope(
             "original_event_type": event_type.replace("workflow.", ""),
             "original_timestamp": datetime.now(UTC).isoformat(),
             "original_data": data,
-            **data
-        }
+            **data,
+        },
     )

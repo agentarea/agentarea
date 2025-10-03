@@ -11,17 +11,17 @@ from .jwt_handler import get_jwt_handler
 
 async def get_user_context(request: Request) -> UserContext:
     """FastAPI dependency to extract user context from JWT token.
-    
+
     This dependency extracts user_id and workspace_id from JWT token claims
     and returns a UserContext object. It also sets the context in the
     ContextManager for use throughout the request lifecycle.
-    
+
     Args:
         request: FastAPI request object
-        
+
     Returns:
         UserContext: User and workspace context from JWT token
-        
+
     Raises:
         HTTPException: If token is missing, invalid, or lacks required claims
     """

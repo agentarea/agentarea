@@ -11,19 +11,19 @@ from ..auth.context import UserContext
 from ..logging.audit_logger import get_audit_logger
 from .models import WorkspaceScopedMixin
 
-T = TypeVar('T', bound=WorkspaceScopedMixin)
+T = TypeVar("T", bound=WorkspaceScopedMixin)
 
 
 class WorkspaceScopedRepository(Generic[T]):
     """Base repository class that provides workspace-scoped CRUD operations.
-    
+
     This repository focuses on workspace-level data isolation rather than user-level.
     All operations are scoped to the current workspace, with created_by used for audit purposes.
     """
 
     def __init__(self, session: AsyncSession, model_class: type[T], user_context: UserContext):
         """Initialize repository with session, model class, and user context.
-        
+
         Args:
             session: SQLAlchemy async session
             model_class: The model class this repository manages
@@ -43,16 +43,16 @@ class WorkspaceScopedRepository(Generic[T]):
         """Get the creator and workspace filter for queries."""
         return and_(
             self.model_class.created_by == self.user_context.user_id,
-            self.model_class.workspace_id == self.user_context.workspace_id
+            self.model_class.workspace_id == self.user_context.workspace_id,
         )
 
     async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> T | None:
         """Get a record by ID within the current workspace.
-        
+
         Args:
             id: The record ID
             creator_scoped: If True, also filter by created_by (for user's own resources)
-            
+
         Returns:
             The record if found, None otherwise
         """
@@ -73,7 +73,7 @@ class WorkspaceScopedRepository(Generic[T]):
                 user_context=self.user_context,
                 resource_id=id,
                 creator_scoped=creator_scoped,
-                found=record is not None
+                found=record is not None,
             )
 
             return record
@@ -83,20 +83,20 @@ class WorkspaceScopedRepository(Generic[T]):
                 user_context=self.user_context,
                 error=str(e),
                 resource_id=id,
-                operation="get_by_id"
+                operation="get_by_id",
             )
             raise
 
     async def get_by_id_or_raise(self, id: UUID | str, creator_scoped: bool = False) -> T:
         """Get a record by ID or raise NoResultFound.
-        
+
         Args:
             id: The record ID
             creator_scoped: If True, also filter by created_by
-            
+
         Returns:
             The record
-            
+
         Raises:
             NoResultFound: If record not found in workspace
         """
@@ -110,19 +110,19 @@ class WorkspaceScopedRepository(Generic[T]):
         creator_scoped: bool = False,
         limit: int | None = None,
         offset: int | None = None,
-        **filters: Any
+        **filters: Any,
     ) -> list[T]:
         """List all records in the current workspace.
-        
+
         By default, returns ALL workspace resources (not just user's).
         Use creator_scoped=True to filter to only resources created by current user.
-        
+
         Args:
             creator_scoped: If True, only return records created by current user
             limit: Maximum number of records to return
             offset: Number of records to skip
             **filters: Additional field filters
-            
+
         Returns:
             List of records
         """
@@ -158,7 +158,7 @@ class WorkspaceScopedRepository(Generic[T]):
                 filters=filters,
                 creator_scoped=creator_scoped,
                 limit=limit,
-                offset=offset
+                offset=offset,
             )
 
             return records
@@ -168,17 +168,17 @@ class WorkspaceScopedRepository(Generic[T]):
                 user_context=self.user_context,
                 error=str(e),
                 operation="list_all",
-                filters=filters
+                filters=filters,
             )
             raise
 
     async def count(self, creator_scoped: bool = False, **filters: Any) -> int:
         """Count records in the current workspace.
-        
+
         Args:
             creator_scoped: If True, only count records created by current user
             **filters: Additional field filters
-            
+
         Returns:
             Number of records
         """
@@ -200,19 +200,19 @@ class WorkspaceScopedRepository(Generic[T]):
 
     async def create(self, **kwargs: Any) -> T:
         """Create a new record in the current workspace.
-        
+
         Automatically sets created_by and workspace_id from user context.
-        
+
         Args:
             **kwargs: Field values for the new record
-            
+
         Returns:
             The created record
         """
         try:
             # Automatically set created_by and workspace_id
-            kwargs['created_by'] = self.user_context.user_id
-            kwargs['workspace_id'] = self.user_context.workspace_id
+            kwargs["created_by"] = self.user_context.user_id
+            kwargs["workspace_id"] = self.user_context.workspace_id
 
             record = self.model_class(**kwargs)
 
@@ -225,7 +225,7 @@ class WorkspaceScopedRepository(Generic[T]):
                 resource_type=self.resource_type,
                 user_context=self.user_context,
                 resource_id=record.id,
-                resource_data=kwargs
+                resource_data=kwargs,
             )
 
             return record
@@ -236,23 +236,18 @@ class WorkspaceScopedRepository(Generic[T]):
                 user_context=self.user_context,
                 error=str(e),
                 operation="create",
-                resource_data=kwargs
+                resource_data=kwargs,
             )
             raise
 
-    async def update(
-        self,
-        id: UUID | str,
-        creator_scoped: bool = False,
-        **kwargs: Any
-    ) -> T | None:
+    async def update(self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any) -> T | None:
         """Update a record by ID within the current workspace.
-        
+
         Args:
             id: The record ID
             creator_scoped: If True, only update records created by current user
             **kwargs: Field values to update
-            
+
         Returns:
             The updated record if found, None otherwise
         """
@@ -272,11 +267,13 @@ class WorkspaceScopedRepository(Generic[T]):
                 return None
 
             # Store original data for audit
-            original_data = {field: getattr(record, field) for field in kwargs.keys() if hasattr(record, field)}
+            original_data = {
+                field: getattr(record, field) for field in kwargs.keys() if hasattr(record, field)
+            }
 
             # Remove immutable fields from updates
-            kwargs.pop('created_by', None)
-            kwargs.pop('workspace_id', None)
+            kwargs.pop("created_by", None)
+            kwargs.pop("workspace_id", None)
 
             # Update fields
             for field, value in kwargs.items():
@@ -293,7 +290,7 @@ class WorkspaceScopedRepository(Generic[T]):
                 resource_id=id,
                 resource_data=kwargs,
                 original_data=original_data,
-                creator_scoped=creator_scoped
+                creator_scoped=creator_scoped,
             )
 
             return record
@@ -305,26 +302,23 @@ class WorkspaceScopedRepository(Generic[T]):
                 error=str(e),
                 resource_id=id,
                 operation="update",
-                resource_data=kwargs
+                resource_data=kwargs,
             )
             raise
 
     async def update_or_raise(
-        self,
-        id: UUID | str,
-        creator_scoped: bool = False,
-        **kwargs: Any
+        self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any
     ) -> T:
         """Update a record by ID or raise NoResultFound.
-        
+
         Args:
             id: The record ID
             creator_scoped: If True, only update records created by current user
             **kwargs: Field values to update
-            
+
         Returns:
             The updated record
-            
+
         Raises:
             NoResultFound: If record not found in workspace
         """
@@ -335,11 +329,11 @@ class WorkspaceScopedRepository(Generic[T]):
 
     async def delete(self, id: UUID | str, creator_scoped: bool = False) -> bool:
         """Delete a record by ID within the current workspace.
-        
+
         Args:
             id: The record ID
             creator_scoped: If True, only delete records created by current user
-            
+
         Returns:
             True if record was deleted, False if not found
         """
@@ -366,7 +360,7 @@ class WorkspaceScopedRepository(Generic[T]):
                 resource_type=self.resource_type,
                 user_context=self.user_context,
                 resource_id=id,
-                creator_scoped=creator_scoped
+                creator_scoped=creator_scoped,
             )
 
             return True
@@ -377,17 +371,17 @@ class WorkspaceScopedRepository(Generic[T]):
                 user_context=self.user_context,
                 error=str(e),
                 resource_id=id,
-                operation="delete"
+                operation="delete",
             )
             raise
 
     async def delete_or_raise(self, id: UUID | str, creator_scoped: bool = False) -> None:
         """Delete a record by ID or raise NoResultFound.
-        
+
         Args:
             id: The record ID
             creator_scoped: If True, only delete records created by current user
-            
+
         Raises:
             NoResultFound: If record not found in workspace
         """
@@ -396,11 +390,11 @@ class WorkspaceScopedRepository(Generic[T]):
 
     async def exists(self, id: UUID | str, creator_scoped: bool = False) -> bool:
         """Check if a record exists by ID within the current workspace.
-        
+
         Args:
             id: The record ID
             creator_scoped: If True, only check records created by current user
-            
+
         Returns:
             True if record exists, False otherwise
         """
@@ -409,11 +403,11 @@ class WorkspaceScopedRepository(Generic[T]):
 
     async def find_by(self, creator_scoped: bool = False, **filters: Any) -> list[T]:
         """Find records by field values within the current workspace.
-        
+
         Args:
             creator_scoped: If True, only return records created by current user
             **filters: Field filters
-            
+
         Returns:
             List of matching records
         """
@@ -421,11 +415,11 @@ class WorkspaceScopedRepository(Generic[T]):
 
     async def find_one_by(self, creator_scoped: bool = False, **filters: Any) -> T | None:
         """Find one record by field values within the current workspace.
-        
+
         Args:
             creator_scoped: If True, only search records created by current user
             **filters: Field filters
-            
+
         Returns:
             The first matching record or None
         """

@@ -61,9 +61,7 @@ async def test_setup_event_listeners(task_event_handler, mock_event_broker):
 
 
 @pytest.mark.asyncio
-async def test_handle_task_status_changed(
-    task_event_handler, mock_task_repository, sample_task
-):
+async def test_handle_task_status_changed(task_event_handler, mock_task_repository, sample_task):
     """Test handling TaskStatusChanged events."""
     # Setup
     mock_task_repository.get.return_value = sample_task
@@ -110,9 +108,7 @@ async def test_handle_task_status_changed_string_status(
 
 
 @pytest.mark.asyncio
-async def test_handle_task_completed(
-    task_event_handler, mock_task_repository, sample_task
-):
+async def test_handle_task_completed(task_event_handler, mock_task_repository, sample_task):
     """Test handling TaskCompleted events."""
     # Setup
     mock_task_repository.get.return_value = sample_task
@@ -137,9 +133,7 @@ async def test_handle_task_completed(
 
 
 @pytest.mark.asyncio
-async def test_handle_task_failed(
-    task_event_handler, mock_task_repository, sample_task
-):
+async def test_handle_task_failed(task_event_handler, mock_task_repository, sample_task):
     """Test handling TaskFailed events."""
     # Setup
     mock_task_repository.get.return_value = sample_task
@@ -164,9 +158,7 @@ async def test_handle_task_failed(
 
 
 @pytest.mark.asyncio
-async def test_handle_task_not_found(
-    task_event_handler, mock_task_repository
-):
+async def test_handle_task_not_found(task_event_handler, mock_task_repository):
     """Test handling events for non-existent tasks."""
     # Setup
     mock_task_repository.get.return_value = None
@@ -185,9 +177,7 @@ async def test_handle_task_not_found(
 
 
 @pytest.mark.asyncio
-async def test_handle_event_with_exception(
-    task_event_handler, mock_task_repository, sample_task
-):
+async def test_handle_event_with_exception(task_event_handler, mock_task_repository, sample_task):
     """Test that exceptions in event handlers are caught and logged."""
     # Setup
     mock_task_repository.get.side_effect = Exception("Database error")

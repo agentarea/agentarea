@@ -14,20 +14,21 @@ from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets import get_real_secret_manager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
 from agentarea_api.api.events import events_router
-from agentarea_api.api.v1.router import v1_router
 
 # Import MCP server
 from agentarea_api.api.v1.mcp import mcp_app
+from agentarea_api.api.v1.router import v1_router
 
 logger = logging.getLogger(__name__)
 container = get_container()
+
 
 async def initialize_services():
     """Initialize real services instead of test mocks."""
@@ -60,6 +61,7 @@ async def cleanup_all_connections():
     try:
         # Cleanup connection manager singletons
         from agentarea_common.infrastructure.connection_manager import cleanup_connections
+
         await cleanup_connections()
         print("✅ Connection manager cleanup completed")
     except Exception as e:
@@ -68,6 +70,7 @@ async def cleanup_all_connections():
     try:
         # Stop events router
         from agentarea_api.api.events.events_router import stop_events_router
+
         await stop_events_router()
         print("✅ Events router cleanup completed")
     except Exception as e:
@@ -82,6 +85,7 @@ async def cleanup_all_connections():
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Original application lifespan."""
+
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
         print(f"📡 Received signal {signum}, initiating graceful shutdown...")
@@ -94,6 +98,7 @@ async def app_lifespan(app: FastAPI):
     await initialize_services()
 
     from agentarea_api.api.events.events_router import start_events_router
+
     await start_events_router()
 
     print("Application started successfully")
@@ -116,23 +121,17 @@ async def combined_lifespan(app: FastAPI):
 
 
 # Security schemes for OpenAPI documentation
-bearer_scheme = HTTPBearer(
-    bearerFormat="JWT",
-    description="JWT Bearer token for authentication"
-)
+bearer_scheme = HTTPBearer(bearerFormat="JWT", description="JWT Bearer token for authentication")
 
 workspace_header_scheme = {
     "type": "apiKey",
     "in": "header",
     "name": "X-Workspace-ID",
-    "description": "Workspace ID for data isolation"
+    "description": "Workspace ID for data isolation",
 }
 
 # Global security requirement
-security_requirements = [
-    {"bearer": []},
-    {"workspace_header": []}
-]
+security_requirements = [{"bearer": []}, {"workspace_header": []}]
 
 
 def create_app() -> FastAPI:
@@ -143,35 +142,17 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=combined_lifespan,
         openapi_tags=[
-            {
-                "name": "agents",
-                "description": "Operations with AI agents"
-            },
-            {
-                "name": "tasks",
-                "description": "Operations with agent tasks"
-            },
-            {
-                "name": "triggers",
-                "description": "Operations with triggers"
-            },
-            {
-                "name": "providers",
-                "description": "Operations with LLM providers"
-            },
-            {
-                "name": "models",
-                "description": "Operations with LLM models"
-            },
-            {
-                "name": "mcp",
-                "description": "Operations with MCP servers"
-            },
+            {"name": "agents", "description": "Operations with AI agents"},
+            {"name": "tasks", "description": "Operations with agent tasks"},
+            {"name": "triggers", "description": "Operations with triggers"},
+            {"name": "providers", "description": "Operations with LLM providers"},
+            {"name": "models", "description": "Operations with LLM models"},
+            {"name": "mcp", "description": "Operations with MCP servers"},
             {
                 "name": "development",
-                "description": "Development utilities (only available in dev mode)"
-            }
-        ]
+                "description": "Development utilities (only available in dev mode)",
+            },
+        ],
     )
 
     # Add CORS middleware
@@ -192,7 +173,7 @@ def create_app() -> FastAPI:
             "CLERK_ISSUER": os.getenv("CLERK_ISSUER", ""),
             "CLERK_JWKS_URL": os.getenv("CLERK_JWKS_URL", ""),
             "CLERK_AUDIENCE": os.getenv("CLERK_AUDIENCE", ""),
-        }
+        },
     )
 
     # Mount static files - this serves all files from static/ at /static/
@@ -211,6 +192,7 @@ def create_app() -> FastAPI:
     dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
 
     if dev_mode:
+
         @app.get("/dev/token", tags=["development"])
         async def get_dev_token():
             """Development mode information."""
@@ -219,8 +201,8 @@ def create_app() -> FastAPI:
                 "usage": {
                     "user_id": "dev-user",
                     "workspace_id": "default",
-                    "example": "curl http://localhost:8000/v1/agents/"
-                }
+                    "example": "curl http://localhost:8000/v1/agents/",
+                },
             }
 
     # Add security schemes to OpenAPI
@@ -237,19 +219,16 @@ def create_app() -> FastAPI:
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
-                "description": "JWT Bearer token for authentication"
+                "description": "JWT Bearer token for authentication",
             },
             "workspace_header": {
                 "type": "apiKey",
                 "in": "header",
                 "name": "X-Workspace-ID",
-                "description": "Workspace ID for data isolation"
-            }
+                "description": "Workspace ID for data isolation",
+            },
         }
-        app.openapi_schema["security"] = [
-            {"bearer": []},
-            {"workspace_header": []}
-        ]
+        app.openapi_schema["security"] = [{"bearer": []}, {"workspace_header": []}]
 
     return app
 
@@ -275,5 +254,5 @@ async def health_check():
         "service": "agentarea-api",
         "version": "0.1.0",
         "connections": connection_health,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }

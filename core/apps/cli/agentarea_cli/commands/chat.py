@@ -25,7 +25,13 @@ def chat():
 @click.argument("agent_id")
 @click.option("--message", "-m", help="Single message to send")
 @click.option("--session-id", help="Chat session ID (optional)")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.pass_context
 def send(ctx, agent_id: str, message: str | None, session_id: str | None, output_format: str):
     """Send a message to an agent."""
@@ -57,10 +63,7 @@ def send(ctx, agent_id: str, message: str | None, session_id: str | None, output
 
 
 async def _interactive_chat(
-    client: "AgentAreaClient",
-    agent_id: str,
-    session_id: str | None,
-    output_format: str
+    client: "AgentAreaClient", agent_id: str, session_id: str | None, output_format: str
 ):
     """Handle interactive chat mode."""
     click.echo(f"💬 Starting chat with agent {agent_id}")
@@ -78,17 +81,17 @@ async def _interactive_chat(
         try:
             user_input = input("You: ").strip()
 
-            if user_input.lower() in ['exit', 'quit']:
+            if user_input.lower() in ["exit", "quit"]:
                 click.echo("👋 Goodbye!")
                 break
 
-            if user_input.lower() == 'clear':
+            if user_input.lower() == "clear":
                 current_session_id = None
                 message_count = 0
                 click.echo("🔄 Starting new session")
                 continue
 
-            if user_input.lower() == 'help':
+            if user_input.lower() == "help":
                 click.echo("Available commands:")
                 click.echo("   exit, quit - End conversation")
                 click.echo("   clear      - Start new session")
@@ -96,7 +99,7 @@ async def _interactive_chat(
                 click.echo("   status     - Show session info")
                 continue
 
-            if user_input.lower() == 'status':
+            if user_input.lower() == "status":
                 click.echo(f"Session ID: {current_session_id or 'None (new session)'}")
                 click.echo(f"Messages sent: {message_count}")
                 continue
@@ -133,7 +136,7 @@ async def _single_message(
     agent_id: str,
     message: str,
     session_id: str | None,
-    output_format: str
+    output_format: str,
 ):
     """Handle single message mode."""
     result = await _send_message(client, agent_id, message, session_id)
@@ -152,16 +155,10 @@ async def _single_message(
 
 
 async def _send_message(
-    client: "AgentAreaClient",
-    agent_id: str,
-    message: str,
-    session_id: str | None
+    client: "AgentAreaClient", agent_id: str, message: str, session_id: str | None
 ) -> dict:
     """Send a message to an agent."""
-    payload = {
-        "content": message,
-        "agent_id": agent_id
-    }
+    payload = {"content": message, "agent_id": agent_id}
 
     if session_id:
         payload["session_id"] = session_id
@@ -181,12 +178,18 @@ def _display_response(result: dict, output_format: str):
         if "response" in result:
             click.echo(f"    {result['response']}")
     else:
-        response = result.get('response', 'No response')
+        response = result.get("response", "No response")
         click.echo(f"🤖 Agent: {response}")
 
 
 @chat.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.pass_context
 def agents(ctx, output_format: str):
     """List available chat agents."""
@@ -214,12 +217,16 @@ def agents(ctx, output_format: str):
             rows = []
 
             for agent in agents_list:
-                rows.append([
-                    safe_get_field(agent, "id", "Unknown"),
-                    safe_get_field(agent, "name", "Unknown"),
-                    safe_get_field(agent, "description", "No description")[:50] + "..." if len(safe_get_field(agent, "description", "")) > 50 else safe_get_field(agent, "description", "No description"),
-                    safe_get_field(agent, "status", "Unknown")
-                ])
+                rows.append(
+                    [
+                        safe_get_field(agent, "id", "Unknown"),
+                        safe_get_field(agent, "name", "Unknown"),
+                        safe_get_field(agent, "description", "No description")[:50] + "..."
+                        if len(safe_get_field(agent, "description", "")) > 50
+                        else safe_get_field(agent, "description", "No description"),
+                        safe_get_field(agent, "status", "Unknown"),
+                    ]
+                )
 
             click.echo(format_table(headers, rows))
 
@@ -234,7 +241,13 @@ def agents(ctx, output_format: str):
 @click.option("--session-id", help="Session ID to get history for")
 @click.option("--agent-id", help="Agent ID to filter by")
 @click.option("--limit", default=50, help="Maximum number of messages to retrieve")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.pass_context
 def history(ctx, session_id: str | None, agent_id: str | None, limit: int, output_format: str):
     """Show chat history."""
@@ -265,9 +278,9 @@ def history(ctx, session_id: str | None, agent_id: str | None, limit: int, outpu
             click.echo()
 
             for msg in messages:
-                timestamp = msg.get('timestamp', 'Unknown time')
-                sender = msg.get('sender', 'Unknown')
-                content = msg.get('content', 'No content')
+                timestamp = msg.get("timestamp", "Unknown time")
+                sender = msg.get("sender", "Unknown")
+                content = msg.get("content", "No content")
 
                 click.echo(f"[{timestamp}] {sender}: {content}")
 

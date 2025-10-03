@@ -25,7 +25,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app, provider_name: str, config: dict | None = None):
         """Initialize the auth middleware.
-        
+
         Args:
             app: FastAPI application instance
             provider_name: Name of the auth provider to use
@@ -37,11 +37,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """Process incoming requests and validate authentication.
-        
+
         Args:
             request: Incoming HTTP request
             call_next: Next middleware or endpoint handler
-            
+
         Returns:
             Response from the next middleware or endpoint
         """
@@ -56,9 +56,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
             # Set user context for development
             user_context = UserContext(
-                user_id=dev_user_id,
-                workspace_id=workspace_id,
-                roles=["dev"]
+                user_id=dev_user_id, workspace_id=workspace_id, roles=["dev"]
             )
             ContextManager.set_context(user_context)
 
@@ -75,14 +73,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not auth_header:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Authorization header missing"}
+                content={"detail": "Authorization header missing"},
             )
 
         # Parse bearer token
         if not auth_header.startswith("Bearer "):
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Invalid authorization header format"}
+                content={"detail": "Invalid authorization header format"},
             )
 
         token = auth_header[7:]  # Remove "Bearer " prefix
@@ -94,7 +92,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not auth_result.is_authenticated:
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": auth_result.error or "Invalid token"}
+                    content={"detail": auth_result.error or "Invalid token"},
                 )
 
             # Extract workspace_id from header if not in token
@@ -105,7 +103,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
                     workspace_id=workspace_id,
-                    roles=[]  # In a real implementation, this would come from the token or database
+                    roles=[],  # In a real implementation, this would come from the token or database
                 )
                 ContextManager.set_context(user_context)
 
@@ -113,7 +111,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             logger.error(f"Unexpected error during token validation: {e}")
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={"detail": "Internal server error"}
+                content={"detail": "Internal server error"},
             )
 
         # Continue with the request
@@ -126,10 +124,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     def _is_public_route(self, request: Request) -> bool:
         """Check if the request is for a public route.
-        
+
         Args:
             request: Incoming HTTP request
-            
+
         Returns:
             True if the route is public, False otherwise
         """
@@ -152,13 +150,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/static/",
             "/v1/auth/",  # All auth endpoints are public
         ]
-        
+
         # A2A endpoints handle their own authentication
-        a2a_patterns = [
-            "/a2a/well-known",
-            "/a2a/rpc"
-        ]
-        
+        a2a_patterns = ["/a2a/well-known", "/a2a/rpc"]
+
         for pattern in a2a_patterns:
             if pattern in request.url.path:
                 return True

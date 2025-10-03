@@ -214,7 +214,7 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     max_reasoning_iterations=args.get("max_reasoning_iterations", 10),
                     enable_agent_communication=args.get("enable_agent_communication", False),
                     requires_human_approval=args.get("requires_human_approval", False),
-                    workflow_metadata=args.get("workflow_metadata", {})
+                    workflow_metadata=args.get("workflow_metadata", {}),
                 )
                 workflow_args = [execution_request]
             else:
@@ -236,7 +236,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         except Exception as e:
             # Handle workflow already started error gracefully
             if "already started" in str(e).lower() or "WorkflowAlreadyStartedError" in str(e):
-                logger.info(f"Workflow {workflow_id} already running - returning existing workflow ID")
+                logger.info(
+                    f"Workflow {workflow_id} already running - returning existing workflow ID"
+                )
                 return workflow_id
             else:
                 logger.error(f"Failed to start workflow {workflow_id}: {e}")

@@ -22,15 +22,14 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         # Reload with relationships
         result = await self.session.execute(
             select(ModelSpec)
-            .options(
-                joinedload(ModelSpec.provider_spec),
-                joinedload(ModelSpec.model_instances)
-            )
+            .options(joinedload(ModelSpec.provider_spec), joinedload(ModelSpec.model_instances))
             .where(ModelSpec.id == id)
         )
         return result.scalar_one_or_none()
 
-    async def get_by_provider_and_model(self, provider_spec_id: UUID, model_name: str) -> ModelSpec | None:
+    async def get_by_provider_and_model(
+        self, provider_spec_id: UUID, model_name: str
+    ) -> ModelSpec | None:
         """Get model spec by provider and model name"""
         spec = await self.find_one_by(provider_spec_id=provider_spec_id, model_name=model_name)
         if not spec:
@@ -39,10 +38,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         # Reload with relationships
         result = await self.session.execute(
             select(ModelSpec)
-            .options(
-                joinedload(ModelSpec.provider_spec),
-                joinedload(ModelSpec.model_instances)
-            )
+            .options(joinedload(ModelSpec.provider_spec), joinedload(ModelSpec.model_instances))
             .where(ModelSpec.id == spec.id)
         )
         return result.scalar_one_or_none()
@@ -58,15 +54,12 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         """List model specs with filtering and relationships."""
         filters = {}
         if provider_spec_id is not None:
-            filters['provider_spec_id'] = provider_spec_id
+            filters["provider_spec_id"] = provider_spec_id
         if is_active is not None:
-            filters['is_active'] = is_active
+            filters["is_active"] = is_active
 
         specs = await self.list_all(
-            creator_scoped=creator_scoped,
-            limit=limit,
-            offset=offset,
-            **filters
+            creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
         )
 
         # Load relationships for each spec
@@ -74,10 +67,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         if spec_ids:
             result = await self.session.execute(
                 select(ModelSpec)
-                .options(
-                    joinedload(ModelSpec.provider_spec),
-                    joinedload(ModelSpec.model_instances)
-                )
+                .options(joinedload(ModelSpec.provider_spec), joinedload(ModelSpec.model_instances))
                 .where(ModelSpec.id.in_(spec_ids))
             )
             specs_with_relations = result.scalars().all()
@@ -87,43 +77,43 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
 
     async def create_spec(self, entity: ModelSpec) -> ModelSpec:
         """Create a new model spec from domain entity.
-        
+
         Note: This method is deprecated. Use create() with field parameters instead.
         """
         # Extract fields from the spec entity
         spec_data = {
-            'id': entity.id,
-            'provider_spec_id': entity.provider_spec_id,
-            'model_name': entity.model_name,
-            'display_name': entity.display_name,
-            'description': entity.description,
-            'context_window': entity.context_window,
-            'is_active': entity.is_active,
-            'created_at': entity.created_at,
-            'updated_at': entity.updated_at,
+            "id": entity.id,
+            "provider_spec_id": entity.provider_spec_id,
+            "model_name": entity.model_name,
+            "display_name": entity.display_name,
+            "description": entity.description,
+            "context_window": entity.context_window,
+            "is_active": entity.is_active,
+            "created_at": entity.created_at,
+            "updated_at": entity.updated_at,
         }
 
         # Remove None values and system fields that will be auto-populated
         spec_data = {k: v for k, v in spec_data.items() if v is not None}
-        spec_data.pop('created_at', None)
-        spec_data.pop('updated_at', None)
+        spec_data.pop("created_at", None)
+        spec_data.pop("updated_at", None)
 
         created_spec = await self.create(**spec_data)
         return await self.get_with_relations(created_spec.id) or created_spec
 
     async def update_spec(self, entity: ModelSpec) -> ModelSpec:
         """Update an existing model spec from domain entity.
-        
+
         Note: This method is deprecated. Use update() with field parameters instead.
         """
         # Extract fields from the spec entity
         spec_data = {
-            'provider_spec_id': entity.provider_spec_id,
-            'model_name': entity.model_name,
-            'display_name': entity.display_name,
-            'description': entity.description,
-            'context_window': entity.context_window,
-            'is_active': entity.is_active,
+            "provider_spec_id": entity.provider_spec_id,
+            "model_name": entity.model_name,
+            "display_name": entity.display_name,
+            "description": entity.description,
+            "context_window": entity.context_window,
+            "is_active": entity.is_active,
         }
 
         # Remove None values

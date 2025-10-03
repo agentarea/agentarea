@@ -8,22 +8,28 @@ from typing import Any
 
 import litellm
 from litellm import (
-    acompletion,
     ModelResponse,
+    acompletion,
 )
 
 from .messages import (
-    BaseMessage as SDKBaseMessage,
-    UserMessage as SDKUserMessage,
-    SystemMessage as SDKSystemMessage,
     AssistantMessage as SDKAssistantMessage,
+)
+from .messages import (
+    SystemMessage as SDKSystemMessage,
+)
+from .messages import (
     ToolMessage as SDKToolMessage,
+)
+from .messages import (
+    UserMessage as SDKUserMessage,
 )
 
 logger = logging.getLogger(__name__)
 
 # Configure LiteLLM callbacks via env to avoid noisy defaults during tests
 import os
+
 _callbacks_env = os.getenv("LITELLM_CALLBACKS")
 if _callbacks_env is not None:
     try:
@@ -221,8 +227,8 @@ class LLMModel:
                 url = f"http://{url}"
             params["base_url"] = url
         # elif self.provider_type == "ollama_chat":
-            # Default Ollama URL - use localhost for local development
-            # params["base_url"] = "http://host.docker.internal:11434"
+        # Default Ollama URL - use localhost for local development
+        # params["base_url"] = "http://host.docker.internal:11434"
 
         # Add tools if provided
         if request.tools:

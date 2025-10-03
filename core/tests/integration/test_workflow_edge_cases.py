@@ -26,10 +26,10 @@ async def test_workflow_with_llm_never_calling_task_complete():
         task_query="Complete a simple test task",
         task_parameters={
             "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3  # Low limit to test termination
+            "max_iterations": 3,  # Low limit to test termination
         },
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     activity_calls = []
@@ -57,8 +57,8 @@ async def test_workflow_with_llm_never_calling_task_complete():
                 "function": {
                     "name": "task_complete",
                     "description": "Mark task as completed",
-                    "parameters": {"type": "object", "properties": {}, "required": []}
-                }
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
             }
         ]
 
@@ -74,7 +74,7 @@ async def test_workflow_with_llm_never_calling_task_complete():
             "content": f"I'm still working on this task... (iteration {llm_call_count})",
             "tool_calls": None,  # No tool calls
             "cost": 0.001,
-            "usage": {"total_tokens": 30}
+            "usage": {"total_tokens": 30},
         }
 
     @activity.defn(name="execute_mcp_tool_activity")
@@ -101,7 +101,7 @@ async def test_workflow_with_llm_never_calling_task_complete():
             mock_call_llm,
             mock_execute_tool,
             mock_evaluate_goal,
-            mock_publish_events
+            mock_publish_events,
         ]
 
         async with Worker(
@@ -115,17 +115,21 @@ async def test_workflow_with_llm_never_calling_task_complete():
                 execution_request,
                 id=f"test-workflow-{uuid4()}",
                 task_queue="test-queue",
-                execution_timeout=timedelta(seconds=15)
+                execution_timeout=timedelta(seconds=15),
             )
 
             # Should complete due to max iterations, not success
             assert result.success is False, "Should not be successful when max iterations reached"
-            assert result.reasoning_iterations_used == 2, f"Expected 2 completed iterations, got {result.reasoning_iterations_used}"
+            assert result.reasoning_iterations_used == 2, (
+                f"Expected 2 completed iterations, got {result.reasoning_iterations_used}"
+            )
             assert llm_call_count == 2, f"Expected 2 LLM calls, got {llm_call_count}"
 
             logger.info(f"Activity calls: {activity_calls}")
             logger.info(f"LLM call count: {llm_call_count}")
-            logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
+            logger.info(
+                f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}"
+            )
     finally:
         await env.shutdown()
 
@@ -139,12 +143,9 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete a simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 5
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 5},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     activity_calls = []
@@ -171,8 +172,8 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
                 "function": {
                     "name": "task_complete",
                     "description": "Mark task as completed",
-                    "parameters": {"type": "object", "properties": {}, "required": []}
-                }
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
             }
         ]
 
@@ -189,12 +190,12 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
                     "type": "function",
                     "function": {
                         "name": "task_complete",
-                        "arguments": json.dumps({"result": "Task attempted"})
-                    }
+                        "arguments": json.dumps({"result": "Task attempted"}),
+                    },
                 }
             ],
             "cost": 0.001,
-            "usage": {"total_tokens": 40}
+            "usage": {"total_tokens": 40},
         }
 
     @activity.defn(name="execute_mcp_tool_activity")
@@ -206,7 +207,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
                 "success": False,  # Not successful!
                 "completed": False,  # Not completed!
                 "result": "Task failed to complete properly",
-                "tool_name": "task_complete"
+                "tool_name": "task_complete",
             }
         return {"success": False, "result": "Unknown tool"}
 
@@ -228,7 +229,7 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
             mock_call_llm,
             mock_execute_tool,
             mock_evaluate_goal,
-            mock_publish_events
+            mock_publish_events,
         ]
 
         async with Worker(
@@ -242,12 +243,14 @@ async def test_workflow_with_llm_calling_task_complete_but_unsuccessful():
                 execution_request,
                 id=f"test-workflow-{uuid4()}",
                 task_queue="test-queue",
-                execution_timeout=timedelta(seconds=15)
+                execution_timeout=timedelta(seconds=15),
             )
 
             # Should continue after unsuccessful task_complete
             # This tests that the workflow doesn't get stuck when task_complete fails
-            logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
+            logger.info(
+                f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}"
+            )
             logger.info(f"Activity calls: {activity_calls}")
 
             # The workflow should continue and eventually hit max iterations or succeed through goal evaluation
@@ -265,12 +268,9 @@ async def test_workflow_with_empty_llm_responses():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete a simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     activity_calls = []
@@ -297,8 +297,8 @@ async def test_workflow_with_empty_llm_responses():
                 "function": {
                     "name": "task_complete",
                     "description": "Mark task as completed",
-                    "parameters": {"type": "object", "properties": {}, "required": []}
-                }
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
             }
         ]
 
@@ -311,7 +311,7 @@ async def test_workflow_with_empty_llm_responses():
             "content": "",  # Empty content
             "tool_calls": None,  # No tool calls
             "cost": 0.001,
-            "usage": {"total_tokens": 10}
+            "usage": {"total_tokens": 10},
         }
 
     @activity.defn(name="execute_mcp_tool_activity")
@@ -337,7 +337,7 @@ async def test_workflow_with_empty_llm_responses():
             mock_call_llm,
             mock_execute_tool,
             mock_evaluate_goal,
-            mock_publish_events
+            mock_publish_events,
         ]
 
         async with Worker(
@@ -351,14 +351,18 @@ async def test_workflow_with_empty_llm_responses():
                 execution_request,
                 id=f"test-workflow-{uuid4()}",
                 task_queue="test-queue",
-                execution_timeout=timedelta(seconds=15)
+                execution_timeout=timedelta(seconds=15),
             )
 
             # Should handle empty responses and eventually terminate
-            logger.info(f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}")
+            logger.info(
+                f"Final result: success={result.success}, iterations={result.reasoning_iterations_used}"
+            )
             logger.info(f"Activity calls: {activity_calls}")
 
-            assert result.reasoning_iterations_used == 2, "Should hit max iterations with empty responses"
+            assert result.reasoning_iterations_used == 2, (
+                "Should hit max iterations with empty responses"
+            )
             assert result.success is False, "Should not be successful with empty responses"
     finally:
         await env.shutdown()

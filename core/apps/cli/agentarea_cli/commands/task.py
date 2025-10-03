@@ -10,8 +10,8 @@ import httpx
 from agentarea_cli.client import run_async
 from agentarea_cli.exceptions import APIError as AgentAreaAPIError
 from agentarea_cli.exceptions import AuthenticationError
-from agentarea_cli.utils import format_table, safe_get_field
 from agentarea_cli.protocol_routing import ProtocolRouter
+from agentarea_cli.utils import format_table, safe_get_field
 
 if TYPE_CHECKING:
     from agentarea_cli.client import AgentAreaClient
@@ -31,14 +31,39 @@ def task():
 @click.option("--user-id", default="cli_user", help="User ID")
 @click.option("--stream/--no-stream", default=True, help="Stream task execution events")
 @click.option("--timeout", default=300, help="Timeout in seconds for task execution")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--protocol", type=click.Choice(["internal", "a2a"]), default="internal", help="Protocol to use for communication")
-@click.option("--requires-human-approval/--no-requires-human-approval", default=False, help="Require human approval before task runs")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
+@click.option(
+    "--protocol",
+    type=click.Choice(["internal", "a2a"]),
+    default="internal",
+    help="Protocol to use for communication",
+)
+@click.option(
+    "--requires-human-approval/--no-requires-human-approval",
+    default=False,
+    help="Require human approval before task runs",
+)
 @click.pass_context
-def create(ctx, agent_id: str, description: str, parameters: str | None, user_id: str,
-          stream: bool, timeout: int, output_format: str, protocol: str, requires_human_approval: bool):
+def create(
+    ctx,
+    agent_id: str,
+    description: str,
+    parameters: str | None,
+    user_id: str,
+    stream: bool,
+    timeout: int,
+    output_format: str,
+    protocol: str,
+    requires_human_approval: bool,
+):
     """Create and execute a task for an agent with real-time event streaming."""
-    client: "AgentAreaClient" = ctx.obj["client"]
+    client: AgentAreaClient = ctx.obj["client"]
 
     # Try parsing parameters JSON
     params_dict = {}
@@ -53,10 +78,30 @@ def create(ctx, agent_id: str, description: str, parameters: str | None, user_id
         router = ProtocolRouter(client)
         if stream:
             # Stream A2A task creation, which will output normalized events
-            return run_async(router.stream_task_create_a2a(agent_id, description, params_dict, user_id, timeout, output_format, requires_human_approval))
+            return run_async(
+                router.stream_task_create_a2a(
+                    agent_id,
+                    description,
+                    params_dict,
+                    user_id,
+                    timeout,
+                    output_format,
+                    requires_human_approval,
+                )
+            )
         else:
             # Non-streaming A2A send: use message/send to get final response
-            return run_async(router.send_a2a_message(agent_id, description, params_dict, user_id, stream=False, output_format=output_format, requires_human_approval=requires_human_approval))
+            return run_async(
+                router.send_a2a_message(
+                    agent_id,
+                    description,
+                    params_dict,
+                    user_id,
+                    stream=False,
+                    output_format=output_format,
+                    requires_human_approval=requires_human_approval,
+                )
+            )
 
     # Internal protocol existing behavior
     if stream:
@@ -103,11 +148,7 @@ def create(ctx, agent_id: str, description: str, parameters: str | None, user_id
 
 
 async def _stream_task_creation(
-    client: "AgentAreaClient",
-    agent_id: str,
-    task_data: dict,
-    timeout: int,
-    output_format: str
+    client: "AgentAreaClient", agent_id: str, task_data: dict, timeout: int, output_format: str
 ):
     """Stream task creation and execution events with chat-like interface."""
     base_url = client.base_url
@@ -116,12 +157,8 @@ async def _stream_task_creation(
 
     async with httpx.AsyncClient(timeout=timeout) as http_client:
         async with http_client.stream(
-            "POST",
-            f"{base_url}/v1/agents/{agent_id}/tasks/",
-            json=task_data,
-            headers=headers
+            "POST", f"{base_url}/v1/agents/{agent_id}/tasks/", json=task_data, headers=headers
         ) as response:
-
             if response.status_code != 200:
                 error_text = await response.aread()
                 raise AgentAreaAPIError(f"HTTP {response.status_code}: {error_text.decode()}")
@@ -129,7 +166,7 @@ async def _stream_task_creation(
             if output_format == "json":
                 events_data = []
                 async for line in response.aiter_lines():
-                    if line.strip().startswith('data:'):
+                    if line.strip().startswith("data:"):
                         try:
                             data = line.strip()[5:].strip()
                             event_data = json.loads(data)
@@ -152,7 +189,7 @@ async def _stream_task_creation(
             async for line in response.aiter_lines():
                 line = line.strip()
 
-                if not line.startswith('data:'):
+                if not line.startswith("data:"):
                     continue
 
                 try:
@@ -169,14 +206,14 @@ async def _stream_task_creation(
 
                     # Format timestamp for display
                     try:
-                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                         time_str = dt.strftime("%H:%M:%S")
                     except:
                         time_str = timestamp[:8] if len(timestamp) > 8 else timestamp
 
                     # Handle different event types with natural conversation flow
                     if event_type == "connected":
-                        agent_name = data_payload.get('agent_name', 'Agent')
+                        agent_name = data_payload.get("agent_name", "Agent")
                         # Silent connection - let the conversation flow naturally
 
                     elif event_type == "task_created":
@@ -266,7 +303,11 @@ async def _stream_task_creation(
                                     click.echo(f"\n{result_str}")
                                 else:
                                     # Show tool result briefly
-                                    result_preview = result_str[:100] + "..." if len(result_str) > 100 else result_str
+                                    result_preview = (
+                                        result_str[:100] + "..."
+                                        if len(result_str) > 100
+                                        else result_str
+                                    )
                                     click.echo(f"🔧 {tool_name}: {result_preview}")
                         # Don't show anything for empty or failed tool calls
 
@@ -277,10 +318,12 @@ async def _stream_task_creation(
                     elif clean_event_type == "WorkflowCompleted":
                         workflow_completed = True
                         # Extract the final result from the workflow
-                        result = (event_data.get("result") or
-                                event_data.get("final_response") or
-                                data_payload.get("result") or
-                                data_payload.get("final_response"))
+                        result = (
+                            event_data.get("result")
+                            or event_data.get("final_response")
+                            or data_payload.get("result")
+                            or data_payload.get("final_response")
+                        )
 
                         if result and result.strip():
                             # If we haven't streamed any content yet, show the result
@@ -313,16 +356,30 @@ async def _stream_task_creation(
                     elif clean_event_type == "LLMCallFailed":
                         # Extract enriched error information
                         original_data = data_payload.get("original_data", data_payload)
-                        error = original_data.get("error", data_payload.get("error", "LLM call failed"))
+                        error = original_data.get(
+                            "error", data_payload.get("error", "LLM call failed")
+                        )
 
                         # Show user-friendly error messages
                         if original_data.get("is_auth_error") or data_payload.get("is_auth_error"):
-                            provider = original_data.get("provider_type", data_payload.get("provider_type", ""))
-                            click.echo(f"\n❌ Authentication failed{f' for {provider}' if provider else ''}. Please check your API key.")
-                        elif original_data.get("is_rate_limit_error") or data_payload.get("is_rate_limit_error"):
-                            retry_after = original_data.get("retry_after", data_payload.get("retry_after"))
-                            click.echo(f"\n⏳ Rate limit exceeded{f'. Retry after {retry_after} seconds' if retry_after else ''}.")
-                        elif original_data.get("is_quota_error") or data_payload.get("is_quota_error"):
+                            provider = original_data.get(
+                                "provider_type", data_payload.get("provider_type", "")
+                            )
+                            click.echo(
+                                f"\n❌ Authentication failed{f' for {provider}' if provider else ''}. Please check your API key."
+                            )
+                        elif original_data.get("is_rate_limit_error") or data_payload.get(
+                            "is_rate_limit_error"
+                        ):
+                            retry_after = original_data.get(
+                                "retry_after", data_payload.get("retry_after")
+                            )
+                            click.echo(
+                                f"\n⏳ Rate limit exceeded{f'. Retry after {retry_after} seconds' if retry_after else ''}."
+                            )
+                        elif original_data.get("is_quota_error") or data_payload.get(
+                            "is_quota_error"
+                        ):
                             click.echo("\n💳 Quota exceeded. Please check your billing settings.")
                         else:
                             click.echo(f"\n❌ LLM error: {error}")
@@ -334,10 +391,14 @@ async def _stream_task_creation(
                     # Handle any other events that might contain useful information
                     else:
                         # Look for meaningful content in the event
-                        message = (data_payload.get("message") or
-                                 data_payload.get("content") or
-                                 data_payload.get("description"))
-                        if message and message.strip() and len(message) > 5:  # Ignore very short messages
+                        message = (
+                            data_payload.get("message")
+                            or data_payload.get("content")
+                            or data_payload.get("description")
+                        )
+                        if (
+                            message and message.strip() and len(message) > 5
+                        ):  # Ignore very short messages
                             click.echo(f"📡 {clean_event_type}: {message}")
 
                 except json.JSONDecodeError:
@@ -357,7 +418,13 @@ async def _stream_task_creation(
 @click.option("--agent-id", help="Filter by agent ID")
 @click.option("--status", help="Filter by status (running, completed, failed, etc.)")
 @click.option("--limit", default=10, help="Maximum number of tasks to show")
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.pass_context
 def list(ctx, agent_id: str | None, status: str | None, limit: int, output_format: str):
     """List tasks with optional filtering."""
@@ -390,7 +457,7 @@ def list(ctx, agent_id: str | None, status: str | None, limit: int, output_forma
                 return
 
             # Ensure data is a list
-            if not hasattr(data, '__iter__') or isinstance(data, str):
+            if not hasattr(data, "__iter__") or isinstance(data, str):
                 click.echo("📭 No tasks found")
                 return
 
@@ -414,7 +481,7 @@ def list(ctx, agent_id: str | None, status: str | None, limit: int, output_forma
 
                 # Format timestamp
                 try:
-                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                     time_str = dt.strftime("%m-%d %H:%M")
                 except:
                     time_str = created_at[:16] if len(created_at) > 16 else created_at
@@ -425,19 +492,21 @@ def list(ctx, agent_id: str | None, status: str | None, limit: int, output_forma
                     "running": "🏃",
                     "pending": "⏳",
                     "failed": "❌",
-                    "cancelled": "🚫"
+                    "cancelled": "🚫",
                 }.get(task_status.lower(), "❓")
 
                 # Truncate description
                 desc_short = description[:40] + "..." if len(description) > 40 else description
 
-                rows.append([
-                    task_id[:8] + "...",  # Truncate ID
-                    agent_name[:15] + "..." if len(agent_name) > 15 else agent_name,
-                    desc_short,
-                    f"{status_emoji} {task_status}",
-                    time_str
-                ])
+                rows.append(
+                    [
+                        task_id[:8] + "...",  # Truncate ID
+                        agent_name[:15] + "..." if len(agent_name) > 15 else agent_name,
+                        desc_short,
+                        f"{status_emoji} {task_status}",
+                        time_str,
+                    ]
+                )
 
             click.echo(format_table(headers, rows))
 
@@ -454,7 +523,13 @@ def list(ctx, agent_id: str | None, status: str | None, limit: int, output_forma
 @task.command()
 @click.argument("task_id")
 @click.option("--agent-id", help="Agent ID (required if not using global task ID)")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
 @click.pass_context
 def status(ctx, task_id: str, agent_id: str | None, output_format: str):
     """Get detailed status of a specific task."""
@@ -499,7 +574,7 @@ def status(ctx, task_id: str, agent_id: str | None, output_format: str):
                 "running": "🏃",
                 "pending": "⏳",
                 "failed": "❌",
-                "cancelled": "🚫"
+                "cancelled": "🚫",
             }.get(status.lower(), "❓")
 
             click.echo(f"Status: {status_emoji} {status}")
@@ -536,10 +611,23 @@ def status(ctx, task_id: str, agent_id: str | None, output_format: str):
 @click.argument("task_id")
 @click.option("--agent-id", help="Agent ID (required if not using global task ID)")
 @click.option("--follow", "-f", is_flag=True, help="Follow/stream live events")
-@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--protocol", type=click.Choice(["internal", "a2a"]), default="internal", help="Protocol to use for communication")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
+@click.option(
+    "--protocol",
+    type=click.Choice(["internal", "a2a"]),
+    default="internal",
+    help="Protocol to use for communication",
+)
 @click.pass_context
-def events(ctx, task_id: str, agent_id: str | None, follow: bool, output_format: str, protocol: str):
+def events(
+    ctx, task_id: str, agent_id: str | None, follow: bool, output_format: str, protocol: str
+):
     """View task execution events."""
 
     async def _get_events():
@@ -580,10 +668,16 @@ def events(ctx, task_id: str, agent_id: str | None, follow: bool, output_format:
                     state = safe_get_field(status, "status.state", "unknown")
                     click.echo(f"Task {task_id} state: {state}")
                     # If events history is not available over A2A, inform user
-                    click.echo("ℹ️ Detailed event history is not available via A2A. Use internal protocol for full events.")
+                    click.echo(
+                        "ℹ️ Detailed event history is not available via A2A. Use internal protocol for full events."
+                    )
                     return
                 else:
-                    endpoint = f"/v1/agents/{agent_id}/tasks/{task_id}/events" if agent_id else f"/v1/tasks/{task_id}/events"
+                    endpoint = (
+                        f"/v1/agents/{agent_id}/tasks/{task_id}/events"
+                        if agent_id
+                        else f"/v1/tasks/{task_id}/events"
+                    )
                     data = await client.get(endpoint)
 
                     events = data.get("events", []) if isinstance(data, dict) else data
@@ -603,7 +697,7 @@ def events(ctx, task_id: str, agent_id: str | None, follow: bool, output_format:
 
                             # Format timestamp
                             try:
-                                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                                 time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
                             except:
                                 time_str = timestamp
@@ -630,7 +724,7 @@ async def _stream_task_events(
     agent_id: str,
     task_id: str,
     output_format: str,
-    protocol: str = "internal"
+    protocol: str = "internal",
 ):
     """Stream live task events."""
     if protocol == "a2a":
@@ -639,7 +733,7 @@ async def _stream_task_events(
         click.echo("ℹ️ A2A protocol doesn't support dedicated event streaming for existing tasks.")
         click.echo("   Use 'agentarea a2a get-task' to check task status instead.")
         return
-    
+
     # Internal streaming implementation
     base_url = client.base_url
     headers = client._get_headers()
@@ -649,11 +743,8 @@ async def _stream_task_events(
 
     async with httpx.AsyncClient(timeout=300) as http_client:
         async with http_client.stream(
-            "GET",
-            f"{base_url}/v1/agents/{agent_id}/tasks/{task_id}/events/stream",
-            headers=headers
+            "GET", f"{base_url}/v1/agents/{agent_id}/tasks/{task_id}/events/stream", headers=headers
         ) as response:
-
             if response.status_code != 200:
                 error_text = await response.aread()
                 raise AgentAreaAPIError(f"HTTP {response.status_code}: {error_text.decode()}")
@@ -661,7 +752,7 @@ async def _stream_task_events(
             async for line in response.aiter_lines():
                 line = line.strip()
 
-                if line.startswith('data:'):
+                if line.startswith("data:"):
                     try:
                         data = line[5:].strip()
                         event_data = json.loads(data)
@@ -678,7 +769,7 @@ async def _stream_task_events(
 
                         # Format timestamp
                         try:
-                            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                             time_str = dt.strftime("%H:%M:%S")
                         except:
                             time_str = timestamp[:8] if len(timestamp) > 8 else timestamp
@@ -696,9 +787,16 @@ async def _stream_task_events(
 
 @task.command()
 @click.option("--agent-id", required=True, help="Agent ID to chat with")
-@click.option("--message", "-m", help="Single message to send (if not provided, enters interactive mode)")
+@click.option(
+    "--message", "-m", help="Single message to send (if not provided, enters interactive mode)"
+)
 @click.option("--timeout", default=300, help="Timeout in seconds for each message")
-@click.option("--protocol", type=click.Choice(["internal", "a2a"]), default="internal", help="Protocol to use for communication")
+@click.option(
+    "--protocol",
+    type=click.Choice(["internal", "a2a"]),
+    default="internal",
+    help="Protocol to use for communication",
+)
 @click.pass_context
 def chat(ctx, agent_id: str, message: str | None, timeout: int, protocol: str):
     """Chat with an agent in a conversational interface."""
@@ -722,7 +820,9 @@ def chat(ctx, agent_id: str, message: str | None, timeout: int, protocol: str):
     run_async(_chat())
 
 
-async def _send_single_message(client: "AgentAreaClient", agent_id: str, message: str, timeout: int, protocol: str):
+async def _send_single_message(
+    client: "AgentAreaClient", agent_id: str, message: str, timeout: int, protocol: str
+):
     """Send a single message and display the response."""
     click.echo(f"💬 You: {message}")
     click.echo()
@@ -730,7 +830,13 @@ async def _send_single_message(client: "AgentAreaClient", agent_id: str, message
     if protocol == "a2a":
         router = ProtocolRouter(client)
         # Use A2A streaming to send the message
-        await router.send_a2a_message(agent_id=agent_id, message=message, parameters={"task_type": "chat", "created_via": "cli_task_chat"}, stream=True, output_format="text")
+        await router.send_a2a_message(
+            agent_id=agent_id,
+            message=message,
+            parameters={"task_type": "chat", "created_via": "cli_task_chat"},
+            stream=True,
+            output_format="text",
+        )
         return
 
     # Internal default: create a task and stream its events
@@ -739,7 +845,7 @@ async def _send_single_message(client: "AgentAreaClient", agent_id: str, message
         "parameters": {
             "task_type": "chat",
             "session_id": f"cli-chat-{int(datetime.now().timestamp())}",
-            "created_via": "cli_chat"
+            "created_via": "cli_chat",
         },
         "user_id": "cli_user",
         "enable_agent_communication": True,
@@ -762,11 +868,11 @@ async def _interactive_chat(client: "AgentAreaClient", agent_id: str, timeout: i
             # Get user input
             user_input = click.prompt("You", type=str).strip()
 
-            if user_input.lower() in ['exit', 'quit']:
+            if user_input.lower() in ["exit", "quit"]:
                 click.echo("👋 Goodbye!")
                 break
 
-            if user_input.lower() == 'clear':
+            if user_input.lower() == "clear":
                 session_id = f"cli-interactive-{int(datetime.now().timestamp())}"
                 message_count = 0
                 click.echo("🔄 Started new conversation")
@@ -787,10 +893,10 @@ async def _interactive_chat(client: "AgentAreaClient", agent_id: str, timeout: i
                         "task_type": "chat",
                         "session_id": session_id,
                         "created_via": "cli_interactive",
-                        "message_number": message_count
+                        "message_number": message_count,
                     },
                     stream=True,
-                    output_format="text"
+                    output_format="text",
                 )
                 click.echo()  # Add space after agent response
                 continue
@@ -802,7 +908,7 @@ async def _interactive_chat(client: "AgentAreaClient", agent_id: str, timeout: i
                     "task_type": "chat",
                     "session_id": session_id,
                     "created_via": "cli_interactive",
-                    "message_number": message_count
+                    "message_number": message_count,
                 },
                 "user_id": "cli_user",
                 "enable_agent_communication": True,

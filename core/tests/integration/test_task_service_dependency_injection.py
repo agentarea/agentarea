@@ -48,15 +48,17 @@ class TestTaskServiceDependencyInjectionIntegration:
             return {
                 "task_service_type": type(task_service).__name__,
                 "agent_service_type": type(agent_service).__name__,
-                "has_task_repository": hasattr(task_service, 'task_repository'),
-                "has_event_broker": hasattr(task_service, 'event_broker'),
-                "has_task_manager": hasattr(task_service, 'task_manager'),
-                "has_agent_repository": hasattr(task_service, 'agent_repository'),
+                "has_task_repository": hasattr(task_service, "task_repository"),
+                "has_event_broker": hasattr(task_service, "event_broker"),
+                "has_task_manager": hasattr(task_service, "task_manager"),
+                "has_agent_repository": hasattr(task_service, "agent_repository"),
             }
 
         return app
 
-    def test_task_service_dependency_injection_in_endpoint(self, test_app, mock_task_service, mock_agent_service):
+    def test_task_service_dependency_injection_in_endpoint(
+        self, test_app, mock_task_service, mock_agent_service
+    ):
         """Test that task service dependency injection works in API endpoints."""
         client = TestClient(test_app)
 
@@ -87,7 +89,7 @@ class TestTaskServiceDependencyInjectionIntegration:
 
         # This test verifies that the dependency injection chain works with real components
         # We'll mock the database session but use real service instantiation
-        with patch('agentarea_common.infrastructure.database.get_db_session') as mock_get_session:
+        with patch("agentarea_common.infrastructure.database.get_db_session") as mock_get_session:
             mock_session = AsyncMock()
             mock_get_session.return_value = mock_session
 
@@ -99,10 +101,10 @@ class TestTaskServiceDependencyInjectionIntegration:
 
             # Verify the service is properly instantiated
             assert isinstance(task_service, TaskService)
-            assert hasattr(task_service, 'task_repository')
-            assert hasattr(task_service, 'event_broker')
-            assert hasattr(task_service, 'task_manager')
-            assert hasattr(task_service, 'agent_repository')
+            assert hasattr(task_service, "task_repository")
+            assert hasattr(task_service, "event_broker")
+            assert hasattr(task_service, "task_manager")
+            assert hasattr(task_service, "agent_repository")
 
             # Verify the dependencies are of the correct types
             from agentarea_agents.infrastructure.repository import AgentRepository
@@ -121,7 +123,7 @@ class TestTaskServiceDependencyInjectionIntegration:
         # This test verifies that the dependency injection chain works correctly
         # by testing that we can instantiate the service and access its methods
 
-        with patch('agentarea_common.infrastructure.database.get_db_session') as mock_get_session:
+        with patch("agentarea_common.infrastructure.database.get_db_session") as mock_get_session:
             mock_session = AsyncMock()
             mock_get_session.return_value = mock_session
 
@@ -130,11 +132,11 @@ class TestTaskServiceDependencyInjectionIntegration:
             task_service = await get_task_service(mock_session, event_broker)
 
             # Test that the service has all required methods and attributes
-            assert hasattr(task_service, 'create_task')
-            assert hasattr(task_service, 'get_task')
-            assert hasattr(task_service, 'update_task')
-            assert hasattr(task_service, 'submit_task')
-            assert hasattr(task_service, 'cancel_task')
+            assert hasattr(task_service, "create_task")
+            assert hasattr(task_service, "get_task")
+            assert hasattr(task_service, "update_task")
+            assert hasattr(task_service, "submit_task")
+            assert hasattr(task_service, "cancel_task")
 
             # Test that dependencies are properly injected
             assert task_service.task_repository is not None

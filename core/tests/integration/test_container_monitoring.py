@@ -27,10 +27,7 @@ async def test_container_health_status():
 
     timestamp = datetime.now()
     status = ContainerHealthStatus(
-        service_name="test-service",
-        is_healthy=True,
-        status="running",
-        timestamp=timestamp
+        service_name="test-service", is_healthy=True, status="running", timestamp=timestamp
     )
 
     assert status.service_name == "test-service"

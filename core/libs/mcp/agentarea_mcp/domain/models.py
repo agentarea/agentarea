@@ -9,6 +9,7 @@ Base = declarative_base()
 
 class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     """MCP Server model with workspace awareness and audit trail."""
+
     __tablename__ = "mcp_servers"
 
     name: Mapped[str] = mapped_column(String, nullable=False)
@@ -35,7 +36,7 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         env_schema: list[dict[str, Any]] | None = None,
         cmd: list[str] | None = None,
         # Note: user_id and workspace_id are now handled by BaseModel
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)  # Let BaseModel handle id, timestamps, user_id, workspace_id
         self.name = name

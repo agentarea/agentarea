@@ -54,7 +54,7 @@ async def test_worker_event_publishing():
         dependencies = ActivityDependencies(
             settings=settings,
             event_broker=event_broker,  # RedisRouter instance
-            secret_manager=secret_manager
+            secret_manager=secret_manager,
         )
 
         logger.info(f"Event broker type: {type(dependencies.event_broker)}")
@@ -66,7 +66,7 @@ async def test_worker_event_publishing():
         # Find the publish_workflow_events_activity
         publish_activity = None
         for activity in activities:
-            if hasattr(activity, '__name__') and 'publish_workflow_events' in activity.__name__:
+            if hasattr(activity, "__name__") and "publish_workflow_events" in activity.__name__:
                 publish_activity = activity
                 break
 
@@ -79,30 +79,34 @@ async def test_worker_event_publishing():
         # Create test event data (like workflow would pass)
         task_id = uuid4()
         test_events = [
-            json.dumps({
-                "event_id": str(uuid4()),
-                "event_type": "LLMCallStarted",
-                "timestamp": datetime.now(UTC).isoformat(),
-                "data": {
-                    "task_id": str(task_id),
-                    "agent_id": str(uuid4()),
-                    "execution_id": f"agent-task-{task_id}",
-                    "iteration": 1,
-                    "model": "test-model"
+            json.dumps(
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "LLMCallStarted",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "data": {
+                        "task_id": str(task_id),
+                        "agent_id": str(uuid4()),
+                        "execution_id": f"agent-task-{task_id}",
+                        "iteration": 1,
+                        "model": "test-model",
+                    },
                 }
-            }),
-            json.dumps({
-                "event_id": str(uuid4()),
-                "event_type": "LLMCallCompleted",
-                "timestamp": datetime.now(UTC).isoformat(),
-                "data": {
-                    "task_id": str(task_id),
-                    "agent_id": str(uuid4()),
-                    "execution_id": f"agent-task-{task_id}",
-                    "iteration": 1,
-                    "response": "Test response"
+            ),
+            json.dumps(
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "LLMCallCompleted",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "data": {
+                        "task_id": str(task_id),
+                        "agent_id": str(uuid4()),
+                        "execution_id": f"agent-task-{task_id}",
+                        "iteration": 1,
+                        "response": "Test response",
+                    },
                 }
-            })
+            ),
         ]
 
         # Test the activity
@@ -120,6 +124,7 @@ async def test_worker_event_publishing():
     except Exception as e:
         logger.error(f"❌ Test failed with exception: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

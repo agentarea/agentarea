@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Message:
     """Structured message for conversation history."""
+
     role: str
     content: str
     tool_call_id: str | None = None
@@ -22,6 +23,7 @@ class Message:
 @dataclass
 class AgentGoal:
     """Agent goal definition."""
+
     description: str
     success_criteria: list[str]
     max_iterations: int = 10
@@ -31,6 +33,7 @@ class AgentGoal:
 @dataclass
 class RunnerConfig:
     """Configuration for agent runners."""
+
     max_iterations: int = 25
     budget_limit: float | None = None
     temperature: float = 0.1
@@ -40,6 +43,7 @@ class RunnerConfig:
 @dataclass
 class ExecutionResult:
     """Result from agent execution."""
+
     success: bool
     current_iteration: int
     messages: list[Message] = field(default_factory=list)
@@ -53,7 +57,7 @@ class ExecutionTerminator:
 
     def __init__(self, config: RunnerConfig):
         """Initialize terminator with configuration.
-        
+
         Args:
             config: Runner configuration
         """
@@ -62,21 +66,21 @@ class ExecutionTerminator:
 
     def should_continue(self, state: Any) -> tuple[bool, str]:
         """Check if execution should continue.
-        
+
         Args:
             state: Current execution state
-            
+
         Returns:
             tuple[bool, str]: (should_continue, reason_for_stopping)
         """
         # Check if goal is achieved (highest priority)
-        if hasattr(state, 'success') and state.success:
+        if hasattr(state, "success") and state.success:
             return False, "Goal achieved successfully"
 
         # Check maximum iterations - use goal's max_iterations if available
-        current_iteration = getattr(state, 'current_iteration', 0)
+        current_iteration = getattr(state, "current_iteration", 0)
         max_iterations = self.config.max_iterations
-        if hasattr(state, 'goal') and state.goal and hasattr(state.goal, 'max_iterations'):
+        if hasattr(state, "goal") and state.goal and hasattr(state.goal, "max_iterations"):
             max_iterations = state.goal.max_iterations
 
         if current_iteration >= max_iterations:
@@ -84,7 +88,10 @@ class ExecutionTerminator:
 
         # Check budget constraints
         if self.budget_tracker and self.budget_tracker.is_exceeded():
-            return False, f"Budget exceeded (${self.budget_tracker.cost:.2f}/${self.budget_tracker.budget_limit:.2f})"
+            return (
+                False,
+                f"Budget exceeded (${self.budget_tracker.cost:.2f}/${self.budget_tracker.budget_limit:.2f})",
+            )
 
         # If we get here, execution should continue
         return True, "Continue execution"
@@ -92,7 +99,7 @@ class ExecutionTerminator:
 
 class BaseAgentRunner(ABC):
     """Base class for agent execution runners.
-    
+
     Provides a unified interface for different execution environments
     (synchronous, Temporal workflow, etc.) while maintaining consistent
     behavior and termination conditions.
@@ -100,7 +107,7 @@ class BaseAgentRunner(ABC):
 
     def __init__(self, config: RunnerConfig | None = None):
         """Initialize the base runner.
-        
+
         Args:
             config: Runner configuration
         """
@@ -111,10 +118,10 @@ class BaseAgentRunner(ABC):
     @abstractmethod
     async def run(self, goal: AgentGoal) -> ExecutionResult:
         """Execute the agent workflow.
-        
+
         Args:
             goal: The goal to achieve
-            
+
         Returns:
             ExecutionResult with final results
         """
@@ -123,7 +130,7 @@ class BaseAgentRunner(ABC):
     @abstractmethod
     async def _execute_iteration(self, state: Any) -> None:
         """Execute a single iteration.
-        
+
         Args:
             state: Current execution state
         """
@@ -131,10 +138,10 @@ class BaseAgentRunner(ABC):
 
     def _should_continue(self, state: Any) -> tuple[bool, str]:
         """Check if execution should continue.
-        
+
         Args:
             state: Current execution state
-            
+
         Returns:
             tuple[bool, str]: (should_continue, reason_for_stopping)
         """
@@ -147,12 +154,12 @@ class BaseAgentRunner(ABC):
         wait_for_unpause: Callable[[], Any] | None = None,
     ) -> ExecutionResult:
         """Execute the main agent loop with unified termination logic.
-        
+
         Args:
             state: Execution state object
             pause_check: Optional function to check if execution is paused
             wait_for_unpause: Optional function to wait for unpause
-            
+
         Returns:
             ExecutionResult with final results
         """
@@ -171,7 +178,9 @@ class BaseAgentRunner(ABC):
             # Check if we should finish after completing the iteration
             should_continue, reason = self._should_continue(state)
             if not should_continue:
-                logger.info(f"Stopping execution after iteration {state.current_iteration}: {reason}")
+                logger.info(
+                    f"Stopping execution after iteration {state.current_iteration}: {reason}"
+                )
                 break
 
             # Check for pause (if supported)
@@ -184,10 +193,10 @@ class BaseAgentRunner(ABC):
         logger.info(f"Agent execution completed after {state.current_iteration} iterations")
 
         return ExecutionResult(
-            success=getattr(state, 'success', False),
+            success=getattr(state, "success", False),
             current_iteration=state.current_iteration,
-            messages=getattr(state, 'messages', []),
-            final_response=getattr(state, 'final_response', None),
-            total_cost=getattr(state, 'total_cost', 0.0),
-            termination_reason=reason
+            messages=getattr(state, "messages", []),
+            final_response=getattr(state, "final_response", None),
+            total_cost=getattr(state, "total_cost", 0.0),
+            termination_reason=reason,
         )

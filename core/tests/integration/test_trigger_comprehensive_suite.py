@@ -22,6 +22,7 @@ try:
     )
     from agentarea_triggers.trigger_service import TriggerService
     from agentarea_triggers.webhook_manager import WebhookManager
+
     TRIGGERS_AVAILABLE = True
 except ImportError:
     TRIGGERS_AVAILABLE = False
@@ -77,11 +78,7 @@ class TestTriggerComprehensiveSuite:
 
     @pytest.fixture
     async def trigger_service(
-        self,
-        trigger_repositories,
-        mock_event_broker,
-        mock_agent_repository,
-        mock_task_service
+        self, trigger_repositories, mock_event_broker, mock_agent_repository, mock_task_service
     ):
         """Create trigger service with real repositories."""
         trigger_repo, execution_repo = trigger_repositories
@@ -93,16 +90,13 @@ class TestTriggerComprehensiveSuite:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=AsyncMock()
+            temporal_schedule_manager=AsyncMock(),
         )
 
     @pytest.fixture
     async def webhook_manager(self, trigger_service, mock_event_broker):
         """Create webhook manager for testing."""
-        return WebhookManager(
-            trigger_service=trigger_service,
-            event_broker=mock_event_broker
-        )
+        return WebhookManager(trigger_service=trigger_service, event_broker=mock_event_broker)
 
     @pytest.fixture
     def sample_agent_id(self):
@@ -111,11 +105,7 @@ class TestTriggerComprehensiveSuite:
 
     # System Health and Validation Tests
 
-    async def test_trigger_system_health_check(
-        self,
-        trigger_service,
-        webhook_manager
-    ):
+    async def test_trigger_system_health_check(self, trigger_service, webhook_manager):
         """Test overall trigger system health."""
         # Test trigger service health
         service_health = await trigger_service.check_health()
@@ -129,11 +119,7 @@ class TestTriggerComprehensiveSuite:
         assert "trigger_service" in webhook_health["components"]
 
     async def test_trigger_system_component_integration(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Test integration between all trigger system components."""
         # Create triggers of different types
@@ -143,7 +129,7 @@ class TestTriggerComprehensiveSuite:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             task_parameters={"integration_test": "cron"},
-            created_by="integration_test"
+            created_by="integration_test",
         )
 
         webhook_trigger_data = TriggerCreate(
@@ -152,7 +138,7 @@ class TestTriggerComprehensiveSuite:
             trigger_type=TriggerType.WEBHOOK,
             webhook_type=WebhookType.GENERIC,
             task_parameters={"integration_test": "webhook"},
-            created_by="integration_test"
+            created_by="integration_test",
         )
 
         # Create triggers
@@ -160,14 +146,8 @@ class TestTriggerComprehensiveSuite:
         webhook_trigger = await trigger_service.create_trigger(webhook_trigger_data)
 
         # Test cron trigger execution
-        cron_execution_data = {
-            "execution_time": datetime.utcnow().isoformat(),
-            "source": "cron"
-        }
-        cron_result = await trigger_service.execute_trigger(
-            cron_trigger.id,
-            cron_execution_data
-        )
+        cron_execution_data = {"execution_time": datetime.utcnow().isoformat(), "source": "cron"}
+        cron_result = await trigger_service.execute_trigger(cron_trigger.id, cron_execution_data)
         assert cron_result.status == ExecutionStatus.SUCCESS
 
         # Test webhook trigger execution via webhook manager
@@ -176,7 +156,7 @@ class TestTriggerComprehensiveSuite:
             "POST",
             {"Content-Type": "application/json"},
             {"integration_test": "webhook_request"},
-            {}
+            {},
         )
         assert webhook_response["status_code"] == 200
         assert webhook_response["body"]["status"] == "success"
@@ -192,10 +172,7 @@ class TestTriggerComprehensiveSuite:
         assert len(webhook_history) == 1
 
     async def test_trigger_system_data_consistency(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test data consistency across trigger operations."""
         # Create trigger
@@ -207,7 +184,7 @@ class TestTriggerComprehensiveSuite:
             cron_expression="0 9 * * *",
             task_parameters={"consistency_test": True},
             failure_threshold=5,
-            created_by="consistency_test"
+            created_by="consistency_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -227,10 +204,9 @@ class TestTriggerComprehensiveSuite:
 
         # 2. Update trigger and verify changes persist
         from agentarea_triggers.domain.models import TriggerUpdate
+
         update_data = TriggerUpdate(
-            name="Updated Consistency Test",
-            description="Updated description",
-            failure_threshold=3
+            name="Updated Consistency Test", description="Updated description", failure_threshold=3
         )
 
         updated_trigger = await trigger_service.update_trigger(trigger_id, update_data)
@@ -256,10 +232,7 @@ class TestTriggerComprehensiveSuite:
         assert len(final_history) == 1  # Should still have the original execution
 
     async def test_trigger_system_error_recovery(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test trigger system error recovery capabilities."""
         # Create trigger
@@ -269,7 +242,7 @@ class TestTriggerComprehensiveSuite:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=3,
-            created_by="error_recovery_test"
+            created_by="error_recovery_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -301,11 +274,7 @@ class TestTriggerComprehensiveSuite:
         assert recovered_trigger.is_active is True
 
     async def test_trigger_system_scalability_validation(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Test trigger system scalability with multiple triggers and executions."""
         # Create multiple triggers of different types
@@ -317,9 +286,9 @@ class TestTriggerComprehensiveSuite:
                 name=f"Scalability Cron {i}",
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
-                cron_expression=f"0 {9+i} * * *",
+                cron_expression=f"0 {9 + i} * * *",
                 task_parameters={"scalability_test": "cron", "index": i},
-                created_by="scalability_test"
+                created_by="scalability_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(("cron", trigger))
@@ -332,7 +301,7 @@ class TestTriggerComprehensiveSuite:
                 trigger_type=TriggerType.WEBHOOK,
                 webhook_type=WebhookType.GENERIC,
                 task_parameters={"scalability_test": "webhook", "index": i},
-                created_by="scalability_test"
+                created_by="scalability_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(("webhook", trigger))
@@ -346,7 +315,7 @@ class TestTriggerComprehensiveSuite:
                 for j in range(3):
                     execution_data = {
                         "execution_time": datetime.utcnow().isoformat(),
-                        "execution_index": j
+                        "execution_index": j,
                     }
                     result = await trigger_service.execute_trigger(trigger.id, execution_data)
                     assert result.status == ExecutionStatus.SUCCESS
@@ -360,7 +329,7 @@ class TestTriggerComprehensiveSuite:
                         "POST",
                         {"Content-Type": "application/json"},
                         {"execution_index": j},
-                        {}
+                        {},
                     )
                     assert response["status_code"] == 200
                     total_executions += 1
@@ -375,11 +344,7 @@ class TestTriggerComprehensiveSuite:
             history = await trigger_service.get_execution_history(trigger.id)
             assert len(history) == 3
 
-    async def test_trigger_system_configuration_validation(
-        self,
-        trigger_service,
-        sample_agent_id
-    ):
+    async def test_trigger_system_configuration_validation(self, trigger_service, sample_agent_id):
         """Test trigger system configuration validation."""
         # Test valid configurations
         valid_configs = [
@@ -387,15 +352,15 @@ class TestTriggerComprehensiveSuite:
                 "name": "Valid Cron Trigger",
                 "trigger_type": TriggerType.CRON,
                 "cron_expression": "0 9 * * 1-5",
-                "timezone": "UTC"
+                "timezone": "UTC",
             },
             {
                 "name": "Valid Webhook Trigger",
                 "trigger_type": TriggerType.WEBHOOK,
                 "webhook_type": WebhookType.GITHUB,
                 "allowed_methods": ["POST"],
-                "validation_rules": {"required_headers": ["X-GitHub-Event"]}
-            }
+                "validation_rules": {"required_headers": ["X-GitHub-Event"]},
+            },
         ]
 
         for config in valid_configs:
@@ -408,7 +373,7 @@ class TestTriggerComprehensiveSuite:
                 webhook_type=config.get("webhook_type"),
                 allowed_methods=config.get("allowed_methods"),
                 validation_rules=config.get("validation_rules"),
-                created_by="config_validation_test"
+                created_by="config_validation_test",
             )
 
             # Should create successfully
@@ -417,11 +382,7 @@ class TestTriggerComprehensiveSuite:
             assert trigger.name == config["name"]
 
     async def test_trigger_system_monitoring_and_observability(
-        self,
-        trigger_service,
-        mock_task_service,
-        mock_event_broker,
-        sample_agent_id
+        self, trigger_service, mock_task_service, mock_event_broker, sample_agent_id
     ):
         """Test trigger system monitoring and observability features."""
         # Create trigger
@@ -431,7 +392,7 @@ class TestTriggerComprehensiveSuite:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             task_parameters={"monitoring_test": True},
-            created_by="monitoring_test"
+            created_by="monitoring_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -466,16 +427,12 @@ class TestTriggerComprehensiveSuite:
     # Integration Test Summary
 
     async def test_comprehensive_integration_summary(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Comprehensive integration test that validates all major functionality."""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("TRIGGER SYSTEM COMPREHENSIVE INTEGRATION TEST SUMMARY")
-        print("="*60)
+        print("=" * 60)
 
         test_results = {
             "trigger_creation": {"cron": 0, "webhook": 0},
@@ -483,7 +440,7 @@ class TestTriggerComprehensiveSuite:
             "webhook_processing": {"requests": 0, "successful": 0},
             "lifecycle_operations": {"enable": 0, "disable": 0, "update": 0, "delete": 0},
             "safety_mechanisms": {"auto_disabled": 0, "recovered": 0},
-            "performance": {"avg_execution_time": 0, "throughput": 0}
+            "performance": {"avg_execution_time": 0, "throughput": 0},
         }
 
         # 1. Test trigger creation
@@ -495,7 +452,7 @@ class TestTriggerComprehensiveSuite:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="summary_test"
+            created_by="summary_test",
         )
         cron_trigger = await trigger_service.create_trigger(cron_trigger_data)
         test_results["trigger_creation"]["cron"] += 1
@@ -506,7 +463,7 @@ class TestTriggerComprehensiveSuite:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_type=WebhookType.GENERIC,
-            created_by="summary_test"
+            created_by="summary_test",
         )
         webhook_trigger = await trigger_service.create_trigger(webhook_trigger_data)
         test_results["trigger_creation"]["webhook"] += 1
@@ -518,6 +475,7 @@ class TestTriggerComprehensiveSuite:
         print("\n2. Testing Trigger Execution...")
 
         import time
+
         start_time = time.time()
 
         execution_data = {"execution_time": datetime.utcnow().isoformat()}
@@ -545,7 +503,7 @@ class TestTriggerComprehensiveSuite:
             "POST",
             {"Content-Type": "application/json"},
             {"summary_test": True},
-            {}
+            {},
         )
 
         test_results["webhook_processing"]["requests"] += 1
@@ -553,7 +511,9 @@ class TestTriggerComprehensiveSuite:
             test_results["webhook_processing"]["successful"] += 1
 
         print(f"   ✓ Webhook requests processed: {test_results['webhook_processing']['requests']}")
-        print(f"   ✓ Successful webhook responses: {test_results['webhook_processing']['successful']}")
+        print(
+            f"   ✓ Successful webhook responses: {test_results['webhook_processing']['successful']}"
+        )
 
         # 4. Test lifecycle operations
         print("\n4. Testing Lifecycle Operations...")
@@ -568,6 +528,7 @@ class TestTriggerComprehensiveSuite:
 
         # Update trigger
         from agentarea_triggers.domain.models import TriggerUpdate
+
         update_data = TriggerUpdate(description="Updated in summary test")
         await trigger_service.update_trigger(cron_trigger.id, update_data)
         test_results["lifecycle_operations"]["update"] += 1
@@ -588,21 +549,23 @@ class TestTriggerComprehensiveSuite:
 
         # 6. Calculate performance metrics
         total_operations = (
-            test_results["trigger_creation"]["cron"] +
-            test_results["trigger_creation"]["webhook"] +
-            test_results["trigger_execution"]["successful"] +
-            test_results["webhook_processing"]["successful"] +
-            test_results["lifecycle_operations"]["enable"] +
-            test_results["lifecycle_operations"]["disable"] +
-            test_results["lifecycle_operations"]["update"]
+            test_results["trigger_creation"]["cron"]
+            + test_results["trigger_creation"]["webhook"]
+            + test_results["trigger_execution"]["successful"]
+            + test_results["webhook_processing"]["successful"]
+            + test_results["lifecycle_operations"]["enable"]
+            + test_results["lifecycle_operations"]["disable"]
+            + test_results["lifecycle_operations"]["update"]
         )
 
-        test_results["performance"]["throughput"] = total_operations / execution_time if execution_time > 0 else 0
+        test_results["performance"]["throughput"] = (
+            total_operations / execution_time if execution_time > 0 else 0
+        )
 
         # 7. Final summary
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("INTEGRATION TEST RESULTS SUMMARY")
-        print("="*60)
+        print("=" * 60)
         print(f"Total Triggers Created: {sum(test_results['trigger_creation'].values())}")
         print(f"Total Executions: {sum(test_results['trigger_execution'].values())}")
         print(f"Total Webhook Requests: {test_results['webhook_processing']['requests']}")
@@ -610,10 +573,10 @@ class TestTriggerComprehensiveSuite:
         print(f"Average Execution Time: {test_results['performance']['avg_execution_time']:.3f}s")
         print(f"System Throughput: {test_results['performance']['throughput']:.2f} ops/sec")
         print("\n✅ ALL INTEGRATION TESTS PASSED")
-        print("="*60)
+        print("=" * 60)
 
         # Verify all major functionality works
-        assert sum(test_results['trigger_creation'].values()) >= 2
-        assert test_results['trigger_execution']['successful'] >= 1
-        assert test_results['webhook_processing']['successful'] >= 1
-        assert sum(test_results['lifecycle_operations'].values()) >= 3
+        assert sum(test_results["trigger_creation"].values()) >= 2
+        assert test_results["trigger_execution"]["successful"] >= 1
+        assert test_results["webhook_processing"]["successful"] >= 1
+        assert sum(test_results["lifecycle_operations"].values()) >= 3

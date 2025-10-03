@@ -34,28 +34,25 @@ class TemporalScheduleManager:
 
     def __init__(self, temporal_client: Client):
         """Initialize with Temporal client.
-        
+
         Args:
             temporal_client: The Temporal client instance
         """
         self.client = temporal_client
 
     async def create_cron_schedule(
-        self,
-        trigger_id: UUID,
-        cron_expression: str,
-        timezone: str = "UTC"
+        self, trigger_id: UUID, cron_expression: str, timezone: str = "UTC"
     ) -> str:
         """Create a Temporal Schedule for a cron trigger.
-        
+
         Args:
             trigger_id: The ID of the trigger
             cron_expression: The cron expression for scheduling
             timezone: The timezone for the cron expression
-            
+
         Returns:
             The schedule ID that was created
-            
+
         Raises:
             TriggerExecutionError: If schedule creation fails
             DependencyUnavailableError: If Temporal client is unavailable
@@ -68,9 +65,7 @@ class TemporalScheduleManager:
             error_msg = "Temporal client not available"
             logger.error(error_msg, trigger_id=trigger_id)
             raise DependencyUnavailableError(
-                error_msg,
-                dependency="temporal_client",
-                trigger_id=str(trigger_id)
+                error_msg, dependency="temporal_client", trigger_id=str(trigger_id)
             )
 
         try:
@@ -79,7 +74,7 @@ class TemporalScheduleManager:
                 trigger_id=trigger_id,
                 schedule_id=schedule_id,
                 cron_expression=cron_expression,
-                timezone=timezone
+                timezone=timezone,
             )
 
             # Create the schedule
@@ -92,32 +87,25 @@ class TemporalScheduleManager:
                             "execution_time": datetime.utcnow().isoformat(),
                             "source": "cron",
                             "cron_expression": cron_expression,
-                            "timezone": timezone
-                        }
+                            "timezone": timezone,
+                        },
                     ],
                     id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
-                    task_queue="trigger-execution-queue"
+                    task_queue="trigger-execution-queue",
                 ),
-                spec=ScheduleSpec(
-                    cron_expressions=[cron_expression],
-                    timezone=timezone
-                ),
+                spec=ScheduleSpec(cron_expressions=[cron_expression], timezone=timezone),
                 state=ScheduleState(
-                    note=f"Cron trigger schedule for trigger {trigger_id}",
-                    paused=False
-                )
+                    note=f"Cron trigger schedule for trigger {trigger_id}", paused=False
+                ),
             )
 
-            await self.client.create_schedule(
-                schedule_id=schedule_id,
-                schedule=schedule
-            )
+            await self.client.create_schedule(schedule_id=schedule_id, schedule=schedule)
 
             logger.info(
                 "Successfully created Temporal schedule",
                 trigger_id=trigger_id,
                 schedule_id=schedule_id,
-                cron_expression=cron_expression
+                cron_expression=cron_expression,
             )
             return schedule_id
 
@@ -127,13 +115,13 @@ class TemporalScheduleManager:
                 error_msg,
                 trigger_id=trigger_id,
                 schedule_id=schedule_id,
-                cron_expression=cron_expression
+                cron_expression=cron_expression,
             )
             raise TriggerExecutionError(
                 error_msg,
                 trigger_id=str(trigger_id),
                 schedule_id=schedule_id,
-                original_error=str(e)
+                original_error=str(e),
             )
         except Exception as e:
             error_msg = f"Unexpected error creating schedule: {e}"
@@ -141,28 +129,25 @@ class TemporalScheduleManager:
                 error_msg,
                 trigger_id=trigger_id,
                 schedule_id=schedule_id,
-                cron_expression=cron_expression
+                cron_expression=cron_expression,
             )
             raise TriggerExecutionError(
                 error_msg,
                 trigger_id=str(trigger_id),
                 schedule_id=schedule_id,
-                original_error=str(e)
+                original_error=str(e),
             )
 
     async def update_cron_schedule(
-        self,
-        trigger_id: UUID,
-        cron_expression: str,
-        timezone: str = "UTC"
+        self, trigger_id: UUID, cron_expression: str, timezone: str = "UTC"
     ) -> None:
         """Update an existing Temporal Schedule for a cron trigger.
-        
+
         Args:
             trigger_id: The ID of the trigger
             cron_expression: The new cron expression
             timezone: The new timezone
-            
+
         Raises:
             Exception: If schedule update fails
         """
@@ -184,17 +169,14 @@ class TemporalScheduleManager:
                                     "execution_time": datetime.utcnow().isoformat(),
                                     "source": "cron",
                                     "cron_expression": cron_expression,
-                                    "timezone": timezone
-                                }
+                                    "timezone": timezone,
+                                },
                             ],
                             id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
-                            task_queue="trigger-execution-queue"
+                            task_queue="trigger-execution-queue",
                         ),
-                        spec=ScheduleSpec(
-                            cron_expressions=[cron_expression],
-                            timezone=timezone
-                        ),
-                        state=input.description.schedule.state
+                        spec=ScheduleSpec(cron_expressions=[cron_expression], timezone=timezone),
+                        state=input.description.schedule.state,
                     )
                 )
             )
@@ -207,10 +189,10 @@ class TemporalScheduleManager:
 
     async def delete_cron_schedule(self, trigger_id: UUID) -> None:
         """Delete a Temporal Schedule for a cron trigger.
-        
+
         Args:
             trigger_id: The ID of the trigger
-            
+
         Raises:
             Exception: If schedule deletion fails
         """
@@ -237,10 +219,10 @@ class TemporalScheduleManager:
 
     async def pause_cron_schedule(self, trigger_id: UUID) -> None:
         """Pause a Temporal Schedule for a cron trigger.
-        
+
         Args:
             trigger_id: The ID of the trigger
-            
+
         Raises:
             Exception: If schedule pause fails
         """
@@ -261,10 +243,10 @@ class TemporalScheduleManager:
 
     async def unpause_cron_schedule(self, trigger_id: UUID) -> None:
         """Unpause a Temporal Schedule for a cron trigger.
-        
+
         Args:
             trigger_id: The ID of the trigger
-            
+
         Raises:
             Exception: If schedule unpause fails
         """
@@ -285,10 +267,10 @@ class TemporalScheduleManager:
 
     async def get_schedule_info(self, trigger_id: UUID) -> dict[str, Any] | None:
         """Get information about a Temporal Schedule.
-        
+
         Args:
             trigger_id: The ID of the trigger
-            
+
         Returns:
             Dictionary containing schedule information, or None if not found
         """
@@ -313,10 +295,12 @@ class TemporalScheduleManager:
                     {
                         "scheduled_time": action.scheduled_time.isoformat(),
                         "actual_time": action.actual_time.isoformat(),
-                        "start_workflow_result": str(action.start_workflow_result) if action.start_workflow_result else None
+                        "start_workflow_result": str(action.start_workflow_result)
+                        if action.start_workflow_result
+                        else None,
                     }
                     for action in description.info.recent_actions
-                ]
+                ],
             }
 
         except TemporalError as e:

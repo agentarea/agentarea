@@ -12,6 +12,7 @@ from ..auth.context import UserContext
 
 class AuditAction(Enum):
     """Audit action types."""
+
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
@@ -34,7 +35,7 @@ class AuditEvent:
         additional_context: dict[str, Any] | None = None,
     ):
         """Initialize audit event.
-        
+
         Args:
             action: The action being performed
             resource_type: Type of resource (e.g., 'agent', 'task', 'trigger')
@@ -53,7 +54,7 @@ class AuditEvent:
         # Handle resource_id conversion safely to avoid async database queries
         if resource_id is None:
             self.resource_id = None
-        elif hasattr(resource_id, 'id') and hasattr(resource_id, '_sa_instance_state'):
+        elif hasattr(resource_id, "id") and hasattr(resource_id, "_sa_instance_state"):
             # For SQLAlchemy model objects, get the ID safely
             try:
                 # Try to get the ID without triggering lazy loading
@@ -67,7 +68,7 @@ class AuditEvent:
             except Exception:
                 # If we can't get the ID safely, use None
                 self.resource_id = None
-        elif hasattr(resource_id, 'id'):
+        elif hasattr(resource_id, "id"):
             # For objects with id attribute but not SQLAlchemy models
             try:
                 self.resource_id = str(resource_id.id)
@@ -108,7 +109,7 @@ class AuditLogger:
 
     def __init__(self, logger_name: str = "agentarea.audit"):
         """Initialize audit logger.
-        
+
         Args:
             logger_name: Name of the logger to use
         """
@@ -118,16 +119,14 @@ class AuditLogger:
         if not self.logger.handlers:
             # Add a handler if none exists
             handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
 
     def log_event(self, event: AuditEvent) -> None:
         """Log an audit event.
-        
+
         Args:
             event: The audit event to log
         """
@@ -140,7 +139,7 @@ class AuditLogger:
                 "workspace_id": event.workspace_id,
                 "resource_type": event.resource_type,
                 "action": event.action.value,
-            }
+            },
         )
 
     def log_create(
@@ -149,10 +148,10 @@ class AuditLogger:
         user_context: UserContext,
         resource_id: str | UUID,
         resource_data: dict[str, Any] | None = None,
-        **additional_context: Any
+        **additional_context: Any,
     ) -> None:
         """Log resource creation.
-        
+
         Args:
             resource_type: Type of resource created
             user_context: Current user and workspace context
@@ -176,10 +175,10 @@ class AuditLogger:
         user_context: UserContext,
         resource_id: str | UUID,
         resource_data: dict[str, Any] | None = None,
-        **additional_context: Any
+        **additional_context: Any,
     ) -> None:
         """Log resource update.
-        
+
         Args:
             resource_type: Type of resource updated
             user_context: Current user and workspace context
@@ -202,10 +201,10 @@ class AuditLogger:
         resource_type: str,
         user_context: UserContext,
         resource_id: str | UUID,
-        **additional_context: Any
+        **additional_context: Any,
     ) -> None:
         """Log resource deletion.
-        
+
         Args:
             resource_type: Type of resource deleted
             user_context: Current user and workspace context
@@ -226,10 +225,10 @@ class AuditLogger:
         resource_type: str,
         user_context: UserContext,
         resource_id: str | UUID | None = None,
-        **additional_context: Any
+        **additional_context: Any,
     ) -> None:
         """Log resource read access.
-        
+
         Args:
             resource_type: Type of resource accessed
             user_context: Current user and workspace context
@@ -251,10 +250,10 @@ class AuditLogger:
         user_context: UserContext,
         count: int | None = None,
         filters: dict[str, Any] | None = None,
-        **additional_context: Any
+        **additional_context: Any,
     ) -> None:
         """Log resource list access.
-        
+
         Args:
             resource_type: Type of resources listed
             user_context: Current user and workspace context
@@ -282,10 +281,10 @@ class AuditLogger:
         user_context: UserContext,
         error: str,
         resource_id: str | UUID | None = None,
-        **additional_context: Any
+        **additional_context: Any,
     ) -> None:
         """Log error with workspace context.
-        
+
         Args:
             resource_type: Type of resource involved in error
             user_context: Current user and workspace context

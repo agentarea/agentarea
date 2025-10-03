@@ -24,7 +24,7 @@ class TestBasicFunctionality:
             data={"model": "gpt-4", "tokens": 150},
             metadata={"source": "workflow"},
             workspace_id="test-workspace",
-            created_by="workflow"
+            created_by="workflow",
         )
 
         # Verify all fields are set correctly
@@ -48,7 +48,7 @@ class TestBasicFunctionality:
             event_type=event_type,
             data=data,
             workspace_id="test-workspace",
-            created_by="test"
+            created_by="test",
         )
 
         # Verify factory method sets fields correctly
@@ -68,9 +68,7 @@ class TestBasicFunctionality:
         task_id = uuid4()
 
         event = TaskEvent.create_workflow_event(
-            task_id=task_id,
-            event_type="TaskStarted",
-            data={"agent_id": str(uuid4())}
+            task_id=task_id, event_type="TaskStarted", data={"agent_id": str(uuid4())}
         )
 
         # Verify defaults are applied
@@ -86,7 +84,7 @@ class TestBasicFunctionality:
             task_id=task_id,
             event_type="LLMCallStarted",
             data={"model": "gpt-4", "temperature": 0.7},
-            workspace_id="test-workspace"
+            workspace_id="test-workspace",
         )
 
         # Test JSON serialization
@@ -119,7 +117,7 @@ class TestBasicFunctionality:
             data={"key": "value"},
             metadata={},
             workspace_id="workspace",
-            created_by="user"
+            created_by="user",
         )
 
         # Should not raise any validation errors

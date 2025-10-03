@@ -1,10 +1,9 @@
 """Workspace-related exception classes."""
 
 
-
 class WorkspaceError(Exception):
     """Base exception for workspace-related errors.
-    
+
     This is the base class for all workspace-related exceptions.
     It includes workspace context information for better error tracking.
     """
@@ -14,10 +13,10 @@ class WorkspaceError(Exception):
         message: str,
         workspace_id: str | None = None,
         user_id: str | None = None,
-        resource_id: str | None = None
+        resource_id: str | None = None,
     ):
         """Initialize workspace error.
-        
+
         Args:
             message: Error message
             workspace_id: ID of the workspace where error occurred
@@ -48,7 +47,7 @@ class WorkspaceError(Exception):
 
 class WorkspaceAccessDenied(WorkspaceError):
     """Raised when user tries to access resource from different workspace.
-    
+
     This exception is raised when a user attempts to access a resource
     that belongs to a different workspace than their current context.
     """
@@ -59,10 +58,10 @@ class WorkspaceAccessDenied(WorkspaceError):
         resource_id: str,
         current_workspace_id: str,
         resource_workspace_id: str | None = None,
-        user_id: str | None = None
+        user_id: str | None = None,
     ):
         """Initialize workspace access denied error.
-        
+
         Args:
             resource_type: Type of resource being accessed (e.g., 'agent', 'task')
             resource_id: ID of the resource being accessed
@@ -86,7 +85,7 @@ class WorkspaceAccessDenied(WorkspaceError):
             message=message,
             workspace_id=current_workspace_id,
             user_id=user_id,
-            resource_id=resource_id
+            resource_id=resource_id,
         )
         self.resource_type = resource_type
         self.current_workspace_id = current_workspace_id
@@ -95,36 +94,33 @@ class WorkspaceAccessDenied(WorkspaceError):
 
 class MissingWorkspaceContext(WorkspaceError):
     """Raised when workspace context is missing from request.
-    
+
     This exception is raised when a request lacks the required
     user and workspace context information.
     """
 
     def __init__(self, missing_field: str, user_id: str | None = None):
         """Initialize missing workspace context error.
-        
+
         Args:
             missing_field: Name of the missing context field
             user_id: ID of the user if available
         """
         message = f"Missing required context field: {missing_field}"
-        super().__init__(
-            message=message,
-            user_id=user_id
-        )
+        super().__init__(message=message, user_id=user_id)
         self.missing_field = missing_field
 
 
 class InvalidJWTToken(WorkspaceError):
     """Raised when JWT token is invalid or missing required claims.
-    
+
     This exception is raised when JWT token validation fails or
     when the token lacks required claims for workspace context.
     """
 
     def __init__(self, reason: str, token_present: bool = False):
         """Initialize invalid JWT token error.
-        
+
         Args:
             reason: Reason why the token is invalid
             token_present: Whether a token was present in the request
@@ -141,21 +137,17 @@ class InvalidJWTToken(WorkspaceError):
 
 class WorkspaceResourceNotFound(WorkspaceError):
     """Raised when a resource is not found in the current workspace.
-    
+
     This exception is used instead of generic NotFound errors to provide
     workspace context and ensure proper 404 responses for cross-workspace
     access attempts.
     """
 
     def __init__(
-        self,
-        resource_type: str,
-        resource_id: str,
-        workspace_id: str,
-        user_id: str | None = None
+        self, resource_type: str, resource_id: str, workspace_id: str, user_id: str | None = None
     ):
         """Initialize workspace resource not found error.
-        
+
         Args:
             resource_type: Type of resource (e.g., 'agent', 'task')
             resource_id: ID of the resource
@@ -164,9 +156,6 @@ class WorkspaceResourceNotFound(WorkspaceError):
         """
         message = f"{resource_type.title()} '{resource_id}' not found in workspace '{workspace_id}'"
         super().__init__(
-            message=message,
-            workspace_id=workspace_id,
-            user_id=user_id,
-            resource_id=resource_id
+            message=message, workspace_id=workspace_id, user_id=user_id, resource_id=resource_id
         )
         self.resource_type = resource_type

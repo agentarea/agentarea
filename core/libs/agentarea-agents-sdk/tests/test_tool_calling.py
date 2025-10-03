@@ -19,7 +19,7 @@ class TestToolCalling:
             model = LLMModel(
                 provider_type="ollama_chat",
                 model_name="qwen2.5",
-                endpoint_url="http://localhost:11434"
+                endpoint_url="http://localhost:11434",
             )
 
             # Define a simple tool
@@ -34,23 +34,26 @@ class TestToolCalling:
                             "properties": {
                                 "expression": {
                                     "type": "string",
-                                    "description": "Mathematical expression to evaluate"
+                                    "description": "Mathematical expression to evaluate",
                                 }
                             },
-                            "required": ["expression"]
-                        }
-                    }
+                            "required": ["expression"],
+                        },
+                    },
                 }
             ]
 
             request = LLMRequest(
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant. Use the calculate tool to solve math problems."},
-                    {"role": "user", "content": "What is 15 + 27?"}
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. Use the calculate tool to solve math problems.",
+                    },
+                    {"role": "user", "content": "What is 15 + 27?"},
                 ],
                 tools=tools,
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=200,
             )
 
             logger.info("🧪 Testing single tool call with qwen2.5")
@@ -73,13 +76,22 @@ class TestToolCalling:
 
                 tool_call = response.tool_calls[0]
                 assert tool_call["function"]["name"] == "calculate", "Should call calculate tool"
-                assert "15" in tool_call["function"]["arguments"] or "27" in tool_call["function"]["arguments"], "Should include the numbers"
+                assert (
+                    "15" in tool_call["function"]["arguments"]
+                    or "27" in tool_call["function"]["arguments"]
+                ), "Should include the numbers"
 
                 logger.info(f"   Tool: {tool_call['function']['name']}")
                 logger.info(f"   Args: {tool_call['function']['arguments']}")
 
-            elif response.content and ("calculate" in response.content.lower() or "15" in response.content or "27" in response.content):
-                logger.warning("⚠️ ISSUE: Tool call information in content instead of tool_calls field")
+            elif response.content and (
+                "calculate" in response.content.lower()
+                or "15" in response.content
+                or "27" in response.content
+            ):
+                logger.warning(
+                    "⚠️ ISSUE: Tool call information in content instead of tool_calls field"
+                )
                 logger.warning(f"Content contains: {response.content[:200]}...")
 
                 # This indicates the model is trying to use tools but not in the right format
@@ -103,7 +115,7 @@ class TestToolCalling:
             model = LLMModel(
                 provider_type="ollama_chat",
                 model_name="qwen2.5",
-                endpoint_url="http://localhost:11434"
+                endpoint_url="http://localhost:11434",
             )
 
             # Define multiple tools
@@ -118,12 +130,12 @@ class TestToolCalling:
                             "properties": {
                                 "expression": {
                                     "type": "string",
-                                    "description": "Mathematical expression to evaluate"
+                                    "description": "Mathematical expression to evaluate",
                                 }
                             },
-                            "required": ["expression"]
-                        }
-                    }
+                            "required": ["expression"],
+                        },
+                    },
                 },
                 {
                     "type": "function",
@@ -135,19 +147,25 @@ class TestToolCalling:
                             "properties": {
                                 "result": {
                                     "type": "string",
-                                    "description": "The final result or summary"
+                                    "description": "The final result or summary",
                                 }
                             },
-                            "required": ["result"]
-                        }
-                    }
-                }
+                            "required": ["result"],
+                        },
+                    },
+                },
             ]
 
             # Simulate a conversation with multiple tool calls
             messages = [
-                {"role": "system", "content": "You are a helpful assistant. Use tools to solve problems step by step. When you're done, use completion."},
-                {"role": "user", "content": "Calculate 10 * 5, then add 15 to the result, and tell me the final answer."}
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. Use tools to solve problems step by step. When you're done, use completion.",
+                },
+                {
+                    "role": "user",
+                    "content": "Calculate 10 * 5, then add 15 to the result, and tell me the final answer.",
+                },
             ]
 
             logger.info("🧪 Testing multiple tool calls sequence")
@@ -167,22 +185,28 @@ class TestToolCalling:
             if response1.tool_calls:
                 logger.info("✅ First call: Tool calls properly returned")
                 # Add the assistant's response and tool result to conversation
-                messages.append({
-                    "role": "assistant",
-                    "content": response1.content,
-                    "tool_calls": response1.tool_calls
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response1.content,
+                        "tool_calls": response1.tool_calls,
+                    }
+                )
 
                 # Simulate tool execution result
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": response1.tool_calls[0]["id"],
-                    "name": response1.tool_calls[0]["function"]["name"],
-                    "content": "50"  # Result of 10 * 5
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": response1.tool_calls[0]["id"],
+                        "name": response1.tool_calls[0]["function"]["name"],
+                        "content": "50",  # Result of 10 * 5
+                    }
+                )
 
                 # Second call - should add 15 and complete
-                request2 = LLMRequest(messages=messages, tools=tools, temperature=0.1, max_tokens=300)
+                request2 = LLMRequest(
+                    messages=messages, tools=tools, temperature=0.1, max_tokens=300
+                )
                 response2 = await model.complete(request2)
 
                 logger.info("\n" + "=" * 40)
@@ -227,7 +251,7 @@ class TestToolCalling:
             model = LLMModel(
                 provider_type="ollama_chat",
                 model_name="qwen2.5",
-                endpoint_url="http://localhost:11434"
+                endpoint_url="http://localhost:11434",
             )
 
             tools = [
@@ -239,25 +263,25 @@ class TestToolCalling:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "result": {
-                                    "type": "string",
-                                    "description": "The final result"
-                                }
+                                "result": {"type": "string", "description": "The final result"}
                             },
-                            "required": ["result"]
-                        }
-                    }
+                            "required": ["result"],
+                        },
+                    },
                 }
             ]
 
             request = LLMRequest(
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant. When you complete a task, use the completion tool."},
-                    {"role": "user", "content": "Say hello and then mark the task as complete."}
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. When you complete a task, use the completion tool.",
+                    },
+                    {"role": "user", "content": "Say hello and then mark the task as complete."},
                 ],
                 tools=tools,
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=200,
             )
 
             logger.info("🧪 Testing streaming tool calls")
@@ -289,7 +313,9 @@ class TestToolCalling:
             if final_tool_calls:
                 logger.info("✅ SUCCESS: Streaming tool calls working properly")
                 assert len(final_tool_calls) >= 1, "Should have at least one tool call"
-                assert final_tool_calls[0]["function"]["name"] == "completion", "Should call completion"
+                assert final_tool_calls[0]["function"]["name"] == "completion", (
+                    "Should call completion"
+                )
             else:
                 logger.warning("⚠️ No tool calls received in streaming")
                 if complete_content and "completion" in complete_content.lower():
@@ -309,7 +335,7 @@ class TestToolCalling:
             model = LLMModel(
                 provider_type="ollama_chat",
                 model_name="qwen2.5",
-                endpoint_url="http://localhost:11434"
+                endpoint_url="http://localhost:11434",
             )
 
             tools = [
@@ -321,25 +347,25 @@ class TestToolCalling:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "message": {
-                                    "type": "string",
-                                    "description": "A test message"
-                                }
+                                "message": {"type": "string", "description": "A test message"}
                             },
-                            "required": ["message"]
-                        }
-                    }
+                            "required": ["message"],
+                        },
+                    },
                 }
             ]
 
             request = LLMRequest(
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant. Use the test_tool with message 'Hello World'."},
-                    {"role": "user", "content": "Please use the test tool."}
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. Use the test_tool with message 'Hello World'.",
+                    },
+                    {"role": "user", "content": "Please use the test tool."},
                 ],
                 tools=tools,
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=200,
             )
 
             logger.info("🧪 Testing tool call format validation")
@@ -370,6 +396,7 @@ class TestToolCalling:
 
                 # Arguments should be a JSON string
                 import json
+
                 try:
                     args = json.loads(function["arguments"])
                     assert isinstance(args, dict), "Arguments should be a dictionary"

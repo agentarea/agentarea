@@ -24,12 +24,9 @@ async def test_workflow_completes_with_task_complete():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete a simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     # Track activity calls to debug execution flow
@@ -60,12 +57,10 @@ async def test_workflow_completes_with_task_complete():
                     "description": "Mark task as completed",
                     "parameters": {
                         "type": "object",
-                        "properties": {
-                            "result": {"type": "string", "description": "Final result"}
-                        },
-                        "required": []
-                    }
-                }
+                        "properties": {"result": {"type": "string", "description": "Final result"}},
+                        "required": [],
+                    },
+                },
             }
         ]
 
@@ -83,12 +78,12 @@ async def test_workflow_completes_with_task_complete():
                     "type": "function",
                     "function": {
                         "name": "task_complete",
-                        "arguments": json.dumps({"result": "Task completed successfully"})
-                    }
+                        "arguments": json.dumps({"result": "Task completed successfully"}),
+                    },
                 }
             ],
             "cost": 0.001,
-            "usage": {"total_tokens": 50}
+            "usage": {"total_tokens": 50},
         }
 
     @activity.defn(name="execute_mcp_tool_activity")
@@ -100,7 +95,7 @@ async def test_workflow_completes_with_task_complete():
                 "success": True,
                 "completed": True,
                 "result": tool_args.get("result", "Task completed"),
-                "tool_name": "task_complete"
+                "tool_name": "task_complete",
             }
             logger.info(f"Mock task_complete returning: {result}")
             return result
@@ -126,7 +121,7 @@ async def test_workflow_completes_with_task_complete():
             mock_call_llm,
             mock_execute_tool,
             mock_evaluate_goal,
-            mock_publish_events
+            mock_publish_events,
         ]
 
         async with Worker(
@@ -143,7 +138,7 @@ async def test_workflow_completes_with_task_complete():
                 execution_request,
                 id=f"test-workflow-{uuid4()}",
                 task_queue="test-queue",
-                execution_timeout=timedelta(seconds=10)  # Short timeout to catch infinite loops
+                execution_timeout=timedelta(seconds=10),  # Short timeout to catch infinite loops
             )
 
             logger.info(f"Workflow completed with result: {result}")
@@ -151,8 +146,12 @@ async def test_workflow_completes_with_task_complete():
 
             # Verify workflow completed
             assert result.success is True, f"Expected success=True, got {result.success}"
-            assert "completed" in result.final_response.lower(), f"Expected 'completed' in response: {result.final_response}"
-            assert result.reasoning_iterations_used == 1, f"Expected 1 iteration, got {result.reasoning_iterations_used}"
+            assert "completed" in result.final_response.lower(), (
+                f"Expected 'completed' in response: {result.final_response}"
+            )
+            assert result.reasoning_iterations_used == 1, (
+                f"Expected 1 iteration, got {result.reasoning_iterations_used}"
+            )
 
             # Verify activity call sequence
             assert "build_agent_config" in activity_calls

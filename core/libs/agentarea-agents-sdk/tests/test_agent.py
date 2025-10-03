@@ -11,9 +11,7 @@ class TestAgentCreation:
     def test_create_agent_with_valid_model(self, test_model):
         """Test creating an agent with valid model specification."""
         agent = create_agent(
-            name="Test Agent",
-            instruction="You are a test assistant.",
-            model=test_model
+            name="Test Agent", instruction="You are a test assistant.", model=test_model
         )
 
         assert agent.name == "Test Agent"
@@ -25,9 +23,7 @@ class TestAgentCreation:
         """Test that invalid model format raises ValueError."""
         with pytest.raises(ValueError, match="Model must be in format 'provider/model_name'"):
             create_agent(
-                name="Test Agent",
-                instruction="You are a test assistant.",
-                model="invalid_format"
+                name="Test Agent", instruction="You are a test assistant.", model="invalid_format"
             )
 
     def test_agent_direct_construction(self):
@@ -39,7 +35,7 @@ class TestAgentCreation:
             model_name="qwen2.5",
             temperature=0.5,
             max_tokens=200,
-            max_iterations=5
+            max_iterations=5,
         )
 
         assert agent.name == "Direct Agent"
@@ -56,7 +52,7 @@ class TestAgentCreation:
             name="Tool Agent",
             instruction="Agent with custom tools.",
             model=test_model,
-            tools=[custom_tool]
+            tools=[custom_tool],
         )
 
         # Check that tools are registered
@@ -71,7 +67,7 @@ class TestAgentCreation:
             instruction="Agent without default tools.",
             model_provider="ollama_chat",
             model_name="qwen2.5",
-            include_default_tools=False
+            include_default_tools=False,
         )
 
         # Should have no tools by default
@@ -88,9 +84,7 @@ class TestAgentExecution:
         skip_if_no_llm()
 
         agent = create_agent(
-            name="Test Agent",
-            instruction="You are a helpful assistant.",
-            model=test_model
+            name="Test Agent", instruction="You are a helpful assistant.", model=test_model
         )
 
         result = await agent.run("What is 2 + 2?")
@@ -104,9 +98,7 @@ class TestAgentExecution:
         skip_if_no_llm()
 
         agent = create_agent(
-            name="Streaming Agent",
-            instruction="You are a helpful assistant.",
-            model=test_model
+            name="Streaming Agent", instruction="You are a helpful assistant.", model=test_model
         )
 
         content_received = False
@@ -127,9 +119,7 @@ class TestAgentExecution:
         skip_if_no_llm()
 
         agent = create_agent(
-            name="Goal Agent",
-            instruction="You are a systematic assistant.",
-            model=test_model
+            name="Goal Agent", instruction="You are a systematic assistant.", model=test_model
         )
 
         task = "Help me understand"
@@ -151,7 +141,7 @@ class TestAgentExecution:
             name="Calculator Agent",
             instruction="You are a math assistant that uses tools.",
             model=test_model,
-            tools=[CalculateTool()]
+            tools=[CalculateTool()],
         )
 
         tool_used = False
@@ -174,7 +164,7 @@ class TestAgentUtilities:
             name="Tool Agent",
             instruction="Agent for tool testing.",
             model=test_model,
-            include_default_tools=False
+            include_default_tools=False,
         )
 
         # Initially no tools
@@ -191,9 +181,7 @@ class TestAgentUtilities:
     def test_get_conversation_history(self, test_model):
         """Test getting conversation history (currently returns empty list)."""
         agent = create_agent(
-            name="History Agent",
-            instruction="Agent for history testing.",
-            model=test_model
+            name="History Agent", instruction="Agent for history testing.", model=test_model
         )
 
         history = agent.get_conversation_history()
@@ -204,9 +192,7 @@ class TestAgentUtilities:
     def test_reset_agent(self, test_model):
         """Test resetting agent state."""
         agent = create_agent(
-            name="Reset Agent",
-            instruction="Agent for reset testing.",
-            model=test_model
+            name="Reset Agent", instruction="Agent for reset testing.", model=test_model
         )
 
         # Should not raise any errors
