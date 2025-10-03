@@ -31,10 +31,32 @@ spec:
             - name: http
               containerPort: 80
               protocol: TCP
-          envFrom:
-            - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-mcp-manager-env
           env:
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
+                  key: LOG_LEVEL
+            - name: CORE_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
+                  key: CORE_API_URL
+            - name: MCP_PROXY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
+                  key: MCP_PROXY_HOST
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
+                  key: REDIS_PORT
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:

@@ -108,14 +108,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: ${{ !env.ACT }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: Log in to Private Registry
-        if: ${{ !env.ACT }}
         uses: docker/login-action@v3
         with:
           registry: ${{ secrets.PRIVATE_REGISTRY }}
@@ -138,7 +136,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
-          push: ${{ env.ACT != 'true' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 

@@ -7,9 +7,6 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: mcp-manager
 data:
-  LOG_LEVEL: "INFO"
-  REDIS_HOST: "{{ .Release.Name }}-redis-master"
-  REDIS_PORT: "{{ .Values.global.redis.port }}"
-  CORE_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
-  MCP_PROXY_HOST: "http://localhost:80"
+  {{- include "agentarea.mcpManagerOnly.configVars" . | nindent 2 }}
+  {{- include "agentarea.redis.configVars" . | nindent 2 }}
 {{- end }}
