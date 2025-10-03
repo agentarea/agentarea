@@ -45,7 +45,7 @@ class WorkspaceError(Exception):
         return self.message
 
 
-class WorkspaceAccessDenied(WorkspaceError):
+class WorkspaceAccessDenied(WorkspaceError):  # noqa: N818
     """Raised when user tries to access resource from different workspace.
 
     This exception is raised when a user attempts to access a resource
@@ -92,7 +92,7 @@ class WorkspaceAccessDenied(WorkspaceError):
         self.resource_workspace_id = resource_workspace_id
 
 
-class MissingWorkspaceContext(WorkspaceError):
+class MissingWorkspaceContext(WorkspaceError):  # noqa: N818
     """Raised when workspace context is missing from request.
 
     This exception is raised when a request lacks the required
@@ -111,7 +111,7 @@ class MissingWorkspaceContext(WorkspaceError):
         self.missing_field = missing_field
 
 
-class InvalidJWTToken(WorkspaceError):
+class InvalidJWTToken(WorkspaceError):  # noqa: N818
     """Raised when JWT token is invalid or missing required claims.
 
     This exception is raised when JWT token validation fails or
@@ -135,7 +135,7 @@ class InvalidJWTToken(WorkspaceError):
         self.token_present = token_present
 
 
-class WorkspaceResourceNotFound(WorkspaceError):
+class WorkspaceResourceNotFound(WorkspaceError):  # noqa: N818
     """Raised when a resource is not found in the current workspace.
 
     This exception is used instead of generic NotFound errors to provide

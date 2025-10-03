@@ -47,7 +47,7 @@ class MCPServerConfig(BaseModel):
     class Config:
         """Pydantic config."""
 
-        json_encoders = {UUID: str}
+        json_encoders = {UUID: str}  # noqa: RUF012
 
 
 class MCPServerDeployment(BaseModel):
@@ -67,7 +67,7 @@ class MCPServerDeployment(BaseModel):
     class Config:
         """Pydantic config."""
 
-        json_encoders = {
+        json_encoders = {  # noqa: RUF012
             UUID: str,
             datetime: lambda v: v.isoformat(),  # type: ignore
         }

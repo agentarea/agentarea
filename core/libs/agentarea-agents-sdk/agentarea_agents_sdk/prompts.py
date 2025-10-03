@@ -63,7 +63,7 @@ Success Criteria:
 You MUST follow this exact pattern for EVERY action you take:
 
 1. **Thought**: First, analyze the current situation and what needs to be done
-2. **Observation**: Note what information you have and what you're missing  
+2. **Observation**: Note what information you have and what you're missing
 3. **Action**: Decide on the next action (tool call or response)
 4. **Result**: After a tool call, observe and interpret the results
 

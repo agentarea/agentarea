@@ -179,8 +179,6 @@ async def _stream_task_creation(
             # Natural conversation interface - no announcement needed
 
             # State tracking for chat interface
-            task_id = None
-            execution_id = None
             agent_name = None
             current_response = ""
             is_streaming_response = False
@@ -207,9 +205,9 @@ async def _stream_task_creation(
                     # Format timestamp for display
                     try:
                         dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                        time_str = dt.strftime("%H:%M:%S")
-                    except:
-                        time_str = timestamp[:8] if len(timestamp) > 8 else timestamp
+                        dt.strftime("%H:%M:%S")
+                    except Exception:
+                        timestamp[:8] if len(timestamp) > 8 else timestamp
 
                     # Handle different event types with natural conversation flow
                     if event_type == "connected":
@@ -217,8 +215,8 @@ async def _stream_task_creation(
                         # Silent connection - let the conversation flow naturally
 
                     elif event_type == "task_created":
-                        task_id = data_payload.get("task_id")
-                        execution_id = data_payload.get("execution_id")
+                        data_payload.get("task_id")
+                        data_payload.get("execution_id")
                         # Just store the IDs, no output needed
 
                     elif clean_event_type == "WorkflowStarted":
@@ -250,7 +248,7 @@ async def _stream_task_creation(
                                 or original_data.get("text")
                                 or data_payload.get("text")
                             )
-                            if isinstance(chunk, (dict, list)):
+                            if isinstance(chunk, dict | list):
                                 chunk = str(chunk)
                             if chunk:
                                 current_response += chunk
@@ -483,7 +481,7 @@ def list(ctx, agent_id: str | None, status: str | None, limit: int, output_forma
                 try:
                     dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                     time_str = dt.strftime("%m-%d %H:%M")
-                except:
+                except Exception:
                     time_str = created_at[:16] if len(created_at) > 16 else created_at
 
                 # Status emoji
@@ -699,7 +697,7 @@ def events(
                             try:
                                 dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                                 time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                            except:
+                            except Exception:
                                 time_str = timestamp
 
                             click.echo(f"[{time_str}] {event_type}: {message}")
@@ -771,7 +769,7 @@ async def _stream_task_events(
                         try:
                             dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                             time_str = dt.strftime("%H:%M:%S")
-                        except:
+                        except Exception:
                             time_str = timestamp[:8] if len(timestamp) > 8 else timestamp
 
                         message = data_payload.get("message", f"Event: {event_type}")

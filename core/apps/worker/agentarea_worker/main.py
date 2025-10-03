@@ -38,9 +38,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-import os
+import os  # noqa: E402
 
-import litellm
+import litellm  # noqa: E402
 
 os.environ["OLLAMA_API_BASE"] = "http://host.docker.internal:11434"
 print(litellm.supports_function_calling("ollama_chat/qwen2.5"))

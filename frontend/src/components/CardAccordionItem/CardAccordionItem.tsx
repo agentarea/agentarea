@@ -61,7 +61,7 @@ export function CardAccordionItem({
   // Build default title node if title is plain text
   const titleNode = typeof title === "string" ? (
     <div className={cn("flex flex-row items-center gap-2 px-[7px] py-[7px]", headerClassName)}>
-      {iconSrc && <img src={iconSrc} className="w-5 h-5" />}
+      {iconSrc && <img src={iconSrc} alt="" className="w-5 h-5" />}
       <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent">
         {title}
       </h3>
@@ -103,4 +103,4 @@ export function CardAccordionItem({
       )}
     </AccordionItem>
   );
-} 
+}

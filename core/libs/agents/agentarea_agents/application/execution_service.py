@@ -90,7 +90,7 @@ class ExecutionService(ExecutionServiceInterface):
 
 
 # Interface for workflow orchestrators
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod  # noqa: E402
 
 
 class WorkflowOrchestratorInterface(ABC):

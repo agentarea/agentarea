@@ -173,7 +173,7 @@ class AgentExecutionWorkflow:
                     # Last resort: convert object to dict via __dict__
                     try:
                         available_tools.append(dict(tool.__dict__))
-                    except Exception:
+                    except Exception:  # noqa: S110
                         pass
 
         self.state.available_tools = available_tools

@@ -9,6 +9,7 @@ from agentarea_common.base.repository import (
     Repository,
     SoftDeleteOperations,
 )
+from agentarea_tasks.infrastructure.models import TaskORM
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.models import Agent

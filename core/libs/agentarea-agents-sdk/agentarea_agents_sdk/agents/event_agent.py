@@ -213,10 +213,10 @@ class EventAgent:
                         history_messages = events_to_messages(prior_events)
                         if isinstance(history_messages, list) and history_messages:
                             messages.extend(history_messages)
-                    except Exception:
+                    except Exception:  # noqa: S110
                         # best-effort history loading; proceed if it fails
                         pass
-        except Exception:
+        except Exception:  # noqa: S110
             # do not block run on context issues
             pass
 
@@ -351,7 +351,7 @@ class EventAgent:
                                         last_task_id = parsed.get("id")
                                     elif action == "add_subtask":
                                         last_subtask_id = parsed.get("id")
-                        except Exception:
+                        except Exception:  # noqa: S110
                             # Non-fatal: placeholder tracking is best-effort for tests
                             pass
 

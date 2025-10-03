@@ -120,24 +120,24 @@ class Messages:
     """
 
     @staticmethod
-    def SystemMessage(content: str, **kwargs) -> SystemMessage:
+    def SystemMessage(content: str, **kwargs) -> SystemMessage:  # noqa: N802
         """Create a system message."""
         return create_system_message(content, **kwargs)
 
     @staticmethod
-    def UserMessage(content: str, **kwargs) -> UserMessage:
+    def UserMessage(content: str, **kwargs) -> UserMessage:  # noqa: N802
         """Create a user message."""
         return create_user_message(content, **kwargs)
 
     @staticmethod
-    def AssistantMessage(
+    def AssistantMessage(  # noqa: N802
         content: str, tool_calls: list[dict] | None = None, **kwargs
     ) -> AssistantMessage:
         """Create an assistant message."""
         return create_assistant_message(content, tool_calls=tool_calls, **kwargs)
 
     @staticmethod
-    def ToolMessage(
+    def ToolMessage(  # noqa: N802
         content: str,
         tool_call_id: str,
         tool_name: str | None = None,

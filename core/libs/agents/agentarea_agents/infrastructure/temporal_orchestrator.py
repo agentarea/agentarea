@@ -76,7 +76,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             # Try to import from execution library - fallback if not available
             try:
                 from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import (
-                    ADKAgentWorkflow,
+                    ADKAgentWorkflow as AgentExecutionWorkflow,
                 )
                 from agentarea_execution.models import AgentExecutionRequest
 

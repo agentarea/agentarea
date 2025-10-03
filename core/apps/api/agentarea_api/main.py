@@ -94,7 +94,7 @@ async def app_lifespan(app: FastAPI):
     signal.signal(signal.SIGINT, signal_handler)
 
     # Startup
-    container = get_container()
+    get_container()
     await initialize_services()
 
     from agentarea_api.api.events.events_router import start_events_router

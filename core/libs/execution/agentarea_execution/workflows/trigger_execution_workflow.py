@@ -26,7 +26,7 @@ class TriggerActivities:
 
 
 # Import Pydantic models for trigger activities
-from ..models import (
+from ..models import (  # noqa: E402
     EvaluateTriggerConditionsRequest,
     EvaluateTriggerConditionsResult,
     ExecuteTriggerRequest,
@@ -71,7 +71,7 @@ class TriggerExecutionWorkflow:
 
         # Enhanced workflow execution timeout with configurable limits
         max_execution_timeout = timedelta(minutes=30)  # Hard limit
-        default_timeout = timedelta(minutes=15)  # Default timeout
+        timedelta(minutes=15)  # Default timeout
 
         # Use custom timeout from execution_data if provided, but cap at max
         custom_timeout_minutes = execution_data.get("timeout_minutes", 15)

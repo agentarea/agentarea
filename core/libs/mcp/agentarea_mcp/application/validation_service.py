@@ -138,7 +138,7 @@ class MCPConfigurationValidator:
                                 "message", f"Validation failed with status {response.status_code}"
                             )
                             errors.append(f"Container validation failed: {error_message}")
-                        except:
+                        except Exception:
                             errors.append(f"Validation failed with status {response.status_code}")
 
                 except httpx.ConnectError:
@@ -163,7 +163,7 @@ class MCPConfigurationValidator:
 
     @classmethod
     async def validate_full_configuration_async(
-        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] = None
+        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] | None = None
     ) -> list[str]:
         """Perform complete async validation of MCP configuration.
 
@@ -237,7 +237,7 @@ class MCPConfigurationValidator:
 
     @classmethod
     def validate_full_configuration(
-        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] = None
+        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] | None = None
     ) -> list[str]:
         """Perform complete validation of MCP configuration (sync wrapper).
 
@@ -269,7 +269,7 @@ class MCPConfigurationValidator:
 
     @classmethod
     def is_valid_configuration(
-        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] = None
+        cls, json_spec: dict[str, Any], provider_schema: dict[str, Any] | None = None
     ) -> bool:
         """Check if configuration is valid.
 

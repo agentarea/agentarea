@@ -206,7 +206,7 @@ class ProviderService:
         secret_name = f"provider_config_{config_id}"
         try:
             await self.secret_manager.delete_secret(secret_name)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         return await self.provider_config_repo.delete(config_id)

@@ -23,7 +23,7 @@ class DomainEvent:
 # We keep the legacy DomainEvent dataclass while introducing a typed Pydantic
 # envelope that can be used across brokers, SSE, and persistence layers.
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer  # noqa: E402
 
 
 class EventEnvelope(BaseModel):

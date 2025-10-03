@@ -676,7 +676,7 @@ async def get_task_events(
             base_query = """
                 SELECT id, task_id, event_type, timestamp, data, event_metadata,
                        COUNT(*) OVER() as total_count
-                FROM task_events 
+                FROM task_events
                 WHERE task_id = :task_id
             """
 

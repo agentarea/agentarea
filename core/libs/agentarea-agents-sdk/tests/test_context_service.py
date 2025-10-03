@@ -340,7 +340,7 @@ class TestContextPersistenceIntegration:
         )
 
         # Subtask agent could access parent context if needed
-        parent_context = await context_service.list_events(parent_task_id)
+        await context_service.list_events(parent_task_id)
 
         # Subtask agent creates its own context
         await context_service.append_event(

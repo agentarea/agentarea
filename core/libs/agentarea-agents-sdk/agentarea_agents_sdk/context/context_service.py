@@ -59,7 +59,7 @@ class InMemoryContextService:
 
 
 # Helper: turn EventAgent events into persisted ContextEvents
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable  # noqa: E402
 
 
 def create_context_event_listener(
@@ -80,7 +80,7 @@ def create_context_event_listener(
                     type=getattr(evt, "type", "event"), payload=getattr(evt, "payload", {})
                 ),
             )
-        except Exception:
+        except Exception:  # noqa: S110
             # best-effort persistence – do not crash agent flow
             pass
 

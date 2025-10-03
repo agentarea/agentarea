@@ -3,7 +3,7 @@
 import inspect
 from abc import ABC
 from collections.abc import Callable
-from typing import Any, Optional, get_type_hints
+from typing import Any, get_type_hints
 
 from .base_tool import BaseTool
 
@@ -129,17 +129,17 @@ class Toolset(ABC):
         schema = {"description": f"Parameter: {param.name}"}
 
         # Map Python types to JSON schema types
-        if type_hint == str or type_hint == Optional[str]:
+        if type_hint is str or type_hint == str | None:
             schema["type"] = "string"
-        elif type_hint == int or type_hint == Optional[int]:
+        elif type_hint is int or type_hint == int | None:
             schema["type"] = "integer"
-        elif type_hint == float or type_hint == Optional[float]:
+        elif type_hint is float or type_hint == float | None:
             schema["type"] = "number"
-        elif type_hint == bool or type_hint == Optional[bool]:
+        elif type_hint is bool or type_hint == bool | None:
             schema["type"] = "boolean"
-        elif type_hint == list or type_hint == list:
+        elif type_hint is list:
             schema["type"] = "array"
-        elif type_hint == dict or type_hint == dict:
+        elif type_hint is dict:
             schema["type"] = "object"
         else:
             schema["type"] = "string"  # Default fallback

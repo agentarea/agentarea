@@ -748,8 +748,8 @@ class TaskService(BaseTaskService):
                 # Query historical events from database
                 query = text("""
                     SELECT event_type, timestamp, data, metadata
-                    FROM task_events 
-                    WHERE task_id = :task_id 
+                    FROM task_events
+                    WHERE task_id = :task_id
                     ORDER BY timestamp ASC
                 """)
 

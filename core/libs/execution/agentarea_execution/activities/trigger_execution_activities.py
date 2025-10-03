@@ -258,7 +258,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 TriggerValidationError,
             )
 
-            if isinstance(e, (TriggerNotFoundError, TriggerValidationError)):
+            if isinstance(e, TriggerNotFoundError | TriggerValidationError):
                 raise
 
             execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)

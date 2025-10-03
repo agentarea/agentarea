@@ -10,7 +10,8 @@ from typing import Any, ClassVar
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, Field, ValidationError
+
 try:
     # Pydantic v2
     from pydantic import ConfigDict
@@ -219,7 +220,7 @@ async def validate_a2a_middleware(request: Request, agent_id: UUID) -> dict[str,
         try:
             body = await request.json()
             request_id = body.get("id")
-        except:
+        except Exception:  # noqa: S110
             pass
 
         # Return error response

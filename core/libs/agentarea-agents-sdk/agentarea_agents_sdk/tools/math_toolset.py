@@ -2,7 +2,6 @@
 
 import inspect
 import math
-import operator
 from collections.abc import Callable
 
 from .decorator_tool import Toolset, tool_method
@@ -326,21 +325,6 @@ class MathToolset(Toolset):
 
         try:
             # Define allowed operations for safe evaluation
-            allowed_names = {
-                "add": operator.add,
-                "sub": operator.sub,
-                "mul": operator.mul,
-                "div": operator.truediv,
-                "pow": operator.pow,
-                "sqrt": math.sqrt,
-                "sin": math.sin,
-                "cos": math.cos,
-                "tan": math.tan,
-                "log": math.log,
-                "abs": abs,
-                "pi": math.pi,
-                "e": math.e,
-            }
 
             # Replace common math functions with their Python equivalents
             expression = expression.replace("^", "**")  # Power operator

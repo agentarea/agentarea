@@ -162,7 +162,7 @@ def run_async(coro):
         click.echo("\n❌ Operation cancelled by user")
         raise click.Abort()
     except Exception as e:
-        if isinstance(e, (AgentAreaAPIError, AuthenticationError, AgentAreaError)):
+        if isinstance(e, AgentAreaAPIError | AuthenticationError | AgentAreaError):
             click.echo(f"❌ {e}")
         else:
             click.echo(f"❌ Unexpected error: {e}")

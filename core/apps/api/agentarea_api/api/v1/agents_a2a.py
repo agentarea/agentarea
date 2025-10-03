@@ -280,7 +280,7 @@ def convert_a2a_message_to_task(
     auth_context: A2AAuthContext,
     a2a_method: str,
     request_id: str,
-    task_id: str = None,
+    task_id: str | None = None,
 ) -> SimpleTask:
     """Convert A2A message to SimpleTask with proper authentication context and user metadata."""
     message_content = ""
@@ -331,7 +331,7 @@ def convert_a2a_message_to_task(
     if getattr(message_params, "metadata", None):
         try:
             a2a_metadata.update(message_params.metadata)
-        except Exception:
+        except Exception:  # noqa: S110
             # If metadata merging fails, continue with base metadata
             pass
 
@@ -362,7 +362,7 @@ def convert_a2a_message_to_task(
     )
 
 
-def convert_simple_task_to_a2a_task(task: SimpleTask) -> "Task":
+def convert_simple_task_to_a2a_task(task: SimpleTask):
     """Convert SimpleTask to A2A protocol Task format with current workflow status."""
     from agentarea_common.utils.types import Task, TaskState, TaskStatus
 
@@ -839,7 +839,7 @@ async def handle_message_stream_sse(
         )
 
         async def error_stream():
-            yield f"data: {json.dumps({'event': 'error', 'code': e.code, 'message': e.message})}\n\n"
+            yield f"data: {json.dumps({'event': 'error', 'code': e.code, 'message': e.message})}\n\n"  # noqa: F821
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
     except A2ATaskServiceError as e:
@@ -855,7 +855,7 @@ async def handle_message_stream_sse(
         )
 
         async def error_stream():
-            yield f"data: {json.dumps({'event': 'error', 'code': e.code, 'message': e.message})}\n\n"
+            yield f"data: {json.dumps({'event': 'error', 'code': e.code, 'message': e.message})}\n\n"  # noqa: F821
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
     except ValueError as e:
@@ -872,7 +872,7 @@ async def handle_message_stream_sse(
         )
 
         async def error_stream():
-            yield f"data: {json.dumps({'event': 'error', 'code': -32602, 'message': f'Invalid parameters: {e}'})}\n\n"
+            yield f"data: {json.dumps({'event': 'error', 'code': -32602, 'message': f'Invalid parameters: {e}'})}\n\n"  # noqa: F821
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
     except Exception as e:
@@ -888,7 +888,7 @@ async def handle_message_stream_sse(
         )
 
         async def error_stream():
-            yield f"data: {json.dumps({'event': 'error', 'code': -32603, 'message': str(e)})}\n\n"
+            yield f"data: {json.dumps({'event': 'error', 'code': -32603, 'message': str(e)})}\n\n"  # noqa: F821
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 

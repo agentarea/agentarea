@@ -32,7 +32,7 @@ def skip_if_no_llm():
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel
 
-            model = LLMModel(provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=None)
+            LLMModel(provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=None)
             # Try a simple request to check if model is available
             return False  # Don't skip
         except Exception:

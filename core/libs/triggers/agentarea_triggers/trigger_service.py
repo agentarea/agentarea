@@ -773,7 +773,7 @@ class TriggerService:
             logger.debug("Agent validation successful", agent_id=agent_id)
 
         except Exception as e:
-            if isinstance(e, (TriggerValidationError, DependencyUnavailableError)):
+            if isinstance(e, TriggerValidationError | DependencyUnavailableError):
                 raise
 
             error_msg = f"Error validating agent existence: {e}"

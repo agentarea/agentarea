@@ -63,7 +63,7 @@ class TestToolExecutor:
 
         # Initially should have completion tool (default behavior)
         initial_tools = tool_executor.registry.list_tools()
-        initial_count = len(initial_tools)
+        len(initial_tools)
 
         # Register tools
         calc_tool = CalculateTool()

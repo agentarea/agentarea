@@ -32,7 +32,7 @@ def _get_workspace_context_for_logging() -> dict[str, Any]:
                 "user_id": context.user_id,
                 "roles": context.roles,
             }
-    except Exception:
+    except Exception:  # noqa: S110
         # If context is not available, return empty dict
         pass
 
@@ -70,7 +70,7 @@ def _log_workspace_error(exc: WorkspaceError, request: Request) -> None:
         log_context["jwt_error_reason"] = exc.reason
 
     # Log at appropriate level based on exception type
-    if isinstance(exc, (WorkspaceAccessDenied, WorkspaceResourceNotFound)):
+    if isinstance(exc, WorkspaceAccessDenied | WorkspaceResourceNotFound):
         # These are expected security-related errors, log at INFO level
         logger.info("Workspace access violation", extra=log_context)
     elif isinstance(exc, MissingWorkspaceContext):
@@ -224,7 +224,7 @@ def _get_workspace_headers() -> dict[str, str]:
         context = ContextManager.get_context()
         if context and context.workspace_id:
             headers["X-Workspace-ID"] = context.workspace_id
-    except Exception:
+    except Exception:  # noqa: S110
         # If context is not available, don't add headers
         pass
 

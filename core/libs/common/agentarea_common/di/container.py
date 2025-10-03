@@ -61,11 +61,11 @@ def register_factory(interface: type[T], factory: Callable[[], T]) -> None:
     _container.register_factory(interface, factory)
 
 
-def resolve(interface: type[T]) -> T:
+def resolve[T](interface: type[T]) -> T:
     """Convenience function to resolve a dependency."""
     return _container.get(interface)
 
 
-def get_instance(interface: type[T]) -> T:
+def get_instance[T](interface: type[T]) -> T:
     """Alias for resolve - convenience function to get a dependency."""
     return _container.get(interface)

@@ -65,7 +65,7 @@ def print_conversation_message(message: Dict[str, Any]):
     """Pretty print a conversation message"""
     role = message.get('role', 'unknown')
     content = message.get('content', '')
-    timestamp = message.get('timestamp', '')
+    message.get('timestamp', '')
     
     if role == 'user':
         print(f"\n👤 User: {content}")
@@ -114,7 +114,7 @@ def main():
         ]
         
         for question in example_questions:
-            print(f"\n" + "="*50)
+            print("\n" + "="*50)
             print(f"👤 User: {question}")
             
             # Send message and get response
@@ -133,7 +133,7 @@ def main():
             time.sleep(1)
         
         # Get final conversation history
-        print(f"\n" + "="*50)
+        print("\n" + "="*50)
         print("📝 Final conversation summary:")
         final_conversation = client.get_conversation(conversation_id)
         

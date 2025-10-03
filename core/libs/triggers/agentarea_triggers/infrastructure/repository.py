@@ -233,7 +233,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         """List active triggers."""
         stmt = (
             select(TriggerORM)
-            .where(TriggerORM.is_active == True)
+            .where(TriggerORM.is_active is True)
             .order_by(TriggerORM.created_at.desc())
             .limit(limit)
         )
@@ -260,7 +260,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             .where(
                 and_(
                     TriggerORM.trigger_type == TriggerType.CRON.value,
-                    TriggerORM.is_active == True,
+                    TriggerORM.is_active is True,
                     TriggerORM.next_run_time <= current_time,
                 )
             )

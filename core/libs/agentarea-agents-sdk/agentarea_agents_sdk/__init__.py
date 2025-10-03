@@ -12,7 +12,7 @@ This follows patterns from leading agentic frameworks like AutoGen, CrewAI, and 
 
 # High-level Agent class (recommended for most users)
 from .agents.agent import Agent
-from .agents.basic_agent import run_agent
+from .agents.basic_agent import run_agent  # noqa: F401
 from .context.context_service import (
     ContextEvent,
     ContextService,
