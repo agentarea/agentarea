@@ -21,9 +21,9 @@ export default function SettingsPage() {
 
     // Transform user data for ProfileForm component
     const userForProfile = user ? {
-        name: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
-        email: user.email,
-        avatar: user.imageUrl || 'https://github.com/shadcn.png'
+        name: user.name || user.email || 'User',
+        email: user.email || '',
+        avatar: user.image || 'https://github.com/shadcn.png'
     } : null;
 
     const handleLogout = async () => {
