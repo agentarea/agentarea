@@ -14,10 +14,6 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_llm.domain.models import (
-    # Legacy models - still needed for some tests
-    LLMModel,
-    LLMModelInstance,
-    LLMProvider,
     ModelInstance,
     ModelSpec,
     ProviderConfig,
@@ -297,63 +293,81 @@ class ModelFactory:
         defaults.update(kwargs)
         return ModelInstance(**defaults)
 
-    # Legacy model factories - still needed for some tests
+    # Provider and model factories
     @staticmethod
-    def create_llm_provider(**kwargs) -> LLMProvider:
-        """Create a test LLM provider."""
+    def create_provider_spec(**kwargs) -> ProviderSpec:
+        """Create a test provider spec."""
         defaults = {
             "id": uuid4(),
             "name": f"test-provider-{uuid4().hex[:8]}",
             "description": "Test LLM provider",
-            "provider_type": "test",
+            "provider_type": "openai",
             "is_builtin": True,
             "updated_at": datetime.now(),
             "created_at": datetime.now(),
         }
         defaults.update(kwargs)
-        return LLMProvider(**defaults)
+        return ProviderSpec(**defaults)
 
     @staticmethod
-    def create_llm_model(provider_id: UUID = None, **kwargs) -> LLMModel:
-        """Create a test LLM model."""
-        if provider_id is None:
-            provider_id = uuid4()
+    def create_provider_config(provider_spec_id: UUID = None, **kwargs) -> ProviderConfig:
+        """Create a test provider config."""
+        if provider_spec_id is None:
+            provider_spec_id = uuid4()
 
         defaults = {
             "id": uuid4(),
+            "provider_spec_id": provider_spec_id,
+            "name": f"test-config-{uuid4().hex[:8]}",
+            "api_key": "test-api-key",
+            "endpoint_url": "http://host.docker.internal:11434",
+            "is_public": True,
+            "updated_at": datetime.now(),
+            "created_at": datetime.now(),
+        }
+        defaults.update(kwargs)
+        return ProviderConfig(**defaults)
+
+    @staticmethod
+    def create_model_spec(provider_spec_id: UUID = None, **kwargs) -> ModelSpec:
+        """Create a test model spec."""
+        if provider_spec_id is None:
+            provider_spec_id = uuid4()
+
+        defaults = {
+            "id": uuid4(),
+            "provider_spec_id": provider_spec_id,
             "name": f"test-model-{uuid4().hex[:8]}",
             "description": "Test LLM model",
-            "provider_id": provider_id,
-            "model_type": "chat",
-            "endpoint_url": "http://host.docker.internal:11434",
-            "context_window": "8192",
-            "status": "active",
-            "is_public": True,
+            "model_id": f"test-model-{uuid4().hex[:8]}",
+            "context_window": 8192,
+            "is_builtin": True,
             "updated_at": datetime.now(),
             "created_at": datetime.now(),
         }
         defaults.update(kwargs)
-        return LLMModel(**defaults)
+        return ModelSpec(**defaults)
 
     @staticmethod
-    def create_llm_model_instance(model_id: UUID = None, **kwargs) -> LLMModelInstance:
-        """Create a test LLM model instance."""
-        if model_id is None:
-            model_id = uuid4()
+    def create_model_instance(model_spec_id: UUID = None, provider_config_id: UUID = None, **kwargs) -> ModelInstance:
+        """Create a test model instance."""
+        if model_spec_id is None:
+            model_spec_id = uuid4()
+        if provider_config_id is None:
+            provider_config_id = uuid4()
 
         defaults = {
             "id": uuid4(),
-            "model_id": model_id,
+            "model_spec_id": model_spec_id,
+            "provider_config_id": provider_config_id,
             "name": f"test-instance-{uuid4().hex[:8]}",
             "description": "Test LLM model instance",
-            "api_key": "test-api-key",
-            "status": "active",
             "is_public": True,
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
         defaults.update(kwargs)
-        return LLMModelInstance(**defaults)
+        return ModelInstance(**defaults)
 
     @staticmethod
     def create_agent(model_id: UUID = None, **kwargs) -> Agent:

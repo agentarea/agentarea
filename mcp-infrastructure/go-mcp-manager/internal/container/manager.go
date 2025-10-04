@@ -358,6 +358,7 @@ func (m *Manager) GetRunningCount() int {
 // getRunningCountUnsafe returns the number of running containers without locking
 // IMPORTANT: This method is not thread-safe and should only be used when the caller
 // already holds the mutex or when thread safety is not required (e.g., during validation)
+// nolint:unused // May be used for debugging or future features
 func (m *Manager) getRunningCountUnsafe() int {
 	count := 0
 	for _, container := range m.containers {
@@ -613,6 +614,7 @@ func (m *Manager) mapPodmanStatus(podmanStatus string) models.ContainerStatus {
 }
 
 // Helper functions
+// nolint:unused // May be used for future features
 func mergeLabels(template, request map[string]string) map[string]string {
 	result := make(map[string]string)
 	for k, v := range template {
@@ -624,6 +626,7 @@ func mergeLabels(template, request map[string]string) map[string]string {
 	return result
 }
 
+// nolint:unused // May be used for future features
 func mergeEnvironment(template, request map[string]string) map[string]string {
 	result := make(map[string]string)
 	for k, v := range template {
@@ -1303,6 +1306,7 @@ func (m *Manager) shouldContainerBeRunning(container *models.Container) bool {
 	// For now, assume all discovered containers should be running
 	// In a more sophisticated system, this could check database state,
 	// environment variables, or other metadata to determine desired state
+	_ = container // Parameter may be used in future implementations
 	return true
 }
 

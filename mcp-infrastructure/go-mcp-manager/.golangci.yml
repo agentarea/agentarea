@@ -1,0 +1,40 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosimple
+    - goconst
+    - gocyclo
+    - funlen
+    - nestif
+    - prealloc
+    - exportloopref
+    - revive
+    - misspell
+    - errcheck
+    - unconvert
+    - unparam
+  disable:
+    - typecheck # Disable typecheck as it has issues with Go 1.24
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (*log.Logger).Print*
+      - (*log.Logger).Printf
+      - (*log.Logger).Println
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+      - name: var-naming
+        severity: warning
+        disabled: false
