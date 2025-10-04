@@ -83,12 +83,17 @@ def dev(debug: bool):
         click.echo(f"📁 Watching: {worker_path} and {libs_path}")
 
         # Run watchfiles to monitor and restart the worker
-        subprocess.run([
-            sys.executable, "-m", "watchfiles",
-            "python -m agentarea_worker.cli start",
-            worker_path,
-            libs_path
-        ], cwd=current_dir)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "watchfiles",
+                "python -m agentarea_worker.cli start",
+                worker_path,
+                libs_path,
+            ],
+            cwd=current_dir,
+        )
     except KeyboardInterrupt:
         click.echo("\n✅ Worker auto-restart stopped")
     except Exception as e:
@@ -120,6 +125,7 @@ def validate():
         # Test database connection
         from agentarea_common.config import Database
         from sqlalchemy import text
+
         db = Database(settings.database)
         with db.get_sync_db() as session:
             session.execute(text("SELECT 1"))

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class LLMConditionEvaluationError(Exception):
     """Raised when LLM condition evaluation fails."""
+
     pass
 
 
@@ -32,7 +33,7 @@ class LLMConditionEvaluator:
         default_model_id: UUID | None = None,
     ):
         """Initialize the LLM condition evaluator.
-        
+
         Args:
             model_instance_service: Service for managing LLM model instances
             secret_manager: Service for managing API keys and secrets
@@ -50,16 +51,16 @@ class LLMConditionEvaluator:
         model_id: UUID | None = None,
     ) -> bool:
         """Evaluate a condition against event data using LLM.
-        
+
         Args:
             condition: The condition configuration to evaluate
             event_data: The event data to evaluate against
             trigger_context: Optional trigger context for evaluation
             model_id: Optional model instance ID to use for evaluation
-            
+
         Returns:
             True if condition is met, False otherwise
-            
+
         Raises:
             LLMConditionEvaluationError: If evaluation fails
         """
@@ -90,11 +91,11 @@ class LLMConditionEvaluator:
         event_data: dict[str, Any],
     ) -> bool:
         """Evaluate a rule-based condition.
-        
+
         Args:
             condition: Rule condition configuration
             event_data: Event data to evaluate
-            
+
         Returns:
             True if rule condition is met
         """
@@ -129,7 +130,9 @@ class LLMConditionEvaluator:
             elif operator == "contains":
                 result = expected_value in str(actual_value) if actual_value is not None else False
             elif operator == "not_contains":
-                result = expected_value not in str(actual_value) if actual_value is not None else False
+                result = (
+                    expected_value not in str(actual_value) if actual_value is not None else False
+                )
             elif operator == "exists":
                 result = actual_value is not None
             elif operator == "not_exists":
@@ -157,13 +160,13 @@ class LLMConditionEvaluator:
         model_id: UUID | None = None,
     ) -> bool:
         """Evaluate an LLM-based natural language condition.
-        
+
         Args:
             condition: LLM condition configuration
             event_data: Event data to evaluate
             trigger_context: Optional trigger context
             model_id: Optional model instance ID
-            
+
         Returns:
             True if LLM determines condition is met
         """
@@ -198,13 +201,13 @@ class LLMConditionEvaluator:
         model_id: UUID | None = None,
     ) -> bool:
         """Evaluate a combined condition with multiple sub-conditions.
-        
+
         Args:
             condition: Combined condition configuration
             event_data: Event data to evaluate
             trigger_context: Optional trigger context
             model_id: Optional model instance ID
-            
+
         Returns:
             True if combined condition is met
         """
@@ -238,16 +241,16 @@ class LLMConditionEvaluator:
         model_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Extract task parameters from event data using LLM.
-        
+
         Args:
             instruction: Natural language instruction for parameter extraction
             event_data: Event data to extract parameters from
             trigger_context: Optional trigger context
             model_id: Optional model instance ID
-            
+
         Returns:
             Dictionary of extracted parameters
-            
+
         Raises:
             LLMConditionEvaluationError: If parameter extraction fails
         """
@@ -284,10 +287,10 @@ class LLMConditionEvaluator:
         condition: dict[str, Any],
     ) -> list[str]:
         """Validate condition syntax and return any errors.
-        
+
         Args:
             condition: Condition configuration to validate
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -298,10 +301,10 @@ class LLMConditionEvaluator:
         condition: dict[str, Any],
     ) -> list[str]:
         """Synchronous condition validation helper.
-        
+
         Args:
             condition: Condition configuration to validate
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -332,7 +335,18 @@ class LLMConditionEvaluator:
         if not rules:
             errors.append("Rule condition must have at least one rule")
 
-        valid_operators = {"eq", "ne", "gt", "lt", "gte", "lte", "contains", "not_contains", "exists", "not_exists"}
+        valid_operators = {
+            "eq",
+            "ne",
+            "gt",
+            "lt",
+            "gte",
+            "lte",
+            "contains",
+            "not_contains",
+            "exists",
+            "not_exists",
+        }
         valid_logic = {"AND", "OR"}
 
         logic = condition.get("logic", "AND").upper()
@@ -411,11 +425,11 @@ class LLMConditionEvaluator:
 
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
         """Extract nested value from data using dot notation.
-        
+
         Args:
             data: Data dictionary to extract from
             field_path: Dot-separated field path (e.g., "request.body.message")
-            
+
         Returns:
             The extracted value or None if not found
         """
@@ -450,36 +464,46 @@ class LLMConditionEvaluator:
         ]
 
         if context_data:
-            prompt_parts.extend([
-                "RELEVANT CONTEXT:",
-                json.dumps(context_data, indent=2),
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "RELEVANT CONTEXT:",
+                    json.dumps(context_data, indent=2),
+                    "",
+                ]
+            )
 
         if trigger_context:
-            prompt_parts.extend([
-                "TRIGGER CONTEXT:",
-                json.dumps(trigger_context, indent=2),
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "TRIGGER CONTEXT:",
+                    json.dumps(trigger_context, indent=2),
+                    "",
+                ]
+            )
 
         if examples:
-            prompt_parts.extend([
-                "EXAMPLES:",
-            ])
+            prompt_parts.extend(
+                [
+                    "EXAMPLES:",
+                ]
+            )
             for i, example in enumerate(examples):
-                prompt_parts.extend([
-                    f"Example {i + 1}:",
-                    f"Input: {json.dumps(example.get('input', {}), indent=2)}",
-                    f"Expected: {example.get('expected')}",
-                    "",
-                ])
+                prompt_parts.extend(
+                    [
+                        f"Example {i + 1}:",
+                        f"Input: {json.dumps(example.get('input', {}), indent=2)}",
+                        f"Expected: {example.get('expected')}",
+                        "",
+                    ]
+                )
 
-        prompt_parts.extend([
-            "Based on the event data and condition description, determine if the condition is met.",
-            "Respond with exactly 'true' if the condition is met, or 'false' if it is not met.",
-            "Do not include any explanation or additional text.",
-        ])
+        prompt_parts.extend(
+            [
+                "Based on the event data and condition description, determine if the condition is met.",
+                "Respond with exactly 'true' if the condition is met, or 'false' if it is not met.",
+                "Do not include any explanation or additional text.",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
@@ -501,24 +525,28 @@ class LLMConditionEvaluator:
         ]
 
         if trigger_context:
-            prompt_parts.extend([
-                "TRIGGER CONTEXT:",
-                json.dumps(trigger_context, indent=2),
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "TRIGGER CONTEXT:",
+                    json.dumps(trigger_context, indent=2),
+                    "",
+                ]
+            )
 
-        prompt_parts.extend([
-            "Based on the instruction and event data, extract relevant parameters for task execution.",
-            "Return your response as a valid JSON object containing the extracted parameters.",
-            "Include any relevant data from the event that would be useful for the task.",
-            "Example response format:",
-            "{",
-            '  "user_id": "extracted_user_id",',
-            '  "message": "extracted_message_content",',
-            '  "file_url": "extracted_file_url",',
-            '  "additional_context": "any_other_relevant_data"',
-            "}",
-        ])
+        prompt_parts.extend(
+            [
+                "Based on the instruction and event data, extract relevant parameters for task execution.",
+                "Return your response as a valid JSON object containing the extracted parameters.",
+                "Include any relevant data from the event that would be useful for the task.",
+                "Example response format:",
+                "{",
+                '  "user_id": "extracted_user_id",',
+                '  "message": "extracted_message_content",',
+                '  "file_url": "extracted_file_url",',
+                '  "additional_context": "any_other_relevant_data"',
+                "}",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
@@ -528,14 +556,14 @@ class LLMConditionEvaluator:
         model_id: UUID | None = None,
     ) -> str:
         """Call LLM with the given prompt.
-        
+
         Args:
             prompt: The prompt to send to the LLM
             model_id: Optional model instance ID to use
-            
+
         Returns:
             The LLM response content
-            
+
         Raises:
             LLMConditionEvaluationError: If LLM call fails
         """
@@ -543,7 +571,9 @@ class LLMConditionEvaluator:
             # Use provided model_id or default
             effective_model_id = model_id or self.default_model_id
             if not effective_model_id:
-                raise LLMConditionEvaluationError("No model ID provided and no default model configured")
+                raise LLMConditionEvaluationError(
+                    "No model ID provided and no default model configured"
+                )
 
             # Get model instance details
             model_instance = await self.model_instance_service.get(effective_model_id)
@@ -560,9 +590,7 @@ class LLMConditionEvaluator:
             litellm_model = f"{provider_type}/{model_type}"
             litellm_params = {
                 "model": litellm_model,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
+                "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.1,  # Low temperature for consistent evaluation
                 "max_tokens": 1000,
             }
@@ -593,10 +621,10 @@ class LLMConditionEvaluator:
 
     def _parse_evaluation_response(self, response: str) -> bool:
         """Parse LLM evaluation response to boolean.
-        
+
         Args:
             response: The LLM response content
-            
+
         Returns:
             True if response indicates condition is met
         """
@@ -610,15 +638,33 @@ class LLMConditionEvaluator:
 
         # Common positive indicators
         positive_indicators = [
-            "yes", "condition is met", "condition met", "true", "match", "matches",
-            "satisfied", "fulfilled", "correct", "valid", "success"
+            "yes",
+            "condition is met",
+            "condition met",
+            "true",
+            "match",
+            "matches",
+            "satisfied",
+            "fulfilled",
+            "correct",
+            "valid",
+            "success",
         ]
 
         # Common negative indicators
         negative_indicators = [
-            "no", "condition is not met", "condition not met", "false", "no match",
-            "does not match", "not satisfied", "not fulfilled", "incorrect", "invalid", "fail",
-            "not match"
+            "no",
+            "condition is not met",
+            "condition not met",
+            "false",
+            "no match",
+            "does not match",
+            "not satisfied",
+            "not fulfilled",
+            "incorrect",
+            "invalid",
+            "fail",
+            "not match",
         ]
 
         # Check for negative indicators first (more specific)

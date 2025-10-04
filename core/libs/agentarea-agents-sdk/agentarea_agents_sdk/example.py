@@ -20,7 +20,7 @@ async def streaming_math_example():
     agent = create_agent(
         name="Math Assistant",
         instruction="You are a helpful math assistant that solves problems step by step.",
-        model="ollama_chat/qwen2.5"
+        model="ollama_chat/qwen2.5",
     )
 
     # Run a simple calculation with streaming
@@ -44,7 +44,7 @@ async def non_streaming_example():
     agent = create_agent(
         name="Quick Assistant",
         instruction="You are a quick assistant that provides concise answers.",
-        model="ollama_chat/qwen2.5"
+        model="ollama_chat/qwen2.5",
     )
 
     # Use the run method for complete response
@@ -66,7 +66,7 @@ async def reasoning_example():
     agent = create_agent(
         name="Logic Assistant",
         instruction="You are a logical reasoning assistant that thinks through problems carefully.",
-        model="ollama_chat/qwen2.5"
+        model="ollama_chat/qwen2.5",
     )
 
     task = "If I have 12 apples and I give away 1/3 of them, then buy 8 more apples, how many apples do I have in total?"
@@ -95,9 +95,9 @@ async def custom_agent_example():
         model_provider="ollama_chat",
         model_name="qwen2.5",
         temperature=0.1,  # Lower temperature for more deterministic responses
-        max_tokens=200,   # Shorter responses
-        max_iterations=3, # Fewer iterations
-        include_default_tools=True
+        max_tokens=200,  # Shorter responses
+        max_iterations=3,  # Fewer iterations
+        include_default_tools=True,
     )
 
     task = "Explain what 5 factorial equals"

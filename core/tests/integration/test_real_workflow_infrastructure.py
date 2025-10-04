@@ -20,6 +20,7 @@ class RealTestDependencies:
 
     class TestSecretManager:
         """Real secret manager that returns appropriate values for testing."""
+
         async def get_secret(self, secret_name: str) -> str:
             # For Ollama, return empty string (no API key needed)
             if "ollama" in secret_name.lower():
@@ -29,6 +30,7 @@ class RealTestDependencies:
 
     class TestEventBroker:
         """Real event broker that logs events."""
+
         def __init__(self):
             self.published_events = []
             self.broker = self  # Add broker attribute to avoid errors
@@ -63,12 +65,9 @@ async def test_workflow_with_real_infrastructure_and_database():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete this simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     logger.info("🧪 Testing workflow with real infrastructure")
@@ -91,7 +90,7 @@ async def test_workflow_with_real_infrastructure_and_database():
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=30)
+                    execution_timeout=timedelta(seconds=30),
                 )
 
                 logger.info("✅ Workflow completed successfully with real infrastructure")
@@ -126,7 +125,7 @@ async def test_database_setup_verification():
     # Find the build_agent_config activity to test database access
     build_agent_config_activity = None
     for activity_func in activities:
-        if hasattr(activity_func, '__name__') and 'build_agent_config' in activity_func.__name__:
+        if hasattr(activity_func, "__name__") and "build_agent_config" in activity_func.__name__:
             build_agent_config_activity = activity_func
             break
 
@@ -138,11 +137,11 @@ async def test_database_setup_verification():
     try:
         # Try to load the test agent from the database
         from uuid import UUID
+
         # Use proper UUID format for the test agent ID
         test_agent_uuid = UUID("12345678-1234-5678-1234-567812345678")
         result = await build_agent_config_activity(
-            test_agent_uuid,
-            {"user_id": "test-user-id", "workspace_id": "test-workspace-id"}
+            test_agent_uuid, {"user_id": "test-user-id", "workspace_id": "test-workspace-id"}
         )
 
         logger.info("✅ Database setup verification PASSED!")
@@ -150,8 +149,10 @@ async def test_database_setup_verification():
         logger.info(f"Model ID: {result['model_id']}")
 
         # Verify the model instance is properly configured
-        assert result['model_id'] == '66666666-6666-6666-6666-666666666666', "Model instance ID should match setup script"
-        assert result['name'] == 'Test Agent', "Agent name should match setup script"
+        assert result["model_id"] == "66666666-6666-6666-6666-666666666666", (
+            "Model instance ID should match setup script"
+        )
+        assert result["name"] == "Test Agent", "Agent name should match setup script"
 
         logger.info("🎯 Database is properly set up for real infrastructure testing!")
 
@@ -185,7 +186,7 @@ async def test_real_activity_call_directly():
     # Find the real call_llm_activity
     call_llm_activity = None
     for activity_func in activities:
-        if hasattr(activity_func, '__name__') and 'call_llm' in activity_func.__name__:
+        if hasattr(activity_func, "__name__") and "call_llm" in activity_func.__name__:
             call_llm_activity = activity_func
             break
 
@@ -196,12 +197,9 @@ async def test_real_activity_call_directly():
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool."
+            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool.",
         },
-        {
-            "role": "user",
-            "content": "Complete this simple test task"
-        }
+        {"role": "user", "content": "Complete this simple test task"},
     ]
 
     tools = [
@@ -215,12 +213,12 @@ async def test_real_activity_call_directly():
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary of what was accomplished"
+                            "description": "Optional final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -238,7 +236,7 @@ async def test_real_activity_call_directly():
             max_tokens=200,
             task_id="test-task",
             agent_id="test-agent",
-            execution_id="test-execution"
+            execution_id="test-execution",
         )
 
         logger.info("Unexpected success - activity returned:")
@@ -259,7 +257,7 @@ async def test_real_activity_call_directly():
 def test_create_database_setup_script():
     """Create a script to set up the database for real infrastructure testing."""
 
-    setup_script = '''
+    setup_script = """
 -- Database setup for real infrastructure testing
 -- Run this to create the necessary test data
 
@@ -311,7 +309,7 @@ JOIN model_instances mi ON a.model_id = mi.id
 JOIN provider_configs pc ON mi.provider_config_id = pc.id  
 JOIN provider_specs ps ON pc.provider_spec_id = ps.id
 WHERE a.id = 'test-agent-id';
-'''
+"""
 
     logger.info("📝 Database setup script created:")
     logger.info("Save this as setup_test_database.sql and run it:")
@@ -358,12 +356,9 @@ async def test_workflow_with_real_database_infrastructure():
         task_id=uuid4(),
         user_id="22222222-2222-2222-2222-222222222222",  # Use proper UUID
         task_query="test",  # Use the same simple query as production
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     logger.info("🧪 Testing workflow with REAL database infrastructure")
@@ -391,7 +386,7 @@ async def test_workflow_with_real_database_infrastructure():
                     execution_request,
                     id=f"real-db-test-{uuid4()}",
                     task_queue="real-db-test-queue",
-                    execution_timeout=timedelta(minutes=2)
+                    execution_timeout=timedelta(minutes=2),
                 )
 
                 logger.info("🎉 SUCCESS: Workflow completed with REAL infrastructure!")
@@ -404,20 +399,26 @@ async def test_workflow_with_real_database_infrastructure():
                 if result.conversation_history:
                     logger.info("🔍 Analyzing conversation history for tool call format...")
                     for i, msg in enumerate(result.conversation_history):
-                        if msg.get('tool_calls'):
+                        if msg.get("tool_calls"):
                             logger.info(f"Message {i} tool_calls: {msg['tool_calls']}")
-                        elif msg.get('content') and 'task_complete' in msg.get('content', ''):
-                            logger.warning(f"🚨 Message {i} has task_complete in content: {msg['content'][:100]}...")
+                        elif msg.get("content") and "task_complete" in msg.get("content", ""):
+                            logger.warning(
+                                f"🚨 Message {i} has task_complete in content: {msg['content'][:100]}..."
+                            )
 
                 # This is the key test - did we get malformed responses?
                 if result.success:
                     logger.info("✅ REAL infrastructure produced CORRECT tool calls!")
-                    logger.info("This means the malformed responses are NOT from the core infrastructure")
+                    logger.info(
+                        "This means the malformed responses are NOT from the core infrastructure"
+                    )
                 else:
                     logger.warning("⚠️ Workflow didn't complete - check logs for issues")
 
                 # Verify we actually used real infrastructure
-                assert result.reasoning_iterations_used >= 1, "Should have completed at least 1 iteration"
+                assert result.reasoning_iterations_used >= 1, (
+                    "Should have completed at least 1 iteration"
+                )
 
             except Exception as e:
                 error_msg = str(e)

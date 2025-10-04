@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	redis "github.com/go-redis/redis/v8"
 )
 
 // StatusUpdateEvent represents a container status update event
@@ -38,9 +38,11 @@ type EventPublisher struct {
 // NewEventPublisher creates a new event publisher
 func NewEventPublisher(redisURL string, logger *slog.Logger) *EventPublisher {
 	// Parse Redis URL to extract host:port
-	addr := redisURL
-	if strings.HasPrefix(redisURL, "redis://") {
-		addr = strings.TrimPrefix(redisURL, "redis://")
+	var addr string
+	if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
+		addr = cutAddr
+	} else {
+		addr = redisURL
 	}
 
 	rdb := redis.NewClient(&redis.Options{
@@ -65,16 +67,16 @@ func (p *EventPublisher) PublishStatusUpdate(ctx context.Context, instanceID, na
 	}
 
 	// Wrap in FastStream message format to match the API's expected structure
-	eventData := map[string]interface{}{
+	eventData := map[string]any{
 		"event_id":   generateEventID(),
 		"timestamp":  event.Timestamp.Format(time.RFC3339),
 		"event_type": "MCPServerInstanceStatusChanged",
 		"data":       event,
 	}
 
-	message := map[string]interface{}{
+	message := map[string]any{
 		"data":    eventData,
-		"headers": map[string]interface{}{},
+		"headers": map[string]any{},
 	}
 
 	eventBytes, err := json.Marshal(message)
@@ -113,16 +115,16 @@ func (p *EventPublisher) PublishError(ctx context.Context, instanceID, name, err
 	}
 
 	// Wrap in FastStream message format
-	eventData := map[string]interface{}{
+	eventData := map[string]any{
 		"event_id":   generateEventID(),
 		"timestamp":  event.Timestamp.Format(time.RFC3339),
 		"event_type": "MCPServerInstanceError",
 		"data":       event,
 	}
 
-	message := map[string]interface{}{
+	message := map[string]any{
 		"data":    eventData,
-		"headers": map[string]interface{}{},
+		"headers": map[string]any{},
 	}
 
 	eventBytes, err := json.Marshal(message)

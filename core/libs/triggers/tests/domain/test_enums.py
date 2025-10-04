@@ -1,6 +1,5 @@
 """Tests for trigger enums."""
 
-
 from agentarea_triggers.domain.enums import (
     ExecutionStatus,
     TriggerStatus,

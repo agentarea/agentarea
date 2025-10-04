@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Event:
     """Generic event structure for agent orchestration."""
+
     type: str
     payload: dict[str, Any] = field(default_factory=dict)
 
@@ -206,14 +207,16 @@ class EventAgent:
                     events_to_messages = None  # type: ignore
                 if events_to_messages:
                     try:
-                        prior_events = await self._context_service.list_events(self._context_task_id)
+                        prior_events = await self._context_service.list_events(
+                            self._context_task_id
+                        )
                         history_messages = events_to_messages(prior_events)
                         if isinstance(history_messages, list) and history_messages:
                             messages.extend(history_messages)
-                    except Exception:
+                    except Exception:  # noqa: S110
                         # best-effort history loading; proceed if it fails
                         pass
-        except Exception:
+        except Exception:  # noqa: S110
             # do not block run on context issues
             pass
 
@@ -254,13 +257,16 @@ class EventAgent:
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
-            await self._emit("llm_request", {
-                "iteration": iteration,
-                # Expose only safe fields
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "tools_count": len(tools),
-            })
+            await self._emit(
+                "llm_request",
+                {
+                    "iteration": iteration,
+                    # Expose only safe fields
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens,
+                    "tools_count": len(tools),
+                },
+            )
 
             response_stream = self.llm.ainvoke_stream(request)
             full_content = ""
@@ -269,27 +275,36 @@ class EventAgent:
             async for chunk in response_stream:
                 if chunk.content:
                     full_content += chunk.content
-                    await self._emit("llm_chunk", {
-                        "iteration": iteration,
-                        "content": chunk.content,
-                    })
+                    await self._emit(
+                        "llm_chunk",
+                        {
+                            "iteration": iteration,
+                            "content": chunk.content,
+                        },
+                    )
                     yield chunk.content
                 if chunk.tool_calls:
                     final_tool_calls = chunk.tool_calls
-                    await self._emit("llm_tool_calls_detected", {
-                        "iteration": iteration,
-                        "tool_calls": final_tool_calls,
-                    })
+                    await self._emit(
+                        "llm_tool_calls_detected",
+                        {
+                            "iteration": iteration,
+                            "tool_calls": final_tool_calls,
+                        },
+                    )
 
             assistant_message = {"role": "assistant", "content": full_content}
             if final_tool_calls:
                 assistant_message["tool_calls"] = final_tool_calls
             messages.append(assistant_message)
-            await self._emit("assistant_message", {
-                "iteration": iteration,
-                "content": full_content,
-                "tool_calls": final_tool_calls,
-            })
+            await self._emit(
+                "assistant_message",
+                {
+                    "iteration": iteration,
+                    "content": full_content,
+                    "tool_calls": final_tool_calls,
+                },
+            )
 
             # Execute tools if any were called
             if final_tool_calls:
@@ -307,19 +322,24 @@ class EventAgent:
                         # Replace placeholders before execution (best-effort)
                         tool_args = _replace_placeholders(raw_args)
 
-                        await self._emit("tool_execution_started", {
-                            "iteration": iteration,
-                            "tool_name": tool_name,
-                            "tool_call_id": tool_id,
-                            "args": tool_args,
-                        })
+                        await self._emit(
+                            "tool_execution_started",
+                            {
+                                "iteration": iteration,
+                                "tool_name": tool_name,
+                                "tool_call_id": tool_id,
+                                "args": tool_args,
+                            },
+                        )
 
                         result = await self.tool_executor.execute_tool(tool_name, tool_args)
 
                         # Track created IDs for simple placeholder substitution
                         try:
                             if tool_name == "tasks":
-                                action = tool_args.get("action") if isinstance(tool_args, dict) else None
+                                action = (
+                                    tool_args.get("action") if isinstance(tool_args, dict) else None
+                                )
                                 # result.get("result") is expected to be a JSON string from TasksToolset
                                 payload = result.get("result")
                                 if isinstance(payload, str):
@@ -331,18 +351,21 @@ class EventAgent:
                                         last_task_id = parsed.get("id")
                                     elif action == "add_subtask":
                                         last_subtask_id = parsed.get("id")
-                        except Exception:
+                        except Exception:  # noqa: S110
                             # Non-fatal: placeholder tracking is best-effort for tests
                             pass
 
                         # Naive completion detection (kept simple to avoid breaking changes)
                         if tool_name == "completion":
                             done = True
-                            await self._emit("completion_signaled", {
-                                "iteration": iteration,
-                                "by_tool": tool_name,
-                                "result": result,
-                            })
+                            await self._emit(
+                                "completion_signaled",
+                                {
+                                    "iteration": iteration,
+                                    "by_tool": tool_name,
+                                    "result": result,
+                                },
+                            )
 
                         tool_result = str(result.get("result", result))
                         messages.append(
@@ -354,13 +377,16 @@ class EventAgent:
                             }
                         )
 
-                        await self._emit("tool_execution_finished", {
-                            "iteration": iteration,
-                            "tool_name": tool_name,
-                            "tool_call_id": tool_id,
-                            "success": bool(result.get("success", True)),
-                            "result": result.get("result"),
-                        })
+                        await self._emit(
+                            "tool_execution_finished",
+                            {
+                                "iteration": iteration,
+                                "tool_name": tool_name,
+                                "tool_call_id": tool_id,
+                                "success": bool(result.get("success", True)),
+                                "result": result.get("result"),
+                            },
+                        )
 
                         yield f"\n[Tool {tool_name}: {tool_result}]\n"
 
@@ -374,12 +400,15 @@ class EventAgent:
                                 "content": f"Error: {error_msg}",
                             }
                         )
-                        await self._emit("tool_execution_error", {
-                            "iteration": iteration,
-                            "tool_name": tool_name,
-                            "tool_call_id": tool_id,
-                            "error": error_msg,
-                        })
+                        await self._emit(
+                            "tool_execution_error",
+                            {
+                                "iteration": iteration,
+                                "tool_name": tool_name,
+                                "tool_call_id": tool_id,
+                                "error": error_msg,
+                            },
+                        )
                         yield f"\n[Tool Error: {error_msg}]\n"
 
             await self._emit("iteration_finished", {"iteration": iteration, "done": done})

@@ -26,7 +26,7 @@ def create_simple_adk_agent():
         "model": "ollama_chat/qwen2.5",  # Using local model for testing
         "instructions": "You are a helpful assistant. Answer questions briefly and clearly.",
         "description": "Simple test agent for SSE verification",
-        "enable_streaming": True  # Enable streaming for real-time events
+        "enable_streaming": True,  # Enable streaming for real-time events
     }
     return agent_config
 
@@ -54,7 +54,7 @@ def test_sse_endpoint(agent_id: str, task_id: str, base_url: str = "http://local
 
                 for line in response.iter_lines():
                     if line:
-                        decoded_line = line.decode('utf-8')
+                        decoded_line = line.decode("utf-8")
                         print(f"   📥 {decoded_line}")
                         event_count += 1
 
@@ -62,7 +62,9 @@ def test_sse_endpoint(agent_id: str, task_id: str, base_url: str = "http://local
                     if time.time() - start_time > 10 or event_count >= 5:
                         break
 
-                print(f"   📊 Received {event_count} events in {time.time() - start_time:.1f} seconds")
+                print(
+                    f"   📊 Received {event_count} events in {time.time() - start_time:.1f} seconds"
+                )
                 return True
             else:
                 print(f"   ❌ Failed to connect: {response.status_code}")
@@ -86,8 +88,8 @@ async def create_test_task(agent_id: str, base_url: str = "http://localhost:8000
         "task_parameters": {
             "enable_streaming": True,  # Enable streaming for this task
             "model": "ollama_chat/qwen2.5",
-            "instructions": "You are a helpful assistant. Answer questions briefly and clearly."
-        }
+            "instructions": "You are a helpful assistant. Answer questions briefly and clearly.",
+        },
     }
 
     try:
@@ -135,7 +137,9 @@ def get_test_agent():
         return None
 
 
-async def trigger_agent_execution(agent_id: str, task_id: str, base_url: str = "http://localhost:8000"):
+async def trigger_agent_execution(
+    agent_id: str, task_id: str, base_url: str = "http://localhost:8000"
+):
     """Trigger agent execution to generate events."""
     print("🎯 Triggering agent execution...")
 
@@ -143,7 +147,7 @@ async def trigger_agent_execution(agent_id: str, task_id: str, base_url: str = "
 
     execute_data = {
         "query": "Please explain what SSE (Server-Sent Events) is and how it works in simple terms.",
-        "enable_streaming": True
+        "enable_streaming": True,
     }
 
     try:

@@ -1,0 +1,39 @@
+{{- if .Values.temporal.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentarea.fullname" . }}-temporal
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal
+spec:
+  type: {{ .Values.temporal.service.type }}
+  ports:
+    - port: {{ .Values.temporal.service.port }}
+      targetPort: temporal
+      protocol: TCP
+      name: temporal
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal
+---
+{{- if .Values.temporalUi.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentarea.fullname" . }}-temporal-ui
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-ui
+spec:
+  type: {{ .Values.temporalUi.service.type }}
+  ports:
+    - port: {{ .Values.temporalUi.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-ui
+{{- end }}
+{{- end }}

@@ -33,7 +33,7 @@ class Trigger(BaseModel):
     class Config:
         from_attributes = True
 
-    @field_validator('name')
+    @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         """Validate trigger name."""
@@ -41,8 +41,8 @@ class Trigger(BaseModel):
             raise ValueError("Trigger name cannot be empty")
         return v.strip()
 
-    @model_validator(mode='after')
-    def validate_datetime_fields(self) -> 'Trigger':
+    @model_validator(mode="after")
+    def validate_datetime_fields(self) -> "Trigger":
         """Validate datetime field relationships."""
         if self.updated_at < self.created_at:
             raise ValueError("updated_at cannot be before created_at")
@@ -77,7 +77,7 @@ class CronTrigger(Trigger):
     timezone: str = Field(default="UTC")
     next_run_time: datetime | None = None
 
-    @field_validator('cron_expression')
+    @field_validator("cron_expression")
     @classmethod
     def validate_cron_expression(cls, v: str) -> str:
         """Basic validation of cron expression format."""
@@ -91,7 +91,7 @@ class CronTrigger(Trigger):
 
         return v.strip()
 
-    @field_validator('timezone')
+    @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, v: str) -> str:
         """Validate timezone string."""
@@ -112,7 +112,7 @@ class WebhookTrigger(Trigger):
     # Generic webhook configuration - supports any webhook type
     webhook_config: dict[str, Any] | None = None
 
-    @field_validator('webhook_id')
+    @field_validator("webhook_id")
     @classmethod
     def validate_webhook_id(cls, v: str) -> str:
         """Validate webhook ID."""
@@ -120,7 +120,7 @@ class WebhookTrigger(Trigger):
             raise ValueError("Webhook ID cannot be empty")
         return v.strip()
 
-    @field_validator('allowed_methods')
+    @field_validator("allowed_methods")
     @classmethod
     def validate_allowed_methods(cls, v: list[str]) -> list[str]:
         """Validate HTTP methods."""
@@ -147,12 +147,12 @@ class TriggerExecution(BaseModel):
     error_message: str | None = None
     trigger_data: dict[str, Any] = Field(default_factory=dict)
     workflow_id: str | None = None  # Temporal workflow ID
-    run_id: str | None = None       # Temporal run ID
+    run_id: str | None = None  # Temporal run ID
 
     class Config:
         from_attributes = True
 
-    @field_validator('execution_time_ms')
+    @field_validator("execution_time_ms")
     @classmethod
     def validate_execution_time(cls, v: int) -> int:
         """Validate execution time is non-negative."""
@@ -195,8 +195,8 @@ class TriggerCreate(BaseModel):
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: dict[str, Any] | None = None
 
-    @model_validator(mode='after')
-    def validate_trigger_type_fields(self) -> 'TriggerCreate':
+    @model_validator(mode="after")
+    def validate_trigger_type_fields(self) -> "TriggerCreate":
         """Validate that required fields are present for each trigger type."""
         if self.trigger_type == TriggerType.CRON:
             if not self.cron_expression:

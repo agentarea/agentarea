@@ -28,18 +28,21 @@ class TestTaskRepositoryMetadataIntegration:
         return TaskRepository(session=db_session, user_context=test_user_context)
 
     @pytest.mark.asyncio
-    async def test_create_task_with_sqlalchemy_metadata_integration(self, task_repository, test_user_context):
+    async def test_create_task_with_sqlalchemy_metadata_integration(
+        self, task_repository, test_user_context
+    ):
         """Test creating a task with SQLAlchemy MetaData object in real database."""
         agent_id = uuid4()
         metadata_obj = MetaData()
 
         # Create task with valid metadata first, then test repository's internal logic
         from agentarea_tasks.domain.models import TaskCreate
+
         task_create = TaskCreate(
             agent_id=agent_id,
             description="Integration test task with SQLAlchemy MetaData",
             parameters={"test": "integration"},
-            metadata={}  # Start with valid metadata
+            metadata={},  # Start with valid metadata
         )
 
         # Manually set the invalid metadata to test repository's fix logic
@@ -73,16 +76,19 @@ class TestTaskRepositoryMetadataIntegration:
             pytest.fail(f"Retrieved task metadata is not JSON serializable: {e}")
 
     @pytest.mark.asyncio
-    async def test_update_task_with_sqlalchemy_metadata_integration(self, task_repository, test_user_context):
+    async def test_update_task_with_sqlalchemy_metadata_integration(
+        self, task_repository, test_user_context
+    ):
         """Test updating a task with SQLAlchemy MetaData object in real database."""
         agent_id = uuid4()
 
         # First create a task with valid metadata
         from agentarea_tasks.domain.models import TaskCreate
+
         task_create = TaskCreate(
             agent_id=agent_id,
             description="Task for metadata update integration test",
-            parameters={"original": "data"}
+            parameters={"original": "data"},
         )
         original_task = await task_repository.create_from_data(task_create)
 
@@ -91,20 +97,20 @@ class TestTaskRepositoryMetadataIntegration:
 
         # Update task with SQLAlchemy MetaData object using TaskUpdate
         from agentarea_tasks.domain.models import TaskUpdate
+
         task_update = TaskUpdate(
             metadata={},  # Start with valid metadata
             description="Updated task with SQLAlchemy MetaData",
             parameters={"updated": "data"},
             status="running",
-            execution_id="integration-test-execution"
+            execution_id="integration-test-execution",
         )
 
         # Manually set the invalid metadata to test repository's fix logic
         task_update.metadata = metadata_obj
 
         updated_task = await task_repository.update_by_id(
-            task_id=original_task.id,
-            task_update=task_update
+            task_id=original_task.id, task_update=task_update
         )
 
         # Verify task was updated successfully
@@ -130,7 +136,9 @@ class TestTaskRepositoryMetadataIntegration:
             pytest.fail(f"Updated task metadata is not JSON serializable: {e}")
 
     @pytest.mark.asyncio
-    async def test_various_invalid_metadata_types_integration(self, task_repository, test_user_context):
+    async def test_various_invalid_metadata_types_integration(
+        self, task_repository, test_user_context
+    ):
         """Test various invalid metadata types in real database operations."""
         agent_id = uuid4()
 
@@ -148,11 +156,12 @@ class TestTaskRepositoryMetadataIntegration:
         for test_name, invalid_metadata in invalid_metadata_types:
             # Create task with valid metadata first, then test repository's internal logic
             from agentarea_tasks.domain.models import TaskCreate
+
             task_create = TaskCreate(
                 agent_id=agent_id,
                 description=f"Integration test task with {test_name} metadata",
                 parameters={"test_type": test_name},
-                metadata={}  # Start with valid metadata
+                metadata={},  # Start with valid metadata
             )
 
             # Manually set the invalid metadata to test repository's fix logic
@@ -163,7 +172,9 @@ class TestTaskRepositoryMetadataIntegration:
             assert created_task is not None, f"Failed to create task with {test_name} metadata"
 
             # All invalid metadata types should be converted to empty dict
-            assert created_task.metadata == {}, f"Invalid {test_name} metadata was not converted to empty dict"
+            assert created_task.metadata == {}, (
+                f"Invalid {test_name} metadata was not converted to empty dict"
+            )
 
             created_tasks.append(created_task)
 
@@ -180,7 +191,9 @@ class TestTaskRepositoryMetadataIntegration:
                 pytest.fail(f"Metadata for {test_name} type is not JSON serializable: {e}")
 
     @pytest.mark.asyncio
-    async def test_valid_metadata_preservation_integration(self, task_repository, test_user_context):
+    async def test_valid_metadata_preservation_integration(
+        self, task_repository, test_user_context
+    ):
         """Test that valid dict metadata is preserved correctly in database operations."""
         agent_id = uuid4()
 
@@ -188,24 +201,21 @@ class TestTaskRepositoryMetadataIntegration:
         complex_metadata = {
             "priority": "high",
             "category": "integration_test",
-            "nested": {
-                "level1": {
-                    "level2": "deep_value"
-                }
-            },
+            "nested": {"level1": {"level2": "deep_value"}},
             "array": [1, 2, 3, {"nested_in_array": True}],
             "boolean": True,
             "number": 42,
-            "float": 3.14159
+            "float": 3.14159,
         }
 
         # Create task with complex valid metadata using TaskCreate
         from agentarea_tasks.domain.models import TaskCreate
+
         task_create = TaskCreate(
             agent_id=agent_id,
             description="Integration test task with complex valid metadata",
             parameters={"test": "complex_metadata"},
-            metadata=complex_metadata
+            metadata=complex_metadata,
         )
 
         # Create task
@@ -232,21 +242,19 @@ class TestTaskRepositoryMetadataIntegration:
         updated_metadata = {
             "status": "updated",
             "timestamp": "2024-01-01T00:00:00Z",
-            "tags": ["test", "integration", "metadata"]
+            "tags": ["test", "integration", "metadata"],
         }
 
         # Update task with new metadata using TaskUpdate
         from agentarea_tasks.domain.models import TaskUpdate
+
         task_update = TaskUpdate(
-            metadata=updated_metadata,
-            status="running",
-            execution_id="integration-test-update"
+            metadata=updated_metadata, status="running", execution_id="integration-test-update"
         )
 
         # Update task
         updated_task = await task_repository.update_by_id(
-            task_id=created_task.id,
-            task_update=task_update
+            task_id=created_task.id, task_update=task_update
         )
         assert updated_task is not None
 
@@ -260,16 +268,19 @@ class TestTaskRepositoryMetadataIntegration:
         assert final_retrieved_task.status == "running"
 
     @pytest.mark.asyncio
-    async def test_database_transaction_rollback_with_metadata_error(self, task_repository, test_user_context):
+    async def test_database_transaction_rollback_with_metadata_error(
+        self, task_repository, test_user_context
+    ):
         """Test that database transactions handle metadata errors gracefully."""
         agent_id = uuid4()
 
         # Create a task first using TaskCreate
         from agentarea_tasks.domain.models import TaskCreate
+
         task_create = TaskCreate(
             agent_id=agent_id,
             description="Task for transaction rollback test",
-            parameters={"test": "rollback"}
+            parameters={"test": "rollback"},
         )
         original_task = await task_repository.create_from_data(task_create)
 
@@ -281,20 +292,20 @@ class TestTaskRepositoryMetadataIntegration:
 
         # This should succeed with the fix using TaskUpdate
         from agentarea_tasks.domain.models import TaskUpdate
+
         task_update = TaskUpdate(
             metadata={},  # Start with valid metadata
             description="Updated task for rollback test",
             parameters={"test": "rollback_updated"},
             status="running",
-            execution_id="rollback-test"
+            execution_id="rollback-test",
         )
 
         # Manually set the invalid metadata to test repository's fix logic
         task_update.metadata = metadata_obj
 
         updated_task = await task_repository.update_by_id(
-            task_id=original_task.id,
-            task_update=task_update
+            task_id=original_task.id, task_update=task_update
         )
 
         assert updated_task is not None

@@ -23,30 +23,32 @@ const HeaderSchema = z.object({
 });
 
 // Define the unified schema for client-side validation
-const MCPServerSchema = z.object({
+// Create base schema without refine for shape access
+const BaseMCPServerSchema = z.object({
   type: z.enum(['docker', 'external'], { required_error: 'Server type is required' }),
   name: z.string().min(1, 'Server name is required'),
   description: z.string().min(1, 'Description is required'),
   dockerImageUrl: z.string().optional(),
   version: z.string().optional(),
   endpointUrl: z.string().optional(),
-  headers: z.array(HeaderSchema).optional().default([]),
+  headers: z.array(HeaderSchema),
   tags: z.string().optional(),
-  isPublic: z.boolean().default(true),
-}).refine((data) => {
+  isPublic: z.boolean(),
+});
+
+const MCPServerSchema = BaseMCPServerSchema.refine((data) => {
   if (data.type === 'docker') {
-    return data.dockerImageUrl && data.dockerImageUrl.length > 0;
+    return data.dockerImageUrl && data.dockerImageUrl.trim() !== '';
+  } else if (data.type === 'external') {
+    return data.endpointUrl && data.endpointUrl.trim() !== '';
   }
-  if (data.type === 'external') {
-    return data.endpointUrl && data.endpointUrl.length > 0;
-  }
-  return true;
+  return false;
 }, {
   message: 'Required fields missing for selected server type',
   path: ['type']
 });
 
-type FormData = z.infer<typeof MCPServerSchema>;
+type FormData = z.infer<typeof BaseMCPServerSchema>;
 
 const initialState: MCPServerFormState = {
   message: '',
@@ -84,7 +86,7 @@ export function AddMCPServerForm() {
     setValue,
     watch,
   } = useForm<FormData>({
-    resolver: zodResolver(MCPServerSchema),
+    resolver: zodResolver(BaseMCPServerSchema),
     defaultValues: {
       type: 'docker',
       name: '',
@@ -114,7 +116,7 @@ export function AddMCPServerForm() {
   useEffect(() => {
     if (state.fieldValues) {
       Object.entries(state.fieldValues).forEach(([key, value]) => {
-        if (MCPServerSchema.shape && key in MCPServerSchema.shape) {
+        if (BaseMCPServerSchema.shape && key in BaseMCPServerSchema.shape) {
           setValue(key as keyof FormData, value as string | boolean);
         }
       });
@@ -346,4 +348,4 @@ export function AddMCPServerForm() {
       </CardFooter>
     </form>
   );
-} 
+}

@@ -13,11 +13,11 @@ class MathToolset(Toolset):
     @tool_method
     async def add(self, a: float, b: float) -> str:
         """Add two numbers together.
-        
+
         Args:
             a: First number
             b: Second number
-            
+
         Returns:
             String representation of the result
         """
@@ -27,11 +27,11 @@ class MathToolset(Toolset):
     @tool_method
     async def subtract(self, a: float, b: float) -> str:
         """Subtract second number from first.
-        
+
         Args:
             a: Number to subtract from
             b: Number to subtract
-            
+
         Returns:
             String representation of the result
         """
@@ -41,11 +41,11 @@ class MathToolset(Toolset):
     @tool_method
     async def multiply(self, a: float, b: float) -> str:
         """Multiply two numbers.
-        
+
         Args:
             a: First number
             b: Second number
-            
+
         Returns:
             String representation of the result
         """
@@ -55,14 +55,14 @@ class MathToolset(Toolset):
     @tool_method
     async def divide(self, a: float, b: float) -> str:
         """Divide first number by second.
-        
+
         Args:
             a: Dividend
             b: Divisor
-            
+
         Returns:
             String representation of the result
-            
+
         Raises:
             ValueError: If b is zero
         """
@@ -78,17 +78,17 @@ class DataToolset(Toolset):
     @tool_method
     async def search(self, query: str, limit: int | None = 10) -> str:
         """Search for data matching the query.
-        
+
         Args:
             query: Search query string
             limit: Maximum number of results to return (default: 10)
-            
+
         Returns:
             Search results as a formatted string
         """
         # Simulate search results
         results = [
-            f"Result {i+1}: Data matching '{query}'"
+            f"Result {i + 1}: Data matching '{query}'"
             for i in range(min(limit, 5))  # Simulate up to 5 results
         ]
         return f"Found {len(results)} results for '{query}':\n" + "\n".join(results)
@@ -96,20 +96,22 @@ class DataToolset(Toolset):
     @tool_method
     async def get_details(self, item_id: str) -> str:
         """Get detailed information about a specific item.
-        
+
         Args:
             item_id: Unique identifier for the item
-            
+
         Returns:
             Detailed information about the item
         """
         # Simulate item details
-        return f"Details for item {item_id}:\n" \
-               f"- Name: Sample Item {item_id}\n" \
-               f"- Type: Data Object\n" \
-               f"- Status: Active\n" \
-               f"- Created: 2024-01-15\n" \
-               f"- Size: 1.2 MB"
+        return (
+            f"Details for item {item_id}:\n"
+            f"- Name: Sample Item {item_id}\n"
+            f"- Type: Data Object\n"
+            f"- Status: Active\n"
+            f"- Created: 2024-01-15\n"
+            f"- Size: 1.2 MB"
+        )
 
 
 class SimpleToolset(Toolset):
@@ -118,11 +120,11 @@ class SimpleToolset(Toolset):
     @tool_method
     async def echo(self, message: str, repeat: int | None = 1) -> str:
         """Echo a message, optionally repeating it.
-        
+
         Args:
             message: The message to echo
             repeat: Number of times to repeat the message (default: 1)
-            
+
         Returns:
             The echoed message
         """
@@ -160,11 +162,14 @@ async def main():
     print("\n=== FileToolset Example ===")
     # Create a temporary directory for file operations
     import tempfile
+
     with tempfile.TemporaryDirectory() as temp_dir:
         file_toolset = FileToolset(base_dir=Path(temp_dir))
 
         # Save a file
-        result = await file_toolset.execute(action="save_file", contents="Hello from FileToolset!", file_name="example.txt")
+        result = await file_toolset.execute(
+            action="save_file", contents="Hello from FileToolset!", file_name="example.txt"
+        )
         print(f"Save file result: {result['result']}")
 
         # Read the file back

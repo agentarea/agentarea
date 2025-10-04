@@ -167,9 +167,8 @@ requires-dist = [
 [[package]]
 name = "agentarea-cli"
 version = "0.1.0"
-source = { editable = "apps/cli" }
+source = { virtual = "apps/cli" }
 dependencies = [
-    { name = "agentarea-common" },
     { name = "click" },
     { name = "httpx" },
     { name = "pyjwt" },
@@ -177,7 +176,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentarea-common", editable = "libs/common" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "pyjwt", specifier = ">=2.8.0" },
@@ -898,7 +896,7 @@ version = "3.22.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
-    { name = "docstring-parser", marker = "python_full_version < '4.0'" },
+    { name = "docstring-parser", marker = "python_full_version < '4'" },
     { name = "rich" },
     { name = "rich-rst" },
 ]
@@ -997,7 +995,6 @@ dependencies = [
     { name = "numpy" },
     { name = "packaging" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/f4/7c2136f4660ca504266cc08b38df2aa1db14fea93393b82e099ff34d7290/faiss_cpu-1.11.0.post1.tar.gz", hash = "sha256:06b1ea9ddec9e4d9a41c8ef7478d493b08d770e9a89475056e963081eed757d1", size = 70543 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/30/1e/9980758efa55b4e7a5d6df1ae17c9ddbe5a636bfbf7d22d47c67f7a530f4/faiss_cpu-1.11.0.post1-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:68f6ce2d9c510a5765af2f5711bd76c2c37bd598af747f3300224bdccf45378c", size = 7913676 },
     { url = "https://files.pythonhosted.org/packages/05/d1/bd785887085faa02916c52320527b8bb54288835b0a3138df89a0e323cc8/faiss_cpu-1.11.0.post1-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:b940c530a8236cc0b9fd9d6e87b3d70b9c6c216bc2baf2649356c908902e52c9", size = 3313952 },

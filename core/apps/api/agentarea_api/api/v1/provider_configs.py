@@ -55,8 +55,12 @@ class ProviderConfigResponse(BaseModel):
             is_public=provider_config.is_public,
             created_at=provider_config.created_at,
             updated_at=provider_config.updated_at,
-            provider_spec_name=provider_config.provider_spec.name if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
-            provider_spec_key=provider_config.provider_spec.provider_key if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
+            provider_spec_name=provider_config.provider_spec.name
+            if hasattr(provider_config, "provider_spec") and provider_config.provider_spec
+            else None,
+            provider_spec_key=provider_config.provider_spec.provider_key
+            if hasattr(provider_config, "provider_spec") and provider_config.provider_spec
+            else None,
         )
 
 
@@ -90,11 +94,19 @@ class ModelInstanceResponse(BaseModel):
             is_public=model_instance.is_public,
             created_at=model_instance.created_at,
             updated_at=model_instance.updated_at,
-            provider_name=model_instance.provider_config.provider_spec.name if model_instance.provider_config and model_instance.provider_config.provider_spec else None,
-            provider_key=model_instance.provider_config.provider_spec.provider_key if model_instance.provider_config and model_instance.provider_config.provider_spec else None,
+            provider_name=model_instance.provider_config.provider_spec.name
+            if model_instance.provider_config and model_instance.provider_config.provider_spec
+            else None,
+            provider_key=model_instance.provider_config.provider_spec.provider_key
+            if model_instance.provider_config and model_instance.provider_config.provider_spec
+            else None,
             model_name=model_instance.model_spec.model_name if model_instance.model_spec else None,
-            model_display_name=model_instance.model_spec.display_name if model_instance.model_spec else None,
-            config_name=model_instance.provider_config.name if model_instance.provider_config else None,
+            model_display_name=model_instance.model_spec.display_name
+            if model_instance.model_spec
+            else None,
+            config_name=model_instance.provider_config.name
+            if model_instance.provider_config
+            else None,
         )
 
 
@@ -126,13 +138,23 @@ class ProviderConfigWithInstancesResponse(BaseModel):
             is_public=provider_config.is_public,
             created_at=provider_config.created_at,
             updated_at=provider_config.updated_at,
-            provider_spec_name=provider_config.provider_spec.name if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
-            provider_spec_key=provider_config.provider_spec.provider_key if hasattr(provider_config, 'provider_spec') and provider_config.provider_spec else None,
-            model_instances=[ModelInstanceResponse.from_domain(instance) for instance in provider_config.model_instances] if hasattr(provider_config, 'model_instances') and provider_config.model_instances else [],
+            provider_spec_name=provider_config.provider_spec.name
+            if hasattr(provider_config, "provider_spec") and provider_config.provider_spec
+            else None,
+            provider_spec_key=provider_config.provider_spec.provider_key
+            if hasattr(provider_config, "provider_spec") and provider_config.provider_spec
+            else None,
+            model_instances=[
+                ModelInstanceResponse.from_domain(instance)
+                for instance in provider_config.model_instances
+            ]
+            if hasattr(provider_config, "model_instances") and provider_config.model_instances
+            else [],
         )
 
 
 # Provider Config endpoints
+
 
 @router.post("/", response_model=ProviderConfigResponse)
 async def create_provider_config(
@@ -237,9 +259,7 @@ async def get_provider_logo(
 
     if os.path.exists(icon_path):
         return FileResponse(
-            icon_path,
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=3600"}
+            icon_path, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"}
         )
 
     # Return default icon if specific one doesn't exist
@@ -248,7 +268,7 @@ async def get_provider_logo(
         return FileResponse(
             default_path,
             media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=3600"}
+            headers={"Cache-Control": "public, max-age=3600"},
         )
 
     raise HTTPException(status_code=404, detail="Provider logo not found")

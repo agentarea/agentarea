@@ -24,7 +24,7 @@ from uuid import uuid4
 import httpx
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -59,7 +59,7 @@ class FunctionalAPITester:
             "success": success,
             "details": details,
             "timestamp": datetime.now().isoformat(),
-            "data": data
+            "data": data,
         }
         self.test_results.append(result)
 
@@ -78,7 +78,7 @@ class FunctionalAPITester:
                 "API Health Check",
                 success,
                 f"Status: {response.status_code}",
-                response.json() if success else response.text
+                response.json() if success else response.text,
             )
             return success
         except Exception as e:
@@ -116,14 +116,14 @@ class FunctionalAPITester:
                         "Get Ollama Provider Spec",
                         True,
                         f"Found Ollama provider with Qwen model: {qwen_model['model_name']}",
-                        {"provider_id": self.provider_spec_id, "model_id": self.model_spec_id}
+                        {"provider_id": self.provider_spec_id, "model_id": self.model_spec_id},
                     )
                 else:
                     self.log_test_result(
                         "Get Ollama Provider Spec",
                         False,
                         "No Qwen model found in Ollama provider spec",
-                        provider_spec.get("models", [])
+                        provider_spec.get("models", []),
                     )
                     return False
             else:
@@ -131,7 +131,7 @@ class FunctionalAPITester:
                     "Get Ollama Provider Spec",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
             return success
         except Exception as e:
@@ -142,7 +142,9 @@ class FunctionalAPITester:
         """Create provider configuration for Ollama."""
         try:
             if not self.provider_spec_id:
-                self.log_test_result("Create Provider Config", False, "No provider spec ID available")
+                self.log_test_result(
+                    "Create Provider Config", False, "No provider spec ID available"
+                )
                 return False
 
             config_data = {
@@ -150,7 +152,7 @@ class FunctionalAPITester:
                 "name": f"Test Ollama Config {uuid4().hex[:8]}",
                 "api_key": "not-needed-for-ollama",
                 "endpoint_url": "http://localhost:11434",  # Default Ollama endpoint
-                "is_public": True
+                "is_public": True,
             }
 
             response = await self.client.post("/v1/provider-configs/", json=config_data)
@@ -163,14 +165,14 @@ class FunctionalAPITester:
                     "Create Provider Config",
                     True,
                     f"Created provider config: {config['name']}",
-                    {"config_id": self.provider_config_id}
+                    {"config_id": self.provider_config_id},
                 )
             else:
                 self.log_test_result(
                     "Create Provider Config",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
             return success
         except Exception as e:
@@ -181,7 +183,9 @@ class FunctionalAPITester:
         """Create model instance for Qwen2.5."""
         try:
             if not self.provider_config_id or not self.model_spec_id:
-                self.log_test_result("Create Model Instance", False, "Missing provider config or model spec ID")
+                self.log_test_result(
+                    "Create Model Instance", False, "Missing provider config or model spec ID"
+                )
                 return False
 
             instance_data = {
@@ -189,7 +193,7 @@ class FunctionalAPITester:
                 "model_spec_id": self.model_spec_id,
                 "name": f"Test Qwen2.5 Instance {uuid4().hex[:8]}",
                 "description": "Test model instance for functional testing",
-                "is_public": True
+                "is_public": True,
             }
 
             response = await self.client.post("/v1/model-instances/", json=instance_data)
@@ -202,14 +206,14 @@ class FunctionalAPITester:
                     "Create Model Instance",
                     True,
                     f"Created model instance: {instance['name']}",
-                    {"instance_id": self.model_instance_id, "model_name": instance.get("model_name")}
+                    {
+                        "instance_id": self.model_instance_id,
+                        "model_name": instance.get("model_name"),
+                    },
                 )
             else:
                 self.log_test_result(
-                    "Create Model Instance",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "Create Model Instance", False, f"Status: {response.status_code}", response.text
                 )
             return success
         except Exception as e:
@@ -228,7 +232,7 @@ class FunctionalAPITester:
                 "description": "Test agent for functional API testing",
                 "instruction": "You are a helpful AI assistant. Respond concisely and helpfully to user queries.",
                 "model_id": self.model_instance_id,
-                "planning": False
+                "planning": False,
             }
 
             response = await self.client.post("/v1/agents/", json=agent_data)
@@ -241,14 +245,11 @@ class FunctionalAPITester:
                     "Create Agent",
                     True,
                     f"Created agent: {agent['name']}",
-                    {"agent_id": self.agent_id, "status": agent.get("status")}
+                    {"agent_id": self.agent_id, "status": agent.get("status")},
                 )
             else:
                 self.log_test_result(
-                    "Create Agent",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "Create Agent", False, f"Status: {response.status_code}", response.text
                 )
             return success
         except Exception as e:
@@ -266,7 +267,7 @@ class FunctionalAPITester:
                 "content": "Hello! Can you tell me what 2+2 equals?",
                 "agent_id": self.agent_id,
                 "user_id": "test_user",
-                "session_id": f"test_session_{uuid4().hex[:8]}"
+                "session_id": f"test_session_{uuid4().hex[:8]}",
             }
 
             # Send chat message
@@ -281,7 +282,7 @@ class FunctionalAPITester:
                     "Chat Mode Task - Send",
                     True,
                     f"Chat message sent, task_id: {task_id}",
-                    {"task_id": task_id, "status": chat_response.get("status")}
+                    {"task_id": task_id, "status": chat_response.get("status")},
                 )
 
                 # Poll for completion (with timeout)
@@ -300,7 +301,7 @@ class FunctionalAPITester:
                                 "Chat Mode Task - Complete",
                                 success,
                                 f"Task {current_status}: {status_data.get('content', 'No content')}",
-                                status_data
+                                status_data,
                             )
                             return success
 
@@ -309,15 +310,12 @@ class FunctionalAPITester:
                     "Chat Mode Task - Complete",
                     False,
                     "Task did not complete within timeout",
-                    {"task_id": task_id}
+                    {"task_id": task_id},
                 )
                 return False
             else:
                 self.log_test_result(
-                    "Chat Mode Task - Send",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "Chat Mode Task - Send", False, f"Status: {response.status_code}", response.text
                 )
                 return False
         except Exception as e:
@@ -339,17 +337,17 @@ class FunctionalAPITester:
                     "id": str(uuid4()),
                     "message": {
                         "role": "user",
-                        "parts": [{"text": "What is the capital of France?"}]
-                    }
+                        "parts": [{"text": "What is the capital of France?"}],
+                    },
                 },
-                "id": str(uuid4())
+                "id": str(uuid4()),
             }
 
             # Send A2A request with authentication
             response = await self.client.post(
                 f"/v1/agents/{self.agent_id}/rpc",
                 json=rpc_request,
-                headers={"x-user-id": "test_user"}  # Development mode authentication
+                headers={"x-user-id": "test_user"},  # Development mode authentication
             )
             success = response.status_code == 200
 
@@ -364,7 +362,7 @@ class FunctionalAPITester:
                         "A2A Mode Task - Send",
                         True,
                         f"A2A task sent, task_id: {task_id}",
-                        {"task_id": task_id, "status": result.get("status")}
+                        {"task_id": task_id, "status": result.get("status")},
                     )
 
                     # For A2A, we can also check task status via regular task API
@@ -379,13 +377,15 @@ class FunctionalAPITester:
                                 "jsonrpc": "2.0",
                                 "method": "tasks/get",
                                 "params": {"id": task_id},
-                                "id": str(uuid4())
+                                "id": str(uuid4()),
                             }
 
                             status_response = await self.client.post(
                                 f"/v1/agents/{self.agent_id}/rpc",
                                 json=status_request,
-                                headers={"x-user-id": "test_user"}  # Development mode authentication
+                                headers={
+                                    "x-user-id": "test_user"
+                                },  # Development mode authentication
                             )
 
                             if status_response.status_code == 200:
@@ -399,7 +399,7 @@ class FunctionalAPITester:
                                             "A2A Mode Task - Complete",
                                             success,
                                             f"A2A task {task_status}",
-                                            status_rpc["result"]
+                                            status_rpc["result"],
                                         )
                                         return success
 
@@ -408,7 +408,7 @@ class FunctionalAPITester:
                             "A2A Mode Task - Complete",
                             False,
                             "A2A task did not complete within timeout",
-                            {"task_id": task_id}
+                            {"task_id": task_id},
                         )
                         return False
                     else:
@@ -417,7 +417,7 @@ class FunctionalAPITester:
                             "A2A Mode Task - Complete",
                             True,
                             "A2A task completed immediately",
-                            result
+                            result,
                         )
                         return True
                 else:
@@ -425,15 +425,12 @@ class FunctionalAPITester:
                         "A2A Mode Task - Send",
                         False,
                         f"A2A error: {rpc_response.get('error', 'Unknown error')}",
-                        rpc_response
+                        rpc_response,
                     )
                     return False
             else:
                 self.log_test_result(
-                    "A2A Mode Task - Send",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "A2A Mode Task - Send", False, f"Status: {response.status_code}", response.text
                 )
                 return False
         except Exception as e:
@@ -459,15 +456,12 @@ class FunctionalAPITester:
                     {
                         "name": agent_card.get("name"),
                         "capabilities": agent_card.get("capabilities"),
-                        "endpoints": agent_card.get("endpoints")
-                    }
+                        "endpoints": agent_card.get("endpoints"),
+                    },
                 )
             else:
                 self.log_test_result(
-                    "Agent Well-Known",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "Agent Well-Known", False, f"Status: {response.status_code}", response.text
                 )
             return success
         except Exception as e:
@@ -491,7 +485,7 @@ class FunctionalAPITester:
                     "Task Listing - Global",
                     True,
                     f"Retrieved {len(tasks)} global tasks",
-                    {"task_count": len(tasks)}
+                    {"task_count": len(tasks)},
                 )
 
                 # Test agent-specific tasks
@@ -504,22 +498,19 @@ class FunctionalAPITester:
                         "Task Listing - Agent",
                         True,
                         f"Retrieved {len(agent_tasks)} agent tasks",
-                        {"task_count": len(agent_tasks)}
+                        {"task_count": len(agent_tasks)},
                     )
                 else:
                     self.log_test_result(
                         "Task Listing - Agent",
                         False,
                         f"Status: {agent_response.status_code}",
-                        agent_response.text
+                        agent_response.text,
                     )
                     success = False
             else:
                 self.log_test_result(
-                    "Task Listing - Global",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "Task Listing - Global", False, f"Status: {response.status_code}", response.text
                 )
             return success
         except Exception as e:
@@ -559,7 +550,9 @@ class FunctionalAPITester:
         # Delete provider config
         if self.provider_config_id:
             try:
-                response = await self.client.delete(f"/v1/provider-configs/{self.provider_config_id}")
+                response = await self.client.delete(
+                    f"/v1/provider-configs/{self.provider_config_id}"
+                )
                 if response.status_code == 200:
                     logger.info(f"✅ Cleaned up provider config: {self.provider_config_id}")
                 else:
@@ -634,7 +627,7 @@ class FunctionalAPITester:
             "passed_tests": passed_tests,
             "failed_tests": failed_tests,
             "success_rate": (passed_tests / total_tests * 100) if total_tests > 0 else 0,
-            "test_results": self.test_results
+            "test_results": self.test_results,
         }
 
         logger.info("=" * 80)
@@ -660,12 +653,9 @@ async def main():
     parser.add_argument(
         "--base-url",
         default="http://localhost:8000",
-        help="Base URL for the API (default: http://localhost:8000)"
+        help="Base URL for the API (default: http://localhost:8000)",
     )
-    parser.add_argument(
-        "--output",
-        help="Output file for test results (JSON format)"
-    )
+    parser.add_argument("--output", help="Output file for test results (JSON format)")
 
     args = parser.parse_args()
 

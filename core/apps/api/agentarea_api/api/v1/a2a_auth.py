@@ -5,7 +5,7 @@ Supports multiple authentication schemes as specified in the A2A protocol.
 """
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
@@ -22,6 +22,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 class A2AAuthContext(BaseModel):
     """A2A authentication context with workspace support."""
+
     authenticated: bool
     user_id: str | None = None
     workspace_id: str | None = None
@@ -33,6 +34,7 @@ class A2AAuthContext(BaseModel):
 
 class A2APermissions:
     """A2A protocol permissions."""
+
     AGENT_READ = "agent:read"
     AGENT_WRITE = "agent:write"
     AGENT_EXECUTE = "agent:execute"
@@ -40,19 +42,25 @@ class A2APermissions:
     AGENT_ADMIN = "agent:admin"
 
     # Default permissions for different roles
-    PUBLIC_PERMISSIONS = [AGENT_READ]
-    USER_PERMISSIONS = [AGENT_READ, AGENT_WRITE, AGENT_EXECUTE, AGENT_STREAM]
-    ADMIN_PERMISSIONS = [AGENT_READ, AGENT_WRITE, AGENT_EXECUTE, AGENT_STREAM, AGENT_ADMIN]
+    PUBLIC_PERMISSIONS: ClassVar[list[str]] = [AGENT_READ]
+    USER_PERMISSIONS: ClassVar[list[str]] = [
+        AGENT_READ,
+        AGENT_WRITE,
+        AGENT_EXECUTE,
+        AGENT_STREAM,
+    ]
+    ADMIN_PERMISSIONS: ClassVar[list[str]] = [
+        AGENT_READ,
+        AGENT_WRITE,
+        AGENT_EXECUTE,
+        AGENT_STREAM,
+        AGENT_ADMIN,
+    ]
 
 
 async def extract_auth_from_request(request: Request) -> dict[str, Any]:
     """Extract authentication information from request."""
-    auth_info = {
-        "method": None,
-        "credentials": None,
-        "user_id": None,
-        "metadata": {}
-    }
+    auth_info = {"method": None, "credentials": None, "user_id": None, "metadata": {}}
 
     # Check Authorization header (Bearer token)
     auth_header = request.headers.get("authorization")
@@ -88,16 +96,16 @@ async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
     if token and len(token) > 10:
         # Extract user_id from token (in production, decode JWT or validate with auth service)
         user_id = f"user_{token[:8]}"
-        
+
         # In production, extract workspace_id from JWT token or user session
         # For now, use default workspace
         workspace_id = "default"
-        
+
         return {
             "user_id": user_id,
             "workspace_id": workspace_id,
             "permissions": A2APermissions.USER_PERMISSIONS,
-            "valid": True
+            "valid": True,
         }
     return None
 
@@ -110,27 +118,22 @@ async def authenticate_api_key(api_key: str) -> dict[str, Any] | None:
         "test_user_key": {
             "user_id": "test_user",
             "workspace_id": "default",
-            "permissions": A2APermissions.USER_PERMISSIONS
+            "permissions": A2APermissions.USER_PERMISSIONS,
         },
         "test_admin_key": {
-            "user_id": "test_admin", 
+            "user_id": "test_admin",
             "workspace_id": "default",
-            "permissions": A2APermissions.ADMIN_PERMISSIONS
-        }
+            "permissions": A2APermissions.ADMIN_PERMISSIONS,
+        },
     }
 
     if api_key in test_keys:
-        return {
-            **test_keys[api_key],
-            "valid": True
-        }
+        return {**test_keys[api_key], "valid": True}
     return None
 
 
 async def get_a2a_auth_context(
-    request: Request,
-    agent_id: UUID | None = None,
-    required_permission: str | None = None
+    request: Request, agent_id: UUID | None = None, required_permission: str | None = None
 ) -> A2AAuthContext:
     """Get A2A authentication context for request."""
     # Extract authentication info
@@ -140,7 +143,7 @@ async def get_a2a_auth_context(
     context = A2AAuthContext(
         authenticated=False,
         permissions=A2APermissions.PUBLIC_PERMISSIONS,
-        metadata=auth_info["metadata"]
+        metadata=auth_info["metadata"],
     )
 
     # Authenticate based on method
@@ -158,7 +161,7 @@ async def get_a2a_auth_context(
             "user_id": auth_info["user_id"],
             "workspace_id": "default",  # Default workspace for dev mode
             "permissions": A2APermissions.USER_PERMISSIONS,
-            "valid": True
+            "valid": True,
         }
         context.auth_method = "dev_user_id"
 
@@ -170,16 +173,20 @@ async def get_a2a_auth_context(
         context.permissions = auth_result["permissions"]
         context.agent_id = agent_id
 
-        logger.info(f"A2A authentication successful: user={context.user_id}, workspace={context.workspace_id}, method={context.auth_method}")
+        logger.info(
+            f"A2A authentication successful: user={context.user_id}, workspace={context.workspace_id}, method={context.auth_method}"
+        )
     else:
         logger.info(f"A2A authentication failed or not provided: method={auth_info['method']}")
 
     # Check required permission
     if required_permission and required_permission not in context.permissions:
-        logger.warning(f"A2A authorization failed: user={context.user_id}, required={required_permission}")
+        logger.warning(
+            f"A2A authorization failed: user={context.user_id}, required={required_permission}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Insufficient permissions. Required: {required_permission}"
+            detail=f"Insufficient permissions. Required: {required_permission}",
         )
 
     return context
@@ -189,7 +196,7 @@ async def require_a2a_auth(
     request: Request,
     agent_id: UUID,
     permission: str = A2APermissions.AGENT_READ,
-    agent_service: AgentService = Depends(get_agent_service)
+    agent_service: AgentService = Depends(get_agent_service),
 ) -> A2AAuthContext:
     """Require A2A authentication with specific permission."""
     # Verify agent exists
@@ -208,27 +215,21 @@ async def require_a2a_auth(
 
 
 async def require_a2a_write_auth(
-    request: Request,
-    agent_id: UUID,
-    agent_service: AgentService = Depends(get_agent_service)
+    request: Request, agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
 ) -> A2AAuthContext:
     """Require A2A write permission."""
     return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_WRITE, agent_service)
 
 
 async def require_a2a_execute_auth(
-    request: Request,
-    agent_id: UUID,
-    agent_service: AgentService = Depends(get_agent_service)
+    request: Request, agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
 ) -> A2AAuthContext:
     """Require A2A execute permission."""
     return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_EXECUTE, agent_service)
 
 
 async def require_a2a_stream_auth(
-    request: Request,
-    agent_id: UUID,
-    agent_service: AgentService = Depends(get_agent_service)
+    request: Request, agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)
 ) -> A2AAuthContext:
     """Require A2A stream permission."""
     return await require_a2a_auth(request, agent_id, A2APermissions.AGENT_STREAM, agent_service)

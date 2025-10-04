@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 class TaskStatus(Enum):
     """Status of a task."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -18,6 +19,7 @@ class TaskStatus(Enum):
 @dataclass
 class Task:
     """A task with hierarchical support (parent/subtasks)."""
+
     title: str
     description: str = ""
     status: TaskStatus = TaskStatus.PENDING
@@ -31,6 +33,7 @@ class Task:
     def __post_init__(self):
         """Set timestamps if not provided."""
         import datetime
+
         now = datetime.datetime.now().isoformat()
         if not self.created_at:
             self.created_at = now

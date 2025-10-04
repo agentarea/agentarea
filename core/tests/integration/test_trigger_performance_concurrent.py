@@ -28,6 +28,7 @@ try:
     )
     from agentarea_triggers.trigger_service import TriggerService
     from agentarea_triggers.webhook_manager import WebhookManager
+
     TRIGGERS_AVAILABLE = True
 except ImportError:
     TRIGGERS_AVAILABLE = False
@@ -86,11 +87,7 @@ class TestTriggerPerformanceConcurrent:
 
     @pytest.fixture
     async def trigger_service(
-        self,
-        trigger_repositories,
-        mock_event_broker,
-        mock_agent_repository,
-        mock_task_service
+        self, trigger_repositories, mock_event_broker, mock_agent_repository, mock_task_service
     ):
         """Create trigger service with real repositories."""
         trigger_repo, execution_repo = trigger_repositories
@@ -102,16 +99,13 @@ class TestTriggerPerformanceConcurrent:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
     @pytest.fixture
     async def webhook_manager(self, trigger_service, mock_event_broker):
         """Create webhook manager for testing."""
-        return WebhookManager(
-            trigger_service=trigger_service,
-            event_broker=mock_event_broker
-        )
+        return WebhookManager(trigger_service=trigger_service, event_broker=mock_event_broker)
 
     @pytest.fixture
     def sample_agent_id(self):
@@ -121,10 +115,7 @@ class TestTriggerPerformanceConcurrent:
     # Concurrent Execution Tests
 
     async def test_concurrent_trigger_executions_same_trigger(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test concurrent executions of the same trigger."""
         # Create trigger
@@ -135,7 +126,7 @@ class TestTriggerPerformanceConcurrent:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             task_parameters={"concurrent_test": True},
-            created_by="concurrent_test"
+            created_by="concurrent_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -146,7 +137,7 @@ class TestTriggerPerformanceConcurrent:
             execution_data = {
                 "execution_time": datetime.utcnow().isoformat(),
                 "execution_id": execution_id,
-                "source": "concurrent_test"
+                "source": "concurrent_test",
             }
             start_time = time.time()
             result = await trigger_service.execute_trigger(trigger_id, execution_data)
@@ -155,7 +146,7 @@ class TestTriggerPerformanceConcurrent:
             return {
                 "execution_id": execution_id,
                 "result": result,
-                "duration": end_time - start_time
+                "duration": end_time - start_time,
             }
 
         # Execute trigger concurrently
@@ -191,10 +182,7 @@ class TestTriggerPerformanceConcurrent:
         assert avg_duration < 1.0  # Each execution should be under 1 second
 
     async def test_concurrent_different_triggers_execution(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test concurrent execution of different triggers."""
         # Create multiple triggers
@@ -206,9 +194,9 @@ class TestTriggerPerformanceConcurrent:
                 name=f"Concurrent Different Trigger {i}",
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
-                cron_expression=f"0 {9+i} * * *",
+                cron_expression=f"0 {9 + i} * * *",
                 task_parameters={"trigger_index": i},
-                created_by="different_concurrent_test"
+                created_by="different_concurrent_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(trigger)
@@ -218,7 +206,7 @@ class TestTriggerPerformanceConcurrent:
             execution_data = {
                 "execution_time": datetime.utcnow().isoformat(),
                 "execution_id": execution_id,
-                "trigger_index": trigger.task_parameters["trigger_index"]
+                "trigger_index": trigger.task_parameters["trigger_index"],
             }
             start_time = time.time()
             result = await trigger_service.execute_trigger(trigger.id, execution_data)
@@ -228,7 +216,7 @@ class TestTriggerPerformanceConcurrent:
                 "trigger_id": trigger.id,
                 "trigger_index": trigger.task_parameters["trigger_index"],
                 "result": result,
-                "duration": end_time - start_time
+                "duration": end_time - start_time,
             }
 
         start_time = time.time()
@@ -265,11 +253,7 @@ class TestTriggerPerformanceConcurrent:
             assert len(history) == 3  # 3 executions per trigger
 
     async def test_webhook_concurrent_request_processing(
-        self,
-        webhook_manager,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_manager, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test concurrent webhook request processing."""
         # Create webhook trigger
@@ -281,7 +265,7 @@ class TestTriggerPerformanceConcurrent:
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST"],
             task_parameters={"webhook_concurrent_test": True},
-            created_by="webhook_concurrent_test"
+            created_by="webhook_concurrent_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -293,14 +277,14 @@ class TestTriggerPerformanceConcurrent:
                 "method": "POST",
                 "headers": {
                     "Content-Type": "application/json",
-                    "X-Request-ID": f"req-{request_id}"
+                    "X-Request-ID": f"req-{request_id}",
                 },
                 "body": {
                     "request_id": request_id,
                     "timestamp": datetime.utcnow().isoformat(),
-                    "data": f"concurrent_request_{request_id}"
+                    "data": f"concurrent_request_{request_id}",
                 },
-                "query_params": {"source": "concurrent_test"}
+                "query_params": {"source": "concurrent_test"},
             }
 
             start_time = time.time()
@@ -309,14 +293,14 @@ class TestTriggerPerformanceConcurrent:
                 request_data["method"],
                 request_data["headers"],
                 request_data["body"],
-                request_data["query_params"]
+                request_data["query_params"],
             )
             end_time = time.time()
 
             return {
                 "request_id": request_id,
                 "response": response,
-                "duration": end_time - start_time
+                "duration": end_time - start_time,
             }
 
         # Send concurrent webhook requests
@@ -351,11 +335,7 @@ class TestTriggerPerformanceConcurrent:
     # High-Throughput Tests
 
     async def test_high_throughput_webhook_processing(
-        self,
-        webhook_manager,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, webhook_manager, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test high-throughput webhook processing."""
         # Create multiple webhook triggers
@@ -369,7 +349,7 @@ class TestTriggerPerformanceConcurrent:
                 trigger_type=TriggerType.WEBHOOK,
                 webhook_type=WebhookType.GENERIC,
                 task_parameters={"webhook_index": i},
-                created_by="throughput_test"
+                created_by="throughput_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(trigger)
@@ -390,9 +370,9 @@ class TestTriggerPerformanceConcurrent:
                         "body": {
                             "webhook_index": trigger.task_parameters["webhook_index"],
                             "request_index": j,
-                            "timestamp": datetime.utcnow().isoformat()
+                            "timestamp": datetime.utcnow().isoformat(),
                         },
-                        "query_params": {}
+                        "query_params": {},
                     }
 
                     task = webhook_manager.handle_webhook_request(
@@ -400,7 +380,7 @@ class TestTriggerPerformanceConcurrent:
                         request_data["method"],
                         request_data["headers"],
                         request_data["body"],
-                        request_data["query_params"]
+                        request_data["query_params"],
                     )
                     tasks.append(task)
 
@@ -429,11 +409,7 @@ class TestTriggerPerformanceConcurrent:
         assert mock_task_service.create_task_from_params.call_count == total_requests
 
     async def test_mixed_trigger_types_concurrent_execution(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Test concurrent execution of mixed trigger types (cron and webhook)."""
         # Create cron triggers
@@ -443,9 +419,9 @@ class TestTriggerPerformanceConcurrent:
                 name=f"Mixed Cron Trigger {i}",
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
-                cron_expression=f"0 {9+i} * * *",
+                cron_expression=f"0 {9 + i} * * *",
                 task_parameters={"type": "cron", "index": i},
-                created_by="mixed_test"
+                created_by="mixed_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             cron_triggers.append(trigger)
@@ -459,7 +435,7 @@ class TestTriggerPerformanceConcurrent:
                 trigger_type=TriggerType.WEBHOOK,
                 webhook_type=WebhookType.GENERIC,
                 task_parameters={"type": "webhook", "index": i},
-                created_by="mixed_test"
+                created_by="mixed_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             webhook_triggers.append(trigger)
@@ -469,7 +445,7 @@ class TestTriggerPerformanceConcurrent:
             execution_data = {
                 "execution_time": datetime.utcnow().isoformat(),
                 "source": "cron",
-                "trigger_index": trigger.task_parameters["index"]
+                "trigger_index": trigger.task_parameters["index"],
             }
             return await trigger_service.execute_trigger(trigger.id, execution_data)
 
@@ -478,18 +454,15 @@ class TestTriggerPerformanceConcurrent:
             request_data = {
                 "method": "POST",
                 "headers": {"Content-Type": "application/json"},
-                "body": {
-                    "source": "webhook",
-                    "trigger_index": trigger.task_parameters["index"]
-                },
-                "query_params": {}
+                "body": {"source": "webhook", "trigger_index": trigger.task_parameters["index"]},
+                "query_params": {},
             }
             return await webhook_manager.handle_webhook_request(
                 webhook_id,
                 request_data["method"],
                 request_data["headers"],
                 request_data["body"],
-                request_data["query_params"]
+                request_data["query_params"],
             )
 
         # Execute all triggers concurrently
@@ -505,8 +478,8 @@ class TestTriggerPerformanceConcurrent:
         total_duration = end_time - start_time
 
         # Verify all executions completed successfully
-        cron_results = results[:len(cron_triggers)]
-        webhook_results = results[len(cron_triggers):]
+        cron_results = results[: len(cron_triggers)]
+        webhook_results = results[len(cron_triggers) :]
 
         # Verify cron trigger results
         for result in cron_results:
@@ -526,11 +499,7 @@ class TestTriggerPerformanceConcurrent:
     # Stress Tests
 
     async def test_trigger_system_under_stress(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Test trigger system under stress conditions."""
         # Create multiple triggers of different types
@@ -544,7 +513,7 @@ class TestTriggerPerformanceConcurrent:
                 trigger_type=TriggerType.CRON,
                 cron_expression=f"0 {i % 24} * * *",
                 task_parameters={"stress_test": True, "index": i},
-                created_by="stress_test"
+                created_by="stress_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(("cron", trigger))
@@ -557,7 +526,7 @@ class TestTriggerPerformanceConcurrent:
                 trigger_type=TriggerType.WEBHOOK,
                 webhook_type=WebhookType.GENERIC,
                 task_parameters={"stress_test": True, "index": i + 10},
-                created_by="stress_test"
+                created_by="stress_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(("webhook", trigger))
@@ -573,7 +542,7 @@ class TestTriggerPerformanceConcurrent:
                         execution_data = {
                             "execution_time": datetime.utcnow().isoformat(),
                             "batch_index": j,
-                            "stress_test": True
+                            "stress_test": True,
                         }
                         task = trigger_service.execute_trigger(trigger.id, execution_data)
                         tasks.append(task)
@@ -587,16 +556,16 @@ class TestTriggerPerformanceConcurrent:
                             "body": {
                                 "batch_index": j,
                                 "stress_test": True,
-                                "timestamp": datetime.utcnow().isoformat()
+                                "timestamp": datetime.utcnow().isoformat(),
                             },
-                            "query_params": {}
+                            "query_params": {},
                         }
                         task = webhook_manager.handle_webhook_request(
                             trigger.webhook_id,
                             request_data["method"],
                             request_data["headers"],
                             request_data["body"],
-                            request_data["query_params"]
+                            request_data["query_params"],
                         )
                         tasks.append(task)
 
@@ -614,7 +583,7 @@ class TestTriggerPerformanceConcurrent:
         successful_operations = 0
         for result in results:
             if not isinstance(result, Exception):
-                if hasattr(result, 'status') and result.status == ExecutionStatus.SUCCESS:
+                if hasattr(result, "status") and result.status == ExecutionStatus.SUCCESS:
                     successful_operations += 1
                 elif isinstance(result, dict) and result.get("status_code") == 200:
                     successful_operations += 1
@@ -631,10 +600,7 @@ class TestTriggerPerformanceConcurrent:
     # Memory and Resource Tests
 
     async def test_memory_usage_under_load(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test memory usage under sustained load."""
         import gc
@@ -646,7 +612,7 @@ class TestTriggerPerformanceConcurrent:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             task_parameters={"memory_test": True},
-            created_by="memory_test"
+            created_by="memory_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -662,7 +628,7 @@ class TestTriggerPerformanceConcurrent:
             execution_data = {
                 "execution_time": datetime.utcnow().isoformat(),
                 "iteration": i,
-                "memory_test": True
+                "memory_test": True,
             }
             result = await trigger_service.execute_trigger(trigger_id, execution_data)
             assert result.status == ExecutionStatus.SUCCESS
@@ -685,10 +651,7 @@ class TestTriggerPerformanceConcurrent:
         assert len(history) == execution_count
 
     async def test_database_connection_handling_under_load(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test database connection handling under concurrent load."""
         # Create multiple triggers
@@ -700,9 +663,9 @@ class TestTriggerPerformanceConcurrent:
                 name=f"DB Load Test Trigger {i}",
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
-                cron_expression=f"0 {9+i} * * *",
+                cron_expression=f"0 {9 + i} * * *",
                 task_parameters={"db_test": True, "index": i},
-                created_by="db_load_test"
+                created_by="db_load_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(trigger)
@@ -716,7 +679,7 @@ class TestTriggerPerformanceConcurrent:
                 # Execute trigger (write operation)
                 execution_data = {
                     "execution_time": datetime.utcnow().isoformat(),
-                    "db_stress_test": True
+                    "db_stress_test": True,
                 }
                 tasks.append(trigger_service.execute_trigger(trigger.id, execution_data))
 
@@ -750,10 +713,7 @@ class TestTriggerPerformanceConcurrent:
     # Error Handling Under Load
 
     async def test_error_handling_under_concurrent_load(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test error handling under concurrent load."""
         # Create trigger
@@ -763,7 +723,7 @@ class TestTriggerPerformanceConcurrent:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=10,  # High threshold to avoid auto-disable
-            created_by="error_load_test"
+            created_by="error_load_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -771,6 +731,7 @@ class TestTriggerPerformanceConcurrent:
 
         # Make task service fail intermittently
         call_count = 0
+
         def intermittent_failure(*args, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -790,7 +751,7 @@ class TestTriggerPerformanceConcurrent:
             execution_data = {
                 "execution_time": datetime.utcnow().isoformat(),
                 "execution_id": execution_id,
-                "error_test": True
+                "error_test": True,
             }
             return await trigger_service.execute_trigger(trigger_id, execution_data)
 

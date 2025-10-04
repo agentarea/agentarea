@@ -77,12 +77,12 @@ async def test_real_workflow_with_mocked_infrastructure():
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary of what was accomplished"
+                            "description": "Optional final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -122,14 +122,14 @@ async def test_real_workflow_with_mocked_infrastructure():
         llm_model = LLMModel(
             provider_type="ollama_chat",
             model_name="llama3.1",  # Use a model that supports tool calling
-            endpoint_url=f"http://{docker_host}:11434"
+            endpoint_url=f"http://{docker_host}:11434",
         )
 
         request = LLMRequest(
             messages=messages,
             tools=tools,
             temperature=temperature or 0.1,
-            max_tokens=max_tokens or 300
+            max_tokens=max_tokens or 300,
         )
 
         try:
@@ -146,12 +146,18 @@ async def test_real_workflow_with_mocked_infrastructure():
 
                 if chunk.content:
                     complete_content += chunk.content
-                    if chunk_count <= 5 or chunk_count % 20 == 0:  # Log first few and every 20th chunk
-                        logger.debug(f"📝 Chunk {chunk_count}: '{chunk.content[:30]}{'...' if len(chunk.content) > 30 else ''}'")
+                    if (
+                        chunk_count <= 5 or chunk_count % 20 == 0
+                    ):  # Log first few and every 20th chunk
+                        logger.debug(
+                            f"📝 Chunk {chunk_count}: '{chunk.content[:30]}{'...' if len(chunk.content) > 30 else ''}'"
+                        )
 
                 if chunk.tool_calls:
                     complete_tool_calls = chunk.tool_calls
-                    logger.info(f"🔧 Tool calls received in chunk {chunk_count}: {chunk.tool_calls}")
+                    logger.info(
+                        f"🔧 Tool calls received in chunk {chunk_count}: {chunk.tool_calls}"
+                    )
 
                 if chunk.usage:
                     final_usage = chunk.usage
@@ -165,7 +171,7 @@ async def test_real_workflow_with_mocked_infrastructure():
                 "content": complete_content,
                 "tool_calls": complete_tool_calls,
                 "cost": final_cost,
-                "usage": final_usage.__dict__ if final_usage else None
+                "usage": final_usage.__dict__ if final_usage else None,
             }
 
             logger.info("=" * 60)
@@ -185,6 +191,7 @@ async def test_real_workflow_with_mocked_infrastructure():
 
                     # Try to extract JSON patterns
                     import re
+
                     json_patterns = [
                         r'\{\s*"name"\s*:\s*"task_complete"[^}]*\}',
                         r'\{\s*"name"\s*:\s*"task_complete"[^}]*"arguments"[^}]*\}',
@@ -211,12 +218,12 @@ async def test_real_workflow_with_mocked_infrastructure():
     # Keep other real activities but replace database-dependent ones
     real_activities = []
     for activity_func in activities:
-        activity_name = getattr(activity_func, '__name__', '')
-        if 'build_agent_config' in activity_name:
+        activity_name = getattr(activity_func, "__name__", "")
+        if "build_agent_config" in activity_name:
             real_activities.append(mock_build_agent_config)
-        elif 'discover_available_tools' in activity_name:
+        elif "discover_available_tools" in activity_name:
             real_activities.append(mock_discover_tools)
-        elif 'call_llm' in activity_name:
+        elif "call_llm" in activity_name:
             real_activities.append(real_llm_with_ollama)
         else:
             real_activities.append(activity_func)
@@ -227,12 +234,9 @@ async def test_real_workflow_with_mocked_infrastructure():
         task_id=uuid4(),
         user_id="22222222-2222-2222-2222-222222222222",
         task_query="test",  # Use the exact same query as production
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     logger.info("🧪 Testing REAL workflow with REAL LLM but mocked database")
@@ -257,7 +261,7 @@ async def test_real_workflow_with_mocked_infrastructure():
                 execution_request,
                 id=f"real-test-{uuid4()}",
                 task_queue="real-test-queue",
-                execution_timeout=timedelta(minutes=3)
+                execution_timeout=timedelta(minutes=3),
             )
 
             logger.info("=" * 60)
@@ -274,16 +278,20 @@ async def test_real_workflow_with_mocked_infrastructure():
             malformed_detected = False
 
             for i, msg in enumerate(result.conversation_history):
-                role = msg.get('role', 'unknown')
-                content = msg.get('content', '')
-                tool_calls = msg.get('tool_calls')
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                tool_calls = msg.get("tool_calls")
 
-                if role == 'assistant':
-                    logger.info(f"📝 Message {i} (assistant): {len(content)} chars, tool_calls: {bool(tool_calls)}")
+                if role == "assistant":
+                    logger.info(
+                        f"📝 Message {i} (assistant): {len(content)} chars, tool_calls: {bool(tool_calls)}"
+                    )
 
                     # Check for malformed response pattern
-                    if not tool_calls and content and 'task_complete' in content.lower():
-                        logger.warning(f"🚨 MALFORMED in message {i}: task_complete in content but no tool_calls")
+                    if not tool_calls and content and "task_complete" in content.lower():
+                        logger.warning(
+                            f"🚨 MALFORMED in message {i}: task_complete in content but no tool_calls"
+                        )
                         logger.warning(f"Content: {content[:100]}...")
                         malformed_detected = True
                     elif tool_calls:
@@ -313,10 +321,14 @@ async def test_real_workflow_with_mocked_infrastructure():
             # Verify workflow completed properly
             if result.success:
                 logger.info("🎉 Workflow completed successfully with real LLM!")
-                assert result.reasoning_iterations_used >= 1, "Should have completed at least 1 iteration"
+                assert result.reasoning_iterations_used >= 1, (
+                    "Should have completed at least 1 iteration"
+                )
             else:
                 logger.warning("⚠️ Workflow did not complete successfully")
-                logger.warning("This might indicate an issue with the LLM responses or tool execution")
+                logger.warning(
+                    "This might indicate an issue with the LLM responses or tool execution"
+                )
 
             logger.info("=" * 60)
 

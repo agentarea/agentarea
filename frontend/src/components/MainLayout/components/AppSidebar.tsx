@@ -35,7 +35,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> & 
             `flex items-center justify-between overflow-hidden flex-row`, 
             open ? 'flex-row' : 'flex-col-reverse ')}
         >
-        <NavUser user={props.data.user} />
+        <NavUser />
         <SidebarTrigger className="hidden md:flex" />
       </SidebarFooter>
       <SidebarRail />

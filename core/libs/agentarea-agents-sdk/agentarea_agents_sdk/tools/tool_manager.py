@@ -5,7 +5,10 @@ from typing import Any
 from uuid import UUID
 
 from .base_tool import ToolRegistry
-from .builtin_tools_loader import get_builtin_tools_metadata, get_builtin_tool_class, create_builtin_tool_instance
+from .builtin_tools_loader import (
+    create_builtin_tool_instance,
+    get_builtin_tools_metadata,
+)
 from .completion_tool import CompletionTool
 from .mcp_tool import MCPToolFactory
 
@@ -14,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def get_available_builtin_tools() -> dict[str, dict[str, Any]]:
     """Get available builtin tools with their metadata.
-    
+
     Returns:
         Dict mapping tool names to their metadata
     """
@@ -59,7 +62,7 @@ class ToolManager:
                     # Support both "enabled_methods" (old) and "disabled_methods" (new, preferred)
                     disabled_methods = tool_config.get("disabled_methods", {})
                     enabled_methods = tool_config.get("enabled_methods", {})
-                    
+
                     # Convert disabled_methods to constructor arguments (all True except disabled ones)
                     if disabled_methods:
                         toolset_methods = {method: False for method in disabled_methods.keys()}
@@ -71,14 +74,15 @@ class ToolManager:
                 else:
                     tool_name = tool_config
                     toolset_methods = {}
-                
+
                 tool_instance = create_builtin_tool_instance(tool_name, toolset_methods)
                 if tool_instance:
                     # Check if tool is a Toolset - if so, wrap it in adapter for compatibility
                     from .decorator_tool import Toolset, ToolsetAdapter
+
                     if isinstance(tool_instance, Toolset):
                         tool_instance = ToolsetAdapter(tool_instance)
-                    
+
                     all_tools.append(tool_instance.get_openai_function_definition())
                     logger.info(f"Added builtin tool: {tool_name}")
                 else:

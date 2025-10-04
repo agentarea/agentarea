@@ -38,17 +38,23 @@ class MockTaskRepository:
             return task
         return None
 
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> list[SimpleTask]:
+    async def get_by_user_id(
+        self, user_id: str, limit: int = 100, offset: int = 0
+    ) -> list[SimpleTask]:
         # Filter by workspace and user
         return [
-            task for task in self.tasks.values()
+            task
+            for task in self.tasks.values()
             if task.user_id == user_id and task.workspace_id == self.user_context.workspace_id
         ]
 
-    async def get_by_agent_id(self, agent_id, limit: int = 100, offset: int = 0) -> list[SimpleTask]:
+    async def get_by_agent_id(
+        self, agent_id, limit: int = 100, offset: int = 0
+    ) -> list[SimpleTask]:
         # Filter by workspace
         return [
-            task for task in self.tasks.values()
+            task
+            for task in self.tasks.values()
             if task.agent_id == agent_id and task.workspace_id == self.user_context.workspace_id
         ]
 
@@ -92,10 +98,7 @@ class MockTaskManager:
 @pytest.fixture
 def test_user_context():
     """Create a test user context."""
-    return create_test_user_context(
-        user_id="test-user-123",
-        workspace_id="test-workspace-456"
-    )
+    return create_test_user_context(user_id="test-user-123", workspace_id="test-workspace-456")
 
 
 class MockRepositoryFactory:
@@ -292,14 +295,8 @@ async def test_create_and_execute_task(task_service, test_user_context):
 async def test_workspace_isolation():
     """Test that tasks are isolated by workspace."""
     # Create two different user contexts in different workspaces
-    user_context_1 = create_test_user_context(
-        user_id="user1",
-        workspace_id="workspace1"
-    )
-    user_context_2 = create_test_user_context(
-        user_id="user2",
-        workspace_id="workspace2"
-    )
+    user_context_1 = create_test_user_context(user_id="user1", workspace_id="workspace1")
+    user_context_2 = create_test_user_context(user_id="user2", workspace_id="workspace2")
 
     # Create repositories for each workspace
     repo1 = MockTaskRepository(user_context_1)

@@ -1,0 +1,133 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-worker
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: worker
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          env:
+            # Database configuration
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: POSTGRES_HOST
+            - name: POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: POSTGRES_PORT
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+            # Redis configuration
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: REDIS_PORT
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.redis }}
+                  key: redis-password
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
+            # Temporal configuration
+            - name: WORKFLOW__USE_WORKFLOW_EXECUTION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: WORKFLOW__USE_WORKFLOW_EXECUTION
+            - name: WORKFLOW__WORKFLOW_ENGINE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: WORKFLOW__WORKFLOW_ENGINE
+            - name: WORKFLOW__TEMPORAL_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: WORKFLOW__TEMPORAL_SERVER_URL
+            - name: WORKFLOW__TEMPORAL_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: WORKFLOW__TEMPORAL_NAMESPACE
+            - name: WORKFLOW__TEMPORAL_TASK_QUEUE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: WORKFLOW__TEMPORAL_TASK_QUEUE
+            - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
+            - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS
+            # Task configuration
+            - name: TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY
+            # Environment
+            - name: DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: DEBUG
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-worker-env
+                  key: ENVIRONMENT
+            {{- if .Values.worker.extraEnv }}
+            {{- toYaml .Values.worker.extraEnv | nindent 12 }}
+            {{- end }}
+          {{- with .Values.worker.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

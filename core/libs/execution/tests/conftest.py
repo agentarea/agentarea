@@ -1,5 +1,4 @@
-"""Pytest configuration and fixtures for AgentArea execution tests.
-"""
+"""Pytest configuration and fixtures for AgentArea execution tests."""
 
 import asyncio
 from unittest.mock import AsyncMock
@@ -32,9 +31,7 @@ class MockActivityServices:
             },
         }
 
-        self.agent_service.update_agent_memory.return_value = {
-            "memory_entries_created": 2
-        }
+        self.agent_service.update_agent_memory.return_value = {"memory_entries_created": 2}
 
         self.mcp_service.get_server_instance.return_value = None
         self.mcp_service.get_server_tools.return_value = []

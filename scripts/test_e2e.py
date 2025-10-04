@@ -7,11 +7,10 @@ Tests the full workflow from MCP instance creation to endpoint accessibility.
 import asyncio
 import json
 import time
-import subprocess
 import sys
 import requests
 import redis
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 import logging
 
 # Configure logging
@@ -138,7 +137,6 @@ class E2ETestRunner:
             pubsub = r.pubsub()
             pubsub.subscribe("MCPServerInstanceStatusChanged")
             
-            expected_statuses = ["validating", "starting", "running"]
             received_statuses = []
             timeout = 60  # 60 seconds timeout
             start_time = time.time()

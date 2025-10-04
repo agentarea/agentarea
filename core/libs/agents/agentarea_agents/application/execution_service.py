@@ -27,8 +27,7 @@ class ExecutionService(ExecutionServiceInterface):
 
             # Delegate to workflow orchestrator
             result = await self._workflow_orchestrator.start_workflow(
-                execution_id=execution_id,
-                request=request
+                execution_id=execution_id, request=request
             )
 
             return ExecutionResult(
@@ -91,7 +90,7 @@ class ExecutionService(ExecutionServiceInterface):
 
 
 # Interface for workflow orchestrators
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod  # noqa: E402
 
 
 class WorkflowOrchestratorInterface(ABC):

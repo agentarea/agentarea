@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class WorkflowConfig(Protocol):
     """Protocol for workflow configuration."""
+
     temporal_address: str
     task_queue: str
     max_concurrent_activities: int

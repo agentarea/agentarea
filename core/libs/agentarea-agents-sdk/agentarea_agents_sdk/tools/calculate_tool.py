@@ -7,7 +7,7 @@ from .base_tool import BaseTool
 
 class CalculateTool(BaseTool):
     """Tool that performs basic mathematical calculations.
-    
+
     This tool safely evaluates mathematical expressions for agent use.
     """
 
@@ -27,10 +27,10 @@ class CalculateTool(BaseTool):
                 "properties": {
                     "expression": {
                         "type": "string",
-                        "description": "Mathematical expression to calculate (e.g., '2 + 2', '15 * 8', '120 + 12')"
+                        "description": "Mathematical expression to calculate (e.g., '2 + 2', '15 * 8', '120 + 12')",
                     }
                 },
-                "required": ["expression"]
+                "required": ["expression"],
             }
         }
 
@@ -50,7 +50,7 @@ class CalculateTool(BaseTool):
                 "success": False,
                 "result": "No expression provided",
                 "tool_name": self.name,
-                "error": "Expression is required"
+                "error": "Expression is required",
             }
 
         try:
@@ -62,12 +62,12 @@ class CalculateTool(BaseTool):
                 "calculation_result": result,
                 "expression": expression,
                 "tool_name": self.name,
-                "error": None
+                "error": None,
             }
         except Exception as e:
             return {
                 "success": False,
                 "result": f"Cannot calculate '{expression}': {str(e)}",
                 "tool_name": self.name,
-                "error": str(e)
+                "error": str(e),
             }

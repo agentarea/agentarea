@@ -2087,7 +2087,10 @@ export interface components {
             is_public: boolean;
             /** Env Schema */
             env_schema: {
-                [key: string]: unknown;
+                name: string;
+                description: string;
+                required: boolean;
+                default?: string;
             }[];
             /** Cmd */
             cmd: string[] | null;

@@ -23,10 +23,7 @@ async def db_session():
 @pytest.fixture
 def user_context():
     """Create a test user context."""
-    return UserContext(
-        user_id="test-user",
-        workspace_id="test-workspace"
-    )
+    return UserContext(user_id="test-user", workspace_id="test-workspace")
 
 
 @pytest.fixture
@@ -60,7 +57,7 @@ class TestTaskEventRepositoryIntegration:
             event_type="LLMCallStarted",
             data={"model": "gpt-4", "tokens": 150},
             workspace_id="test-workspace",
-            created_by="workflow"
+            created_by="workflow",
         )
 
         # Save to database
@@ -97,20 +94,20 @@ class TestTaskEventRepositoryIntegration:
                 task_id=task_id,
                 event_type="LLMCallStarted",
                 data={"model": "gpt-4"},
-                workspace_id="test-workspace"
+                workspace_id="test-workspace",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id,
                 event_type="LLMCallCompleted",
                 data={"tokens": 150},
-                workspace_id="test-workspace"
+                workspace_id="test-workspace",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id,
                 event_type="TaskCompleted",
                 data={"result": "success"},
-                workspace_id="test-workspace"
-            )
+                workspace_id="test-workspace",
+            ),
         ]
 
         # Save all events
@@ -140,20 +137,20 @@ class TestTaskEventRepositoryIntegration:
                 task_id=task_id_1,
                 event_type="LLMCallStarted",
                 data={"model": "gpt-4"},
-                workspace_id="test-workspace"
+                workspace_id="test-workspace",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id_2,
                 event_type="LLMCallStarted",
                 data={"model": "claude-3"},
-                workspace_id="test-workspace"
+                workspace_id="test-workspace",
             ),
             TaskEvent.create_workflow_event(
                 task_id=task_id_1,
                 event_type="TaskCompleted",
                 data={"result": "success"},
-                workspace_id="test-workspace"
-            )
+                workspace_id="test-workspace",
+            ),
         ]
 
         # Save all events
@@ -189,14 +186,14 @@ class TestTaskEventRepositoryIntegration:
             task_id=task_id,
             event_type="LLMCallStarted",
             data={"model": "gpt-4"},
-            workspace_id="workspace1"
+            workspace_id="workspace1",
         )
 
         event2 = TaskEvent.create_workflow_event(
             task_id=task_id,
             event_type="LLMCallStarted",
             data={"model": "claude-3"},
-            workspace_id="workspace2"
+            workspace_id="workspace2",
         )
 
         # Save events using respective repositories
@@ -232,7 +229,7 @@ class TestTaskEventServiceIntegration:
             event_type=event_type,
             data=data,
             workspace_id=workspace_id,
-            created_by="integration_test"
+            created_by="integration_test",
         )
         await db_session.commit()
 
@@ -257,15 +254,15 @@ class TestTaskEventServiceIntegration:
                 "event_type": "LLMCallStarted",
                 "data": {"model": "gpt-4"},
                 "workspace_id": "test-workspace",
-                "created_by": "integration_test"
+                "created_by": "integration_test",
             },
             {
                 "task_id": str(uuid4()),
                 "event_type": "LLMCallCompleted",
                 "data": {"tokens": 150},
                 "workspace_id": "test-workspace",
-                "created_by": "integration_test"
-            }
+                "created_by": "integration_test",
+            },
         ]
 
         # Create events using service
@@ -290,21 +287,21 @@ class TestTaskEventServiceIntegration:
             task_id=uuid4(),
             event_type="LLMCallStarted",
             data={"model": "gpt-4"},
-            workspace_id="test-workspace"
+            workspace_id="test-workspace",
         )
 
         await task_event_service.create_workflow_event(
             task_id=uuid4(),
             event_type="LLMCallStarted",
             data={"model": "claude-3"},
-            workspace_id="test-workspace"
+            workspace_id="test-workspace",
         )
 
         await task_event_service.create_workflow_event(
             task_id=uuid4(),
             event_type="TaskCompleted",
             data={"result": "success"},
-            workspace_id="test-workspace"
+            workspace_id="test-workspace",
         )
 
         await db_session.commit()

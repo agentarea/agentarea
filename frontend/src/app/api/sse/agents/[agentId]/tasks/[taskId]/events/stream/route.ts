@@ -1,16 +1,17 @@
 import { NextRequest } from 'next/server';
+import { env } from "@/env";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ agentId: string; taskId: string }> }
 ) {
   const { agentId, taskId } = await params;
-  
+
   try {
     // Get auth token from the request
     const authHeader = request.headers.get('authorization');
     const workspaceHeader = request.headers.get('x-workspace-id') || 'default';
-    
+
     // Get token from auth API if not provided
     let token = authHeader?.replace('Bearer ', '');
     if (!token) {
@@ -41,7 +42,7 @@ export async function GET(
     }
 
     // Connect to backend SSE endpoint
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const backendUrl = env.NEXT_PUBLIC_API_URL;
     const sseUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream`;
     
     const response = await fetch(sseUrl, {

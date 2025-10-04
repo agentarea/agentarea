@@ -111,7 +111,7 @@ class MCPRealIntegrationTest:
                 "port": 3000,
                 "endpoint_url": mcp_endpoint_url,
                 "environment": {"PORT": "3000"},
-                "resources": {"memory_limit": "256m", "cpu_limit": "0.5"}
+                "resources": {"memory_limit": "256m", "cpu_limit": "0.5"},
             },
         }
 
@@ -223,8 +223,7 @@ class MCPRealIntegrationTest:
 
         # Step 2: Check for existing provider config
         response = await self.client.get(
-            f"{self.api_base}/v1/provider-configs/",
-            params={"provider_spec_id": provider_spec_id}
+            f"{self.api_base}/v1/provider-configs/", params={"provider_spec_id": provider_spec_id}
         )
 
         provider_config_id = None
@@ -244,13 +243,17 @@ class MCPRealIntegrationTest:
                 "is_public": True,
             }
 
-            response = await self.client.post(f"{self.api_base}/v1/provider-configs/", json=config_data)
+            response = await self.client.post(
+                f"{self.api_base}/v1/provider-configs/", json=config_data
+            )
             if response.status_code in [200, 201]:
                 config = response.json()
                 provider_config_id = config["id"]
                 print(f"✅ Created provider config: {provider_config_id}")
             else:
-                print(f"❌ Failed to create provider config: {response.status_code} - {response.text}")
+                print(
+                    f"❌ Failed to create provider config: {response.status_code} - {response.text}"
+                )
                 return None
 
         return provider_config_id
@@ -305,7 +308,9 @@ class MCPRealIntegrationTest:
             "is_public": True,
         }
 
-        response = await self.client.post(f"{self.api_base}/v1/model-instances/", json=instance_data)
+        response = await self.client.post(
+            f"{self.api_base}/v1/model-instances/", json=instance_data
+        )
         if response.status_code in [200, 201]:
             instance = response.json()
             print(f"✅ Created model instance: {instance['id']}")

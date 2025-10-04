@@ -32,9 +32,9 @@ export function NavUser() {
   const { isMobile } = useSidebar();
   const { user: authUser, isLoaded, signOut } = useAuth();
   const user = authUser ? {
-    name: authUser.fullName || authUser.firstName || "User",
+    name: authUser.name || "User",
     email: authUser.email || "",
-    avatar: authUser.imageUrl || ""
+    avatar: authUser.image || ""
   } : null;
 
   const handleLogout = async () => {

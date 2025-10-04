@@ -1,0 +1,169 @@
+{{- if .Values.backend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-backend
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: backend
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            # Backend configuration
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: LOG_LEVEL
+            - name: DEV_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: DEV_MODE
+            # Database configuration
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: POSTGRES_HOST
+            - name: POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: POSTGRES_PORT
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            # Redis configuration
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: REDIS_PORT
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.redis }}
+                  key: redis-password
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
+            # Storage (S3/MinIO) configuration
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: AWS_REGION
+            - name: S3_BUCKET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: S3_BUCKET_NAME
+            - name: AWS_ENDPOINT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: AWS_ENDPOINT_URL
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-user
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-password
+            # Temporal configuration
+            - name: WORKFLOW__TEMPORAL_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: WORKFLOW__TEMPORAL_SERVER_URL
+            - name: WORKFLOW__TEMPORAL_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: WORKFLOW__TEMPORAL_NAMESPACE
+            - name: WORKFLOW__TEMPORAL_TASK_QUEUE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: WORKFLOW__TEMPORAL_TASK_QUEUE
+            # MCP Manager configuration
+            - name: MCP_MANAGER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: MCP_MANAGER_URL
+            - name: MCP_PROXY_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: MCP_PROXY_HOST
+            - name: MCP_CLIENT_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-backend-env
+                  key: MCP_CLIENT_TIMEOUT
+            {{- if .Values.backend.extraEnv }}
+            # Extra environment variables from values
+            {{- toYaml .Values.backend.extraEnv | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

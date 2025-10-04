@@ -19,7 +19,13 @@ def agent():
 
 
 @agent.command()
-@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format",
+)
 @click.pass_context
 def list(ctx, output_format: str):
     """List all agents."""
@@ -36,6 +42,7 @@ def list(ctx, output_format: str):
 
             if output_format == "json":
                 import json
+
                 click.echo(json.dumps(data, indent=2))
                 return
 
@@ -47,13 +54,17 @@ def list(ctx, output_format: str):
             rows = []
 
             for agent in data:
-                rows.append([
-                    safe_get_field(agent, "id", "N/A"),
-                    safe_get_field(agent, "name"),
-                    safe_get_field(agent, "description", "No description")[:50] + "..." if len(safe_get_field(agent, "description", "")) > 50 else safe_get_field(agent, "description", "No description"),
-                    safe_get_field(agent, "status", "unknown"),
-                    safe_get_field(agent, "llm_model_instance_id", "N/A")
-                ])
+                rows.append(
+                    [
+                        safe_get_field(agent, "id", "N/A"),
+                        safe_get_field(agent, "name"),
+                        safe_get_field(agent, "description", "No description")[:50] + "..."
+                        if len(safe_get_field(agent, "description", "")) > 50
+                        else safe_get_field(agent, "description", "No description"),
+                        safe_get_field(agent, "status", "unknown"),
+                        safe_get_field(agent, "llm_model_instance_id", "N/A"),
+                    ]
+                )
 
             click.echo(format_table(headers, rows))
 
@@ -71,9 +82,20 @@ def list(ctx, output_format: str):
 @click.option("--model-id", required=True, help="LLM model instance ID")
 @click.option("--planning/--no-planning", default=False, help="Enable planning")
 @click.option("--public/--private", default=False, help="Make agent public")
-@click.option("--builtin-tools", help="Comma-separated list of builtin tools (e.g., calculator,weather)")
+@click.option(
+    "--builtin-tools", help="Comma-separated list of builtin tools (e.g., calculator,weather)"
+)
 @click.pass_context
-def create(ctx, name: str, description: str, instruction: str, model_id: str, planning: bool, public: bool, builtin_tools: str):
+def create(
+    ctx,
+    name: str,
+    description: str,
+    instruction: str,
+    model_id: str,
+    planning: bool,
+    public: bool,
+    builtin_tools: str,
+):
     """Create a new agent."""
     # Validate inputs
     if len(name.strip()) < 2:
@@ -98,23 +120,18 @@ def create(ctx, name: str, description: str, instruction: str, model_id: str, pl
             "model_id": model_id,
             "planning": planning,
         }
-        
+
         # Add tools configuration if builtin tools are specified
         if builtin_tools:
             tools_list = []
-            for tool_name in builtin_tools.split(','):
+            for tool_name in builtin_tools.split(","):
                 tool_name = tool_name.strip()
                 if tool_name:
                     # Use the simplified format (methods enabled by default)
-                    tools_list.append({
-                        "tool_name": tool_name
-                    })
-            
+                    tools_list.append({"tool_name": tool_name})
+
             if tools_list:
-                data["tools_config"] = {
-                    "mcp_server_configs": [],
-                    "builtin_tools": tools_list
-                }
+                data["tools_config"] = {"mcp_server_configs": [], "builtin_tools": tools_list}
 
         try:
             result = await client.post("/v1/agents/", data)
@@ -152,7 +169,7 @@ def show(ctx, agent_id: str):
             click.echo(f"   Created: {agent.get('created_at', 'Unknown')}")
             click.echo(f"   Updated: {agent.get('updated_at', 'Unknown')}")
 
-            if instruction := agent.get('instruction'):
+            if instruction := agent.get("instruction"):
                 click.echo("\n📝 Instructions:")
                 click.echo(f"   {instruction}")
 
@@ -171,7 +188,9 @@ def show(ctx, agent_id: str):
 @click.option("--planning/--no-planning", help="Enable/disable planning")
 @click.option("--public/--private", help="Make agent public/private")
 @click.pass_context
-def update(ctx, agent_id: str, name: str, description: str, instruction: str, planning: bool, public: bool):
+def update(
+    ctx, agent_id: str, name: str, description: str, instruction: str, planning: bool, public: bool
+):
     """Update an existing agent."""
     # Build update data with only provided fields
     update_data = {}
@@ -211,7 +230,7 @@ def update(ctx, agent_id: str, name: str, description: str, instruction: str, pl
             result = await client.patch(f"/v1/agents/{agent_id}", update_data)
             click.echo(f"✅ Agent '{agent_id}' updated successfully")
 
-            if updated_name := result.get('name'):
+            if updated_name := result.get("name"):
                 click.echo(f"   Name: {updated_name}")
 
         except AgentAreaAPIError as e:

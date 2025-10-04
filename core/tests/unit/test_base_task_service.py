@@ -63,25 +63,33 @@ class MockTaskRepository:
     async def list(self) -> list[SimpleTask]:
         # Only return tasks from current workspace
         return [
-            task for task in self.tasks.values()
+            task
+            for task in self.tasks.values()
             if task.workspace_id == self.user_context.workspace_id
         ]
 
-    async def get_by_agent_id(self, agent_id: UUID, limit: int = 100, offset: int = 0) -> builtins.list[SimpleTask]:
+    async def get_by_agent_id(
+        self, agent_id: UUID, limit: int = 100, offset: int = 0
+    ) -> builtins.list[SimpleTask]:
         return [
-            task for task in self.tasks.values()
+            task
+            for task in self.tasks.values()
             if task.agent_id == agent_id and task.workspace_id == self.user_context.workspace_id
         ]
 
-    async def get_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> builtins.list[SimpleTask]:
+    async def get_by_user_id(
+        self, user_id: str, limit: int = 100, offset: int = 0
+    ) -> builtins.list[SimpleTask]:
         return [
-            task for task in self.tasks.values()
+            task
+            for task in self.tasks.values()
             if task.user_id == user_id and task.workspace_id == self.user_context.workspace_id
         ]
 
     async def get_by_status(self, status: str) -> builtins.list[SimpleTask]:
         return [
-            task for task in self.tasks.values()
+            task
+            for task in self.tasks.values()
             if task.status == status and task.workspace_id == self.user_context.workspace_id
         ]
 
@@ -115,10 +123,7 @@ class ConcreteTaskService(BaseTaskService):
 @pytest.fixture
 def test_user_context():
     """Create a test user context."""
-    return create_test_user_context(
-        user_id="test-user-123",
-        workspace_id="test-workspace-456"
-    )
+    return create_test_user_context(user_id="test-user-123", workspace_id="test-workspace-456")
 
 
 @pytest.fixture
@@ -151,7 +156,7 @@ def sample_task(test_user_context):
         agent_id=uuid4(),
         status="submitted",
         task_parameters={"param1": "value1"},
-        metadata={"test": True}
+        metadata={"test": True},
     )
 
 
@@ -159,7 +164,9 @@ class TestBaseTaskService:
     """Test cases for BaseTaskService common functionality."""
 
     @pytest.mark.asyncio
-    async def test_create_task_success(self, task_service, mock_repository, mock_event_broker, sample_task):
+    async def test_create_task_success(
+        self, task_service, mock_repository, mock_event_broker, sample_task
+    ):
         """Test successful task creation."""
         # Act
         created_task = await task_service.create_task(sample_task)
@@ -189,7 +196,7 @@ class TestBaseTaskService:
             description="Test description",
             query="Test query",
             user_id="user123",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         # Act & Assert
@@ -254,7 +261,7 @@ class TestBaseTaskService:
             description="This task doesn't exist",
             query="Test query",
             user_id="user123",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         # Act & Assert
@@ -272,7 +279,7 @@ class TestBaseTaskService:
             description="Second task",
             query="What is 3+3?",
             user_id="user456",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
         await task_service.create_task(task2)
 
@@ -297,7 +304,7 @@ class TestBaseTaskService:
             description="Task for agent 1",
             query="Query 1",
             user_id="user123",
-            agent_id=agent1_id
+            agent_id=agent1_id,
         )
         await task_service.create_task(task1)
 
@@ -306,7 +313,7 @@ class TestBaseTaskService:
             description="Task for agent 2",
             query="Query 2",
             user_id="user123",
-            agent_id=agent2_id
+            agent_id=agent2_id,
         )
         await task_service.create_task(task2)
 
@@ -328,7 +335,7 @@ class TestBaseTaskService:
             description="Task for user 1",
             query="Query 1",
             user_id="user1",
-            agent_id=agent_id
+            agent_id=agent_id,
         )
         await task_service.create_task(task1)
 
@@ -337,7 +344,7 @@ class TestBaseTaskService:
             description="Task for user 2",
             query="Query 2",
             user_id="user2",
-            agent_id=agent_id
+            agent_id=agent_id,
         )
         await task_service.create_task(task2)
 
@@ -346,7 +353,9 @@ class TestBaseTaskService:
 
         # Assert - both tasks should exist but with context user_id
         assert len(all_tasks) == 2
-        assert all(task.user_id == "test-user-123" for task in all_tasks)  # All tasks get context user_id
+        assert all(
+            task.user_id == "test-user-123" for task in all_tasks
+        )  # All tasks get context user_id
 
     @pytest.mark.asyncio
     async def test_list_tasks_by_status(self, task_service, sample_task):
@@ -360,7 +369,7 @@ class TestBaseTaskService:
             query="Query 2",
             user_id="user123",
             agent_id=uuid4(),
-            status="completed"
+            status="completed",
         )
         await task_service.create_task(task2)
 
@@ -411,7 +420,7 @@ class TestBaseTaskService:
             description="Test description",
             query="Test query",
             user_id="user123",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         with pytest.raises(TaskValidationError, match="Task title is required"):
@@ -425,7 +434,7 @@ class TestBaseTaskService:
             description="",
             query="Test query",
             user_id="user123",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         with pytest.raises(TaskValidationError, match="Task description is required"):
@@ -439,7 +448,7 @@ class TestBaseTaskService:
             description="Test description",
             query="",
             user_id="user123",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         with pytest.raises(TaskValidationError, match="Task query is required"):
@@ -453,7 +462,7 @@ class TestBaseTaskService:
             description="Test description",
             query="Test query",
             user_id="",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         with pytest.raises(TaskValidationError, match="Task user_id is required"):
@@ -469,7 +478,7 @@ class TestBaseTaskService:
             description="Test description",
             query="Test query",
             user_id="user123",
-            agent_id=uuid4()  # Valid UUID for creation
+            agent_id=uuid4(),  # Valid UUID for creation
         )
         # Manually set agent_id to None to test validation
         invalid_task.agent_id = None
@@ -486,7 +495,7 @@ class TestBaseTaskService:
             query="Test query",
             user_id="user123",
             agent_id=uuid4(),
-            status="invalid_status"
+            status="invalid_status",
         )
 
         with pytest.raises(TaskValidationError, match="Invalid task status"):
@@ -502,7 +511,7 @@ class TestBaseTaskService:
             description="Test description",
             query="Test query",
             user_id="user123",
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
         # Manually set invalid datetime relationship to test validation
         valid_task.created_at = datetime(2023, 1, 2)
@@ -554,7 +563,9 @@ class TestBaseTaskService:
         assert len(task_service.submitted_tasks) == 1
         assert submitted_task.status == "running"  # Updated by concrete implementation
 
-    def test_abstract_base_class_cannot_be_instantiated(self, mock_repository, mock_event_broker, test_user_context):
+    def test_abstract_base_class_cannot_be_instantiated(
+        self, mock_repository, mock_event_broker, test_user_context
+    ):
         """Test that BaseTaskService cannot be instantiated directly."""
         with pytest.raises(TypeError):
             BaseTaskService(mock_repository, mock_event_broker)
@@ -563,14 +574,8 @@ class TestBaseTaskService:
     async def test_workspace_isolation_in_service(self, test_user_context):
         """Test that task service properly isolates tasks by workspace."""
         # Create two different user contexts in different workspaces
-        user_context_1 = create_test_user_context(
-            user_id="user1",
-            workspace_id="workspace1"
-        )
-        user_context_2 = create_test_user_context(
-            user_id="user2",
-            workspace_id="workspace2"
-        )
+        user_context_1 = create_test_user_context(user_id="user1", workspace_id="workspace1")
+        user_context_2 = create_test_user_context(user_id="user2", workspace_id="workspace2")
 
         # Create repositories and services for each workspace
         repo1 = MockTaskRepository(user_context_1)
@@ -588,7 +593,7 @@ class TestBaseTaskService:
             query="Query 1",
             user_id=user_context_1.user_id,
             workspace_id=user_context_1.workspace_id,
-            agent_id=agent_id
+            agent_id=agent_id,
         )
 
         task2 = SimpleTask(
@@ -597,7 +602,7 @@ class TestBaseTaskService:
             query="Query 2",
             user_id=user_context_2.user_id,
             workspace_id=user_context_2.workspace_id,
-            agent_id=agent_id
+            agent_id=agent_id,
         )
 
         created_task1 = await service1.create_task(task1)
@@ -637,7 +642,7 @@ class TestBaseTaskService:
             query="Valid query",
             user_id=test_user_context.user_id,
             workspace_id=test_user_context.workspace_id,
-            agent_id=uuid4()
+            agent_id=uuid4(),
         )
 
         created_task = await service.create_task(valid_task)

@@ -39,6 +39,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             try:
                 from temporalio.client import Client
                 from temporalio.contrib.pydantic import pydantic_data_converter
+
                 self._client = await Client.connect(
                     self.temporal_address,
                     data_converter=pydantic_data_converter,
@@ -75,7 +76,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             # Try to import from execution library - fallback if not available
             try:
                 from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import (
-                    ADKAgentWorkflow,
+                    ADKAgentWorkflow as AgentExecutionWorkflow,
                 )
                 from agentarea_execution.models import AgentExecutionRequest
 
@@ -88,8 +89,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     except ValueError:
                         # If extraction fails, generate a new UUID
                         from uuid import uuid4
+
                         task_id_uuid = uuid4()
-                        logger.warning(f"Failed to extract UUID from execution_id {execution_id}, using new UUID: {task_id_uuid}")
+                        logger.warning(
+                            f"Failed to extract UUID from execution_id {execution_id}, using new UUID: {task_id_uuid}"
+                        )
                 else:
                     # If execution_id doesn't match expected pattern, try to parse it as UUID
                     try:
@@ -97,8 +101,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     except ValueError:
                         # Last resort: generate new UUID
                         from uuid import uuid4
+
                         task_id_uuid = uuid4()
-                        logger.warning(f"execution_id {execution_id} is not a valid UUID pattern, using new UUID: {task_id_uuid}")
+                        logger.warning(
+                            f"execution_id {execution_id} is not a valid UUID pattern, using new UUID: {task_id_uuid}"
+                        )
 
                 # Convert to execution request format with proper UUID
                 exec_request = AgentExecutionRequest(
@@ -131,6 +138,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 except ValueError:
                     # If not, log a warning and generate a new one to avoid workflow failure
                     from uuid import uuid4
+
                     task_id_str = str(uuid4())
                     logger.warning(
                         f"Could not parse UUID from execution_id '{execution_id}'. "
@@ -184,9 +192,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     "status": "completed",
                     "success": True,
                     "result": {
-                        "response": getattr(result, 'final_response', str(result)),
-                        "conversation_history": getattr(result, 'conversation_history', []),
-                        "execution_metrics": getattr(result, 'execution_metrics', {}),
+                        "response": getattr(result, "final_response", str(result)),
+                        "conversation_history": getattr(result, "conversation_history", []),
+                        "execution_metrics": getattr(result, "execution_metrics", {}),
                     },
                     "start_time": None,  # TODO: Get from Temporal
                     "end_time": datetime.now().isoformat(),
@@ -258,7 +266,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             logger.error(f"Failed to resume workflow: {e}")
             return False
 
-    async def _simulate_workflow_start(self, execution_id: str, request: ExecutionRequest) -> dict[str, Any]:
+    async def _simulate_workflow_start(
+        self, execution_id: str, request: ExecutionRequest
+    ) -> dict[str, Any]:
         """Simulate workflow start when Temporal is not available."""
         logger.info(f"Simulating workflow start: {execution_id}")
 
@@ -280,7 +290,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             "status": "running",
         }
 
-        with open(state_file, 'w') as f:
+        with open(state_file, "w") as f:
             json.dump(state_data, f)
 
         return {
@@ -347,7 +357,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             state_data["status"] = "paused"
             state_data["paused_at"] = datetime.now().isoformat()
 
-            with open(state_file, 'w') as f:
+            with open(state_file, "w") as f:
                 json.dump(state_data, f)
 
             logger.info(f"Simulated pause of workflow: {execution_id}")
@@ -379,7 +389,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             state_data["status"] = "running"
             state_data["resumed_at"] = datetime.now().isoformat()
 
-            with open(state_file, 'w') as f:
+            with open(state_file, "w") as f:
                 json.dump(state_data, f)
 
             logger.info(f"Simulated resume of workflow: {execution_id}")

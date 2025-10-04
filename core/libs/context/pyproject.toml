@@ -7,6 +7,7 @@ name = "agentarea-context"
 version = "0.1.0"
 description = "Context management system for AgentArea"
 readme = "README.md"
+license = {text = "EPL-2.0"}
 requires-python = ">=3.11"
 dependencies = [
     "agentarea-common",

@@ -55,7 +55,7 @@ interface TaskDetail {
   status: string;
   result?: Record<string, unknown>;
   created_at: string;
-  execution_id?: string;
+  execution_id?: string | null;
   agent_name?: string;
   agent_description?: string;
 }
@@ -143,11 +143,11 @@ export default function TaskDetailsPage() {
         agent_id: foundTask.agent_id.toString(),
         description: foundTask.description,
         status: foundTask.status,
-        result: foundTask.result,
+        result: foundTask.result || undefined,
         created_at: foundTask.created_at,
-        execution_id: foundTask.execution_id,
+        execution_id: foundTask.execution_id || undefined,
         agent_name: foundTask.agent_name,
-        agent_description: foundTask.agent_description,
+        agent_description: foundTask.agent_description || undefined,
       });
 
       // Get detailed status information
@@ -189,8 +189,9 @@ export default function TaskDetailsPage() {
       const { error } = await pauseAgentTask(task.agent_id, task.id);
       
       if (error) {
+        const errorMessage = error.detail?.[0]?.msg || "An error occurred while pausing the task";
         toast.error("Failed to pause task", {
-          description: error.message || "An error occurred while pausing the task"
+          description: errorMessage
         });
       } else {
         toast.success("Task paused successfully");
@@ -214,8 +215,9 @@ export default function TaskDetailsPage() {
       const { error } = await resumeAgentTask(task.agent_id, task.id);
       
       if (error) {
+        const errorMessage = error.detail?.[0]?.msg || "An error occurred while resuming the task";
         toast.error("Failed to resume task", {
-          description: error.message || "An error occurred while resuming the task"
+          description: errorMessage
         });
       } else {
         toast.success("Task resumed successfully");
@@ -239,8 +241,9 @@ export default function TaskDetailsPage() {
       const { error } = await cancelAgentTask(task.agent_id, task.id);
       
       if (error) {
+        const errorMessage = error.detail?.[0]?.msg || "An error occurred while cancelling the task";
         toast.error("Failed to cancel task", {
-          description: error.message || "An error occurred while cancelling the task"
+          description: errorMessage
         });
       } else {
         toast.success("Task cancelled successfully");

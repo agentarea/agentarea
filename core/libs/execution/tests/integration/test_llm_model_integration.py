@@ -21,15 +21,13 @@ from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest, LLMRespo
 # Configure logging for test output with proper formatting
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 
 # Also configure the LLM model logger
-llm_logger = logging.getLogger('agentarea_execution.agentic.models.llm_model')
+llm_logger = logging.getLogger("agentarea_execution.agentic.models.llm_model")
 llm_logger.setLevel(logging.INFO)
 
 
@@ -53,7 +51,7 @@ class EventCapture:
             "chunk_index": chunk_index,
             "is_final": is_final,
             "timestamp": time.time(),
-            "chunk_length": len(chunk) if chunk else 0
+            "chunk_length": len(chunk) if chunk else 0,
         }
 
         self.events.append(event)
@@ -67,8 +65,10 @@ class EventCapture:
             self.final_events += 1
 
         # Enhanced logging with more details
-        chunk_preview = chunk[:50] + '...' if chunk and len(chunk) > 50 else chunk
-        logger.info(f"📨 Event {self.total_events}: chunk_idx={chunk_index}, final={is_final}, len={len(chunk) if chunk else 0}")
+        chunk_preview = chunk[:50] + "..." if chunk and len(chunk) > 50 else chunk
+        logger.info(
+            f"📨 Event {self.total_events}: chunk_idx={chunk_index}, final={is_final}, len={len(chunk) if chunk else 0}"
+        )
         if chunk:
             logger.info(f"    Content: '{chunk_preview}'")
 
@@ -88,10 +88,10 @@ class EventCapture:
                 {
                     "index": e["chunk_index"],
                     "is_final": e["is_final"],
-                    "content_length": e["chunk_length"]
+                    "content_length": e["chunk_length"],
                 }
                 for e in self.events
-            ]
+            ],
         }
 
     def clear(self):
@@ -111,7 +111,9 @@ def check_ollama_availability():
         # Check if Ollama is running
         result = subprocess.run(
             ["curl", "-s", "http://localhost:11434/api/tags"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
 
         if result.returncode != 0:
@@ -122,7 +124,9 @@ def check_ollama_availability():
             response_data = json.loads(result.stdout)
             models = [model.get("name", "") for model in response_data.get("models", [])]
             if not any("qwen2.5" in model for model in models):
-                pytest.skip("qwen2.5 model not found in Ollama. Available models: " + ", ".join(models))
+                pytest.skip(
+                    "qwen2.5 model not found in Ollama. Available models: " + ", ".join(models)
+                )
         except (json.JSONDecodeError, KeyError):
             logger.warning("Could not parse Ollama models list, proceeding with test")
 
@@ -140,7 +144,7 @@ def llm_model():
         provider_type="ollama_chat",
         model_name="qwen2.5",
         api_key=None,
-        endpoint_url="localhost:11434"
+        endpoint_url="localhost:11434",
     )
 
 
@@ -162,10 +166,10 @@ class TestLLMModelIntegration:
         request = LLMRequest(
             messages=[
                 {"role": "system", "content": "You are a helpful assistant. Be concise."},
-                {"role": "user", "content": "What is 2 + 2? Answer with just the number."}
+                {"role": "user", "content": "What is 2 + 2? Answer with just the number."},
             ],
             temperature=0.1,
-            max_tokens=50
+            max_tokens=50,
         )
 
         response = await llm_model.complete(request)
@@ -200,23 +204,26 @@ class TestLLMModelIntegration:
                         "properties": {
                             "expression": {
                                 "type": "string",
-                                "description": "Mathematical expression to evaluate"
+                                "description": "Mathematical expression to evaluate",
                             }
                         },
-                        "required": ["expression"]
-                    }
-                }
+                        "required": ["expression"],
+                    },
+                },
             }
         ]
 
         request = LLMRequest(
             messages=[
-                {"role": "system", "content": "You are a helpful assistant. Use the calculate function for math problems."},
-                {"role": "user", "content": "Calculate 15 * 7 using the calculate function."}
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. Use the calculate function for math problems.",
+                },
+                {"role": "user", "content": "Calculate 15 * 7 using the calculate function."},
             ],
             tools=tools,
             temperature=0.1,
-            max_tokens=200
+            max_tokens=200,
         )
 
         response = await llm_model.complete(request)
@@ -245,7 +252,9 @@ class TestLLMModelIntegration:
         logger.info(f"📊 Usage: {response.usage.total_tokens} tokens")
 
     @pytest.mark.asyncio
-    async def test_streaming_completion(self, llm_model: LLMModel, event_capture: EventCapture, check_ollama_availability):
+    async def test_streaming_completion(
+        self, llm_model: LLMModel, event_capture: EventCapture, check_ollama_availability
+    ):
         """Test LLM completion with streaming and comprehensive event capture."""
         logger.info("🧪 Testing LLM streaming completion with event publisher")
 
@@ -264,11 +273,17 @@ class TestLLMModelIntegration:
 
         request = LLMRequest(
             messages=[
-                {"role": "system", "content": "You are a helpful assistant. Provide detailed explanations."},
-                {"role": "user", "content": "Explain what artificial intelligence is in 2-3 sentences."}
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. Provide detailed explanations.",
+                },
+                {
+                    "role": "user",
+                    "content": "Explain what artificial intelligence is in 2-3 sentences.",
+                },
             ],
             temperature=0.3,
-            max_tokens=150
+            max_tokens=150,
         )
 
         logger.info("🚀 Starting streaming LLM call...")
@@ -277,7 +292,7 @@ class TestLLMModelIntegration:
             task_id=task_id,
             agent_id=agent_id,
             execution_id=execution_id,
-            event_publisher=event_capture.publish_chunk_event
+            event_publisher=event_capture.publish_chunk_event,
         )
 
         logger.info("✅ Streaming call completed, analyzing results...")
@@ -304,7 +319,9 @@ class TestLLMModelIntegration:
 
         # Verify content reconstruction
         reconstructed_content = event_capture.get_full_content()
-        assert reconstructed_content == response.content, "Reconstructed content doesn't match response content"
+        assert reconstructed_content == response.content, (
+            "Reconstructed content doesn't match response content"
+        )
 
         # Detailed logging of results
         logger.info("📊 Event Publisher Test Results:")
@@ -312,19 +329,25 @@ class TestLLMModelIntegration:
         logger.info(f"    Content events: {event_summary['content_events']}")
         logger.info(f"    Final events: {event_summary['final_events']}")
         logger.info(f"    Total content length: {event_summary['total_content_length']} chars")
-        logger.info(f"    Average chunk size: {sum(event_summary['chunk_sizes']) / len(event_summary['chunk_sizes']) if event_summary['chunk_sizes'] else 0:.1f} chars")
+        logger.info(
+            f"    Average chunk size: {sum(event_summary['chunk_sizes']) / len(event_summary['chunk_sizes']) if event_summary['chunk_sizes'] else 0:.1f} chars"
+        )
 
         logger.info(f"✅ Streaming response: {response.content[:100]}...")
         logger.info(f"📨 Event timeline: {len(event_capture.events)} events total")
 
         # Log first few and last few events for verification
         for i, event in enumerate(event_capture.events[:3]):
-            logger.info(f"    Event {i+1}: idx={event['chunk_index']}, final={event['is_final']}, len={event['chunk_length']}")
+            logger.info(
+                f"    Event {i + 1}: idx={event['chunk_index']}, final={event['is_final']}, len={event['chunk_length']}"
+            )
 
         if len(event_capture.events) > 6:
             logger.info("    ... (middle events omitted) ...")
-            for i, event in enumerate(event_capture.events[-3:], len(event_capture.events)-2):
-                logger.info(f"    Event {i}: idx={event['chunk_index']}, final={event['is_final']}, len={event['chunk_length']}")
+            for i, event in enumerate(event_capture.events[-3:], len(event_capture.events) - 2):
+                logger.info(
+                    f"    Event {i}: idx={event['chunk_index']}, final={event['is_final']}, len={event['chunk_length']}"
+                )
 
         logger.info(f"💰 Cost: ${response.cost:.6f}")
         logger.info(f"📊 Usage: {response.usage.total_tokens} tokens")
@@ -335,10 +358,14 @@ class TestLLMModelIntegration:
 
         # Verify event ordering
         chunk_indices = [e["chunk_index"] for e in event_capture.events]
-        assert chunk_indices == sorted(chunk_indices), "Events are not in correct chronological order"
+        assert chunk_indices == sorted(chunk_indices), (
+            "Events are not in correct chronological order"
+        )
 
     @pytest.mark.asyncio
-    async def test_event_publisher_comprehensive(self, llm_model: LLMModel, event_capture: EventCapture, check_ollama_availability):
+    async def test_event_publisher_comprehensive(
+        self, llm_model: LLMModel, event_capture: EventCapture, check_ollama_availability
+    ):
         """Comprehensive test of event publisher functionality with different scenarios."""
         logger.info("🧪 Testing comprehensive event publisher functionality")
 
@@ -349,10 +376,10 @@ class TestLLMModelIntegration:
         short_request = LLMRequest(
             messages=[
                 {"role": "system", "content": "Be very brief."},
-                {"role": "user", "content": "Say just 'Hello'"}
+                {"role": "user", "content": "Say just 'Hello'"},
             ],
             temperature=0.1,
-            max_tokens=10
+            max_tokens=10,
         )
 
         response1 = await llm_model.complete_with_streaming(
@@ -360,7 +387,7 @@ class TestLLMModelIntegration:
             task_id="short-test-" + str(uuid4()),
             agent_id="test-agent",
             execution_id="test-exec",
-            event_publisher=event_capture.publish_chunk_event
+            event_publisher=event_capture.publish_chunk_event,
         )
 
         short_summary = event_capture.get_event_summary()
@@ -376,10 +403,10 @@ class TestLLMModelIntegration:
         long_request = LLMRequest(
             messages=[
                 {"role": "system", "content": "Provide detailed explanations."},
-                {"role": "user", "content": "Explain the concept of machine learning in detail."}
+                {"role": "user", "content": "Explain the concept of machine learning in detail."},
             ],
             temperature=0.5,
-            max_tokens=300
+            max_tokens=300,
         )
 
         response2 = await llm_model.complete_with_streaming(
@@ -387,17 +414,21 @@ class TestLLMModelIntegration:
             task_id="long-test-" + str(uuid4()),
             agent_id="test-agent",
             execution_id="test-exec",
-            event_publisher=event_capture.publish_chunk_event
+            event_publisher=event_capture.publish_chunk_event,
         )
 
         long_summary = event_capture.get_event_summary()
         logger.info(f"    Long response events: {long_summary['total_events']}")
         logger.info(f"    Content length: {len(response2.content)} chars")
-        logger.info(f"    Average chunk size: {sum(long_summary['chunk_sizes']) / len(long_summary['chunk_sizes']) if long_summary['chunk_sizes'] else 0:.1f}")
+        logger.info(
+            f"    Average chunk size: {sum(long_summary['chunk_sizes']) / len(long_summary['chunk_sizes']) if long_summary['chunk_sizes'] else 0:.1f}"
+        )
 
         assert long_summary["final_events"] == 1
         assert response2.content == event_capture.get_full_content()
-        assert long_summary["total_events"] > short_summary["total_events"], "Longer response should have more events"
+        assert long_summary["total_events"] > short_summary["total_events"], (
+            "Longer response should have more events"
+        )
 
         # Test 3: Event publisher with None (should not crash)
         logger.info("📝 Test 3: No event publisher")
@@ -407,7 +438,7 @@ class TestLLMModelIntegration:
             task_id="no-events-" + str(uuid4()),
             agent_id="test-agent",
             execution_id="test-exec",
-            event_publisher=None  # No event publisher
+            event_publisher=None,  # No event publisher
         )
 
         assert isinstance(response3, LLMResponse)
@@ -419,14 +450,13 @@ class TestLLMModelIntegration:
         event_capture.clear()
 
         timing_request = LLMRequest(
-            messages=[
-                {"role": "user", "content": "Count from 1 to 5"}
-            ],
+            messages=[{"role": "user", "content": "Count from 1 to 5"}],
             temperature=0.1,
-            max_tokens=50
+            max_tokens=50,
         )
 
         import time
+
         start_time = time.time()
 
         response4 = await llm_model.complete_with_streaming(
@@ -434,7 +464,7 @@ class TestLLMModelIntegration:
             task_id="timing-test-" + str(uuid4()),
             agent_id="test-agent",
             execution_id="test-exec",
-            event_publisher=event_capture.publish_chunk_event
+            event_publisher=event_capture.publish_chunk_event,
         )
 
         end_time = time.time()
@@ -442,7 +472,9 @@ class TestLLMModelIntegration:
 
         # Verify event timestamps are within the call duration
         for event in event_capture.events:
-            assert start_time <= event["timestamp"] <= end_time, "Event timestamp outside call duration"
+            assert start_time <= event["timestamp"] <= end_time, (
+                "Event timestamp outside call duration"
+            )
 
         # Verify events are in chronological order
         timestamps = [e["timestamp"] for e in event_capture.events]
@@ -463,14 +495,10 @@ class TestLLMModelIntegration:
             provider_type="ollama_chat",
             model_name="nonexistent-model",
             api_key=None,
-            endpoint_url="localhost:11434"
+            endpoint_url="localhost:11434",
         )
 
-        request = LLMRequest(
-            messages=[
-                {"role": "user", "content": "Hello"}
-            ]
-        )
+        request = LLMRequest(messages=[{"role": "user", "content": "Hello"}])
 
         with pytest.raises(Exception) as exc_info:
             await llm_model.complete(request)
@@ -489,14 +517,10 @@ class TestLLMModelIntegration:
             provider_type="ollama_chat",
             model_name="qwen2.5",
             api_key=None,
-            endpoint_url="localhost:99999"  # Invalid port
+            endpoint_url="localhost:99999",  # Invalid port
         )
 
-        request = LLMRequest(
-            messages=[
-                {"role": "user", "content": "Hello"}
-            ]
-        )
+        request = LLMRequest(messages=[{"role": "user", "content": "Hello"}])
 
         with pytest.raises(Exception) as exc_info:
             await llm_model.complete(request)
@@ -513,11 +537,9 @@ class TestLLMModelIntegration:
         # Test with different temperature values
         for temp in [0.0, 0.5, 1.0]:
             request = LLMRequest(
-                messages=[
-                    {"role": "user", "content": "Say 'hello'"}
-                ],
+                messages=[{"role": "user", "content": "Say 'hello'"}],
                 temperature=temp,
-                max_tokens=20
+                max_tokens=20,
             )
 
             response = await llm_model.complete(request)
@@ -528,11 +550,9 @@ class TestLLMModelIntegration:
         # Test with different max_tokens
         for max_tokens in [10, 50, 100]:
             request = LLMRequest(
-                messages=[
-                    {"role": "user", "content": "Count from 1 to 20"}
-                ],
+                messages=[{"role": "user", "content": "Count from 1 to 20"}],
                 temperature=0.1,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
             )
 
             response = await llm_model.complete(request)
@@ -548,20 +568,12 @@ class TestLLMModelIntegration:
 
         async def make_request(query: str) -> LLMResponse:
             request = LLMRequest(
-                messages=[
-                    {"role": "user", "content": query}
-                ],
-                temperature=0.1,
-                max_tokens=50
+                messages=[{"role": "user", "content": query}], temperature=0.1, max_tokens=50
             )
             return await llm_model.complete(request)
 
         # Make multiple concurrent requests
-        queries = [
-            "What is 1 + 1?",
-            "What is 2 + 2?",
-            "What is 3 + 3?"
-        ]
+        queries = ["What is 1 + 1?", "What is 2 + 2?", "What is 3 + 3?"]
 
         responses = await asyncio.gather(*[make_request(q) for q in queries])
 
@@ -571,4 +583,4 @@ class TestLLMModelIntegration:
             assert isinstance(response, LLMResponse)
             assert response.content is not None
             assert len(response.content.strip()) > 0
-            logger.info(f"✅ Concurrent request {i+1}: {response.content.strip()}")
+            logger.info(f"✅ Concurrent request {i + 1}: {response.content.strip()}")

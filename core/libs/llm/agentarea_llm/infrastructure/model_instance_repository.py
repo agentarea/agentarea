@@ -24,7 +24,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             select(ModelInstance)
             .options(
                 joinedload(ModelInstance.provider_config).joinedload(ProviderConfig.provider_spec),
-                joinedload(ModelInstance.model_spec)
+                joinedload(ModelInstance.model_spec),
             )
             .where(ModelInstance.id == id)
         )
@@ -43,19 +43,16 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         """List model instances with filtering and relationships."""
         filters = {}
         if provider_config_id is not None:
-            filters['provider_config_id'] = provider_config_id
+            filters["provider_config_id"] = provider_config_id
         if model_spec_id is not None:
-            filters['model_spec_id'] = model_spec_id
+            filters["model_spec_id"] = model_spec_id
         if is_active is not None:
-            filters['is_active'] = is_active
+            filters["is_active"] = is_active
         if is_public is not None:
-            filters['is_public'] = is_public
+            filters["is_public"] = is_public
 
         instances = await self.list_all(
-            creator_scoped=creator_scoped,
-            limit=limit,
-            offset=offset,
-            **filters
+            creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
         )
 
         # Load relationships for each instance
@@ -64,8 +61,10 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
             result = await self.session.execute(
                 select(ModelInstance)
                 .options(
-                    joinedload(ModelInstance.provider_config).joinedload(ProviderConfig.provider_spec),
-                    joinedload(ModelInstance.model_spec)
+                    joinedload(ModelInstance.provider_config).joinedload(
+                        ProviderConfig.provider_spec
+                    ),
+                    joinedload(ModelInstance.model_spec),
                 )
                 .where(ModelInstance.id.in_(instance_ids))
             )
@@ -74,9 +73,11 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
 
         return instances
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[ModelInstance]:
+    async def get_by_workspace_id(
+        self, workspace_id: str, limit: int = 100, offset: int = 0
+    ) -> list[ModelInstance]:
         """Get model instances by workspace ID with pagination.
-        
+
         Note: This method is deprecated. Use list_instances() instead which automatically
         filters by the current workspace from user context.
         """
@@ -88,43 +89,43 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
 
     async def create_instance(self, entity: ModelInstance) -> ModelInstance:
         """Create a new model instance from domain entity.
-        
+
         Note: This method is deprecated. Use create() with field parameters instead.
         """
         # Extract fields from the instance entity
         instance_data = {
-            'id': entity.id,
-            'provider_config_id': entity.provider_config_id,
-            'model_spec_id': entity.model_spec_id,
-            'name': entity.name,
-            'description': entity.description,
-            'is_active': entity.is_active,
-            'is_public': entity.is_public,
-            'created_at': entity.created_at,
-            'updated_at': entity.updated_at,
+            "id": entity.id,
+            "provider_config_id": entity.provider_config_id,
+            "model_spec_id": entity.model_spec_id,
+            "name": entity.name,
+            "description": entity.description,
+            "is_active": entity.is_active,
+            "is_public": entity.is_public,
+            "created_at": entity.created_at,
+            "updated_at": entity.updated_at,
         }
 
         # Remove None values and system fields that will be auto-populated
         instance_data = {k: v for k, v in instance_data.items() if v is not None}
-        instance_data.pop('created_at', None)
-        instance_data.pop('updated_at', None)
+        instance_data.pop("created_at", None)
+        instance_data.pop("updated_at", None)
 
         created_instance = await self.create(**instance_data)
         return await self.get_with_relations(created_instance.id) or created_instance
 
     async def update_instance(self, entity: ModelInstance) -> ModelInstance:
         """Update an existing model instance from domain entity.
-        
+
         Note: This method is deprecated. Use update() with field parameters instead.
         """
         # Extract fields from the instance entity
         instance_data = {
-            'provider_config_id': entity.provider_config_id,
-            'model_spec_id': entity.model_spec_id,
-            'name': entity.name,
-            'description': entity.description,
-            'is_active': entity.is_active,
-            'is_public': entity.is_public,
+            "provider_config_id": entity.provider_config_id,
+            "model_spec_id": entity.model_spec_id,
+            "name": entity.name,
+            "description": entity.description,
+            "is_active": entity.is_active,
+            "is_public": entity.is_public,
         }
 
         # Remove None values

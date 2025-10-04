@@ -47,14 +47,11 @@ class TestTriggerExecutionIntegration:
             task_parameters={"integration_test": True},
             conditions={"hour_range": [9, 17]},
             created_by="integration_test",
-            is_active=True
+            is_active=True,
         )
 
     async def test_complete_trigger_execution_flow(
-        self,
-        mock_repositories,
-        mock_task_service,
-        sample_trigger
+        self, mock_repositories, mock_task_service, sample_trigger
     ):
         """Test the complete trigger execution flow from trigger to task creation."""
         trigger_repo, execution_repo = mock_repositories
@@ -68,7 +65,7 @@ class TestTriggerExecutionIntegration:
             trigger_id=sample_trigger.id,
             status=ExecutionStatus.SUCCESS,
             execution_time_ms=150,
-            task_id=mock_task_service.create_task_from_params.return_value.id
+            task_id=mock_task_service.create_task_from_params.return_value.id,
         )
         execution_repo.create.return_value = mock_execution
 
@@ -80,14 +77,14 @@ class TestTriggerExecutionIntegration:
             agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
         # Execute trigger
         execution_data = {
             "execution_time": datetime.utcnow().isoformat(),
             "source": "cron",
-            "schedule_info": {"next_run": "2024-01-02T09:00:00Z"}
+            "schedule_info": {"next_run": "2024-01-02T09:00:00Z"},
         }
 
         result = await trigger_service.execute_trigger(sample_trigger.id, execution_data)
@@ -118,10 +115,7 @@ class TestTriggerExecutionIntegration:
         execution_repo.create.assert_called_once()
 
     async def test_trigger_execution_with_condition_evaluation(
-        self,
-        mock_repositories,
-        mock_task_service,
-        sample_trigger
+        self, mock_repositories, mock_task_service, sample_trigger
     ):
         """Test trigger execution with condition evaluation."""
         trigger_repo, execution_repo = mock_repositories
@@ -129,7 +123,7 @@ class TestTriggerExecutionIntegration:
         # Setup trigger with specific conditions
         sample_trigger.conditions = {
             "field_matches": {"request.body.type": "test"},
-            "time_conditions": {"hour_range": [9, 17]}
+            "time_conditions": {"hour_range": [9, 17]},
         }
 
         trigger_repo.get.return_value = sample_trigger
@@ -140,7 +134,7 @@ class TestTriggerExecutionIntegration:
             trigger_id=sample_trigger.id,
             status=ExecutionStatus.SUCCESS,
             execution_time_ms=100,
-            task_id=mock_task_service.create_task_from_params.return_value.id
+            task_id=mock_task_service.create_task_from_params.return_value.id,
         )
         execution_repo.create.return_value = mock_execution
 
@@ -152,7 +146,7 @@ class TestTriggerExecutionIntegration:
             agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
         # Test with matching conditions
@@ -162,11 +156,11 @@ class TestTriggerExecutionIntegration:
                 "body": {
                     "type": "test"  # Matches field condition
                 }
-            }
+            },
         }
 
         # Mock datetime for time condition evaluation
-        with patch('agentarea_triggers.trigger_service.datetime') as mock_datetime:
+        with patch("agentarea_triggers.trigger_service.datetime") as mock_datetime:
             mock_datetime.utcnow.return_value = datetime(2024, 1, 1, 10, 0, 0)  # 10 AM
 
             result = await trigger_service.execute_trigger(sample_trigger.id, execution_data)
@@ -179,18 +173,13 @@ class TestTriggerExecutionIntegration:
         mock_task_service.create_task_from_params.assert_called_once()
 
     async def test_trigger_execution_conditions_not_met(
-        self,
-        mock_repositories,
-        mock_task_service,
-        sample_trigger
+        self, mock_repositories, mock_task_service, sample_trigger
     ):
         """Test trigger execution when conditions are not met."""
         trigger_repo, execution_repo = mock_repositories
 
         # Setup trigger with specific conditions
-        sample_trigger.conditions = {
-            "field_matches": {"request.body.type": "expected_type"}
-        }
+        sample_trigger.conditions = {"field_matches": {"request.body.type": "expected_type"}}
 
         trigger_repo.get.return_value = sample_trigger
 
@@ -202,7 +191,7 @@ class TestTriggerExecutionIntegration:
             agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
         # Test with non-matching conditions
@@ -212,20 +201,18 @@ class TestTriggerExecutionIntegration:
                 "body": {
                     "type": "different_type"  # Doesn't match condition
                 }
-            }
+            },
         }
 
         # Evaluate conditions directly (this should return False)
-        conditions_met = await trigger_service.evaluate_trigger_conditions(sample_trigger, execution_data)
+        conditions_met = await trigger_service.evaluate_trigger_conditions(
+            sample_trigger, execution_data
+        )
 
         # Verify conditions are not met
         assert conditions_met is False
 
-    async def test_webhook_trigger_parameter_building(
-        self,
-        mock_repositories,
-        mock_task_service
-    ):
+    async def test_webhook_trigger_parameter_building(self, mock_repositories, mock_task_service):
         """Test parameter building for webhook triggers."""
         from agentarea_triggers.domain.models import WebhookTrigger
 
@@ -241,7 +228,7 @@ class TestTriggerExecutionIntegration:
             allowed_methods=["POST"],
             task_parameters={"webhook_param": "webhook_value"},
             created_by="webhook_test",
-            is_active=True
+            is_active=True,
         )
 
         trigger_repo.get.return_value = webhook_trigger
@@ -254,7 +241,7 @@ class TestTriggerExecutionIntegration:
             agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
         # Test webhook execution data
@@ -265,8 +252,8 @@ class TestTriggerExecutionIntegration:
                 "method": "POST",
                 "headers": {"Content-Type": "application/json"},
                 "body": {"message": "Hello from webhook"},
-                "query_params": {"source": "external"}
-            }
+                "query_params": {"source": "external"},
+            },
         }
 
         # Build task parameters
@@ -285,10 +272,7 @@ class TestTriggerExecutionIntegration:
         assert params["trigger_data"]["request"]["body"]["message"] == "Hello from webhook"
 
     async def test_error_handling_in_execution_flow(
-        self,
-        mock_repositories,
-        mock_task_service,
-        sample_trigger
+        self, mock_repositories, mock_task_service, sample_trigger
     ):
         """Test error handling during trigger execution."""
         trigger_repo, execution_repo = mock_repositories
@@ -305,7 +289,7 @@ class TestTriggerExecutionIntegration:
             trigger_id=sample_trigger.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=50,
-            error_message="Task creation failed"
+            error_message="Task creation failed",
         )
         execution_repo.create.return_value = mock_execution
 
@@ -317,7 +301,7 @@ class TestTriggerExecutionIntegration:
             agent_repository=None,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
         # Execute trigger

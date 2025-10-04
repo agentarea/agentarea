@@ -8,11 +8,11 @@ def test_extract_malformed_tool_calls_pattern1():
     """Test extraction of malformed tool calls with action/name pattern."""
     llm = LLMModel("test", "test")
 
-    content = '''I need to complete this task.
+    content = """I need to complete this task.
 
 {   "action": {     "name": "task_complete"   },   "arguments": {"result": "Task completed successfully"} }undefined
 
-The task is now done.'''
+The task is now done."""
 
     tool_calls, cleaned_content = llm._extract_malformed_tool_calls(content)
 
@@ -30,7 +30,7 @@ def test_extract_malformed_tool_calls_pattern2():
     """Test extraction of malformed tool calls with name/arguments pattern."""
     llm = LLMModel("test", "test")
 
-    content = '''{"name": "task_complete", "arguments": {"result": "I have not completed the task yet as I am still in the process of understanding who I am according to the given context."}}undefined'''
+    content = """{"name": "task_complete", "arguments": {"result": "I have not completed the task yet as I am still in the process of understanding who I am according to the given context."}}undefined"""
 
     tool_calls, cleaned_content = llm._extract_malformed_tool_calls(content)
 
@@ -46,7 +46,7 @@ def test_extract_malformed_tool_calls_empty_args():
     """Test extraction with empty arguments."""
     llm = LLMModel("test", "test")
 
-    content = '''{   "action": {     "name": "task_complete"   },   "arguments": {} }undefined'''
+    content = """{   "action": {     "name": "task_complete"   },   "arguments": {} }undefined"""
 
     tool_calls, cleaned_content = llm._extract_malformed_tool_calls(content)
 
@@ -73,11 +73,11 @@ def test_extract_malformed_tool_calls_multiple():
     """Test extraction of multiple malformed tool calls."""
     llm = LLMModel("test", "test")
 
-    content = '''First I'll do this:
+    content = """First I'll do this:
 {   "action": {     "name": "search"   },   "arguments": {"query": "test"} }
 
 Then I'll complete:
-{"name": "task_complete", "arguments": {"result": "Done"}}undefined'''
+{"name": "task_complete", "arguments": {"result": "Done"}}undefined"""
 
     tool_calls, cleaned_content = llm._extract_malformed_tool_calls(content)
 

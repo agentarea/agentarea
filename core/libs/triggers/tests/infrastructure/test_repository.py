@@ -416,10 +416,7 @@ class TestTriggerExecutionRepositoryEnhancements:
 
         # Execute
         result = await repository.list_executions_paginated(
-            trigger_id=trigger_id,
-            status=None,
-            limit=2,
-            offset=0
+            trigger_id=trigger_id, status=None, limit=2, offset=0
         )
 
         # Verify
@@ -428,10 +425,14 @@ class TestTriggerExecutionRepositoryEnhancements:
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_list_executions_paginated_with_status_filter(self, repository, mock_session, sample_executions_orm):
+    async def test_list_executions_paginated_with_status_filter(
+        self, repository, mock_session, sample_executions_orm
+    ):
         """Test paginated execution listing with status filtering."""
         # Setup - only return successful executions
-        successful_executions = [exec for exec in sample_executions_orm if exec.status == ExecutionStatus.SUCCESS.value]
+        successful_executions = [
+            exec for exec in sample_executions_orm if exec.status == ExecutionStatus.SUCCESS.value
+        ]
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = successful_executions
         mock_session.execute.return_value = mock_result
@@ -441,7 +442,7 @@ class TestTriggerExecutionRepositoryEnhancements:
             trigger_id=sample_executions_orm[0].trigger_id,
             status=ExecutionStatus.SUCCESS,
             limit=10,
-            offset=0
+            offset=0,
         )
 
         # Verify
@@ -460,8 +461,7 @@ class TestTriggerExecutionRepositoryEnhancements:
 
         # Execute
         result = await repository.count_executions_filtered(
-            trigger_id=trigger_id,
-            status=ExecutionStatus.SUCCESS
+            trigger_id=trigger_id, status=ExecutionStatus.SUCCESS
         )
 
         # Verify
@@ -490,16 +490,16 @@ class TestTriggerExecutionRepositoryEnhancements:
         result = await repository.get_execution_metrics(trigger_id, hours=24)
 
         # Verify
-        assert result['total_executions'] == 10
-        assert result['successful_executions'] == 8
-        assert result['failed_executions'] == 1
-        assert result['timeout_executions'] == 1
-        assert result['success_rate'] == 80.0
-        assert result['failure_rate'] == 20.0
-        assert result['avg_execution_time_ms'] == 1250.5
-        assert result['min_execution_time_ms'] == 800
-        assert result['max_execution_time_ms'] == 2000
-        assert result['period_hours'] == 24
+        assert result["total_executions"] == 10
+        assert result["successful_executions"] == 8
+        assert result["failed_executions"] == 1
+        assert result["timeout_executions"] == 1
+        assert result["success_rate"] == 80.0
+        assert result["failure_rate"] == 20.0
+        assert result["avg_execution_time_ms"] == 1250.5
+        assert result["min_execution_time_ms"] == 800
+        assert result["max_execution_time_ms"] == 2000
+        assert result["period_hours"] == 24
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
@@ -515,20 +515,22 @@ class TestTriggerExecutionRepositoryEnhancements:
         result = await repository.get_execution_metrics(trigger_id, hours=24)
 
         # Verify default values
-        assert result['total_executions'] == 0
-        assert result['successful_executions'] == 0
-        assert result['failed_executions'] == 0
-        assert result['timeout_executions'] == 0
-        assert result['success_rate'] == 0.0
-        assert result['failure_rate'] == 0.0
-        assert result['avg_execution_time_ms'] == 0.0
-        assert result['min_execution_time_ms'] == 0
-        assert result['max_execution_time_ms'] == 0
-        assert result['period_hours'] == 24
+        assert result["total_executions"] == 0
+        assert result["successful_executions"] == 0
+        assert result["failed_executions"] == 0
+        assert result["timeout_executions"] == 0
+        assert result["success_rate"] == 0.0
+        assert result["failure_rate"] == 0.0
+        assert result["avg_execution_time_ms"] == 0.0
+        assert result["min_execution_time_ms"] == 0
+        assert result["max_execution_time_ms"] == 0
+        assert result["period_hours"] == 24
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_executions_with_task_correlation(self, repository, mock_session, sample_executions_orm):
+    async def test_get_executions_with_task_correlation(
+        self, repository, mock_session, sample_executions_orm
+    ):
         """Test getting executions with task correlation information."""
         # Setup
         trigger_id = sample_executions_orm[0].trigger_id
@@ -543,15 +545,17 @@ class TestTriggerExecutionRepositoryEnhancements:
 
         # Verify
         assert len(result) == 3
-        assert all('has_task_correlation' in exec for exec in result)
-        assert all('has_workflow_correlation' in exec for exec in result)
+        assert all("has_task_correlation" in exec for exec in result)
+        assert all("has_workflow_correlation" in exec for exec in result)
 
         # Check correlation flags
-        assert result[0]['has_task_correlation'] is True  # Has task_id
-        assert result[1]['has_task_correlation'] is False  # No task_id (failed execution)
-        assert result[2]['has_task_correlation'] is True  # Has task_id
+        assert result[0]["has_task_correlation"] is True  # Has task_id
+        assert result[1]["has_task_correlation"] is False  # No task_id (failed execution)
+        assert result[2]["has_task_correlation"] is True  # Has task_id
 
-        assert all(exec['has_workflow_correlation'] is True for exec in result)  # All have workflow_id
+        assert all(
+            exec["has_workflow_correlation"] is True for exec in result
+        )  # All have workflow_id
 
     @pytest.mark.asyncio
     async def test_get_execution_timeline(self, repository, mock_session):
@@ -563,14 +567,14 @@ class TestTriggerExecutionRepositoryEnhancements:
                 total_count=5,
                 success_count=4,
                 failed_count=1,
-                timeout_count=0
+                timeout_count=0,
             ),
             MagicMock(
                 time_bucket=datetime.utcnow() - timedelta(hours=1),
                 total_count=3,
                 success_count=2,
                 failed_count=0,
-                timeout_count=1
+                timeout_count=1,
             ),
         ]
 
@@ -580,20 +584,22 @@ class TestTriggerExecutionRepositoryEnhancements:
 
         # Execute
         trigger_id = uuid4()
-        result = await repository.get_execution_timeline(trigger_id, hours=24, bucket_size_minutes=60)
+        result = await repository.get_execution_timeline(
+            trigger_id, hours=24, bucket_size_minutes=60
+        )
 
         # Verify
         assert len(result) == 2
-        assert result[0]['total_count'] == 5
-        assert result[0]['success_count'] == 4
-        assert result[0]['failed_count'] == 1
-        assert result[0]['timeout_count'] == 0
-        assert result[0]['success_rate'] == 80.0
+        assert result[0]["total_count"] == 5
+        assert result[0]["success_count"] == 4
+        assert result[0]["failed_count"] == 1
+        assert result[0]["timeout_count"] == 0
+        assert result[0]["success_rate"] == 80.0
 
-        assert result[1]['total_count'] == 3
-        assert result[1]['success_count'] == 2
-        assert result[1]['failed_count'] == 0
-        assert result[1]['timeout_count'] == 1
-        assert abs(result[1]['success_rate'] - 66.67) < 0.01  # Approximately 66.67%
+        assert result[1]["total_count"] == 3
+        assert result[1]["success_count"] == 2
+        assert result[1]["failed_count"] == 0
+        assert result[1]["timeout_count"] == 1
+        assert abs(result[1]["success_rate"] - 66.67) < 0.01  # Approximately 66.67%
 
         mock_session.execute.assert_called_once()

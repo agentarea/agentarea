@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class ActivityServiceContainer:
     """Service container for Temporal activities.
-    
+
     Provides clean service access without manual session/context management.
     """
 
@@ -36,40 +36,44 @@ class ActivityServiceContainer:
         session = self._database.async_session_factory()
         repository_factory = RepositoryFactory(session, user_context)
         service = AgentService(
-            repository_factory=repository_factory,
-            event_broker=self.dependencies.event_broker
+            repository_factory=repository_factory, event_broker=self.dependencies.event_broker
         )
         return service, session
 
-    async def get_model_instance_service(self, user_context: UserContext) -> tuple[ModelInstanceService, Any]:
+    async def get_model_instance_service(
+        self, user_context: UserContext
+    ) -> tuple[ModelInstanceService, Any]:
         """Get ModelInstanceService with proper session and context."""
         session = self._database.async_session_factory()
         repository = ModelInstanceRepository(session, user_context)
         service = ModelInstanceService(
             repository=repository,
             event_broker=self.dependencies.event_broker,
-            secret_manager=self.dependencies.secret_manager
+            secret_manager=self.dependencies.secret_manager,
         )
         return service, session
 
-    async def get_mcp_server_instance_service(self, user_context: UserContext) -> tuple[MCPServerInstanceService, Any]:
+    async def get_mcp_server_instance_service(
+        self, user_context: UserContext
+    ) -> tuple[MCPServerInstanceService, Any]:
         """Get MCPServerInstanceService with proper session and context."""
         session = self._database.async_session_factory()
         repository_factory = RepositoryFactory(session, user_context)
         service = MCPServerInstanceService(
             repository_factory=repository_factory,
             event_broker=self.dependencies.event_broker,
-            secret_manager=self.dependencies.secret_manager
+            secret_manager=self.dependencies.secret_manager,
         )
         return service, session
 
-    async def get_task_event_service(self, user_context: UserContext) -> tuple[TaskEventService, Any]:
+    async def get_task_event_service(
+        self, user_context: UserContext
+    ) -> tuple[TaskEventService, Any]:
         """Get TaskEventService with proper session and context."""
         session = self._database.async_session_factory()
         repository_factory = RepositoryFactory(session, user_context)
         service = TaskEventService(
-            repository_factory=repository_factory,
-            event_broker=self.dependencies.event_broker
+            repository_factory=repository_factory, event_broker=self.dependencies.event_broker
         )
         return service, session
 
@@ -78,22 +82,24 @@ def create_user_context(user_context_data: dict[str, Any]) -> UserContext:
     """Helper to create UserContext from data dictionary."""
     return UserContext(
         user_id=user_context_data.get("user_id", "system"),
-        workspace_id=user_context_data["workspace_id"]
+        workspace_id=user_context_data["workspace_id"],
     )
 
 
 def create_system_context(workspace_id: str) -> UserContext:
     """Helper to create system context for background tasks."""
-    return UserContext(
-        user_id="system",
-        workspace_id=workspace_id
-    )
+    return UserContext(user_id="system", workspace_id=workspace_id)
 
 
 class ActivityContext:
     """Context manager for activity execution with proper cleanup."""
 
-    def __init__(self, container: ActivityServiceContainer, user_context: UserContext, auto_commit: bool = True):
+    def __init__(
+        self,
+        container: ActivityServiceContainer,
+        user_context: UserContext,
+        auto_commit: bool = True,
+    ):
         self.container = container
         self.user_context = user_context
         self.auto_commit = auto_commit

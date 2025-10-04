@@ -15,7 +15,9 @@ from agentarea_context.domain.models import Context
 
 
 class FAISSContextProvider(ContextProvider):
-    def __init__(self, config: ContextConfig, embedding_service: EmbeddingService, model_instance_id: UUID):
+    def __init__(
+        self, config: ContextConfig, embedding_service: EmbeddingService, model_instance_id: UUID
+    ):
         self.config = config
         self.embedding_service = embedding_service
         self.model_instance_id = model_instance_id
@@ -40,7 +42,9 @@ class FAISSContextProvider(ContextProvider):
                 self.metadata = {int(k): v for k, v in raw_metadata.items()}
         else:
             # Create new index using embedding service dimension
-            embedding_dim = await self.embedding_service.get_embedding_dimension(self.model_instance_id)
+            embedding_dim = await self.embedding_service.get_embedding_dimension(
+                self.model_instance_id
+            )
             self.index = faiss.IndexFlatIP(embedding_dim)
             self.metadata = {}
 
@@ -88,7 +92,9 @@ class FAISSContextProvider(ContextProvider):
             await self._load_or_create_index()
 
         # Generate embedding using the embedding service
-        embeddings = await self.embedding_service.generate_embeddings([content], self.model_instance_id)
+        embeddings = await self.embedding_service.generate_embeddings(
+            [content], self.model_instance_id
+        )
         embedding = np.array(embeddings[0], dtype=np.float32)
 
         # Normalize for cosine similarity (IndexFlatIP expects normalized vectors)
@@ -135,7 +141,9 @@ class FAISSContextProvider(ContextProvider):
             await self._load_or_create_index()
 
         # Generate query embedding using the embedding service
-        query_embeddings = await self.embedding_service.generate_embeddings([query], self.model_instance_id)
+        query_embeddings = await self.embedding_service.generate_embeddings(
+            [query], self.model_instance_id
+        )
         query_embedding = np.array(query_embeddings[0], dtype=np.float32)
         query_embedding = query_embedding.reshape(1, -1)
         faiss.normalize_L2(query_embedding)
@@ -214,7 +222,9 @@ class FAISSContextProvider(ContextProvider):
         old_meta["content_hash"] = self._create_content_hash(content)
 
         # Generate new embedding
-        embeddings = await self.embedding_service.generate_embeddings([content], self.model_instance_id)
+        embeddings = await self.embedding_service.generate_embeddings(
+            [content], self.model_instance_id
+        )
         embedding = np.array(embeddings[0], dtype=np.float32)
         embedding = embedding.reshape(1, -1)
         faiss.normalize_L2(embedding)

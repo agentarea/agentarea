@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 def create_event_publisher(event_broker, task_id: str):
     """Create an event publisher function for chunk events."""
+
     async def publish_chunk_event(chunk: str, chunk_index: int, is_final: bool = False):
         """Publish LLM chunk event."""
         try:
@@ -25,8 +26,8 @@ def create_event_publisher(event_broker, task_id: str):
                     "task_id": task_id,
                     "chunk": chunk,
                     "chunk_index": chunk_index,
-                    "is_final": is_final
-                }
+                    "is_final": is_final,
+                },
             }
 
             # Create proper domain event
@@ -38,7 +39,7 @@ def create_event_publisher(event_broker, task_id: str):
                 aggregate_type="task",
                 original_event_type=chunk_event["event_type"],
                 original_timestamp=chunk_event["timestamp"],
-                original_data=chunk_event["data"]
+                original_data=chunk_event["data"],
             )
 
             # Publish via RedisEventBroker for real-time SSE
@@ -58,7 +59,7 @@ async def publish_enriched_llm_error_event(
     execution_id: str,
     model_id: str,
     provider_type: str | None,
-    event_broker
+    event_broker,
 ):
     """Publish enriched LLM error event with detailed error information."""
     try:
@@ -98,7 +99,7 @@ async def publish_enriched_llm_error_event(
             "event_type": "LLMCallFailed",
             "event_id": str(uuid4()),
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "data": error_data
+            "data": error_data,
         }
 
         # Create proper domain event
@@ -110,7 +111,7 @@ async def publish_enriched_llm_error_event(
             aggregate_type="task",
             original_event_type=error_event["event_type"],
             original_timestamp=error_event["timestamp"],
-            original_data=error_event["data"]
+            original_data=error_event["data"],
         )
 
         # Publish via RedisEventBroker for real-time SSE
@@ -126,11 +127,11 @@ def _is_auth_error(error: Exception) -> bool:
     error_str = str(error).lower()
     error_type = type(error).__name__
     return (
-        "authenticationerror" in error_type.lower() or
-        "api_key" in error_str or
-        "authentication" in error_str or
-        "unauthorized" in error_str or
-        "401" in error_str
+        "authenticationerror" in error_type.lower()
+        or "api_key" in error_str
+        or "authentication" in error_str
+        or "unauthorized" in error_str
+        or "401" in error_str
     )
 
 
@@ -139,10 +140,10 @@ def _is_rate_limit_error(error: Exception) -> bool:
     error_str = str(error).lower()
     error_type = type(error).__name__
     return (
-        "ratelimiterror" in error_type.lower() or
-        "rate limit" in error_str or
-        "too many requests" in error_str or
-        "429" in error_str
+        "ratelimiterror" in error_type.lower()
+        or "rate limit" in error_str
+        or "too many requests" in error_str
+        or "429" in error_str
     )
 
 
@@ -150,22 +151,18 @@ def _is_quota_error(error: Exception) -> bool:
     """Check if error is quota/billing-related."""
     error_str = str(error).lower()
     return (
-        "quota" in error_str or
-        "billing" in error_str or
-        "exceeded" in error_str or
-        "insufficient funds" in error_str
+        "quota" in error_str
+        or "billing" in error_str
+        or "exceeded" in error_str
+        or "insufficient funds" in error_str
     )
 
 
 def _is_model_error(error: Exception) -> bool:
     """Check if error is model-related."""
     error_str = str(error).lower()
-    return (
-        "model" in error_str and (
-            "not found" in error_str or
-            "does not exist" in error_str or
-            "invalid" in error_str
-        )
+    return "model" in error_str and (
+        "not found" in error_str or "does not exist" in error_str or "invalid" in error_str
     )
 
 
@@ -174,21 +171,17 @@ def _is_network_error(error: Exception) -> bool:
     error_str = str(error).lower()
     error_type = type(error).__name__
     return (
-        "connectionerror" in error_type.lower() or
-        "timeouterror" in error_type.lower() or
-        "network" in error_str or
-        "connection" in error_str or
-        "timeout" in error_str
+        "connectionerror" in error_type.lower()
+        or "timeouterror" in error_type.lower()
+        or "network" in error_str
+        or "connection" in error_str
+        or "timeout" in error_str
     )
 
 
 def _is_non_retryable_error(error: Exception) -> bool:
     """Determine if error should not be retried."""
-    return (
-        _is_auth_error(error) or
-        _is_quota_error(error) or
-        _is_model_error(error)
-    )
+    return _is_auth_error(error) or _is_quota_error(error) or _is_model_error(error)
 
 
 def _extract_retry_after(error: Exception) -> int | None:
@@ -196,6 +189,7 @@ def _extract_retry_after(error: Exception) -> int | None:
     error_str = str(error)
     # Simple pattern matching - could be enhanced
     import re
+
     match = re.search(r"retry.*?(\d+)", error_str, re.IGNORECASE)
     if match:
         return int(match.group(1))
@@ -218,6 +212,7 @@ def _extract_status_code(error: Exception) -> int | None:
     """Extract HTTP status code from network errors."""
     error_str = str(error)
     import re
+
     match = re.search(r"(\d{3})", error_str)
     if match:
         return int(match.group(1))

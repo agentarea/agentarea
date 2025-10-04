@@ -12,6 +12,7 @@ import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
+import { env } from "@/env";
 
 interface UserChatMessage {
   id: string;
@@ -35,7 +36,7 @@ interface FullChatProps {
   agent: {
     id: string;
     name: string;
-    description?: string;
+    description?: string | null;
   };
   taskId?: string;
   initialMessages?: ChatMessage[];
@@ -479,7 +480,7 @@ export default function FullChat({
 
     try {
       // Create task with SSE streaming
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const baseUrl = env.NEXT_PUBLIC_API_URL;
       const response = await fetch(`${baseUrl}/v1/agents/${agent.id}/tasks/`, {
         method: 'POST',
         headers: {

@@ -24,7 +24,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
             select(ProviderConfig)
             .options(
                 joinedload(ProviderConfig.provider_spec),
-                selectinload(ProviderConfig.model_instances)
+                selectinload(ProviderConfig.model_instances),
             )
             .where(ProviderConfig.id == id)
         )
@@ -42,17 +42,14 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
         """List provider configs with filtering and relationships."""
         filters = {}
         if provider_spec_id is not None:
-            filters['provider_spec_id'] = provider_spec_id
+            filters["provider_spec_id"] = provider_spec_id
         if is_active is not None:
-            filters['is_active'] = is_active
+            filters["is_active"] = is_active
         if is_public is not None:
-            filters['is_public'] = is_public
+            filters["is_public"] = is_public
 
         configs = await self.list_all(
-            creator_scoped=creator_scoped,
-            limit=limit,
-            offset=offset,
-            **filters
+            creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
         )
 
         # Load relationships for each config
@@ -62,7 +59,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
                 select(ProviderConfig)
                 .options(
                     joinedload(ProviderConfig.provider_spec),
-                    selectinload(ProviderConfig.model_instances)
+                    selectinload(ProviderConfig.model_instances),
                 )
                 .where(ProviderConfig.id.in_(config_ids))
             )
@@ -71,9 +68,11 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
 
         return configs
 
-    async def get_by_workspace_id(self, workspace_id: str, limit: int = 100, offset: int = 0) -> list[ProviderConfig]:
+    async def get_by_workspace_id(
+        self, workspace_id: str, limit: int = 100, offset: int = 0
+    ) -> list[ProviderConfig]:
         """Get provider configs by workspace ID with pagination.
-        
+
         Note: This method is deprecated. Use list_configs() instead which automatically
         filters by the current workspace from user context.
         """
@@ -85,42 +84,42 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
 
     async def create_config(self, entity: ProviderConfig) -> ProviderConfig:
         """Create a new provider config from domain entity.
-        
+
         Note: This method is deprecated. Use create() with field parameters instead.
         """
         # Extract fields from the config entity
         config_data = {
-            'id': entity.id,
-            'provider_spec_id': entity.provider_spec_id,
-            'name': entity.name,
-            'description': entity.description,
-            'is_active': entity.is_active,
-            'is_public': entity.is_public,
-            'api_key': entity.api_key,
-            'created_at': entity.created_at,
-            'updated_at': entity.updated_at,
+            "id": entity.id,
+            "provider_spec_id": entity.provider_spec_id,
+            "name": entity.name,
+            "description": entity.description,
+            "is_active": entity.is_active,
+            "is_public": entity.is_public,
+            "api_key": entity.api_key,
+            "created_at": entity.created_at,
+            "updated_at": entity.updated_at,
         }
 
         # Remove None values and system fields that will be auto-populated
         config_data = {k: v for k, v in config_data.items() if v is not None}
-        config_data.pop('created_at', None)
-        config_data.pop('updated_at', None)
+        config_data.pop("created_at", None)
+        config_data.pop("updated_at", None)
 
         created_config = await self.create(**config_data)
         return await self.get_with_relations(created_config.id) or created_config
 
     async def update_config(self, entity: ProviderConfig) -> ProviderConfig:
         """Update an existing provider config from domain entity.
-        
+
         Note: This method is deprecated. Use update() with field parameters instead.
         """
         # Extract fields from the config entity
         config_data = {
-            'provider_spec_id': entity.provider_spec_id,
-            'name': entity.name,
-            'description': entity.description,
-            'is_active': entity.is_active,
-            'is_public': entity.is_public,
+            "provider_spec_id": entity.provider_spec_id,
+            "name": entity.name,
+            "description": entity.description,
+            "is_active": entity.is_active,
+            "is_public": entity.is_public,
         }
 
         # Remove None values

@@ -35,13 +35,12 @@ class TestWorkspaceExceptions:
     def test_workspace_error_base_class(self):
         """Test WorkspaceError base class."""
         error = WorkspaceError(
-            message="Test error",
-            workspace_id="ws-123",
-            user_id="user-456",
-            resource_id="res-789"
+            message="Test error", workspace_id="ws-123", user_id="user-456", resource_id="res-789"
         )
 
-        assert str(error) == "Test error (workspace_id=ws-123, user_id=user-456, resource_id=res-789)"
+        assert (
+            str(error) == "Test error (workspace_id=ws-123, user_id=user-456, resource_id=res-789)"
+        )
         assert error.workspace_id == "ws-123"
         assert error.user_id == "user-456"
         assert error.resource_id == "res-789"
@@ -53,7 +52,7 @@ class TestWorkspaceExceptions:
             resource_id="agent-123",
             current_workspace_id="ws-current",
             resource_workspace_id="ws-other",
-            user_id="user-456"
+            user_id="user-456",
         )
 
         assert "Access denied to agent 'agent-123'" in str(error)
@@ -65,10 +64,7 @@ class TestWorkspaceExceptions:
 
     def test_missing_workspace_context(self):
         """Test MissingWorkspaceContext exception."""
-        error = MissingWorkspaceContext(
-            missing_field="workspace_id",
-            user_id="user-456"
-        )
+        error = MissingWorkspaceContext(missing_field="workspace_id", user_id="user-456")
 
         assert "Missing required context field: workspace_id" in str(error)
         assert error.missing_field == "workspace_id"
@@ -76,10 +72,7 @@ class TestWorkspaceExceptions:
 
     def test_invalid_jwt_token(self):
         """Test InvalidJWTToken exception."""
-        error = InvalidJWTToken(
-            reason="Token expired",
-            token_present=True
-        )
+        error = InvalidJWTToken(reason="Token expired", token_present=True)
 
         assert "Invalid JWT token: Token expired" in str(error)
         assert error.reason == "Token expired"
@@ -88,10 +81,7 @@ class TestWorkspaceExceptions:
     def test_workspace_resource_not_found(self):
         """Test WorkspaceResourceNotFound exception."""
         error = WorkspaceResourceNotFound(
-            resource_type="task",
-            resource_id="task-123",
-            workspace_id="ws-123",
-            user_id="user-456"
+            resource_type="task", resource_id="task-123", workspace_id="ws-123", user_id="user-456"
         )
 
         assert "Task 'task-123' not found in workspace 'ws-123'" in str(error)
@@ -114,11 +104,7 @@ class TestWorkspaceErrorHandlers:
     @pytest.fixture
     def user_context(self):
         """Create a test user context."""
-        return UserContext(
-            user_id="test-user",
-            workspace_id="test-workspace",
-            roles=["user"]
-        )
+        return UserContext(user_id="test-user", workspace_id="test-workspace", roles=["user"])
 
     @pytest.mark.asyncio
     async def test_workspace_access_denied_handler(self, mock_request):
@@ -127,7 +113,7 @@ class TestWorkspaceErrorHandlers:
             resource_type="agent",
             resource_id="agent-123",
             current_workspace_id="ws-current",
-            resource_workspace_id="ws-other"
+            resource_workspace_id="ws-other",
         )
 
         response = await workspace_access_denied_handler(mock_request, error)
@@ -144,9 +130,7 @@ class TestWorkspaceErrorHandlers:
     async def test_workspace_resource_not_found_handler(self, mock_request):
         """Test workspace resource not found handler."""
         error = WorkspaceResourceNotFound(
-            resource_type="task",
-            resource_id="task-123",
-            workspace_id="ws-123"
+            resource_type="task", resource_id="task-123", workspace_id="ws-123"
         )
 
         response = await workspace_resource_not_found_handler(mock_request, error)
@@ -186,15 +170,13 @@ class TestWorkspaceErrorHandlers:
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
 
     @pytest.mark.asyncio
-    @patch('agentarea_common.exceptions.handlers.ContextManager.get_context')
+    @patch("agentarea_common.exceptions.handlers.ContextManager.get_context")
     async def test_workspace_headers_included(self, mock_get_context, mock_request, user_context):
         """Test that workspace headers are included in responses."""
         mock_get_context.return_value = user_context
 
         error = WorkspaceResourceNotFound(
-            resource_type="agent",
-            resource_id="agent-123",
-            workspace_id="test-workspace"
+            resource_type="agent", resource_id="agent-123", workspace_id="test-workspace"
         )
 
         response = await workspace_resource_not_found_handler(mock_request, error)
@@ -209,11 +191,7 @@ class TestWorkspaceUtilities:
     @pytest.fixture
     def user_context(self):
         """Create a test user context."""
-        return UserContext(
-            user_id="test-user",
-            workspace_id="test-workspace",
-            roles=["user"]
-        )
+        return UserContext(user_id="test-user", workspace_id="test-workspace", roles=["user"])
 
     def test_raise_workspace_access_denied(self, user_context):
         """Test raise_workspace_access_denied utility."""

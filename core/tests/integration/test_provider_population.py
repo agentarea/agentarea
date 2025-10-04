@@ -1,6 +1,7 @@
 """
 Test that provider specs are correctly populated for integration tests.
 """
+
 import pytest
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec
 from sqlalchemy import select
@@ -37,8 +38,7 @@ async def test_model_specs_populated(populated_db_session: AsyncSession):
     # Check that qwen model exists
     result = await populated_db_session.execute(
         select(ModelSpec).where(
-            ModelSpec.provider_spec_id == ollama_provider.id,
-            ModelSpec.model_name == "qwen2.5"
+            ModelSpec.provider_spec_id == ollama_provider.id, ModelSpec.model_name == "qwen2.5"
         )
     )
     qwen_model = result.scalar_one_or_none()

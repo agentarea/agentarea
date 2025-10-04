@@ -22,12 +22,9 @@ def execution_request():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete a simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
 
@@ -67,9 +64,9 @@ class TestWorkflowCompletion:
                             "properties": {
                                 "result": {"type": "string", "description": "Final result"}
                             },
-                            "required": []
-                        }
-                    }
+                            "required": [],
+                        },
+                    },
                 }
             ]
 
@@ -85,12 +82,12 @@ class TestWorkflowCompletion:
                         "type": "function",
                         "function": {
                             "name": "task_complete",
-                            "arguments": json.dumps({"result": "Task completed successfully"})
-                        }
+                            "arguments": json.dumps({"result": "Task completed successfully"}),
+                        },
                     }
                 ],
                 "cost": 0.001,
-                "usage": {"total_tokens": 50}
+                "usage": {"total_tokens": 50},
             }
 
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
@@ -100,7 +97,7 @@ class TestWorkflowCompletion:
                     "success": True,
                     "completed": True,
                     "result": tool_args.get("result", "Task completed"),
-                    "tool_name": "task_complete"
+                    "tool_name": "task_complete",
                 }
             return {"success": False, "result": "Unknown tool"}
 
@@ -120,7 +117,7 @@ class TestWorkflowCompletion:
                 mock_call_llm,
                 mock_execute_tool,
                 mock_evaluate_goal,
-                mock_publish_events
+                mock_publish_events,
             ]
 
             async with Worker(
@@ -135,7 +132,9 @@ class TestWorkflowCompletion:
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=10)  # Short timeout to catch infinite loops
+                    execution_timeout=timedelta(
+                        seconds=10
+                    ),  # Short timeout to catch infinite loops
                 )
 
                 # Verify workflow completed
@@ -176,8 +175,8 @@ class TestWorkflowCompletion:
                     "function": {
                         "name": "task_complete",
                         "description": "Mark task as completed",
-                        "parameters": {"type": "object", "properties": {}, "required": []}
-                    }
+                        "parameters": {"type": "object", "properties": {}, "required": []},
+                    },
                 }
             ]
 
@@ -192,12 +191,12 @@ class TestWorkflowCompletion:
                         "type": "function",
                         "function": {
                             "name": "task_complete",
-                            "arguments": json.dumps({"result": "Done"})
-                        }
+                            "arguments": json.dumps({"result": "Done"}),
+                        },
                     }
                 ],
                 "cost": 0.001,
-                "usage": {"total_tokens": 30}
+                "usage": {"total_tokens": 30},
             }
 
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
@@ -206,7 +205,7 @@ class TestWorkflowCompletion:
                     "success": True,
                     "completed": True,
                     "result": "Task completed",
-                    "tool_name": "task_complete"
+                    "tool_name": "task_complete",
                 }
             return {"success": False}
 
@@ -223,7 +222,7 @@ class TestWorkflowCompletion:
                 mock_call_llm,
                 mock_execute_tool,
                 mock_evaluate_goal,
-                mock_publish_events
+                mock_publish_events,
             ]
 
             async with Worker(
@@ -237,7 +236,7 @@ class TestWorkflowCompletion:
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=10)
+                    execution_timeout=timedelta(seconds=10),
                 )
 
                 # Verify final state
@@ -270,21 +269,19 @@ class TestWorkflowCompletion:
                         "description": "Perform calculations",
                         "parameters": {
                             "type": "object",
-                            "properties": {
-                                "expression": {"type": "string"}
-                            },
-                            "required": ["expression"]
-                        }
-                    }
+                            "properties": {"expression": {"type": "string"}},
+                            "required": ["expression"],
+                        },
+                    },
                 },
                 {
                     "type": "function",
                     "function": {
                         "name": "task_complete",
                         "description": "Mark task as completed",
-                        "parameters": {"type": "object", "properties": {}, "required": []}
-                    }
-                }
+                        "parameters": {"type": "object", "properties": {}, "required": []},
+                    },
+                },
             ]
 
         async def mock_call_llm(*args, **kwargs):
@@ -302,12 +299,12 @@ class TestWorkflowCompletion:
                             "type": "function",
                             "function": {
                                 "name": "calculate",
-                                "arguments": json.dumps({"expression": "2 + 2"})
-                            }
+                                "arguments": json.dumps({"expression": "2 + 2"}),
+                            },
                         }
                     ],
                     "cost": 0.001,
-                    "usage": {"total_tokens": 40}
+                    "usage": {"total_tokens": 40},
                 }
             else:
                 # Second call - complete task
@@ -320,27 +317,25 @@ class TestWorkflowCompletion:
                             "type": "function",
                             "function": {
                                 "name": "task_complete",
-                                "arguments": json.dumps({"result": "Calculation done, task complete"})
-                            }
+                                "arguments": json.dumps(
+                                    {"result": "Calculation done, task complete"}
+                                ),
+                            },
                         }
                     ],
                     "cost": 0.001,
-                    "usage": {"total_tokens": 35}
+                    "usage": {"total_tokens": 35},
                 }
 
         async def mock_execute_tool(tool_name: str, tool_args: dict, **kwargs):
             if tool_name == "calculate":
-                return {
-                    "success": True,
-                    "result": "4",
-                    "tool_name": "calculate"
-                }
+                return {"success": True, "result": "4", "tool_name": "calculate"}
             elif tool_name == "task_complete":
                 return {
                     "success": True,
                     "completed": True,
                     "result": tool_args.get("result", "Task completed"),
-                    "tool_name": "task_complete"
+                    "tool_name": "task_complete",
                 }
             return {"success": False}
 
@@ -357,7 +352,7 @@ class TestWorkflowCompletion:
                 mock_call_llm,
                 mock_execute_tool,
                 mock_evaluate_goal,
-                mock_publish_events
+                mock_publish_events,
             ]
 
             async with Worker(
@@ -371,7 +366,7 @@ class TestWorkflowCompletion:
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=15)
+                    execution_timeout=timedelta(seconds=15),
                 )
 
                 # Verify workflow completed after 2 iterations

@@ -5,13 +5,14 @@ import AgentEditContent from "./AgentEditContent";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 interface AgentSettingsPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function AgentSettingsPage({ params }: AgentSettingsPageProps) {
   const t = await getTranslations("Agent");
+  const resolvedParams = await params;
 
   return (
     <AgentPageWrapper
@@ -25,7 +26,7 @@ export default async function AgentSettingsPage({ params }: AgentSettingsPagePro
           <LoadingSpinner />
         </div>
       }>
-        <AgentEditContent agentId={params.id} />
+        <AgentEditContent agentId={resolvedParams.id} />
       </Suspense>
     </AgentPageWrapper>
   );

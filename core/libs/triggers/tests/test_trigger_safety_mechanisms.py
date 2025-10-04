@@ -63,7 +63,7 @@ class TestTriggerSafetyMechanisms:
         mock_event_broker,
         mock_agent_repository,
         mock_task_service,
-        mock_temporal_schedule_manager
+        mock_temporal_schedule_manager,
     ):
         """Create TriggerService instance with mocked dependencies."""
         return TriggerService(
@@ -73,7 +73,7 @@ class TestTriggerSafetyMechanisms:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=mock_temporal_schedule_manager
+            temporal_schedule_manager=mock_temporal_schedule_manager,
         )
 
     @pytest.fixture
@@ -97,7 +97,7 @@ class TestTriggerSafetyMechanisms:
             consecutive_failures=3,  # 3 out of 5 failures
             created_at=now - timedelta(minutes=20),  # Created 20 minutes ago
             updated_at=now - timedelta(minutes=10),  # Updated 10 minutes ago
-            last_execution_at=now - timedelta(minutes=10)  # Last executed 10 minutes ago
+            last_execution_at=now - timedelta(minutes=10),  # Last executed 10 minutes ago
         )
 
     @pytest.fixture
@@ -115,8 +115,8 @@ class TestTriggerSafetyMechanisms:
             failure_threshold=5,
             consecutive_failures=5,  # At threshold
             created_at=now - timedelta(minutes=15),  # Created 15 minutes ago
-            updated_at=now - timedelta(minutes=5),   # Updated 5 minutes ago
-            last_execution_at=now - timedelta(minutes=5)  # Last executed 5 minutes ago
+            updated_at=now - timedelta(minutes=5),  # Updated 5 minutes ago
+            last_execution_at=now - timedelta(minutes=5),  # Last executed 5 minutes ago
         )
 
     # Test Automatic Trigger Disabling
@@ -127,14 +127,14 @@ class TestTriggerSafetyMechanisms:
         trigger_service,
         mock_trigger_repository,
         mock_trigger_execution_repository,
-        sample_trigger_with_failures
+        sample_trigger_with_failures,
     ):
         """Test that successful execution resets consecutive failures."""
         # Setup mocks
         execution = TriggerExecution(
             trigger_id=sample_trigger_with_failures.id,
             status=ExecutionStatus.SUCCESS,
-            execution_time_ms=100
+            execution_time_ms=100,
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get.return_value = sample_trigger_with_failures
@@ -144,7 +144,7 @@ class TestTriggerSafetyMechanisms:
         result = await trigger_service.record_execution(
             trigger_id=sample_trigger_with_failures.id,
             status=ExecutionStatus.SUCCESS,
-            execution_time_ms=100
+            execution_time_ms=100,
         )
 
         # Verify
@@ -158,7 +158,7 @@ class TestTriggerSafetyMechanisms:
         trigger_service,
         mock_trigger_repository,
         mock_trigger_execution_repository,
-        sample_trigger_with_failures
+        sample_trigger_with_failures,
     ):
         """Test that failed execution increments consecutive failures."""
         # Setup mocks
@@ -167,7 +167,7 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_with_failures.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Test error"
+            error_message="Test error",
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get.return_value = sample_trigger_with_failures
@@ -179,7 +179,7 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_with_failures.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Test error"
+            error_message="Test error",
         )
 
         # Verify
@@ -194,7 +194,7 @@ class TestTriggerSafetyMechanisms:
         mock_trigger_repository,
         mock_trigger_execution_repository,
         mock_event_broker,
-        sample_trigger_at_threshold
+        sample_trigger_at_threshold,
     ):
         """Test that trigger is automatically disabled when reaching failure threshold."""
         # Setup mocks
@@ -202,7 +202,7 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_at_threshold.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Final failure"
+            error_message="Final failure",
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get.return_value = sample_trigger_at_threshold
@@ -214,11 +214,13 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_at_threshold.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Final failure"
+            error_message="Final failure",
         )
 
         # Verify trigger was disabled
-        mock_trigger_repository.disable_trigger.assert_called_once_with(sample_trigger_at_threshold.id)
+        mock_trigger_repository.disable_trigger.assert_called_once_with(
+            sample_trigger_at_threshold.id
+        )
 
         # Verify auto-disabled event was published
         mock_event_broker.publish.assert_called_once()
@@ -234,7 +236,7 @@ class TestTriggerSafetyMechanisms:
         trigger_service,
         mock_trigger_repository,
         mock_trigger_execution_repository,
-        sample_trigger_with_failures
+        sample_trigger_with_failures,
     ):
         """Test that trigger is not disabled when below failure threshold."""
         # Setup mocks
@@ -242,7 +244,7 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_with_failures.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Another failure"
+            error_message="Another failure",
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get.return_value = sample_trigger_with_failures
@@ -253,7 +255,7 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_with_failures.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Another failure"
+            error_message="Another failure",
         )
 
         # Verify trigger was NOT disabled (still below threshold)
@@ -266,7 +268,7 @@ class TestTriggerSafetyMechanisms:
         mock_trigger_repository,
         mock_trigger_execution_repository,
         mock_event_broker,
-        sample_trigger_at_threshold
+        sample_trigger_at_threshold,
     ):
         """Test that event publishing failure doesn't break trigger execution recording."""
         # Setup mocks
@@ -274,7 +276,7 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_at_threshold.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Final failure"
+            error_message="Final failure",
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get.return_value = sample_trigger_at_threshold
@@ -289,7 +291,7 @@ class TestTriggerSafetyMechanisms:
             trigger_id=sample_trigger_at_threshold.id,
             status=ExecutionStatus.FAILED,
             execution_time_ms=100,
-            error_message="Final failure"
+            error_message="Final failure",
         )
 
         # Verify execution was still recorded despite event failure
@@ -300,10 +302,7 @@ class TestTriggerSafetyMechanisms:
 
     @pytest.mark.asyncio
     async def test_reset_trigger_failure_count_success(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_trigger_with_failures
+        self, trigger_service, mock_trigger_repository, sample_trigger_with_failures
     ):
         """Test successful reset of trigger failure count."""
         # Setup mocks
@@ -320,9 +319,7 @@ class TestTriggerSafetyMechanisms:
 
     @pytest.mark.asyncio
     async def test_reset_trigger_failure_count_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
+        self, trigger_service, mock_trigger_repository
     ):
         """Test reset failure count when trigger doesn't exist."""
         # Setup mocks
@@ -340,10 +337,7 @@ class TestTriggerSafetyMechanisms:
 
     @pytest.mark.asyncio
     async def test_get_trigger_safety_status_success(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_trigger_with_failures
+        self, trigger_service, mock_trigger_repository, sample_trigger_with_failures
     ):
         """Test getting trigger safety status."""
         # Setup mocks
@@ -364,10 +358,7 @@ class TestTriggerSafetyMechanisms:
 
     @pytest.mark.asyncio
     async def test_get_trigger_safety_status_at_risk(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_agent_id
+        self, trigger_service, mock_trigger_repository, sample_agent_id
     ):
         """Test safety status for trigger at risk (80% of threshold)."""
         # Create trigger at 80% of threshold (4 out of 5)
@@ -379,7 +370,7 @@ class TestTriggerSafetyMechanisms:
             timezone="UTC",
             created_by="test_user",
             failure_threshold=5,
-            consecutive_failures=4  # 4 out of 5 = 80%
+            consecutive_failures=4,  # 4 out of 5 = 80%
         )
 
         # Setup mocks
@@ -395,10 +386,7 @@ class TestTriggerSafetyMechanisms:
 
     @pytest.mark.asyncio
     async def test_get_trigger_safety_status_should_disable(
-        self,
-        trigger_service,
-        mock_trigger_repository,
-        sample_trigger_at_threshold
+        self, trigger_service, mock_trigger_repository, sample_trigger_at_threshold
     ):
         """Test safety status for trigger that should be disabled."""
         # Setup mocks
@@ -414,9 +402,7 @@ class TestTriggerSafetyMechanisms:
 
     @pytest.mark.asyncio
     async def test_get_trigger_safety_status_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
+        self, trigger_service, mock_trigger_repository
     ):
         """Test safety status when trigger doesn't exist."""
         # Setup mocks
@@ -462,9 +448,7 @@ class TestTriggerSafetyMechanisms:
 
     @pytest.mark.asyncio
     async def test_update_execution_tracking_trigger_not_found(
-        self,
-        trigger_service,
-        mock_trigger_repository
+        self, trigger_service, mock_trigger_repository
     ):
         """Test execution tracking update when trigger doesn't exist."""
         # Setup mocks
@@ -472,13 +456,17 @@ class TestTriggerSafetyMechanisms:
         mock_trigger_repository.get.return_value = None
 
         # Execute - should not raise exception
-        await trigger_service._update_trigger_execution_tracking(trigger_id, ExecutionStatus.SUCCESS)
+        await trigger_service._update_trigger_execution_tracking(
+            trigger_id, ExecutionStatus.SUCCESS
+        )
 
         # Verify no update was attempted
         mock_trigger_repository.update.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_custom_failure_threshold(self, trigger_service, mock_trigger_repository, sample_agent_id):
+    async def test_custom_failure_threshold(
+        self, trigger_service, mock_trigger_repository, sample_agent_id
+    ):
         """Test trigger with custom failure threshold."""
         # Create trigger with custom threshold
         custom_trigger = CronTrigger(
@@ -489,7 +477,7 @@ class TestTriggerSafetyMechanisms:
             timezone="UTC",
             created_by="test_user",
             failure_threshold=3,  # Custom threshold
-            consecutive_failures=2  # One less than threshold
+            consecutive_failures=2,  # One less than threshold
         )
 
         # Setup mocks
@@ -504,7 +492,9 @@ class TestTriggerSafetyMechanisms:
         assert result["is_at_risk"] is False  # 2 < (3 * 0.8) = 2.4, so False
 
     @pytest.mark.asyncio
-    async def test_zero_consecutive_failures(self, trigger_service, mock_trigger_repository, sample_agent_id):
+    async def test_zero_consecutive_failures(
+        self, trigger_service, mock_trigger_repository, sample_agent_id
+    ):
         """Test trigger with zero consecutive failures."""
         # Create trigger with no failures
         clean_trigger = CronTrigger(
@@ -515,7 +505,7 @@ class TestTriggerSafetyMechanisms:
             timezone="UTC",
             created_by="test_user",
             failure_threshold=5,
-            consecutive_failures=0  # No failures
+            consecutive_failures=0,  # No failures
         )
 
         # Setup mocks

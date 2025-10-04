@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, override, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, override
 
 from faststream.redis import RedisBroker
 
@@ -36,12 +36,12 @@ class RedisEventBroker(EventBroker):
         return self._connected
 
     @override
-    async def publish(self, event: DomainEvent | EventEnvelope | "BaseEvent") -> None:
+    async def publish(self, event: DomainEvent | EventEnvelope | BaseEvent) -> None:
         # Ensure we're connected before publishing
         await self._ensure_connected()
 
         # Normalize input to EventEnvelope for type safety
-        if hasattr(event, "to_envelope") and callable(getattr(event, "to_envelope")):
+        if hasattr(event, "to_envelope") and callable(event.to_envelope):
             # Supports typed Pydantic BaseEvent models without importing them here
             envelope = event.to_envelope()  # type: ignore[attr-defined]
         else:
@@ -82,7 +82,7 @@ class RedisEventBroker(EventBroker):
 
         # Additional cleanup for any remaining connections
         try:
-            if hasattr(self.redis_broker, '_connection') and self.redis_broker._connection:
+            if hasattr(self.redis_broker, "_connection") and self.redis_broker._connection:
                 await self.redis_broker._connection.close()
         except Exception as e:
             logger.debug(f"Error during additional Redis cleanup: {e}")

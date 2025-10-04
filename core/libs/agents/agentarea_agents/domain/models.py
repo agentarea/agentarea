@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class Agent(BaseModel, WorkspaceScopedMixin):
     """Agent model with workspace awareness and audit trail."""
+
     __tablename__ = "agents"
 
     name: Mapped[str] = mapped_column(String, nullable=False)

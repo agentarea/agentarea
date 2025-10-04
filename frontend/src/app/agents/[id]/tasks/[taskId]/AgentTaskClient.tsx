@@ -25,7 +25,7 @@ import AgentChat from "@/components/Chat/AgentChat";
 interface Agent {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   status: string;
 }
 
@@ -62,7 +62,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
 
   useEffect(() => {
     loadTaskData();
-  }, [taskId]);
+  }, [agent.id, taskId]);
 
   const loadTaskData = async () => {
     setLoading(true);

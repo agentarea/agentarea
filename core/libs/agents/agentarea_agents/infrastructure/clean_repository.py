@@ -9,6 +9,7 @@ from agentarea_common.base.repository import (
     Repository,
     SoftDeleteOperations,
 )
+from agentarea_tasks.infrastructure.models import TaskORM
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.models import Agent
@@ -59,7 +60,9 @@ class AgentRepository:
         await self.session.refresh(agent)
         return agent
 
-    async def update_agent(self, agent_id: str, user_scoped: bool = False, **kwargs) -> Agent | None:
+    async def update_agent(
+        self, agent_id: str, user_scoped: bool = False, **kwargs
+    ) -> Agent | None:
         """Update an agent."""
         repo = self._get_repo(user_scoped)
         return await repo.update(agent_id, **kwargs)
@@ -99,15 +102,22 @@ class TaskRepository:
         repo = self._get_repo(user_scoped)
         return await repo.get_by_id(task_id)
 
-    async def list_all(self, user_scoped: bool = False, include_deleted: bool = False, **filters) -> list:
+    async def list_all(
+        self, user_scoped: bool = False, include_deleted: bool = False, **filters
+    ) -> list:
         """List all tasks."""
         if include_deleted:
             # Remove soft delete filter to include deleted records
             from agentarea_common.base.repository import SoftDeleteFilter
+
             repo = self._get_repo(user_scoped)
             # Create new repo without soft delete filter
-            filters_without_soft_delete = [f for f in repo._filters if not isinstance(f, SoftDeleteFilter)]
-            new_repo = Repository(repo.session, repo.model_class).with_filters(*filters_without_soft_delete)
+            filters_without_soft_delete = [
+                f for f in repo._filters if not isinstance(f, SoftDeleteFilter)
+            ]
+            new_repo = Repository(repo.session, repo.model_class).with_filters(
+                *filters_without_soft_delete
+            )
             return await new_repo.list_all(**filters)
 
         repo = self._get_repo(user_scoped)
@@ -119,10 +129,7 @@ class TaskRepository:
 
         # Create record with context
         task = self.contextual_repo.create_with_context(
-            TaskORM,
-            description=description,
-            agent_id=agent_id,
-            **kwargs
+            TaskORM, description=description, agent_id=agent_id, **kwargs
         )
 
         self.session.add(task)

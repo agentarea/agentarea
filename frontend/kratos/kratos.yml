@@ -29,50 +29,49 @@ serve:
     base_url: http://localhost:4434/
 
 selfservice:
-  default_browser_return_url: http://localhost:3000/
+  default_browser_return_url: http://localhost:3001/
   allowed_return_urls:
     - http://localhost:3000
     - http://localhost:3001
-    - http://localhost:3000
-    - http://localhost:3000/workplace
-    - http://localhost:3000/dashboard
+    - http://localhost:3001/workplace
+    - http://localhost:3001/dashboard
 
   flows:
     error:
-      ui_url: http://localhost:3000/auth/error
+      ui_url: http://localhost:3001/auth/error
 
     settings:
-      ui_url: http://localhost:3000/auth/settings
+      ui_url: http://localhost:3001/auth/settings
       privileged_session_max_age: 15m
       required_aal: highest_available
 
     recovery:
       enabled: true
-      ui_url: http://localhost:3000/auth/recovery
+      ui_url: http://localhost:3001/auth/recovery
       use: code
 
     verification:
-      enabled: false
-      ui_url: http://localhost:3000/auth/verification
+      enabled: true
+      ui_url: http://localhost:3001/auth/verification
       use: code
       after:
-        default_browser_return_url: http://localhost:3000/workplace
+        default_browser_return_url: http://localhost:3001/workplace
 
     logout:
       after:
-        default_browser_return_url: http://localhost:3000/auth/signin
+        default_browser_return_url: http://localhost:3001/auth/signin
 
     login:
-      ui_url: http://localhost:3000/auth/login
+      ui_url: http://localhost:3001/auth/login
       lifespan: 10m
       after:
-        default_browser_return_url: http://localhost:3000/workplace
+        default_browser_return_url: http://localhost:3001/workplace
 
     registration:
       lifespan: 10m
-      ui_url: http://localhost:3000/auth/registration
+      ui_url: http://localhost:3001/auth/registration
       after:
-        default_browser_return_url: http://localhost:3000/workplace
+        default_browser_return_url: http://localhost:3001/workplace
 
   methods:
     password:
@@ -107,4 +106,19 @@ identity:
 
 courier:
   smtp:
-    connection_uri: smtps://test:test@mailslurper:1025/?skip_ssl_verify=true
+    connection_uri: smtp://user:pass@mailslurper:1025/?skip_ssl_verify=true
+    from_address: noreply@example.com
+    from_name: AgentArea
+
+session:
+  cookie:
+    same_site: Lax
+    domain: localhost
+    path: /
+  whoami:
+    tokenizer:
+      templates:
+        agentarea_jwt:
+          jwks_url: base64://ewogICJrZXlzIjogWwogICAgewogICAgICAia3R5IjogIkVDIiwKICAgICAgImtpZCI6ICJhZ2VudGFyZWEtand0LWtleS0xIiwKICAgICAgInVzZSI6ICJzaWciLAogICAgICAiYWxnIjogIkVTMjU2IiwKICAgICAgImNydiI6ICJQLTI1NiIsCiAgICAgICJ4IjogIk1LQkNUTkljS1VTRGlpMTF5U3MzNTI2aURaOEFpVG83VHU2S1BBcXY3RDQiLAogICAgICAieSI6ICI0RXRsNlNSVzJZaUxVck41dmZ2Vkh1aHA3eDhQeGx0bVdXbGJiTTRJRnlNIiwKICAgICAgImQiOiAiODcwTUI2Z2Z1VEo0SHRVblV2WU15SnByNWVVWk5QNEJrNDNiVmRqM2VBRSIKICAgIH0KICBdCn0=
+          claims_mapper_url: base64://bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7CmxvY2FsIGlkZW50aXR5ID0gc3RkLmV4dFZhcignaWRlbnRpdHknKTsKCnsKICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zCiAgaXNzOiAnaHR0cHM6Ly9hZ2VudGFyZWEuZGV2JywgLy8gQ3VzdG9tIGlzc3VlciBmb3IgQWdlbnRBcmVhCiAgc3ViOiBpZGVudGl0eS5pZCwKICBhdWQ6ICdhZ2VudGFyZWEtYXBpJywKICBleHA6IHN0ZC5wYXJzZUludChzdGQuc3BsaXQoc2Vzc2lvbi5leHBpcmVzX2F0LCAnLicpWzBdKSwKICBpYXQ6IHN0ZC5wYXJzZUludChzdGQuc3BsaXQoc2Vzc2lvbi5pc3N1ZWRfYXQsICcuJylbMF0pLAoKICAvLyBDdXN0b20gY2xhaW1zCiAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoaWRlbnRpdHkudHJhaXRzLCAnZW1haWwnKSB0aGVuIGlkZW50aXR5LnRyYWl0cy5lbWFpbCBlbHNlIG51bGwsCiAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoaWRlbnRpdHkudHJhaXRzLCAndXNlcm5hbWUnKSB0aGVuIGlkZW50aXR5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgbmFtZTogaWYgc3RkLm9iamVjdEhhcyhpZGVudGl0eS50cmFpdHMsICduYW1lJykgdGhlbiB7CiAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhpZGVudGl0eS50cmFpdHMubmFtZSwgJ2ZpcnN0JykgdGhlbiBpZGVudGl0eS50cmFpdHMubmFtZS5maXJzdCBlbHNlIG51bGwsCiAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKGlkZW50aXR5LnRyYWl0cy5uYW1lLCAnbGFzdCcpIHRoZW4gaWRlbnRpdHkudHJhaXRzLm5hbWUubGFzdCBlbHNlIG51bGwsCiAgfSBlbHNlIG51bGwsCgogIC8vIEtyYXRvcyBzcGVjaWZpYyBjbGFpbXMKICBzY2hlbWFfaWQ6IGlkZW50aXR5LnNjaGVtYV9pZCwKICBhYWw6IHNlc3Npb24uYXV0aGVudGljYXRvcl9hc3N1cmFuY2VfbGV2ZWwsCiAgc2Vzc2lvbl9pZDogc2Vzc2lvbi5pZCwKfQ==
+          ttl: 30m

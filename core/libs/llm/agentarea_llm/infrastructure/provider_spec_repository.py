@@ -24,8 +24,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         result = await self.session.execute(
             select(ProviderSpec)
             .options(
-                selectinload(ProviderSpec.model_specs),
-                selectinload(ProviderSpec.provider_configs)
+                selectinload(ProviderSpec.model_specs), selectinload(ProviderSpec.provider_configs)
             )
             .where(ProviderSpec.id == id)
         )
@@ -44,8 +43,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         result = await self.session.execute(
             select(ProviderSpec)
             .options(
-                selectinload(ProviderSpec.model_specs),
-                selectinload(ProviderSpec.provider_configs)
+                selectinload(ProviderSpec.model_specs), selectinload(ProviderSpec.provider_configs)
             )
             .where(ProviderSpec.id == spec.id)
         )
@@ -56,12 +54,12 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         is_builtin: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False
+        creator_scoped: bool = False,
     ) -> list[ProviderSpec]:
         """List provider specs with filtering and relationships."""
         filters = {}
         if is_builtin is not None:
-            filters['is_builtin'] = is_builtin
+            filters["is_builtin"] = is_builtin
 
         # Build query with filters
         query = select(ProviderSpec)
@@ -79,7 +77,7 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
                 select(ProviderSpec)
                 .options(
                     selectinload(ProviderSpec.model_specs),
-                    selectinload(ProviderSpec.provider_configs)
+                    selectinload(ProviderSpec.provider_configs),
                 )
                 .where(ProviderSpec.id.in_(spec_ids))
             )
@@ -90,26 +88,26 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
 
     async def create_spec(self, entity: ProviderSpec) -> ProviderSpec:
         """Create a new provider spec from domain entity.
-        
+
         Note: This method is deprecated. Use create() with field parameters instead.
         """
         # Extract fields from the spec entity
         spec_data = {
-            'id': entity.id,
-            'provider_key': entity.provider_key,
-            'name': entity.name,
-            'description': entity.description,
-            'provider_type': entity.provider_type,
-            'icon': entity.icon,
-            'is_builtin': entity.is_builtin,
-            'created_at': entity.created_at,
-            'updated_at': entity.updated_at,
+            "id": entity.id,
+            "provider_key": entity.provider_key,
+            "name": entity.name,
+            "description": entity.description,
+            "provider_type": entity.provider_type,
+            "icon": entity.icon,
+            "is_builtin": entity.is_builtin,
+            "created_at": entity.created_at,
+            "updated_at": entity.updated_at,
         }
 
         # Remove None values and system fields that will be auto-populated
         spec_data = {k: v for k, v in spec_data.items() if v is not None}
-        spec_data.pop('created_at', None)
-        spec_data.pop('updated_at', None)
+        spec_data.pop("created_at", None)
+        spec_data.pop("updated_at", None)
 
         # Create the spec instance
         new_spec = ProviderSpec(**spec_data)
@@ -118,17 +116,17 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
 
     async def update_spec(self, entity: ProviderSpec) -> ProviderSpec:
         """Update an existing provider spec from domain entity.
-        
+
         Note: This method is deprecated. Use update() with field parameters instead.
         """
         # Extract fields from the spec entity
         spec_data = {
-            'provider_key': entity.provider_key,
-            'name': entity.name,
-            'description': entity.description,
-            'provider_type': entity.provider_type,
-            'icon': entity.icon,
-            'is_builtin': entity.is_builtin,
+            "provider_key": entity.provider_key,
+            "name": entity.name,
+            "description": entity.description,
+            "provider_type": entity.provider_type,
+            "icon": entity.icon,
+            "is_builtin": entity.is_builtin,
         }
 
         # Remove None values

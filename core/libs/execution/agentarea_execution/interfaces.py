@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 @dataclass
 class ActivityDependencies:
     """Container for basic dependencies needed by temporal activities.
-    
+
     This class provides only the essential dependencies that activities
     need to create their own database sessions and services. Each activity
     will create its own session using get_database().async_session_factory()

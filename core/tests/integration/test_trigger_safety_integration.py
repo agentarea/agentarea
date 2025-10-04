@@ -26,6 +26,7 @@ try:
         TriggerRepository,
     )
     from agentarea_triggers.trigger_service import TriggerService
+
     TRIGGERS_AVAILABLE = True
 except ImportError:
     TRIGGERS_AVAILABLE = False
@@ -72,11 +73,7 @@ class TestTriggerSafetyIntegration:
 
     @pytest.fixture
     async def trigger_service(
-        self,
-        trigger_repositories,
-        mock_event_broker,
-        mock_agent_repository,
-        mock_task_service
+        self, trigger_repositories, mock_event_broker, mock_agent_repository, mock_task_service
     ):
         """Create trigger service with real repositories."""
         trigger_repo, execution_repo = trigger_repositories
@@ -88,7 +85,7 @@ class TestTriggerSafetyIntegration:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=None
+            temporal_schedule_manager=None,
         )
 
     @pytest.fixture
@@ -99,11 +96,7 @@ class TestTriggerSafetyIntegration:
     # Auto-Disable Integration Tests
 
     async def test_trigger_auto_disable_after_consecutive_failures(
-        self,
-        trigger_service,
-        mock_task_service,
-        mock_event_broker,
-        sample_agent_id
+        self, trigger_service, mock_task_service, mock_event_broker, sample_agent_id
     ):
         """Test that trigger is automatically disabled after consecutive failures."""
         # Create trigger with low failure threshold for testing
@@ -115,7 +108,7 @@ class TestTriggerSafetyIntegration:
             cron_expression="0 9 * * *",
             failure_threshold=3,  # Low threshold for testing
             task_parameters={"auto_disable_test": True},
-            created_by="safety_test"
+            created_by="safety_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -131,10 +124,7 @@ class TestTriggerSafetyIntegration:
         # Execute trigger multiple times to reach failure threshold
         execution_results = []
         for i in range(3):  # Reach the threshold
-            execution_data = {
-                "execution_time": datetime.utcnow().isoformat(),
-                "attempt": i + 1
-            }
+            execution_data = {"execution_time": datetime.utcnow().isoformat(), "attempt": i + 1}
             result = await trigger_service.execute_trigger(trigger_id, execution_data)
             execution_results.append(result)
 
@@ -156,10 +146,7 @@ class TestTriggerSafetyIntegration:
         assert event_call.kwargs["data"]["reason"] == "consecutive_failures_threshold_exceeded"
 
     async def test_trigger_failure_count_reset_on_success(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test that failure count resets on successful execution."""
         # Create trigger
@@ -169,7 +156,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
-            created_by="failure_reset_test"
+            created_by="failure_reset_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -204,10 +191,7 @@ class TestTriggerSafetyIntegration:
         assert trigger_after_success.is_active is True
 
     async def test_multiple_triggers_independent_failure_tracking(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test that multiple triggers have independent failure tracking."""
         # Create multiple triggers
@@ -217,9 +201,9 @@ class TestTriggerSafetyIntegration:
                 name=f"Independent Failure Test Trigger {i}",
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
-                cron_expression=f"0 {9+i} * * *",
+                cron_expression=f"0 {9 + i} * * *",
                 failure_threshold=3,
-                created_by="independent_test"
+                created_by="independent_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(trigger)
@@ -242,7 +226,7 @@ class TestTriggerSafetyIntegration:
             for trigger in triggers:
                 execution_data = {
                     "execution_time": datetime.utcnow().isoformat(),
-                    "attempt": attempt
+                    "attempt": attempt,
                 }
                 await trigger_service.execute_trigger(trigger.id, execution_data)
 
@@ -259,10 +243,7 @@ class TestTriggerSafetyIntegration:
                 assert updated_trigger.consecutive_failures == 0
 
     async def test_trigger_safety_status_monitoring(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test trigger safety status monitoring and risk assessment."""
         # Create trigger
@@ -272,7 +253,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
-            created_by="safety_status_test"
+            created_by="safety_status_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -320,10 +301,7 @@ class TestTriggerSafetyIntegration:
         assert safety_status["should_disable"] is True
 
     async def test_trigger_failure_count_reset_functionality(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test manual failure count reset functionality."""
         # Create trigger
@@ -333,7 +311,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
-            created_by="reset_test"
+            created_by="reset_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -364,11 +342,7 @@ class TestTriggerSafetyIntegration:
     # Recovery and Re-enabling Tests
 
     async def test_auto_disabled_trigger_manual_recovery(
-        self,
-        trigger_service,
-        mock_task_service,
-        mock_event_broker,
-        sample_agent_id
+        self, trigger_service, mock_task_service, mock_event_broker, sample_agent_id
     ):
         """Test manual recovery of auto-disabled trigger."""
         # Create trigger with low threshold
@@ -378,7 +352,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=2,  # Low threshold
-            created_by="recovery_test"
+            created_by="recovery_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -420,10 +394,7 @@ class TestTriggerSafetyIntegration:
         assert result.status == ExecutionStatus.SUCCESS
 
     async def test_webhook_trigger_safety_mechanisms(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test safety mechanisms for webhook triggers."""
         # Create webhook trigger
@@ -433,7 +404,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.WEBHOOK,
             webhook_type=WebhookType.GENERIC,
             failure_threshold=3,
-            created_by="webhook_safety_test"
+            created_by="webhook_safety_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -451,8 +422,8 @@ class TestTriggerSafetyIntegration:
                 "request": {
                     "method": "POST",
                     "body": {"attempt": i + 1},
-                    "headers": {"Content-Type": "application/json"}
-                }
+                    "headers": {"Content-Type": "application/json"},
+                },
             }
             result = await trigger_service.execute_trigger(trigger_id, execution_data)
             assert result.status == ExecutionStatus.FAILED
@@ -467,7 +438,7 @@ class TestTriggerSafetyIntegration:
         execution_data = {
             "execution_time": datetime.utcnow().isoformat(),
             "source": "webhook",
-            "request": {"method": "POST", "body": {"test": "disabled"}}
+            "request": {"method": "POST", "body": {"test": "disabled"}},
         }
 
         # Execution should still be attempted but may fail due to disabled state
@@ -477,10 +448,7 @@ class TestTriggerSafetyIntegration:
     # Edge Cases and Error Handling
 
     async def test_safety_mechanisms_with_concurrent_executions(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test safety mechanisms under concurrent execution load."""
         # Create trigger
@@ -490,7 +458,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
-            created_by="concurrent_safety_test"
+            created_by="concurrent_safety_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -533,10 +501,7 @@ class TestTriggerSafetyIntegration:
         assert result is False
 
     async def test_custom_failure_thresholds(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test triggers with custom failure thresholds."""
         # Create triggers with different thresholds
@@ -550,7 +515,7 @@ class TestTriggerSafetyIntegration:
                 trigger_type=TriggerType.CRON,
                 cron_expression="0 9 * * *",
                 failure_threshold=threshold,
-                created_by="custom_threshold_test"
+                created_by="custom_threshold_test",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append((trigger, threshold))
@@ -570,11 +535,7 @@ class TestTriggerSafetyIntegration:
             assert updated_trigger.consecutive_failures == threshold
 
     async def test_event_publishing_failure_handling(
-        self,
-        trigger_service,
-        mock_task_service,
-        mock_event_broker,
-        sample_agent_id
+        self, trigger_service, mock_task_service, mock_event_broker, sample_agent_id
     ):
         """Test that event publishing failures don't break safety mechanisms."""
         # Create trigger
@@ -584,7 +545,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=2,
-            created_by="event_failure_test"
+            created_by="event_failure_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)

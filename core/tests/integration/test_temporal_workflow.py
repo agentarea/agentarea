@@ -14,6 +14,7 @@ from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def test_temporal_workflow():
     """Test that we can submit a task and it gets processed by Temporal."""
 
@@ -26,7 +27,7 @@ async def test_temporal_workflow():
         agent_id=uuid4(),
         user_id="test_user",
         status="pending",
-        task_parameters={}
+        task_parameters={},
     )
 
     logger.info(f"Created test task: {task.id}")
@@ -50,6 +51,7 @@ async def test_temporal_workflow():
             logger.error("Failed to retrieve task")
 
         return submitted_task
+
 
 if __name__ == "__main__":
     asyncio.run(test_temporal_workflow())

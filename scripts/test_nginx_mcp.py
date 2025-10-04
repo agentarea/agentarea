@@ -22,7 +22,6 @@ Usage:
 
 import argparse
 import asyncio
-import json
 import logging
 import time
 from typing import Any, Dict, Optional
@@ -366,7 +365,7 @@ class NginxMCPTester:
                 logger.warning(f"⚠️  Error monitoring status: {e}")
                 await asyncio.sleep(3)
         
-        logger.error(f"❌ Timeout waiting for instance to be ready")
+        logger.error("❌ Timeout waiting for instance to be ready")
         return False
     
     async def test_http_endpoint(self, instance_id: str) -> bool:
@@ -394,8 +393,8 @@ class NginxMCPTester:
         else:
             # Try to construct from MCP proxy
             # This is based on the current MCP infrastructure setup
-            port = json_spec.get('port', 80)
-            endpoint_url = f"http://localhost:7999/mcp/nginx-mcp-instance"
+            json_spec.get('port', 80)
+            endpoint_url = "http://localhost:7999/mcp/nginx-mcp-instance"
         
         if not endpoint_url:
             logger.warning("⚠️  No endpoint URL found, skipping HTTP test")
@@ -408,7 +407,7 @@ class NginxMCPTester:
             try:
                 test_response = await self.client.get(endpoint_url, timeout=10)
                 if test_response.status_code == 200:
-                    logger.info(f"✅ HTTP endpoint accessible")
+                    logger.info("✅ HTTP endpoint accessible")
                     logger.info(f"   Response length: {len(test_response.text)} bytes")
                     return True
                 else:

@@ -55,7 +55,9 @@ class ModelSpecResponse(BaseModel):
             created_at=model_spec.created_at,
             updated_at=model_spec.updated_at,
             provider_name=model_spec.provider_spec.name if model_spec.provider_spec else None,
-            provider_key=model_spec.provider_spec.provider_key if model_spec.provider_spec else None,
+            provider_key=model_spec.provider_spec.provider_key
+            if model_spec.provider_spec
+            else None,
         )
 
 
@@ -110,8 +112,7 @@ async def get_model_spec_by_provider_and_name(
     model_spec = await model_spec_repo.get_by_provider_and_model(provider_spec_id, model_name)
     if not model_spec:
         raise HTTPException(
-            status_code=404,
-            detail=f"Model specification '{model_name}' not found for provider"
+            status_code=404, detail=f"Model specification '{model_name}' not found for provider"
         )
     return ModelSpecResponse.from_domain(model_spec)
 
@@ -129,7 +130,7 @@ async def create_model_spec(
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Model specification '{data.model_name}' already exists for this provider"
+            detail=f"Model specification '{data.model_name}' already exists for this provider",
         )
 
     model_spec = ModelSpec(
@@ -188,7 +189,7 @@ async def upsert_model_spec(
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Create or update a model specification by provider and model name.
-    
+
     This endpoint is useful for bulk operations and bootstrapping.
     """
     model_spec = ModelSpec(

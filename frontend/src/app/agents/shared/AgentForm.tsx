@@ -47,16 +47,6 @@ export default function AgentForm({
 }: AgentFormProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
-
-  // Show loading spinner if data is still loading
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
   const { register, control, setValue, handleSubmit, formState: { errors } } = useForm<AgentFormValues>({
     defaultValues: {
       name: initialData?.name || '',
@@ -86,6 +76,15 @@ export default function AgentForm({
       control,
       name: "events_config.events",
     });
+
+  // Show loading spinner if data is still loading (hooks are already initialized above)
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   // Handle form submission with react-hook-form validation
   const handleFormSubmit = (data: AgentFormValues) => {

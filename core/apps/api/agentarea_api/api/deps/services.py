@@ -31,6 +31,9 @@ from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Initialize module logger early to avoid NameError in import-time branches
+logger = logging.getLogger(__name__)
+
 # Trigger system imports (conditional to avoid import errors)
 try:
     from agentarea_triggers.infrastructure.repository import (
@@ -40,19 +43,30 @@ try:
     from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
     from agentarea_triggers.trigger_service import TriggerService
     from agentarea_triggers.webhook_manager import DefaultWebhookManager, WebhookExecutionCallback
+
     TRIGGERS_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"Triggers module not available: {e}")
     TRIGGERS_AVAILABLE = False
-    # Create dummy classes to prevent import errors
-    class TriggerService: pass
-    class TriggerRepository: pass
-    class TriggerExecutionRepository: pass
-    class DefaultWebhookManager: pass
-    class WebhookExecutionCallback: pass
-    class TemporalScheduleManager: pass
 
-logger = logging.getLogger(__name__)
+    # Create dummy classes to prevent import errors
+    class TriggerService:
+        pass
+
+    class TriggerRepository:
+        pass
+
+    class TriggerExecutionRepository:
+        pass
+
+    class DefaultWebhookManager:
+        pass
+
+    class WebhookExecutionCallback:
+        pass
+
+    class TemporalScheduleManager:
+        pass
 
 
 async def get_event_broker() -> EventBroker:
@@ -71,9 +85,6 @@ EventBrokerDep = Annotated[EventBroker, Depends(get_event_broker)]
 
 # Secret Manager dependencies
 BaseSecretManagerDep = Annotated[BaseSecretManager, Depends(get_real_secret_manager)]
-
-
-
 
 
 # Agent Service dependencies
@@ -206,7 +217,9 @@ MCPServerInstanceServiceDep = Annotated[
 
 
 # Additional backward compatibility functions
-async def get_model_spec_repository(db_session: DatabaseSessionDep, user_context: UserContextDep) -> ModelSpecRepository:
+async def get_model_spec_repository(
+    db_session: DatabaseSessionDep, user_context: UserContextDep
+) -> ModelSpecRepository:
     """Get a ModelSpecRepository instance for the current request."""
     return ModelSpecRepository(db_session, user_context)
 
@@ -231,13 +244,14 @@ class TriggerServiceWebhookCallback(WebhookExecutionCallback):
             # Return a mock failed execution
             from datetime import datetime
             from uuid import uuid4
+
             return {
                 "id": str(uuid4()),
                 "trigger_id": str(uuid4()),
                 "executed_at": datetime.utcnow().isoformat(),
                 "status": "failed",
                 "execution_time_ms": 0,
-                "error_message": "Triggers service not available"
+                "error_message": "Triggers service not available",
             }
 
         # Find trigger by webhook_id
@@ -256,7 +270,7 @@ class TriggerServiceWebhookCallback(WebhookExecutionCallback):
                 executed_at=datetime.utcnow(),
                 status=ExecutionStatus.FAILED,
                 execution_time_ms=0,
-                error_message=f"Webhook {webhook_id} not found"
+                error_message=f"Webhook {webhook_id} not found",
             )
 
         # Execute the trigger
@@ -282,12 +296,15 @@ async def get_trigger_service(
     if settings.triggers.ENABLE_LLM_CONDITIONS:
         try:
             from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluator
+
             model_instance_service = await get_model_instance_service(
-                repository_factory.session, repository_factory.user_context, secret_manager, event_broker
+                repository_factory.session,
+                repository_factory.user_context,
+                secret_manager,
+                event_broker,
             )
             llm_condition_evaluator = LLMConditionEvaluator(
-                model_instance_service=model_instance_service,
-                secret_manager=secret_manager
+                model_instance_service=model_instance_service, secret_manager=secret_manager
             )
         except Exception as e:
             logger.warning(f"LLM condition evaluator not available: {e}")
@@ -297,7 +314,7 @@ async def get_trigger_service(
     try:
         temporal_schedule_manager = TemporalScheduleManager(
             namespace=settings.triggers.TEMPORAL_SCHEDULE_NAMESPACE,
-            task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE
+            task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
         )
     except Exception as e:
         logger.warning(f"Temporal schedule manager not available: {e}")
@@ -307,7 +324,7 @@ async def get_trigger_service(
         event_broker=event_broker,
         task_service=task_service,
         llm_condition_evaluator=llm_condition_evaluator,
-        temporal_schedule_manager=temporal_schedule_manager
+        temporal_schedule_manager=temporal_schedule_manager,
     )
 
 
@@ -323,10 +340,7 @@ async def get_webhook_manager(
             async def handle_webhook_request(self, *args, **kwargs):
                 return {
                     "status_code": 503,
-                    "body": {
-                        "status": "error",
-                        "message": "Triggers service not available"
-                    }
+                    "body": {"status": "error", "message": "Triggers service not available"},
                 }
 
             async def is_healthy(self):
@@ -341,7 +355,7 @@ async def get_webhook_manager(
     return DefaultWebhookManager(
         execution_callback=execution_callback,
         event_broker=event_broker,
-        base_url=settings.triggers.WEBHOOK_BASE_URL
+        base_url=settings.triggers.WEBHOOK_BASE_URL,
     )
 
 
@@ -361,9 +375,9 @@ async def get_trigger_health_check(
                     "components": {
                         "triggers": {
                             "status": "unavailable",
-                            "message": "Triggers service not available"
+                            "message": "Triggers service not available",
                         }
-                    }
+                    },
                 }
 
         return MockHealthCheck()
@@ -380,7 +394,7 @@ async def get_trigger_health_check(
         settings = get_settings()
         temporal_schedule_manager = TemporalScheduleManager(
             namespace=settings.triggers.TEMPORAL_SCHEDULE_NAMESPACE,
-            task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE
+            task_queue=settings.triggers.TEMPORAL_SCHEDULE_TASK_QUEUE,
         )
     except Exception as e:
         logger.warning(f"Temporal schedule manager not available for health check: {e}")
@@ -389,7 +403,7 @@ async def get_trigger_health_check(
         trigger_repository=trigger_repository,
         trigger_execution_repository=trigger_execution_repository,
         temporal_schedule_manager=temporal_schedule_manager,
-        webhook_manager=webhook_manager
+        webhook_manager=webhook_manager,
     )
 
 
@@ -399,6 +413,7 @@ if TRIGGERS_AVAILABLE:
     WebhookManagerDep = Annotated[DefaultWebhookManager, Depends(get_webhook_manager)]
 
     from agentarea_triggers.health_checks import TriggerSystemHealthCheck
+
     TriggerHealthCheckDep = Annotated[TriggerSystemHealthCheck, Depends(get_trigger_health_check)]
 else:
     # Create dummy type hints when triggers are not available

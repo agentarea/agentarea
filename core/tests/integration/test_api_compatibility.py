@@ -43,14 +43,16 @@ class APICompatibilityTester:
         """Async context manager exit."""
         await self.client.aclose()
 
-    def log_test_result(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
+    def log_test_result(
+        self, test_name: str, success: bool, details: str = "", response_data: Any = None
+    ):
         """Log a test result."""
         result = {
             "test_name": test_name,
             "success": success,
             "details": details,
             "timestamp": datetime.now().isoformat(),
-            "response_data": response_data
+            "response_data": response_data,
         }
         self.test_results.append(result)
 
@@ -69,7 +71,7 @@ class APICompatibilityTester:
                 "Health Check",
                 success,
                 f"Status: {response.status_code}",
-                response.json() if success else response.text
+                response.json() if success else response.text,
             )
             return success
         except Exception as e:
@@ -88,14 +90,11 @@ class APICompatibilityTester:
                     "Get All Tasks",
                     True,
                     f"Retrieved {len(tasks)} tasks",
-                    {"task_count": len(tasks), "sample": tasks[:2] if tasks else []}
+                    {"task_count": len(tasks), "sample": tasks[:2] if tasks else []},
                 )
             else:
                 self.log_test_result(
-                    "Get All Tasks",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "Get All Tasks", False, f"Status: {response.status_code}", response.text
                 )
             return success
         except Exception as e:
@@ -114,15 +113,12 @@ class APICompatibilityTester:
                     "Get Agents",
                     True,
                     f"Retrieved {len(agents)} agents",
-                    {"agent_count": len(agents)}
+                    {"agent_count": len(agents)},
                 )
                 return agents
             else:
                 self.log_test_result(
-                    "Get Agents",
-                    False,
-                    f"Status: {response.status_code}",
-                    response.text
+                    "Get Agents", False, f"Status: {response.status_code}", response.text
                 )
                 return []
         except Exception as e:
@@ -136,13 +132,10 @@ class APICompatibilityTester:
                 "description": "API compatibility test task",
                 "parameters": {"test": True, "timestamp": datetime.now().isoformat()},
                 "user_id": "api_test_user",
-                "enable_agent_communication": True
+                "enable_agent_communication": True,
             }
 
-            response = await self.client.post(
-                f"/api/v1/agents/{agent_id}/tasks/",
-                json=task_data
-            )
+            response = await self.client.post(f"/api/v1/agents/{agent_id}/tasks/", json=task_data)
 
             success = response.status_code == 200
 
@@ -152,7 +145,7 @@ class APICompatibilityTester:
                     f"Create Task for Agent {agent_id}",
                     True,
                     f"Created task {task.get('id')} with status {task.get('status')}",
-                    {"task_id": task.get("id"), "status": task.get("status")}
+                    {"task_id": task.get("id"), "status": task.get("status")},
                 )
                 return task
             else:
@@ -160,7 +153,7 @@ class APICompatibilityTester:
                     f"Create Task for Agent {agent_id}",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
                 return None
         except Exception as e:
@@ -179,14 +172,14 @@ class APICompatibilityTester:
                     f"Get Tasks for Agent {agent_id}",
                     True,
                     f"Retrieved {len(tasks)} tasks",
-                    {"task_count": len(tasks)}
+                    {"task_count": len(tasks)},
                 )
             else:
                 self.log_test_result(
                     f"Get Tasks for Agent {agent_id}",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
             return success
         except Exception as e:
@@ -205,14 +198,14 @@ class APICompatibilityTester:
                     f"Get Task Status {task_id}",
                     True,
                     f"Status: {status_data.get('status')}",
-                    status_data
+                    status_data,
                 )
             else:
                 self.log_test_result(
                     f"Get Task Status {task_id}",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
             return success
         except Exception as e:
@@ -231,21 +224,21 @@ class APICompatibilityTester:
                     f"Get Specific Task {task_id}",
                     True,
                     f"Retrieved task with status {task_data.get('status')}",
-                    task_data
+                    task_data,
                 )
             elif response.status_code == 404:
                 self.log_test_result(
                     f"Get Specific Task {task_id}",
                     True,
                     "Task not found (expected for some test cases)",
-                    {"status": "not_found"}
+                    {"status": "not_found"},
                 )
             else:
                 self.log_test_result(
                     f"Get Specific Task {task_id}",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
             return success
         except Exception as e:
@@ -264,14 +257,17 @@ class APICompatibilityTester:
                     f"A2A Well-Known {agent_id}",
                     True,
                     f"Retrieved agent card for {agent_card.get('name')}",
-                    {"name": agent_card.get("name"), "capabilities": agent_card.get("capabilities")}
+                    {
+                        "name": agent_card.get("name"),
+                        "capabilities": agent_card.get("capabilities"),
+                    },
                 )
             else:
                 self.log_test_result(
                     f"A2A Well-Known {agent_id}",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
             return success
         except Exception as e:
@@ -286,17 +282,13 @@ class APICompatibilityTester:
                 "method": "tasks/send",
                 "params": {
                     "id": str(uuid4()),
-                    "message": {
-                        "role": "user",
-                        "parts": [{"text": "Test A2A task submission"}]
-                    }
+                    "message": {"role": "user", "parts": [{"text": "Test A2A task submission"}]},
                 },
-                "id": str(uuid4())
+                "id": str(uuid4()),
             }
 
             response = await self.client.post(
-                f"/api/v1/agents/{agent_id}/a2a/rpc",
-                json=rpc_request
+                f"/api/v1/agents/{agent_id}/a2a/rpc", json=rpc_request
             )
 
             success = response.status_code == 200
@@ -307,14 +299,14 @@ class APICompatibilityTester:
                     f"A2A RPC Task Send {agent_id}",
                     True,
                     f"RPC response: {rpc_response.get('result', {}).get('status')}",
-                    rpc_response
+                    rpc_response,
                 )
             else:
                 self.log_test_result(
                     f"A2A RPC Task Send {agent_id}",
                     False,
                     f"Status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
             return success
         except Exception as e:
@@ -327,14 +319,17 @@ class APICompatibilityTester:
             # This test checks if the API can start and handle requests
             # which indicates that dependency injection is working
             response = await self.client.get("/api/v1/tasks/")
-            success = response.status_code in [200, 500]  # 500 might indicate DB issues, not DI issues
+            success = response.status_code in [
+                200,
+                500,
+            ]  # 500 might indicate DB issues, not DI issues
 
             if response.status_code == 200:
                 self.log_test_result(
                     "Dependency Injection",
                     True,
                     "Services are properly injected and functional",
-                    {"status": "working"}
+                    {"status": "working"},
                 )
             elif response.status_code == 500:
                 # Check if it's a dependency injection issue or something else
@@ -344,7 +339,7 @@ class APICompatibilityTester:
                         "Dependency Injection",
                         False,
                         "Dependency injection failure detected",
-                        error_text
+                        error_text,
                     )
                     success = False
                 else:
@@ -352,14 +347,14 @@ class APICompatibilityTester:
                         "Dependency Injection",
                         True,
                         "DI working, but other service issues present",
-                        {"status": "di_ok_service_issues"}
+                        {"status": "di_ok_service_issues"},
                     )
             else:
                 self.log_test_result(
                     "Dependency Injection",
                     False,
                     f"Unexpected status: {response.status_code}",
-                    response.text
+                    response.text,
                 )
 
             return success
@@ -418,7 +413,7 @@ class APICompatibilityTester:
             "passed_tests": passed_tests,
             "failed_tests": failed_tests,
             "success_rate": (passed_tests / total_tests * 100) if total_tests > 0 else 0,
-            "test_results": self.test_results
+            "test_results": self.test_results,
         }
 
         logger.info("=" * 60)
@@ -444,12 +439,9 @@ async def main():
     parser.add_argument(
         "--base-url",
         default="http://localhost:8000",
-        help="Base URL for the API (default: http://localhost:8000)"
+        help="Base URL for the API (default: http://localhost:8000)",
     )
-    parser.add_argument(
-        "--output",
-        help="Output file for test results (JSON format)"
-    )
+    parser.add_argument("--output", help="Output file for test results (JSON format)")
 
     args = parser.parse_args()
 

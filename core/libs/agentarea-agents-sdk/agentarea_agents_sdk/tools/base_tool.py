@@ -6,7 +6,7 @@ from typing import Any
 
 class BaseTool(ABC):
     """Base class for all tools in the agentic system.
-    
+
     This provides a unified interface for both built-in tools (like completion)
     and external tools (like MCP tools), following patterns from frameworks
     like LangChain, AutoGen, and CrewAI.
@@ -32,10 +32,10 @@ class BaseTool(ABC):
     @abstractmethod
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Execute the tool with given arguments.
-        
+
         Args:
             **kwargs: Tool-specific arguments
-            
+
         Returns:
             Dict containing execution results with standard format:
             {
@@ -49,17 +49,13 @@ class BaseTool(ABC):
 
     def get_openai_function_definition(self) -> dict[str, Any]:
         """Get OpenAI-compatible function definition.
-        
+
         This is a convenience method that wraps get_schema() in the
         OpenAI function calling format.
         """
         return {
             "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                **self.get_schema()
-            }
+            "function": {"name": self.name, "description": self.description, **self.get_schema()},
         }
 
 

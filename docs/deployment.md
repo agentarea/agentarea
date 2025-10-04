@@ -873,3 +873,21 @@ jobs:
 <Note>
 For production deployments, always follow security best practices, implement proper monitoring, and have a disaster recovery plan in place. Consider consulting with our enterprise team for large-scale deployments.
 </Note>
+## CI/CD container publishing
+
+Our GitHub Actions build and push all Docker images in the monorepo.
+
+- On pushes to `main`, all images are published to Docker Hub with tags:
+  - `dev`
+  - `commit-<short-sha>`
+- Release workflow (`Release Images`) builds all images and tags them with:
+  - the provided release version (for example, `v1.2.3`)
+  - `latest`
+- Helm charts in `charts/*/Chart.yaml` are automatically bumped to the release version via the release workflow and a PR is opened.
+
+Images are published under `agentarea/agentarea-<component>` on Docker Hub for components:
+`agentarea-api`, `agentarea-worker`, `agentarea-frontend`, `agentarea-bootstrap`, `agentarea-mcp-manager`.
+
+Authentication for publishing uses repository secrets:
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_PASSWORD`

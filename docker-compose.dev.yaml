@@ -366,6 +366,10 @@ services:
     environment:
       DSN: postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: debug
+      # SMTP Configuration - Override courier settings via environment variables
+      COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}"
+      COURIER_SMTP_FROM_ADDRESS: ${SMTP_FROM_EMAIL}
+      COURIER_SMTP_FROM_NAME: ${SMTP_FROM_NAME}
     command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
     volumes:
       - ./frontend/kratos:/etc/config/kratos

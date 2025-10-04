@@ -8,15 +8,15 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/providers"
-	"github.com/go-redis/redis/v8"
+	redis "github.com/go-redis/redis/v8"
 )
 
 // MCPServerInstanceCreated represents the event when an MCP instance is created
 type MCPServerInstanceCreated struct {
-	InstanceID   string                 `json:"instance_id"`
-	Name         string                 `json:"name"`
-	ServerSpecID string                 `json:"server_spec_id,omitempty"`
-	JSONSpec     map[string]interface{} `json:"json_spec"`
+	InstanceID   string         `json:"instance_id"`
+	Name         string         `json:"name"`
+	ServerSpecID string         `json:"server_spec_id,omitempty"`
+	JSONSpec     map[string]any `json:"json_spec"`
 }
 
 // MCPServerInstanceDeleted represents the event when an MCP instance is deleted
@@ -35,9 +35,11 @@ type EventSubscriber struct {
 // NewEventSubscriber creates a new event subscriber
 func NewEventSubscriber(redisURL string, providerManager *providers.ProviderManager, logger *slog.Logger) *EventSubscriber {
 	// Parse Redis URL to extract host:port
-	addr := redisURL
-	if strings.HasPrefix(redisURL, "redis://") {
-		addr = strings.TrimPrefix(redisURL, "redis://")
+	var addr string
+	if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
+		addr = cutAddr
+	} else {
+		addr = redisURL
 	}
 
 	rdb := redis.NewClient(&redis.Options{
@@ -102,16 +104,16 @@ func (s *EventSubscriber) handleMessage(ctx context.Context, msg *redis.Message)
 
 // EventMessage represents the wrapper structure from FastStream Redis
 type EventMessage struct {
-	Data    string                 `json:"data"`
-	Headers map[string]interface{} `json:"headers"`
+	Data    string         `json:"data"`
+	Headers map[string]any `json:"headers"`
 }
 
 // EventData represents the inner event data structure
 type EventData struct {
-	EventID   string                 `json:"event_id"`
-	Timestamp string                 `json:"timestamp"`
-	EventType string                 `json:"event_type"`
-	Data      map[string]interface{} `json:"data"`
+	EventID   string         `json:"event_id"`
+	Timestamp string         `json:"timestamp"`
+	EventType string         `json:"event_type"`
+	Data      map[string]any `json:"data"`
 }
 
 // handleInstanceCreated processes MCP instance creation events
@@ -152,9 +154,9 @@ func (s *EventSubscriber) handleInstanceCreated(ctx context.Context, payload str
 	serverSpecID, serverSpecOK := eventData.Data["server_spec_id"].(string)
 	jsonSpecInterface, jsonSpecOK := eventData.Data["json_spec"]
 
-	var jsonSpec map[string]interface{}
+	var jsonSpec map[string]any
 	if jsonSpecInterface != nil {
-		jsonSpec, _ = jsonSpecInterface.(map[string]interface{})
+		jsonSpec, _ = jsonSpecInterface.(map[string]any)
 	}
 
 	s.logger.Info("Extracted event data",
@@ -236,7 +238,7 @@ func (s *EventSubscriber) handleInstanceDeleted(ctx context.Context, payload str
 
 	// Try Docker provider first
 	dockerProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
-		JSONSpec: map[string]interface{}{"type": "docker"},
+		JSONSpec: map[string]any{"type": "docker"},
 	})
 	if err := dockerProvider.DeleteInstance(ctx, instanceID, name); err != nil {
 		s.logger.Debug("Docker provider deletion failed (may not be docker type)",
@@ -246,7 +248,7 @@ func (s *EventSubscriber) handleInstanceDeleted(ctx context.Context, payload str
 
 	// Try URL provider
 	urlProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
-		JSONSpec: map[string]interface{}{"type": "url"},
+		JSONSpec: map[string]any{"type": "url"},
 	})
 	if err := urlProvider.DeleteInstance(ctx, instanceID, name); err != nil {
 		s.logger.Debug("URL provider deletion failed (may not be URL type)",
@@ -264,7 +266,7 @@ func (s *EventSubscriber) Close() error {
 }
 
 // Helper function to get map keys for debugging
-func getMapKeys(m map[string]interface{}) []string {
+func getMapKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

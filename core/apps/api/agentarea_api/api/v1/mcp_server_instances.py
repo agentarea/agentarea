@@ -99,9 +99,9 @@ async def check_mcp_server_instance_configuration(
         # Format the request for the golang manager
         validation_request = {
             "instance_id": "validation-check",  # Temporary ID for validation
-            "name": "validation-test",          # Temporary name for validation
+            "name": "validation-test",  # Temporary name for validation
             "json_spec": json_spec,
-            "dry_run": True
+            "dry_run": True,
         }
 
         # Validate the configuration through the golang manager
@@ -109,30 +109,28 @@ async def check_mcp_server_instance_configuration(
             response = await client.post(
                 f"{settings.mcp.MCP_MANAGER_URL}/containers/validate",
                 json=validation_request,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
             )
 
             if response.status_code == 200:
                 return {
                     "valid": True,
                     "message": "Configuration is valid",
-                    "details": response.json()
+                    "details": response.json(),
                 }
             else:
                 return {
                     "valid": False,
                     "message": f"Configuration validation failed: {response.text}",
-                    "status_code": response.status_code
+                    "status_code": response.status_code,
                 }
     except httpx.RequestError as e:
         raise HTTPException(
-            status_code=503,
-            detail=f"Unable to connect to container manager for validation: {e!s}"
+            status_code=503, detail=f"Unable to connect to container manager for validation: {e!s}"
         ) from e
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to validate configuration: {e!s}"
+            status_code=500, detail=f"Failed to validate configuration: {e!s}"
         ) from e
 
 
@@ -162,7 +160,9 @@ async def get_instance_environment(
 
 @router.get("/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
-    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's instances only"),
+    created_by: str | None = Query(
+        None, description="Filter by creator: 'me' for current user's instances only"
+    ),
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -180,7 +180,9 @@ async def list_mcp_server_instances(
             response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
             if response.status_code == 200:
                 health_data = response.json()
-                health_lookup = {check["service_name"]: check for check in health_data.get("health_checks", [])}
+                health_lookup = {
+                    check["service_name"]: check for check in health_data.get("health_checks", [])
+                }
             else:
                 health_lookup = {}
     except Exception as e:
@@ -228,14 +230,19 @@ async def get_mcp_server_instance(
             response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
             if response.status_code == 200:
                 health_data = response.json()
-                health_lookup = {check["service_name"]: check for check in health_data.get("health_checks", [])}
+                health_lookup = {
+                    check["service_name"]: check for check in health_data.get("health_checks", [])
+                }
 
                 # Override status with real-time data if available
                 if instance.name in health_lookup:
                     health_check = health_lookup[instance.name]
                     if health_check["container_status"] == "running" and health_check["healthy"]:
                         response_instance.status = "running"
-                    elif health_check["container_status"] == "running" and not health_check["healthy"]:
+                    elif (
+                        health_check["container_status"] == "running"
+                        and not health_check["healthy"]
+                    ):
                         response_instance.status = "unhealthy"
                     elif health_check["container_status"] == "stopped":
                         response_instance.status = "stopped"
@@ -308,6 +315,7 @@ async def stop_mcp_server_instance(
 # REMOVED: Insecure endpoint that exposed secrets via HTTP
 # Secrets are now resolved directly in the Go service using Infisical SDK
 
+
 @router.get("/health/containers")
 async def get_containers_health():
     """Get health status of all MCP containers by proxying to the golang manager."""
@@ -320,21 +328,17 @@ async def get_containers_health():
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"Failed to get container health: {response.text}"
+                    detail=f"Failed to get container health: {response.text}",
                 )
 
             # No URL transformation needed - Go manager returns correct external URLs
             return response.json()
     except httpx.RequestError as e:
         raise HTTPException(
-            status_code=503,
-            detail=f"Unable to connect to container manager: {e!s}"
+            status_code=503, detail=f"Unable to connect to container manager: {e!s}"
         ) from e
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get container health: {e!s}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to get container health: {e!s}") from e
 
 
 @router.get("/{instance_id}/tools", response_model=list[dict[str, Any]])
@@ -358,9 +362,6 @@ async def discover_instance_tools(
     """Trigger tool discovery for a specific MCP server instance."""
     success = await service.discover_and_store_tools(instance_id)
     if not success:
-        raise HTTPException(
-            status_code=400,
-            detail="Failed to discover tools for the instance"
-        )
+        raise HTTPException(status_code=400, detail="Failed to discover tools for the instance")
 
     return {"message": "Tool discovery completed successfully"}

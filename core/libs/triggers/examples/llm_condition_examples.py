@@ -13,9 +13,9 @@ RULE_CONDITION_EXAMPLE = {
     "type": "rule",
     "rules": [
         {"field": "request.method", "operator": "eq", "value": "POST"},
-        {"field": "request.body.type", "operator": "eq", "value": "file"}
+        {"field": "request.body.type", "operator": "eq", "value": "file"},
     ],
-    "logic": "AND"
+    "logic": "AND",
 }
 
 # LLM-based natural language condition
@@ -28,95 +28,82 @@ LLM_CONDITION_EXAMPLE = {
             "input": {
                 "request": {
                     "body": {"document": {"file_name": "report.pdf"}},
-                    "headers": {"content-type": "multipart/form-data"}
+                    "headers": {"content-type": "multipart/form-data"},
                 }
             },
-            "expected": True
+            "expected": True,
         },
         {
             "input": {
                 "request": {
                     "body": {"message": "Hello, how are you?"},
-                    "headers": {"content-type": "application/json"}
+                    "headers": {"content-type": "application/json"},
                 }
             },
-            "expected": False
-        }
-    ]
+            "expected": False,
+        },
+    ],
 }
 
 # Combined condition with both rule and LLM evaluation
 COMBINED_CONDITION_EXAMPLE = {
     "type": "combined",
     "conditions": [
-        {
-            "type": "rule",
-            "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}]
-        },
+        {"type": "rule", "rules": [{"field": "request.method", "operator": "eq", "value": "POST"}]},
         {
             "type": "llm",
-            "description": "when the message looks like a sales inquiry or support request"
-        }
+            "description": "when the message looks like a sales inquiry or support request",
+        },
     ],
-    "logic": "AND"
+    "logic": "AND",
 }
 
 # Example event data for testing
 FILE_UPLOAD_EVENT = {
     "request": {
         "method": "POST",
-        "headers": {
-            "content-type": "multipart/form-data",
-            "user-agent": "TelegramBot/1.0"
-        },
+        "headers": {"content-type": "multipart/form-data", "user-agent": "TelegramBot/1.0"},
         "body": {
             "document": {
                 "file_name": "quarterly_report.pdf",
                 "file_size": 1024000,
-                "mime_type": "application/pdf"
+                "mime_type": "application/pdf",
             },
             "message": "Here's the quarterly report for review",
-            "user": {
-                "id": "123456",
-                "name": "John Doe"
-            }
-        }
+            "user": {"id": "123456", "name": "John Doe"},
+        },
     },
-    "timestamp": "2024-01-15T10:30:00Z"
+    "timestamp": "2024-01-15T10:30:00Z",
 }
 
 TEXT_MESSAGE_EVENT = {
     "request": {
         "method": "POST",
-        "headers": {
-            "content-type": "application/json",
-            "user-agent": "SlackBot/1.0"
-        },
+        "headers": {"content-type": "application/json", "user-agent": "SlackBot/1.0"},
         "body": {
             "message": "Hello, I'm interested in your product pricing",
-            "user": {
-                "id": "789012",
-                "name": "Jane Smith"
-            },
-            "channel": "sales-inquiries"
-        }
+            "user": {"id": "789012", "name": "Jane Smith"},
+            "channel": "sales-inquiries",
+        },
     },
-    "timestamp": "2024-01-15T10:35:00Z"
+    "timestamp": "2024-01-15T10:35:00Z",
 }
 
 # Example task parameter extraction instructions
 PARAMETER_EXTRACTION_EXAMPLES = {
     "file_analysis": "analyze the uploaded file and respond with insights about its content",
     "sales_inquiry": "extract customer information and their specific interests or questions",
-    "support_request": "identify the issue type and extract relevant technical details"
+    "support_request": "identify the issue type and extract relevant technical details",
 }
+
 
 def print_example(title: str, data: dict):
     """Print a formatted example."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{title}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(json.dumps(data, indent=2))
+
 
 def main():
     """Print all examples."""
@@ -130,15 +117,15 @@ def main():
     print_example("4. File Upload Event Data", FILE_UPLOAD_EVENT)
     print_example("5. Text Message Event Data", TEXT_MESSAGE_EVENT)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Parameter Extraction Instructions")
-    print("="*60)
+    print("=" * 60)
     for key, instruction in PARAMETER_EXTRACTION_EXAMPLES.items():
         print(f"{key}: {instruction}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Usage Examples")
-    print("="*60)
+    print("=" * 60)
     print("""
 # Example 1: File Upload Trigger
 trigger = WebhookTrigger(
@@ -183,6 +170,7 @@ trigger = CronTrigger(
     }
 )
 """)
+
 
 if __name__ == "__main__":
     main()

@@ -19,6 +19,7 @@ EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
 
+
 # Event types
 class EventTypes:
     """Workflow event type constants."""
@@ -30,7 +31,6 @@ class EventTypes:
 
     ITERATION_STARTED: Final[str] = "IterationStarted"
     ITERATION_COMPLETED: Final[str] = "IterationCompleted"
-
 
     LLM_CALL_STARTED: Final[str] = "LLMCallStarted"
     LLM_CALL_CHUNK: Final[str] = "LLMCallChunk"
@@ -47,18 +47,22 @@ class EventTypes:
     HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
 
+
 # Activity names
 class Activities:
     """Activity function references to avoid hardcoded strings."""
 
     BUILD_AGENT_CONFIG: Final[str] = "build_agent_config_activity"
     DISCOVER_AVAILABLE_TOOLS: Final[str] = "discover_available_tools_activity"
-    EXECUTE_ADK_AGENT_WITH_TEMPORAL_BACKBONE: Final[str] = "execute_adk_agent_with_temporal_backbone"
+    EXECUTE_ADK_AGENT_WITH_TEMPORAL_BACKBONE: Final[str] = (
+        "execute_adk_agent_with_temporal_backbone"
+    )
     CALL_LLM: Final[str] = "call_llm_activity"
     EXECUTE_MCP_TOOL: Final[str] = "execute_mcp_tool_activity"
     CREATE_EXECUTION_PLAN: Final[str] = "create_execution_plan_activity"
     EVALUATE_GOAL_PROGRESS: Final[str] = "evaluate_goal_progress_activity"
     PUBLISH_WORKFLOW_EVENTS: Final[str] = "publish_workflow_events_activity"
+
 
 # Execution statuses
 class ExecutionStatus:

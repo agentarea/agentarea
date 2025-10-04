@@ -26,7 +26,7 @@ class Task(BaseModel):
     workspace_id: str | None = None
     metadata: dict[str, Any] = {}
 
-    @field_validator('metadata', mode='before')
+    @field_validator("metadata", mode="before")
     @classmethod
     def validate_task_metadata(cls, v):
         """Ensure metadata is always a dict, converting non-dict values to empty dict."""
@@ -37,7 +37,7 @@ class Task(BaseModel):
 
     def __setattr__(self, name, value):
         """Custom setter to validate metadata field when manually assigned."""
-        if name == 'metadata':
+        if name == "metadata":
             if value is not None and not isinstance(value, dict):
                 # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
                 value = {}
@@ -57,7 +57,7 @@ class TaskCreate(BaseModel):
     workspace_id: str | None = None
     metadata: dict[str, Any] = {}
 
-    @field_validator('metadata', mode='before')
+    @field_validator("metadata", mode="before")
     @classmethod
     def validate_task_create_metadata(cls, v):
         """Convert non-dict metadata to empty dict."""
@@ -67,7 +67,7 @@ class TaskCreate(BaseModel):
 
     def __setattr__(self, name, value):
         """Custom setter to validate metadata field when manually assigned."""
-        if name == 'metadata' and value is not None and not isinstance(value, dict):
+        if name == "metadata" and value is not None and not isinstance(value, dict):
             # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
             value = {}
         super().__setattr__(name, value)
@@ -75,13 +75,21 @@ class TaskCreate(BaseModel):
     @classmethod
     def model_validate(cls, obj, *, strict=None, from_attributes=None, context=None):
         """Override model validation to handle metadata conversion."""
-        if hasattr(obj, 'metadata') and obj.metadata is not None and not isinstance(obj.metadata, dict):
+        if (
+            hasattr(obj, "metadata")
+            and obj.metadata is not None
+            and not isinstance(obj.metadata, dict)
+        ):
             # Create a copy and fix the metadata
-            if hasattr(obj, '__dict__'):
+            if hasattr(obj, "__dict__"):
                 obj_dict = obj.__dict__.copy()
-                obj_dict['metadata'] = {}
-                return super().model_validate(obj_dict, strict=strict, from_attributes=from_attributes, context=context)
-        return super().model_validate(obj, strict=strict, from_attributes=from_attributes, context=context)
+                obj_dict["metadata"] = {}
+                return super().model_validate(
+                    obj_dict, strict=strict, from_attributes=from_attributes, context=context
+                )
+        return super().model_validate(
+            obj, strict=strict, from_attributes=from_attributes, context=context
+        )
 
 
 class TaskUpdate(BaseModel):
@@ -95,7 +103,7 @@ class TaskUpdate(BaseModel):
     execution_id: str | None = None
     metadata: dict[str, Any] | None = None
 
-    @field_validator('metadata', mode='before')
+    @field_validator("metadata", mode="before")
     @classmethod
     def validate_task_update_metadata(cls, v):
         """Ensure metadata is always a dict, converting non-dict values to empty dict."""
@@ -106,7 +114,7 @@ class TaskUpdate(BaseModel):
 
     def __setattr__(self, name, value):
         """Custom setter to validate metadata field when manually assigned."""
-        if name == 'metadata' and value is not None and not isinstance(value, dict):
+        if name == "metadata" and value is not None and not isinstance(value, dict):
             # Convert non-dict values (like SQLAlchemy MetaData) to empty dict
             value = {}
         super().__setattr__(name, value)
@@ -115,7 +123,7 @@ class TaskUpdate(BaseModel):
 # Enhanced SimpleTask model for A2A compatibility and task management
 class SimpleTask(BaseModel):
     """Enhanced task model for A2A protocol compatibility and task management.
-    
+
     This model extends the original SimpleTask with additional fields for
     enhanced task lifecycle management while maintaining backward compatibility.
     """
@@ -177,7 +185,7 @@ class SimpleTask(BaseModel):
 
     def update_status(self, new_status: str, **kwargs) -> None:
         """Update task status with automatic timestamp management.
-        
+
         Args:
             new_status: The new status to set
             **kwargs: Additional fields to update
@@ -221,7 +229,7 @@ class TaskEvent(BaseModel):
         event_type: str,
         data: dict[str, Any],
         workspace_id: str = "default",
-        created_by: str = "workflow"
+        created_by: str = "workflow",
     ) -> "TaskEvent":
         """Create a workflow event with proper formatting."""
         return cls(
@@ -229,10 +237,7 @@ class TaskEvent(BaseModel):
             event_type=event_type,
             timestamp=datetime.now(UTC),
             data=data,
-            metadata={
-                "source": "workflow",
-                "created_at": datetime.now(UTC).isoformat()
-            },
+            metadata={"source": "workflow", "created_at": datetime.now(UTC).isoformat()},
             workspace_id=workspace_id,
-            created_by=created_by
+            created_by=created_by,
         )

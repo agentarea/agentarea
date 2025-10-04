@@ -107,7 +107,7 @@ class CleanupValidator:
         
         instance = response.json()
         self.test_resources['instance_id'] = instance['id']
-        self.test_resources['container_name'] = f"mcp-cleanup-test-instance"
+        self.test_resources['container_name'] = "mcp-cleanup-test-instance"
         logger.info(f"✅ Created test instance: {instance['id']}")
         
         # Wait for instance to be ready

@@ -80,7 +80,9 @@ class TestAgentTaskControl:
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
-        mock_workflow_service.get_workflow_status.assert_called_once_with(f"agent-task-{test_task_id}")
+        mock_workflow_service.get_workflow_status.assert_called_once_with(
+            f"agent-task-{test_task_id}"
+        )
         mock_workflow_service.pause_task.assert_called_once_with(f"agent-task-{test_task_id}")
 
     @pytest.mark.asyncio
@@ -224,7 +226,9 @@ class TestAgentTaskControl:
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
-        mock_workflow_service.get_workflow_status.assert_called_once_with(f"agent-task-{test_task_id}")
+        mock_workflow_service.get_workflow_status.assert_called_once_with(
+            f"agent-task-{test_task_id}"
+        )
         mock_workflow_service.resume_task.assert_called_once_with(f"agent-task-{test_task_id}")
 
     @pytest.mark.asyncio
@@ -440,7 +444,9 @@ class TestAgentTaskEvents:
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
-        mock_workflow_service.get_workflow_status.assert_called_once_with(f"agent-task-{test_task_id}")
+        mock_workflow_service.get_workflow_status.assert_called_once_with(
+            f"agent-task-{test_task_id}"
+        )
 
     @pytest.mark.asyncio
     async def test_get_task_events_agent_not_found(
@@ -520,7 +526,9 @@ class TestAgentTaskEvents:
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
-        mock_workflow_service.get_workflow_status.assert_called_once_with(f"agent-task-{test_task_id}")
+        mock_workflow_service.get_workflow_status.assert_called_once_with(
+            f"agent-task-{test_task_id}"
+        )
 
     @pytest.mark.asyncio
     async def test_get_task_events_pagination(
@@ -637,12 +645,15 @@ class TestAgentTaskEvents:
 
         # Verify that a StreamingResponse is returned
         from fastapi.responses import StreamingResponse
+
         assert isinstance(result, StreamingResponse)
         assert result.media_type == "text/event-stream"
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
-        mock_workflow_service.get_workflow_status.assert_called_once_with(f"agent-task-{test_task_id}")
+        mock_workflow_service.get_workflow_status.assert_called_once_with(
+            f"agent-task-{test_task_id}"
+        )
 
     @pytest.mark.asyncio
     async def test_stream_task_events_exception_handling(

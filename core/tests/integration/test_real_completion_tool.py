@@ -21,7 +21,9 @@ class TestRealCompletionTool:
 
         # Verify the result structure matches what workflow expects
         assert result.get("success") is True, f"Expected success=True, got {result.get('success')}"
-        assert result.get("completed") is True, f"Expected completed=True, got {result.get('completed')}"
+        assert result.get("completed") is True, (
+            f"Expected completed=True, got {result.get('completed')}"
+        )
         assert result.get("result") == "Task completed successfully"
         assert result.get("tool_name") == "task_complete"
         assert result.get("error") is None

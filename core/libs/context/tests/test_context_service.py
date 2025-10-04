@@ -32,7 +32,7 @@ async def test_store_context(context_service, mock_context_provider):
         context_type=ContextType.FACTUAL,
         user_id=user_id,
         task_id=task_id,
-        agent_id=agent_id
+        agent_id=agent_id,
     )
 
     assert result == expected_context_id
@@ -42,7 +42,7 @@ async def test_store_context(context_service, mock_context_provider):
         user_id=user_id,
         task_id=task_id,
         agent_id=agent_id,
-        metadata={}
+        metadata={},
     )
 
 
@@ -57,24 +57,16 @@ async def test_get_context(context_service, mock_context_provider):
             content="User likes brief responses",
             context_type=ContextType.FACTUAL,
             user_id=user_id,
-            score=0.8
+            score=0.8,
         )
     ]
     mock_context_provider.get_context.return_value = expected_contexts
 
-    result = await context_service.get_context(
-        query=query,
-        user_id=user_id,
-        limit=5
-    )
+    result = await context_service.get_context(query=query, user_id=user_id, limit=5)
 
     assert result == expected_contexts
     mock_context_provider.get_context.assert_called_once_with(
-        query=query,
-        user_id=user_id,
-        task_id=None,
-        agent_id=None,
-        limit=5
+        query=query, user_id=user_id, task_id=None, agent_id=None, limit=5
     )
 
 
@@ -92,7 +84,7 @@ async def test_get_combined_context(context_service, mock_context_provider):
         context_type=ContextType.FACTUAL,
         user_id=user_id,
         task_id=task_id,
-        score=0.9
+        score=0.9,
     )
 
     user_context = Context(
@@ -100,7 +92,7 @@ async def test_get_combined_context(context_service, mock_context_provider):
         content="User prefers JSON examples",
         context_type=ContextType.FACTUAL,
         user_id=user_id,
-        score=0.7
+        score=0.7,
     )
 
     agent_context = Context(
@@ -108,7 +100,7 @@ async def test_get_combined_context(context_service, mock_context_provider):
         content="I'm good at API documentation",
         context_type=ContextType.SEMANTIC,
         agent_id=agent_id,
-        score=0.6
+        score=0.6,
     )
 
     # Configure mock to return different contexts based on call parameters
@@ -124,11 +116,7 @@ async def test_get_combined_context(context_service, mock_context_provider):
     mock_context_provider.get_context.side_effect = mock_get_context
 
     result = await context_service.get_combined_context(
-        user_id=user_id,
-        task_id=task_id,
-        agent_id=agent_id,
-        query=query,
-        limit=10
+        user_id=user_id, task_id=task_id, agent_id=agent_id, query=query, limit=10
     )
 
     # Should return all contexts, sorted by score (highest first)
@@ -151,7 +139,7 @@ async def test_get_combined_context_deduplication(context_service, mock_context_
         content="API rate limiting required",
         context_type=ContextType.FACTUAL,
         user_id=user_id,
-        score=0.8
+        score=0.8,
     )
 
     def mock_get_context(query, user_id=None, task_id=None, agent_id=None, limit=10):
@@ -161,11 +149,7 @@ async def test_get_combined_context_deduplication(context_service, mock_context_
     mock_context_provider.get_context.side_effect = mock_get_context
 
     result = await context_service.get_combined_context(
-        user_id=user_id,
-        task_id=task_id,
-        agent_id=agent_id,
-        query=query,
-        limit=10
+        user_id=user_id, task_id=task_id, agent_id=agent_id, query=query, limit=10
     )
 
     # Should return only one instance despite multiple calls

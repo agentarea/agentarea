@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from .decorator_tool import Toolset, tool_method
-from agentarea_agents_sdk.tasks.task_service import InMemoryTaskService
 from agentarea_agents_sdk.tasks import TaskStatus
+from agentarea_agents_sdk.tasks.task_service import InMemoryTaskService
+
+from .decorator_tool import Toolset, tool_method
 
 
 class TasksToolset(Toolset):
@@ -18,10 +19,21 @@ class TasksToolset(Toolset):
         self.service = service or InMemoryTaskService()
 
     @tool_method
-    async def create_task(self, title: str, description: str | None = "", parent_id: str | None = None, priority: int | None = 1) -> str:
+    async def create_task(
+        self,
+        title: str,
+        description: str | None = "",
+        parent_id: str | None = None,
+        priority: int | None = 1,
+    ) -> str:
         """Create a task and return JSON of the created task."""
         parent_uuid = UUID(parent_id) if parent_id else None
-        task = self.service.create(title=title, description=description or "", parent_id=parent_uuid, priority=priority or 1)
+        task = self.service.create(
+            title=title,
+            description=description or "",
+            parent_id=parent_uuid,
+            priority=priority or 1,
+        )
         return json.dumps(self.service.to_dict(task))
 
     @tool_method
@@ -41,9 +53,13 @@ class TasksToolset(Toolset):
         return json.dumps(self.service.to_dict(updated))
 
     @tool_method
-    async def add_subtask(self, parent_id: str, title: str, description: str | None = "", priority: int | None = 1) -> str:
+    async def add_subtask(
+        self, parent_id: str, title: str, description: str | None = "", priority: int | None = 1
+    ) -> str:
         """Add a subtask under a given parent task and return JSON of the created subtask."""
-        task = self.service.add_subtask(UUID(parent_id), title=title, description=description or "", priority=priority or 1)
+        task = self.service.add_subtask(
+            UUID(parent_id), title=title, description=description or "", priority=priority or 1
+        )
         if not task:
             return json.dumps({"error": "Parent task not found"})
         return json.dumps(self.service.to_dict(task))

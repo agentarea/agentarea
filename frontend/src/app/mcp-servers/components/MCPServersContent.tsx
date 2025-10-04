@@ -24,7 +24,12 @@ interface MCPSpec {
   tags: string[];
   status: string;
   is_public: boolean;
-  env_schema?: unknown[];
+  env_schema?: Array<{
+    name: string;
+    description: string;
+    required: boolean;
+    default?: string;
+  }>;
   cmd?: string[] | null;
   created_at: string;
   updated_at: string;

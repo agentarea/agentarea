@@ -25,8 +25,7 @@ from temporalio.worker import Worker
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -46,9 +45,7 @@ class ADKWorkflowWithToolsTest:
         secret_manager = get_real_secret_manager()
 
         return ActivityDependencies(
-            settings=settings,
-            event_broker=event_broker,
-            secret_manager=secret_manager
+            settings=settings, event_broker=event_broker, secret_manager=secret_manager
         )
 
     async def connect(self) -> None:
@@ -76,7 +73,7 @@ class ADKWorkflowWithToolsTest:
             workflows=[ADKAgentWorkflow],
             activities=activities,
             max_concurrent_workflow_tasks=1,
-            max_concurrent_activities=10
+            max_concurrent_activities=10,
         )
 
         logger.info(f"✅ Test worker created for task queue: {self.task_queue}")
@@ -96,7 +93,7 @@ class ADKWorkflowWithToolsTest:
             user_id="tools-test-user",
             task_query="Hello! Please use the test_function tool to greet me with the name 'Alice'. Also, can you calculate what 15 * 3 equals using the calculator tool?",
             timeout_seconds=180,
-            max_reasoning_iterations=5
+            max_reasoning_iterations=5,
         )
 
         try:
@@ -105,7 +102,7 @@ class ADKWorkflowWithToolsTest:
                 ADKAgentWorkflow.run,
                 test_request,
                 id=f"tools-test-{test_request.task_id}",
-                task_queue=self.task_queue
+                task_queue=self.task_queue,
             )
 
             logger.info(f"🚀 Started tools test workflow: {handle.id}")
@@ -126,7 +123,9 @@ class ADKWorkflowWithToolsTest:
             # Check if the response contains evidence of tool usage
             if result.final_response:
                 response_lower = result.final_response.lower()
-                if "alice" in response_lower and ("45" in result.final_response or "forty" in response_lower):
+                if "alice" in response_lower and (
+                    "45" in result.final_response or "forty" in response_lower
+                ):
                     logger.info("🎉 SUCCESS: Agent appears to have used both tools correctly!")
                 else:
                     logger.warning("⚠️ Agent response doesn't show clear evidence of tool usage")
@@ -152,7 +151,7 @@ class ADKWorkflowWithToolsTest:
             user_id="simple-test-user",
             task_query="Just say hello and tell me what you are. Don't use any tools.",
             timeout_seconds=120,
-            max_reasoning_iterations=2
+            max_reasoning_iterations=2,
         )
 
         try:
@@ -161,7 +160,7 @@ class ADKWorkflowWithToolsTest:
                 ADKAgentWorkflow.run,
                 test_request,
                 id=f"simple-test-{test_request.task_id}",
-                task_queue=self.task_queue
+                task_queue=self.task_queue,
             )
 
             logger.info(f"🚀 Started simple test workflow: {handle.id}")
@@ -195,7 +194,7 @@ class ADKWorkflowWithToolsTest:
             logger.info("🧪 Running simple LLM-only test first...")
             await self.test_simple_llm_only()
 
-            logger.info("\n" + "="*60)
+            logger.info("\n" + "=" * 60)
             logger.info("🧪 Running complex agent with tools test...")
             await self.test_complex_agent_with_tools()
 

@@ -34,14 +34,16 @@ class ServiceCompatibilityTester:
         """Initialize the tester."""
         self.test_results: list[dict[str, Any]] = []
 
-    def log_test_result(self, test_name: str, success: bool, details: str = "", error: Exception | None = None):
+    def log_test_result(
+        self, test_name: str, success: bool, details: str = "", error: Exception | None = None
+    ):
         """Log a test result."""
         result = {
             "test_name": test_name,
             "success": success,
             "details": details,
             "timestamp": datetime.now().isoformat(),
-            "error": str(error) if error else None
+            "error": str(error) if error else None,
         }
         self.test_results.append(result)
 
@@ -67,18 +69,13 @@ class ServiceCompatibilityTester:
             # Test importing dependency injection functions
 
             self.log_test_result(
-                "Import Refactored Services",
-                True,
-                "All refactored services imported successfully"
+                "Import Refactored Services", True, "All refactored services imported successfully"
             )
             return True
 
         except Exception as e:
             self.log_test_result(
-                "Import Refactored Services",
-                False,
-                "Failed to import refactored services",
-                e
+                "Import Refactored Services", False, "Failed to import refactored services", e
             )
             return False
 
@@ -93,11 +90,17 @@ class ServiceCompatibilityTester:
                 raise ValueError("TaskService does not inherit from BaseTaskService")
 
             # Check that TaskService has the required abstract method implemented
-            if not hasattr(TaskService, 'submit_task'):
+            if not hasattr(TaskService, "submit_task"):
                 raise ValueError("TaskService does not implement submit_task method")
 
             # Check that TaskService has inherited methods
-            expected_methods = ['create_task', 'get_task', 'update_task', 'list_tasks', 'delete_task']
+            expected_methods = [
+                "create_task",
+                "get_task",
+                "update_task",
+                "list_tasks",
+                "delete_task",
+            ]
             for method in expected_methods:
                 if not hasattr(TaskService, method):
                     raise ValueError(f"TaskService missing inherited method: {method}")
@@ -105,7 +108,7 @@ class ServiceCompatibilityTester:
             self.log_test_result(
                 "Base Service Inheritance",
                 True,
-                "TaskService properly inherits from BaseTaskService with all required methods"
+                "TaskService properly inherits from BaseTaskService with all required methods",
             )
             return True
 
@@ -114,7 +117,7 @@ class ServiceCompatibilityTester:
                 "Base Service Inheritance",
                 False,
                 "TaskService inheritance structure is incorrect",
-                e
+                e,
             )
             return False
 
@@ -138,19 +141,26 @@ class ServiceCompatibilityTester:
                 task_repository=mock_task_repository,
                 event_broker=mock_event_broker,
                 task_manager=mock_task_manager,
-                agent_repository=mock_agent_repository
+                agent_repository=mock_agent_repository,
             )
 
             # Verify the service has the expected attributes
-            assert hasattr(task_service, 'task_repository')
-            assert hasattr(task_service, 'event_broker')
-            assert hasattr(task_service, 'task_manager')
-            assert hasattr(task_service, 'agent_repository')
+            assert hasattr(task_service, "task_repository")
+            assert hasattr(task_service, "event_broker")
+            assert hasattr(task_service, "task_manager")
+            assert hasattr(task_service, "agent_repository")
 
             # Verify it has all the expected methods
             expected_methods = [
-                'create_task', 'get_task', 'update_task', 'list_tasks', 'delete_task',
-                'submit_task', 'cancel_task', 'get_user_tasks', 'get_agent_tasks'
+                "create_task",
+                "get_task",
+                "update_task",
+                "list_tasks",
+                "delete_task",
+                "submit_task",
+                "cancel_task",
+                "get_user_tasks",
+                "get_agent_tasks",
             ]
             for method in expected_methods:
                 if not hasattr(task_service, method):
@@ -159,16 +169,13 @@ class ServiceCompatibilityTester:
             self.log_test_result(
                 "Task Service Instantiation",
                 True,
-                "TaskService instantiated successfully with all dependencies"
+                "TaskService instantiated successfully with all dependencies",
             )
             return True
 
         except Exception as e:
             self.log_test_result(
-                "Task Service Instantiation",
-                False,
-                "Failed to instantiate TaskService",
-                e
+                "Task Service Instantiation", False, "Failed to instantiate TaskService", e
             )
             return False
 
@@ -196,7 +203,7 @@ class ServiceCompatibilityTester:
                 query="Test query",
                 user_id="test_user",
                 agent_id=uuid4(),
-                status="submitted"
+                status="submitted",
             )
 
             # Mock repository responses
@@ -221,7 +228,7 @@ class ServiceCompatibilityTester:
                 task_repository=mock_task_repository,
                 event_broker=mock_event_broker,
                 task_manager=mock_task_manager,
-                agent_repository=mock_agent_repository
+                agent_repository=mock_agent_repository,
             )
 
             # Test create_task
@@ -260,19 +267,12 @@ class ServiceCompatibilityTester:
             assert deleted is True
 
             self.log_test_result(
-                "Task Service CRUD Operations",
-                True,
-                "All CRUD operations work correctly"
+                "Task Service CRUD Operations", True, "All CRUD operations work correctly"
             )
             return True
 
         except Exception as e:
-            self.log_test_result(
-                "Task Service CRUD Operations",
-                False,
-                "CRUD operations failed",
-                e
-            )
+            self.log_test_result("Task Service CRUD Operations", False, "CRUD operations failed", e)
             return False
 
     def test_dependency_injection_functions(self) -> bool:
@@ -290,7 +290,7 @@ class ServiceCompatibilityTester:
                 get_task_service,
                 get_task_repository,
                 get_agent_repository,
-                get_task_manager
+                get_task_manager,
             ]
 
             for func in functions_to_test:
@@ -299,6 +299,7 @@ class ServiceCompatibilityTester:
 
             # Check function signatures (they should be async)
             import inspect
+
             for func in functions_to_test:
                 if not inspect.iscoroutinefunction(func):
                     raise ValueError(f"Function {func.__name__} is not async")
@@ -306,7 +307,7 @@ class ServiceCompatibilityTester:
             self.log_test_result(
                 "Dependency Injection Functions",
                 True,
-                "All dependency injection functions are properly defined"
+                "All dependency injection functions are properly defined",
             )
             return True
 
@@ -315,7 +316,7 @@ class ServiceCompatibilityTester:
                 "Dependency Injection Functions",
                 False,
                 "Dependency injection functions are not properly defined",
-                e
+                e,
             )
             return False
 
@@ -326,15 +327,15 @@ class ServiceCompatibilityTester:
 
             # Check for backward compatibility methods
             compatibility_methods = [
-                'create_task_from_params',
-                'get_user_tasks',
-                'get_agent_tasks',
-                'get_task_status',
-                'get_task_result',
-                'update_task_status',
-                'list_agent_tasks',
-                'execute_task',
-                'create_and_execute_task'
+                "create_task_from_params",
+                "get_user_tasks",
+                "get_agent_tasks",
+                "get_task_status",
+                "get_task_result",
+                "update_task_status",
+                "list_agent_tasks",
+                "execute_task",
+                "create_and_execute_task",
             ]
 
             for method in compatibility_methods:
@@ -349,7 +350,7 @@ class ServiceCompatibilityTester:
             self.log_test_result(
                 "Backward Compatibility Methods",
                 True,
-                "All backward compatibility methods are present"
+                "All backward compatibility methods are present",
             )
             return True
 
@@ -358,7 +359,7 @@ class ServiceCompatibilityTester:
                 "Backward Compatibility Methods",
                 False,
                 "Backward compatibility methods are missing",
-                e
+                e,
             )
             return False
 
@@ -373,16 +374,11 @@ class ServiceCompatibilityTester:
                 description="Test Description",
                 query="Test Query",
                 user_id="test_user",
-                agent_id=uuid4()
+                agent_id=uuid4(),
             )
 
             # Check for enhanced fields
-            enhanced_fields = [
-                'started_at',
-                'completed_at',
-                'execution_id',
-                'metadata'
-            ]
+            enhanced_fields = ["started_at", "completed_at", "execution_id", "metadata"]
 
             for field in enhanced_fields:
                 if not hasattr(task, field):
@@ -398,16 +394,14 @@ class ServiceCompatibilityTester:
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
                 execution_id="test-execution-id",
-                metadata={"test": "value"}
+                metadata={"test": "value"},
             )
 
             assert enhanced_task.execution_id == "test-execution-id"
             assert enhanced_task.metadata["test"] == "value"
 
             self.log_test_result(
-                "SimpleTask Model Enhancements",
-                True,
-                "SimpleTask model has all enhanced fields"
+                "SimpleTask Model Enhancements", True, "SimpleTask model has all enhanced fields"
             )
             return True
 
@@ -416,7 +410,7 @@ class ServiceCompatibilityTester:
                 "SimpleTask Model Enhancements",
                 False,
                 "SimpleTask model enhancements are missing",
-                e
+                e,
             )
             return False
 
@@ -427,10 +421,10 @@ class ServiceCompatibilityTester:
 
             # Check for enhanced methods
             enhanced_methods = [
-                'get_by_agent_id',
-                'get_by_user_id',
-                'get_by_status',
-                'update_status'
+                "get_by_agent_id",
+                "get_by_user_id",
+                "get_by_status",
+                "update_status",
             ]
 
             for method in enhanced_methods:
@@ -443,9 +437,7 @@ class ServiceCompatibilityTester:
                     raise ValueError(f"Method {method} is not callable")
 
             self.log_test_result(
-                "Repository Enhanced Methods",
-                True,
-                "TaskRepository has all enhanced methods"
+                "Repository Enhanced Methods", True, "TaskRepository has all enhanced methods"
             )
             return True
 
@@ -454,7 +446,7 @@ class ServiceCompatibilityTester:
                 "Repository Enhanced Methods",
                 False,
                 "TaskRepository enhanced methods are missing",
-                e
+                e,
             )
             return False
 
@@ -478,18 +470,13 @@ class ServiceCompatibilityTester:
             assert str(not_found_error) == "Test not found error"
 
             self.log_test_result(
-                "Error Handling Classes",
-                True,
-                "Custom error classes are properly defined"
+                "Error Handling Classes", True, "Custom error classes are properly defined"
             )
             return True
 
         except Exception as e:
             self.log_test_result(
-                "Error Handling Classes",
-                False,
-                "Custom error classes are not properly defined",
-                e
+                "Error Handling Classes", False, "Custom error classes are not properly defined", e
             )
             return False
 
@@ -535,7 +522,7 @@ class ServiceCompatibilityTester:
             "passed_tests": passed_tests,
             "failed_tests": failed_tests,
             "success_rate": (passed_tests / total_tests * 100) if total_tests > 0 else 0,
-            "test_results": self.test_results
+            "test_results": self.test_results,
         }
 
         logger.info("=" * 60)
@@ -559,10 +546,7 @@ async def main():
     import json
 
     parser = argparse.ArgumentParser(description="Service Compatibility Test Suite")
-    parser.add_argument(
-        "--output",
-        help="Output file for test results (JSON format)"
-    )
+    parser.add_argument("--output", help="Output file for test results (JSON format)")
 
     args = parser.parse_args()
 

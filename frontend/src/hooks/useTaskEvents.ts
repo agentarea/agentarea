@@ -113,7 +113,6 @@ export function useTaskEvents(
       console.log("Raw SSE event received:", sseEvent);
       
       // Handle different SSE event formats
-      let eventData: SSEMessage;
       let parsedData: any;
       
       // Parse the data based on its type
@@ -137,7 +136,7 @@ export function useTaskEvents(
       const originalData = parsedData.original_data || {};
       const baseData = parsedData.data || parsedData;
       
-      eventData = {
+      const eventData: SSEMessage = {
         event: sseEvent.type,
         data: {
           event_type: parsedData.original_event_type || parsedData.event_type || sseEvent.type as any,
@@ -187,60 +186,11 @@ export function useTaskEvents(
       const displayEvent = mapSSEToDisplayEvent(eventData);
       console.log("Display event:", displayEvent);
       
-      // Handle chunk events - aggregate them into a single message
-      if (displayEvent.type === 'LLMCallChunk' || displayEvent.type === 'llmcallchunk') {
-        const taskId = displayEvent.data?.task_id || eventData.data?.data?.task_id;
-        const chunk = displayEvent.data?.chunk;
-        const isChunkFinal = displayEvent.data?.is_final;
-        
-        if (taskId && chunk !== undefined) {
-          const chunkKey = `llm_response_${taskId}`;
-          
-          // Get or create the aggregated message
-          const existingMessage = chunkBufferRef.current.get(chunkKey) || {
-            id: `aggregated_llm_${taskId}`,
-            type: 'LLMCallStreaming',
-            timestamp: displayEvent.timestamp,
-            description: 'LLM Response (streaming)',
-            data: {
-              ...displayEvent.data,
-              content: '', // Start with empty content
-              is_streaming: !isChunkFinal,
-              chunks_received: 0
-            }
-          };
-          
-          // Append the chunk to the content
-          existingMessage.data.content = (existingMessage.data.content || '') + chunk;
-          existingMessage.data.chunks_received = (existingMessage.data.chunks_received || 0) + 1;
-          existingMessage.data.is_streaming = !isChunkFinal;
-          existingMessage.timestamp = displayEvent.timestamp; // Update timestamp to latest chunk
-          
-          // Update description to show streaming progress
-          existingMessage.description = isChunkFinal 
-            ? `LLM Response (${existingMessage.data.chunks_received} chunks, complete)`
-            : `LLM Response (${existingMessage.data.chunks_received} chunks, streaming...)`;
-          
-          // Store the updated message
-          chunkBufferRef.current.set(chunkKey, existingMessage);
-          
-          // Replace existing message or add new one
-          eventsRef.current = [
-            ...eventsRef.current.filter(e => e.id !== existingMessage.id),
-            existingMessage
-          ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-          
-          console.log("Aggregated chunk:", { chunkKey, chunk: chunk.substring(0, 50), isChunkFinal, totalContent: existingMessage.data.content.length });
-        } else {
-          console.warn("Chunk event missing required data:", { taskId, chunk });
-        }
-      } else {
-        // Regular event - add normally (avoid duplicates)
-        eventsRef.current = [
-          ...eventsRef.current.filter(e => e.id !== displayEvent.id),
-          displayEvent
-        ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-      }
+      // Regular event - add normally (avoid duplicates)
+      eventsRef.current = [
+        ...eventsRef.current.filter(e => e.id !== displayEvent.id),
+        displayEvent
+      ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
       setState(prev => ({
         ...prev,
@@ -297,7 +247,7 @@ export function useTaskEvents(
     if (agentId && taskId) {
       loadHistoricalEvents();
     }
-  }, [loadHistoricalEvents]);
+  }, [agentId, taskId, loadHistoricalEvents]);
 
   // Update connection state from SSE hook
   useEffect(() => {

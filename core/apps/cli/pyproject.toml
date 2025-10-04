@@ -1,17 +1,14 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
 name = "agentarea-cli"
 version = "0.1.0"
 description = "AgentArea Management CLI"
+license = {text = "EPL-2.0"}
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.0.0",
     "httpx>=0.24.0",
     "PyJWT>=2.8.0",
-    "agentarea-common",
+    # "agentarea-common",  # temporarily removed as unused
 ]
 
 [project.scripts]

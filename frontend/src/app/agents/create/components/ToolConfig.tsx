@@ -11,6 +11,10 @@ import { SelectableList } from "./SelectableList";
 import { useTranslations } from "next-intl";
 import ConfigSheet from "./ConfigSheet";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BuiltinToolIconGrid } from "./BuiltinToolIconGrid";
+import client from '@/lib/client';
 import { toast } from "sonner";
 import { createMCPServerInstance, checkMCPServerInstanceConfiguration, getMCPServerInstance, updateMCPServerInstance } from "@/lib/api";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
@@ -355,4 +359,4 @@ const ToolConfig = ({
   );
 };
 
-export default ToolConfig; 
+export default ToolConfig;

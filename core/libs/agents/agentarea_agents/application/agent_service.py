@@ -23,9 +23,9 @@ class AgentService(BaseCrudService[Agent]):
         description: str,
         instruction: str,
         model_id: str,
-        tools_config: dict = None,
-        events_config: dict = None,
-        planning: bool = None,
+        tools_config: dict | None = None,
+        events_config: dict | None = None,
+        planning: bool | None = None,
     ) -> Agent:
         agent = Agent(
             name=name,

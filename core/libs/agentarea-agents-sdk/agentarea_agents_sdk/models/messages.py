@@ -13,6 +13,7 @@ from typing import Any
 @dataclass
 class BaseMessage:
     """Base message class with common fields for all message types."""
+
     role: str
     content: str
     timestamp: str | None = None
@@ -22,6 +23,7 @@ class BaseMessage:
 @dataclass
 class UserMessage:
     """Message from user/human."""
+
     content: str
     timestamp: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -31,6 +33,7 @@ class UserMessage:
 @dataclass
 class SystemMessage:
     """System message with instructions or context."""
+
     content: str
     timestamp: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -40,6 +43,7 @@ class SystemMessage:
 @dataclass
 class AssistantMessage:
     """Message from AI assistant/agent."""
+
     content: str
     timestamp: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -50,6 +54,7 @@ class AssistantMessage:
 @dataclass
 class ToolMessage:
     """Message containing tool execution results."""
+
     content: str
     tool_call_id: str
     timestamp: str | None = None
@@ -67,6 +72,7 @@ class Message:
 
     This maintains the original interface while providing the new structure.
     """
+
     role: str
     content: str
     timestamp: str | None = None
@@ -74,8 +80,6 @@ class Message:
     tool_call_id: str | None = None
     name: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
-
-
 
 
 # Factory functions for easy message creation
@@ -89,19 +93,19 @@ def create_user_message(content: str, **kwargs) -> UserMessage:
     return UserMessage(content=content, **kwargs)
 
 
-def create_assistant_message(content: str, tool_calls: list[dict] | None = None, **kwargs) -> AssistantMessage:
+def create_assistant_message(
+    content: str, tool_calls: list[dict] | None = None, **kwargs
+) -> AssistantMessage:
     """Create an assistant message."""
     return AssistantMessage(content=content, tool_calls=tool_calls, **kwargs)
 
 
-def create_tool_message(content: str, tool_call_id: str, tool_name: str | None = None, success: bool = True, **kwargs) -> ToolMessage:
+def create_tool_message(
+    content: str, tool_call_id: str, tool_name: str | None = None, success: bool = True, **kwargs
+) -> ToolMessage:
     """Create a tool message."""
     return ToolMessage(
-        content=content,
-        tool_call_id=tool_call_id,
-        tool_name=tool_name,
-        success=success,
-        **kwargs
+        content=content, tool_call_id=tool_call_id, tool_name=tool_name, success=success, **kwargs
     )
 
 
@@ -116,22 +120,31 @@ class Messages:
     """
 
     @staticmethod
-    def SystemMessage(content: str, **kwargs) -> SystemMessage:
+    def SystemMessage(content: str, **kwargs) -> SystemMessage:  # noqa: N802
         """Create a system message."""
         return create_system_message(content, **kwargs)
 
     @staticmethod
-    def UserMessage(content: str, **kwargs) -> UserMessage:
+    def UserMessage(content: str, **kwargs) -> UserMessage:  # noqa: N802
         """Create a user message."""
         return create_user_message(content, **kwargs)
 
     @staticmethod
-    def AssistantMessage(content: str, tool_calls: list[dict] | None = None, **kwargs) -> AssistantMessage:
+    def AssistantMessage(  # noqa: N802
+        content: str, tool_calls: list[dict] | None = None, **kwargs
+    ) -> AssistantMessage:
         """Create an assistant message."""
         return create_assistant_message(content, tool_calls=tool_calls, **kwargs)
 
     @staticmethod
-    def ToolMessage(content: str, tool_call_id: str, tool_name: str | None = None, success: bool = True, **kwargs) -> ToolMessage:
+    def ToolMessage(  # noqa: N802
+        content: str,
+        tool_call_id: str,
+        tool_name: str | None = None,
+        success: bool = True,
+        **kwargs,
+    ) -> ToolMessage:
         """Create a tool message."""
-        return create_tool_message(content, tool_call_id, tool_name=tool_name, success=success, **kwargs)
-
+        return create_tool_message(
+            content, tool_call_id, tool_name=tool_name, success=success, **kwargs
+        )

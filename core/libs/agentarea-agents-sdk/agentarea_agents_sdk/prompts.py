@@ -1,7 +1,7 @@
 """Prompt templates for agent LLM interactions.
 
 This module contains all prompt templates used by agents to interact with LLMs.
-Following patterns from frameworks like AutoGen, CrewAI, and LangGraph, 
+Following patterns from frameworks like AutoGen, CrewAI, and LangGraph,
 prompts are treated as core agentic components.
 """
 
@@ -10,6 +10,7 @@ from typing import Any, Final, TypedDict
 
 class ToolInfo(TypedDict, total=False):
     """Type definition for tool information."""
+
     name: str
     description: str
     type: str
@@ -19,7 +20,6 @@ class ToolInfo(TypedDict, total=False):
 class MessageTemplates:
     """Prompt templates for agent-LLM interactions following framework best practices."""
 
-    # Main system prompt - follows AutoGen/LangChain patterns
     SYSTEM_PROMPT: Final[str] = """You are {agent_name}, an AI agent with the following role:
 
 {agent_instruction}
@@ -44,7 +44,9 @@ INSTRUCTIONS:
 Remember: You are {agent_name} - stay in character and leverage your specific capabilities."""
 
     # ReAct framework system prompt - enhanced reasoning pattern
-    REACT_SYSTEM_PROMPT: Final[str] = """You are {agent_name}, an AI agent that follows the ReAct (Reasoning + Acting) framework.
+    REACT_SYSTEM_PROMPT: Final[
+        str
+    ] = """You are {agent_name}, an AI agent that follows the ReAct (Reasoning + Acting) framework.
 
 {agent_instruction}
 
@@ -61,7 +63,7 @@ Success Criteria:
 You MUST follow this exact pattern for EVERY action you take:
 
 1. **Thought**: First, analyze the current situation and what needs to be done
-2. **Observation**: Note what information you have and what you're missing  
+2. **Observation**: Note what information you have and what you're missing
 3. **Action**: Decide on the next action (tool call or response)
 4. **Result**: After a tool call, observe and interpret the results
 
@@ -96,11 +98,15 @@ Remember: ALWAYS show your reasoning before taking actions. Users want to see yo
     ITERATION_STATUS: Final[str] = "Iteration {current_iteration}/{max_iterations}"
     BUDGET_STATUS: Final[str] = "Budget remaining: ${budget_remaining:.2f}"
 
-    BUDGET_WARNING: Final[str] = "Warning: Budget usage at {percentage:.1f}% (${used:.2f}/${total:.2f})"
+    BUDGET_WARNING: Final[str] = (
+        "Warning: Budget usage at {percentage:.1f}% (${used:.2f}/${total:.2f})"
+    )
     BUDGET_EXCEEDED: Final[str] = "Budget exceeded: ${used:.2f}/${total:.2f}. Stopping execution."
 
     TOOL_CALL_SUMMARY: Final[str] = "Called {tool_name} with result: {result}"
-    ITERATION_SUMMARY: Final[str] = "Iteration {iteration}: {tool_calls} tool calls, ${cost:.4f} spent"
+    ITERATION_SUMMARY: Final[str] = (
+        "Iteration {iteration}: {tool_calls} tool calls, ${cost:.4f} spent"
+    )
 
 
 class PromptBuilder:
@@ -113,10 +119,10 @@ class PromptBuilder:
         goal_description: str,
         success_criteria: list[str],
         available_tools: list[ToolInfo],
-        use_react_framework: bool = False
+        use_react_framework: bool = False,
     ) -> str:
         """Build system prompt with agent context and current task.
-        
+
         Args:
             agent_name: Name of the agent
             agent_instruction: Agent's role and capabilities
@@ -124,7 +130,7 @@ class PromptBuilder:
             success_criteria: List of success criteria
             available_tools: List of available tools
             use_react_framework: Whether to use ReAct framework prompting
-        
+
         Following best practices from AutoGen, LangChain, and ADK:
         - Agent identity and instruction come first (who are you?)
         - Current task is clearly separated (what are you doing?)
@@ -141,18 +147,23 @@ class PromptBuilder:
             else:
                 return tool.get("name", "Unknown"), tool.get("description", "No description")
 
-        tools_text = "\n".join(f"- {name}: {desc}" for name, desc in
-                               (get_tool_info(tool) for tool in available_tools))
+        tools_text = "\n".join(
+            f"- {name}: {desc}" for name, desc in (get_tool_info(tool) for tool in available_tools)
+        )
 
         # Choose template based on framework preference
-        template = MessageTemplates.REACT_SYSTEM_PROMPT if use_react_framework else MessageTemplates.SYSTEM_PROMPT
+        template = (
+            MessageTemplates.REACT_SYSTEM_PROMPT
+            if use_react_framework
+            else MessageTemplates.SYSTEM_PROMPT
+        )
 
         return template.format(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=criteria_text,
-            available_tools=tools_text
+            available_tools=tools_text,
         )
 
     @staticmethod
@@ -161,10 +172,10 @@ class PromptBuilder:
         agent_instruction: str,
         goal_description: str,
         success_criteria: list[str],
-        available_tools: list[ToolInfo]
+        available_tools: list[ToolInfo],
     ) -> str:
         """Build system prompt with ReAct framework instructions.
-        
+
         This is a convenience method that explicitly uses ReAct framework.
         """
         return PromptBuilder.build_system_prompt(
@@ -173,15 +184,14 @@ class PromptBuilder:
             goal_description=goal_description,
             success_criteria=success_criteria,
             available_tools=available_tools,
-            use_react_framework=True
+            use_react_framework=True,
         )
 
     @staticmethod
     def build_iteration_status(current_iteration: int, max_iterations: int) -> str:
         """Build iteration status message (separate from system prompt)."""
         return MessageTemplates.ITERATION_STATUS.format(
-            current_iteration=current_iteration,
-            max_iterations=max_iterations
+            current_iteration=current_iteration, max_iterations=max_iterations
         )
 
     @staticmethod
@@ -193,16 +203,11 @@ class PromptBuilder:
     def build_tool_call_summary(tool_name: str, result: Any) -> str:
         """Build tool call summary message."""
         result_str = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
-        return MessageTemplates.TOOL_CALL_SUMMARY.format(
-            tool_name=tool_name,
-            result=result_str
-        )
+        return MessageTemplates.TOOL_CALL_SUMMARY.format(tool_name=tool_name, result=result_str)
 
     @staticmethod
     def build_iteration_summary(iteration: int, tool_calls: int, cost: float) -> str:
         """Build iteration summary message."""
         return MessageTemplates.ITERATION_SUMMARY.format(
-            iteration=iteration,
-            tool_calls=tool_calls,
-            cost=cost
+            iteration=iteration, tool_calls=tool_calls, cost=cost
         )

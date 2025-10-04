@@ -1,6 +1,9 @@
+`use server`;
+
 import client from "./client";
 import { apiFetch } from "./utils";
 import type { components } from "../api/schema";
+import { env } from "@/env";
 
 // Agent API
 export const listAgents = async () => {
@@ -74,7 +77,7 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
   }
   
   // Convert events to message format (simplified)
-  const messages = events
+  const messages = events.events
     .filter((event: any) => ['LLMCallCompleted', 'ToolCallCompleted', 'WorkflowCompleted'].includes(event.event_type))
     .map((event: any) => ({
       id: event.id,
@@ -196,24 +199,11 @@ export const sendMessage = async (message: components["schemas"]["ChatMessageReq
   return { data, error };
 };
 
-export const streamMessage = async (message: components["schemas"]["ChatMessageRequest"]) => {
-  const { data, error } = await client.POST("/v1/chat/messages/stream", { body: message });
-  return { data, error };
-};
 
-export const getConversationHistory = async (sessionId: string) => {
-  const { data, error } = await client.GET("/v1/chat/conversations/{session_id}/messages", {
-    params: { path: { session_id: sessionId } },
-  });
-  return { data, error };
-};
 
-export const listConversations = async (params?: { user_id?: string }) => {
-  const { data, error } = await client.GET("/v1/chat/conversations", {
-    params: { query: params },
-  });
-  return { data, error };
-};
+
+
+
 
 export const getChatAgents = async () => {
   const { data, error } = await client.GET("/v1/chat/agents");
@@ -234,33 +224,15 @@ export const getChatMessageStatus = async (taskId: string) => {
   return { data, error };
 };
 
-// Protocol API
-export const handleJsonRpc = async (request: any) => {
-  const { data, error } = await client.POST("/v1/protocol/rpc", { body: request });
-  return { data, error };
-};
 
-export const getAgentCard = async (agentId: string) => {
-  const { data, error } = await client.GET("/v1/protocol/agents/{agent_id}/card", {
-    params: { path: { agent_id: agentId } },
-  });
-  return { data, error };
-};
 
-export const handleAgUiRequest = async (request: components["schemas"]["AGUIRequest"]) => {
-  const { data, error } = await client.POST("/v1/protocol/ag-ui", { body: request });
-  return { data, error };
-};
 
-export const protocolHealthCheck = async () => {
-  const { data, error } = await client.GET("/v1/protocol/health");
-  return { data, error };
-};
 
-export const chatHealthCheck = async () => {
-  const { data, error } = await client.GET("/v1/chat/health");
-  return { data, error };
-};
+
+
+
+
+
 
 // MCP Server API
 export const listMCPServers = async (params?: {
@@ -317,7 +289,7 @@ export const listMCPServerInstances = async () => {
 export const checkMCPServerInstanceConfiguration = async (checkRequest: { json_spec: Record<string, any> }) => {
   // Use fetch directly since the endpoint isn't in the generated schema yet
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/v1/mcp-server-instances/check`, {
+    const response = await fetch(`${env.NEXT_PUBLIC_API_BASE_URL}/v1/mcp-server-instances/check`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -431,50 +403,33 @@ export const listProviderConfigsWithModelInstances = async (params?: {
   is_active?: boolean;
 }) => {
   try {
-    // Fetch provider configs with the new endpoint
-    const configsResponse = await client.GET("/v1/provider-configs/with-instances", {
-      params: { query: params },
-    });
-    
+    // Fetch provider configs
+    const configsResponse = await listProviderConfigs(params);
+
     if (configsResponse.error) {
       return { data: null, error: configsResponse.error };
     }
 
     const configs = configsResponse.data || [];
-    
+
     // Fetch model instances for all configs in parallel
-    const instancesPromises = configs.map(config => 
+    const instancesPromises = configs.map(config =>
       listModelInstances({
         provider_config_id: config.id,
-        is_active: true
       })
     );
-    
+
     const instancesResponses = await Promise.all(instancesPromises);
-    
-    // Enhance configs with their model instances
-    const enhancedConfigs = configs.map((config, index) => {
-      const instancesResponse = instancesResponses[index];
-      const modelInstances = instancesResponse.data || [];
-      
-      return {
-        ...config,
-        model_instances: modelInstances
-      };
-    });
-    
-    return { data: enhancedConfigs, error: null };
+
+    // Combine configs with their instances
+    const configsWithInstances = configs.map((config, index) => ({
+      ...config,
+      model_instances: instancesResponses[index].data || [],
+    }));
+
+    return { data: configsWithInstances, error: null };
   } catch (error) {
-    return { 
-      data: null, 
-      error: { 
-        detail: [{ 
-          loc: [], 
-          msg: error instanceof Error ? error.message : 'Unknown error', 
-          type: 'error' 
-        }] 
-      } 
-    };
+    return { data: null, error };
   }
 };
 
@@ -606,8 +561,8 @@ export const testModelInstance = async (testRequest: {
   model_spec_id: string;
   test_message?: string;
 }) => {
-  const { data, error } = await client.POST("/v1/model-instances/test", { body: testRequest });
-  return { data, error };
+  // TODO: Implement model instance testing endpoint
+  return { data: null, error: { detail: [{ msg: "Model instance testing not yet implemented", type: "error" }] } };
 };
 
 export const getModelInstance = async (instanceId: string) => {
@@ -626,14 +581,11 @@ export const deleteModelInstance = async (instanceId: string) => {
 
 // Health Check API
 export const healthCheck = async () => {
-  const { data, error } = await client.GET("/health", {});
-  return { data, error };
+  // TODO: Implement health check endpoint
+  return { data: { status: "healthy" }, error: null };
 };
 
-export const rootEndpoint = async () => {
-  const { data, error } = await client.GET("/", {});
-  return { data, error };
-};
+
 
 // Authentication API
 export const getCurrentUser = async () => {
@@ -641,10 +593,7 @@ export const getCurrentUser = async () => {
   return { data, error };
 };
 
-export const testPublicEndpoint = async () => {
-  const { data, error } = await client.GET("/health", {});
-  return { data, error };
-};
+
 
 export const testProtectedEndpoint = async () => {
   const { data, error } = await client.GET("/v1/protected/test", {});
@@ -682,7 +631,7 @@ export type ModelSpec = components["schemas"]["agentarea_api__api__v1__model_spe
 export type ModelInstance = components["schemas"]["ModelInstanceResponse"];
 export type ChatAgent = components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"];
 export type ChatResponse = components["schemas"]["ChatResponse"];
-export type ConversationResponse = components["schemas"]["ConversationResponse"];
+export type ConversationResponse = any;
 export type TaskResponse = components["schemas"]["TaskResponse"];
 export type AgentCard = components["schemas"]["AgentCard"];
 

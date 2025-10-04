@@ -81,11 +81,19 @@ class ModelInstanceResponse(BaseModel):
             is_public=model_instance.is_public,
             created_at=model_instance.created_at,
             updated_at=model_instance.updated_at,
-            provider_name=model_instance.provider_config.provider_spec.name if model_instance.provider_config and model_instance.provider_config.provider_spec else None,
-            provider_key=model_instance.provider_config.provider_spec.provider_key if model_instance.provider_config and model_instance.provider_config.provider_spec else None,
+            provider_name=model_instance.provider_config.provider_spec.name
+            if model_instance.provider_config and model_instance.provider_config.provider_spec
+            else None,
+            provider_key=model_instance.provider_config.provider_spec.provider_key
+            if model_instance.provider_config and model_instance.provider_config.provider_spec
+            else None,
             model_name=model_instance.model_spec.model_name if model_instance.model_spec else None,
-            model_display_name=model_instance.model_spec.display_name if model_instance.model_spec else None,
-            config_name=model_instance.provider_config.name if model_instance.provider_config else None,
+            model_display_name=model_instance.model_spec.display_name
+            if model_instance.model_spec
+            else None,
+            config_name=model_instance.provider_config.name
+            if model_instance.provider_config
+            else None,
         )
 
 
@@ -173,7 +181,7 @@ async def test_model_instance(
         api_key_secret_name = getattr(provider_config, "api_key", None)
         if api_key_secret_name:
             # Get secret manager from provider service
-            secret_manager = provider_service._secret_manager
+            secret_manager = provider_service.secret_manager
             api_key = await secret_manager.get_secret(api_key_secret_name)
 
         if not api_key and provider_type not in ["ollama_chat"]:  # Ollama doesn't need API key
@@ -182,7 +190,7 @@ async def test_model_instance(
                 message="No API key found for this provider configuration",
                 error_type="MissingAPIKey",
                 provider_type=provider_type,
-                model_name=model_name
+                model_name=model_name,
             )
 
         # Prepare endpoint URL defaults
@@ -235,7 +243,9 @@ async def test_model_instance(
         elif "quota" in error_message.lower() or "billing" in error_message.lower():
             error_type = "QuotaError"
             message = "Quota exceeded or billing issue"
-        elif "model" in error_message.lower() and ("not found" in error_message.lower() or "does not exist" in error_message.lower()):
+        elif "model" in error_message.lower() and (
+            "not found" in error_message.lower() or "does not exist" in error_message.lower()
+        ):
             error_type = "ModelNotFoundError"
             message = "Model not found or not available"
         elif "connection" in error_message.lower() or "timeout" in error_message.lower():
@@ -248,6 +258,6 @@ async def test_model_instance(
             success=False,
             message=message,
             error_type=error_type,
-            provider_type=provider_type if 'provider_type' in locals() else None,
-            model_name=model_name if 'model_name' in locals() else None
+            provider_type=provider_type if "provider_type" in locals() else None,
+            model_name=model_name if "model_name" in locals() else None,
         )

@@ -4,7 +4,7 @@ End-to-End Test for Main AgentArea Flow
 
 This test covers the complete flow:
 1. Get provider specifications (new architecture)
-2. Create provider configuration 
+2. Create provider configuration
 3. Create model instance from provider config + model spec
 4. Create a new agent using that model instance
 5. Send a task to that agent
@@ -158,7 +158,9 @@ class TestE2EMainFlow:
                                 print(f"📝 Agent response preview: '{agent_text[:100]}...'")
                                 break
                     else:
-                        print("⚠️ No agent text found in events, task may have completed without LLM response")
+                        print(
+                            "⚠️ No agent text found in events, task may have completed without LLM response"
+                        )
                 else:
                     print("⚠️ No events found in result")
             else:
@@ -178,7 +180,12 @@ class TestE2EMainFlow:
             instances = response.json()
             for instance in instances:
                 # Check if this is an ollama_chat instance
-                if instance.get("provider_config", {}).get("provider_spec", {}).get("provider_type") == "ollama_chat":
+                if (
+                    instance.get("provider_config", {})
+                    .get("provider_spec", {})
+                    .get("provider_type")
+                    == "ollama_chat"
+                ):
                     print(f"✅ Found existing ollama_chat model instance: {instance}")
                     return str(instance.get("id"))
 

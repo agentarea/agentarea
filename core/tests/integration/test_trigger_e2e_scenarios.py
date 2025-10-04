@@ -30,6 +30,7 @@ try:
     from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
     from agentarea_triggers.trigger_service import TriggerService
     from agentarea_triggers.webhook_manager import WebhookManager
+
     TRIGGERS_AVAILABLE = True
 except ImportError:
     TRIGGERS_AVAILABLE = False
@@ -98,7 +99,7 @@ class TestTriggerE2EScenarios:
         mock_event_broker,
         mock_agent_repository,
         mock_task_service,
-        mock_temporal_schedule_manager
+        mock_temporal_schedule_manager,
     ):
         """Create trigger service with real repositories and mocked dependencies."""
         trigger_repo, execution_repo = trigger_repositories
@@ -110,16 +111,13 @@ class TestTriggerE2EScenarios:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=mock_temporal_schedule_manager
+            temporal_schedule_manager=mock_temporal_schedule_manager,
         )
 
     @pytest.fixture
     async def webhook_manager(self, trigger_service, mock_event_broker):
         """Create webhook manager for testing."""
-        return WebhookManager(
-            trigger_service=trigger_service,
-            event_broker=mock_event_broker
-        )
+        return WebhookManager(trigger_service=trigger_service, event_broker=mock_event_broker)
 
     @pytest.fixture
     def test_app(self, trigger_service, webhook_manager):
@@ -148,11 +146,7 @@ class TestTriggerE2EScenarios:
     # End-to-End Trigger Creation and Execution Tests
 
     async def test_complete_cron_trigger_lifecycle(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, mock_task_service, sample_agent_id
     ):
         """Test complete lifecycle of a cron trigger from creation to execution."""
         # Step 1: Create cron trigger
@@ -165,7 +159,7 @@ class TestTriggerE2EScenarios:
             timezone="UTC",
             task_parameters={"report_type": "daily", "format": "pdf"},
             conditions={"business_hours": True},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -183,13 +177,10 @@ class TestTriggerE2EScenarios:
         execution_data = {
             "execution_time": datetime.utcnow().isoformat(),
             "source": "cron",
-            "schedule_info": {"next_run": "2024-01-02T09:00:00Z"}
+            "schedule_info": {"next_run": "2024-01-02T09:00:00Z"},
         }
 
-        execution_result = await trigger_service.execute_trigger(
-            created_trigger.id,
-            execution_data
-        )
+        execution_result = await trigger_service.execute_trigger(created_trigger.id, execution_data)
 
         # Verify execution was successful
         assert execution_result.status == ExecutionStatus.SUCCESS
@@ -229,11 +220,7 @@ class TestTriggerE2EScenarios:
         mock_temporal_schedule_manager.delete_schedule.assert_called_once()
 
     async def test_complete_webhook_trigger_lifecycle(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Test complete lifecycle of a webhook trigger from creation to HTTP request handling."""
         # Step 1: Create webhook trigger
@@ -247,7 +234,7 @@ class TestTriggerE2EScenarios:
             task_parameters={"action": "deploy", "environment": "staging"},
             conditions={"branch": "main"},
             validation_rules={"required_headers": ["X-GitHub-Event"]},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -261,17 +248,14 @@ class TestTriggerE2EScenarios:
         webhook_request_data = {
             "webhook_id": created_trigger.webhook_id,
             "method": "POST",
-            "headers": {
-                "X-GitHub-Event": "push",
-                "Content-Type": "application/json"
-            },
+            "headers": {"X-GitHub-Event": "push", "Content-Type": "application/json"},
             "body": {
                 "ref": "refs/heads/main",
                 "repository": {"name": "test-repo"},
-                "commits": [{"message": "Fix bug"}]
+                "commits": [{"message": "Fix bug"}],
             },
             "query_params": {},
-            "received_at": datetime.utcnow()
+            "received_at": datetime.utcnow(),
         }
 
         # Process webhook request
@@ -280,7 +264,7 @@ class TestTriggerE2EScenarios:
             webhook_request_data["method"],
             webhook_request_data["headers"],
             webhook_request_data["body"],
-            webhook_request_data["query_params"]
+            webhook_request_data["query_params"],
         )
 
         # Verify webhook was processed successfully
@@ -308,11 +292,7 @@ class TestTriggerE2EScenarios:
         assert trigger_data["request"]["headers"]["X-GitHub-Event"] == "push"
 
     async def test_multiple_triggers_same_event(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
     ):
         """Test multiple triggers responding to the same webhook event."""
         # Create multiple webhook triggers with same webhook_id
@@ -326,7 +306,7 @@ class TestTriggerE2EScenarios:
             webhook_id=webhook_id,
             task_parameters={"action": "deploy", "environment": "staging"},
             conditions={"branch": "main"},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Trigger 2: Run tests
@@ -337,7 +317,7 @@ class TestTriggerE2EScenarios:
             webhook_id=webhook_id,
             task_parameters={"action": "test", "suite": "integration"},
             conditions={"branch": "main"},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         # Trigger 3: Notify team (different branch condition)
@@ -348,7 +328,7 @@ class TestTriggerE2EScenarios:
             webhook_id=webhook_id,
             task_parameters={"action": "notify", "channel": "dev-team"},
             conditions={"branch": "develop"},  # Different condition
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger1 = await trigger_service.create_trigger(trigger1_data)
@@ -360,7 +340,7 @@ class TestTriggerE2EScenarios:
             "method": "POST",
             "headers": {"Content-Type": "application/json"},
             "body": {"ref": "refs/heads/main", "action": "push"},
-            "query_params": {}
+            "query_params": {},
         }
 
         response = await webhook_manager.handle_webhook_request(
@@ -368,7 +348,7 @@ class TestTriggerE2EScenarios:
             webhook_request_data["method"],
             webhook_request_data["headers"],
             webhook_request_data["body"],
-            webhook_request_data["query_params"]
+            webhook_request_data["query_params"],
         )
 
         # Verify response
@@ -410,13 +390,11 @@ class TestTriggerE2EScenarios:
                 "cron_expression": "0 10 * * *",
                 "timezone": "UTC",
                 "task_parameters": {"api_test": True},
-                "conditions": {"test_mode": True}
+                "conditions": {"test_mode": True},
             }
 
             create_response = test_client.post(
-                "/v1/triggers/",
-                json=create_data,
-                headers=auth_headers
+                "/v1/triggers/", json=create_data, headers=auth_headers
             )
 
             assert create_response.status_code == 201
@@ -424,10 +402,7 @@ class TestTriggerE2EScenarios:
             trigger_id = created_trigger["id"]
 
             # Step 2: Get trigger via API
-            get_response = test_client.get(
-                f"/v1/triggers/{trigger_id}",
-                headers=auth_headers
-            )
+            get_response = test_client.get(f"/v1/triggers/{trigger_id}", headers=auth_headers)
 
             assert get_response.status_code == 200
             retrieved_trigger = get_response.json()
@@ -438,13 +413,11 @@ class TestTriggerE2EScenarios:
             update_data = {
                 "name": "Updated API Test Trigger",
                 "description": "Updated description",
-                "cron_expression": "0 11 * * *"
+                "cron_expression": "0 11 * * *",
             }
 
             update_response = test_client.put(
-                f"/v1/triggers/{trigger_id}",
-                json=update_data,
-                headers=auth_headers
+                f"/v1/triggers/{trigger_id}", json=update_data, headers=auth_headers
             )
 
             assert update_response.status_code == 200
@@ -453,10 +426,7 @@ class TestTriggerE2EScenarios:
             assert updated_trigger["cron_expression"] == "0 11 * * *"
 
             # Step 4: List triggers via API
-            list_response = test_client.get(
-                "/v1/triggers/",
-                headers=auth_headers
-            )
+            list_response = test_client.get("/v1/triggers/", headers=auth_headers)
 
             assert list_response.status_code == 200
             triggers_list = list_response.json()
@@ -465,8 +435,7 @@ class TestTriggerE2EScenarios:
 
             # Step 5: Disable trigger via API
             disable_response = test_client.post(
-                f"/v1/triggers/{trigger_id}/disable",
-                headers=auth_headers
+                f"/v1/triggers/{trigger_id}/disable", headers=auth_headers
             )
 
             assert disable_response.status_code == 200
@@ -475,8 +444,7 @@ class TestTriggerE2EScenarios:
 
             # Step 6: Enable trigger via API
             enable_response = test_client.post(
-                f"/v1/triggers/{trigger_id}/enable",
-                headers=auth_headers
+                f"/v1/triggers/{trigger_id}/enable", headers=auth_headers
             )
 
             assert enable_response.status_code == 200
@@ -484,25 +452,18 @@ class TestTriggerE2EScenarios:
             assert enable_result["is_active"] is True
 
             # Step 7: Delete trigger via API
-            delete_response = test_client.delete(
-                f"/v1/triggers/{trigger_id}",
-                headers=auth_headers
-            )
+            delete_response = test_client.delete(f"/v1/triggers/{trigger_id}", headers=auth_headers)
 
             assert delete_response.status_code == 204
 
             # Verify trigger is deleted
             get_deleted_response = test_client.get(
-                f"/v1/triggers/{trigger_id}",
-                headers=auth_headers
+                f"/v1/triggers/{trigger_id}", headers=auth_headers
             )
             assert get_deleted_response.status_code == 404
 
     async def test_webhook_http_request_processing(
-        self,
-        test_client,
-        trigger_service,
-        sample_agent_id
+        self, test_client, trigger_service, sample_agent_id
     ):
         """Test processing real HTTP requests to webhook endpoints."""
         # Create webhook trigger
@@ -513,7 +474,7 @@ class TestTriggerE2EScenarios:
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST", "PUT"],
             task_parameters={"http_test": True},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -524,7 +485,7 @@ class TestTriggerE2EScenarios:
         post_response = test_client.post(
             f"/v1/webhooks/{webhook_id}",
             json=post_data,
-            headers={"Content-Type": "application/json", "X-Test-Header": "test-value"}
+            headers={"Content-Type": "application/json", "X-Test-Header": "test-value"},
         )
 
         assert post_response.status_code == 200
@@ -537,7 +498,7 @@ class TestTriggerE2EScenarios:
         put_response = test_client.put(
             f"/v1/webhooks/{webhook_id}",
             json=put_data,
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
 
         assert put_response.status_code == 200
@@ -550,23 +511,19 @@ class TestTriggerE2EScenarios:
 
         # Test non-existent webhook
         fake_webhook_id = f"fake_{uuid4().hex[:8]}"
-        fake_response = test_client.post(
-            f"/v1/webhooks/{fake_webhook_id}",
-            json={"test": "data"}
-        )
+        fake_response = test_client.post(f"/v1/webhooks/{fake_webhook_id}", json={"test": "data"})
         assert fake_response.status_code == 404
 
     # Error Handling and Edge Cases
 
     async def test_trigger_execution_with_task_service_failure(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test trigger execution when task service fails."""
         # Make task service fail
-        mock_task_service.create_task_from_params.side_effect = Exception("Task service unavailable")
+        mock_task_service.create_task_from_params.side_effect = Exception(
+            "Task service unavailable"
+        )
 
         # Create trigger
         trigger_data = TriggerCreate(
@@ -574,17 +531,14 @@ class TestTriggerE2EScenarios:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="test_user"
+            created_by="test_user",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
 
         # Execute trigger
         execution_data = {"execution_time": datetime.utcnow().isoformat()}
-        execution_result = await trigger_service.execute_trigger(
-            created_trigger.id,
-            execution_data
-        )
+        execution_result = await trigger_service.execute_trigger(created_trigger.id, execution_data)
 
         # Verify execution failed gracefully
         assert execution_result.status == ExecutionStatus.FAILED
@@ -596,10 +550,7 @@ class TestTriggerE2EScenarios:
         assert updated_trigger.consecutive_failures == 1
 
     async def test_concurrent_trigger_executions(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test concurrent execution of multiple triggers."""
         # Create multiple triggers
@@ -609,9 +560,9 @@ class TestTriggerE2EScenarios:
                 name=f"Concurrent Trigger {i}",
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
-                cron_expression=f"0 {9+i} * * *",
+                cron_expression=f"0 {9 + i} * * *",
                 task_parameters={"trigger_index": i},
-                created_by="test_user"
+                created_by="test_user",
             )
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(trigger)
@@ -621,7 +572,7 @@ class TestTriggerE2EScenarios:
         for trigger in triggers:
             execution_data = {
                 "execution_time": datetime.utcnow().isoformat(),
-                "trigger_index": trigger.task_parameters["trigger_index"]
+                "trigger_index": trigger.task_parameters["trigger_index"],
             }
             task = trigger_service.execute_trigger(trigger.id, execution_data)
             execution_tasks.append(task)
@@ -638,21 +589,19 @@ class TestTriggerE2EScenarios:
         # Verify all tasks were created
         assert mock_task_service.create_task_from_params.call_count == 5
 
-    async def test_trigger_condition_evaluation_edge_cases(
-        self,
-        trigger_service,
-        sample_agent_id
-    ):
+    async def test_trigger_condition_evaluation_edge_cases(self, trigger_service, sample_agent_id):
         """Test trigger condition evaluation with various edge cases."""
         # Test with complex nested conditions
         complex_conditions = {
             "and": [
                 {"field": "request.body.type", "operator": "eq", "value": "deployment"},
-                {"or": [
-                    {"field": "request.body.branch", "operator": "eq", "value": "main"},
-                    {"field": "request.body.branch", "operator": "eq", "value": "master"}
-                ]},
-                {"field": "request.headers.X-GitHub-Event", "operator": "eq", "value": "push"}
+                {
+                    "or": [
+                        {"field": "request.body.branch", "operator": "eq", "value": "main"},
+                        {"field": "request.body.branch", "operator": "eq", "value": "master"},
+                    ]
+                },
+                {"field": "request.headers.X-GitHub-Event", "operator": "eq", "value": "push"},
             ]
         }
 
@@ -661,7 +610,7 @@ class TestTriggerE2EScenarios:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             conditions=complex_conditions,
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -670,7 +619,7 @@ class TestTriggerE2EScenarios:
         matching_data = {
             "request": {
                 "body": {"type": "deployment", "branch": "main"},
-                "headers": {"X-GitHub-Event": "push"}
+                "headers": {"X-GitHub-Event": "push"},
             }
         }
 
@@ -681,11 +630,13 @@ class TestTriggerE2EScenarios:
         non_matching_data = {
             "request": {
                 "body": {"type": "deployment", "branch": "develop"},  # Wrong branch
-                "headers": {"X-GitHub-Event": "push"}
+                "headers": {"X-GitHub-Event": "push"},
             }
         }
 
-        conditions_not_met = await trigger_service.evaluate_trigger_conditions(trigger, non_matching_data)
+        conditions_not_met = await trigger_service.evaluate_trigger_conditions(
+            trigger, non_matching_data
+        )
         assert conditions_not_met is False
 
         # Test with missing data
@@ -696,14 +647,13 @@ class TestTriggerE2EScenarios:
             }
         }
 
-        conditions_incomplete = await trigger_service.evaluate_trigger_conditions(trigger, incomplete_data)
+        conditions_incomplete = await trigger_service.evaluate_trigger_conditions(
+            trigger, incomplete_data
+        )
         assert conditions_incomplete is False
 
     async def test_execution_history_and_metrics(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test execution history tracking and metrics calculation."""
         # Create trigger
@@ -712,7 +662,7 @@ class TestTriggerE2EScenarios:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="test_user"
+            created_by="test_user",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -761,10 +711,7 @@ class TestTriggerE2EScenarios:
         assert updated_trigger.consecutive_failures == 2  # Last 2 were failures
 
     async def test_webhook_validation_and_parsing(
-        self,
-        webhook_manager,
-        trigger_service,
-        sample_agent_id
+        self, webhook_manager, trigger_service, sample_agent_id
     ):
         """Test webhook request validation and parsing for different webhook types."""
         # Test GitHub webhook
@@ -774,7 +721,7 @@ class TestTriggerE2EScenarios:
             trigger_type=TriggerType.WEBHOOK,
             webhook_type=WebhookType.GITHUB,
             validation_rules={"required_headers": ["X-GitHub-Event"]},
-            created_by="test_user"
+            created_by="test_user",
         )
 
         github_trigger = await trigger_service.create_trigger(github_trigger_data)
@@ -785,14 +732,14 @@ class TestTriggerE2EScenarios:
             "headers": {
                 "X-GitHub-Event": "push",
                 "X-GitHub-Delivery": "12345",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
             "body": {
                 "ref": "refs/heads/main",
                 "repository": {"name": "test-repo"},
-                "pusher": {"name": "testuser"}
+                "pusher": {"name": "testuser"},
             },
-            "query_params": {}
+            "query_params": {},
         }
 
         github_response = await webhook_manager.handle_webhook_request(
@@ -800,7 +747,7 @@ class TestTriggerE2EScenarios:
             github_request["method"],
             github_request["headers"],
             github_request["body"],
-            github_request["query_params"]
+            github_request["query_params"],
         )
 
         assert github_response["status_code"] == 200
@@ -811,7 +758,7 @@ class TestTriggerE2EScenarios:
             "method": "POST",
             "headers": {"Content-Type": "application/json"},
             "body": {"ref": "refs/heads/main"},
-            "query_params": {}
+            "query_params": {},
         }
 
         invalid_response = await webhook_manager.handle_webhook_request(
@@ -819,17 +766,14 @@ class TestTriggerE2EScenarios:
             invalid_github_request["method"],
             invalid_github_request["headers"],
             invalid_github_request["body"],
-            invalid_github_request["query_params"]
+            invalid_github_request["query_params"],
         )
 
         assert invalid_response["status_code"] == 400
         assert "validation failed" in invalid_response["body"]["message"].lower()
 
     async def test_trigger_system_health_monitoring(
-        self,
-        trigger_service,
-        webhook_manager,
-        mock_temporal_schedule_manager
+        self, trigger_service, webhook_manager, mock_temporal_schedule_manager
     ):
         """Test trigger system health monitoring and status checks."""
         # Test trigger service health
@@ -847,7 +791,7 @@ class TestTriggerE2EScenarios:
         mock_temporal_schedule_manager.check_health.return_value = {
             "status": "healthy",
             "active_schedules": 5,
-            "connection": "ok"
+            "connection": "ok",
         }
 
         temporal_health = await mock_temporal_schedule_manager.check_health()

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TemporalExecutionState:
     """Execution state for Temporal runner."""
+
     goal: AgentGoal
     messages: list[Message] = field(default_factory=list)
     current_iteration: int = 0
@@ -32,7 +33,7 @@ class TemporalExecutionState:
 
 class TemporalAgentRunner(BaseAgentRunner):
     """Temporal-based agent execution runner for workflow orchestration.
-    
+
     This runner integrates with Temporal workflows and uses activities
     for infrastructure concerns while maintaining the same interface
     as other runners.
@@ -46,7 +47,7 @@ class TemporalAgentRunner(BaseAgentRunner):
         config: RunnerConfig | None = None,
     ):
         """Initialize the Temporal runner.
-        
+
         Args:
             activities_interface: Temporal activities interface
             event_manager: Event manager for tracking (optional)
@@ -65,11 +66,11 @@ class TemporalAgentRunner(BaseAgentRunner):
 
     async def run(self, goal: AgentGoal, workflow_state=None) -> ExecutionResult:
         """Execute the agent workflow using Temporal activities.
-        
+
         Args:
             goal: The goal to achieve
             workflow_state: Optional existing workflow state
-            
+
         Returns:
             ExecutionResult with final results
         """
@@ -89,9 +90,7 @@ class TemporalAgentRunner(BaseAgentRunner):
 
         # Use the unified main loop with pause support
         result = await self._execute_main_loop(
-            state,
-            pause_check=lambda: self._paused,
-            wait_for_unpause=self._wait_for_unpause
+            state, pause_check=lambda: self._paused, wait_for_unpause=self._wait_for_unpause
         )
 
         return result
@@ -102,10 +101,15 @@ class TemporalAgentRunner(BaseAgentRunner):
 
         # Log iteration start
         if self.event_manager:
-            self.event_manager.add_event("iteration_started", {
-                "iteration": iteration,
-                "budget_remaining": self.budget_tracker.get_remaining() if self.budget_tracker else 0
-            })
+            self.event_manager.add_event(
+                "iteration_started",
+                {
+                    "iteration": iteration,
+                    "budget_remaining": self.budget_tracker.get_remaining()
+                    if self.budget_tracker
+                    else 0,
+                },
+            )
 
         try:
             # Execute the iteration using activities
@@ -116,30 +120,28 @@ class TemporalAgentRunner(BaseAgentRunner):
 
             # Log iteration completion
             if self.event_manager:
-                self.event_manager.add_event("iteration_completed", {
-                    "iteration": iteration,
-                    "success": True
-                })
+                self.event_manager.add_event(
+                    "iteration_completed", {"iteration": iteration, "success": True}
+                )
 
         except Exception as e:
             # Log iteration failure
             if self.event_manager:
-                self.event_manager.add_event("iteration_failed", {
-                    "iteration": iteration,
-                    "error": str(e)
-                })
+                self.event_manager.add_event(
+                    "iteration_failed", {"iteration": iteration, "error": str(e)}
+                )
             raise
 
     async def _execute_temporal_iteration(self, state: TemporalExecutionState) -> None:
         """Execute iteration using Temporal activities."""
         from temporalio.common import RetryPolicy
 
+        from ..models import LLMCallRequest
         from ..workflows.constants import (
             DEFAULT_RETRY_ATTEMPTS,
             LLM_CALL_TIMEOUT,
             Activities,
         )
-        from ..models import LLMCallRequest
 
         # Convert messages to dict format for request
         messages_dict = [
@@ -158,7 +160,7 @@ class TemporalAgentRunner(BaseAgentRunner):
             model_id=state.agent_config.get("model_id") or "gpt-4",  # Provide default model
             tools=state.available_tools,
             workspace_id="system",
-            user_context_data={"user_id": "dev-user"}
+            user_context_data={"user_id": "dev-user"},
         )
 
         # Call LLM via activity using Pydantic model
@@ -166,7 +168,7 @@ class TemporalAgentRunner(BaseAgentRunner):
             Activities.CALL_LLM,
             args=[llm_request],
             start_to_close_timeout=LLM_CALL_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
         )
 
         # Extract usage info and update budget
@@ -194,12 +196,14 @@ class TemporalAgentRunner(BaseAgentRunner):
         # Evaluate goal progress
         await self._evaluate_temporal_goal_progress(state)
 
-    async def _handle_temporal_tool_calls(self, state: TemporalExecutionState, tool_calls: list[dict[str, Any]]) -> None:
+    async def _handle_temporal_tool_calls(
+        self, state: TemporalExecutionState, tool_calls: list[dict[str, Any]]
+    ) -> None:
         """Handle tool calls using Temporal activities."""
         from temporalio.common import RetryPolicy
 
-        from ..workflows.constants import DEFAULT_RETRY_ATTEMPTS, TOOL_EXECUTION_TIMEOUT, Activities
         from ..models import MCPToolRequest
+        from ..workflows.constants import DEFAULT_RETRY_ATTEMPTS, TOOL_EXECUTION_TIMEOUT, Activities
 
         for tool_call in tool_calls:
             tool_name = tool_call["function"]["name"]
@@ -207,6 +211,7 @@ class TemporalAgentRunner(BaseAgentRunner):
             try:
                 # Parse tool arguments
                 import json
+
                 try:
                     tool_args = json.loads(tool_call["function"]["arguments"])
                 except (json.JSONDecodeError, KeyError):
@@ -218,7 +223,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                     tool_args=tool_args,
                     server_instance_id=None,
                     workspace_id="system",
-                    tools_config=state.agent_config.get("tools_config")
+                    tools_config=state.agent_config.get("tools_config"),
                 )
 
                 # Execute tool call via activity using Pydantic model
@@ -226,39 +231,51 @@ class TemporalAgentRunner(BaseAgentRunner):
                     Activities.EXECUTE_MCP_TOOL,
                     args=[mcp_request],
                     start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
-                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
+                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
                 )
 
                 # Add tool result to messages
-                state.messages.append(Message(
-                    role="tool",
-                    tool_call_id=tool_call["id"],
-                    name=tool_name,
-                    content=str(result.result if hasattr(result, 'result') else result.get("result", ""))
-                ))
+                state.messages.append(
+                    Message(
+                        role="tool",
+                        tool_call_id=tool_call["id"],
+                        name=tool_name,
+                        content=str(
+                            result.result if hasattr(result, "result") else result.get("result", "")
+                        ),
+                    )
+                )
 
                 # Check if completion tool was called
-                if tool_name == "task_complete" and (hasattr(result, 'result') and "completed" in str(result.result)):
+                if tool_name == "task_complete" and (
+                    hasattr(result, "result") and "completed" in str(result.result)
+                ):
                     state.success = True
-                    state.final_response = str(result.result if hasattr(result, 'result') else result.get("result", "Task completed"))
+                    state.final_response = str(
+                        result.result
+                        if hasattr(result, "result")
+                        else result.get("result", "Task completed")
+                    )
 
             except Exception as e:
                 workflow.logger.error(f"Tool call {tool_name} failed: {e}")
 
                 # Add error message
-                state.messages.append(Message(
-                    role="tool",
-                    tool_call_id=tool_call["id"],
-                    name=tool_name,
-                    content=f"Tool execution failed: {e}"
-                ))
+                state.messages.append(
+                    Message(
+                        role="tool",
+                        tool_call_id=tool_call["id"],
+                        name=tool_name,
+                        content=f"Tool execution failed: {e}",
+                    )
+                )
 
     async def _evaluate_temporal_goal_progress(self, state: TemporalExecutionState) -> None:
         """Evaluate goal progress using Temporal activities."""
         from temporalio.common import RetryPolicy
 
-        from ..workflows.constants import ACTIVITY_TIMEOUT, DEFAULT_RETRY_ATTEMPTS, Activities
         from ..models import GoalEvaluationRequest
+        from ..workflows.constants import ACTIVITY_TIMEOUT, DEFAULT_RETRY_ATTEMPTS, Activities
 
         try:
             # Convert goal to dict for request
@@ -268,7 +285,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                 "success_criteria": state.goal.success_criteria,
                 "max_iterations": state.goal.max_iterations,
                 "requires_human_approval": False,
-                "context": state.goal.context
+                "context": state.goal.context,
             }
 
             # Convert messages to dict format for request
@@ -276,20 +293,18 @@ class TemporalAgentRunner(BaseAgentRunner):
 
             # Create Pydantic request model for goal evaluation
             evaluation_request = GoalEvaluationRequest(
-                goal=goal_dict,
-                messages=messages_dict,
-                current_iteration=state.current_iteration
+                goal=goal_dict, messages=messages_dict, current_iteration=state.current_iteration
             )
 
             evaluation = await workflow.execute_activity(
                 Activities.EVALUATE_GOAL_PROGRESS,
                 args=[evaluation_request],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS)
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
 
             # Handle Pydantic result model
-            if hasattr(evaluation, 'goal_achieved') and evaluation.goal_achieved:
+            if hasattr(evaluation, "goal_achieved") and evaluation.goal_achieved:
                 state.success = True
                 state.final_response = evaluation.final_response
             elif isinstance(evaluation, dict) and evaluation.get("goal_achieved", False):
@@ -306,21 +321,27 @@ class TemporalAgentRunner(BaseAgentRunner):
 
         if self.budget_tracker.should_warn():
             if self.event_manager:
-                self.event_manager.add_event("budget_warning", {
-                    "usage_percentage": self.budget_tracker.get_usage_percentage(),
-                    "cost": self.budget_tracker.cost,
-                    "limit": self.budget_tracker.budget_limit,
-                    "message": self.budget_tracker.get_warning_message()
-                })
+                self.event_manager.add_event(
+                    "budget_warning",
+                    {
+                        "usage_percentage": self.budget_tracker.get_usage_percentage(),
+                        "cost": self.budget_tracker.cost,
+                        "limit": self.budget_tracker.budget_limit,
+                        "message": self.budget_tracker.get_warning_message(),
+                    },
+                )
             self.budget_tracker.mark_warning_sent()
 
         if self.budget_tracker.is_exceeded():
             if self.event_manager:
-                self.event_manager.add_event("budget_exceeded", {
-                    "cost": self.budget_tracker.cost,
-                    "limit": self.budget_tracker.budget_limit,
-                    "message": self.budget_tracker.get_exceeded_message()
-                })
+                self.event_manager.add_event(
+                    "budget_exceeded",
+                    {
+                        "cost": self.budget_tracker.cost,
+                        "limit": self.budget_tracker.budget_limit,
+                        "message": self.budget_tracker.get_exceeded_message(),
+                    },
+                )
 
     def _build_system_prompt(self, goal: AgentGoal) -> str:
         """Build system prompt for the agent."""

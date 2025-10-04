@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 # Context variable to store correlation ID across async operations
-correlation_id_context: ContextVar[str | None] = ContextVar('correlation_id', default=None)
+correlation_id_context: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
 class TriggerLogger:
@@ -34,19 +34,19 @@ class TriggerLogger:
         context_parts = [f"correlation_id={correlation_id}"]
 
         # Add trigger_id if provided
-        if 'trigger_id' in kwargs:
+        if "trigger_id" in kwargs:
             context_parts.append(f"trigger_id={kwargs['trigger_id']}")
 
         # Add execution_id if provided
-        if 'execution_id' in kwargs:
+        if "execution_id" in kwargs:
             context_parts.append(f"execution_id={kwargs['execution_id']}")
 
         # Add webhook_id if provided
-        if 'webhook_id' in kwargs:
+        if "webhook_id" in kwargs:
             context_parts.append(f"webhook_id={kwargs['webhook_id']}")
 
         # Add task_id if provided
-        if 'task_id' in kwargs:
+        if "task_id" in kwargs:
             context_parts.append(f"task_id={kwargs['task_id']}")
 
         context_str = " | ".join(context_parts)
@@ -102,53 +102,56 @@ class TriggerError(Exception):
             "error_type": self.__class__.__name__,
             "message": str(self),
             "correlation_id": self.correlation_id,
-            "context": self.context
+            "context": self.context,
         }
 
 
 class TriggerValidationError(TriggerError):
     """Raised when trigger validation fails."""
+
     pass
 
 
 class TriggerNotFoundError(TriggerError):
     """Raised when a trigger is not found."""
+
     pass
 
 
 class TriggerExecutionError(TriggerError):
     """Raised when trigger execution fails."""
+
     pass
 
 
 class WebhookValidationError(TriggerError):
     """Raised when webhook validation fails."""
+
     pass
 
 
 class DependencyUnavailableError(TriggerError):
     """Raised when required dependencies are not available."""
+
     pass
 
 
 class TriggerTimeoutError(TriggerError):
     """Raised when trigger operation times out."""
+
     pass
 
 
 def log_trigger_operation(operation: str, trigger_id: UUID | None = None, **context):
     """Decorator to log trigger operations with error handling."""
+
     def decorator(func):
         async def wrapper(*args, **kwargs):
             logger = TriggerLogger(func.__module__)
             correlation_id = generate_correlation_id()
             set_correlation_id(correlation_id)
 
-            log_context = {
-                "operation": operation,
-                "correlation_id": correlation_id,
-                **context
-            }
+            log_context = {"operation": operation, "correlation_id": correlation_id, **context}
 
             if trigger_id:
                 log_context["trigger_id"] = trigger_id
@@ -164,4 +167,5 @@ def log_trigger_operation(operation: str, trigger_id: UUID | None = None, **cont
                 raise
 
         return wrapper
+
     return decorator

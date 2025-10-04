@@ -21,11 +21,11 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 async def validate_model_id(model_id: str, user_context: UserContext) -> None:
     """Validate that the model_id corresponds to an existing model instance or is a valid model identifier.
-    
+
     Args:
         model_id: The model ID to validate
         user_context: Current user context
-        
+
     Raises:
         HTTPException: If the model_id is invalid
     """
@@ -37,7 +37,7 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
         model_instance_service = ModelInstanceService(
             repository=model_instance_repository,
             event_broker=None,  # Not needed for validation
-            secret_manager=None  # Not needed for validation
+            secret_manager=None,  # Not needed for validation
         )
 
         # First, try to treat model_id as a UUID (model instance ID)
@@ -73,7 +73,7 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
         # If we get here, the model_id doesn't match any valid pattern
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid model_id '{model_id}'. Must be either a valid model instance UUID or a recognized model identifier (e.g., 'qwen2.5', 'gpt-4', 'claude-3', etc.)"
+            detail=f"Invalid model_id '{model_id}'. Must be either a valid model instance UUID or a recognized model identifier (e.g., 'qwen2.5', 'gpt-4', 'claude-3', etc.)",
         )
 
 
@@ -81,24 +81,29 @@ class MCPToolConfig(BaseModel):
     tool_name: str
     requires_user_confirmation: bool = False
 
+
 class MCPConfig(BaseModel):
     mcp_server_id: str
     allowed_tools: list[MCPToolConfig] | None = None
+
 
 class BuiltinToolConfig(BaseModel):
     tool_name: str
     requires_user_confirmation: bool = False
     enabled: bool = True
 
+
 class EventConfig(BaseModel):
     event_type: str
     config: dict | None = None
     enabled: bool = True
 
+
 class ToolsConfig(BaseModel):
     mcp_server_configs: list[MCPConfig] | None = None
     builtin_tools: list[BuiltinToolConfig] | None = None
     planning: bool | None = None
+
 
 class EventsConfig(BaseModel):
     events: list[EventConfig] | None = None
@@ -155,7 +160,7 @@ class AgentResponse(BaseModel):
 async def create_agent(
     data: AgentCreate,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_agent_service)
+    agent_service: AgentService = Depends(get_agent_service),
 ):
     """Create a new agent."""
     # Validate model_id before creating agent
@@ -165,13 +170,14 @@ async def create_agent(
     if data.tools_config and data.tools_config.builtin_tools:
         available_tools = get_available_builtin_tools()
         invalid_tools = [
-            tool_config.tool_name for tool_config in data.tools_config.builtin_tools
+            tool_config.tool_name
+            for tool_config in data.tools_config.builtin_tools
             if tool_config.tool_name not in available_tools
         ]
         if invalid_tools:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid builtin tools: {invalid_tools}. Available tools: {list(available_tools.keys())}"
+                detail=f"Invalid builtin tools: {invalid_tools}. Available tools: {list(available_tools.keys())}",
             )
 
     agent = await agent_service.create_agent(
@@ -197,8 +203,10 @@ async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_ag
 
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
-    created_by: str | None = Query(None, description="Filter by creator: 'me' for current user's agents only"),
-    agent_service: AgentService = Depends(get_agent_service)
+    created_by: str | None = Query(
+        None, description="Filter by creator: 'me' for current user's agents only"
+    ),
+    agent_service: AgentService = Depends(get_agent_service),
 ):
     """List all workspace agents with optional filtering by creator."""
     # Determine if we should filter by creator
@@ -250,15 +258,7 @@ async def get_builtin_tools():
 
 
 # Include A2A protocol subroutes
-router.include_router(
-    agents_a2a.router,
-    prefix="/{agent_id}",
-    tags=["agents-a2a"]
-)
+router.include_router(agents_a2a.router, prefix="/{agent_id}", tags=["agents-a2a"])
 
 # Include agent-specific well-known subroutes
-router.include_router(
-    agents_well_known.router,
-    prefix="/{agent_id}",
-    tags=["agents-well-known"]
-)
+router.include_router(agents_well_known.router, prefix="/{agent_id}", tags=["agents-well-known"])

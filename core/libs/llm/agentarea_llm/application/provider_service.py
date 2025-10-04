@@ -55,9 +55,7 @@ class ProviderService:
 
     # Provider Specs methods
 
-    async def list_provider_specs(
-        self, is_builtin: bool | None = None
-    ) -> list[ProviderSpec]:
+    async def list_provider_specs(self, is_builtin: bool | None = None) -> list[ProviderSpec]:
         """List all available provider specifications.
 
         Args:
@@ -208,16 +206,14 @@ class ProviderService:
         secret_name = f"provider_config_{config_id}"
         try:
             await self.secret_manager.delete_secret(secret_name)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         return await self.provider_config_repo.delete(config_id)
 
     # Model Specs methods
 
-    async def list_model_specs(
-        self, provider_spec_id: UUID | None = None
-    ) -> list[ModelSpec]:
+    async def list_model_specs(self, provider_spec_id: UUID | None = None) -> list[ModelSpec]:
         """List model specifications with optional filtering by provider specification.
 
         Args:
@@ -301,7 +297,7 @@ class ProviderService:
         Returns:
             Optional[ModelInstance]: The model instance if found, else None.
         """
-        return await self.model_instance_repo.get_by_id(instance_id)
+        return await self.model_instance_repo.get_with_relations(instance_id)
 
     async def delete_model_instance(self, instance_id: UUID) -> bool:
         """Delete a model instance.
@@ -316,9 +312,7 @@ class ProviderService:
 
     # Helper methods
 
-    async def get_model_instance_with_config(
-        self, instance_id: UUID
-    ) -> dict[str, Any] | None:
+    async def get_model_instance_with_config(self, instance_id: UUID) -> dict[str, Any] | None:
         """Retrieve a model instance along with its provider configuration details and API key.
 
         Args:
@@ -328,7 +322,7 @@ class ProviderService:
             Optional[Dict[str, Any]]: Dictionary containing instance, provider type, model name,
                                       API key, and endpoint URL, or None if not found.
         """
-        instance = await self.model_instance_repo.get_by_id(instance_id)
+        instance = await self.model_instance_repo.get_with_relations(instance_id)
         if not instance:
             return None
 

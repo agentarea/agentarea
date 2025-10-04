@@ -19,9 +19,9 @@ import pytest
 
 def main():
     """Run trigger system integration tests."""
-    print("="*80)
+    print("=" * 80)
     print("TRIGGER SYSTEM INTEGRATION TEST RUNNER")
-    print("="*80)
+    print("=" * 80)
 
     # Test configuration
     test_args = [
@@ -45,6 +45,7 @@ def main():
     # Check if trigger system is available
     try:
         from agentarea_triggers.trigger_service import TriggerService
+
         print("✓ Trigger system components available")
     except ImportError as e:
         print(f"✗ Trigger system not available: {e}")
@@ -65,15 +66,15 @@ def main():
         "total_categories": len(categories),
         "passed_categories": 0,
         "failed_categories": 0,
-        "total_time": 0
+        "total_time": 0,
     }
 
     start_time = time.time()
 
     for category_name, test_file in categories:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"RUNNING: {category_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         test_path = f"core/tests/integration/{test_file}"
 
@@ -85,11 +86,9 @@ def main():
         category_start = time.time()
 
         # Run tests for this category
-        result = pytest.main([
-            *test_args,
-            test_path,
-            f"--junit-xml=test_results_{test_file.replace('.py', '')}.xml"
-        ])
+        result = pytest.main(
+            [*test_args, test_path, f"--junit-xml=test_results_{test_file.replace('.py', '')}.xml"]
+        )
 
         category_end = time.time()
         category_time = category_end - category_start
@@ -105,9 +104,9 @@ def main():
     overall_results["total_time"] = end_time - start_time
 
     # Print final summary
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("TRIGGER INTEGRATION TEST SUMMARY")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"Total Categories: {overall_results['total_categories']}")
     print(f"Passed Categories: {overall_results['passed_categories']}")
     print(f"Failed Categories: {overall_results['failed_categories']}")
@@ -122,7 +121,7 @@ def main():
         print("🔧 Please review and fix failing tests")
         return_code = 1
 
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     return return_code
 

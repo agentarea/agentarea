@@ -77,13 +77,13 @@ async def simulate_workflow_publishing(event_broker, task_id: UUID, num_events: 
                 "agent_id": str(uuid4()),
                 "execution_id": f"agent-task-{task_id}",
                 "iteration": i + 1,
-                "message": f"Workflow {event_type} event #{i+1}"
-            }
+                "message": f"Workflow {event_type} event #{i + 1}",
+            },
         )
 
         # Publish via EventBroker (like workflow activities)
         await event_broker.publish(workflow_event)
-        logger.info(f"  Published: {event_type} (event #{i+1})")
+        logger.info(f"  Published: {event_type} (event #{i + 1})")
 
         # Small delay between events
         await asyncio.sleep(0.1)
@@ -100,12 +100,12 @@ async def simulate_sse_consumption(task_service: TaskService, task_id: UUID, max
         async for event in task_service.stream_task_events(task_id, include_history=False):
             events_received.append(event)
 
-            event_type = event.get('event_type', 'unknown')
-            event_data = event.get('data', {})
+            event_type = event.get("event_type", "unknown")
+            event_data = event.get("data", {})
             logger.info(f"  Received: {event_type} - {event_data.get('message', 'no message')}")
 
             # Stop after receiving enough events or heartbeat
-            if len(events_received) >= max_events or event_type == 'heartbeat':
+            if len(events_received) >= max_events or event_type == "heartbeat":
                 break
 
     except Exception as e:
@@ -132,9 +132,7 @@ async def test_end_to_end_workflow():
     task_repository = MockTaskRepository()
     task_manager = MockTaskManager()
     task_service = TaskService(
-        task_repository=task_repository,
-        event_broker=event_broker,
-        task_manager=task_manager
+        task_repository=task_repository, event_broker=event_broker, task_manager=task_manager
     )
 
     # Create and store test task
@@ -146,7 +144,7 @@ async def test_end_to_end_workflow():
         user_id="test_user",
         agent_id=uuid4(),
         status="running",
-        execution_id=f"agent-task-{task_id}"
+        execution_id=f"agent-task-{task_id}",
     )
     await task_repository.create(test_task)
 
@@ -174,8 +172,13 @@ async def test_end_to_end_workflow():
         logger.info("=" * 60)
         logger.info("📊 End-to-End Test Results:")
 
-        workflow_events = [e for e in events_received if not e.get('event_type', '').startswith('task_') and e.get('event_type') != 'heartbeat']
-        heartbeat_events = [e for e in events_received if e.get('event_type') == 'heartbeat']
+        workflow_events = [
+            e
+            for e in events_received
+            if not e.get("event_type", "").startswith("task_")
+            and e.get("event_type") != "heartbeat"
+        ]
+        heartbeat_events = [e for e in events_received if e.get("event_type") == "heartbeat"]
 
         logger.info(f"  Total events received: {len(events_received)}")
         logger.info(f"  Workflow events: {len(workflow_events)}")
@@ -185,8 +188,10 @@ async def test_end_to_end_workflow():
         if workflow_events:
             logger.info("✅ SUCCESS: Received workflow events via SSE!")
             for event in workflow_events:
-                event_type = event.get('event_type', 'unknown').replace('workflow.', '')
-                message = event.get('data', {}).get('original_data', {}).get('message', 'no message')
+                event_type = event.get("event_type", "unknown").replace("workflow.", "")
+                message = (
+                    event.get("data", {}).get("original_data", {}).get("message", "no message")
+                )
                 logger.info(f"    - {event_type}: {message}")
             return True
         else:
@@ -196,12 +201,13 @@ async def test_end_to_end_workflow():
     except Exception as e:
         logger.error(f"❌ End-to-end test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
     finally:
         # Cleanup
-        if hasattr(event_broker, '_connected') and event_broker._connected:
+        if hasattr(event_broker, "_connected") and event_broker._connected:
             await event_broker.redis_broker.close()
             logger.info("🧹 Cleaned up Redis connection")
 

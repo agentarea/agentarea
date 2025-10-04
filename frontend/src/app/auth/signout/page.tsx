@@ -3,13 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
+import { env } from "@/env";
 
 export default function SignOut() {
   const router = useRouter();
 
   const handleSignOut = () => {
     // Перенаправляем прямо на Ory Kratos logout flow
-    window.location.href = `${process.env.NEXT_PUBLIC_ORY_SDK_URL}/self-service/logout/browser`;
+    window.location.href = `${env.NEXT_PUBLIC_ORY_SDK_URL}/self-service/logout/browser`;
   };
 
   return (

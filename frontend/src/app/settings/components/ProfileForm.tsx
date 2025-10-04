@@ -83,7 +83,7 @@ export default function ProfileForm(defaultValues: { name: string, email: string
                             Need to update your profile information?
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            Use your authentication provider's profile management to make changes.
+                            Use your authentication provider&#39;s profile management to make changes.
                         </p>
                     </div>
                     <Button onClick={handleManageAccount} variant="outline" className="shrink-0 gap-2">

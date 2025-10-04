@@ -3,7 +3,7 @@
 This module re-exports configuration from the common library.
 """
 
-from agentarea_common.config import *  # noqa: F403
+from agentarea_common.config import *
 
 __all__ = [
     "AWSSettings",

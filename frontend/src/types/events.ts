@@ -301,17 +301,17 @@ export const mapSSEToDisplayEvent = (sseEvent: SSEMessage, id?: string): Display
   // Check for content in tool_calls (like task_complete results)
   if (eventData.tool_calls && eventData.tool_calls.length > 0) {
     const toolCall = eventData.tool_calls[0];
-    if (toolCall.function?.name === 'task_complete') {
+    if (toolCall.name === 'task_complete') {
       try {
-        const args = typeof toolCall.function.arguments === 'string' 
-          ? JSON.parse(toolCall.function.arguments)
-          : toolCall.function.arguments;
+        const args = typeof toolCall.arguments === 'string'
+          ? JSON.parse(toolCall.arguments)
+          : toolCall.arguments;
         description = `Task completed: ${args.summary || args.result || 'Success'}`;
       } catch (e) {
-        description = `Task completed with ${toolCall.function?.name}`;
+        description = `Task completed with ${toolCall.name}`;
       }
     } else {
-      description = `${config?.title}: ${toolCall.function?.name || toolCall.name}`;
+      description = `${config?.title}: ${toolCall.name}`;
     }
   } else if (eventData.content) {
     description = eventData.chunk 

@@ -5,7 +5,7 @@ from contextvars import ContextVar
 from .context import UserContext
 
 # Context variable to store the current user context
-_user_context: ContextVar[UserContext | None] = ContextVar('user_context', default=None)
+_user_context: ContextVar[UserContext | None] = ContextVar("user_context", default=None)
 
 
 class ContextManager:
@@ -14,7 +14,7 @@ class ContextManager:
     @staticmethod
     def set_context(user_context: UserContext) -> None:
         """Set the current user context.
-        
+
         Args:
             user_context: UserContext to set as current
         """
@@ -23,7 +23,7 @@ class ContextManager:
     @staticmethod
     def get_context() -> UserContext | None:
         """Get the current user context.
-        
+
         Returns:
             Current UserContext or None if not set
         """
@@ -37,7 +37,7 @@ class ContextManager:
     @staticmethod
     def get_user_id() -> str | None:
         """Get the current user ID.
-        
+
         Returns:
             Current user_id or None if context not set
         """
@@ -47,7 +47,7 @@ class ContextManager:
     @staticmethod
     def get_workspace_id() -> str | None:
         """Get the current workspace ID.
-        
+
         Returns:
             Current workspace_id or None if context not set
         """

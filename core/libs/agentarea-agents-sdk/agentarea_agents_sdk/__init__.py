@@ -3,7 +3,7 @@
 This module contains all AI-specific components:
 - High-level Agent class for simplified usage
 - LLM clients and interactions
-- Agent tools and completion detection  
+- Agent tools and completion detection
 - Goal progress evaluation
 - Tool management and execution
 
@@ -12,7 +12,16 @@ This follows patterns from leading agentic frameworks like AutoGen, CrewAI, and 
 
 # High-level Agent class (recommended for most users)
 from .agents.agent import Agent
-from .agents.basic_agent import run_agent
+from .agents.basic_agent import run_agent  # noqa: F401
+from .context.context_service import (
+    ContextEvent,
+    ContextService,
+    InMemoryContextService,
+    events_to_messages,
+)
+
+# Services
+from .goal.goal_progress_evaluator import GoalProgressEvaluator
 
 # LLM Model
 from .models.llm_model import LLMModel, LLMRequest, LLMResponse, LLMUsage
@@ -27,11 +36,7 @@ from .runners import (
     RunnerConfig,
     # SyncAgentRunner,
 )
-
-# Services
-from .goal.goal_progress_evaluator import GoalProgressEvaluator
 from .tasks.task_service import InMemoryTaskService
-from .context.context_service import ContextService, InMemoryContextService, ContextEvent, events_to_messages
 
 # Tools
 from .tools.base_tool import BaseTool, ToolExecutionError, ToolRegistry

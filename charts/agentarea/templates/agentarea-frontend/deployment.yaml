@@ -1,0 +1,73 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-frontend
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: frontend
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-frontend-env
+                  key: PORT
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-frontend-env
+                  key: NODE_ENV
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-frontend-env
+                  key: NEXT_PUBLIC_API_URL
+            - name: KRATOS_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-frontend-env
+                  key: KRATOS_PUBLIC_URL
+            - name: KRATOS_ADMIN_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-frontend-env
+                  key: KRATOS_ADMIN_URL
+            - name: HYDRA_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-frontend-env
+                  key: HYDRA_PUBLIC_URL
+            - name: HYDRA_ADMIN_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "agentarea.fullname" . }}-frontend-env
+                  key: HYDRA_ADMIN_URL
+            {{- if .Values.frontend.extraEnv }}
+            {{- toYaml .Values.frontend.extraEnv | nindent 12 }}
+            {{- end }}
+          {{- with .Values.frontend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

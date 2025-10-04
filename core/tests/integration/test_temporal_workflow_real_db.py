@@ -73,7 +73,9 @@ class TestTemporalWorkflowRealDB:
         """Test workflow execution with real database - successful validation."""
         # Use a test agent ID that should exist in the database
         # In a real setup, this would be seeded data or created in test setup
-        test_agent_id = str(uuid.uuid4())  # This will fail validation, which is expected for this test
+        test_agent_id = str(
+            uuid.uuid4()
+        )  # This will fail validation, which is expected for this test
 
         # Start worker with REAL activities (not mocked)
         async with Worker(

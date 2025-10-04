@@ -8,22 +8,28 @@ from typing import Any
 
 import litellm
 from litellm import (
-    acompletion,
     ModelResponse,
+    acompletion,
 )
 
 from .messages import (
-    BaseMessage as SDKBaseMessage,
-    UserMessage as SDKUserMessage,
-    SystemMessage as SDKSystemMessage,
     AssistantMessage as SDKAssistantMessage,
+)
+from .messages import (
+    SystemMessage as SDKSystemMessage,
+)
+from .messages import (
     ToolMessage as SDKToolMessage,
+)
+from .messages import (
+    UserMessage as SDKUserMessage,
 )
 
 logger = logging.getLogger(__name__)
 
 # Configure LiteLLM callbacks via env to avoid noisy defaults during tests
-import os
+import os  # noqa: E402
+
 _callbacks_env = os.getenv("LITELLM_CALLBACKS")
 if _callbacks_env is not None:
     try:
@@ -109,7 +115,7 @@ class LLMModel:
                 return parts
 
         # Pass through structured content
-        if isinstance(content, (list, dict)):
+        if isinstance(content, list | dict):
             return content
 
         # Try to parse JSON-encoded content into structured parts
@@ -118,9 +124,9 @@ class LLMModel:
             if (c.startswith("{") and c.endswith("}")) or (c.startswith("[") and c.endswith("]")):
                 try:
                     parsed = json.loads(c)
-                    if isinstance(parsed, (list, dict)):
+                    if isinstance(parsed, list | dict):
                         return parsed
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
             return content
 
@@ -171,7 +177,7 @@ class LLMModel:
                                 "function": fn,
                             }
                         )
-                    except Exception:
+                    except Exception:  # noqa: S110
                         pass
             return {
                 "role": "assistant",
@@ -180,7 +186,7 @@ class LLMModel:
             }
 
         # If it's already a dict/list in OpenAI format, return as-is
-        if isinstance(msg, (dict, list)):
+        if isinstance(msg, dict | list):
             return msg
 
         # If it's a legacy SDK message dict-like
@@ -221,8 +227,8 @@ class LLMModel:
                 url = f"http://{url}"
             params["base_url"] = url
         # elif self.provider_type == "ollama_chat":
-            # Default Ollama URL - use localhost for local development
-            # params["base_url"] = "http://host.docker.internal:11434"
+        # Default Ollama URL - use localhost for local development
+        # params["base_url"] = "http://host.docker.internal:11434"
 
         # Add tools if provided
         if request.tools:

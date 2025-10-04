@@ -27,6 +27,7 @@ try:
     )
     from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
     from agentarea_triggers.trigger_service import TriggerNotFoundError, TriggerService
+
     TRIGGERS_AVAILABLE = True
 except ImportError:
     TRIGGERS_AVAILABLE = False
@@ -92,7 +93,7 @@ class TestTriggerLifecycleManagement:
         mock_event_broker,
         mock_agent_repository,
         mock_task_service,
-        mock_temporal_schedule_manager
+        mock_temporal_schedule_manager,
     ):
         """Create trigger service with real repositories and mocked dependencies."""
         trigger_repo, execution_repo = trigger_repositories
@@ -104,7 +105,7 @@ class TestTriggerLifecycleManagement:
             agent_repository=mock_agent_repository,
             task_service=mock_task_service,
             llm_condition_evaluator=None,
-            temporal_schedule_manager=mock_temporal_schedule_manager
+            temporal_schedule_manager=mock_temporal_schedule_manager,
         )
 
     @pytest.fixture
@@ -115,10 +116,7 @@ class TestTriggerLifecycleManagement:
     # Trigger Creation Tests
 
     async def test_cron_trigger_creation_lifecycle(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, sample_agent_id
     ):
         """Test complete cron trigger creation lifecycle."""
         # Create cron trigger
@@ -131,7 +129,7 @@ class TestTriggerLifecycleManagement:
             timezone="UTC",
             task_parameters={"lifecycle_test": True},
             conditions={"business_hours": True},
-            created_by="lifecycle_test"
+            created_by="lifecycle_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -160,11 +158,7 @@ class TestTriggerLifecycleManagement:
         assert retrieved_trigger.id == created_trigger.id
         assert retrieved_trigger.name == created_trigger.name
 
-    async def test_webhook_trigger_creation_lifecycle(
-        self,
-        trigger_service,
-        sample_agent_id
-    ):
+    async def test_webhook_trigger_creation_lifecycle(self, trigger_service, sample_agent_id):
         """Test complete webhook trigger creation lifecycle."""
         # Create webhook trigger
         trigger_data = TriggerCreate(
@@ -178,7 +172,7 @@ class TestTriggerLifecycleManagement:
             conditions={"branch": "main"},
             validation_rules={"required_headers": ["X-GitHub-Event"]},
             webhook_config={"secret": "webhook_secret"},
-            created_by="lifecycle_test"
+            created_by="lifecycle_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -206,10 +200,7 @@ class TestTriggerLifecycleManagement:
     # Trigger Update Tests
 
     async def test_trigger_update_lifecycle(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, sample_agent_id
     ):
         """Test trigger update lifecycle."""
         # Create initial trigger
@@ -223,7 +214,7 @@ class TestTriggerLifecycleManagement:
             task_parameters={"original": True},
             conditions={"original_condition": True},
             failure_threshold=5,
-            created_by="update_test"
+            created_by="update_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -235,10 +226,10 @@ class TestTriggerLifecycleManagement:
             name="Updated Trigger",
             description="Updated description",
             cron_expression="0 10 * * *",  # Changed time
-            timezone="America/New_York",   # Changed timezone
+            timezone="America/New_York",  # Changed timezone
             task_parameters={"updated": True, "version": 2},
             conditions={"updated_condition": True},
-            failure_threshold=3  # Changed threshold
+            failure_threshold=3,  # Changed threshold
         )
 
         updated_trigger = await trigger_service.update_trigger(original_id, update_data)
@@ -255,7 +246,7 @@ class TestTriggerLifecycleManagement:
 
         # Verify timestamps
         assert updated_trigger.created_at == original_created_at  # Should not change
-        assert updated_trigger.updated_at > original_created_at   # Should be updated
+        assert updated_trigger.updated_at > original_created_at  # Should be updated
 
         # Verify schedule was updated
         mock_temporal_schedule_manager.update_schedule.assert_called_once()
@@ -264,11 +255,7 @@ class TestTriggerLifecycleManagement:
         assert update_call.kwargs["cron_expression"] == "0 10 * * *"
         assert update_call.kwargs["timezone"] == "America/New_York"
 
-    async def test_partial_trigger_update(
-        self,
-        trigger_service,
-        sample_agent_id
-    ):
+    async def test_partial_trigger_update(self, trigger_service, sample_agent_id):
         """Test partial trigger update (only some fields)."""
         # Create initial trigger
         trigger_data = TriggerCreate(
@@ -279,15 +266,14 @@ class TestTriggerLifecycleManagement:
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST"],
             task_parameters={"original": True},
-            created_by="partial_test"
+            created_by="partial_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
 
         # Update only name and task_parameters
         update_data = TriggerUpdate(
-            name="Partially Updated Trigger",
-            task_parameters={"original": True, "updated": True}
+            name="Partially Updated Trigger", task_parameters={"original": True, "updated": True}
         )
 
         updated_trigger = await trigger_service.update_trigger(created_trigger.id, update_data)
@@ -304,10 +290,7 @@ class TestTriggerLifecycleManagement:
     # Trigger Enable/Disable Tests
 
     async def test_trigger_disable_enable_lifecycle(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, sample_agent_id
     ):
         """Test trigger disable and enable lifecycle."""
         # Create active trigger
@@ -316,7 +299,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="enable_disable_test"
+            created_by="enable_disable_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -344,11 +327,7 @@ class TestTriggerLifecycleManagement:
         # Verify schedule was resumed
         mock_temporal_schedule_manager.resume_schedule.assert_called_once_with(created_trigger.id)
 
-    async def test_webhook_trigger_disable_enable(
-        self,
-        trigger_service,
-        sample_agent_id
-    ):
+    async def test_webhook_trigger_disable_enable(self, trigger_service, sample_agent_id):
         """Test webhook trigger disable and enable."""
         # Create webhook trigger
         trigger_data = TriggerCreate(
@@ -356,7 +335,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_type=WebhookType.GENERIC,
-            created_by="webhook_enable_test"
+            created_by="webhook_enable_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -397,10 +376,7 @@ class TestTriggerLifecycleManagement:
     # Trigger Deletion Tests
 
     async def test_cron_trigger_deletion_lifecycle(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, sample_agent_id
     ):
         """Test complete cron trigger deletion lifecycle."""
         # Create trigger
@@ -409,7 +385,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="deletion_test"
+            created_by="deletion_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -438,11 +414,7 @@ class TestTriggerLifecycleManagement:
         history_after_delete = await trigger_service.get_execution_history(trigger_id)
         assert len(history_after_delete) == 0
 
-    async def test_webhook_trigger_deletion_lifecycle(
-        self,
-        trigger_service,
-        sample_agent_id
-    ):
+    async def test_webhook_trigger_deletion_lifecycle(self, trigger_service, sample_agent_id):
         """Test complete webhook trigger deletion lifecycle."""
         # Create webhook trigger
         trigger_data = TriggerCreate(
@@ -450,7 +422,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_type=WebhookType.GENERIC,
-            created_by="webhook_deletion_test"
+            created_by="webhook_deletion_test",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
@@ -460,7 +432,7 @@ class TestTriggerLifecycleManagement:
         # Create some execution history
         execution_data = {
             "execution_time": datetime.utcnow().isoformat(),
-            "request": {"method": "POST", "body": {"test": "data"}}
+            "request": {"method": "POST", "body": {"test": "data"}},
         }
         await trigger_service.execute_trigger(trigger_id, execution_data)
 
@@ -486,10 +458,7 @@ class TestTriggerLifecycleManagement:
     # State Transition Tests
 
     async def test_trigger_state_transitions(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, sample_agent_id
     ):
         """Test various trigger state transitions."""
         # Create trigger (active by default)
@@ -498,7 +467,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="state_test"
+            created_by="state_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -546,10 +515,7 @@ class TestTriggerLifecycleManagement:
     # Execution During Lifecycle Changes
 
     async def test_execution_during_disable_enable(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test trigger execution behavior during disable/enable operations."""
         # Create trigger
@@ -558,7 +524,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="execution_lifecycle_test"
+            created_by="execution_lifecycle_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -591,10 +557,7 @@ class TestTriggerLifecycleManagement:
         assert len(history) >= 2  # At least the successful executions
 
     async def test_concurrent_lifecycle_operations(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, sample_agent_id
     ):
         """Test concurrent lifecycle operations on the same trigger."""
         # Create trigger
@@ -603,7 +566,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="concurrent_test"
+            created_by="concurrent_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -624,10 +587,7 @@ class TestTriggerLifecycleManagement:
 
         # Execute operations concurrently
         results = await asyncio.gather(
-            disable_operation(),
-            enable_operation(),
-            update_operation(),
-            return_exceptions=True
+            disable_operation(), enable_operation(), update_operation(), return_exceptions=True
         )
 
         # Verify no exceptions occurred
@@ -643,14 +603,13 @@ class TestTriggerLifecycleManagement:
     # Error Handling in Lifecycle Operations
 
     async def test_lifecycle_operations_with_schedule_manager_failure(
-        self,
-        trigger_service,
-        mock_temporal_schedule_manager,
-        sample_agent_id
+        self, trigger_service, mock_temporal_schedule_manager, sample_agent_id
     ):
         """Test lifecycle operations when schedule manager fails."""
         # Make schedule manager fail
-        mock_temporal_schedule_manager.create_schedule.side_effect = Exception("Schedule manager error")
+        mock_temporal_schedule_manager.create_schedule.side_effect = Exception(
+            "Schedule manager error"
+        )
 
         # Create trigger (should handle schedule manager failure gracefully)
         trigger_data = TriggerCreate(
@@ -658,7 +617,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="schedule_failure_test"
+            created_by="schedule_failure_test",
         )
 
         # Creation might fail or succeed depending on implementation
@@ -680,10 +639,7 @@ class TestTriggerLifecycleManagement:
             await trigger_service.update_trigger(fake_trigger_id, update_data)
 
     async def test_lifecycle_operations_preserve_execution_history(
-        self,
-        trigger_service,
-        mock_task_service,
-        sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test that lifecycle operations preserve execution history."""
         # Create trigger
@@ -692,7 +648,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
-            created_by="history_test"
+            created_by="history_test",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)

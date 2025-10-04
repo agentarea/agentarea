@@ -12,9 +12,7 @@ class EmbeddingService:
         self.provider_service = provider_service
 
     async def generate_embeddings(
-        self,
-        texts: list[str],
-        model_instance_id: UUID
+        self, texts: list[str], model_instance_id: UUID
     ) -> list[list[float]]:
         """Generate embeddings for a list of texts using the specified model instance."""
         # Get model instance details
@@ -31,10 +29,10 @@ class EmbeddingService:
                 model=instance_details["model_name"],
                 input=texts,
                 api_key=instance_details["api_key"],
-                base_url=instance_details["endpoint_url"]
+                base_url=instance_details["endpoint_url"],
             )
 
-            return [embedding['embedding'] for embedding in response.data]
+            return [embedding["embedding"] for embedding in response.data]
 
         except Exception as e:
             raise RuntimeError(f"Failed to generate embeddings: {e!s}") from e

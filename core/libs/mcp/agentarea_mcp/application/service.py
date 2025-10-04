@@ -256,13 +256,13 @@ class MCPServerInstanceService:
         # Build update kwargs
         update_kwargs = {}
         if name is not None:
-            update_kwargs['name'] = name
+            update_kwargs["name"] = name
         if description is not None:
-            update_kwargs['description'] = description
+            update_kwargs["description"] = description
         if json_spec is not None:
-            update_kwargs['json_spec'] = json_spec
+            update_kwargs["json_spec"] = json_spec
         if status is not None:
-            update_kwargs['status'] = status
+            update_kwargs["status"] = status
 
         instance = await self.repository.update(id, **update_kwargs)
         if not instance:
@@ -304,9 +304,7 @@ class MCPServerInstanceService:
             return False
 
         # Publish event for Go MCP Manager to handle container deletion
-        await self.event_broker.publish(
-            MCPServerInstanceDeleted(instance_id=instance.id)
-        )
+        await self.event_broker.publish(MCPServerInstanceDeleted(instance_id=instance.id))
 
         # Delete the instance from the database
         return await self.repository.delete(id)
@@ -332,7 +330,9 @@ class MCPServerInstanceService:
 
         await self.event_broker.publish(
             MCPServerInstanceStarted(
-                instance_id=updated_instance.id, server_spec_id=updated_instance.server_spec_id, name=updated_instance.name
+                instance_id=updated_instance.id,
+                server_spec_id=updated_instance.server_spec_id,
+                name=updated_instance.name,
             )
         )
 
@@ -350,7 +350,9 @@ class MCPServerInstanceService:
 
         await self.event_broker.publish(
             MCPServerInstanceStopped(
-                instance_id=updated_instance.id, server_spec_id=updated_instance.server_spec_id, name=updated_instance.name
+                instance_id=updated_instance.id,
+                server_spec_id=updated_instance.server_spec_id,
+                name=updated_instance.name,
             )
         )
 
@@ -361,14 +363,17 @@ class MCPServerInstanceService:
         return await self.repository.get_by_id(id)
 
     async def list(
-        self, server_spec_id: str | None = None, status: str | None = None, creator_scoped: bool = False
+        self,
+        server_spec_id: str | None = None,
+        status: str | None = None,
+        creator_scoped: bool = False,
     ) -> list[MCPServerInstance]:
         # Build filters for the repository
         filters = {}
         if server_spec_id:
-            filters['server_spec_id'] = server_spec_id
+            filters["server_spec_id"] = server_spec_id
         if status:
-            filters['status'] = status
+            filters["status"] = status
 
         # Use the repository's list_all method with creator_scoped parameter
         return await self.repository.list_all(creator_scoped=creator_scoped, **filters)
@@ -417,10 +422,10 @@ class MCPServerInstanceService:
 
     async def discover_and_store_tools(self, instance_id: UUID) -> bool:
         """Discover available tools from MCP server instance and store them.
-        
+
         Args:
             instance_id: The MCP server instance ID
-            
+
         Returns:
             True if tools were successfully discovered and stored, False otherwise
         """
@@ -440,7 +445,9 @@ class MCPServerInstanceService:
 
             # Store the discovered tools in the instance
             instance.set_available_tools(discovered_tools)
-            updated_instance = await self.repository.update(instance_id, json_spec=instance.json_spec)
+            updated_instance = await self.repository.update(
+                instance_id, json_spec=instance.json_spec
+            )
 
             return updated_instance is not None
 

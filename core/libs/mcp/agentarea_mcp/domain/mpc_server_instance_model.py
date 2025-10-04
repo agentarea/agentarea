@@ -10,8 +10,12 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    server_spec_id: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Nullable for external providers
-    json_spec: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)  # Unified configuration storage
+    server_spec_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # Nullable for external providers
+    json_spec: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False
+    )  # Unified configuration storage
     status: Mapped[str] = mapped_column(String(50), default="pending")
 
     def __init__(
@@ -23,7 +27,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         status: str = "pending",
         workspace_id: str | None = None,
         created_by: str | None = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.name = name

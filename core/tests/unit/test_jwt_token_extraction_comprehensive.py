@@ -43,7 +43,7 @@ class TestJWTTokenHandler:
             workspace_id="test-workspace-456",
             email="test@example.com",
             roles=["user", "admin"],
-            secret_key="test-secret-key"
+            secret_key="test-secret-key",
         )
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
@@ -56,7 +56,9 @@ class TestJWTTokenHandler:
         assert context.workspace_id == "test-workspace-456"
         assert context.roles == ["user", "admin"]
 
-    async def test_extract_user_context_missing_authorization_header(self, jwt_handler, mock_request):
+    async def test_extract_user_context_missing_authorization_header(
+        self, jwt_handler, mock_request
+    ):
         """Test error handling when authorization header is missing."""
         # Arrange
         mock_request.headers = {}
@@ -69,7 +71,9 @@ class TestJWTTokenHandler:
         assert "Missing authorization token" in exc_info.value.detail
         assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
 
-    async def test_extract_user_context_malformed_authorization_header(self, jwt_handler, mock_request):
+    async def test_extract_user_context_malformed_authorization_header(
+        self, jwt_handler, mock_request
+    ):
         """Test error handling when authorization header is malformed."""
         # Arrange
         mock_request.headers = {"authorization": "InvalidFormat token"}
@@ -112,7 +116,7 @@ class TestJWTTokenHandler:
             user_id="test-user",
             workspace_id="test-workspace",
             expires_in_minutes=-30,  # Already expired
-            secret_key="test-secret-key"
+            secret_key="test-secret-key",
         )
         mock_request.headers = {"authorization": f"Bearer {expired_token}"}
 
@@ -129,7 +133,7 @@ class TestJWTTokenHandler:
         token = generate_test_jwt_token(
             user_id="test-user",
             workspace_id="test-workspace",
-            secret_key="wrong-secret-key"  # Different secret
+            secret_key="wrong-secret-key",  # Different secret
         )
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
@@ -146,7 +150,7 @@ class TestJWTTokenHandler:
         payload = {
             "workspace_id": "test-workspace",
             "iat": datetime.now(UTC),
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -164,7 +168,7 @@ class TestJWTTokenHandler:
         payload = {
             "sub": "test-user",
             "iat": datetime.now(UTC),
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -183,7 +187,7 @@ class TestJWTTokenHandler:
             "sub": "",  # Empty user ID
             "workspace_id": "test-workspace",
             "iat": datetime.now(UTC),
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -202,7 +206,7 @@ class TestJWTTokenHandler:
             "sub": "test-user",
             "workspace_id": "",  # Empty workspace ID
             "iat": datetime.now(UTC),
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -221,7 +225,7 @@ class TestJWTTokenHandler:
             "sub": "test-user",
             "workspace_id": "test-workspace",
             "iat": datetime.now(UTC),
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -242,7 +246,7 @@ class TestJWTTokenHandler:
             workspace_id="full-workspace-456",
             email="full@example.com",
             roles=["user", "admin", "moderator"],
-            secret_key="test-secret-key"
+            secret_key="test-secret-key",
         )
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
@@ -258,9 +262,7 @@ class TestJWTTokenHandler:
         """Test that Bearer token extraction is case sensitive (as per spec)."""
         # Arrange
         token = generate_test_jwt_token(
-            user_id="test-user",
-            workspace_id="test-workspace",
-            secret_key="test-secret-key"
+            user_id="test-user", workspace_id="test-workspace", secret_key="test-secret-key"
         )
         mock_request.headers = {"authorization": f"bearer {token}"}  # lowercase
 
@@ -279,10 +281,10 @@ class TestJWTTokenHandler:
             {
                 "sub": "test-user",
                 "workspace_id": "test-workspace",
-                "exp": datetime.now(UTC) + timedelta(minutes=30)
+                "exp": datetime.now(UTC) + timedelta(minutes=30),
             },
             "test-secret",
-            algorithm="HS512"
+            algorithm="HS512",
         )
 
         mock_request = MagicMock(spec=Request)
@@ -349,7 +351,7 @@ class TestJWTTokenHandler:
         # Assert
         assert extracted_token == f" {token}"  # Should include the extra space
 
-    @patch('agentarea_common.auth.jwt_handler.get_settings')
+    @patch("agentarea_common.auth.jwt_handler.get_settings")
     def test_get_jwt_handler_uses_app_settings(self, mock_get_settings):
         """Test that get_jwt_handler() uses application settings."""
         # Arrange
@@ -393,7 +395,7 @@ class TestJWTTokenHandler:
             "email": None,
             "roles": None,
             "iat": datetime.now(UTC),
-            "exp": datetime.now(UTC) + timedelta(minutes=30)
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
@@ -412,10 +414,7 @@ class TestJWTTestUtils:
 
     def test_generate_test_jwt_token_basic(self):
         """Test basic JWT token generation."""
-        token = generate_test_jwt_token(
-            user_id="test-user",
-            workspace_id="test-workspace"
-        )
+        token = generate_test_jwt_token(user_id="test-user", workspace_id="test-workspace")
 
         # Decode and verify
         payload = jwt.decode(token, options={"verify_signature": False})
@@ -432,15 +431,12 @@ class TestJWTTestUtils:
             roles=["admin", "user"],
             expires_in_minutes=60,
             secret_key="custom-secret",
-            algorithm="HS512"
+            algorithm="HS512",
         )
 
         # Decode and verify
         payload = jwt.decode(
-            token,
-            "custom-secret",
-            algorithms=["HS512"],
-            options={"verify_aud": False}
+            token, "custom-secret", algorithms=["HS512"], options={"verify_aud": False}
         )
         assert payload["sub"] == "full-user"
         assert payload["workspace_id"] == "full-workspace"
@@ -450,9 +446,7 @@ class TestJWTTestUtils:
     def test_create_test_user_context(self):
         """Test test user context creation."""
         context = create_test_user_context(
-            user_id="test-user",
-            workspace_id="test-workspace",
-            roles=["admin"]
+            user_id="test-user", workspace_id="test-workspace", roles=["admin"]
         )
 
         assert isinstance(context, UserContext)

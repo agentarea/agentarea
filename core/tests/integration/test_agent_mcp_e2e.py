@@ -55,9 +55,9 @@ class TestAgentMCPE2E:
                     "name": "PORT",
                     "description": "Port for the MCP server",
                     "required": False,
-                    "default": "3000"
+                    "default": "3000",
                 }
-            ]
+            ],
         }
 
         response = requests.post(f"{API_BASE_URL}/v1/mcp-servers/", json=server_data)
@@ -77,7 +77,7 @@ class TestAgentMCPE2E:
                 "port": 3000,
                 "endpoint_url": "http://localhost:3000",
                 "environment": {"PORT": "3000"},
-                "resources": {"memory_limit": "256m", "cpu_limit": "0.5"}
+                "resources": {"memory_limit": "256m", "cpu_limit": "0.5"},
             },
         }
 
@@ -98,7 +98,7 @@ class TestAgentMCPE2E:
             "model_id": "qwen2.5:latest",
             "instruction": "You are a helpful assistant that can use MCP tools. When asked to echo something, use the echo tool.",
             "mcp_server_ids": [mcp_instance_id],
-            "capabilities": ["mcp_tools"]
+            "capabilities": ["mcp_tools"],
         }
 
         response = requests.post(f"{API_BASE_URL}/v1/agents/", json=agent_data)
@@ -112,7 +112,7 @@ class TestAgentMCPE2E:
         task_data = {
             "agent_id": agent_id,
             "message": "Please echo the text 'Hello from MCP integration test!'",
-            "priority": "high"
+            "priority": "high",
         }
 
         response = requests.post(f"{API_BASE_URL}/v1/tasks/", json=task_data)
@@ -173,11 +173,15 @@ class TestAgentMCPE2E:
 
             # Check task metadata for tool calls
             if task.metadata:
-                metadata = json.loads(task.metadata) if isinstance(task.metadata, str) else task.metadata
+                metadata = (
+                    json.loads(task.metadata) if isinstance(task.metadata, str) else task.metadata
+                )
                 if "tool_calls" in metadata:
                     tool_calls = metadata["tool_calls"]
                     for call in tool_calls:
-                        if call.get("name") == "echo" and "Hello from MCP integration test!" in str(call):
+                        if call.get("name") == "echo" and "Hello from MCP integration test!" in str(
+                            call
+                        ):
                             tool_calls_found = True
                             break
 
@@ -229,7 +233,7 @@ class TestAgentMCPE2E:
             "model_id": "qwen2.5:latest",
             "instructions": "You are a helpful assistant.",
             "mcp_server_ids": [fake_instance_id],
-            "capabilities": ["mcp_tools"]
+            "capabilities": ["mcp_tools"],
         }
 
         # This should either fail during agent creation or handle gracefully during execution
@@ -243,7 +247,7 @@ class TestAgentMCPE2E:
             task_data = {
                 "agent_id": agent["id"],
                 "message": "Please echo something",
-                "priority": "high"
+                "priority": "high",
             }
 
             task_response = requests.post(f"{API_BASE_URL}/v1/tasks/", json=task_data)

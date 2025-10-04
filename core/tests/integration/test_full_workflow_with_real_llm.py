@@ -56,12 +56,9 @@ async def test_full_workflow_with_real_ollama():
         task_id=uuid4(),
         user_id="test-user",
         task_query="Complete this simple test task",
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     # Mock the agent config and tools discovery activities to avoid database dependencies
@@ -95,12 +92,12 @@ async def test_full_workflow_with_real_ollama():
                         "properties": {
                             "result": {
                                 "type": "string",
-                                "description": "Optional final result or summary of what was accomplished"
+                                "description": "Optional final result or summary of what was accomplished",
                             }
                         },
-                        "required": []
-                    }
-                }
+                        "required": [],
+                    },
+                },
             }
         ]
 
@@ -128,7 +125,7 @@ async def test_full_workflow_with_real_ollama():
         llm_model = LLMModel(
             provider_type="ollama_chat",
             model_name="qwen2.5",
-            endpoint_url=f"http://{docker_host}:11434"
+            endpoint_url=f"http://{docker_host}:11434",
         )
 
         # Create request
@@ -136,7 +133,7 @@ async def test_full_workflow_with_real_ollama():
             messages=messages,
             tools=tools,
             temperature=temperature or 0.1,
-            max_tokens=max_tokens or 200
+            max_tokens=max_tokens or 200,
         )
 
         try:
@@ -148,7 +145,9 @@ async def test_full_workflow_with_real_ollama():
 
             logger.info("Starting streaming LLM call...")
             async for chunk in llm_model.ainvoke_stream(request):
-                logger.info(f"Chunk received - Content: '{chunk.content}', Tool calls: {chunk.tool_calls}")
+                logger.info(
+                    f"Chunk received - Content: '{chunk.content}', Tool calls: {chunk.tool_calls}"
+                )
 
                 if chunk.content:
                     complete_content += chunk.content
@@ -168,7 +167,7 @@ async def test_full_workflow_with_real_ollama():
                 "content": complete_content,
                 "tool_calls": complete_tool_calls,
                 "cost": final_cost,
-                "usage": final_usage.__dict__ if final_usage else None
+                "usage": final_usage.__dict__ if final_usage else None,
             }
 
             logger.info("=== FINAL LLM RESPONSE ===")
@@ -177,8 +176,8 @@ async def test_full_workflow_with_real_ollama():
             logger.info(f"Cost: {result['cost']}")
 
             # Check if we have the malformed response issue
-            if not result['tool_calls'] and result['content']:
-                if "task_complete" in result['content'].lower():
+            if not result["tool_calls"] and result["content"]:
+                if "task_complete" in result["content"].lower():
                     logger.warning("🚨 MALFORMED RESPONSE DETECTED IN WORKFLOW!")
                     logger.warning(f"Tool calls are None but content contains: {result['content']}")
 
@@ -194,7 +193,16 @@ async def test_full_workflow_with_real_ollama():
         mock_discover_tools,
         real_ollama_llm_activity,
         # Keep the real tool execution and other activities
-        *[a for a in original_activities if a.__name__ not in ['build_agent_config_activity', 'discover_available_tools_activity', 'call_llm_activity']]
+        *[
+            a
+            for a in original_activities
+            if a.__name__
+            not in [
+                "build_agent_config_activity",
+                "discover_available_tools_activity",
+                "call_llm_activity",
+            ]
+        ],
     ]
 
     env = await WorkflowEnvironment.start_time_skipping()
@@ -213,7 +221,7 @@ async def test_full_workflow_with_real_ollama():
                     execution_request,
                     id=f"test-workflow-{uuid4()}",
                     task_queue="test-queue",
-                    execution_timeout=timedelta(seconds=30)
+                    execution_timeout=timedelta(seconds=30),
                 )
 
                 logger.info("=== WORKFLOW RESULT ===")
@@ -223,7 +231,9 @@ async def test_full_workflow_with_real_ollama():
                 logger.info(f"Total cost: ${result.total_cost:.6f}")
 
                 # The workflow should complete successfully
-                assert result.reasoning_iterations_used >= 1, "Should have completed at least 1 iteration"
+                assert result.reasoning_iterations_used >= 1, (
+                    "Should have completed at least 1 iteration"
+                )
 
                 if result.success:
                     logger.info("✅ Workflow completed successfully with real LLM")
@@ -250,19 +260,16 @@ async def test_compare_direct_vs_workflow_llm_calls():
     llm_model = LLMModel(
         provider_type="ollama_chat",
         model_name="qwen2.5",
-        endpoint_url=f"http://{docker_host}:11434"
+        endpoint_url=f"http://{docker_host}:11434",
     )
 
     # Test messages and tools
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool."
+            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool.",
         },
-        {
-            "role": "user",
-            "content": "Complete this simple test task"
-        }
+        {"role": "user", "content": "Complete this simple test task"},
     ]
 
     tools = [
@@ -276,21 +283,16 @@ async def test_compare_direct_vs_workflow_llm_calls():
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary of what was accomplished"
+                            "description": "Optional final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
-    request = LLMRequest(
-        messages=messages,
-        tools=tools,
-        temperature=0.1,
-        max_tokens=200
-    )
+    request = LLMRequest(messages=messages, tools=tools, temperature=0.1, max_tokens=200)
 
     logger.info("=== DIRECT LLM CALL ===")
     try:
@@ -321,7 +323,7 @@ async def test_compare_direct_vs_workflow_llm_calls():
         # Find the call_llm_activity
         call_llm_activity = None
         for activity_func in activities:
-            if hasattr(activity_func, '__name__') and activity_func.__name__ == 'call_llm_activity':
+            if hasattr(activity_func, "__name__") and activity_func.__name__ == "call_llm_activity":
                 call_llm_activity = activity_func
                 break
 
@@ -336,7 +338,7 @@ async def test_compare_direct_vs_workflow_llm_calls():
                 max_tokens=200,
                 task_id="test-task",
                 agent_id="test-agent",
-                execution_id="test-execution"
+                execution_id="test-execution",
             )
 
             logger.info("Activity call result:")
@@ -344,7 +346,7 @@ async def test_compare_direct_vs_workflow_llm_calls():
             logger.info(f"  Tool calls: {activity_result.get('tool_calls')}")
 
             # Compare results
-            if activity_result.get('tool_calls') != complete_tool_calls:
+            if activity_result.get("tool_calls") != complete_tool_calls:
                 logger.warning("🚨 DIFFERENCE DETECTED!")
                 logger.warning(f"Direct: {complete_tool_calls}")
                 logger.warning(f"Activity: {activity_result.get('tool_calls')}")

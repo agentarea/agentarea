@@ -1,14 +1,14 @@
 """Simple base repository for CRUD operations."""
 
-from typing import Generic, TypeVar
+from typing import TypeVar
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
-class BaseRepository(Generic[T]):
+class BaseRepository[T]:
     """Base repository providing basic CRUD operations."""
 
     def __init__(self, session: AsyncSession):
@@ -21,6 +21,7 @@ class BaseRepository(Generic[T]):
     async def list(self) -> list[T]:
         """List all records."""
         from sqlalchemy import select
+
         query = select(self.model_class)
         result = await self.session.execute(query)
         return list(result.scalars().all())

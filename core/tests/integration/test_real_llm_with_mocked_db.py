@@ -21,6 +21,7 @@ class MockedDatabaseDependencies:
 
     class TestSecretManager:
         """Real secret manager for LLM providers."""
+
         async def get_secret(self, secret_name: str) -> str:
             # For Ollama, return empty string (no API key needed)
             if "ollama" in secret_name.lower():
@@ -30,6 +31,7 @@ class MockedDatabaseDependencies:
 
     class TestEventBroker:
         """Real event broker that logs events."""
+
         def __init__(self):
             self.published_events = []
             self.broker = self  # Add broker attribute to avoid errors
@@ -60,7 +62,7 @@ def mock_database_calls():
         "workspace_id": "test-workspace-id",
         "created_by": "test-user-id",
         "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC)
+        "updated_at": datetime.now(UTC),
     }
 
     # Test model instance configuration
@@ -71,7 +73,7 @@ def mock_database_calls():
         "model_spec_id": "qwen25-model-spec",
         "config": {},
         "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC)
+        "updated_at": datetime.now(UTC),
     }
 
     # Test provider configuration
@@ -82,7 +84,7 @@ def mock_database_calls():
         "config": {"endpoint_url": "http://localhost:11434"},
         "api_key": None,
         "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC)
+        "updated_at": datetime.now(UTC),
     }
 
     # Test provider spec
@@ -93,7 +95,7 @@ def mock_database_calls():
         "description": "Local Ollama provider",
         "config_schema": {},
         "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC)
+        "updated_at": datetime.now(UTC),
     }
 
     # Test model spec
@@ -103,44 +105,54 @@ def mock_database_calls():
         "description": "Qwen 2.5 model",
         "config_schema": {},
         "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC)
+        "updated_at": datetime.now(UTC),
     }
 
     # Mock the database repositories
-    with patch('agentarea_agents.infrastructure.repository.AgentRepository') as mock_agent_repo, \
-         patch('agentarea_llm.infrastructure.model_instance_repository.ModelInstanceRepository') as mock_model_repo, \
-         patch('agentarea_llm.infrastructure.provider_config_repository.ProviderConfigRepository') as mock_provider_repo, \
-         patch('agentarea_llm.infrastructure.provider_spec_repository.ProviderSpecRepository') as mock_spec_repo, \
-         patch('agentarea_tasks.infrastructure.repository.TaskRepository') as mock_task_repo:
-
+    with (
+        patch("agentarea_agents.infrastructure.repository.AgentRepository") as mock_agent_repo,
+        patch(
+            "agentarea_llm.infrastructure.model_instance_repository.ModelInstanceRepository"
+        ) as mock_model_repo,
+        patch(
+            "agentarea_llm.infrastructure.provider_config_repository.ProviderConfigRepository"
+        ) as mock_provider_repo,
+        patch(
+            "agentarea_llm.infrastructure.provider_spec_repository.ProviderSpecRepository"
+        ) as mock_spec_repo,
+        patch("agentarea_tasks.infrastructure.repository.TaskRepository") as mock_task_repo,
+    ):
         # Configure agent repository
         mock_agent_instance = mock_agent_repo.return_value
         mock_agent_instance.get_by_id = AsyncMock(return_value=test_agent_config)
-        mock_agent_instance.get_agent_with_model = AsyncMock(return_value={
-            **test_agent_config,
-            "model_instance": test_model_instance,
-            "provider_config": test_provider_config,
-            "provider_spec": test_provider_spec,
-            "model_spec": test_model_spec
-        })
+        mock_agent_instance.get_agent_with_model = AsyncMock(
+            return_value={
+                **test_agent_config,
+                "model_instance": test_model_instance,
+                "provider_config": test_provider_config,
+                "provider_spec": test_provider_spec,
+                "model_spec": test_model_spec,
+            }
+        )
 
         # Configure model repository
         mock_model_instance = mock_model_repo.return_value
         mock_model_instance.get_by_id = AsyncMock(return_value=test_model_instance)
-        mock_model_instance.get_model_with_provider = AsyncMock(return_value={
-            **test_model_instance,
-            "provider_config": test_provider_config,
-            "provider_spec": test_provider_spec,
-            "model_spec": test_model_spec
-        })
+        mock_model_instance.get_model_with_provider = AsyncMock(
+            return_value={
+                **test_model_instance,
+                "provider_config": test_provider_config,
+                "provider_spec": test_provider_spec,
+                "model_spec": test_model_spec,
+            }
+        )
 
         # Configure provider repository
         mock_provider_instance = mock_provider_repo.return_value
         mock_provider_instance.get_by_id = AsyncMock(return_value=test_provider_config)
-        mock_provider_instance.get_provider_with_spec = AsyncMock(return_value={
-            **test_provider_config,
-            "provider_spec": test_provider_spec
-        })
+        mock_provider_instance.get_provider_with_spec = AsyncMock(
+            return_value={**test_provider_config, "provider_spec": test_provider_spec}
+        )
 
         # Configure spec repository
         mock_spec_instance = mock_spec_repo.return_value
@@ -150,18 +162,16 @@ def mock_database_calls():
         mock_task_instance = mock_task_repo.return_value
         mock_task_instance.create = AsyncMock(return_value={"id": str(uuid4())})
         mock_task_instance.update = AsyncMock()
-        mock_task_instance.get_by_id = AsyncMock(return_value={
-            "id": str(uuid4()),
-            "status": "pending",
-            "created_at": datetime.now(UTC)
-        })
+        mock_task_instance.get_by_id = AsyncMock(
+            return_value={"id": str(uuid4()), "status": "pending", "created_at": datetime.now(UTC)}
+        )
 
         yield {
             "agent_repo": mock_agent_instance,
             "model_repo": mock_model_instance,
             "provider_repo": mock_provider_instance,
             "spec_repo": mock_spec_instance,
-            "task_repo": mock_task_instance
+            "task_repo": mock_task_instance,
         }
 
 
@@ -188,12 +198,9 @@ async def test_real_llm_with_mocked_database(mock_database_calls):
         task_id=str(uuid4()),
         user_id="test-user-id",
         task_query="test",  # Simple task like production
-        task_parameters={
-            "success_criteria": ["Task completed successfully"],
-            "max_iterations": 3
-        },
+        task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
-        requires_human_approval=False
+        requires_human_approval=False,
     )
 
     logger.info(f"🤖 Agent ID: {execution_request.agent_id}")
@@ -218,7 +225,7 @@ async def test_real_llm_with_mocked_database(mock_database_calls):
                     execution_request,
                     id=f"real-llm-test-{uuid4()}",
                     task_queue="real-llm-test-queue",
-                    execution_timeout=timedelta(minutes=2)
+                    execution_timeout=timedelta(minutes=2),
                 )
 
                 logger.info("=" * 60)
@@ -236,22 +243,28 @@ async def test_real_llm_with_mocked_database(mock_database_calls):
                 proper_tool_calls = 0
 
                 for i, msg in enumerate(result.conversation_history):
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')
-                    tool_calls = msg.get('tool_calls', [])
+                    role = msg.get("role", "unknown")
+                    content = msg.get("content", "")
+                    tool_calls = msg.get("tool_calls", [])
 
-                    if role == 'assistant':
+                    if role == "assistant":
                         content_len = len(content) if content else 0
                         has_tool_calls = bool(tool_calls)
 
-                        logger.info(f"📝 Message {i} ({role}): {content_len} chars, tool_calls: {has_tool_calls}")
+                        logger.info(
+                            f"📝 Message {i} ({role}): {content_len} chars, tool_calls: {has_tool_calls}"
+                        )
 
                         if has_tool_calls:
                             proper_tool_calls += 1
                             logger.info(f"✅ Message {i}: Proper tool calls detected")
                             for tc in tool_calls:
-                                logger.info(f"   🔧 Tool: {tc.get('function', {}).get('name', 'unknown')}")
-                        elif content and ('task_complete' in content or 'function' in content.lower()):
+                                logger.info(
+                                    f"   🔧 Tool: {tc.get('function', {}).get('name', 'unknown')}"
+                                )
+                        elif content and (
+                            "task_complete" in content or "function" in content.lower()
+                        ):
                             malformed_responses += 1
                             logger.warning(f"🚨 Message {i}: Potential malformed response detected")
                             logger.warning(f"   Content preview: {content[:200]}...")
@@ -284,7 +297,9 @@ async def test_real_llm_with_mocked_database(mock_database_calls):
                 # Verify we actually completed successfully
                 if result.success:
                     logger.info("🎉 Workflow completed successfully with real LLM!")
-                    assert result.reasoning_iterations_used >= 1, "Should have completed at least 1 iteration"
+                    assert result.reasoning_iterations_used >= 1, (
+                        "Should have completed at least 1 iteration"
+                    )
                 else:
                     logger.warning("⚠️ Workflow didn't complete successfully - check logs")
 
@@ -322,7 +337,7 @@ async def test_direct_llm_call_with_mocked_db(mock_database_calls):
     # Find the call_llm activity
     call_llm_activity = None
     for activity_func in activities:
-        if hasattr(activity_func, '__name__') and 'call_llm' in activity_func.__name__:
+        if hasattr(activity_func, "__name__") and "call_llm" in activity_func.__name__:
             call_llm_activity = activity_func
             break
 
@@ -333,12 +348,12 @@ async def test_direct_llm_call_with_mocked_db(mock_database_calls):
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool to mark it as completed."
+            "content": "You are a helpful AI assistant. When you complete a task, use the task_complete tool to mark it as completed.",
         },
         {
             "role": "user",
-            "content": "test"  # Same simple query as production
-        }
+            "content": "test",  # Same simple query as production
+        },
     ]
 
     tools = [
@@ -352,12 +367,12 @@ async def test_direct_llm_call_with_mocked_db(mock_database_calls):
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary of what was accomplished"
+                            "description": "Optional final result or summary of what was accomplished",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
@@ -376,16 +391,16 @@ async def test_direct_llm_call_with_mocked_db(mock_database_calls):
             max_tokens=500,
             task_id="test-task",
             agent_id="12345678-1234-5678-1234-567812345678",
-            execution_id="test-execution"
+            execution_id="test-execution",
         )
 
         logger.info("=" * 60)
         logger.info("🎯 DIRECT LLM CALL RESULT")
         logger.info("=" * 60)
 
-        content = result.get('content', '')
-        tool_calls = result.get('tool_calls', [])
-        cost = result.get('cost', 0)
+        content = result.get("content", "")
+        tool_calls = result.get("tool_calls", [])
+        cost = result.get("cost", 0)
 
         logger.info(f"📝 Content length: {len(content)} chars")
         logger.info(f"🔧 Tool calls: {tool_calls}")
@@ -400,7 +415,7 @@ async def test_direct_llm_call_with_mocked_db(mock_database_calls):
             for i, tc in enumerate(tool_calls):
                 logger.info(f"   Tool {i}: {tc.get('function', {}).get('name', 'unknown')}")
                 logger.info(f"   Args: {tc.get('function', {}).get('arguments', 'none')}")
-        elif content and ('task_complete' in content or '"function"' in content):
+        elif content and ("task_complete" in content or '"function"' in content):
             logger.warning("🚨 Response format is MALFORMED - tool calls in content")
             logger.warning("This indicates the LLM is not properly formatting tool calls")
         else:

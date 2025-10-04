@@ -4,7 +4,7 @@ Integration test for LLM model and response parser with ollama_chat/qwen2.5.
 
 Tests the complete LLM integration including:
 1. Direct LLM calls with different response modes
-2. Response parser functionality 
+2. Response parser functionality
 3. Event publishing and streaming
 4. Tool call extraction from content vs structured responses
 """
@@ -17,7 +17,9 @@ import subprocess
 import pytest
 
 # Setup logging for test visibility
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -29,13 +31,11 @@ class EventCapture:
 
     async def publish_chunk_event(self, chunk: str, chunk_index: int, is_final: bool = False):
         """Capture chunk events."""
-        event = {
-            "chunk": chunk,
-            "chunk_index": chunk_index,
-            "is_final": is_final
-        }
+        event = {"chunk": chunk, "chunk_index": chunk_index, "is_final": is_final}
         self.events.append(event)
-        logger.debug(f"Chunk Event: index={chunk_index}, final={is_final}, chunk='{chunk[:30]}{'...' if len(chunk) > 30 else ''}'")
+        logger.debug(
+            f"Chunk Event: index={chunk_index}, final={is_final}, chunk='{chunk[:30]}{'...' if len(chunk) > 30 else ''}'"
+        )
 
 
 def check_ollama_available():
@@ -43,7 +43,9 @@ def check_ollama_available():
     try:
         result = subprocess.run(
             ["curl", "-s", "http://localhost:11434/api/tags"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             # Check if qwen2.5 model is available
@@ -73,19 +75,19 @@ async def test_llm_with_structured_tools():
         provider_type="ollama_chat",
         model_name="qwen2.5",
         api_key=None,
-        endpoint_url="localhost:11434"
+        endpoint_url="localhost:11434",
     )
 
     # Messages for task completion
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant. When you complete a task, call the task_complete function."
+            "content": "You are a helpful AI assistant. When you complete a task, call the task_complete function.",
         },
         {
             "role": "user",
-            "content": "Please test the task completion functionality. Call task_complete when ready."
-        }
+            "content": "Please test the task completion functionality. Call task_complete when ready.",
+        },
     ]
 
     # Define tools
@@ -100,21 +102,16 @@ async def test_llm_with_structured_tools():
                     "properties": {
                         "result": {
                             "type": "string",
-                            "description": "Optional final result or summary"
+                            "description": "Optional final result or summary",
                         }
                     },
-                    "required": []
-                }
-            }
+                    "required": [],
+                },
+            },
         }
     ]
 
-    request = LLMRequest(
-        messages=messages,
-        tools=tools,
-        temperature=0.7,
-        max_tokens=300
-    )
+    request = LLMRequest(messages=messages, tools=tools, temperature=0.7, max_tokens=300)
 
     # Call LLM
     logger.info("Testing LLM with structured tools...")
@@ -158,26 +155,26 @@ async def test_llm_content_based_responses():
         provider_type="ollama_chat",
         model_name="qwen2.5",
         api_key=None,
-        endpoint_url="localhost:11434"
+        endpoint_url="localhost:11434",
     )
 
     # Messages requesting JSON format in content
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant. When you complete a task, respond with JSON format: {\"name\": \"task_complete\", \"arguments\": {\"result\": \"your result\"}}."
+            "content": 'You are a helpful AI assistant. When you complete a task, respond with JSON format: {"name": "task_complete", "arguments": {"result": "your result"}}.',
         },
         {
             "role": "user",
-            "content": "Please test the task completion functionality. Respond with the JSON format to complete the task."
-        }
+            "content": "Please test the task completion functionality. Respond with the JSON format to complete the task.",
+        },
     ]
 
     request = LLMRequest(
         messages=messages,
         tools=None,  # No tools provided
         temperature=0.7,
-        max_tokens=300
+        max_tokens=300,
     )
 
     # Call LLM
@@ -191,7 +188,9 @@ async def test_llm_content_based_responses():
     assert response.usage is not None, "Response should have usage information"
 
     # Without tools, expect content with JSON and no structured tool calls
-    assert response.tool_calls is None or len(response.tool_calls) == 0, "Should not have structured tool calls"
+    assert response.tool_calls is None or len(response.tool_calls) == 0, (
+        "Should not have structured tool calls"
+    )
     assert response.content != "", "Content should not be empty"
 
     # Verify content contains valid JSON
@@ -224,27 +223,16 @@ async def test_llm_streaming():
         provider_type="ollama_chat",
         model_name="qwen2.5",
         api_key=None,
-        endpoint_url="localhost:11434"
+        endpoint_url="localhost:11434",
     )
 
     # Messages for streaming test
     messages = [
-        {
-            "role": "system",
-            "content": "You are a helpful AI assistant. Provide concise responses."
-        },
-        {
-            "role": "user",
-            "content": "Explain task completion in AI systems in 2-3 sentences."
-        }
+        {"role": "system", "content": "You are a helpful AI assistant. Provide concise responses."},
+        {"role": "user", "content": "Explain task completion in AI systems in 2-3 sentences."},
     ]
 
-    request = LLMRequest(
-        messages=messages,
-        tools=None,
-        temperature=0.7,
-        max_tokens=200
-    )
+    request = LLMRequest(messages=messages, tools=None, temperature=0.7, max_tokens=200)
 
     # Set up event capture
     event_capture = EventCapture()
@@ -256,7 +244,7 @@ async def test_llm_streaming():
         task_id="test-task-123",
         agent_id="test-agent-456",
         execution_id="test-exec-789",
-        event_publisher=event_capture.publish_chunk_event
+        event_publisher=event_capture.publish_chunk_event,
     )
 
     # Assertions
@@ -299,17 +287,19 @@ async def test_response_parser_with_different_formats():
         model="ollama_chat/qwen2.5",
         messages=[
             {"role": "system", "content": "You are helpful. Call task_complete when done."},
-            {"role": "user", "content": "Test task completion. Call the function."}
+            {"role": "user", "content": "Test task completion. Call the function."},
         ],
-        tools=[{
-            "type": "function",
-            "function": {
-                "name": "task_complete",
-                "description": "Complete the task",
-                "parameters": {"type": "object", "properties": {}, "required": []}
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "task_complete",
+                    "description": "Complete the task",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
             }
-        }],
-        base_url="http://localhost:11434"
+        ],
+        base_url="http://localhost:11434",
     )
 
     parsed1 = LiteLLMResponseParser.parse_response(response1)
@@ -319,10 +309,13 @@ async def test_response_parser_with_different_formats():
     response2 = await litellm.acompletion(
         model="ollama_chat/qwen2.5",
         messages=[
-            {"role": "system", "content": "Respond with JSON: {\"name\": \"task_complete\", \"arguments\": {\"result\": \"your result\"}}."},
-            {"role": "user", "content": "Test completion with JSON format."}
+            {
+                "role": "system",
+                "content": 'Respond with JSON: {"name": "task_complete", "arguments": {"result": "your result"}}.',
+            },
+            {"role": "user", "content": "Test completion with JSON format."},
         ],
-        base_url="http://localhost:11434"
+        base_url="http://localhost:11434",
     )
 
     parsed2 = LiteLLMResponseParser.parse_response(response2)
@@ -343,7 +336,9 @@ async def test_response_parser_with_different_formats():
 
     # Verify extracted tool call from content
     extracted_tool = parsed2["tool_calls"][0]
-    assert extracted_tool["function"]["name"] == "task_complete", "Should extract task_complete from content"
+    assert extracted_tool["function"]["name"] == "task_complete", (
+        "Should extract task_complete from content"
+    )
 
     logger.info("✅ Response parser test passed - both formats handled correctly")
     return parsed1, parsed2
@@ -366,7 +361,7 @@ async def test_react_framework_issue():
         provider_type="ollama_chat",
         model_name="qwen2.5",
         api_key=None,
-        endpoint_url="localhost:11434"
+        endpoint_url="localhost:11434",
     )
 
     # ReAct framework messages (similar to what the debug shows)
@@ -402,12 +397,9 @@ CRITICAL RULES:
 
 Continue this pattern until the task is complete, then use the task_complete tool with comprehensive details.
 
-Remember: ALWAYS show your reasoning before taking actions. Users want to see your thought process."""
+Remember: ALWAYS show your reasoning before taking actions. Users want to see your thought process.""",
         },
-        {
-            "role": "user",
-            "content": "Tell me a short joke about programming"
-        }
+        {"role": "user", "content": "Tell me a short joke about programming"},
     ]
 
     # Tools available
@@ -419,21 +411,14 @@ Remember: ALWAYS show your reasoning before taking actions. Users want to see yo
                 "description": "Mark task as completed when all success criteria are met",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "result": {"type": "string", "description": "Final result"}
-                    },
-                    "required": []
-                }
-            }
+                    "properties": {"result": {"type": "string", "description": "Final result"}},
+                    "required": [],
+                },
+            },
         }
     ]
 
-    request = LLMRequest(
-        messages=messages,
-        tools=tools,
-        temperature=0.7,
-        max_tokens=500
-    )
+    request = LLMRequest(messages=messages, tools=tools, temperature=0.7, max_tokens=500)
 
     # Call LLM
     logger.info("Testing ReAct framework behavior...")
@@ -449,7 +434,9 @@ Remember: ALWAYS show your reasoning before taking actions. Users want to see yo
     # Check if LLM is following ReAct pattern
     if response.tool_calls and not response.content:
         logger.warning("⚠️ LLM jumped straight to tool calls without ReAct reasoning!")
-        logger.warning("This indicates the tool_choice or model configuration may be forcing tool usage")
+        logger.warning(
+            "This indicates the tool_choice or model configuration may be forcing tool usage"
+        )
 
         # This is the problematic behavior we want to identify
         assert False, "LLM should provide reasoning content before calling tools in ReAct framework"
@@ -468,6 +455,7 @@ Remember: ALWAYS show your reasoning before taking actions. Users want to see yo
 
 if __name__ == "__main__":
     """Run tests directly for development/debugging."""
+
     async def run_all_tests():
         logger.info("🚀 Running LLM Integration Tests")
         logger.info("=" * 60)
@@ -477,7 +465,7 @@ if __name__ == "__main__":
             ("Content-Based", test_llm_content_based_responses()),
             ("Streaming", test_llm_streaming()),
             ("Response Parser", test_response_parser_with_different_formats()),
-            ("ReAct Framework", test_react_framework_issue())
+            ("ReAct Framework", test_react_framework_issue()),
         ]
 
         results = {}

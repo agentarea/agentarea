@@ -31,25 +31,24 @@ from agentarea_common.auth.context import UserContext
 from temporalio import activity
 
 from ..interfaces import ActivityDependencies
-from .event_publisher import create_event_publisher, publish_enriched_llm_error_event
 
 # Add import for new Pydantic models
 from ..models import (
     AgentConfigRequest,
     AgentConfigResult,
-    ToolDiscoveryRequest,
-    ToolDiscoveryResult,
-    LLMCallRequest,
-    LLMCallResult,
-    MCPToolRequest,
-    MCPToolResult,
     ExecutionPlanRequest,
     ExecutionPlanResult,
     GoalEvaluationRequest,
     GoalEvaluationResult,
+    LLMCallRequest,
+    LLMCallResult,
+    MCPToolRequest,
+    MCPToolResult,
+    ToolDiscoveryRequest,
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from .event_publisher import create_event_publisher, publish_enriched_llm_error_event
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +137,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             try:
                 model_uuid = UUID(request.model_id)
             except ValueError as e:
-                raise ValueError(f"Invalid model_id: {request.model_id}. Must be a valid UUID representing a model instance.") from e
+                raise ValueError(
+                    f"Invalid model_id: {request.model_id}. Must be a valid UUID representing a model instance."
+                ) from e
 
             # Create context - prefer workspace_id, fallback to user_context_data
             if request.workspace_id:
@@ -227,13 +228,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Create final response using Pydantic model
             from ..models import LLMUsage
-            
+
             usage_model = None
             if final_usage:
                 usage_model = LLMUsage(
-                    prompt_tokens=getattr(final_usage, 'prompt_tokens', 0),
-                    completion_tokens=getattr(final_usage, 'completion_tokens', 0),
-                    total_tokens=getattr(final_usage, 'total_tokens', 0),
+                    prompt_tokens=getattr(final_usage, "prompt_tokens", 0),
+                    completion_tokens=getattr(final_usage, "completion_tokens", 0),
+                    total_tokens=getattr(final_usage, "total_tokens", 0),
                 )
 
             return LLMCallResult(
@@ -253,8 +254,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     agent_id=request.agent_id,
                     execution_id=request.execution_id or "",
                     model_id=request.model_id,
-                    provider_type=provider_type if 'provider_type' in locals() else None,
-                    event_broker=dependencies.event_broker
+                    provider_type=provider_type if "provider_type" in locals() else None,
+                    event_broker=dependencies.event_broker,
                 )
 
             # Legacy error handling for backward compatibility
@@ -271,7 +272,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             raise ApplicationError(
                 f"LLM call failed: {error_message}",
                 type=error_type,
-                non_retryable=_is_non_retryable_error(e)
+                non_retryable=_is_non_retryable_error(e),
             ) from e
 
     @activity.defn
@@ -298,7 +299,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         disabled_methods = tool_config.get("disabled_methods", {})
 
                         # Convert disabled_methods to constructor arguments
-                        toolset_methods = dict.fromkeys(disabled_methods.keys(), False) if disabled_methods else {}
+                        toolset_methods = (
+                            dict.fromkeys(disabled_methods.keys(), False)
+                            if disabled_methods
+                            else {}
+                        )
                     else:
                         builtin_tool_name = tool_config
                         toolset_methods = {}
@@ -322,13 +327,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     server_instance_id=request.server_instance_id,
                     mcp_server_instance_service=mcp_server_instance_service,
                 )
-                
+
                 return MCPToolResult(
                     success=result.get("success", False),
                     result=str(result.get("result", "")),
                     execution_time=result.get("execution_time", ""),
                 )
-                
+
             except Exception as e:
                 logger.error(f"Tool execution failed: {e}")
                 return MCPToolResult(
@@ -382,9 +387,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             goal_description=goal_description,
             success_criteria=success_criteria,
             conversation_history=request.messages,
-            current_iteration=request.current_iteration
+            current_iteration=request.current_iteration,
         )
-        
+
         return GoalEvaluationResult(
             goal_achieved=evaluation.get("goal_achieved", False),
             confidence=evaluation.get("confidence", 0.0),
@@ -416,7 +421,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 logger.error(
                     f"Event broker {type(dependencies.event_broker)} does not have 'broker' attribute"
                 )
-                return WorkflowEventsResult(success=False, errors=["Event broker configuration error"])
+                return WorkflowEventsResult(
+                    success=False, errors=["Event broker configuration error"]
+                )
 
             redis_event_broker = create_event_broker_from_router(dependencies.event_broker)  # type: ignore
             events_published = 0
@@ -437,12 +444,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         aggregate_type="task",
                         original_event_type=event["event_type"],
                         original_timestamp=event["timestamp"],
-                        original_data=event["data"],  # Include the original event data for tool calls
+                        original_data=event[
+                            "data"
+                        ],  # Include the original event data for tool calls
                     )
 
                     # 1. Publish via RedisEventBroker (uses FastStream infrastructure) for real-time SSE
                     await redis_event_broker.publish(domain_event)
-                    logger.debug(f"Published workflow event: {event['event_type']} for task {task_id}")
+                    logger.debug(
+                        f"Published workflow event: {event['event_type']} for task {task_id}"
+                    )
 
                     # 2. Store event in database using proper service layer
                     try:
@@ -458,15 +469,17 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                 event_type=event["event_type"],
                                 data=event["data"],
                                 workspace_id=workspace_id,
-                                created_by="workflow"
+                                created_by="workflow",
                             )
 
                             # Commit is handled by the service
-                            logger.debug(f"Stored event using service: {event['event_type']} for task {task_id}")
+                            logger.debug(
+                                f"Stored event using service: {event['event_type']} for task {task_id}"
+                            )
 
                     except Exception as db_error:
                         logger.error(f"Failed to store event using service: {db_error}")
-                        errors.append(f"DB storage failed for {event['event_type']}: {str(db_error)}")
+                        errors.append(f"DB storage failed for {event['event_type']}: {db_error!s}")
 
                     # 3. Handle LLM error events locally for immediate action
                     if event["event_type"].startswith("LLM") and "Failed" in event["event_type"]:
@@ -474,13 +487,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             await handle_llm_error_event(domain_event)
                         except Exception as handler_error:
                             logger.error(f"Failed to handle LLM error event: {handler_error}")
-                            errors.append(f"Error handler failed: {str(handler_error)}")
-                    
+                            errors.append(f"Error handler failed: {handler_error!s}")
+
                     events_published += 1
-                    
+
                 except Exception as event_error:
                     logger.error(f"Failed to process single event: {event_error}")
-                    errors.append(f"Event processing failed: {str(event_error)}")
+                    errors.append(f"Event processing failed: {event_error!s}")
 
             return WorkflowEventsResult(
                 success=len(errors) == 0,
@@ -493,7 +506,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return WorkflowEventsResult(
                 success=False,
                 events_published=0,
-                errors=[f"Critical failure: {str(e)}"],
+                errors=[f"Critical failure: {e!s}"],
             )
 
     # Return all activity functions

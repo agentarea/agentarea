@@ -35,7 +35,7 @@ class Config:
     def _save_config(self, config: dict[str, Any]) -> None:
         """Save configuration to file and update cache."""
         try:
-            with open(self.config_file, 'w') as f:
+            with open(self.config_file, "w") as f:
                 json.dump(config, f, indent=2)
             self._config_cache = config
         except OSError as e:
@@ -44,7 +44,7 @@ class Config:
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value."""
         config = self._load_config()
-        keys = key.split('.')
+        keys = key.split(".")
         value = config
 
         for k in keys:
@@ -58,7 +58,7 @@ class Config:
     def set(self, key: str, value: Any) -> None:
         """Set configuration value."""
         config = self._load_config()
-        keys = key.split('.')
+        keys = key.split(".")
         current = config
 
         # Navigate to the parent of the target key
@@ -74,7 +74,7 @@ class Config:
     def delete(self, key: str) -> None:
         """Delete configuration value."""
         config = self._load_config()
-        keys = key.split('.')
+        keys = key.split(".")
         current = config
 
         # Navigate to the parent of the target key

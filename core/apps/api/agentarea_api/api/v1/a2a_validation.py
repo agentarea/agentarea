@@ -6,11 +6,17 @@ Ensures compliance with JSON-RPC 2.0 and A2A protocol specifications.
 
 import json
 import logging
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
+
+try:
+    # Pydantic v2
+    from pydantic import ConfigDict
+except ImportError:  # pragma: no cover
+    ConfigDict = dict  # type: ignore[misc]
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +47,10 @@ class A2AMessageSendParams(BaseModel):
     """A2A message/send parameters validation."""
 
     message: A2AMessage
-    contextId: str | None = None
+    context_id: str | None = Field(None, alias="contextId")
     metadata: dict[str, Any] | None = None
+    # Allow population by field name or alias
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class A2ATaskParams(BaseModel):
@@ -63,7 +71,7 @@ class A2AValidationError(Exception):
 class A2AValidator:
     """A2A protocol validator."""
 
-    SUPPORTED_METHODS = {
+    SUPPORTED_METHODS: ClassVar[set[str]] = {
         "message/send",
         "message/stream",
         "tasks/get",
@@ -94,7 +102,9 @@ class A2AValidator:
             return request
 
         except ValidationError as e:
-            raise A2AValidationError(f"Invalid JSON-RPC request format: {e}", "INVALID_REQUEST")
+            raise A2AValidationError(
+                f"Invalid JSON-RPC request format: {e}", "INVALID_REQUEST"
+            ) from e
 
     @classmethod
     def validate_message_send_params(cls, params: dict[str, Any]) -> A2AMessageSendParams:
@@ -102,7 +112,9 @@ class A2AValidator:
         try:
             return A2AMessageSendParams(**params)
         except ValidationError as e:
-            raise A2AValidationError(f"Invalid message/send parameters: {e}", "INVALID_PARAMS")
+            raise A2AValidationError(
+                f"Invalid message/send parameters: {e}", "INVALID_PARAMS"
+            ) from e
 
     @classmethod
     def validate_task_params(cls, params: dict[str, Any]) -> A2ATaskParams:
@@ -110,7 +122,7 @@ class A2AValidator:
         try:
             return A2ATaskParams(**params)
         except ValidationError as e:
-            raise A2AValidationError(f"Invalid task parameters: {e}", "INVALID_PARAMS")
+            raise A2AValidationError(f"Invalid task parameters: {e}", "INVALID_PARAMS") from e
 
     @classmethod
     def validate_agent_id(cls, agent_id: str) -> UUID:
@@ -120,7 +132,7 @@ class A2AValidator:
         except ValueError:
             raise A2AValidationError(
                 f"Invalid agent ID format: {agent_id}. Expected UUID format.", "INVALID_AGENT_ID"
-            )
+            ) from None
 
     @classmethod
     def validate_request_content_type(cls, request: Request) -> None:
@@ -160,9 +172,7 @@ class A2AValidator:
         return json_rpc_request
 
 
-def create_a2a_error_response(
-    request_id: str | None, error: A2AValidationError
-) -> dict[str, Any]:
+def create_a2a_error_response(request_id: str | None, error: A2AValidationError) -> dict[str, Any]:
     """Create A2A-compliant error response."""
     # Map validation errors to JSON-RPC error codes
     error_code_mapping = {
@@ -208,7 +218,7 @@ async def validate_a2a_middleware(request: Request, agent_id: UUID) -> dict[str,
         try:
             body = await request.json()
             request_id = body.get("id")
-        except:
+        except Exception:  # noqa: S110
             pass
 
         # Return error response

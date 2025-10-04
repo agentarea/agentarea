@@ -9,28 +9,28 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
-	
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // KubernetesBackend implements the Backend interface using Kubernetes resources
 type KubernetesBackend struct {
-	client       client.Client
-	clientset    kubernetes.Interface
-	config       *config.Config
-	k8sConfig    *config.KubernetesConfig
-	logger       *slog.Logger
-	scheme       *runtime.Scheme
+	client    client.Client
+	clientset kubernetes.Interface
+	config    *config.Config
+	k8sConfig *config.KubernetesConfig
+	logger    *slog.Logger
+	scheme    *runtime.Scheme
 }
 
 // NewKubernetesBackend creates a new Kubernetes backend
@@ -96,7 +96,7 @@ func (k *KubernetesBackend) Initialize(ctx context.Context) error {
 // CreateInstance creates a new MCP server instance using Kubernetes resources
 func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSpec) (*InstanceResult, error) {
 	instanceName := k.sanitizeInstanceName(spec.Name)
-	
+
 	k.logger.Info("Creating Kubernetes instance",
 		slog.String("name", spec.Name),
 		slog.String("instance_name", instanceName),
@@ -116,7 +116,7 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 			k.logger.Error("Failed to create resource, cleaning up",
 				slog.String("instance_name", instanceName),
 				slog.String("error", err.Error()))
-			
+
 			// Best effort cleanup
 			k.cleanupResources(ctx, instanceName)
 			return nil, fmt.Errorf("failed to create kubernetes resources: %w", err)
@@ -128,7 +128,7 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 		k.logger.Error("Deployment not ready, cleaning up",
 			slog.String("instance_name", instanceName),
 			slog.String("error", err.Error()))
-		
+
 		k.cleanupResources(ctx, instanceName)
 		return nil, fmt.Errorf("deployment not ready: %w", err)
 	}
@@ -280,7 +280,7 @@ func (k *KubernetesBackend) ListInstances(ctx context.Context) ([]*InstanceStatu
 	instances := make([]*InstanceStatus, 0, len(deployments.Items))
 	for _, deployment := range deployments.Items {
 		instanceName := strings.TrimPrefix(deployment.Name, "mcp-")
-		
+
 		status, err := k.GetInstanceStatus(ctx, string(deployment.UID))
 		if err != nil {
 			k.logger.Warn("Failed to get instance status",
@@ -288,7 +288,7 @@ func (k *KubernetesBackend) ListInstances(ctx context.Context) ([]*InstanceStatu
 				slog.String("error", err.Error()))
 			continue
 		}
-		
+
 		instances = append(instances, status)
 	}
 
@@ -351,7 +351,7 @@ func (k *KubernetesBackend) PerformHealthCheck(ctx context.Context, instanceID s
 	}
 
 	// Check deployment readiness
-	ready := deployment.Status.ReadyReplicas > 0 && 
+	ready := deployment.Status.ReadyReplicas > 0 &&
 		deployment.Status.ReadyReplicas == deployment.Status.Replicas
 
 	result := &HealthCheckResult{
@@ -387,7 +387,7 @@ func (k *KubernetesBackend) sanitizeInstanceName(name string) string {
 	sanitized := strings.ToLower(name)
 	sanitized = strings.ReplaceAll(sanitized, "_", "-")
 	sanitized = strings.ReplaceAll(sanitized, " ", "-")
-	
+
 	// Remove any non-alphanumeric characters except hyphens
 	var result strings.Builder
 	for _, r := range sanitized {
@@ -395,12 +395,12 @@ func (k *KubernetesBackend) sanitizeInstanceName(name string) string {
 			result.WriteRune(r)
 		}
 	}
-	
+
 	sanitized = result.String()
-	
+
 	// Trim leading/trailing hyphens
 	sanitized = strings.Trim(sanitized, "-")
-	
+
 	// Ensure it's not empty and doesn't exceed 253 characters
 	if sanitized == "" {
 		sanitized = "instance"
@@ -409,7 +409,7 @@ func (k *KubernetesBackend) sanitizeInstanceName(name string) string {
 		sanitized = sanitized[:253]
 		sanitized = strings.TrimSuffix(sanitized, "-")
 	}
-	
+
 	return sanitized
 }
 

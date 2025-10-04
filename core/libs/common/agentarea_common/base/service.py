@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import TypeVar
 from uuid import UUID
 
 from ..base.repository import BaseRepository
@@ -6,7 +6,7 @@ from ..base.repository import BaseRepository
 T = TypeVar("T")
 
 
-class BaseCrudService(Generic[T]):
+class BaseCrudService[T]:
     def __init__(self, repository: BaseRepository[T]):
         self.repository = repository
 
@@ -17,7 +17,7 @@ class BaseCrudService(Generic[T]):
     async def list(self, creator_scoped: bool = False) -> list[T]:
         """List all entities with optional creator filtering."""
         # Check if repository supports creator_scoped (WorkspaceScopedRepository)
-        if hasattr(self.repository, 'list_all'):
+        if hasattr(self.repository, "list_all"):
             return await self.repository.list_all(creator_scoped=creator_scoped)
         else:
             # Fallback for repositories that don't support workspace scoping
@@ -26,7 +26,7 @@ class BaseCrudService(Generic[T]):
     async def create(self, entity: T) -> T:
         """Create a new entity."""
         # Check if repository is workspace-scoped (expects kwargs)
-        if hasattr(self.repository, 'create') and hasattr(self.repository.create, '__code__'):
+        if hasattr(self.repository, "create") and hasattr(self.repository.create, "__code__"):
             # Extract entity attributes as kwargs for the repository
             entity_dict = entity.to_dict()
             return await self.repository.create(**entity_dict)
