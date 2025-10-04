@@ -22,7 +22,7 @@ linters:
     - unconvert
     - unparam
   disable:
-    - typecheck # Disable typecheck as it has issues with Go 1.24
+    - typecheck # Disable typecheck due to import resolution issues in CI
 
 linters-settings:
   errcheck:
@@ -30,6 +30,7 @@ linters-settings:
       - (*log.Logger).Print*
       - (*log.Logger).Printf
       - (*log.Logger).Println
+    # Remove the deprecated ignore option
   revive:
     rules:
       - name: exported
