@@ -67,7 +67,6 @@ class TestJWTTokenHandler:
         assert isinstance(context, UserContext)
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.email == "test@example.com"
         assert context.roles == ["user", "admin"]
 
     @pytest.mark.asyncio

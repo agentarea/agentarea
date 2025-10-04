@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from dataclasses import asdict
 from uuid import UUID
 
-from agentarea_agents_sdk.tasks import Task, TaskStatus
+from agentarea_agents_sdk.tasks.tasks import Task, TaskStatus
 
 
 class InMemoryTaskService:

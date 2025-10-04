@@ -79,7 +79,7 @@ const EventIcon = ({ type, level }: { type: WorkflowEventType; level: EventLevel
     "info": <Info className="h-4 w-4" />
   };
   
-  return iconMap[iconName] || <Info className="h-4 w-4" />;
+  return iconMap[iconName as keyof typeof iconMap] || <Info className="h-4 w-4" />;
 };
 
 const EventLevelBadge = ({ level }: { level: EventLevel }) => {

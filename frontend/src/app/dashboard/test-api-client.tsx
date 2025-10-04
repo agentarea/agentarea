@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { testPublicEndpoint, testProtectedEndpoint, getCurrentUser } from "@/lib/api";
-
 export default function TestApiClient() {
   const [testResults, setTestResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -10,14 +8,9 @@ export default function TestApiClient() {
   const runTests = async () => {
     setLoading(true);
     try {
-      const publicResult = await testPublicEndpoint();
-      const protectedResult = await testProtectedEndpoint();
-      const userResult = await getCurrentUser();
-      
+      // TODO: Implement API connection tests
       setTestResults({
-        public: publicResult,
-        protected: protectedResult,
-        user: userResult,
+        message: "API connection tests not yet implemented",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

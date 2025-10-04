@@ -6,7 +6,7 @@ import { env } from "@/env";
 
 // Create Kratos client for server-side calls via our proxy
 const kratosConfig = new Configuration({
-  basePath: env.NEXT_PUBLIC_URL || 'http://localhost:3001',
+  basePath: env.NEXT_PUBLIC_ORY_SDK_URL,
   apiKey: '', // No API key needed for our proxy
 });
 const kratos = new FrontendApi(kratosConfig);

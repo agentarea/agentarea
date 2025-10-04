@@ -146,7 +146,7 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
             }}
             forceCreateDisabled={isCreating || !instanceName.trim()}
             onSubmit={async (e) => {
-              e.preventDefault();
+              e?.preventDefault();
               if (!validationResult) { toast.warning('Please validate the configuration first'); return; }
               if (validationResult && !validationResult.valid) { toast.error('Configuration validation failed. Use "Force Create" to proceed.'); return; }
               setIsCreating(true);

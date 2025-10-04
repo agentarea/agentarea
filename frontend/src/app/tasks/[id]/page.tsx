@@ -147,7 +147,7 @@ export default function TaskDetailsPage() {
         created_at: foundTask.created_at,
         execution_id: foundTask.execution_id || undefined,
         agent_name: foundTask.agent_name,
-        agent_description: foundTask.agent_description,
+        agent_description: foundTask.agent_description || undefined,
       });
 
       // Get detailed status information
@@ -241,7 +241,7 @@ export default function TaskDetailsPage() {
       const { error } = await cancelAgentTask(task.agent_id, task.id);
       
       if (error) {
-        const errorMessage = error.detail?.[0]?.msg || error.message || "An error occurred while cancelling the task";
+        const errorMessage = error.detail?.[0]?.msg || "An error occurred while cancelling the task";
         toast.error("Failed to cancel task", {
           description: errorMessage
         });

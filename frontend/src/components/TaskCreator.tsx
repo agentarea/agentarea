@@ -38,9 +38,18 @@ export default function TaskCreator() {
         console.error("Failed to load agents:", error);
         setResult({ success: false, message: "Failed to load agents" });
       } else {
-        setAgents(agentsData || []);
-        if (agentsData && agentsData.length > 0) {
-          setSelectedAgentId(agentsData[0].id);
+        const transformedAgents = (agentsData || []).map(agent => ({
+          ...agent,
+          description: agent.description || undefined,
+          instruction: agent.instruction || undefined,
+          model_id: agent.model_id || undefined,
+          tools_config: agent.tools_config || undefined,
+          events_config: agent.events_config || undefined,
+          planning: agent.planning ?? undefined,
+        }));
+        setAgents(transformedAgents);
+        if (transformedAgents.length > 0) {
+          setSelectedAgentId(transformedAgents[0].id);
         }
       }
     } catch (err) {
@@ -76,13 +85,12 @@ export default function TaskCreator() {
       if (error) {
         setResult({ 
           success: false, 
-          message: `Failed to create task: ${error.message || 'Unknown error'}` 
+          message: `Failed to create task: ${error.detail?.[0]?.msg || 'Unknown error'}` 
         });
       } else {
-        setResult({ 
-          success: true, 
-          message: `Task created successfully! Task ID: ${task?.id}`,
-          taskId: task?.id?.toString()
+        setResult({
+          success: true,
+          message: `Task created successfully!`
         });
         setTaskDescription(""); // Clear the form
       }

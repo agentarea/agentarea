@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getAgent, listMCPServers, listModelInstances, listMCPServerInstances } from '@/lib/api';
+import { getAgent, listMCPServers, listModelInstances, listMCPServerInstances, listBuiltinTools } from '@/lib/api';
 import EditAgentClient from './EditAgentClient';
 import ContentBlock from '@/components/ContentBlock/ContentBlock';
 
@@ -10,11 +10,12 @@ interface Props {
 export default async function EditAgentPage({ params }: Props) {
   const { id } = await params;
   try {
-    const [agentResponse, mcpResponse, llmResponse, mcpInstancesResponse] = await Promise.all([
+    const [agentResponse, mcpResponse, llmResponse, mcpInstancesResponse, builtinToolsResponse] = await Promise.all([
       getAgent(id),
       listMCPServers(),
       listModelInstances(),
       listMCPServerInstances(),
+      listBuiltinTools(),
     ]);
 
     if (!agentResponse.data) {
@@ -30,6 +31,9 @@ export default async function EditAgentPage({ params }: Props) {
     }));
     const llmModelInstances = llmResponse.data || [];
     const mcpInstanceList = mcpInstancesResponse.data || [];
+    const builtinTools = Array.isArray(builtinToolsResponse.data)
+      ? builtinToolsResponse.data
+      : Object.values(builtinToolsResponse.data || {});
 
     return (
       <ContentBlock 
@@ -40,11 +44,12 @@ export default async function EditAgentPage({ params }: Props) {
             href: "/agents"
           }
         }}>
-        <EditAgentClient 
+        <EditAgentClient
           agent={agent}
-          mcpServers={mcpServers} 
+          mcpServers={mcpServers}
           llmModelInstances={llmModelInstances}
           mcpInstanceList={mcpInstanceList}
+          builtinTools={builtinTools}
         />
       </ContentBlock>
     );

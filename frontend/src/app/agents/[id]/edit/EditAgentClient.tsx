@@ -4,7 +4,7 @@ import React, { useEffect, useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { useForm, useFieldArray } from 'react-hook-form';
 import { updateAgent } from './actions';
-import { initialState as agentInitialState } from '../../create/state';
+import { initialState as agentInitialState } from '../../create/types';
 import type { components } from '@/api/schema';
 import { Card } from "@/components/ui/card";
 import { 
@@ -19,16 +19,18 @@ type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 type Agent = components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
 type MCPInstance = components["schemas"]["MCPServerInstanceResponse"];
 
-export default function EditAgentClient({ 
+export default function EditAgentClient({
   agent,
-  mcpServers, 
+  mcpServers,
   llmModelInstances,
-  mcpInstanceList
-}: { 
+  mcpInstanceList,
+  builtinTools
+}: {
   agent: Agent;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: MCPInstance[];
+  builtinTools: any[];
 }) {
   const [state, formAction] = useActionState(updateAgent, agentInitialState);
 
@@ -49,7 +51,13 @@ export default function EditAgentClient({
       control,
       name: "tools_config.mcp_server_configs",
     });
-    
+
+  const { fields: builtinToolFields, append: appendBuiltinTool, remove: removeBuiltinTool } =
+    useFieldArray({
+      control,
+      name: "tools_config.builtin_tools",
+    });
+
   const { fields: eventFields, append: appendEvent, remove: removeEvent } =
     useFieldArray({
       control,
@@ -139,14 +147,18 @@ export default function EditAgentClient({
               </div>
               <div className="my-6 w-full h-[1px] bg-slate-200" />
               <div className="px-6">
-                <ToolConfig 
-                  control={control} 
-                  errors={errors} 
-                  toolFields={toolFields} 
-                  removeTool={removeTool} 
-                  appendTool={appendTool} 
+                <ToolConfig
+                  control={control}
+                  errors={errors}
+                  toolFields={toolFields}
+                  removeTool={removeTool}
+                  appendTool={appendTool}
                   mcpServers={mcpServers}
                   mcpInstanceList={mcpInstanceList}
+                  builtinTools={builtinTools}
+                  builtinToolFields={builtinToolFields}
+                  removeBuiltinTool={removeBuiltinTool}
+                  appendBuiltinTool={appendBuiltinTool}
                 />
               </div>
             </Card>
