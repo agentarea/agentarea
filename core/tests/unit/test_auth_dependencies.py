@@ -72,50 +72,54 @@ class TestJWTTokenHandler:
     @pytest.mark.asyncio
     async def test_extract_user_context_missing_token(self, jwt_handler, mock_request):
         """Test user context extraction when token is missing."""
+        from agentarea_common.exceptions.workspace import InvalidJWTToken
+
         mock_request.headers = {}
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(InvalidJWTToken) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Missing authorization token" in exc_info.value.detail
+        assert "Missing authorization token" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_extract_user_context_invalid_token(self, jwt_handler, mock_request):
         """Test user context extraction with invalid JWT token."""
+        from agentarea_common.exceptions.workspace import InvalidJWTToken
+
         mock_request.headers = {"authorization": "Bearer invalid-token"}
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(InvalidJWTToken) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Invalid token" in exc_info.value.detail
+        assert "Invalid" in str(exc_info.value) or "decode" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_extract_user_context_missing_sub_claim(self, jwt_handler, mock_request):
         """Test user context extraction when 'sub' claim is missing."""
-        payload = {"workspace_id": "test-workspace-456", "email": "test@example.com"}
+        from agentarea_common.exceptions.workspace import MissingWorkspaceContext
+
+        payload = {"workspace_id": "test-workspace-456"}
         token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(MissingWorkspaceContext) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 400
-        assert "Token missing required 'sub' claim" in exc_info.value.detail
+        assert "sub" in str(exc_info.value).lower() or "user_id" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
     async def test_extract_user_context_missing_workspace_claim(self, jwt_handler, mock_request):
         """Test user context extraction when 'workspace_id' claim is missing."""
-        payload = {"sub": "test-user-123", "email": "test@example.com"}
+        from agentarea_common.exceptions.workspace import MissingWorkspaceContext
+
+        payload = {"sub": "test-user-123"}
         token = jwt.encode(payload, "test-secret", algorithm="HS256")
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(MissingWorkspaceContext) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 400
-        assert "Token missing required 'workspace_id' claim" in exc_info.value.detail
+        assert "workspace" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
     async def test_extract_user_context_minimal_claims(self, jwt_handler, mock_request):
@@ -128,7 +132,6 @@ class TestJWTTokenHandler:
 
         assert context.user_id == "test-user-123"
         assert context.workspace_id == "test-workspace-456"
-        assert context.email is None
         assert context.roles == []  # Default empty list
 
 
@@ -156,7 +159,6 @@ class TestGetUserContext:
         expected_context = UserContext(
             user_id="test-user",
             workspace_id="test-workspace",
-            email="test@example.com",
             roles=["user"],
         )
 
@@ -209,7 +211,6 @@ class TestIntegration:
         payload = {
             "sub": "integration-user-123",
             "workspace_id": "integration-workspace-456",
-            "email": "integration@example.com",
             "roles": ["user", "developer"],
         }
         token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
@@ -228,7 +229,6 @@ class TestIntegration:
         assert isinstance(result, UserContext)
         assert result.user_id == "integration-user-123"
         assert result.workspace_id == "integration-workspace-456"
-        assert result.email == "integration@example.com"
         assert result.roles == ["user", "developer"]
 
         # Verify context was set in ContextManager

@@ -1,7 +1,16 @@
 run:
   timeout: 5m
 
+issues:
+  exclude-dirs:
+    - vendor
+  exclude-rules:
+    - linters:
+        - typecheck
+      text: "could not import k8s.io/apimachinery/pkg/types"
+
 linters:
+  disable-all: true
   enable:
     - gofmt
     - goimports
@@ -21,10 +30,17 @@ linters:
     - errcheck
     - unconvert
     - unparam
-  disable:
-    - typecheck # Disable typecheck due to import resolution issues in CI
 
 linters-settings:
+  govet:
+    disable:
+      - shadow
+    settings:
+      printf:
+        funcs:
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
   errcheck:
     exclude-functions:
       - (*log.Logger).Print*

@@ -30,7 +30,13 @@ def mock_secret_manager():
 @pytest.fixture
 def activity_dependencies(mock_event_broker, mock_secret_manager):
     """Create activity dependencies."""
-    return ActivityDependencies(event_broker=mock_event_broker, secret_manager=mock_secret_manager)
+    from agentarea_common.config import get_settings
+    settings = get_settings()
+    return ActivityDependencies(
+        settings=settings,
+        event_broker=mock_event_broker,
+        secret_manager=mock_secret_manager
+    )
 
 
 @pytest.fixture

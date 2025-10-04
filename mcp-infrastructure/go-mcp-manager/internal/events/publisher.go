@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	redis "github.com/go-redis/redis/v8"
 )
 
 // StatusUpdateEvent represents a container status update event

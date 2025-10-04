@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 
 	"github.com/agentarea/mcp-manager/internal/config"
 )

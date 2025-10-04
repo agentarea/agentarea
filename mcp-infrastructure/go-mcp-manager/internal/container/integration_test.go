@@ -11,7 +11,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/models"
-	"github.com/go-redis/redis/v8"
+	redis "github.com/go-redis/redis/v8"
 )
 
 // TestContainerLifecycleIntegration tests the full container lifecycle with Redis events

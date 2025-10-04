@@ -8,7 +8,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/providers"
-	"github.com/go-redis/redis/v8"
+	redis "github.com/go-redis/redis/v8"
 )
 
 // MCPServerInstanceCreated represents the event when an MCP instance is created
