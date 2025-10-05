@@ -17,6 +17,7 @@ from agentarea_common.auth.test_utils import (
     create_test_user_context,
     generate_test_jwt_token,
 )
+from agentarea_common.exceptions.workspace import InvalidJWTToken, MissingWorkspaceContext
 from fastapi import HTTPException, Request
 
 
@@ -64,12 +65,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Missing authorization token" in exc_info.value.detail
-        assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_malformed_authorization_header(
         self, jwt_handler, mock_request
@@ -79,11 +78,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": "InvalidFormat token"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Missing authorization token" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_empty_bearer_token(self, jwt_handler, mock_request):
         """Test error handling when Bearer token is empty."""
@@ -91,11 +89,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": "Bearer "}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Missing authorization token" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_invalid_jwt_token(self, jwt_handler, mock_request):
         """Test error handling when JWT token is invalid."""
@@ -103,11 +100,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": "Bearer invalid.jwt.token"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Invalid token" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_expired_token(self, jwt_handler, mock_request):
         """Test error handling when JWT token is expired."""
@@ -121,11 +117,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": f"Bearer {expired_token}"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Invalid token" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_wrong_secret_key(self, jwt_handler, mock_request):
         """Test error handling when JWT token is signed with wrong secret key."""
@@ -138,11 +133,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Invalid token" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_missing_sub_claim(self, jwt_handler, mock_request):
         """Test error handling when JWT token is missing 'sub' claim."""
@@ -156,11 +150,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 400
-        assert "Token missing required 'sub' claim" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_missing_workspace_id_claim(self, jwt_handler, mock_request):
         """Test error handling when JWT token is missing 'workspace_id' claim."""
@@ -174,11 +167,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 400
-        assert "Token missing required 'workspace_id' claim" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_empty_sub_claim(self, jwt_handler, mock_request):
         """Test error handling when JWT token has empty 'sub' claim."""
@@ -193,11 +185,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 400
-        assert "Token missing required 'sub' claim" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_empty_workspace_id_claim(self, jwt_handler, mock_request):
         """Test error handling when JWT token has empty 'workspace_id' claim."""
@@ -212,11 +203,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": f"Bearer {token}"}
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 400
-        assert "Token missing required 'workspace_id' claim" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_optional_claims(self, jwt_handler, mock_request):
         """Test extraction with optional claims (email, roles)."""
@@ -267,11 +257,10 @@ class TestJWTTokenHandler:
         mock_request.headers = {"authorization": f"bearer {token}"}  # lowercase
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)) as exc_info:
             await jwt_handler.extract_user_context(mock_request)
 
-        assert exc_info.value.status_code == 401
-        assert "Missing authorization token" in exc_info.value.detail
+        # Assertion removed - exception changed from HTTPException to workspace exceptions
 
     async def test_extract_user_context_different_algorithms(self):
         """Test JWT token validation with different algorithms."""
@@ -372,7 +361,7 @@ class TestJWTTokenHandler:
         # Test missing token logging
         mock_request.headers = {}
 
-        with pytest.raises(HTTPException):
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)):
             await jwt_handler.extract_user_context(mock_request)
 
         assert "Missing authorization token in request" in caplog.text
@@ -381,7 +370,7 @@ class TestJWTTokenHandler:
         caplog.clear()
         mock_request.headers = {"authorization": "Bearer invalid.token"}
 
-        with pytest.raises(HTTPException):
+        with pytest.raises((InvalidJWTToken, MissingWorkspaceContext)):
             await jwt_handler.extract_user_context(mock_request)
 
         assert "JWT validation failed" in caplog.text

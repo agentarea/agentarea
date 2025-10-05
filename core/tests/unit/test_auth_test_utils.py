@@ -12,6 +12,7 @@ from agentarea_common.auth.test_utils import (
     create_test_user_context,
     generate_test_jwt_token,
 )
+from jwt.exceptions import ExpiredSignatureError
 
 
 class TestGenerateTestJWTToken:
@@ -86,7 +87,7 @@ class TestGenerateTestJWTToken:
         )
 
         # Token should be expired and raise an error when decoded
-        with pytest.raises(JWTError):
+        with pytest.raises(ExpiredSignatureError):
             jwt.decode(token, "test-secret", algorithms=["HS256"], audience="agentarea-api")
 
 
@@ -168,5 +169,5 @@ class TestTokenHelpers:
         token = create_expired_test_token()
 
         # Token should be expired and raise an error when decoded
-        with pytest.raises(JWTError):
+        with pytest.raises(ExpiredSignatureError):
             jwt.decode(token, "test-secret", algorithms=["HS256"], audience="agentarea-api")

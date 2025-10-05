@@ -2,18 +2,32 @@
 
 <div align="center">
 
-[![License](https://img.shields.io/badge/license-EPLv2-blue.svg)](LICENSE)
-[![CI](https://github.com/agentarea/agentarea/workflows/CI/badge.svg)](https://github.com/agentarea/agentarea/actions)
-[![Documentation](https://img.shields.io/badge/docs-mintlify-green.svg)](https://docs.agentarea.dev)
+![AgentArea Logo](https://via.placeholder.com/150x150?text=AgentArea)
 
 **Build, deploy, and manage AI agents at scale**
 
-[Documentation](https://docs.agentarea.dev) •
-[Examples](docs/examples.md) •
-[Contributing](docs/contributing.md) •
-[Community](https://github.com/agentarea/agentarea/discussions)
+[![License](https://img.shields.io/badge/license-EPLv2-blue.svg)](LICENSE.md)
+[![CI](https://github.com/agentarea/agentarea/workflows/CI/badge.svg)](https://github.com/agentarea/agentarea/actions)
+[![Documentation](https://img.shields.io/badge/docs-mintlify-green.svg)](https://docs.agentarea.dev)
+[![Discord](https://img.shields.io/discord/YOUR_DISCORD_ID?color=5865F2&label=discord&logo=discord&logoColor=white)](https://discord.gg/93jVZ4Kx)
+[![GitHub Stars](https://img.shields.io/github/stars/agentarea/agentarea?style=social)](https://github.com/agentarea/agentarea/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/agentarea/agentarea?style=social)](https://github.com/agentarea/agentarea/network/members)
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-ready-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
+
+[📖 Documentation](https://docs.agentarea.dev) •
+[🚀 Quick Start](#-quick-start) •
+[💬 Discord](https://discord.gg/93jVZ4Kx) •
+[🐛 Report Bug](https://github.com/agentarea/agentarea/issues/new?template=bug_report.md) •
+[✨ Request Feature](https://github.com/agentarea/agentarea/issues/new?template=feature_request.md)
 
 </div>
+
+---
 
 ## 🚀 What is AgentArea?
 
@@ -21,12 +35,38 @@ AgentArea is an open-source platform for building, deploying, and managing AI ag
 
 ### ✨ Key Features
 
-- **🤖 Multi-Agent Communication**: Enable agents to collaborate and work together
-- **🔌 MCP Integration**: Built-in Model Context Protocol support for external tools
-- **📈 Scalable Infrastructure**: Docker and Kubernetes-ready deployment
-- **🛠️ Developer-Friendly**: RESTful APIs and comprehensive SDKs
-- **📊 Real-time Monitoring**: Performance analytics and debugging tools
-- **🔒 Enterprise-Ready**: Security, compliance, and role-based access control
+<table>
+<tr>
+<td width="50%">
+
+#### 🤖 Multi-Agent Communication
+Enable agents to collaborate and work together seamlessly. Build complex workflows with multiple specialized agents.
+
+#### 🔌 MCP Integration
+Built-in Model Context Protocol support for external tools and services. Extend your agents with custom capabilities.
+
+#### 📈 Scalable Infrastructure
+Docker and Kubernetes-ready deployment. Scale from prototype to production effortlessly.
+
+</td>
+<td width="50%">
+
+#### 🛠️ Developer-Friendly
+RESTful APIs and comprehensive SDKs. Start building in minutes with our quickstart guides.
+
+#### 📊 Real-time Monitoring
+Performance analytics and debugging tools. Track agent behavior and optimize performance.
+
+#### 🔒 Enterprise-Ready
+Security, compliance, and role-based access control. Production-ready from day one.
+
+</td>
+</tr>
+</table>
+
+### 🎬 See It In Action
+
+> 📸 *Screenshots and demo GIFs coming soon! [Contribute yours](https://github.com/agentarea/agentarea/discussions)*
 
 ## 🏃‍♂️ Quick Start
 
@@ -172,9 +212,29 @@ See our [full roadmap](docs/roadmap.md) for more details.
 
 ## 🌟 Community
 
-- **GitHub Discussions**: [General discussions, Q&A, and feature requests](https://github.com/agentarea/agentarea/discussions)
-- **Issues**: [Bug reports and feature requests](https://github.com/agentarea/agentarea/issues)
-- **Contributing**: [Contribution guidelines](docs/contributing.md)
+Join our growing community of AI developers and contributors!
+
+- **💬 Discord**: [Join our Discord server](https://discord.gg/93jVZ4Kx) - Get help, share ideas, and connect with the community
+- **💭 GitHub Discussions**: [General discussions, Q&A, and feature requests](https://github.com/agentarea/agentarea/discussions)
+- **🐛 Issues**: [Bug reports and feature requests](https://github.com/agentarea/agentarea/issues)
+- **🤝 Contributing**: [Contribution guidelines](CONTRIBUTING.md)
+- **🐦 Twitter/X**: Follow us for updates [@agentarea](https://twitter.com/agentarea)
+
+### 🎯 Ways to Contribute
+
+- **Code**: Submit pull requests for bug fixes and new features
+- **Documentation**: Help improve our docs
+- **Community**: Answer questions and help others
+- **Feedback**: Share your experience and suggestions
+- **Showcase**: Share projects built with AgentArea
+
+### 🌟 Show Your Support
+
+If you find AgentArea helpful, please consider:
+- ⭐ Starring the repository
+- 🐦 Sharing on social media
+- 📝 Writing a blog post or tutorial
+- 💬 Joining our Discord community
 
 ## 📄 License
 
@@ -188,6 +248,18 @@ AgentArea is built on top of many excellent open-source projects. See our [NOTIC
 
 <div align="center">
 
-**[⭐ Star us on GitHub](https://github.com/agentarea/agentarea) • [📖 Read the Docs](https://docs.agentarea.dev) • [💬 Join Discussions](https://github.com/agentarea/agentarea/discussions)**
+### ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=agentarea/agentarea&type=Date)](https://star-history.com/#agentarea/agentarea&Date)
+
+### 🙌 Built With AgentArea
+
+*Showcase your project here! [Submit via PR](https://github.com/agentarea/agentarea/pulls) or [Discussion](https://github.com/agentarea/agentarea/discussions)*
+
+---
+
+**[⭐ Star us on GitHub](https://github.com/agentarea/agentarea) • [📖 Read the Docs](https://docs.agentarea.dev) • [💬 Join Discord](https://discord.gg/93jVZ4Kx) • [🐦 Follow on Twitter](https://twitter.com/agentarea)**
+
+Made with ❤️ by the AgentArea community
 
 </div>

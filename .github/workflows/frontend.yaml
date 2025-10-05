@@ -61,10 +61,3 @@ jobs:
       #   with:
       #     path: ./frontend/build.zip
       #     name: build.zip
-
-  build-container:
-    if: false
-    runs-on: ubuntu-latest
-    steps:
-      - name: Skipped (handled in unified CI workflow)
-        run: echo "Docker build/push moved to central CI workflow."
