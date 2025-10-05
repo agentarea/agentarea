@@ -75,9 +75,16 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run database migrations
-        run: uv run alembic upgrade head
+        run: |
+          cd apps/api
+          uv run --from agentarea-api agentarea-api migrate
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentarea_test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
 
       - name: Run integration tests
         run: uv run python -m pytest tests/integration/ --tb=short -v

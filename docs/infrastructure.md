@@ -911,7 +911,7 @@ graph TB
                 drop:
                 - ALL
     ```
-  </Tab>
+  </AccordionItem>
 </Accordion>
 
 ## 🔄 Disaster Recovery
