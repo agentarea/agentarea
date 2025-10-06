@@ -22,6 +22,7 @@ import AccordionControl from "./AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
 import { MethodsList } from "./MethodsList";
+import Image from "next/image";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -363,11 +364,29 @@ const ToolConfig = ({
                   );
                 }}
               />
-              <div className="font-semibold">Active MCP Servers</div>
+              <div className="font-semibold flex items-center gap-2">
+                <Image 
+                  src="/mcp.svg" 
+                  alt="MCP" 
+                  width={16} 
+                  height={16} 
+                  className="text-current"
+                />
+                Active MCP Servers
+              </div>
               <SelectableList
                 items={activeInstances}
                 prefix="active-mcp"
-                extractTitle={(instance) => instance.name || instance.id}
+                extractTitle={(instance) => (
+                  <div className="flex flex-row items-center gap-2 px-[7px] py-[7px] min-w-0">
+                    <div className="relative shrink-0">
+                      <img src="/Icon.svg" alt="" className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent truncate">
+                      {instance.name || instance.id}
+                    </h3>
+                  </div>
+                )}
                 onAdd={(instance) => handleAddTools([instance])}
                 onRemove={(instance) => handleRemoveTool(instance.id)}
                 selectedIds={toolFields.map((item) => item.mcp_server_id)}
@@ -392,12 +411,30 @@ const ToolConfig = ({
                   </div>
                 )}
               />
-              <div className="font-semibold">Available MCP Servers</div>
+              <div className="font-semibold flex items-center gap-2">
+                <Image 
+                  src="/mcp.svg" 
+                  alt="MCP" 
+                  width={16} 
+                  height={16} 
+                  className="text-current"
+                />
+                Available MCP Servers
+              </div>
               <SelectableList
                 disableExpand={true}
                 items={mcpServers}
                 prefix="mcp"
-                extractTitle={(server) => server.name}
+                extractTitle={(server) => (
+                  <div className="flex flex-row items-center gap-2 px-[7px] py-[7px] min-w-0">
+                      <div className="relative shrink-0">
+                        <img src="/Icon.svg" alt="" className="w-5 h-5" />
+                      </div>
+                    <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent truncate">
+                      {server.name}
+                    </h3>
+                  </div>
+                )}
                 onAdd={(server) => handleAddConfigurationTools(server)}
                 onRemove={(server) => handleRemoveTool(server.id)}
                 selectedIds={toolFields.map((item) => item.mcp_server_id)}
@@ -469,7 +506,16 @@ const ToolConfig = ({
           {/* MCP Tools Section */}
           {toolFields.length > 0 ? (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-foreground">MCP Servers</h4>
+              <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Image 
+                  src="/mcp.svg" 
+                  alt="MCP" 
+                  width={14} 
+                  height={14} 
+                  className="text-current"
+                />
+                MCP Servers
+              </h4>
               <Accordion type="multiple" id="mcp-tools-items" className="space-y-2">
                 {toolFields.map((item, index) => (
                   <TriggerControl 
