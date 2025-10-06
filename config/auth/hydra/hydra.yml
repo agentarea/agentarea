@@ -2,7 +2,9 @@
 
 version: v2.2.0
 
-dsn: postgres://hydra:secret@postgres-hydra:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+# DSN is overridden via docker-compose environment variable
+# Default for reference: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/hydra
+dsn: postgres://postgres:postgres@db:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
 
 serve:
   public:
