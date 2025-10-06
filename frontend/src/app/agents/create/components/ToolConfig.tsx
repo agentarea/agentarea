@@ -1,8 +1,8 @@
 import React from "react";
-import { Cpu, ArrowRight } from "lucide-react";
+import { Wrench, ArrowRight } from "lucide-react";
 import { FieldErrors, UseFieldArrayReturn, UseFieldArrayAppend } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
-import type { AgentFormValues, BuiltinToolConfig } from "../types";
+import type { AgentFormValues } from "../types";
 import type { components } from '@/api/schema';
 import { useState, useEffect, useMemo } from "react";
 import { TriggerControl } from "./TriggerControl";
@@ -11,10 +11,6 @@ import { SelectableList } from "./SelectableList";
 import { useTranslations } from "next-intl";
 import ConfigSheet from "./ConfigSheet";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { BuiltinToolIconGrid } from "./BuiltinToolIconGrid";
-import client from '@/lib/client';
 import { toast } from "sonner";
 import { createMCPServerInstance, checkMCPServerInstanceConfiguration, getMCPServerInstance, updateMCPServerInstance } from "@/lib/api";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
@@ -275,9 +271,7 @@ const ToolConfig = ({
   ), []);
 
   const title = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <FormLabel icon={Cpu} className="cursor-pointer">Agent Tools</FormLabel>
-    </div>
+    <FormLabel icon={Wrench} className="cursor-pointer">Agent Tools</FormLabel>
   ), []);
 
   return (

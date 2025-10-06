@@ -56,9 +56,7 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
   ), []);
 
   const title = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <FormLabel icon={Zap} className="cursor-pointer">Agent Triggers</FormLabel>
-    </div>
+    <FormLabel icon={Zap} className="cursor-pointer">Agent Triggers</FormLabel>
   ), []);
 
   useEffect(()=>{
