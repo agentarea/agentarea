@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 interface SelectableListProps<T extends { id: string }> {
   items: T[];
-  extractTitle: (item: T) => string;
+  extractTitle: (item: T) => string | React.ReactNode;
   extractIconSrc?: (item: T) => string;
   onAdd: (item: T) => void;
   onRemove: (item: T) => void;

@@ -162,6 +162,7 @@ export default function AgentForm({
               <div className="px-6">
                 <ToolConfig 
                   control={control} 
+                  setValue={setValue}
                   errors={errors} 
                   toolFields={toolFields} 
                   removeTool={removeTool} 
