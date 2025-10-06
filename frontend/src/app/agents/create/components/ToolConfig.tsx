@@ -21,6 +21,7 @@ import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import AccordionControl from "./AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
+import { MethodsList } from "./MethodsList";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -82,7 +83,7 @@ const ToolConfig = ({
 
   // Initialize selectedMethods for sheet (all methods selected by default)
   useEffect(() => {
-    if (!builtinTools?.length || Object.keys(selectedMethods).length > 0) return;
+    if (!builtinTools?.length) return;
     
     const toolsMethods = builtinTools.reduce((acc, tool) => {
       if (tool.available_methods) {
@@ -95,7 +96,7 @@ const ToolConfig = ({
     }, {} as Record<string, Record<string, boolean>>);
     
     setSelectedMethods(toolsMethods);
-  }, [builtinTools, selectedMethods]);
+  }, [builtinTools]);
 
   const handleAddBuiltinTool = (toolName: string) => {
     if (!appendBuiltinTool || builtinToolFields?.some(field => field.tool_name === toolName)) return;
@@ -116,6 +117,19 @@ const ToolConfig = ({
         disabled_methods: Object.keys(disabledMethods).length > 0 ? disabledMethods : undefined
       });
     } else {
+      // Initialize selectedMethods for this tool if not already set
+      if (tool?.available_methods && !currentState) {
+        const initialMethods = tool.available_methods.reduce((acc: Record<string, boolean>, method: any) => {
+          acc[method.name] = true;
+          return acc;
+        }, {} as Record<string, boolean>);
+        
+        setSelectedMethods(prev => ({
+          ...prev,
+          [toolName]: initialMethods
+        }));
+      }
+      
       appendBuiltinTool({ tool_name: toolName });
     }
   };
@@ -139,7 +153,7 @@ const ToolConfig = ({
     }));
     
     const currentIndex = builtinToolFields?.findIndex(field => field.tool_name === toolName);
-    if (currentIndex === undefined || currentIndex === -1 || !builtinToolFields || !removeBuiltinTool || !appendBuiltinTool) return;
+    if (currentIndex === undefined || currentIndex === -1 || !builtinToolFields || !setValue) return;
     
     const field = builtinToolFields[currentIndex];
     const newDisabledMethods = { ...(field.disabled_methods || {}) };
@@ -150,22 +164,12 @@ const ToolConfig = ({
       newDisabledMethods[methodName] = false;
     }
     
-    removeBuiltinTool(currentIndex);
-    appendBuiltinTool({
-      tool_name: toolName,
-      disabled_methods: Object.keys(newDisabledMethods).length > 0 ? newDisabledMethods : undefined
-    });
+    // Update the existing field instead of removing and adding
+    setValue(`tools_config.builtin_tools.${currentIndex}.disabled_methods`, 
+      Object.keys(newDisabledMethods).length > 0 ? newDisabledMethods : undefined
+    );
   };
 
-  const getSelectedMethodsCount = (toolName: string) => {
-    const tool = builtinTools.find(t => t.name === toolName);
-    if (!tool?.available_methods) return { selected: 0, total: 0 };
-    
-    const methodsState = selectedMethods[toolName] || {};
-    const selected = tool.available_methods.filter((method: any) => methodsState[method.name] !== false).length;
-    
-    return { selected, total: tool.available_methods.length };
-  };
 
 
   const getSelectedBuiltinTools = () => 
@@ -278,26 +282,25 @@ const ToolConfig = ({
   return (
     <>
       {/* Builtin Tools Section */}
-      {/**
-       * <Card>
-       *   <CardHeader>
-       *     <CardTitle className="flex items-center gap-2">
-       *       <Calculator className="h-4 w-4" />
-       *       Tools Configuration
-       *     </CardTitle>
-       *   </CardHeader>
-       *   <CardContent>
-       *     <BuiltinToolIconGrid
-       *       builtinTools={builtinTools}
-       *       selectedTools={getSelectedBuiltinTools()}
-       *       onAddTool={handleAddBuiltinTool}
-       *       onRemoveTool={handleRemoveBuiltinTool}
-       *       onUpdateToolConfig={handleUpdateBuiltinToolConfig}
-       *       loading={loadingBuiltinTools}
-       *     />
-       *   </CardContent>
-       * </Card>
-       */}
+      
+        {/* <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Tools Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BuiltinToolIconGrid
+              builtinTools={builtinTools}
+              selectedTools={getSelectedBuiltinTools()}
+              onAddTool={handleAddBuiltinTool}
+              onRemoveTool={handleRemoveBuiltinTool}
+              onUpdateToolConfig={() => console.log('update tool config')}
+              loading={loadingBuiltinTools}
+            />
+          </CardContent>
+        </Card> */}
+       
 
       <AccordionControl
         id="tools"
@@ -335,43 +338,27 @@ const ToolConfig = ({
                 selectedIds={getSelectedBuiltinTools().map(tool => tool.tool_name)}
                 openItemId={scrollBuiltinToolId}
                 renderContent={(tool) => {
-                  const { selected, total } = getSelectedMethodsCount(tool.name);
                   const methodsState = selectedMethods[tool.name] || {};
                   
                   return (
                     <div className="p-2 space-y-2">
                       <p className="text-xs text-muted-foreground">{tool.description}</p>
-                      {tool.available_methods && tool.available_methods.length > 0 && (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-foreground">Available Methods:</p>
-                            <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                              {selected}/{total}
-                            </span>
-                          </div>
-                          <div className="space-y-1">
-                            {tool.available_methods.map((method: any) => (
-                              <div key={method.name} className="flex items-center gap-2 p-1 rounded bg-muted/30">
-                                <Checkbox
-                                  id={`${tool.name}-${method.name}`}
-                                  checked={methodsState[method.name] !== false}
-                                  onCheckedChange={(checked) => 
-                                    handleMethodToggle(tool.name, method.name, checked as boolean)
-                                  }
-                                  className="h-4 w-4 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                                />
-                                <label 
-                                  htmlFor={`${tool.name}-${method.name}`}
-                                  className="flex-1 flex items-center gap-2 cursor-pointer"
-                                >
-                                  <span className="text-xs text-foreground">{method.display_name || method.name}</span>
-                                  <span className="text-xs text-muted-foreground ml-auto">{method.description}</span>
-                                </label>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <MethodsList
+                        methods={tool.available_methods || []}
+                        selectedMethods={methodsState}
+                        onMethodToggle={(methodName, checked) => 
+                          handleMethodToggle(tool.name, methodName, checked)
+                        }
+                        toolName={tool.name}
+                        showSelectAll={true}
+                        onSelectAll={(checked) => {
+                          if (tool.available_methods) {
+                            tool.available_methods.forEach((method: any) => {
+                              handleMethodToggle(tool.name, method.name, checked);
+                            });
+                          }
+                        }}
+                      />
                     </div>
                   );
                 }}
@@ -467,7 +454,7 @@ const ToolConfig = ({
                       index={index}
                       control={control}
                       removeEvent={() => removeBuiltinTool?.(index)}
-                      editEvent={() => {}}
+                      // editEvent={() => {}}
                       selectedMethods={selectedMethods[builtinTool.name] || {}}
                       onMethodToggle={(methodName: string, checked: boolean) => 
                         handleMethodToggle(builtinTool.name, methodName, checked)
