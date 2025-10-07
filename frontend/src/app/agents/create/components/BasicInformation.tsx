@@ -94,7 +94,7 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
             id="instruction"
             {...register('instruction', { required: "Instruction is required" })}
             placeholder={t("instructionPlaceholder")}
-            className="resize-none h-[100px]"
+            className="resize-none h-[200px]"
             // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
             aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
           />

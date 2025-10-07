@@ -33,7 +33,7 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
                 {modelInstances.length > 0 ? (
                     <ModelsList models={modelInstances} />
                 ) : (
-                    <Badge variant="yellow" className="w-fit">
+                    <Badge variant="yellow" className="w-fit" size="sm">
                         <AlertCircle className="h-3 w-3 mr-1" />
                         No instances configured
                     </Badge>
