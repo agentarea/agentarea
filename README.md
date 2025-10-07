@@ -2,7 +2,8 @@
 
 <div align="center">
 
-![AgentArea Logo](https://via.placeholder.com/150x150?text=AgentArea)
+![AgentArea Logo](frontend/public/logo-line.svg)
+
 
 **Build, deploy, and manage AI agents at scale**
 
