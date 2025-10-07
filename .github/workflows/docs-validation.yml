@@ -60,12 +60,12 @@ jobs:
       - name: Validate Mintlify configuration
         working-directory: docs
         run: |
-          # Try to build docs to validate configuration
-          npx mint validate || {
-            echo "❌ Mintlify validation failed"
+          # Check for broken links to validate configuration
+          npx mint broken-links || {
+            echo "❌ Mintlify broken links check failed"
             exit 1
           }
-          
+
           echo "✅ Mintlify configuration is valid"
 
       - name: Check documentation files exist
@@ -104,16 +104,27 @@ jobs:
               print("✅ All referenced documentation files exist")
           EOF
 
-      - name: Build documentation (dry run)
+      - name: Start dev server to validate
         working-directory: docs
         run: |
-          # Attempt to build documentation
-          npx mint build --dry-run || {
-            echo "❌ Documentation build failed"
+          # Start mint dev server to validate docs can be served
+          npx mint dev --port 3002 &
+          MINT_PID=$!
+
+          # Wait for server to start
+          sleep 10
+
+          # Check if server is running
+          if ! curl -f http://localhost:3002 > /dev/null 2>&1; then
+            echo "❌ Failed to start Mintlify dev server - configuration may be invalid"
+            kill $MINT_PID 2>/dev/null || true
             exit 1
-          }
-          
-          echo "✅ Documentation builds successfully"
+          fi
+
+          echo "✅ Documentation can be served successfully"
+
+          # Kill the background process
+          kill $MINT_PID 2>/dev/null || true
 
   link-validation:
     name: Validate Internal Links

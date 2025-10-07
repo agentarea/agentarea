@@ -89,8 +89,32 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      bootstrap_db:
+        condition: service_completed_successfully
     command: ["python", "-m", "agentarea_api.cli", "migrate"]
 
+  # Bootstrap Database Creation - creates all required databases
+  bootstrap_db:
+    image: agentarea-bootstrap:latest
+    build:
+      context: bootstrap
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-aiagents}
+      - TEMPORAL_DB=${TEMPORAL_DB:-temporal}
+      - INFISICAL_DB=${INFISICAL_DB:-infisical}
+      - KRATOS_DB=${KRATOS_DB:-kratos}
+      - HYDRA_DB=${HYDRA_DB:-hydra}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-c", "from code.database_setup import database_setup; database_setup()"]
+
+  # Bootstrap Application Setup - runs after migrations
   bootstrap:
     image: agentarea-bootstrap:latest
     build:
@@ -114,6 +138,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-aiagents}
     depends_on:
       db:
         condition: service_healthy
@@ -146,19 +171,20 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_DB=postgres  # Use default postgres DB, bootstrap will create all others
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - default
       - temporal-network
+      - auth-network
 
   infisical:
     image: infisical/infisical:latest-postgres
@@ -174,8 +200,8 @@ services:
       - 3333:8080
     environment:
       - NODE_ENV=production
-      - POSTGRES_DB=infisical
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/infisical
+      - POSTGRES_DB=${INFISICAL_DB:-infisical}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${INFISICAL_DB:-infisical}
 
   redis:
     image: redis
@@ -241,7 +267,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
       - POSTGRES_SEEDS=db
-      - DBNAME=temporal
+      - DBNAME=${TEMPORAL_DB:-temporal}
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CLI_ADDRESS=temporal:7233
@@ -340,23 +366,6 @@ services:
 
   # Ory Authentication Services
 
-  # PostgreSQL database for Ory Kratos
-  postgres-kratos:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: kratos
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: kratos
-    volumes:
-      - kratos-postgres:/var/lib/postgresql/data
-    networks:
-      - auth-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kratos -d kratos"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   # Ory Kratos Identity Server
   kratos:
     image: oryd/kratos:v1.1.0
@@ -364,7 +373,7 @@ services:
       - "4433:4433" # public API
       - "4434:4434" # admin API
     environment:
-      DSN: postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: debug
       # SMTP Configuration - Override courier settings via environment variables
       COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}"
@@ -372,30 +381,13 @@ services:
       COURIER_SMTP_FROM_NAME: ${SMTP_FROM_NAME}
     command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
     volumes:
-      - ./frontend/kratos:/etc/config/kratos
+      - ./config/auth/kratos:/etc/config/kratos
     networks:
       - auth-network
     depends_on:
-      postgres-kratos:
+      db:
         condition: service_healthy
     restart: unless-stopped
-
-  # PostgreSQL database for Ory Hydra
-  postgres-hydra:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: hydra
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: hydra
-    volumes:
-      - hydra-postgres:/var/lib/postgresql/data
-    networks:
-      - auth-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hydra -d hydra"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   # Ory Hydra OAuth2/OIDC Server
   hydra:
@@ -404,7 +396,7 @@ services:
       - "4444:4444" # public API
       - "4445:4445" # admin API
     environment:
-      DSN: postgres://hydra:secret@postgres-hydra:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
       URLS_SELF_ISSUER: http://localhost:4444
       URLS_CONSENT: http://localhost:3000/auth/consent
       URLS_LOGIN: http://localhost:3000/auth/login
@@ -417,11 +409,11 @@ services:
       LOG_LEAK_SENSITIVE_VALUES: true
     command: serve all --dev
     volumes:
-      - ./frontend/hydra:/etc/config/hydra
+      - ./config/auth/hydra:/etc/config/hydra
     networks:
       - auth-network
     depends_on:
-      postgres-hydra:
+      db:
         condition: service_healthy
     restart: unless-stopped
 
@@ -438,14 +430,14 @@ services:
   hydra-migrate:
     image: oryd/hydra:v2.2.0
     environment:
-      DSN: postgres://hydra:secret@postgres-hydra:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
     command: migrate -c /etc/config/hydra/hydra.yml sql -e --yes
     volumes:
-      - ./frontend/hydra:/etc/config/hydra
+      - ./config/auth/hydra:/etc/config/hydra
     networks:
       - auth-network
     depends_on:
-      postgres-hydra:
+      db:
         condition: service_healthy
 
   # Register OAuth2 client for frontend
@@ -480,8 +472,6 @@ volumes:
   infisical_bootstrap:
   mcp_containers:
     driver: local
-  kratos-postgres:
-  hydra-postgres:
 
 networks:
   infisical:

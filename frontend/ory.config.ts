@@ -14,6 +14,7 @@ const config: OryClientConfiguration = {
     verification_ui_url: "/auth/verification",
     recovery_ui_url: "/auth/recovery",
     login_ui_url: "/auth/login",
+    logout_ui_url: "/auth/logout",
     settings_ui_url: "/settings",
   },
 }

@@ -37,7 +37,7 @@ export default function ErrorPage() {
 
           <div className="space-y-3">
             <Button
-              onClick={() => router.push("/auth/signin")}
+              onClick={() => router.push("/auth/login")}
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
               Try Again

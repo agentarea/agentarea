@@ -2,7 +2,9 @@
 
 version: v1.1.0
 
-dsn: postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+# DSN is overridden via docker-compose environment variable
+# Default for reference: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/kratos
+dsn: postgres://postgres:postgres@db:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
 
 serve:
   public:
@@ -29,49 +31,49 @@ serve:
     base_url: http://localhost:4434/
 
 selfservice:
-  default_browser_return_url: http://localhost:3001/
+  default_browser_return_url: http://localhost:3000/
   allowed_return_urls:
     - http://localhost:3000
     - http://localhost:3001
-    - http://localhost:3001/workplace
-    - http://localhost:3001/dashboard
+    - http://localhost:3000/workplace
+    - http://localhost:3000/dashboard
 
   flows:
     error:
-      ui_url: http://localhost:3001/auth/error
+      ui_url: http://localhost:3000/auth/error
 
     settings:
-      ui_url: http://localhost:3001/auth/settings
+      ui_url: http://localhost:3000/auth/settings
       privileged_session_max_age: 15m
       required_aal: highest_available
 
     recovery:
       enabled: true
-      ui_url: http://localhost:3001/auth/recovery
+      ui_url: http://localhost:3000/auth/recovery
       use: code
 
     verification:
       enabled: true
-      ui_url: http://localhost:3001/auth/verification
+      ui_url: http://localhost:3000/auth/verification
       use: code
       after:
-        default_browser_return_url: http://localhost:3001/workplace
+        default_browser_return_url: http://localhost:3000/workplace
 
     logout:
       after:
-        default_browser_return_url: http://localhost:3001/auth/signin
+        default_browser_return_url: http://localhost:3000/auth/login
 
     login:
-      ui_url: http://localhost:3001/auth/login
+      ui_url: http://localhost:3000/auth/login
       lifespan: 10m
       after:
-        default_browser_return_url: http://localhost:3001/workplace
+        default_browser_return_url: http://localhost:3000/workplace
 
     registration:
       lifespan: 10m
-      ui_url: http://localhost:3001/auth/registration
+      ui_url: http://localhost:3000/auth/registration
       after:
-        default_browser_return_url: http://localhost:3001/workplace
+        default_browser_return_url: http://localhost:3000/workplace
 
   methods:
     password:

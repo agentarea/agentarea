@@ -12,9 +12,9 @@ interface ConditionalLayoutProps {
 
 // Routes that should NOT use the main layout (auth pages, etc.)
 const NO_LAYOUT_ROUTES = [
-  '/auth/signin',
-  '/auth/signout',
   '/auth/login',
+  '/auth/logout',
+  '/auth/registration',
   '/auth/consent',
   '/auth/verification',
   '/auth/recovery',
