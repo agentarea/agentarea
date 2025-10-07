@@ -5,7 +5,7 @@ import CreateAgentContent from "./CreateAgentContent";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 export default async function CreateAgentPage() {
-  const t = await getTranslations("Agent");
+  const t = await getTranslations("AgentsPage");
   const tCommon = await getTranslations("Common");
 
   return (

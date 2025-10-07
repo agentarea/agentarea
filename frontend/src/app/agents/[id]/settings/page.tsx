@@ -11,7 +11,7 @@ interface AgentSettingsPageProps {
 }
 
 export default async function AgentSettingsPage({ params }: AgentSettingsPageProps) {
-  const t = await getTranslations("Agent");
+  const t = await getTranslations("AgentsPage");
   const resolvedParams = await params;
 
   return (

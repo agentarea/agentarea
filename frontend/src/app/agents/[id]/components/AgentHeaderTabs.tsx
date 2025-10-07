@@ -3,7 +3,7 @@ import ActiveLink from "./ActiveLink";
 import { MessagesSquare, List, Settings } from "lucide-react";
 
 export default async function AgentHeaderTabs({ agentId }: { agentId: string }) {
-  const t = await getTranslations("Agent");
+  const t = await getTranslations("AgentsPage");
   return (
     <div className="inline-flex items-center gap-3 py-2">
       <ActiveLink

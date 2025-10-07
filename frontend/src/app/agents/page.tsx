@@ -15,7 +15,7 @@ interface AgentsBrowsePageProps {
 }
 
 export default async function AgentsBrowsePage({ searchParams }: AgentsBrowsePageProps) {
-  const t = await getTranslations("Agent");
+  const t = await getTranslations("AgentsPage");
   const resolvedSearchParams = await searchParams;
   const searchQuery = typeof resolvedSearchParams.search === 'string' ? resolvedSearchParams.search : "";
   

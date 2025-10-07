@@ -183,6 +183,52 @@
   },
 
   "AgentsPage": {
+    "name": "Name",
+    "status": "Status",
+    "settings": "Settings",
+    "model": "Model",
+    "description": "Description",
+    "tools": "Tools",
+    "noTools": "No tools",
+    "createTask": "Create Task",
+    "currentTasks": "Current Tasks",
+    "browseAgents": "Browse Agents",
+    "newAgent": "New Agent",
+    "mainDescriptionPage": "Browse and manage your agents",
+    "deployNewAgent": "Deploy New Agent",
+    "deployNewAgentDescription": "Deploy a new agent to get started.",
+    "noAgentsYet": "No agents yet",
+    "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
+    "addYourFirstAgent": "Add your first agent",
+    "noAgentsTitle": "No agents available",
+    "noAgentsDescription": "Get started by creating your first agent",
+    "noMatchingAgents": "No matching agents",
+    "noMatchingAgentsDescription": "No agents match your search query",
+    "descriptionPage": {
+      "placeholderNewTask": "Write new task for {agentName}...",
+      "agentDetails": "Agent details",
+      "taskDetails": "Task details",
+      "time": "Time",
+      "usage": "Usage",
+      "kpi": "KPI",
+      "info": "Info",
+      "from": "From",
+      "description": "Description",
+      "model": "Model",
+      "tools": "Tools"
+    },
+    "error": {
+      "loadingData": "Error loading data"
+    },
+    "delete": {
+      "deleteAgent": "Delete Agent",
+      "agentDeletedSuccessfully": "Agent deleted successfully",
+      "error": {
+        "noAgentIdProvided": "No agent ID provided",
+        "failedToDeleteAgent": "Failed to delete agent",
+        "unexpectedErrorWhileDeletingAgent": "Unexpected error while deleting agent"
+      }
+    },
     "create": {
       "add": "Add",
       "cancel": "Cancel",
@@ -208,7 +254,31 @@
       "selectedTools": "Selected {count, plural, =0 {0 Tools} one {# Tool} other {# Tools}}",
       "selected": "Selected",
       "added": "Added",
-      "remove": "Remove"
+      "remove": "Remove",
+      "tool": "Tool",
+      "activeMcpServers": "Active MCP Servers",
+      "builtinTools": "Built-in Tools",
+      "availableMcpServers": "Available MCP Servers",
+      "mcpServers": "MCP Servers",
+      "agentTriggers": "Triggers",
+      "agentTriggersDescription": "Select triggers for your agent",
+      "agentTriggersNote": "Triggers determine when your agent is activated to perform its tasks.",
+      "agentTriggersNoteDescription": "Select when you want your agent to be activated. You can add multiple triggers.",
+      "trigger": "Trigger",
+      "agentTools": "Tools",
+      "agentToolsDescription": "Add MCP servers to enable tools for your agent.",
+      "agentToolsNote": "You can add multiple servers and configure them individually.",
+      "agentName": "Name",
+      "agentNamePlaceholder": "Enter agent name",
+      "description": "Description / Goal",
+      "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
+      "instruction": "Instruction",
+      "instructionPlaceholder": "Provide specific instructions for this agent...",
+      "llmModel": "LLM Model",
+      "selectModel": "Select a model",
+      "noConfigurationsYet": "No configurations yet",
+      "createAndUseProviderConfiguration": "Create and use a provider configuration",
+      "createConfiguration": "Create Configuration"
     }
   },
 
@@ -320,67 +390,6 @@
     }
   },
 
-  "Agent": {
-    "name": "Name",
-    "status": "Status",
-    "settings": "Settings",
-    "model": "Model",
-    "description": "Description",
-    "tools": "Tools",
-    "noTools": "No tools",
-    "descriptionPage": {
-      "placeholderNewTask": "Write new task for {agentName}...",
-      "agentDetails": "Agent details",
-      "taskDetails": "Task details",
-      "time": "Time",
-      "usage": "Usage",
-      "kpi": "KPI",
-      "info": "Info",
-      "from": "From",
-      "description": "Description",
-      "model": "Model",
-      "tools": "Tools"
-    },
-    "error": {
-      "loadingData": "Error loading data"
-    },
-    "createTask": "Create Task",
-    "currentTasks": "Current Tasks",
-    "browseAgents": "Browse Agents",
-    "newAgent": "New Agent",
-    "mainDescriptionPage": "Browse and manage your agents",
-    "deployNewAgent": "Deploy New Agent",
-    "deployNewAgentDescription": "Deploy a new agent to get started.",
-    "noAgentsYet": "No agents yet",
-    "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
-    "addYourFirstAgent": "Add your first agent",
-    "noAgentsTitle": "No agents available",
-    "noAgentsDescription": "Get started by creating your first agent",
-    "noMatchingAgents": "No matching agents",
-    "noMatchingAgentsDescription": "No agents match your search query",
-    "delete": {
-      "deleteAgent": "Delete Agent",
-      "agentDeletedSuccessfully": "Agent deleted successfully",
-      "error": {
-        "noAgentIdProvided": "No agent ID provided",
-        "failedToDeleteAgent": "Failed to delete agent",
-        "unexpectedErrorWhileDeletingAgent": "Unexpected error while deleting agent"
-      }
-    },
-    "create": {
-      "agentName": "Name",
-      "agentNamePlaceholder": "Enter agent name",
-      "description": "Description / Goal",
-      "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
-      "instruction": "Instruction",
-      "instructionPlaceholder": "Provide specific instructions for this agent...",
-      "llmModel": "LLM Model",
-      "selectModel": "Select a model",
-      "noConfigurationsYet": "No configurations yet",
-      "createAndUseProviderConfiguration": "Create and use a provider configuration",
-      "createConfiguration": "Create Configuration"
-    }
-  },
   "Chat": {
     "writeNewTaskFor": "Write new task for {agentName}...",
     "Messages": {

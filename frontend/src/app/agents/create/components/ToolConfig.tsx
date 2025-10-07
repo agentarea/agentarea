@@ -264,14 +264,14 @@ const ToolConfig = ({
   }, [isSheetOpen, scrollBuiltinToolId]);
 
   const note = useMemo(() => (
-    <>
-      <p>Add MCP servers to enable tools for your agent.</p>
-      <p>You can add multiple servers and configure them individually.</p>
+    <>  
+      <p>{t("create.agentToolsDescription")}</p>
+      <p>{t("create.agentToolsNote")}</p>
     </>
   ), []);
 
   const title = useMemo(() => (
-    <FormLabel icon={Wrench} className="cursor-pointer">Agent Tools</FormLabel>
+    <FormLabel icon={Wrench} className="cursor-pointer">{t("create.agentTools")}</FormLabel>
   ), []);
 
   return (
@@ -307,13 +307,13 @@ const ToolConfig = ({
           <ConfigSheet
             title={t('create.toolsMcp')}
             description={t('create.toolsMcpDescription')}
-            triggerText="Tool"
+            triggerText={t("create.tool")}
             className="ml-auto"
             open={isSheetOpen}
             onOpenChange={setIsSheetOpen}
           >
             <div className="flex flex-col overflow-y-auto space-y-4">
-              <div className="font-semibold">Built-in Tools</div>
+              <div className="font-semibold">{t("create.builtinTools")}</div>
               <SelectableList
                 items={builtinTools.map(tool => ({ ...tool, id: tool.name }))}
                 prefix="builtin-tool"
@@ -366,7 +366,7 @@ const ToolConfig = ({
                   height={16} 
                   className="text-current"
                 />
-                Active MCP Servers
+                {t("create.activeMcpServers")}
               </div>
               <SelectableList
                 items={activeInstances}
@@ -413,7 +413,7 @@ const ToolConfig = ({
                   height={16} 
                   className="text-current"
                 />
-                Available MCP Servers
+                {t("create.availableMcpServers")}
               </div>
               <SelectableList
                 disableExpand={true}
@@ -462,7 +462,7 @@ const ToolConfig = ({
           {/* Built-in Tools Section */}
           {builtinToolFields && builtinToolFields.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-foreground">Built-in Tools</h4>
+              <h4 className="text-sm font-medium text-foreground">{t("create.builtinTools")}</h4>
               <Accordion type="multiple" id="builtin-tools-items" className="space-y-2">
                 {builtinToolFields.map((item, index) => {
                   const builtinTool = builtinTools.find(tool => tool.name === item.tool_name);
@@ -508,7 +508,7 @@ const ToolConfig = ({
                   height={14} 
                   className="text-current"
                 />
-                MCP Servers
+                {t("create.mcpServers")}
               </h4>
               <Accordion type="multiple" id="mcp-tools-items" className="space-y-2">
                 {toolFields.map((item, index) => (
@@ -531,7 +531,8 @@ const ToolConfig = ({
             </div>
           ) : (
             <div className="cursor-default mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
-              Add MCP Servers to your agent to enable tool use.
+              {t("create.agentToolsDescription")}
+              <p>{t("create.agentToolsNote")}</p>
             </div>
           )}
         </div>

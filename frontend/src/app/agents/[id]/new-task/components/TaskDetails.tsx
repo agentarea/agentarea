@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function TaskDetails({ agent, isTaskRunning = false, isTaskActive = false }: Props) {
-    const t = useTranslations("Agent.descriptionPage");
+    const t = useTranslations("AgentsPage.descriptionPage");
     return (
         <Card className="
             h-full flex flex-col overflow-auto gap-3

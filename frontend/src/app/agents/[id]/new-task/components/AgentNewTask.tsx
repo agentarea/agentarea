@@ -13,7 +13,7 @@ interface Props {
 export default function AgentNewTask({ agent }: Props) {
   const [isTaskRunning, setIsTaskRunning] = useState(false);
   const [isTaskActive, setIsTaskActive] = useState(false);
-  const t = useTranslations("Agent.descriptionPage");
+  const t = useTranslations("AgentsPage.descriptionPage");
 
   // Handle task creation from chat
   const handleTaskCreated = (taskId: string) => {

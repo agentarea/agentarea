@@ -31,7 +31,7 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
-  const t = useTranslations("Agent.create");
+  const t = useTranslations("AgentsPage.create");
 
   const handleConfigSheetOpenChange = (open: boolean) => {
     setConfigSheetOpen(open);

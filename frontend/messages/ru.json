@@ -141,18 +141,104 @@
   },
 
   "AgentsPage": {
+    "name": "Имя",
+    "status": "Статус",
+    "model": "Модель",
+    "description": "Описание",
+    "tools": "Инструменты",
+    "settings": "Настройки",
+    "noTools": "Нет инструментов",
+    "createTask": "Создать задачу",
+    "currentTasks": "Текущие задачи",
+    "browseAgents": "Агенты",
+    "newAgent": "Новый агент",
+    "mainDescriptionPage": "Обзор и управление вашими агентами",
+    "deployNewAgent": "Создать нового агента",
+    "deployNewAgentDescription": "Создайте нового агента, чтобы начать работу.",
+    "deployNewAgentButton": "Создать агента",
+    "noAgentsYet": "Нет агентов",
+    "getStartedByAddingYourFirstAgent": "Начните работу, добавив своего первого агента.",
+    "addYourFirstAgent": "Добавьте своего первого агента",
+    "noAgentsTitle": "Нет доступных агентов",
+    "noAgentsDescription": "Начните с создания вашего первого агента",
+    "noMatchingAgents": "Нет подходящих агентов",
+    "noMatchingAgentsDescription": "Ни один агент не соответствует вашему поисковому запросу",
+    "descriptionPage": {
+      "placeholderNewTask": "Напишите новую задачу для {agentName}...",
+      "agentDetails": "Детали агента",
+      "taskDetails": "Детали задачи",
+      "time": "Время",
+      "usage": "Использование",
+      "kpi": "KPI",
+      "info": "Информация",
+      "from": "из",
+      "description": "Описание",
+      "model": "Модель",
+      "tools": "Инструменты"
+    },
+    "error": {
+      "loadingData": "Ошибка загрузки данных"
+    },
+    "delete": {
+      "deleteAgent": "Удалить агента",
+      "agentDeletedSuccessfully": "Агент успешно удален",
+      "error": {
+        "noAgentIdProvided": "ID агента не предоставлен",
+        "failedToDeleteAgent": "Не удалось удалить агента",
+        "unexpectedErrorWhileDeletingAgent": "Произошла непредвиденная ошибка при удалении агента"
+      }
+    },
     "create": {
       "add": "Добавить",
       "cancel": "Отмена",
       "title": "Создать агента",
       "back": "Вернуться к обзору агентов",
+      "success": "Агент успешно создан!",
+      "error": "Не удалось создать агента",
+      "validation": "Проверка не удалась. Пожалуйста, проверьте поля.",
+      "fields": {
+        "name": "Имя агента",
+        "description": "Описание / Цель",
+        "instruction": "Инструкция",
+        "model": "Модель LLM",
+        "namePlaceholder": "Введите имя агента",
+        "descriptionPlaceholder": "Опишите цель агента, личность и основную задачу...",
+        "instructionPlaceholder": "Укажите конкретные инструкции для этого агента...",
+        "selectModel": "Выберите модель",
+        "noModels": "Модели LLM не настроены. Пожалуйста, добавьте модели в Админ → Экземпляры моделей"
+      },
       "toolsMcp": "Инструменты (MCP серверы)",
       "toolsMcpDescription": "Выберите MCP сервер для добавления в вашего агента.",
       "addTool": "Добавить инструмент",
       "selectedTools": "Выбрано {count, plural, =0 {0 инструментов} one {# инструмент} few {# инструмента} many {# инструментов} other {# инструмента}}",
       "selected": "Выбрано",
       "added": "Добавлено",
-      "remove": "Удалить"
+      "remove": "Удалить",
+      
+      "tool": "Инструмент",
+      "activeMcpServers": "Активные MCP серверы",
+      "builtinTools": "Встроенные инструменты",
+      "availableMcpServers": "Доступные MCP серверы",
+      "mcpServers": "MCP серверы",
+      "agentTriggers": "Триггеры",
+      "agentTriggersDescription": "Выберите триггеры для вашего агента",
+      "agentTriggersNote": "Триггеры определяют, когда ваш агент активируется для выполнения своих задач.",
+      "agentTriggersNoteDescription": "Выберите, когда вы хотите, чтобы ваш агент активировался. Вы можете добавить несколько триггеров.",
+      "trigger": "Триггер",
+      "agentTools": "Инструменты",
+      "agentToolsDescription": "Добавьте MCP серверы, чтобы включить инструменты для вашего агента.",
+      "agentToolsNote": "Вы можете добавить несколько серверов и настроить их индивидуально.",
+      "agentName": "Имя",
+      "agentNamePlaceholder": "Введите имя агента",
+      "description": "Описание / Цель",
+      "descriptionPlaceholder": "Опишите цель и задачи агента...",
+      "instruction": "Инструкция",
+      "instructionPlaceholder": "Укажите конкретные инструкции для этого агента...",
+      "llmModel": "Модель LLM",
+      "selectModel": "Выберите модель",
+      "noConfigurationsYet": "Нет конфигураций",
+      "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
+      "createConfiguration": "Создать конфигурацию"
     }
   },
 
@@ -283,69 +369,6 @@
     }
   },
 
-  "Agent": {
-    "name": "Имя",
-    "status": "Статус",
-    "model": "Модель",
-    "description": "Описание",
-    "tools": "Инструменты",
-    "settings": "Настройки",
-    "noTools": "Нет инструментов",
-    "createTask": "Создать задачу",
-    "currentTasks": "Текущие задачи",
-    "descriptionPage": {
-      "placeholderNewTask": "Напишите новую задачу для {agentName}...",
-      "agentDetails": "Детали агента",
-      "taskDetails": "Детали задачи",
-      "time": "Время",
-      "usage": "Использование",
-      "kpi": "KPI",
-      "info": "Информация",
-      "from": "из",
-      "description": "Описание",
-      "model": "Модель",
-      "tools": "Инструменты"
-    },
-    "error": {
-      "loadingData": "Ошибка загрузки данных"
-    },
-    "delete": {
-
-      "deleteAgent": "Удалить агента",
-      "agentDeletedSuccessfully": "Агент успешно удален",
-      "error": {
-        "noAgentIdProvided": "ID агента не предоставлен",
-        "failedToDeleteAgent": "Не удалось удалить агента",
-        "unexpectedErrorWhileDeletingAgent": "Произошла непредвиденная ошибка при удалении агента"
-      }
-    },
-    "browseAgents": "Агенты",
-    "newAgent": "Новый агент",
-    "mainDescriptionPage": "Обзор и управление вашими агентами",
-    "deployNewAgent": "Создать нового агента",
-    "deployNewAgentDescription": "Создайте нового агента, чтобы начать работу.",
-    "deployNewAgentButton": "Создать агента",
-    "noAgentsYet": "Нет агентов",
-    "getStartedByAddingYourFirstAgent": "Начните работу, добавив своего первого агента.",
-    "addYourFirstAgent": "Добавьте своего первого агента",
-    "noAgentsTitle": "Нет доступных агентов",
-    "noAgentsDescription": "Начните с создания вашего первого агента",
-    "noMatchingAgents": "Нет подходящих агентов",
-    "noMatchingAgentsDescription": "Ни один агент не соответствует вашему поисковому запросу",
-    "create": {
-      "agentName": "Имя",
-      "agentNamePlaceholder": "Введите имя агента",
-      "description": "Описание / Цель",
-      "descriptionPlaceholder": "Опишите цель и задачи агента...",
-      "instruction": "Инструкция",
-      "instructionPlaceholder": "Укажите конкретные инструкции для этого агента...",
-      "llmModel": "Модель LLM",
-      "selectModel": "Выберите модель",
-      "noConfigurationsYet": "Нет конфигураций",
-      "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
-      "createConfiguration": "Создать конфигурацию"
-    }
-  },
   "Chat": {
     "writeNewTaskFor": "Напишите новую задачу для {agentName}...",
     "Messages": {

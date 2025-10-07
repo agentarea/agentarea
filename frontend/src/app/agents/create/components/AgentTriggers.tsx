@@ -9,6 +9,7 @@ import { Accordion } from "@/components/ui/accordion";
 import { SelectableList } from "./SelectableList";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import ConfigSheet from "./ConfigSheet";
+import { useTranslations } from "next-intl";
 
 // Define event trigger types
 const eventOptions = [
@@ -38,6 +39,7 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
   const [accordionValue, setAccordionValue] = useState<string>("triggers");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollTriggerId, setScrollTriggerId] = useState<string | null>(null);
+  const t = useTranslations("AgentsPage");
 
   // Precompute map for quick lookup of trigger option by id
   const triggerMap = useMemo(() => {
@@ -50,13 +52,13 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
 
   const note = useMemo(() => (
     <>
-      <p>Triggers determine when your agent is activated to perform its tasks.</p>
-      <p>Select when you want your agent to be activated. You can add multiple triggers.</p>
+      <p>{t("create.agentTriggersNote")}</p>
+      <p>{t("create.agentTriggersNoteDescription")}</p>
     </>
   ), []);
 
   const title = useMemo(() => (
-    <FormLabel icon={Zap} className="cursor-pointer">Agent Triggers</FormLabel>
+    <FormLabel icon={Zap} className="cursor-pointer">{t("create.agentTriggers")}</FormLabel>
   ), []);
 
   useEffect(()=>{
@@ -79,9 +81,9 @@ const AgentTriggers = ({ control, errors, eventFields, removeEvent, appendEvent 
         note={note}
         mainControl={
           <ConfigSheet
-            title="Agent Triggers"
-            description="Select triggers for your agent"
-            triggerText="Trigger"
+            title={t("create.agentTriggers")}
+            description={t("create.agentTriggersDescription")}
+            triggerText={t("create.trigger")}
           >
             <SelectableList
               items={eventOptions}

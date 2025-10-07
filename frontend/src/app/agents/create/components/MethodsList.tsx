@@ -45,7 +45,7 @@ export const MethodsList: React.FC<MethodsListProps> = ({
           />
         )}
       </div>
-      <div className="space-y-1">
+      <div className="max-h-60 overflow-y-auto space-y-1 pr-2">
         {methods.map((method) => {
           const methodId = `${toolName}-${method.name}`;
           const isChecked = selectedMethods[method.name] === true;
