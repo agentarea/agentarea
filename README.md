@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![AgentArea Logo](frontend/public/logo-line.svg)
+<img src="frontend/public/new-logo.svg" alt="AgentArea Logo" width="300" style="margin-bottom: 20px;" />
 
 
 **Build, deploy, and manage AI agents at scale**
