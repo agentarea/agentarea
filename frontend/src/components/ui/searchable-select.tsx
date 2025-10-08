@@ -164,7 +164,7 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           className={cn(
-            "rounded-xl px-3 w-full justify-between hover:bg-background shadow-none text-foreground hover:text-foreground focus:border-primary focus-visible:border-primary focus-visible:ring-0 dark:focus:border-accent-foreground dark:focus-visible:border-accent-foreground dark:bg-zinc-900", 
+            "rounded-md px-3 w-full justify-between hover:bg-background shadow-none text-foreground hover:text-foreground focus:border-primary focus-visible:border-primary focus-visible:ring-0 dark:focus:border-accent-foreground dark:focus-visible:border-accent-foreground dark:bg-zinc-900", 
             className
           )}
           disabled={disabled}

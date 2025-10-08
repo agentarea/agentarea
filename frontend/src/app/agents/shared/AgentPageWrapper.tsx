@@ -21,7 +21,7 @@ export default async function AgentPageWrapper({
   useContentBlock = true,
   className = "h-full w-full px-4 py-5"
 }: AgentPageWrapperProps) {
-  const t = await getTranslations("Agent");
+  const t = await getTranslations("AgentsPage");
 
   const content = (
     <Suspense fallback={

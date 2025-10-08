@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Edit, Play, Pause, Terminal, Trash2 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 type MCPInstance = {
   id: string;
@@ -33,7 +34,16 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
     <>
       {mcpInstanceList && mcpInstanceList.length > 0 && (
         <div className="flex items-center space-x-2 mt-6 mb-2">
-          <h2 className="text-xl font-semibold">Server Instances</h2>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Image 
+              src="/mcp.svg" 
+              alt="MCP" 
+              width={20} 
+              height={20} 
+              className="text-current"
+            />
+            Server Instances
+          </h2>
         </div>
       )}
 
@@ -58,7 +68,9 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <Terminal className="h-4 w-4 text-primary" />
-                        {instance.name}
+                        <span className="truncate max-w-[200px]" title={instance.name}>
+                          {instance.name}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>

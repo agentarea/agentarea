@@ -5,6 +5,7 @@ import EmptyState from "@/components/EmptyState";
 import { ProviderSpecCard } from "./ProviderItem";
 import Table from "@/components/Table/Table";
 import { useRouter } from "next/navigation";
+import ModelsList from "./ModelsList";
 
 interface ProviderSpecViewProps {
     specs: ProviderSpec[];
@@ -40,10 +41,19 @@ export default function ProviderSpecView({
             ),
         },
         {
+            accessor: "description",
+            header: "Description",
+            render: (value: string) => (
+                <span className="block truncate max-w-[300px]" title={value}>
+                    {value || '-'}
+                </span>
+            ),
+        },
+        {
             accessor: "models",
             header: "Models",
             render: (value: any[]) => (
-                <span>{value?.length || 0}</span>
+                <ModelsList models={value || []} />
             ),
         },
     ];

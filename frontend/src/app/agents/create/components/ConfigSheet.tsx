@@ -62,7 +62,7 @@ const ConfigSheet = ({
         }
       </SheetTrigger>
       <SheetContent
-        className={cn("w-full flex flex-col sm:w-[540px] overflow-y-hidden pb-0", className)}
+        className={cn("w-full flex flex-col sm:w-[540px] overflow-y-hidden pb-0 md:min-w-[500px]", className)}
         hideOverlay
         onPointerDownOutside={(e) => {
           const target = e.target as HTMLElement;

@@ -47,7 +47,7 @@ export default function AccordionControl({ id, accordionValue, setAccordionValue
             onValueChange={setAccordionValue}
         >
             <AccordionItem value={id} className={cn(itemClassName)}>
-                <AccordionTrigger className={cn("label py-0 justify-start pb-4", triggerClassName)}
+                <AccordionTrigger className={cn("label py-0 justify-start", triggerClassName)}
                     chevron={chevron}
                     controls={
                         <div className="flex flex-row items-center gap-2">
@@ -70,7 +70,7 @@ export default function AccordionControl({ id, accordionValue, setAccordionValue
                                         <Button 
                                             className="focus-visible:ring-0"
                                             type="button" 
-                                            size="xs"
+                                            size="sm"
                                         >
                                             <Plus />
                                             {isDropdown && props.addText ? props.addText : "Add"}
@@ -100,7 +100,7 @@ export default function AccordionControl({ id, accordionValue, setAccordionValue
                 >
                     {title}
                 </AccordionTrigger>
-                <AccordionContent className="p-0">
+                <AccordionContent className="pt-4">
                     {children}
                 </AccordionContent>
             </AccordionItem>

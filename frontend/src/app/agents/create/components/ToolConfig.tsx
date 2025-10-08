@@ -1,8 +1,8 @@
 import React from "react";
-import { Cpu, ArrowRight } from "lucide-react";
+import { Wrench, ArrowRight } from "lucide-react";
 import { FieldErrors, UseFieldArrayReturn, UseFieldArrayAppend } from 'react-hook-form';
 import { getNestedErrorMessage } from "../utils/formUtils";
-import type { AgentFormValues, BuiltinToolConfig } from "../types";
+import type { AgentFormValues } from "../types";
 import type { components } from '@/api/schema';
 import { useState, useEffect, useMemo } from "react";
 import { TriggerControl } from "./TriggerControl";
@@ -11,21 +11,20 @@ import { SelectableList } from "./SelectableList";
 import { useTranslations } from "next-intl";
 import ConfigSheet from "./ConfigSheet";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { BuiltinToolIconGrid } from "./BuiltinToolIconGrid";
-import client from '@/lib/client';
 import { toast } from "sonner";
 import { createMCPServerInstance, checkMCPServerInstanceConfiguration, getMCPServerInstance, updateMCPServerInstance } from "@/lib/api";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import AccordionControl from "./AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
+import { MethodsList } from "./MethodsList";
+import Image from "next/image";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
-
 type ToolConfigProps = {
   control: any;
+  setValue: any;
   errors: FieldErrors<AgentFormValues>;
   toolFields: UseFieldArrayReturn<AgentFormValues, "tools_config.mcp_server_configs", "id">["fields"];
   removeTool: (index: number) => void;
@@ -40,6 +39,7 @@ type ToolConfigProps = {
 
 const ToolConfig = ({ 
   control, 
+  setValue,
   errors, 
   toolFields, 
   removeTool, 
@@ -54,7 +54,9 @@ const ToolConfig = ({
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollToolId, setScrollToolId] = useState<string | null>(null);
+  const [scrollBuiltinToolId, setScrollBuiltinToolId] = useState<string | null>(null);
   const [loadingBuiltinTools, setLoadingBuiltinTools] = useState(false);
+  const [selectedMethods, setSelectedMethods] = useState<Record<string, Record<string, boolean>>>({});
   const t = useTranslations('AgentsPage');
 
   // Configure server overlay (like marketplace, but in sheet)
@@ -76,13 +78,55 @@ const ToolConfig = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(mcpInstanceList)]);
 
-
-  // Builtin tools helpers for unified selector
-  const handleAddBuiltinTool = (toolName: string) => {
-    if (!appendBuiltinTool) return;
+  // Initialize selectedMethods for sheet (all methods selected by default)
+  useEffect(() => {
+    if (!builtinTools?.length) return;
     
-    const exists = builtinToolFields?.some(field => field.tool_name === toolName) || false;
-    if (!exists) {
+    const toolsMethods = builtinTools.reduce((acc, tool) => {
+      if (tool.available_methods) {
+        acc[tool.name] = tool.available_methods.reduce((methods: Record<string, boolean>, method: any) => {
+          methods[method.name] = true;
+          return methods;
+        }, {} as Record<string, boolean>);
+      }
+      return acc;
+    }, {} as Record<string, Record<string, boolean>>);
+    
+    setSelectedMethods(toolsMethods);
+  }, [builtinTools]);
+
+  const handleAddBuiltinTool = (toolName: string) => {
+    if (!appendBuiltinTool || builtinToolFields?.some(field => field.tool_name === toolName)) return;
+    
+    const currentState = selectedMethods[toolName];
+    const tool = builtinTools.find(t => t.name === toolName);
+    
+    if (currentState && tool?.available_methods) {
+      const disabledMethods = tool.available_methods
+        .filter((method: any) => currentState[method.name] === false)
+        .reduce((acc: Record<string, boolean>, method: any) => {
+          acc[method.name] = false;
+          return acc;
+        }, {} as Record<string, boolean>);
+      
+      appendBuiltinTool({ 
+        tool_name: toolName,
+        disabled_methods: Object.keys(disabledMethods).length > 0 ? disabledMethods : undefined
+      });
+    } else {
+      // Initialize selectedMethods for this tool if not already set
+      if (tool?.available_methods && !currentState) {
+        const initialMethods = tool.available_methods.reduce((acc: Record<string, boolean>, method: any) => {
+          acc[method.name] = true;
+          return acc;
+        }, {} as Record<string, boolean>);
+        
+        setSelectedMethods(prev => ({
+          ...prev,
+          [toolName]: initialMethods
+        }));
+      }
+      
       appendBuiltinTool({ tool_name: toolName });
     }
   };
@@ -90,45 +134,60 @@ const ToolConfig = ({
   const handleRemoveBuiltinTool = (toolName: string) => {
     if (!removeBuiltinTool) return;
     
-    const index = builtinToolFields?.findIndex(field => field.tool_name === toolName) ?? -1;
-    if (index !== -1) {
+    const index = builtinToolFields?.findIndex(field => field.tool_name === toolName);
+    if (index !== undefined && index !== -1) {
       removeBuiltinTool(index);
     }
   };
 
-  const handleUpdateBuiltinToolConfig = (toolName: string, disabledMethods: { [methodName: string]: boolean }) => {
-    if (!builtinToolFields || !removeBuiltinTool || !appendBuiltinTool) return;
+  const handleMethodToggle = (toolName: string, methodName: string, checked: boolean) => {
+    setSelectedMethods(prev => ({
+      ...prev,
+      [toolName]: {
+        ...prev[toolName],
+        [methodName]: checked
+      }
+    }));
     
-    const index = builtinToolFields.findIndex(field => field.tool_name === toolName);
-    if (index !== -1) {
-      // Update existing tool config
-      removeBuiltinTool(index);
-      appendBuiltinTool({ 
-        tool_name: toolName,
-        disabled_methods: Object.keys(disabledMethods).length > 0 ? disabledMethods : undefined
-      });
+    const currentIndex = builtinToolFields?.findIndex(field => field.tool_name === toolName);
+    if (currentIndex === undefined || currentIndex === -1 || !builtinToolFields || !setValue) return;
+    
+    const field = builtinToolFields[currentIndex];
+    const newDisabledMethods = { ...(field.disabled_methods || {}) };
+    
+    if (checked) {
+      delete newDisabledMethods[methodName];
+    } else {
+      newDisabledMethods[methodName] = false;
     }
+    
+    // Update the existing field instead of removing and adding
+    setValue(`tools_config.builtin_tools.${currentIndex}.disabled_methods`, 
+      Object.keys(newDisabledMethods).length > 0 ? newDisabledMethods : undefined
+    );
   };
 
-  const getSelectedBuiltinTools = () => {
-    return builtinToolFields?.map(field => ({
+
+
+  const getSelectedBuiltinTools = () => 
+    builtinToolFields?.map(field => ({
       tool_name: field.tool_name,
       disabled_methods: field.disabled_methods || {}
     })) || [];
-  };
 
-  // MCP server helpers  
   const handleAddTools = (servers: MCPServer[]) => {
     if (!servers?.length) return;
-    const configs = servers.map((server) => ({
+    
+    const configs = servers.map(server => ({
       mcp_server_id: server.id,
       allowed_tools: [],
     }));
+    
     appendTool(configs);
   };
 
   const handleRemoveTool = (serverId: string) => {
-    const idx = toolFields.findIndex((item) => item.mcp_server_id === serverId);
+    const idx = toolFields.findIndex(item => item.mcp_server_id === serverId);
     if (idx !== -1) {
       removeTool(idx);
     }
@@ -194,42 +253,49 @@ const ToolConfig = ({
     }
   }, [isSheetOpen, scrollToolId]);
 
+  useEffect(() => {
+    if (isSheetOpen && scrollBuiltinToolId) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`builtin-tool-${scrollBuiltinToolId}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isSheetOpen, scrollBuiltinToolId]);
+
   const note = useMemo(() => (
-    <>
-      <p>Add MCP servers to enable tools for your agent.</p>
-      <p>You can add multiple servers and configure them individually.</p>
+    <>  
+      <p>{t("create.agentToolsDescription")}</p>
+      <p>{t("create.agentToolsNote")}</p>
     </>
   ), []);
 
   const title = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <FormLabel icon={Cpu} className="cursor-pointer">Agent Tools</FormLabel>
-    </div>
+    <FormLabel icon={Wrench} className="cursor-pointer">{t("create.agentTools")}</FormLabel>
   ), []);
 
   return (
     <>
       {/* Builtin Tools Section */}
-      {/**
-       * <Card>
-       *   <CardHeader>
-       *     <CardTitle className="flex items-center gap-2">
-       *       <Calculator className="h-4 w-4" />
-       *       Tools Configuration
-       *     </CardTitle>
-       *   </CardHeader>
-       *   <CardContent>
-       *     <BuiltinToolIconGrid
-       *       builtinTools={builtinTools}
-       *       selectedTools={getSelectedBuiltinTools()}
-       *       onAddTool={handleAddBuiltinTool}
-       *       onRemoveTool={handleRemoveBuiltinTool}
-       *       onUpdateToolConfig={handleUpdateBuiltinToolConfig}
-       *       loading={loadingBuiltinTools}
-       *     />
-       *   </CardContent>
-       * </Card>
-       */}
+      
+        {/* <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Tools Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BuiltinToolIconGrid
+              builtinTools={builtinTools}
+              selectedTools={getSelectedBuiltinTools()}
+              onAddTool={handleAddBuiltinTool}
+              onRemoveTool={handleRemoveBuiltinTool}
+              onUpdateToolConfig={() => console.log('update tool config')}
+              loading={loadingBuiltinTools}
+            />
+          </CardContent>
+        </Card> */}
+       
 
       <AccordionControl
         id="tools"
@@ -241,38 +307,151 @@ const ToolConfig = ({
           <ConfigSheet
             title={t('create.toolsMcp')}
             description={t('create.toolsMcpDescription')}
-            triggerText="Tool"
+            triggerText={t("create.tool")}
             className="ml-auto"
             open={isSheetOpen}
             onOpenChange={setIsSheetOpen}
           >
             <div className="flex flex-col overflow-y-auto space-y-4">
-              <div className="font-semibold">Active MCP Servers</div>
+              <div className="font-semibold">{t("create.builtinTools")}</div>
+              <SelectableList
+                items={builtinTools.map(tool => ({ ...tool, id: tool.name }))}
+                prefix="builtin-tool"
+                extractTitle={(tool) => {
+                  const { IconComponent, displayName } = getBuiltinToolDisplayInfo(tool);
+                  return (
+                    <div className="flex flex-row items-center gap-2 px-[7px] py-[7px]">
+                      <IconComponent className="w-5 h-5 text-muted-foreground" />
+                      <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent">
+                        {displayName}
+                      </h3>
+                    </div>
+                  );
+                }}
+                onAdd={(tool) => handleAddBuiltinTool(tool.name)}
+                onRemove={(tool) => handleRemoveBuiltinTool(tool.name)}
+                selectedIds={getSelectedBuiltinTools().map(tool => tool.tool_name)}
+                openItemId={scrollBuiltinToolId}
+                renderContent={(tool) => {
+                  const methodsState = selectedMethods[tool.name] || {};
+                  
+                  return (
+                    <div className="p-2 space-y-2">
+                      <p className="text-xs text-muted-foreground">{tool.description}</p>
+                      <MethodsList
+                        methods={tool.available_methods || []}
+                        selectedMethods={methodsState}
+                        onMethodToggle={(methodName, checked) => 
+                          handleMethodToggle(tool.name, methodName, checked)
+                        }
+                        toolName={tool.name}
+                        showSelectAll={true}
+                        onSelectAll={(checked) => {
+                          if (tool.available_methods) {
+                            tool.available_methods.forEach((method: any) => {
+                              handleMethodToggle(tool.name, method.name, checked);
+                            });
+                          }
+                        }}
+                      />
+                    </div>
+                  );
+                }}
+              />
+              <div className="font-semibold flex items-center gap-2">
+                <Image 
+                  src="/mcp.svg" 
+                  alt="MCP" 
+                  width={16} 
+                  height={16} 
+                  className="text-current"
+                />
+                {t("create.activeMcpServers")}
+              </div>
               <SelectableList
                 items={activeInstances}
                 prefix="active-mcp"
-                extractTitle={(instance) => instance.name || instance.id}
+                extractTitle={(instance) => (
+                  <div className="flex flex-row items-center gap-2 px-[7px] py-[7px] min-w-0">
+                    <div className="relative shrink-0">
+                      <img src="/Icon.svg" alt="" className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent truncate">
+                      {instance.name || instance.id}
+                    </h3>
+                  </div>
+                )}
                 onAdd={(instance) => handleAddTools([instance])}
                 onRemove={(instance) => handleRemoveTool(instance.id)}
                 selectedIds={toolFields.map((item) => item.mcp_server_id)}
                 openItemId={scrollToolId}
-                renderContent={() => (
-                  <div className="p-4 text-sm text-muted-foreground">Active</div>
+                renderContent={(instance) => (
+                  <div className="p-2 space-y-2">
+                    <p className="text-xs text-muted-foreground">Active MCP Server Instance</p>
+                    {instance.available_tools && instance.available_tools.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-foreground">Available Tools:</p>
+                        <div className="space-y-1">
+                          {instance.available_tools.map((tool: any) => (
+                            <div key={tool.name} className="flex items-center gap-2 p-1 rounded bg-muted/30">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+                              <span className="text-xs text-foreground">{tool.display_name || tool.name}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">{tool.description}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               />
-              <div className="font-semibold">Available MCP Servers</div>
+              <div className="font-semibold flex items-center gap-2">
+                <Image 
+                  src="/mcp.svg" 
+                  alt="MCP" 
+                  width={16} 
+                  height={16} 
+                  className="text-current"
+                />
+                {t("create.availableMcpServers")}
+              </div>
               <SelectableList
                 disableExpand={true}
                 items={mcpServers}
                 prefix="mcp"
-                extractTitle={(server) => server.name}
+                extractTitle={(server) => (
+                  <div className="flex flex-row items-center gap-2 px-[7px] py-[7px] min-w-0">
+                      <div className="relative shrink-0">
+                        <img src="/Icon.svg" alt="" className="w-5 h-5" />
+                      </div>
+                    <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent truncate">
+                      {server.name}
+                    </h3>
+                  </div>
+                )}
                 onAdd={(server) => handleAddConfigurationTools(server)}
                 onRemove={(server) => handleRemoveTool(server.id)}
                 selectedIds={toolFields.map((item) => item.mcp_server_id)}
                 openItemId={scrollToolId}
                 inactiveLabel={<>Configure <ArrowRight className="h-3 w-3" /></>}
-                renderContent={() => (
-                  <div className="p-4 text-sm text-muted-foreground">Available</div>
+                renderContent={(server) => (
+                  <div className="p-2 space-y-2">
+                    <p className="text-xs text-muted-foreground">{server.description || 'Available MCP Server'}</p>
+                    {(server as any).available_tools && (server as any).available_tools.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-foreground">Available Tools:</p>
+                        <div className="space-y-1">
+                          {(server as any).available_tools.map((tool: any) => (
+                            <div key={tool.name} className="flex items-center gap-2 p-1 rounded bg-muted/30">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+                              <span className="text-xs text-foreground">{tool.display_name || tool.name}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">{tool.description}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               />
             </div>
@@ -280,28 +459,80 @@ const ToolConfig = ({
         }
       >
         <div className="space-y-4">
+          {/* Built-in Tools Section */}
+          {builtinToolFields && builtinToolFields.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-foreground">{t("create.builtinTools")}</h4>
+              <Accordion type="multiple" id="builtin-tools-items" className="space-y-2">
+                {builtinToolFields.map((item, index) => {
+                  const builtinTool = builtinTools.find(tool => tool.name === item.tool_name);
+                  if (!builtinTool) return null;
+                  
+                  const { IconComponent, displayName, description } = getBuiltinToolDisplayInfo(builtinTool);
+                  
+                  return (
+                    <TriggerControl 
+                      name={`tools_config.builtin_tools.${index}.tool_name`}
+                      enabledName={`tools_config.builtin_tools.${index}.enabled`}
+                      key={`builtin-tool-${index}`}
+                      trigger={{
+                        id: builtinTool.name,
+                        name: displayName,
+                        description: description,
+                        icon: IconComponent,
+                        available_methods: builtinTool.available_methods
+                      }}
+                      index={index}
+                      control={control}
+                      removeEvent={() => removeBuiltinTool?.(index)}
+                      // editEvent={() => {}}
+                      selectedMethods={selectedMethods[builtinTool.name] || {}}
+                      onMethodToggle={(methodName: string, checked: boolean) => 
+                        handleMethodToggle(builtinTool.name, methodName, checked)
+                      }
+                    />
+                  );
+                })}
+              </Accordion>
+            </div>
+          )}
+
+          {/* MCP Tools Section */}
           {toolFields.length > 0 ? (
-            <Accordion type="multiple" id="mcp-tools-items" className="space-y-2">
-              {toolFields.map((item, index) => (
-                <TriggerControl 
-                  name={`tools_config.mcp_server_configs.${index}.mcp_server_id`}
-                  enabledName={`tools_config.mcp_server_configs.${index}.enabled`}
-                  key={`tool-${index}`}
-                  trigger={
-                    activeInstances.find((option: any) => option.id === item.mcp_server_id) ||
-                    mcpServers.find((option) => option.id === item.mcp_server_id) ||
-                    undefined
-                  }
-                  index={index}
-                  control={control}
-                  removeEvent={() => removeTool(index)}
-                  editEvent={() => editTool(index)}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Image 
+                  src="/mcp.svg" 
+                  alt="MCP" 
+                  width={14} 
+                  height={14} 
+                  className="text-current"
                 />
-              ))}
-            </Accordion>
+                {t("create.mcpServers")}
+              </h4>
+              <Accordion type="multiple" id="mcp-tools-items" className="space-y-2">
+                {toolFields.map((item, index) => (
+                  <TriggerControl 
+                    name={`tools_config.mcp_server_configs.${index}.mcp_server_id`}
+                    enabledName={`tools_config.mcp_server_configs.${index}.enabled`}
+                    key={`tool-${index}`}
+                    trigger={
+                      activeInstances.find((option: any) => option.id === item.mcp_server_id) ||
+                      mcpServers.find((option) => option.id === item.mcp_server_id) ||
+                      undefined
+                    }
+                    index={index}
+                    control={control}
+                    removeEvent={() => removeTool(index)}
+                    editEvent={() => editTool(index)}
+                  />
+                ))}
+              </Accordion>
+            </div>
           ) : (
             <div className="cursor-default mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
-              Add MCP Servers to your agent to enable tool use.
+              {t("create.agentToolsDescription")}
+              <p>{t("create.agentToolsNote")}</p>
             </div>
           )}
         </div>

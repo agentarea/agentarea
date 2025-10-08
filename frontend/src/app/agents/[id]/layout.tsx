@@ -12,7 +12,7 @@ interface Props {
 export default async function AgentLayout({ params, children }: Props) {
   const { id } = await params;
   const agentResponse = await getAgent(id);
-  const t = await getTranslations("Agent");
+  const t = await getTranslations("AgentsPage");
   if (!agentResponse.data) {
     notFound();
   }

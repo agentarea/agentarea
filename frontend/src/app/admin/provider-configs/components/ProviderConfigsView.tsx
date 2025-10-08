@@ -5,6 +5,7 @@ import EmptyState from "@/components/EmptyState";
 import { ProviderConfigCard } from "./ProviderItem";
 import Table from "@/components/Table/Table";
 import { useRouter } from "next/navigation";
+import ModelsList from "./ModelsList";
 
 interface ProviderConfigsViewProps {
     configs: ProviderConfig[];
@@ -47,7 +48,7 @@ export default function ProviderConfigsView({
             accessor: "model_instances",
             header: "Models",
             render: (value: any[]) => (
-                <span>{value?.length || 0}</span>
+                <ModelsList models={value || []} />
             ),
         },
     ];

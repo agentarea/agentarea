@@ -16,7 +16,7 @@ interface AgentsListProps {
 }
 
 export default function AgentsList({ initialAgents, viewMode = "grid" }: AgentsListProps) {
-  const t = useTranslations("Agent");
+  const t = useTranslations("AgentsPage");
   const commonT = useTranslations("Common");
   const router = useRouter();
 

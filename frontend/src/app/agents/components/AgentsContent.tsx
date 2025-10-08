@@ -12,7 +12,7 @@ export default async function AgentsContent({
   searchQuery = "", 
   viewMode = "grid" 
 }: AgentsContentProps) {
-  const t = await getTranslations("Agent");
+  const t = await getTranslations("AgentsPage");
   
   const [{ data: agents = [] }, { data: modelInstances = [] }] = await Promise.all([
     listAgents(),

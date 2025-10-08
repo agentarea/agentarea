@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Card } from "@/components/ui/card";
@@ -162,6 +162,7 @@ export default function AgentForm({
               <div className="px-6">
                 <ToolConfig 
                   control={control} 
+                  setValue={setValue}
                   errors={errors} 
                   toolFields={toolFields} 
                   removeTool={removeTool} 
