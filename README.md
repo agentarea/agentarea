@@ -1,5 +1,3 @@
-# AgentArea
-
 <div align="center">
 
 ![AgentArea Logo](images/agentarea-cover.jpg)
