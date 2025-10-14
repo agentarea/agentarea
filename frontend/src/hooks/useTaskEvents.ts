@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSSE } from "./useSSE";
-import { getAgentTaskEvents } from "@/lib/api";
+import { getTaskEvents } from "./actions";
 import { 
   DisplayEvent, 
   EventsState, 
@@ -72,7 +72,7 @@ export function useTaskEvents(
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      const { data, error } = await getAgentTaskEvents(agentId, taskId, {
+      const { data, error } = await getTaskEvents(agentId, taskId, {
         page: 1,
         page_size: 100
       });
@@ -274,7 +274,7 @@ export function useTaskEvents(
       try {
         setState(prev => ({ ...prev, loading: true, error: null }));
 
-        const { data, error } = await getAgentTaskEvents(agentId, taskId, {
+        const { data, error } = await getTaskEvents(agentId, taskId, {
           page: 1,
           page_size: 100
         });

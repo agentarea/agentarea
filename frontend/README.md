@@ -26,8 +26,8 @@ To configure authentication, set the following environment variables in `.env.lo
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secret-key-change-in-production
 
-# API Configuration
-NEXT_PUBLIC_API_URL=http://localhost:8000
+# Server-side API Configuration (not exposed to browser)
+API_URL=http://localhost:8000
 
 # Generic OIDC Configuration (fallback)
 OIDC_ISSUER=https://your-oidc-provider.com

@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_model_spec_repository
+from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
@@ -64,6 +65,7 @@ class ModelSpecResponse(BaseModel):
 # Model Spec endpoints
 @router.get("/", response_model=list[ModelSpecResponse])
 async def list_model_specs(
+    user_context: UserContextDep,
     provider_spec_id: UUID | None = None,
     is_active: bool | None = None,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
@@ -79,6 +81,7 @@ async def list_model_specs(
 @router.get("/{model_spec_id}", response_model=ModelSpecResponse)
 async def get_model_spec(
     model_spec_id: UUID,
+    user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Get a specific model specification by ID."""
@@ -91,6 +94,7 @@ async def get_model_spec(
 @router.get("/by-provider/{provider_spec_id}", response_model=list[ModelSpecResponse])
 async def list_model_specs_by_provider(
     provider_spec_id: UUID,
+    user_context: UserContextDep,
     is_active: bool | None = None,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
@@ -106,6 +110,7 @@ async def list_model_specs_by_provider(
 async def get_model_spec_by_provider_and_name(
     provider_spec_id: UUID,
     model_name: str,
+    user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Get a specific model specification by provider and model name."""
@@ -120,6 +125,7 @@ async def get_model_spec_by_provider_and_name(
 @router.post("/", response_model=ModelSpecResponse)
 async def create_model_spec(
     data: ModelSpecCreate,
+    user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Create a new model specification."""
@@ -150,6 +156,7 @@ async def create_model_spec(
 async def update_model_spec(
     model_spec_id: UUID,
     data: ModelSpecUpdate,
+    user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Update a model specification."""
@@ -174,6 +181,7 @@ async def update_model_spec(
 @router.delete("/{model_spec_id}")
 async def delete_model_spec(
     model_spec_id: UUID,
+    user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Delete a model specification."""
@@ -186,6 +194,7 @@ async def delete_model_spec(
 @router.post("/upsert", response_model=ModelSpecResponse)
 async def upsert_model_spec(
     data: ModelSpecCreate,
+    user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
 ):
     """Create or update a model specification by provider and model name.

@@ -120,28 +120,11 @@ ignore = [
     "D101",
     "D100",    # Missing docstring in public module
     "D104",    # Missing docstring in public package
-    "D105",    # Missing docstring in magic method
-    "D106",    # Missing docstring in nested class
     "D203",    # One blank line required before class docstring
     "D213",    # Multi-line docstring summary should start at the second line
     "D205",    # Blank line required between summary line and description
     "D415",    # First line should end with punctuation
-    "D417",    # Missing parameter documentation
     "E501",    # Line too long
-    "T201",    # Print statements (used for CLI output)
-    "S105",    # Hardcoded password (false positives in test fixtures)
-    "S108",    # Hardcoded temp file (intentional for testing)
-    "S104",    # Hardcoded bind all interfaces (intentional for dev)
-    "S112",    # Try except continue (intentional flow control)
-    "S324",    # Insecure hash function (used for non-security purposes)
-    "S603",    # Subprocess without shell (false positive)
-    "F405",    # Import star usage (legacy code, will refactor)
-    "F403",    # Import star undefined (legacy code)
-    "B904",    # Raise without from (requires careful manual review)
-    "N802",    # Invalid function name (intentional for compatibility)
-    "RUF001",  # Ambiguous unicode (intentional for i18n)
-    "RUF006",  # Asyncio dangling task (intentional fire-and-forget)
-    "PT028",   # Pytest parameter with default (intentional design)
 ]
 
 [tool.ruff.lint.pydocstyle]

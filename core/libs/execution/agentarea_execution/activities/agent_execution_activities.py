@@ -96,7 +96,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_id=request.override_model or agent.model_id,
                 tools_config=agent.tools_config or {},
                 events_config=agent.events_config or {},
-                planning=agent.planning,
+                planning=agent.planning if agent.planning is not None else False,
                 execution_context=request.execution_context,
                 step_type=request.step_type,
             )

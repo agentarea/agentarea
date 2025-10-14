@@ -46,10 +46,16 @@ class ActivityServiceContainer:
         """Get ModelInstanceService with proper session and context."""
         session = self._database.async_session_factory()
         repository = ModelInstanceRepository(session, user_context)
+
+        # Use factory to create secret manager with workspace context
+        secret_manager = self.dependencies.secret_manager_factory.create(
+            session=session, user_context=user_context
+        )
+
         service = ModelInstanceService(
             repository=repository,
             event_broker=self.dependencies.event_broker,
-            secret_manager=self.dependencies.secret_manager,
+            secret_manager=secret_manager,
         )
         return service, session
 
@@ -59,10 +65,16 @@ class ActivityServiceContainer:
         """Get MCPServerInstanceService with proper session and context."""
         session = self._database.async_session_factory()
         repository_factory = RepositoryFactory(session, user_context)
+
+        # Use factory to create secret manager with workspace context
+        secret_manager = self.dependencies.secret_manager_factory.create(
+            session=session, user_context=user_context
+        )
+
         service = MCPServerInstanceService(
             repository_factory=repository_factory,
             event_broker=self.dependencies.event_broker,
-            secret_manager=self.dependencies.secret_manager,
+            secret_manager=secret_manager,
         )
         return service, session
 

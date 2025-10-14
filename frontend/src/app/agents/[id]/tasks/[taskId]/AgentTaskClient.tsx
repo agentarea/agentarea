@@ -13,13 +13,13 @@ import {
   Clock
 } from "lucide-react";
 import Link from "next/link";
-import { 
-  getAgentTaskStatus,
-  pauseAgentTask,
-  resumeAgentTask,
-  cancelAgentTask,
-  getAgentTaskMessages
-} from "@/lib/api";
+import {
+  getTaskStatus,
+  pauseTask,
+  resumeTask,
+  cancelTask,
+  getTaskMessages
+} from "./actions";
 import AgentChat from "@/components/Chat/AgentChat";
 
 interface Agent {
@@ -68,14 +68,14 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
     setLoading(true);
     try {
       // Load task status
-      const statusResponse = await getAgentTaskStatus(agent.id, taskId);
+      const statusResponse = await getTaskStatus(agent.id, taskId);
       if (statusResponse.data) {
         setTaskStatus(statusResponse.data as TaskStatus);
       }
 
       // Load task messages if available
       try {
-        const messagesResponse = await getAgentTaskMessages(agent.id, taskId);
+        const messagesResponse = await getTaskMessages(agent.id, taskId);
         if (messagesResponse.data) {
           setMessages(messagesResponse.data);
         }
@@ -94,16 +94,16 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
       let result;
       switch (action) {
         case "pause":
-          result = await pauseAgentTask(agent.id, taskId);
+          result = await pauseTask(agent.id, taskId);
           break;
         case "resume":
-          result = await resumeAgentTask(agent.id, taskId);
+          result = await resumeTask(agent.id, taskId);
           break;
         case "cancel":
-          result = await cancelAgentTask(agent.id, taskId);
+          result = await cancelTask(agent.id, taskId);
           break;
       }
-      
+
       if (!result.error) {
         loadTaskData(); // Refresh data
       }

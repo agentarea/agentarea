@@ -11,7 +11,7 @@ import (
 
 // DockerProvider handles Docker-based MCP server instances
 type DockerProvider struct {
-	secretResolver   *secrets.SecretResolver
+	secretResolver   secrets.SecretResolver
 	containerManager ContainerManagerInterface
 	logger           *slog.Logger
 }
@@ -23,7 +23,7 @@ type ContainerManagerInterface interface {
 }
 
 // NewDockerProvider creates a new Docker provider
-func NewDockerProvider(secretResolver *secrets.SecretResolver, containerManager ContainerManagerInterface, logger *slog.Logger) *DockerProvider {
+func NewDockerProvider(secretResolver secrets.SecretResolver, containerManager ContainerManagerInterface, logger *slog.Logger) *DockerProvider {
 	return &DockerProvider{
 		secretResolver:   secretResolver,
 		containerManager: containerManager,

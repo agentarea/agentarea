@@ -10,7 +10,6 @@ export async function GET(
   try {
     // Get auth token from the request
     const authHeader = request.headers.get('authorization');
-    const workspaceHeader = request.headers.get('x-workspace-id') || 'default';
 
     // Get token from auth API if not provided
     let token = authHeader?.replace('Bearer ', '');
@@ -31,18 +30,18 @@ export async function GET(
     }
 
     // Create headers for backend request
+    // Note: workspace_id is already in the JWT token claims, no need to send separately
     const backendHeaders: Record<string, string> = {
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'X-Workspace-ID': workspaceHeader,
     };
 
     if (token) {
       backendHeaders['Authorization'] = `Bearer ${token}`;
     }
 
-    // Connect to backend SSE endpoint
-    const backendUrl = env.NEXT_PUBLIC_API_URL;
+    // Connect to backend SSE endpoint (server-side only)
+    const backendUrl = env.API_URL;
     const sseUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream`;
     
     const response = await fetch(sseUrl, {

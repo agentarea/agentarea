@@ -193,7 +193,11 @@ async def create_agent(
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
-async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)):
+async def get_agent(
+    agent_id: UUID,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+):
     """Get an agent by ID."""
     agent = await agent_service.get(agent_id)
     if not agent:
@@ -203,6 +207,7 @@ async def get_agent(agent_id: UUID, agent_service: AgentService = Depends(get_ag
 
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
+    user_context: UserContextDep,
     created_by: str | None = Query(
         None, description="Filter by creator: 'me' for current user's agents only"
     ),
@@ -243,7 +248,11 @@ async def update_agent(
 
 
 @router.delete("/{agent_id}")
-async def delete_agent(agent_id: UUID, agent_service: AgentService = Depends(get_agent_service)):
+async def delete_agent(
+    agent_id: UUID,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+):
     """Delete an agent."""
     success = await agent_service.delete_agent(agent_id)
     if not success:
@@ -252,7 +261,7 @@ async def delete_agent(agent_id: UUID, agent_service: AgentService = Depends(get
 
 
 @router.get("/tools/builtin")
-async def get_builtin_tools():
+async def get_builtin_tools(user_context: UserContextDep):
     """Get available builtin tools with full metadata including available methods."""
     return get_available_builtin_tools()
 

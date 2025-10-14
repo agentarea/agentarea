@@ -39,20 +39,7 @@ class JWTTokenHandler:
         Raises:
             HTTPException: If token is missing, invalid, or lacks required claims
         """
-        # Check for development mode
-        dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
-
-        if dev_mode:
-            # Development mode: use default values
-            dev_user_id = "dev-user"
-            workspace_id = "system"  # Use "system" workspace for built-in resources
-
-            self.logger.info(
-                f"Development mode: using user_id={dev_user_id}, workspace_id={workspace_id}"
-            )
-            return UserContext(user_id=dev_user_id, workspace_id=workspace_id, roles=["dev"])
-
-        # Production mode: use JWT token
+        # Extract JWT token from request
         token = self._extract_token_from_header(request)
         if not token:
             self.logger.warning("Missing authorization token in request")

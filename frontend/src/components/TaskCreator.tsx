@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { listAgents, createAgentTask } from "@/lib/api";
+import { getAgents, createTask } from "./actions";
 import { Loader2, Send, CheckCircle } from "lucide-react";
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 
@@ -32,7 +32,7 @@ export default function TaskCreator() {
   const loadAgents = async () => {
     try {
       setLoadingAgents(true);
-      const { data: agentsData, error } = await listAgents();
+      const { data: agentsData, error } = await getAgents();
       
       if (error) {
         console.error("Failed to load agents:", error);
@@ -80,7 +80,7 @@ export default function TaskCreator() {
         enable_agent_communication: true
       };
 
-      const { data: task, error } = await createAgentTask(selectedAgentId, taskData);
+      const { data: task, error } = await createTask(selectedAgentId, taskData);
 
       if (error) {
         setResult({ 

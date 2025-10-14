@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from agentarea_api.api.deps.services import get_webhook_manager
+from agentarea_common.auth.dependencies import UserContextDep
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -88,7 +89,10 @@ async def handle_webhook(
     summary="Webhook system health check",
     description="Check if the webhook system is healthy and operational",
 )
-async def webhook_health_check(webhook_manager=Depends(get_webhook_manager)) -> dict[str, Any]:
+async def webhook_health_check(
+    user_context: UserContextDep,
+    webhook_manager=Depends(get_webhook_manager),
+) -> dict[str, Any]:
     """Health check endpoint for webhook system.
 
     Returns:
@@ -120,7 +124,9 @@ async def webhook_health_check(webhook_manager=Depends(get_webhook_manager)) -> 
     description="Get debug information about a webhook (admin only)",
 )
 async def debug_webhook(
-    webhook_id: str, webhook_manager=Depends(get_webhook_manager)
+    webhook_id: str,
+    user_context: UserContextDep,
+    webhook_manager=Depends(get_webhook_manager),
 ) -> dict[str, Any]:
     """Debug endpoint to get information about a webhook.
 

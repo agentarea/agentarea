@@ -53,7 +53,6 @@ Backend-specific configuration variables
 {{- define "agentarea.backend.configVars" -}}
 PORT: "8000"
 LOG_LEVEL: "info"
-DEV_MODE: "false"
 {{- end }}
 
 {{/*

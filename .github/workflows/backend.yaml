@@ -1,6 +1,9 @@
 name: Backend CI workflow
 on:
   push:
+    paths:
+      - "core/**"
+      - ".github/**"
     branches:
       - main
   pull_request:

@@ -149,6 +149,7 @@ export default function EditAgentClient({
               <div className="px-6">
                 <ToolConfig
                   control={control}
+                  setValue={setValue}
                   errors={errors}
                   toolFields={toolFields}
                   removeTool={removeTool}

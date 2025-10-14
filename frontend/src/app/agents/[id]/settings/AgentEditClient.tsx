@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { updateAgent } from '@/lib/api';
+import { updateAgentSettings } from './actions';
 import type { components } from '@/api/schema';
 import AgentForm from '../../shared/AgentForm';
 import type { AgentFormValues } from '../../create/types';
@@ -35,7 +35,7 @@ export default function AgentEditClient({
 
   const handleSubmit = async (formData: AgentFormValues) => {
     try {
-      // Просто вызываем API напрямую
+      // Call server action instead of direct API call
       const updateData: any = {
         name: formData.name,
         description: formData.description || undefined,
@@ -50,7 +50,7 @@ export default function AgentEditClient({
         planning: formData.planning,
       };
 
-      const { data, error } = await updateAgent(agentId, updateData);
+      const { data, error } = await updateAgentSettings(agentId, updateData);
 
       if (error) {
         console.error('Update error:', error);

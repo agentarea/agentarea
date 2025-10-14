@@ -112,6 +112,7 @@ class TemporalTaskManager(BaseTaskManager):
                 task_id=task.id,
                 agent_id=task.agent_id,
                 user_id=task.user_id,
+                workspace_id=task.workspace_id or "system",  # Required field, fallback to system
                 task_query=task.query,
                 task_parameters=task.task_parameters or {},
                 enable_agent_communication=bool(

@@ -36,7 +36,12 @@ class BaseCrudService[T]:
 
     async def update(self, entity: T) -> T:
         """Update an existing entity."""
-        return await self.repository.update(entity)
+        # Check if repository has update_from_entity (WorkspaceScopedRepository)
+        if hasattr(self.repository, "update_from_entity"):
+            return await self.repository.update_from_entity(entity)
+        else:
+            # Fallback for BaseRepository
+            return await self.repository.update(entity)
 
     async def delete(self, id: UUID) -> bool:
         """Delete an entity by ID."""

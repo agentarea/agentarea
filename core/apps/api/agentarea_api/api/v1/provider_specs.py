@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_provider_service
+from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -113,6 +114,7 @@ class ProviderSpecWithModelsResponse(BaseModel):
 @router.get("/", response_model=list[ProviderSpecResponse])
 async def list_provider_specs(
     request: Request,
+    user_context: UserContextDep,
     is_builtin: bool | None = None,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
@@ -124,6 +126,7 @@ async def list_provider_specs(
 @router.get("/with-models", response_model=list[ProviderSpecWithModelsResponse])
 async def list_provider_specs_with_models(
     request: Request,
+    user_context: UserContextDep,
     is_builtin: bool | None = None,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
@@ -134,8 +137,9 @@ async def list_provider_specs_with_models(
 
 @router.get("/{provider_spec_id}", response_model=ProviderSpecWithModelsResponse)
 async def get_provider_spec(
-    request: Request,
     provider_spec_id: UUID,
+    request: Request,
+    user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Get a specific provider specification with its models."""
@@ -147,8 +151,9 @@ async def get_provider_spec(
 
 @router.get("/by-key/{provider_key}", response_model=ProviderSpecWithModelsResponse)
 async def get_provider_spec_by_key(
-    request: Request,
     provider_key: str,
+    request: Request,
+    user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Get a provider specification by its key (e.g., 'openai', 'anthropic')."""

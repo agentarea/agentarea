@@ -2,7 +2,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Loader2, Play } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, TestTube } from "lucide-react";
 import { useState } from "react";
 import { testModelInstance } from "@/lib/api";
 import type { ModelSpec } from "@/types/provider";
@@ -55,7 +55,7 @@ export const ModelItemControl = ({
             if (error || !data) {
                 setTestResult({
                     success: false,
-                    message: error?.detail?.[0]?.msg || "Test failed",
+                    message: error?.message || "Test failed",
                     error_type: "TestError"
                 });
             } else {
@@ -117,7 +117,7 @@ export const ModelItemControl = ({
                             {isTestingLLM ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                                <Play className="h-3 w-3" />
+                                <TestTube className="h-3 w-3" />
                             )}
                             {isTestingLLM ? "Testing..." : "Test"}
                         </Button>

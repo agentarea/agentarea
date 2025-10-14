@@ -85,7 +85,8 @@ class AgentExecutionWorkflow:
         self.state.execution_id = workflow.info().workflow_id
         self.state.agent_id = str(request.agent_id)
         self.state.task_id = str(request.task_id)
-        self.state.user_id = request.user_id  # Add user_id from request
+        self.state.user_id = request.user_id
+        self.state.workspace_id = request.workspace_id  # Add workspace_id from request
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         self.state.budget_usd = request.budget_usd
@@ -118,10 +119,11 @@ class AgentExecutionWorkflow:
         """Initialize agent configuration and available tools."""
         workflow.logger.info("Initializing agent configuration")
 
-        # Prepare user context data for activities (simplified - no roles)
+        # Prepare user context data for activities
+        # Use actual user_id and workspace_id from the request
         self.state.user_context_data = {
-            "user_id": "dev-user",  # Use dev-user as set by JWT handler in dev mode
-            "workspace_id": "system",  # Use system workspace where agents are created
+            "user_id": self.state.user_id,
+            "workspace_id": self.state.workspace_id,
         }
 
         # Build agent config using Pydantic request model

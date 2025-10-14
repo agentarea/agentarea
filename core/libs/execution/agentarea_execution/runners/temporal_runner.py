@@ -155,12 +155,13 @@ class TemporalAgentRunner(BaseAgentRunner):
         ]
 
         # Create Pydantic request model for LLM call
+        # NOTE: This runner uses state from workflow which should have workspace_id set
         llm_request = LLMCallRequest(
             messages=messages_dict,
             model_id=state.agent_config.get("model_id") or "gpt-4",  # Provide default model
             tools=state.available_tools,
-            workspace_id="system",
-            user_context_data={"user_id": "dev-user"},
+            workspace_id=state.agent_config.get("workspace_id", "system"),  # Fallback to system
+            user_context_data=state.agent_config.get("user_context_data", {"user_id": "system"}),
         )
 
         # Call LLM via activity using Pydantic model

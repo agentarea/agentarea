@@ -9,24 +9,15 @@ import {
   MessageSquare, 
   Send, 
   Bell, 
-  CheckCircle2, 
+  CheckCircle2,
   Clock,
   AlertCircle,
-  Plus,
   ChevronRight,
-  Building2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface Message {
   id: string;
@@ -65,30 +56,7 @@ export default function WorkplacePage() {
     },
   ]);
   const [inputValue, setInputValue] = useState("");
-  const [selectedWorkplace, setSelectedWorkplace] = useState<string>("personal");
   const inputRef = useRef<HTMLInputElement>(null);
-  
-  // Sample workplaces data
-  const workplaces = [
-    { id: "personal", name: "Personal Workspace", icon: <Building2 className="h-4 w-4" /> },
-    { id: "team1", name: "Marketing Team", icon: <Building2 className="h-4 w-4" /> },
-    { id: "team2", name: "Development Team", icon: <Building2 className="h-4 w-4" /> },
-    { id: "team3", name: "Sales Team", icon: <Building2 className="h-4 w-4" /> },
-  ];
-  
-  // Load selected workspace from localStorage on mount
-  useEffect(() => {
-    const savedWorkspace = localStorage.getItem("selectedWorkspace");
-    if (savedWorkspace) {
-      setSelectedWorkplace(savedWorkspace);
-    }
-  }, []);
-  
-  // Save selected workspace to localStorage when it changes
-  const handleWorkspaceChange = (workspaceId: string) => {
-    setSelectedWorkplace(workspaceId);
-    localStorage.setItem("selectedWorkspace", workspaceId);
-  };
   
   // Sample data for tasks and notifications
   const [tasks] = useState<Task[]>([
@@ -219,32 +187,7 @@ export default function WorkplacePage() {
         breadcrumb: [
           {label: "Workplace", href: "/workplace"},
         ],
-        description: "Your command center for managing agents and tasks",
-        controls: (
-          <div className="flex items-center gap-2">
-              <Select value={selectedWorkplace} onValueChange={handleWorkspaceChange}>
-                <SelectTrigger className="w-[200px] h-9 text-sm bg-white border-gray-200">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    <SelectValue placeholder="Select workplace" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  {workplaces.map((workplace) => (
-                    <SelectItem key={workplace.id} value={workplace.id}>
-                      <div className="flex items-center gap-2">
-                        {workplace.icon}
-                        {workplace.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button size="icon" variant="outline" className="h-9 w-9 border-gray-200">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-        )
+        description: "Your command center for managing agents and tasks"
       }}
     >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from agentarea_common.config import Settings
     from agentarea_common.events.broker import EventBroker
-    from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+    from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 
 
 @dataclass
@@ -22,11 +22,14 @@ class ActivityDependencies:
     need to create their own database sessions and services. Each activity
     will create its own session using get_database().async_session_factory()
     for better retryability and resource isolation.
+
+    The secret_manager_factory is used by activities to create workspace-scoped
+    secret manager instances with the proper user context at activity execution time.
     """
 
     settings: "Settings"
     event_broker: "EventBroker"
-    secret_manager: "BaseSecretManager"
+    secret_manager_factory: "SecretManagerFactory"
 
 
 # Legacy alias for backward compatibility during transition

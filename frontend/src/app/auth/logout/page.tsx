@@ -1,10 +1,8 @@
 import { getLogoutFlow } from "@ory/nextjs/app"
 import { redirect } from "next/navigation"
 
-import config from "@/ory.config"
-
 export default async function LogoutPage() {
-  const flow = await getLogoutFlow(config)
+  const flow = await getLogoutFlow()
 
   // If we got a logout URL, redirect to it to complete the logout
   if (flow?.logout_url) {

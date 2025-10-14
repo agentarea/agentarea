@@ -72,11 +72,14 @@ uv run uvicorn agentarea_api.main:app --reload
 Create a `.env` file in the `core` directory with the following variables:
 
 ```env
-# OIDC Configuration
-OIDC_JWKS_URI=https://your-oidc-provider.com/.well-known/jwks.json
-OIDC_ALGORITHM=RS256
+# Kratos Authentication Configuration
+# Default test values are provided in config/app.py
+# Override in production with your Kratos JWKS
+KRATOS_JWKS_B64=<base64-encoded-jwks>
+KRATOS_ISSUER=https://agentarea.dev
+KRATOS_AUDIENCE=agentarea-api
 
-# Database (if applicable)
+# Database
 DATABASE_URL=postgresql://user:password@localhost/dbname
 
 # Other settings...

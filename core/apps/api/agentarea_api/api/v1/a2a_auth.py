@@ -60,7 +60,7 @@ class A2APermissions:
 
 async def extract_auth_from_request(request: Request) -> dict[str, Any]:
     """Extract authentication information from request."""
-    auth_info = {"method": None, "credentials": None, "user_id": None, "metadata": {}}
+    auth_info = {"method": None, "credentials": None, "metadata": {}}
 
     # Check Authorization header (Bearer token)
     auth_header = request.headers.get("authorization")
@@ -74,11 +74,6 @@ async def extract_auth_from_request(request: Request) -> dict[str, Any]:
         auth_info["method"] = "api_key"
         auth_info["credentials"] = api_key
 
-    # Check User ID header (for development/testing)
-    user_id = request.headers.get("x-user-id")
-    if user_id:
-        auth_info["user_id"] = user_id
-
     # Extract additional metadata
     auth_info["metadata"] = {
         "user_agent": request.headers.get("user-agent"),
@@ -90,45 +85,49 @@ async def extract_auth_from_request(request: Request) -> dict[str, Any]:
 
 
 async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
-    """Authenticate bearer token and extract user context including workspace."""
-    # In production, validate against your authentication service
-    # For now, accept any non-empty token and extract basic user context
-    if token and len(token) > 10:
-        # Extract user_id from token (in production, decode JWT or validate with auth service)
-        user_id = f"user_{token[:8]}"
+    """Authenticate bearer token using Kratos auth provider."""
+    from agentarea_common.auth.providers.factory import AuthProviderFactory
+    from agentarea_common.config.app import get_app_settings
 
-        # In production, extract workspace_id from JWT token or user session
-        # For now, use default workspace
-        workspace_id = "default"
+    try:
+        settings = get_app_settings()
+        auth_provider = AuthProviderFactory.create_provider(
+            "kratos",
+            config={
+                "jwks_b64": settings.KRATOS_JWKS_B64,
+                "issuer": settings.KRATOS_ISSUER,
+                "audience": settings.KRATOS_AUDIENCE,
+            },
+        )
 
+        # Verify token using Kratos provider
+        auth_result = await auth_provider.verify_token(token)
+
+        if not auth_result.is_authenticated or not auth_result.token:
+            logger.warning(f"Bearer token authentication failed: {auth_result.error}")
+            return None
+
+        # Extract user information from validated token
         return {
-            "user_id": user_id,
-            "workspace_id": workspace_id,
+            "user_id": auth_result.token.user_id,
+            "workspace_id": "default",  # TODO: Extract from token or user metadata
             "permissions": A2APermissions.USER_PERMISSIONS,
             "valid": True,
         }
-    return None
+
+    except Exception as e:
+        logger.error(f"Error authenticating bearer token: {e}")
+        return None
 
 
 async def authenticate_api_key(api_key: str) -> dict[str, Any] | None:
-    """Authenticate API key and extract user context including workspace."""
-    # In production, validate against your API key store
-    # For now, accept specific test keys with workspace context
-    test_keys = {
-        "test_user_key": {
-            "user_id": "test_user",
-            "workspace_id": "default",
-            "permissions": A2APermissions.USER_PERMISSIONS,
-        },
-        "test_admin_key": {
-            "user_id": "test_admin",
-            "workspace_id": "default",
-            "permissions": A2APermissions.ADMIN_PERMISSIONS,
-        },
-    }
+    """Authenticate API key and extract user context including workspace.
 
-    if api_key in test_keys:
-        return {**test_keys[api_key], "valid": True}
+    TODO: Implement proper API key authentication with database lookup.
+    API keys should be stored hashed in the database with associated user/workspace context.
+    """
+    # API key authentication not yet implemented
+    logger.warning("API key authentication attempted but not yet implemented")
     return None
 
 
@@ -155,15 +154,6 @@ async def get_a2a_auth_context(
     elif auth_info["method"] == "api_key" and auth_info["credentials"]:
         auth_result = await authenticate_api_key(auth_info["credentials"])
         context.auth_method = "api_key"
-    elif auth_info["user_id"]:
-        # Development mode - accept user ID header
-        auth_result = {
-            "user_id": auth_info["user_id"],
-            "workspace_id": "default",  # Default workspace for dev mode
-            "permissions": A2APermissions.USER_PERMISSIONS,
-            "valid": True,
-        }
-        context.auth_method = "dev_user_id"
 
     # Update context if authenticated
     if auth_result and auth_result.get("valid"):
@@ -206,6 +196,14 @@ async def require_a2a_auth(
 
     # Get auth context with required permission
     context = await get_a2a_auth_context(request, agent_id, permission)
+
+    # Ensure user is authenticated
+    if not context.authenticated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Add agent info to context
     context.metadata["agent_name"] = agent.name

@@ -44,16 +44,36 @@ type Credentials struct {
 	Token string `json:"token"`
 }
 
-// SecretResolver handles secure secret resolution using Infisical SDK
-type SecretResolver struct {
+// InfisicalSecretResolver handles secure secret resolution using Infisical SDK
+type InfisicalSecretResolver struct {
 	client      infisical.InfisicalClientInterface
 	logger      *slog.Logger
 	projectID   string
 	environment string
 }
 
-// NewSecretResolver creates a new secret resolver with Infisical SDK
-func NewSecretResolver(logger *slog.Logger) (*SecretResolver, error) {
+// NewSecretResolver creates the appropriate secret resolver based on SECRET_MANAGER_TYPE
+func NewSecretResolver(logger *slog.Logger) (SecretResolver, error) {
+	secretManagerType := os.Getenv("SECRET_MANAGER_TYPE")
+	if secretManagerType == "" {
+		secretManagerType = "database" // Default to database
+	}
+
+	logger.Info("Initializing secret resolver",
+		slog.String("type", secretManagerType))
+
+	switch strings.ToLower(secretManagerType) {
+	case "database":
+		return NewDatabaseSecretResolver(logger)
+	case "infisical":
+		return newInfisicalSecretResolver(logger)
+	default:
+		return nil, fmt.Errorf("unsupported SECRET_MANAGER_TYPE: %s (supported: database, infisical)", secretManagerType)
+	}
+}
+
+// newInfisicalSecretResolver creates a new Infisical secret resolver
+func newInfisicalSecretResolver(logger *slog.Logger) (*InfisicalSecretResolver, error) {
 	// Get Infisical configuration from environment
 	infisicalURL := os.Getenv("INFISICAL_URL")
 	if infisicalURL == "" {
@@ -72,7 +92,7 @@ func NewSecretResolver(logger *slog.Logger) (*SecretResolver, error) {
 		logger.Warn("Could not read Infisical config file, using placeholder implementation",
 			slog.String("token_path", tokenPath),
 			slog.String("error", err.Error()))
-		return &SecretResolver{
+		return &InfisicalSecretResolver{
 			client:      nil,
 			logger:      logger,
 			projectID:   "default",
@@ -84,7 +104,7 @@ func NewSecretResolver(logger *slog.Logger) (*SecretResolver, error) {
 	if err := json.Unmarshal(configData, &config); err != nil {
 		logger.Warn("Could not parse Infisical config file, using placeholder implementation",
 			slog.String("error", err.Error()))
-		return &SecretResolver{
+		return &InfisicalSecretResolver{
 			client:      nil,
 			logger:      logger,
 			projectID:   "default",
@@ -117,7 +137,7 @@ func NewSecretResolver(logger *slog.Logger) (*SecretResolver, error) {
 		slog.String("environment", environment),
 		slog.String("organization", config.Organization.Name))
 
-	return &SecretResolver{
+	return &InfisicalSecretResolver{
 		client:      client,
 		logger:      logger,
 		projectID:   projectID,
@@ -126,7 +146,7 @@ func NewSecretResolver(logger *slog.Logger) (*SecretResolver, error) {
 }
 
 // ResolveSecrets resolves all secrets for an MCP instance
-func (sr *SecretResolver) ResolveSecrets(instanceID string, envVars map[string]string) (map[string]string, error) {
+func (sr *InfisicalSecretResolver) ResolveSecrets(instanceID string, envVars map[string]string) (map[string]string, error) {
 	resolved := make(map[string]string)
 
 	for key, value := range envVars {
@@ -157,7 +177,7 @@ func (sr *SecretResolver) ResolveSecrets(instanceID string, envVars map[string]s
 }
 
 // resolveSecretFromInfisical retrieves a secret from Infisical using the same pattern as Python service
-func (sr *SecretResolver) resolveSecretFromInfisical(instanceID, secretKey string) (string, error) {
+func (sr *InfisicalSecretResolver) resolveSecretFromInfisical(instanceID, secretKey string) (string, error) {
 	// Use the same secret key pattern as MCPEnvironmentService in Python:
 	// mcp_instance_{instance_id}_{env_name}
 	infisicalSecretKey := fmt.Sprintf("mcp_instance_%s_%s", instanceID, secretKey)
@@ -198,7 +218,7 @@ func (sr *SecretResolver) resolveSecretFromInfisical(instanceID, secretKey strin
 }
 
 // Close closes the secret resolver
-func (sr *SecretResolver) Close() error {
+func (sr *InfisicalSecretResolver) Close() error {
 	sr.logger.Info("Closing Infisical secret resolver")
 	// TODO: Close Infisical client if needed
 	return nil
