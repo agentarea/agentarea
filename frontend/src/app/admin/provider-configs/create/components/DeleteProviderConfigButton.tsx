@@ -1,6 +1,6 @@
 'use client';
 
-import { deleteProviderConfig } from '@/lib/api';
+import { deleteProviderConfig } from '../../actions';
 import DeleteButton from '@/components/DeleteButton';
 import { useTranslations } from 'next-intl';
 

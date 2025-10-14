@@ -20,14 +20,21 @@ const nextConfig: NextConfig = {
   },
   output: "standalone",
   async rewrites() {
+    const backendUrl = process.env.API_URL || 'http://localhost:8000';
+    const kratosUrl = process.env.ORY_ADMIN_URL?.replace(':4434', ':4433') || 'http://localhost:4433';
+
     return [
       {
         source: '/self-service/:path*',
-        destination: 'http://localhost:4433/self-service/:path*',
+        destination: `${kratosUrl}/self-service/:path*`,
       },
       {
         source: '/sessions/:path*',
-        destination: 'http://localhost:4433/sessions/:path*',
+        destination: `${kratosUrl}/sessions/:path*`,
+      },
+      {
+        source: '/api/static/:path*',
+        destination: `${backendUrl}/static/:path*`,
       },
     ];
   },

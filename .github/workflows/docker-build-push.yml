@@ -24,11 +24,11 @@ on:
         required: true
       DOCKERHUB_PASSWORD:
         required: true
-      PRIVATE_REGISTRY:
+      DOCKER_REGISTRY_MIRROR:
         required: false
-      PRIVATE_REGISTRY_USERNAME:
+      DOCKER_REGISTRY_MIRROR_USERNAME:
         required: false
-      PRIVATE_REGISTRY_PASSWORD:
+      DOCKER_REGISTRY_MIRROR_PASSWORD:
         required: false
 
 jobs:
@@ -52,12 +52,12 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: Log in to Private Registry
-        if: ${{ secrets.PRIVATE_REGISTRY != '' }}
+        if: ${{ secrets.DOCKER_REGISTRY_MIRROR != '' }}
         uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.PRIVATE_REGISTRY }}
-          username: ${{ secrets.PRIVATE_REGISTRY_USERNAME }}
-          password: ${{ secrets.PRIVATE_REGISTRY_PASSWORD }}
+          registry: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
+          username: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
+          password: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
 
       - name: Extract Docker metadata
         id: meta
@@ -65,7 +65,7 @@ jobs:
         with:
           images: |
             agentarea/${{ inputs.image-name || format('agentarea-{0}', inputs.component) }}
-            ${{ secrets.PRIVATE_REGISTRY }}/agentarea/${{ inputs.image-name || format('agentarea-{0}', inputs.component) }}
+            ${{ secrets.DOCKER_REGISTRY_MIRROR }}/agentarea/${{ inputs.image-name || format('agentarea-{0}', inputs.component) }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr

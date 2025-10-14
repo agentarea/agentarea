@@ -462,9 +462,8 @@ export default function AgentChat({
     }
 
     try {
-      // Create task with SSE streaming
-      const baseUrl = env.NEXT_PUBLIC_API_URL;
-      const response = await fetch(`${baseUrl}/v1/agents/${agent.id}/tasks/`, {
+      // Create task with SSE streaming through Next.js API route (handles auth)
+      const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

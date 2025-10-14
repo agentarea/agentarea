@@ -16,6 +16,7 @@ class AgentExecutionRequest(BaseModel):
     task_id: UUID
     agent_id: UUID
     user_id: str
+    workspace_id: str  # Required for proper multi-tenancy
 
     # Task content
     task_query: str

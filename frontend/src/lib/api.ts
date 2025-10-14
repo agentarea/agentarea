@@ -1,9 +1,7 @@
 `use server`;
 
-import client from "./client";
-import { apiFetch } from "./utils";
+import client from "./server-client";
 import type { components } from "../api/schema";
-import { env } from "@/env";
 
 // Agent API
 export const listAgents = async () => {
@@ -287,26 +285,10 @@ export const listMCPServerInstances = async () => {
 };
 
 export const checkMCPServerInstanceConfiguration = async (checkRequest: { json_spec: Record<string, any> }) => {
-  // Use fetch directly since the endpoint isn't in the generated schema yet
-  try {
-    const response = await fetch(`${env.NEXT_PUBLIC_API_BASE_URL}/v1/mcp-server-instances/check`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(checkRequest),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      return { data: null, error: errorData };
-    }
-    
-    const data = await response.json();
-    return { data, error: null };
-  } catch (error) {
-    return { data: null, error: { message: 'Network error' } };
-  }
+  const { data, error } = await client.POST("/v1/mcp-server-instances/check", {
+    body: checkRequest,
+  });
+  return { data, error };
 };
 
 export const createMCPServerInstance = async (instance: components["schemas"]["MCPServerInstanceCreateRequest"]) => {
@@ -602,22 +584,8 @@ export const testProtectedEndpoint = async () => {
 
 // Builtin Tools API (outside generated schema)
 export const listBuiltinTools = async () => {
-  try {
-    const response = await apiFetch("/v1/agents/tools/builtin");
-    if (!response.ok) {
-      let error: unknown = null;
-      try {
-        error = await response.json();
-      } catch {
-        error = { message: "Request failed" };
-      }
-      return { data: null as any, error };
-    }
-    const data = await response.json();
-    return { data, error: null };
-  } catch (error) {
-    return { data: null as any, error };
-  }
+  const { data, error } = await client.GET("/v1/agents/tools/builtin");
+  return { data, error };
 };
 
 // Type exports for commonly used schemas
@@ -657,12 +625,12 @@ export async function getMCPHealthStatus(): Promise<{
   total: number;
 }> {
   try {
-    const response = await fetch(`http://localhost:8000/v1/mcp-server-instances/health/containers`);
-    if (!response.ok) {
+    const { data, error } = await client.GET('/v1/mcp-server-instances/health/containers');
+    if (error || !data) {
       // Return empty health checks if endpoint is not available
       return { health_checks: [], total: 0 };
     }
-    return response.json();
+    return data as any;
   } catch (error) {
     console.warn('Failed to fetch MCP health status:', error);
     // Return empty health checks instead of throwing

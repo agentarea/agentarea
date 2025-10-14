@@ -1,9 +1,11 @@
-"""Clerk authentication provider for AgentArea.
+"""Kratos authentication provider for AgentArea.
 
-This module provides implementation for Clerk authentication verification
-using JWT tokens.
+This module provides implementation for Ory Kratos authentication verification
+using JWT tokens signed with ES256.
 """
 
+import base64
+import json
 import logging
 from typing import Any
 
@@ -15,32 +17,36 @@ from .base import BaseAuthProvider
 logger = logging.getLogger(__name__)
 
 
-class ClerkAuthProvider(BaseAuthProvider):
-    """Clerk authentication provider implementation."""
+class KratosAuthProvider(BaseAuthProvider):
+    """Kratos authentication provider implementation."""
 
     def __init__(self, config: dict[str, Any] | None = None):
-        """Initialize the Clerk auth provider.
+        """Initialize the Kratos auth provider.
 
         Args:
             config: Configuration dictionary for the provider
                    Should include:
-                   - jwks_url: URL to fetch JWKS from
-                   - issuer: Expected issuer URL
-                   - audience: Expected audience (optional)
+                   - jwks_b64: Base64-encoded JWKS from Kratos config
+                   - issuer: Expected issuer URL (default: https://agentarea.dev)
+                   - audience: Expected audience (default: agentarea-api)
         """
         super().__init__(config)
-        self.jwks_url = self.config.get("jwks_url")
-        self.issuer = self.config.get("issuer")
-        self.audience = self.config.get("audience")
+        self.jwks_b64 = self.config.get("jwks_b64")
+        self.issuer = self.config.get("issuer", "https://agentarea.dev")
+        self.audience = self.config.get("audience", "agentarea-api")
 
-        if not self.jwks_url:
-            raise ValueError("jwks_url is required for ClerkAuthProvider")
+        if not self.jwks_b64:
+            raise ValueError("jwks_b64 is required for KratosAuthProvider")
 
-        if not self.issuer:
-            raise ValueError("issuer is required for ClerkAuthProvider")
+        # Decode and parse JWKS
+        try:
+            jwks_json = base64.b64decode(self.jwks_b64).decode("utf-8")
+            self._jwks = json.loads(jwks_json)
+        except Exception as e:
+            raise ValueError(f"Failed to decode JWKS: {e}")
 
     async def verify_token(self, token: str) -> AuthResult:
-        """Verify a Clerk JWT token.
+        """Verify a Kratos JWT token.
 
         Args:
             token: The JWT token to verify
@@ -56,20 +62,17 @@ class ClerkAuthProvider(BaseAuthProvider):
             if not kid:
                 return AuthResult(is_authenticated=False, error="Token header missing key ID")
 
-            # Fetch JWKS
-            jwks = await self._fetch_jwks(self.jwks_url)
-
             # Find the key by key ID
-            key = self._find_key_by_kid(jwks, kid)
+            key = self._find_key_by_kid(self._jwks, kid)
             if not key:
                 return AuthResult(is_authenticated=False, error="Key not found in JWKS")
 
-            # Convert JWK to RSA key
-            rsa_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
+            # Convert JWK to EC key (Kratos uses ES256)
+            ec_key = jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(key))
 
             # Verify and decode the token
             payload = jwt.decode(
-                token, rsa_key, algorithms=["RS256"], audience=self.audience, issuer=self.issuer
+                token, ec_key, algorithms=["ES256"], audience=self.audience, issuer=self.issuer
             )
 
             # Validate claims
@@ -101,9 +104,9 @@ class ClerkAuthProvider(BaseAuthProvider):
     async def get_user_info(self, user_id: str) -> dict[str, Any] | None:
         """Get user information by user ID.
 
-        For Clerk, we don't fetch user info directly in this implementation
+        For Kratos, we don't fetch user info directly in this implementation
         as the token already contains the necessary information.
-        In a full implementation, this would call the Clerk API.
+        In a full implementation, this would call the Kratos Admin API.
 
         Args:
             user_id: The user ID to look up
@@ -111,9 +114,9 @@ class ClerkAuthProvider(BaseAuthProvider):
         Returns:
             Dictionary containing user information or None if not found
         """
-        # In a real implementation, this would call the Clerk API
+        # In a real implementation, this would call the Kratos Admin API
         # For now, we return minimal user info
-        return {"user_id": user_id, "provider": "clerk"}
+        return {"user_id": user_id, "provider": "kratos"}
 
     def get_provider_name(self) -> str:
         """Get the name of this authentication provider.
@@ -121,4 +124,4 @@ class ClerkAuthProvider(BaseAuthProvider):
         Returns:
             The provider name
         """
-        return "clerk"
+        return "kratos"

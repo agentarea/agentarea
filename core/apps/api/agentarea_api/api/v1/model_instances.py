@@ -6,8 +6,7 @@ from agentarea_agents_sdk.models import LLMModel, LLMRequest
 
 # Import LLM testing components
 from agentarea_api.api.deps.services import get_provider_service
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
@@ -101,6 +100,7 @@ class ModelInstanceResponse(BaseModel):
 @router.post("/", response_model=ModelInstanceResponse)
 async def create_model_instance(
     data: ModelInstanceCreate,
+    user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Create a new model instance."""
@@ -116,6 +116,7 @@ async def create_model_instance(
 
 @router.get("/", response_model=list[ModelInstanceResponse])
 async def list_model_instances(
+    user_context: UserContextDep,
     provider_config_id: UUID | None = None,
     model_spec_id: UUID | None = None,
     is_active: bool | None = None,
@@ -133,6 +134,7 @@ async def list_model_instances(
 @router.get("/{instance_id}", response_model=ModelInstanceResponse)
 async def get_model_instance(
     instance_id: UUID,
+    user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Get a specific model instance."""
@@ -145,6 +147,7 @@ async def get_model_instance(
 @router.delete("/{instance_id}")
 async def delete_model_instance(
     instance_id: UUID,
+    user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Delete a model instance."""
@@ -157,8 +160,8 @@ async def delete_model_instance(
 @router.post("/test", response_model=ModelInstanceTestResponse)
 async def test_model_instance(
     data: ModelInstanceTestRequest,
+    user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),
-    user_context: UserContext = Depends(get_user_context),
 ):
     """Test a model instance configuration before creating it."""
     try:

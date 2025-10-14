@@ -5,6 +5,7 @@ from uuid import UUID
 
 import yaml
 from agentarea_api.api.deps.services import get_mcp_server_service
+from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
 from fastapi import APIRouter, Depends, HTTPException
@@ -76,6 +77,7 @@ class MCPServerResponse(BaseModel):
 @router.post("/", response_model=MCPServerResponse)
 async def create_mcp_server(
     data: MCPServerCreate,
+    user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     server = await mcp_server_service.create_mcp_server(
@@ -93,6 +95,7 @@ async def create_mcp_server(
 
 @router.get("/", response_model=list[MCPServerResponse])
 async def list_mcp_servers(
+    user_context: UserContextDep,
     status: str | None = None,
     is_public: bool | None = None,
     tag: str | None = None,
@@ -151,7 +154,9 @@ def load_mcp_provider_templates() -> dict[str, Any]:
 
 
 @router.get("/templates", response_model=list[dict[str, Any]])
-async def get_mcp_server_templates():
+async def get_mcp_server_templates(
+    user_context: UserContextDep,
+):
     """Get all available MCP server templates from the YAML configuration."""
     try:
         data = load_mcp_provider_templates()
@@ -177,7 +182,10 @@ async def get_mcp_server_templates():
 
 
 @router.get("/templates/{template_key}", response_model=dict[str, Any])
-async def get_mcp_server_template(template_key: str):
+async def get_mcp_server_template(
+    template_key: str,
+    user_context: UserContextDep,
+):
     """Get a specific MCP server template by key."""
     try:
         data = load_mcp_provider_templates()
@@ -208,6 +216,7 @@ async def get_mcp_server_template(template_key: str):
 @router.post("/from-template/{template_key}", response_model=MCPServerResponse)
 async def create_mcp_server_from_template(
     template_key: str,
+    user_context: UserContextDep,
     server_name: str,
     server_description: str = "",
     version: str = "latest",
@@ -246,6 +255,7 @@ async def create_mcp_server_from_template(
 @router.get("/{server_id}", response_model=MCPServerResponse)
 async def get_mcp_server(
     server_id: UUID,
+    user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     server = await mcp_server_service.get(server_id)
@@ -258,6 +268,7 @@ async def get_mcp_server(
 async def update_mcp_server(
     server_id: UUID,
     data: MCPServerUpdate,
+    user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     server = await mcp_server_service.update_mcp_server(
@@ -278,6 +289,7 @@ async def update_mcp_server(
 @router.delete("/{server_id}")
 async def delete_mcp_server(
     server_id: UUID,
+    user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     success = await mcp_server_service.delete_mcp_server(server_id)
@@ -289,6 +301,7 @@ async def delete_mcp_server(
 @router.post("/{server_id}/deploy")
 async def deploy_mcp_server(
     server_id: UUID,
+    user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     server = await mcp_server_service.get(server_id)

@@ -26,9 +26,8 @@ def a2a():
 )
 @click.option("--token", help="Bearer token for authentication")
 @click.option("--api-key", help="API key for authentication")
-@click.option("--dev-user-id", help="Development mode user ID")
 async def discover(
-    agent_id: str, base_url: str, output_format: str, token: str, api_key: str, dev_user_id: str
+    agent_id: str, base_url: str, output_format: str, token: str, api_key: str
 ):
     """Discover an agent's capabilities via A2A well-known endpoint."""
     try:
@@ -40,8 +39,6 @@ async def discover(
             headers["Authorization"] = f"Bearer {token}"
         elif api_key:
             headers["X-API-Key"] = api_key
-        elif dev_user_id:
-            headers["x-user-id"] = dev_user_id
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:

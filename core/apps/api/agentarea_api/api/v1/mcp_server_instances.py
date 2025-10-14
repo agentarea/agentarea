@@ -5,6 +5,7 @@ from uuid import UUID
 
 import httpx
 from agentarea_api.api.deps.services import get_mcp_server_instance_service
+from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
@@ -59,6 +60,7 @@ class MCPServerInstanceResponse(BaseModel):
 @router.post("/", response_model=MCPServerInstanceResponse)
 async def create_mcp_server_instance(
     data: MCPServerInstanceCreateRequest,
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -85,6 +87,7 @@ async def create_mcp_server_instance(
 @router.post("/check")
 async def check_mcp_server_instance_configuration(
     data: dict[str, Any],
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -137,6 +140,7 @@ async def check_mcp_server_instance_configuration(
 @router.get("/{instance_id}/environment")
 async def get_instance_environment(
     instance_id: UUID,
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -160,6 +164,7 @@ async def get_instance_environment(
 
 @router.get("/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
+    user_context: UserContextDep,
     created_by: str | None = Query(
         None, description="Filter by creator: 'me' for current user's instances only"
     ),
@@ -212,6 +217,7 @@ async def list_mcp_server_instances(
 @router.get("/{instance_id}", response_model=MCPServerInstanceResponse)
 async def get_mcp_server_instance(
     instance_id: UUID,
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -257,6 +263,7 @@ async def get_mcp_server_instance(
 async def update_mcp_server_instance(
     instance_id: UUID,
     data: MCPServerInstanceUpdate,
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -276,6 +283,7 @@ async def update_mcp_server_instance(
 @router.delete("/{instance_id}")
 async def delete_mcp_server_instance(
     instance_id: UUID,
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -289,6 +297,7 @@ async def delete_mcp_server_instance(
 @router.post("/{instance_id}/start")
 async def start_mcp_server_instance(
     instance_id: UUID,
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -302,6 +311,7 @@ async def start_mcp_server_instance(
 @router.post("/{instance_id}/stop")
 async def stop_mcp_server_instance(
     instance_id: UUID,
+    user_context: UserContextDep,
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
@@ -317,7 +327,9 @@ async def stop_mcp_server_instance(
 
 
 @router.get("/health/containers")
-async def get_containers_health():
+async def get_containers_health(
+    user_context: UserContextDep,
+):
     """Get health status of all MCP containers by proxying to the golang manager."""
     try:
         settings = get_settings()
@@ -344,6 +356,7 @@ async def get_containers_health():
 @router.get("/{instance_id}/tools", response_model=list[dict[str, Any]])
 async def get_instance_available_tools(
     instance_id: UUID,
+    user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
     """Get available tools for a specific MCP server instance."""
@@ -357,6 +370,7 @@ async def get_instance_available_tools(
 @router.post("/{instance_id}/discover-tools")
 async def discover_instance_tools(
     instance_id: UUID,
+    user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
     """Trigger tool discovery for a specific MCP server instance."""

@@ -10,22 +10,11 @@ class AppSettings(BaseAppSettings):
 
     APP_NAME: str = "AI Agent Service"
     DEBUG: bool = False
-    DEV_MODE: bool = False  # Enable development mode for easier testing
-    JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
-    JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # OIDC Configuration for JWT authentication (deprecated - kept for backward compatibility)
-    OIDC_JWKS_URI: str = ""
-    OIDC_ALGORITHM: str = "RS256"
-    OIDC_ISSUER: str = ""
-    OIDC_AUDIENCE: str = ""
-
-    # Clerk Configuration
-    CLERK_SECRET_KEY: str = ""
-    CLERK_ISSUER: str = ""
-    CLERK_JWKS_URL: str = ""
-    CLERK_AUDIENCE: str = ""
+    # Kratos Authentication Configuration
+    KRATOS_JWKS_B64: str = "ewogICJrZXlzIjogWwogICAgewogICAgICAia3R5IjogIkVDIiwKICAgICAgImtpZCI6ICJhZ2VudGFyZWEtand0LWtleS0xIiwKICAgICAgInVzZSI6ICJzaWciLAogICAgICAiYWxnIjogIkVTMjU2IiwKICAgICAgImNydiI6ICJQLTI1NiIsCiAgICAgICJ4IjogIk1LQkNUTkljS1VTRGlpMTF5U3MzNTI2aURaOEFpVG83VHU2S1BBcXY3RDQiLAogICAgICAieSI6ICI0RXRsNlNSVzJZaUxVck41dmZ2Vkh1aHA3eDhQeGx0bVdXbGJiTTRJRnlNIiwKICAgICAgImQiOiAiODcwTUI2Z2Z1VEo0SHRVblV2WU15SnByNWVVWk5QNEJrNDNiVmRqM2VBRSIKICAgIH0KICBdCn0="  # noqa: E501
+    KRATOS_ISSUER: str = "https://agentarea.dev"
+    KRATOS_AUDIENCE: str = "agentarea-api"
 
 
 @lru_cache

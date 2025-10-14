@@ -4,9 +4,9 @@ This module contains implementations of different authentication providers.
 """
 
 from .base import BaseAuthProvider
-from .simple_jwt import SimpleJWTProvider
+from .kratos import KratosAuthProvider
 
 __all__ = [
     "BaseAuthProvider",
-    "SimpleJWTProvider",
+    "KratosAuthProvider",
 ]

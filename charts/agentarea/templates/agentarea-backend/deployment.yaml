@@ -39,11 +39,6 @@ spec:
                 configMapKeyRef:
                   name: {{ include "agentarea.fullname" . }}-backend-env
                   key: LOG_LEVEL
-            - name: DEV_MODE
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: DEV_MODE
             # Database configuration
             - name: POSTGRES_HOST
               valueFrom:

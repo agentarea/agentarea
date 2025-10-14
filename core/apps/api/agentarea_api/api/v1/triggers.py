@@ -26,6 +26,7 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_api.api.v1.a2a_auth import A2AAuthContext, require_a2a_execute_auth
+from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
 from agentarea_triggers.domain.models import (
     TriggerCreate,

@@ -77,7 +77,8 @@ class AgentExecutionState(BaseModel):
     execution_id: str = ""
     agent_id: str = ""
     task_id: str = ""
-    user_id: str = ""  # Add user_id field for user context
+    user_id: str = ""
+    workspace_id: str = ""  # Add workspace_id for proper multi-tenancy
     goal: AgentGoal | None = None
     status: str = "initializing"  # Will be set to ExecutionStatus.INITIALIZING in workflow
     current_iteration: int = 0

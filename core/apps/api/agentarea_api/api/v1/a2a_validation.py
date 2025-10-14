@@ -122,7 +122,9 @@ class A2AValidator:
         try:
             return A2ATaskParams(**params)
         except ValidationError as e:
-            raise A2AValidationError(f"Invalid task parameters: {e}", "INVALID_PARAMS") from e
+            raise A2AValidationError(
+                f"Invalid task parameters: {e}", "INVALID_PARAMS"
+            ) from e
 
     @classmethod
     def validate_agent_id(cls, agent_id: str) -> UUID:
@@ -218,7 +220,7 @@ async def validate_a2a_middleware(request: Request, agent_id: UUID) -> dict[str,
         try:
             body = await request.json()
             request_id = body.get("id")
-        except Exception:  # noqa: S110
+        except:
             pass
 
         # Return error response

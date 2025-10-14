@@ -25,9 +25,9 @@ const TelegramIcon = ({ className }: { className?: string }) => (
 
 // Define event trigger types
 const eventOptions = [
-  { id: 'telegram', label: 'Telegram', description: '', icon: TelegramIcon },
-  { id: 'agent_call', label: 'Agent Call', description: '', icon: Wand2 },
-  { id: 'scheduled', label: 'Scheduled', description: '', icon: Clock },
+  { id: 'telegram', name: 'telegram', label: 'Telegram', description: '', icon: TelegramIcon },
+  { id: 'agent_call', name: 'agent_call', label: 'Agent Call', description: '', icon: Wand2 },
+  { id: 'scheduled', name: 'scheduled', label: 'Scheduled', description: '', icon: Clock },
 ];
 
 type AgentTriggersProps = {

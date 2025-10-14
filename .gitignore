@@ -83,3 +83,4 @@ memory-bank/
 *.py.bak
 
 mcp-infrastructure/traefik/
+mcp-infrastructure/go-mcp-manager/bin

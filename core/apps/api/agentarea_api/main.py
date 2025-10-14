@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
-from agentarea_common.auth.middleware import AuthMiddleware
 from agentarea_common.di.container import get_container, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
@@ -24,7 +23,7 @@ from agentarea_api.api.events import events_router
 
 # Import MCP server
 from agentarea_api.api.v1.mcp import mcp_app
-from agentarea_api.api.v1.router import v1_router
+from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
 
 logger = logging.getLogger(__name__)
 container = get_container()
@@ -41,13 +40,14 @@ async def initialize_services():
         event_broker = create_event_broker_from_router(event_router)
         register_singleton(EventBroker, event_broker)
 
-        secret_manager = get_real_secret_manager()
-        register_singleton(BaseSecretManager, secret_manager)
+        # Secret manager is created per-request with session and user_context
+        # Not registered as singleton during startup
+        # secret_manager = get_real_secret_manager()
+        # register_singleton(BaseSecretManager, secret_manager)
 
         print(
             f"Real services initialized successfully - "
-            f"Event Broker: {type(event_broker).__name__}, "
-            f"Secret Manager: {type(secret_manager).__name__}"
+            f"Event Broker: {type(event_broker).__name__}"
         )
     except Exception as e:
         print(f"ERROR: Service initialization failed: {e}")
@@ -138,7 +138,7 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="AgentArea API",
-        description="Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header and workspace ID in the X-Workspace-ID header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json. In development mode, use X-Dev-User-ID header to bypass authentication.",
+        description="Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header and workspace ID in the X-Workspace-ID header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json.",
         version="0.1.0",
         lifespan=combined_lifespan,
         openapi_tags=[
@@ -148,10 +148,6 @@ def create_app() -> FastAPI:
             {"name": "providers", "description": "Operations with LLM providers"},
             {"name": "models", "description": "Operations with LLM models"},
             {"name": "mcp", "description": "Operations with MCP servers"},
-            {
-                "name": "development",
-                "description": "Development utilities (only available in dev mode)",
-            },
         ],
     )
 
@@ -164,46 +160,32 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Add authentication middleware
-    app.add_middleware(
-        AuthMiddleware,
-        provider_name="clerk",
-        config={
-            "CLERK_SECRET_KEY": os.getenv("CLERK_SECRET_KEY", ""),
-            "CLERK_ISSUER": os.getenv("CLERK_ISSUER", ""),
-            "CLERK_JWKS_URL": os.getenv("CLERK_JWKS_URL", ""),
-            "CLERK_AUDIENCE": os.getenv("CLERK_AUDIENCE", ""),
-        },
-    )
+    # NOTE: Authentication is now handled by router-level dependencies
+    # instead of middleware. See api/v1/router.py for protected/public routers.
+    # This provides better control and follows FastAPI best practices.
 
     # Mount static files - this serves all files from static/ at /static/
     static_path = Path(__file__).parent / "static"
 
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
     app.mount("/llm", mcp_app)
-    # Add routers
+
+    # Add routers - PUBLIC routes first (no auth), then PROTECTED routes (auth required)
     app.include_router(events_router, prefix="/events", tags=["events"])
-    app.include_router(v1_router, tags=["v1"])
+    app.include_router(public_v1_router, tags=["v1", "public"])
+    app.include_router(protected_v1_router, tags=["v1", "protected"])
 
     # Register workspace error handlers
     register_workspace_error_handlers(app)
 
-    # Development endpoints (only in dev mode)
-    dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
-
-    if dev_mode:
-
-        @app.get("/dev/token", tags=["development"])
-        async def get_dev_token():
-            """Development mode information."""
-            return {
-                "message": "Development mode is enabled. No authentication required.",
-                "usage": {
-                    "user_id": "dev-user",
-                    "workspace_id": "default",
-                    "example": "curl http://localhost:8000/v1/agents/",
-                },
-            }
+    # Health check endpoint
+    @app.get("/health")
+    async def health():
+        """Health check endpoint."""
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+        }
 
     # Add security schemes to OpenAPI
     app.openapi_schema = None  # Force regeneration

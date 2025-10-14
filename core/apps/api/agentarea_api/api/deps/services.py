@@ -24,7 +24,7 @@ from agentarea_llm.infrastructure.model_spec_repository import ModelSpecReposito
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
-from agentarea_secrets import get_real_secret_manager
+from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
 from agentarea_tasks.temporal_task_manager import TemporalTaskManager
@@ -84,7 +84,21 @@ DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 EventBrokerDep = Annotated[EventBroker, Depends(get_event_broker)]
 
 # Secret Manager dependencies
-BaseSecretManagerDep = Annotated[BaseSecretManager, Depends(get_real_secret_manager)]
+async def get_secret_manager(
+    db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
+) -> BaseSecretManager:
+    """Get SecretManager instance based on configuration."""
+    from agentarea_common.config.secrets import get_secret_manager_settings
+
+    settings = get_secret_manager_settings()
+    return get_real_secret_manager(
+        session=db_session,
+        user_context=user_context,
+    )
+
+
+BaseSecretManagerDep = Annotated[BaseSecretManager, Depends(get_secret_manager)]
 
 
 # Agent Service dependencies
@@ -224,9 +238,6 @@ async def get_model_spec_repository(
     return ModelSpecRepository(db_session, user_context)
 
 
-async def get_secret_manager() -> BaseSecretManager:
-    """Get SecretManager instance - real Infisical implementation."""
-    return get_real_secret_manager()
 
 
 # Trigger Service dependencies

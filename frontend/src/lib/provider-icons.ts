@@ -1,11 +1,14 @@
 /**
  * Maps provider names to their corresponding icon URLs
- * Icons are served from the backend at /static/icons/providers/
+ * Icons are served from the backend via Next.js proxy
+ *
+ * Note: We use relative URLs so icons are proxied through Next.js
+ * instead of exposing the backend API URL to the browser.
+ * Configure Next.js rewrites in next.config.js to proxy /api/static/* to backend.
  */
 
-import { env } from "@/env";
-
-const API_BASE_URL = env.NEXT_PUBLIC_API_URL;
+// Use relative URL that will be proxied by Next.js
+const API_BASE_URL = "/api";
 
 // Map of provider names to icon identifiers
 const PROVIDER_ICON_MAP: Record<string, string> = {

@@ -1,6 +1,6 @@
 """Workspace-scoped repository base class."""
 
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -305,6 +305,44 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
                 resource_data=kwargs,
             )
             raise
+
+    async def update_from_entity(self, entity: T, creator_scoped: bool = False) -> T:
+        """Update a record from an entity object (BaseRepository compatibility).
+
+        This method provides compatibility with BaseRepository's entity-based API.
+        It extracts the entity's data and delegates to the kwargs-based update method.
+
+        Args:
+            entity: The entity object with updated values
+            creator_scoped: If True, only update records created by current user
+
+        Returns:
+            The updated record
+
+        Raises:
+            NoResultFound: If record not found in workspace
+        """
+        # Extract entity data using to_dict()
+        entity_dict = entity.to_dict()
+
+        # Extract ID and remove it from update data
+        entity_id = entity_dict.pop("id")
+
+        # Remove audit fields that shouldn't be updated
+        entity_dict.pop("created_by", None)
+        entity_dict.pop("workspace_id", None)
+        entity_dict.pop("created_at", None)
+        entity_dict.pop("updated_at", None)
+
+        # Delegate to kwargs-based update
+        result = await self.update(entity_id, creator_scoped=creator_scoped, **entity_dict)
+
+        if result is None:
+            raise NoResultFound(
+                f"{self.model_class.__name__} with id {entity_id} not found in workspace"
+            )
+
+        return result
 
     async def update_or_raise(
         self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any

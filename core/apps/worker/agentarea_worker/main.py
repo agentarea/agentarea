@@ -58,12 +58,16 @@ def create_activity_dependencies() -> ActivityDependencies:
     # Get event broker
     event_broker = get_event_router(settings.broker)
 
-    # Get secret manager
-    secret_manager = get_real_secret_manager()
+    # Create secret manager factory with settings
+    from agentarea_secrets import SecretManagerFactory
+
+    secret_manager_factory = SecretManagerFactory(settings.secret_manager)
 
     # Create dependency container
     return ActivityDependencies(
-        settings=settings, event_broker=event_broker, secret_manager=secret_manager
+        settings=settings,
+        event_broker=event_broker,
+        secret_manager_factory=secret_manager_factory,
     )
 
 

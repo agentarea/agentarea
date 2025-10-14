@@ -4,11 +4,10 @@ This module provides a factory pattern implementation for creating
 authentication providers based on configuration.
 """
 
-import os
 from typing import Any
 
 from ..interfaces import AuthProviderInterface
-from .simple_jwt import SimpleJWTProvider
+from .kratos import KratosAuthProvider
 
 
 class AuthProviderFactory:
@@ -32,19 +31,15 @@ class AuthProviderFactory:
         """
         config = config or {}
 
-        if provider_name.lower() == "clerk":
-            # Get Clerk configuration from environment or config
-            clerk_config = {
-                "secret_key": config.get("secret_key") or os.getenv("CLERK_SECRET_KEY"),
-                "algorithm": config.get("algorithm") or os.getenv("JWT_ALGORITHM", "HS256"),
-                "issuer": config.get("issuer") or os.getenv("CLERK_ISSUER"),
-                "audience": config.get("audience") or os.getenv("CLERK_AUDIENCE"),
-            }
+        if provider_name.lower() == "kratos":
+            # Config should contain: jwks_b64, issuer, audience
+            # These are now provided from AuthSettings, not os.getenv
+            if not all(k in config for k in ["jwks_b64", "issuer", "audience"]):
+                raise ValueError(
+                    "Kratos provider requires 'jwks_b64', 'issuer', and 'audience' in config"
+                )
 
-            # Remove None values
-            clerk_config = {k: v for k, v in clerk_config.items() if v is not None}
-
-            return SimpleJWTProvider(clerk_config)
+            return KratosAuthProvider(config)
 
         # Add other providers here as needed
         # elif provider_name.lower() == "auth0":
@@ -55,11 +50,22 @@ class AuthProviderFactory:
         raise ValueError(f"Unsupported authentication provider: {provider_name}")
 
     @staticmethod
-    def create_provider_from_env() -> AuthProviderInterface:
-        """Create an authentication provider based on environment variables.
+    def create_provider_from_settings() -> AuthProviderInterface:
+        """Create an authentication provider based on application settings.
 
         Returns:
             AuthProviderInterface instance
         """
-        provider_name = os.getenv("AUTH_PROVIDER", "clerk")
-        return AuthProviderFactory.create_provider(provider_name)
+        from agentarea_common.config.app import get_app_settings
+
+        settings = get_app_settings()
+
+        # Currently only Kratos is supported
+        return AuthProviderFactory.create_provider(
+            "kratos",
+            config={
+                "jwks_b64": settings.KRATOS_JWKS_B64,
+                "issuer": settings.KRATOS_ISSUER,
+                "audience": settings.KRATOS_AUDIENCE,
+            },
+        )
