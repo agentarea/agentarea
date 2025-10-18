@@ -53,9 +53,10 @@ export const ModelItemControl = ({
             });
             
             if (error || !data) {
+                const errorMessage = error?.detail?.[0]?.msg || (error as any)?.message || "Test failed";
                 setTestResult({
                     success: false,
-                    message: error?.message || "Test failed",
+                    message: errorMessage,
                     error_type: "TestError"
                 });
             } else {

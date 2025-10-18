@@ -45,7 +45,8 @@ export default async function AgentTasksPage({ params }: Props) {
         </div>
       )}
     >
-      <AgentTasksList 
+      <AgentTasksList
+        agentId={id}
         initialTasks={initialTasks}
       />
     </Suspense>

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { TaskWithAgent } from "@/lib/api";
+import { TaskWithAgent } from "@/lib/browser-api";
 import { TaskItem } from "@/components/TaskItem";
 import Table from "@/components/Table/Table";
 import { useRouter } from "next/navigation";

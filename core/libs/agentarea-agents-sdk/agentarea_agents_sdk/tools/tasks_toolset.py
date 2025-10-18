@@ -69,9 +69,3 @@ class TasksToolset(Toolset):
         """Delete a task (and its subtasks) by id. Returns JSON {deleted: true/false}."""
         ok = self.service.delete(UUID(task_id))
         return json.dumps({"deleted": ok})
-
-    @tool_method
-    async def search_tasks(self, query: str) -> str:
-        """Search tasks by text in title or description. Returns JSON array of tasks."""
-        tasks = self.service.search(query)
-        return json.dumps([self.service.to_dict(t) for t in tasks])

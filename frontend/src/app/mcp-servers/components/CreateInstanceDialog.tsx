@@ -104,9 +104,10 @@ export function CreateInstanceDialog({ open, onOpenChange, mcpServer }: CreateIn
                 if (checkResult.error) {
                   toast.error('Failed to validate configuration');
                 } else {
-                  setValidationResult(checkResult.data);
-                  if (checkResult.data.valid) toast.success('Configuration is valid!');
-                  else toast.warning(`Configuration has ${checkResult.data.errors.length} error(s)`);
+                  const validationData = checkResult.data as any;
+                  setValidationResult(validationData);
+                  if (validationData?.valid) toast.success('Configuration is valid!');
+                  else toast.warning(`Configuration has ${validationData?.errors?.length || 0} error(s)`);
                 }
               } catch (error) {
                 console.error('Validation error:', error);

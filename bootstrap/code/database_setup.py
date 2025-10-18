@@ -96,7 +96,14 @@ def database_setup():
 
         # Create all databases
         create_database_if_not_exists(cursor, main_db, "AgentArea main application")
-        create_database_if_not_exists(cursor, infisical_db, "Secrets management")
+        
+        # Only create Infisical database if using Infisical secret manager
+        secret_manager_type = os.getenv("SECRET_MANAGER_TYPE", "database").lower()
+        if secret_manager_type == "infisical" or os.getenv("INFISICAL_DB"):
+            create_database_if_not_exists(cursor, infisical_db, "Secrets management")
+        else:
+            print(f"  ⊘ Skipping Infisical database (SECRET_MANAGER_TYPE={secret_manager_type})")
+        
         create_database_if_not_exists(cursor, temporal_db, "Workflow engine")
         create_database_if_not_exists(cursor, "temporal_visibility", "Temporal visibility")
         create_database_if_not_exists(cursor, kratos_db, "Identity management")
@@ -106,7 +113,9 @@ def database_setup():
         print("✓ All databases initialized successfully")
         print("\nCreated databases:")
         print(f"  - {main_db} (main application)")
-        print(f"  - {infisical_db} (secrets management)")
+        secret_manager_type = os.getenv("SECRET_MANAGER_TYPE", "database").lower()
+        if secret_manager_type == "infisical" or os.getenv("INFISICAL_DB"):
+            print(f"  - {infisical_db} (secrets management)")
         print(f"  - {temporal_db} (workflow engine)")
         print(f"  - temporal_visibility (workflow visibility)")
         print(f"  - {kratos_db} (identity management)")

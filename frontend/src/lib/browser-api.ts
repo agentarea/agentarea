@@ -1,35 +1,46 @@
-`use server`;
+/**
+ * Browser-side API Functions
+ *
+ * This module provides the same API interface as @/lib/api but for client-side use.
+ * These functions use the browser-client which routes through our secure proxy.
+ *
+ * Usage in client components:
+ *   import { listAgents, createAgent } from "@/lib/browser-api";
+ *
+ * The proxy ensures authentication tokens are handled server-side and never
+ * exposed to the browser.
+ */
 
-import client from "./server-client";
+import browserClient from "./browser-client";
 import type { components } from "../api/schema";
 
 // Agent API
 export const listAgents = async () => {
-  const { data, error } = await client.GET("/v1/agents/");
+  const { data, error } = await browserClient.GET("/v1/agents/");
   return { data, error };
 };
 
 export const createAgent = async (agent: components["schemas"]["AgentCreate"]) => {
-  const { data, error } = await client.POST("/v1/agents/", { body: agent });
+  const { data, error } = await browserClient.POST("/v1/agents/", { body: agent });
   return { data, error };
 };
 
 export const getAgent = async (agentId: string) => {
-  const { data, error } = await client.GET("/v1/agents/{agent_id}", {
+  const { data, error } = await browserClient.GET("/v1/agents/{agent_id}", {
     params: { path: { agent_id: agentId } },
   });
   return { data, error };
 };
 
 export const deleteAgent = async (agentId: string) => {
-  const { data, error } = await client.DELETE("/v1/agents/{agent_id}", {
+  const { data, error } = await browserClient.DELETE("/v1/agents/{agent_id}", {
     params: { path: { agent_id: agentId } },
   });
   return { data, error };
 };
 
 export const updateAgent = async (agentId: string, agent: components["schemas"]["AgentUpdate"]) => {
-  const { data, error } = await client.PATCH("/v1/agents/{agent_id}", {
+  const { data, error } = await browserClient.PATCH("/v1/agents/{agent_id}", {
     params: { path: { agent_id: agentId } },
     body: agent,
   });
@@ -38,14 +49,14 @@ export const updateAgent = async (agentId: string, agent: components["schemas"][
 
 // Agent Task API
 export const listAgentTasks = async (agentId: string) => {
-  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/", {
+  const { data, error } = await browserClient.GET("/v1/agents/{agent_id}/tasks/", {
     params: { path: { agent_id: agentId } },
   });
   return { data, error };
 };
 
 export const createAgentTask = async (agentId: string, task: components["schemas"]["TaskCreate"]) => {
-  const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/", {
+  const { data, error } = await browserClient.POST("/v1/agents/{agent_id}/tasks/", {
     params: { path: { agent_id: agentId } },
     body: task,
   });
@@ -53,14 +64,14 @@ export const createAgentTask = async (agentId: string, task: components["schemas
 };
 
 export const getAgentTask = async (agentId: string, taskId: string) => {
-  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}", {
+  const { data, error } = await browserClient.GET("/v1/agents/{agent_id}/tasks/{task_id}", {
     params: { path: { agent_id: agentId, task_id: taskId } },
   });
   return { data, error };
 };
 
 export const getAgentTaskById = async (agentId: string, taskId: string) => {
-  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}", {
+  const { data, error } = await browserClient.GET("/v1/agents/{agent_id}/tasks/{task_id}", {
     params: { path: { agent_id: agentId, task_id: taskId } },
   });
   return { data, error };
@@ -73,7 +84,7 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
   if (error || !events) {
     return { data: [], error };
   }
-  
+
   // Convert events to message format (simplified)
   const messages = events.events
     .filter((event: any) => ['LLMCallCompleted', 'ToolCallCompleted', 'WorkflowCompleted'].includes(event.event_type))
@@ -83,12 +94,12 @@ export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
       role: event.event_type === 'LLMCallCompleted' ? 'assistant' : 'system',
       timestamp: event.timestamp
     }));
-  
+
   return { data: messages, error: null };
 };
 
 export const cancelAgentTask = async (agentId: string, taskId: string) => {
-  const { data, error } = await client.DELETE("/v1/agents/{agent_id}/tasks/{task_id}", {
+  const { data, error } = await browserClient.DELETE("/v1/agents/{agent_id}/tasks/{task_id}", {
     params: { path: { agent_id: agentId, task_id: taskId } },
   });
   return { data, error };
@@ -96,10 +107,10 @@ export const cancelAgentTask = async (agentId: string, taskId: string) => {
 
 export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
   try {
-    const response = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/status", {
+    const response = await browserClient.GET("/v1/agents/{agent_id}/tasks/{task_id}/status", {
       params: { path: { agent_id: agentId, task_id: taskId } },
     });
-    return { 
+    return {
       data: response.data as {
         task_id: string;
         agent_id: string;
@@ -114,42 +125,42 @@ export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
         artifacts?: any;
         session_id?: string;
         usage_metadata?: any;
-      } | undefined, 
-      error: response.error 
+      } | undefined,
+      error: response.error
     };
   } catch (error) {
-    return { 
-      data: undefined, 
-      error: error as Error 
+    return {
+      data: undefined,
+      error: error as Error
     };
   }
 };
 
 export const pauseAgentTask = async (agentId: string, taskId: string) => {
-  const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/{task_id}/pause", {
+  const { data, error } = await browserClient.POST("/v1/agents/{agent_id}/tasks/{task_id}/pause", {
     params: { path: { agent_id: agentId, task_id: taskId } },
   });
   return { data, error };
 };
 
 export const resumeAgentTask = async (agentId: string, taskId: string) => {
-  const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/{task_id}/resume", {
+  const { data, error } = await browserClient.POST("/v1/agents/{agent_id}/tasks/{task_id}/resume", {
     params: { path: { agent_id: agentId, task_id: taskId } },
   });
   return { data, error };
 };
 
 export const getAgentTaskEvents = async (
-  agentId: string, 
-  taskId: string, 
-  options: { 
-    page?: number; 
-    page_size?: number; 
-    event_type?: string; 
+  agentId: string,
+  taskId: string,
+  options: {
+    page?: number;
+    page_size?: number;
+    event_type?: string;
   } = {}
 ) => {
-  const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/events", {
-    params: { 
+  const { data, error } = await browserClient.GET("/v1/agents/{agent_id}/tasks/{task_id}/events", {
+    params: {
       path: { agent_id: agentId, task_id: taskId },
       query: {
         page: options.page || 1,
@@ -193,44 +204,28 @@ export const getAllTasks = async () => {
 
 // Chat API
 export const sendMessage = async (message: components["schemas"]["ChatMessageRequest"]) => {
-  const { data, error } = await client.POST("/v1/chat/messages", { body: message });
+  const { data, error } = await browserClient.POST("/v1/chat/messages", { body: message });
   return { data, error };
 };
 
-
-
-
-
-
-
 export const getChatAgents = async () => {
-  const { data, error } = await client.GET("/v1/chat/agents");
+  const { data, error } = await browserClient.GET("/v1/chat/agents");
   return { data, error };
 };
 
 export const getChatAgent = async (agentId: string) => {
-  const { data, error } = await client.GET("/v1/chat/agents/{agent_id}", {
+  const { data, error } = await browserClient.GET("/v1/chat/agents/{agent_id}", {
     params: { path: { agent_id: agentId } },
   });
   return { data, error };
 };
 
 export const getChatMessageStatus = async (taskId: string) => {
-  const { data, error } = await client.GET("/v1/chat/messages/{task_id}/status", {
+  const { data, error } = await browserClient.GET("/v1/chat/messages/{task_id}/status", {
     params: { path: { task_id: taskId } },
   });
   return { data, error };
 };
-
-
-
-
-
-
-
-
-
-
 
 // MCP Server API
 export const listMCPServers = async (params?: {
@@ -238,33 +233,33 @@ export const listMCPServers = async (params?: {
   is_public?: boolean;
   tag?: string;
 }) => {
-  const { data, error } = await client.GET("/v1/mcp-servers/", {
+  const { data, error } = await browserClient.GET("/v1/mcp-servers/", {
     params: { query: params },
   });
   return { data, error };
 };
 
 export const createMCPServer = async (server: components["schemas"]["MCPServerCreate"]) => {
-  const { data, error } = await client.POST("/v1/mcp-servers/", { body: server });
+  const { data, error } = await browserClient.POST("/v1/mcp-servers/", { body: server });
   return { data, error };
 };
 
 export const getMCPServer = async (serverId: string) => {
-  const { data, error } = await client.GET("/v1/mcp-servers/{server_id}", {
+  const { data, error } = await browserClient.GET("/v1/mcp-servers/{server_id}", {
     params: { path: { server_id: serverId } },
   });
   return { data, error };
 };
 
 export const deleteMCPServer = async (serverId: string) => {
-  const { data, error } = await client.DELETE("/v1/mcp-servers/{server_id}", {
+  const { data, error } = await browserClient.DELETE("/v1/mcp-servers/{server_id}", {
     params: { path: { server_id: serverId } },
   });
   return { data, error };
 };
 
 export const updateMCPServer = async (serverId: string, server: components["schemas"]["MCPServerUpdate"]) => {
-  const { data, error } = await client.PATCH("/v1/mcp-servers/{server_id}", {
+  const { data, error } = await browserClient.PATCH("/v1/mcp-servers/{server_id}", {
     params: { path: { server_id: serverId } },
     body: server,
   });
@@ -272,7 +267,7 @@ export const updateMCPServer = async (serverId: string, server: components["sche
 };
 
 export const deployMCPServer = async (serverId: string) => {
-  const { data, error } = await client.POST("/v1/mcp-servers/{server_id}/deploy", {
+  const { data, error } = await browserClient.POST("/v1/mcp-servers/{server_id}/deploy", {
     params: { path: { server_id: serverId } },
   });
   return { data, error };
@@ -280,38 +275,38 @@ export const deployMCPServer = async (serverId: string) => {
 
 // MCP Server Instance API
 export const listMCPServerInstances = async () => {
-  const { data, error } = await client.GET("/v1/mcp-server-instances/");
+  const { data, error } = await browserClient.GET("/v1/mcp-server-instances/");
   return { data, error };
 };
 
 export const checkMCPServerInstanceConfiguration = async (checkRequest: { json_spec: Record<string, any> }) => {
-  const { data, error } = await client.POST("/v1/mcp-server-instances/check", {
+  const { data, error } = await browserClient.POST("/v1/mcp-server-instances/check", {
     body: checkRequest,
   });
   return { data, error };
 };
 
 export const createMCPServerInstance = async (instance: components["schemas"]["MCPServerInstanceCreateRequest"]) => {
-  const { data, error } = await client.POST("/v1/mcp-server-instances/", { body: instance });
+  const { data, error } = await browserClient.POST("/v1/mcp-server-instances/", { body: instance });
   return { data, error };
 };
 
 export const getMCPServerInstance = async (instanceId: string) => {
-  const { data, error } = await client.GET("/v1/mcp-server-instances/{instance_id}", {
+  const { data, error } = await browserClient.GET("/v1/mcp-server-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
   });
   return { data, error };
 };
 
 export const deleteMCPServerInstance = async (instanceId: string) => {
-  const { data, error } = await client.DELETE("/v1/mcp-server-instances/{instance_id}", {
+  const { data, error } = await browserClient.DELETE("/v1/mcp-server-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
   });
   return { data, error };
 };
 
 export const updateMCPServerInstance = async (instanceId: string, instance: components["schemas"]["MCPServerInstanceUpdate"]) => {
-  const { data, error } = await client.PATCH("/v1/mcp-server-instances/{instance_id}", {
+  const { data, error } = await browserClient.PATCH("/v1/mcp-server-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
     body: instance,
   });
@@ -319,21 +314,21 @@ export const updateMCPServerInstance = async (instanceId: string, instance: comp
 };
 
 export const startMCPServerInstance = async (instanceId: string) => {
-  const { data, error } = await client.POST("/v1/mcp-server-instances/{instance_id}/start", {
+  const { data, error } = await browserClient.POST("/v1/mcp-server-instances/{instance_id}/start", {
     params: { path: { instance_id: instanceId } },
   });
   return { data, error };
 };
 
 export const stopMCPServerInstance = async (instanceId: string) => {
-  const { data, error } = await client.POST("/v1/mcp-server-instances/{instance_id}/stop", {
+  const { data, error } = await browserClient.POST("/v1/mcp-server-instances/{instance_id}/stop", {
     params: { path: { instance_id: instanceId } },
   });
   return { data, error };
 };
 
 export const getMCPServerInstanceEnvironment = async (instanceId: string) => {
-  const { data, error } = await client.GET("/v1/mcp-server-instances/{instance_id}/environment", {
+  const { data, error } = await browserClient.GET("/v1/mcp-server-instances/{instance_id}/environment", {
     params: { path: { instance_id: instanceId } },
   });
   return { data, error };
@@ -341,28 +336,28 @@ export const getMCPServerInstanceEnvironment = async (instanceId: string) => {
 
 // Provider Spec API
 export const listProviderSpecs = async (params?: { is_builtin?: boolean }) => {
-  const { data, error } = await client.GET("/v1/provider-specs/", {
+  const { data, error } = await browserClient.GET("/v1/provider-specs/", {
     params: { query: params },
   });
   return { data, error };
 };
 
 export const listProviderSpecsWithModels = async (params?: { is_builtin?: boolean }) => {
-  const { data, error } = await client.GET("/v1/provider-specs/with-models", {
+  const { data, error } = await browserClient.GET("/v1/provider-specs/with-models", {
     params: { query: params },
   });
   return { data, error };
 };
 
 export const getProviderSpec = async (providerSpecId: string) => {
-  const { data, error } = await client.GET("/v1/provider-specs/{provider_spec_id}", {
+  const { data, error } = await browserClient.GET("/v1/provider-specs/{provider_spec_id}", {
     params: { path: { provider_spec_id: providerSpecId } },
   });
   return { data, error };
 };
 
 export const getProviderSpecByKey = async (providerKey: string) => {
-  const { data, error } = await client.GET("/v1/provider-specs/by-key/{provider_key}", {
+  const { data, error } = await browserClient.GET("/v1/provider-specs/by-key/{provider_key}", {
     params: { path: { provider_key: providerKey } },
   });
   return { data, error };
@@ -373,7 +368,7 @@ export const listProviderConfigs = async (params?: {
   provider_spec_id?: string;
   is_active?: boolean;
 }) => {
-  const { data, error } = await client.GET("/v1/provider-configs/", {
+  const { data, error } = await browserClient.GET("/v1/provider-configs/", {
     params: { query: params },
   });
   return { data, error };
@@ -416,24 +411,24 @@ export const listProviderConfigsWithModelInstances = async (params?: {
 };
 
 export const createProviderConfig = async (config: components["schemas"]["ProviderConfigCreate"]) => {
-  const { data, error } = await client.POST("/v1/provider-configs/", { body: config });
+  const { data, error } = await browserClient.POST("/v1/provider-configs/", { body: config });
   return { data, error };
 };
 
 export async function getProviderConfig(id: string): Promise<components["schemas"]["ProviderConfigResponse"]> {
-  const response = await client.GET('/v1/provider-configs/{config_id}', {
+  const response = await browserClient.GET('/v1/provider-configs/{config_id}', {
     params: { path: { config_id: id } },
   });
-  
+
   if (!response.data) {
     throw new Error('Provider config not found');
   }
-  
+
   return response.data;
 }
 
 export const updateProviderConfig = async (configId: string, config: components["schemas"]["ProviderConfigUpdate"]) => {
-  const { data, error } = await client.PUT("/v1/provider-configs/{config_id}", {
+  const { data, error } = await browserClient.PUT("/v1/provider-configs/{config_id}", {
     params: { path: { config_id: configId } },
     body: config,
   });
@@ -441,7 +436,7 @@ export const updateProviderConfig = async (configId: string, config: components[
 };
 
 export const deleteProviderConfig = async (configId: string) => {
-  const { data, error } = await client.DELETE("/v1/provider-configs/{config_id}", {
+  const { data, error } = await browserClient.DELETE("/v1/provider-configs/{config_id}", {
     params: { path: { config_id: configId } },
   });
   return { data, error };
@@ -466,33 +461,33 @@ export const listModelSpecs = async (params?: {
   provider_spec_id?: string;
   is_active?: boolean;
 }) => {
-  const { data, error } = await client.GET("/v1/model-specs/", {
+  const { data, error } = await browserClient.GET("/v1/model-specs/", {
     params: { query: params },
   });
   return { data, error };
 };
 
 export const createModelSpec = async (spec: components["schemas"]["ModelSpecCreate"]) => {
-  const { data, error } = await client.POST("/v1/model-specs/", { body: spec });
+  const { data, error } = await browserClient.POST("/v1/model-specs/", { body: spec });
   return { data, error };
 };
 
 export const getModelSpec = async (modelSpecId: string) => {
-  const { data, error } = await client.GET("/v1/model-specs/{model_spec_id}", {
+  const { data, error } = await browserClient.GET("/v1/model-specs/{model_spec_id}", {
     params: { path: { model_spec_id: modelSpecId } },
   });
   return { data, error };
 };
 
 export const deleteModelSpec = async (modelSpecId: string) => {
-  const { data, error } = await client.DELETE("/v1/model-specs/{model_spec_id}", {
+  const { data, error } = await browserClient.DELETE("/v1/model-specs/{model_spec_id}", {
     params: { path: { model_spec_id: modelSpecId } },
   });
   return { data, error };
 };
 
 export const updateModelSpec = async (modelSpecId: string, spec: components["schemas"]["ModelSpecUpdate"]) => {
-  const { data, error } = await client.PATCH("/v1/model-specs/{model_spec_id}", {
+  const { data, error } = await browserClient.PATCH("/v1/model-specs/{model_spec_id}", {
     params: { path: { model_spec_id: modelSpecId } },
     body: spec,
   });
@@ -500,8 +495,8 @@ export const updateModelSpec = async (modelSpecId: string, spec: components["sch
 };
 
 export const listModelSpecsByProvider = async (providerSpecId: string, params?: { is_active?: boolean }) => {
-  const { data, error } = await client.GET("/v1/model-specs/by-provider/{provider_spec_id}", {
-    params: { 
+  const { data, error } = await browserClient.GET("/v1/model-specs/by-provider/{provider_spec_id}", {
+    params: {
       path: { provider_spec_id: providerSpecId },
       query: params
     },
@@ -510,14 +505,14 @@ export const listModelSpecsByProvider = async (providerSpecId: string, params?: 
 };
 
 export const getModelSpecByProviderAndName = async (providerSpecId: string, modelName: string) => {
-  const { data, error } = await client.GET("/v1/model-specs/by-provider/{provider_spec_id}/{model_name}", {
+  const { data, error } = await browserClient.GET("/v1/model-specs/by-provider/{provider_spec_id}/{model_name}", {
     params: { path: { provider_spec_id: providerSpecId, model_name: modelName } },
   });
   return { data, error };
 };
 
 export const upsertModelSpec = async (spec: components["schemas"]["ModelSpecCreate"]) => {
-  const { data, error } = await client.POST("/v1/model-specs/upsert", { body: spec });
+  const { data, error } = await browserClient.POST("/v1/model-specs/upsert", { body: spec });
   return { data, error };
 };
 
@@ -527,14 +522,14 @@ export const listModelInstances = async (params?: {
   model_spec_id?: string;
   is_active?: boolean;
 }) => {
-  const { data, error } = await client.GET("/v1/model-instances/", {
+  const { data, error } = await browserClient.GET("/v1/model-instances/", {
     params: { query: params },
   });
   return { data, error };
 };
 
 export const createModelInstance = async (instance: components["schemas"]["ModelInstanceCreate"]) => {
-  const { data, error } = await client.POST("/v1/model-instances/", { body: instance });
+  const { data, error } = await browserClient.POST("/v1/model-instances/", { body: instance });
   return { data, error };
 };
 
@@ -548,14 +543,14 @@ export const testModelInstance = async (testRequest: {
 };
 
 export const getModelInstance = async (instanceId: string) => {
-  const { data, error } = await client.GET("/v1/model-instances/{instance_id}", {
+  const { data, error } = await browserClient.GET("/v1/model-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
   });
   return { data, error };
 };
 
 export const deleteModelInstance = async (instanceId: string) => {
-  const { data, error } = await client.DELETE("/v1/model-instances/{instance_id}", {
+  const { data, error } = await browserClient.DELETE("/v1/model-instances/{instance_id}", {
     params: { path: { instance_id: instanceId } },
   });
   return { data, error };
@@ -567,24 +562,20 @@ export const healthCheck = async () => {
   return { data: { status: "healthy" }, error: null };
 };
 
-
-
 // Authentication API
 export const getCurrentUser = async () => {
-  const { data, error } = await client.GET("/v1/auth/users/me", {});
+  const { data, error } = await browserClient.GET("/v1/auth/users/me", {});
   return { data, error };
 };
 
-
-
 export const testProtectedEndpoint = async () => {
-  const { data, error } = await client.GET("/v1/protected/test", {});
+  const { data, error } = await browserClient.GET("/v1/protected/test", {});
   return { data, error };
 };
 
 // Builtin Tools API (outside generated schema)
 export const listBuiltinTools = async () => {
-  const { data, error } = await client.GET("/v1/agents/tools/builtin" as any, {});
+  const { data, error } = await browserClient.GET("/v1/agents/tools/builtin" as any, {});
   return { data, error };
 };
 
@@ -625,7 +616,7 @@ export async function getMCPHealthStatus(): Promise<{
   total: number;
 }> {
   try {
-    const { data, error } = await client.GET('/v1/mcp-server-instances/health/containers');
+    const { data, error } = await browserClient.GET('/v1/mcp-server-instances/health/containers');
     if (error || !data) {
       // Return empty health checks if endpoint is not available
       return { health_checks: [], total: 0 };

@@ -8,5 +8,5 @@ export type { User, AuthState, AuthActions, AuthHook } from '@/types/auth';
 export { useCookie } from './useCookie';
 export { useSearchWithDebounce } from './useSearchWithDebounce';
 export { useTabState } from './useTabState';
-export { useModelInfo } from './useModelInfo';
-export type { ModelInfo } from './useModelInfo';
+// export { useModelInfo } from './useModelInfo';
+// export type { ModelInfo } from './useModelInfo';

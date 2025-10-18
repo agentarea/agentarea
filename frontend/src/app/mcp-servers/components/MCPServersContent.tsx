@@ -143,12 +143,9 @@ export default async function MCPServersContent({
                 <h4 className="mb-3 uppercase text-xs text-muted-foreground/80">
                     Browse MCP Specifications ({filteredServers.filter(s => s.is_public).length})
                 </h4>
-                <MCPSpecsSection 
-                    mcpServers={filteredServers} 
-                    searchParams={{ search: searchQuery }} 
-                    viewMode={viewMode}
-                    searchQuery={searchQuery}
-                    hasNoData={hasNoServers}
+                <MCPSpecsSection
+                    mcpServers={filteredServers}
+                    searchParams={{ search: searchQuery }}
                 />
             </div>
         </div>

@@ -10,8 +10,9 @@ import {
   pauseAgentTask,
   resumeAgentTask,
   cancelAgentTask,
-} from "@/lib/api";
+} from "@/lib/browser-api";
 import { AlertCircle, CheckCircle, FileText, Pause, Play, Square } from "lucide-react";
+import { TaskWithStatus, TaskStatus } from "../types";
 
 interface Task {
   id: string;
@@ -21,24 +22,29 @@ interface Task {
   agent_id: string;
 }
 
-interface TaskStatus {
-  status: string;
-  task_id: string;
-  agent_id: string;
-  start_time?: string;
-  end_time?: string;
-  execution_time?: string;
-  message?: string;
-  error?: string;
+interface AgentTasksListProps {
+  agentId: string;
+  initialTasks?: TaskWithStatus[];
 }
 
-export default function AgentTasksList({ agentId }: { agentId: string }) {
-  const [tasks, setTasks] = useState<Task[]>([]);
+export default function AgentTasksList({ agentId, initialTasks = [] }: AgentTasksListProps) {
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [tasksLoading, setTasksLoading] = useState(false);
-  const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
+  const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>(
+    // Initialize with statuses from initialTasks if available
+    initialTasks.reduce((acc, task) => {
+      if (task.taskStatus) {
+        acc[task.id] = task.taskStatus;
+      }
+      return acc;
+    }, {} as Record<string, TaskStatus>)
+  );
 
   useEffect(() => {
-    loadTasks();
+    // Only fetch if we don't have initial data
+    if (initialTasks.length === 0) {
+      loadTasks();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 

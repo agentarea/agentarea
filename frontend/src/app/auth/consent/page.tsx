@@ -20,7 +20,8 @@ export default function ConsentPage() {
       return;
     }
 
-    // Get consent request information
+    // Get consent request information (server-side should use proxy or server action instead)
+    // TODO: This should be moved to a server action to avoid exposing admin URL to browser
     fetch(`http://localhost:4445/admin/oauth2/auth/requests/consent?consent_challenge=${consentChallenge}`)
       .then(response => response.json())
       .then(data => {

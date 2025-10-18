@@ -1,8 +1,9 @@
+`use server`;
+
 import createClient from "openapi-fetch";
 import type { paths } from "../api/schema";
-import { getAuthToken } from "./auth";
+import { getAuthToken } from "./getAuthToken";
 import { env } from "@/env";
-import { cookies } from "next/headers";
 
 // Create the server-side client - uses server-only env vars
 const serverClient = createClient<paths>({
@@ -12,22 +13,39 @@ const serverClient = createClient<paths>({
 // Add authentication middleware that runs server-side
 serverClient.use({
   async onRequest({ request }) {
+    const url = request.url;
+    const method = request.method;
+
     // Get authentication token from cookies (server-side)
-    // The JWT token already contains workspace_id in its claims, so we don't need to send it separately
     try {
       const authToken = await getAuthToken();
       if (authToken) {
         request.headers.set("Authorization", `Bearer ${authToken}`);
+        console.log(`[Server Client] ${method} ${url} - Auth token added`);
+      } else {
+        console.warn(`[Server Client] ${method} ${url} - No auth token available`);
       }
     } catch (error: any) {
-      console.error("Error getting auth token (server):", error);
+      console.error(`[Server Client] ${method} ${url} - Error getting auth token:`, error);
       // Continue without Authorization header if authentication fails
     }
 
     return request;
   },
   async onResponse({ response }) {
-    // Handle responses if needed
+    const url = response.url;
+    const status = response.status;
+
+    console.log(`[Server Client] Response: ${status} ${url}`);
+
+    if (response.status === 403) {
+      console.error("[Server Client] 403 Forbidden details:", {
+        url,
+        status: response.status,
+        statusText: response.statusText
+      });
+      throw new Error(`Forbidden: Received a 403 response from the API (${url})`);
+    }
     return response;
   }
 });

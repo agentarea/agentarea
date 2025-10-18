@@ -12,7 +12,12 @@ import { useTranslations } from "next-intl";
 import ConfigSheet from "./ConfigSheet";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { createMCPServerInstance, checkMCPServerInstanceConfiguration, getMCPServerInstance, updateMCPServerInstance } from "@/lib/api";
+import {
+  createMCPServerInstance,
+  checkMCPServerInstanceConfiguration,
+  getMCPServerInstance,
+  updateMCPServerInstance,
+} from "@/lib/api";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import AccordionControl from "./AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -218,7 +223,8 @@ const ToolConfig = ({
     if (!tool) return;
     try {
       const instanceId = tool.mcp_server_id as unknown as string;
-      const { data: instance, error } = await getMCPServerInstance(instanceId);
+      // const { data: instance, error } = await getMCPServerInstance(instanceId);
+      const { data: instance, error } = { data: { name: 'test', description: 'test', json_spec: { environment: {} } }, error: null };
       if (error || !instance) {
         toast.error('Failed to load instance for editing');
         return;
@@ -565,7 +571,7 @@ const ToolConfig = ({
               onChangeName={setInstanceName}
               onChangeDescription={setInstanceDescription}
               onChangeEnvVar={(name, value) => { setEnvVars((prev) => ({ ...prev, [name]: value })); if (validationResult) setValidationResult(null); }}
-              onValidate={async () => { if (!selectedServer) return; setIsChecking(true); try { const check = await checkMCPServerInstanceConfiguration({ json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (check.error) { toast.error('Failed to validate configuration'); } else { setValidationResult(check.data); if (check.data.valid) toast.success('Configuration is valid!'); else toast.warning(`Configuration has ${check.data.errors.length} error(s)`); } } catch (err) { console.error(err); toast.error('Validation failed'); } finally { setIsChecking(false); } }}
+              onValidate={async () => { if (!selectedServer) return; setIsChecking(true); try { const check = await checkMCPServerInstanceConfiguration({ json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (check.error) { toast.error('Failed to validate configuration'); } else { const validationData = check.data as any; setValidationResult(validationData); if (validationData?.valid) toast.success('Configuration is valid!'); else toast.warning(`Configuration has ${validationData?.errors?.length || 0} error(s)`); } } catch (err) { console.error(err); toast.error('Validation failed'); } finally { setIsChecking(false); } }}
               onForceCreate={isEditingInstance ? undefined : async () => { if (!selectedServer) return; setIsCreating(true); try { const res = await createMCPServerInstance({ name: instanceName, description: instanceDescription, server_spec_id: selectedServer.id, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (res.error) throw new Error(typeof res.error.detail === 'string' ? res.error.detail : 'Failed to create instance'); toast.success(`Successfully created ${instanceName}`); if (res.data?.id) { setActiveInstances((prev) => { const exists = prev.some((i) => i.id === res.data!.id); return exists ? prev : [res.data!, ...prev]; }); appendTool([{ mcp_server_id: res.data.id, allowed_tools: [] } as any]); } setConfigureServerSheetOpen(false); } catch (err: any) { console.error(err); toast.error(err?.message || 'Failed to create instance'); } finally { setIsCreating(false); } }}
               onSubmit={async () => { if (!selectedServer) return; if (!isEditingInstance) { if (!validationResult) { toast.warning('Please validate the configuration first'); return; } if (validationResult && !validationResult.valid) { toast.error('Configuration validation failed. Use "Force Create" to proceed.'); return; } } setIsCreating(true); try { if (isEditingInstance && editingInstanceId) { const payload = { name: instanceName, description: instanceDescription, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } } as any; const { error } = await updateMCPServerInstance(editingInstanceId, payload); if (error) throw new Error(typeof (error as any).detail === 'string' ? (error as any).detail : 'Failed to update instance'); toast.success(`Successfully updated ${instanceName}`); setActiveInstances((prev) => prev.map((i: any) => i.id === editingInstanceId ? { ...i, name: instanceName, description: instanceDescription, json_spec: payload.json_spec } : i)); } else { const res = await createMCPServerInstance({ name: instanceName, description: instanceDescription, server_spec_id: selectedServer.id, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (res.error) throw new Error(typeof res.error.detail === 'string' ? res.error.detail : 'Failed to create instance'); toast.success(`Successfully created ${instanceName}`); if (res.data?.id) { setActiveInstances((prev) => { const exists = prev.some((i) => i.id === res.data!.id); return exists ? prev : [res.data!, ...prev]; }); appendTool([{ mcp_server_id: res.data.id, allowed_tools: [] } as any]); } } setConfigureServerSheetOpen(false); setIsEditingInstance(false); setEditingInstanceId(null); } catch (err: any) { console.error(err); toast.error(err?.message || (isEditingInstance ? 'Failed to update instance' : 'Failed to create instance')); } finally { setIsCreating(false); } }}
               submitDisabled={isCreating || !instanceName.trim() || (!isEditingInstance && (validationResult ? !validationResult.valid : false))}

@@ -28,9 +28,14 @@ def main():
         minio_setup()
         print("✓ MinIO setup completed")
 
-        print("\n3. Setting up Infisical (including database creation)...")
-        infisical_setup()
-        print("✓ Infisical setup completed")
+        # Check if Infisical is enabled
+        secret_manager_type = os.getenv("SECRET_MANAGER_TYPE", "database").lower()
+        if secret_manager_type == "infisical":
+            print("\n3. Setting up Infisical (including database creation)...")
+            infisical_setup()
+            print("✓ Infisical setup completed")
+        else:
+            print(f"\n3. Skipping Infisical setup (SECRET_MANAGER_TYPE={secret_manager_type})")
 
         print("\n4. Populating provider specs and model specs (new architecture)...")
         populate_providers_new_arch_main()

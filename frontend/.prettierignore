@@ -1,0 +1,37 @@
+# Dependencies
+node_modules
+pnpm-lock.yaml
+package-lock.json
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Cache
+.cache
+.turbo
+.vercel
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# IDE
+.vscode
+.idea
+
+# Other
+coverage
+.DS_Store
+
+

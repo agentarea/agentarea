@@ -122,8 +122,9 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./data:/app/llm
-      - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/data
+      # - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}/bootstrap/data:/app/data
     environment:
+      - SECRET_MANAGER_TYPE=${SECRET_MANAGER_TYPE:-database}
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
       - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
       - MINIO_ENDPOINT=http://minio:9000
@@ -146,8 +147,8 @@ services:
         condition: service_healthy
       app_migrations:
         condition: service_completed_successfully
-      infisical:
-        condition: service_started
+      # infisical:
+      #   condition: service_started
 
   minio:
     image: minio/minio:latest
@@ -186,22 +187,22 @@ services:
       - temporal-network
       - auth-network
 
-  infisical:
-    image: infisical/infisical:latest-postgres
-    container_name: infisical-backend
-    restart: always
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    env_file: .env
-    ports:
-      - 3333:8080
-    environment:
-      - NODE_ENV=production
-      - POSTGRES_DB=${INFISICAL_DB:-infisical}
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${INFISICAL_DB:-infisical}
+  # infisical:
+  #   image: infisical/infisical:latest-postgres
+  #   container_name: infisical-backend
+  #   restart: always
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #   env_file: .env
+  #   ports:
+  #     - 3333:8080
+  #   environment:
+  #     - NODE_ENV=production
+  #     - POSTGRES_DB=${INFISICAL_DB:-infisical}
+  #     - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${INFISICAL_DB:-infisical}
 
   redis:
     image: redis
@@ -380,7 +381,7 @@ services:
 
   # Ory Kratos Identity Server
   kratos:
-    image: oryd/kratos:v1.1.0
+    image: oryd/kratos:v1.3.1
     ports:
       - "4433:4433" # public API
       - "4434:4434" # admin API
@@ -401,33 +402,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Ory Hydra OAuth2/OIDC Server
-  hydra:
-    image: oryd/hydra:v2.2.0
-    ports:
-      - "4444:4444" # public API
-      - "4445:4445" # admin API
-    environment:
-      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
-      URLS_SELF_ISSUER: http://localhost:4444
-      URLS_CONSENT: http://localhost:3000/auth/consent
-      URLS_LOGIN: http://localhost:3000/auth/login
-      URLS_LOGOUT: http://localhost:3000/auth/logout
-      URLS_ERROR: http://localhost:3000/auth/error
-      SECRETS_SYSTEM: this-is-the-primary-secret-replace-me-in-production
-      OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
-      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: some-random-salt
-      LOG_LEVEL: debug
-      LOG_LEAK_SENSITIVE_VALUES: true
-    command: serve all --dev
-    volumes:
-      - ./config/auth/hydra:/etc/config/hydra
-    networks:
-      - auth-network
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
+  # # Ory Hydra OAuth2/OIDC Server
+  # hydra:
+  #   image: oryd/hydra:v2.2.0
+  #   ports:
+  #     - "4444:4444" # public API
+  #     - "4445:4445" # admin API
+  #   environment:
+  #     DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
+  #     URLS_SELF_ISSUER: http://localhost:4444
+  #     URLS_CONSENT: http://localhost:3000/auth/consent
+  #     URLS_LOGIN: http://localhost:3000/auth/login
+  #     URLS_LOGOUT: http://localhost:3000/auth/logout
+  #     URLS_ERROR: http://localhost:3000/auth/error
+  #     SECRETS_SYSTEM: this-is-the-primary-secret-replace-me-in-production
+  #     OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
+  #     OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: some-random-salt
+  #     LOG_LEVEL: debug
+  #     LOG_LEAK_SENSITIVE_VALUES: true
+  #   command: serve all --dev
+  #   volumes:
+  #     - ./config/auth/hydra:/etc/config/hydra
+  #   networks:
+  #     - auth-network
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
   # MailSlurper for email testing (catches emails in development)
   mailslurper:
@@ -438,44 +439,44 @@ services:
     networks:
       - auth-network
 
-  # Hydra OAuth2 Client Setup
-  hydra-migrate:
-    image: oryd/hydra:v2.2.0
-    environment:
-      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
-    command: migrate -c /etc/config/hydra/hydra.yml sql -e --yes
-    volumes:
-      - ./config/auth/hydra:/etc/config/hydra
-    networks:
-      - auth-network
-    depends_on:
-      db:
-        condition: service_healthy
+  # # Hydra OAuth2 Client Setup
+  # hydra-migrate:
+  #   image: oryd/hydra:v2.2.0
+  #   environment:
+  #     DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
+  #   command: migrate -c /etc/config/hydra/hydra.yml sql -e --yes
+  #   volumes:
+  #     - ./config/auth/hydra:/etc/config/hydra
+  #   networks:
+  #     - auth-network
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
 
-  # Register OAuth2 client for frontend
-  hydra-client-setup:
-    image: oryd/hydra:v2.2.0
-    environment:
-      ORY_SDK_URL: http://hydra:4445
-    entrypoint: ["sh", "-c"]
-    command: >
-      "
-        sleep 15 &&
-        hydra create oauth2-client \
-          --name 'AgentArea Frontend' \
-          --secret agentarea-secret \
-          --grant-type authorization_code,refresh_token \
-          --response-type code \
-          --scope openid,profile,email \
-          --redirect-uri http://localhost:3000/auth/callback \
-          --redirect-uri http://localhost:3000/workplace \
-          --skip-consent || echo 'Client may already exist'
-      "
-    networks:
-      - auth-network
-    depends_on:
-      hydra:
-        condition: service_started
+  # # Register OAuth2 client for frontend
+  # hydra-client-setup:
+  #   image: oryd/hydra:v2.2.0
+  #   environment:
+  #     ORY_SDK_URL: http://hydra:4445
+  #   entrypoint: ["sh", "-c"]
+  #   command: >
+  #     "
+  #       sleep 15 &&
+  #       hydra create oauth2-client \
+  #         --name 'AgentArea Frontend' \
+  #         --secret agentarea-secret \
+  #         --grant-type authorization_code,refresh_token \
+  #         --response-type code \
+  #         --scope openid,profile,email \
+  #         --redirect-uri http://localhost:3000/auth/callback \
+  #         --redirect-uri http://localhost:3000/workplace \
+  #         --skip-consent || echo 'Client may already exist'
+  #     "
+  #   networks:
+  #     - auth-network
+  #   depends_on:
+  #     hydra:
+  #       condition: service_started
 
 volumes:
   postgres_data:
