@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, Loader2, TestTube } from "lucide-react";
 import { useState } from "react";
-import { testModelInstance } from "@/lib/api";
+import { testModelInstance } from "@/lib/browser-api";
 import type { ModelSpec } from "@/types/provider";
 
 type ModelItemControlProps = {

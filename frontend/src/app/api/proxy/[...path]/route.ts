@@ -26,7 +26,7 @@ async function handleRequest(
     const authToken = await getAuthToken();
 
     // Construct the backend URL
-    const backendUrl = `${env.API_URL}/v1/${pathString}`;
+    const backendUrl = `${env.API_URL}/${pathString}`;
 
     // Get query parameters from the request
     const { searchParams } = new URL(request.url);

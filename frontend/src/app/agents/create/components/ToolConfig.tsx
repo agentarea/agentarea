@@ -17,7 +17,7 @@ import {
   checkMCPServerInstanceConfiguration,
   getMCPServerInstance,
   updateMCPServerInstance,
-} from "@/lib/api";
+} from "@/lib/browser-api";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import AccordionControl from "./AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";

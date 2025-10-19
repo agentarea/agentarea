@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
-import { checkMCPServerInstanceConfiguration } from "@/lib/api";
+import { checkMCPServerInstanceConfiguration } from "@/lib/browser-api";
 import { createMCPServerInstance } from "../actions";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";

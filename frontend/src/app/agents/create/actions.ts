@@ -1,3 +1,5 @@
+'use server';
+
 import { createAgent } from '@/lib/api';
 import { z } from 'zod';
 import type { components } from '@/api/schema';

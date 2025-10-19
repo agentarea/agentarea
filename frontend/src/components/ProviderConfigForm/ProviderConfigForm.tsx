@@ -13,7 +13,7 @@ import {
   listProviderSpecs,
   listProviderSpecsWithModels,
   deleteModelInstance,
-} from "@/lib/api";
+} from "@/lib/browser-api";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SearchableSelect } from "@/components/ui/searchable-select";

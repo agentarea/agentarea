@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import EmptyState from "@/components/EmptyState";
-import { getMCPHealthStatus } from "@/lib/api";
+import { getMCPHealthStatus } from "@/lib/browser-api";
 import { MCPInstanceCard } from "./MCPCard";
 import Table from "@/components/Table/Table";
 import { useRouter } from "next/navigation";
