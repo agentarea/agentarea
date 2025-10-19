@@ -77,30 +77,6 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
           {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="description" icon={FileText} optional>{t("description")}</FormLabel>
-          <Textarea
-            id="description"
-            {...register('description')}
-            placeholder={t("descriptionPlaceholder")}
-            className="resize-none h-[100px]"
-            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
-            aria-invalid={!!getNestedErrorMessage(errors, 'description')}
-          />
-          {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
-        </div>
-        <div className="space-y-2">
-          <FormLabel htmlFor="instruction" icon={MessageSquare} required>{t("instruction")}</FormLabel>
-          <Textarea
-            id="instruction"
-            {...register('instruction', { required: "Instruction is required" })}
-            placeholder={t("instructionPlaceholder")}
-            className="resize-none h-[200px]"
-            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
-            aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
-          />
-          {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
-        </div>
-        <div className="space-y-2">
           <FormLabel htmlFor="model_id" icon={Cpu}>{t("llmModel")}</FormLabel>
            <Controller
               name="model_id"
@@ -133,6 +109,31 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
             />
           {getNestedErrorMessage(errors, 'model_id') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'model_id')}</p>}
         </div>
+        <div className="space-y-2">
+          <FormLabel htmlFor="description" icon={FileText} optional>{t("description")}</FormLabel>
+          <Textarea
+            id="description"
+            {...register('description')}
+            placeholder={t("descriptionPlaceholder")}
+            className="resize-none h-[100px]"
+            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
+            aria-invalid={!!getNestedErrorMessage(errors, 'description')}
+          />
+          {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
+        </div>
+        <div className="space-y-2">
+          <FormLabel htmlFor="instruction" icon={MessageSquare} required>{t("instruction")}</FormLabel>
+          <Textarea
+            id="instruction"
+            {...register('instruction', { required: "Instruction is required" })}
+            placeholder={t("instructionPlaceholder")}
+            className="resize-none h-[200px]"
+            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
+            aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
+          />
+          {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
+        </div>
+
       </div>
 
       {/* ConfigSheet rendered outside of SearchableSelect */}
