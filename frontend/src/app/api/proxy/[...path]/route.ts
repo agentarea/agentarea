@@ -7,11 +7,11 @@ import { NextRequest, NextResponse } from "next/server";
  *
  * This route acts as a secure proxy between client-side code and the backend API.
  * It handles authentication by:
- * 1. Extracting auth token from cookies (server-side only)
+ * 1. Extracting auth token from cookies (server-side)
  * 2. Adding Authorization header to backend requests
  * 3. Forwarding requests to the actual backend API
  *
- * This ensures tokens are never exposed to the browser.
+ * Tokens are never exposed to the browser.
  */
 
 async function handleRequest(

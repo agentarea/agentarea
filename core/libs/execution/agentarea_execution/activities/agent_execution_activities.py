@@ -165,7 +165,17 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 api_key = None
                 api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                 if api_key_secret_name:
-                    api_key = await dependencies.secret_manager.get_secret(api_key_secret_name)
+                    # Create secret manager from factory with workspace context
+                    # We need to create a new session for the secret manager
+                    from agentarea_common.config import get_database
+                    secret_session = get_database().async_session_factory()
+                    try:
+                        secret_manager = dependencies.secret_manager_factory.create(
+                            session=secret_session, user_context=user_context
+                        )
+                        api_key = await secret_manager.get_secret(api_key_secret_name)
+                    finally:
+                        await secret_session.close()
                 else:
                     logger.warning(f"No API key found for model instance {model_instance.id}")
 

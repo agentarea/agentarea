@@ -203,11 +203,14 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
 
                 from agentarea_execution.models import AgentExecutionRequest
 
+                logger.info(f"workspace_id: {args['workspace_id']}")
+
                 # Convert string UUIDs back to UUID objects
                 execution_request = AgentExecutionRequest(
                     task_id=UUID(args["task_id"]),
                     agent_id=UUID(args["agent_id"]),
                     user_id=args["user_id"],
+                    workspace_id=args["workspace_id"],
                     task_query=args["task_query"],
                     task_parameters=args.get("task_parameters", {}),
                     timeout_seconds=args.get("timeout_seconds", 300),

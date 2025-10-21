@@ -387,6 +387,7 @@ class TaskService(BaseTaskService):
         self,
         agent_id: UUID,
         description: str,
+        workspace_id: str,
         parameters: dict[str, Any] | None = None,
         user_id: str | None = None,
         enable_agent_communication: bool = True,
@@ -397,6 +398,7 @@ class TaskService(BaseTaskService):
         Args:
             agent_id: The agent to execute the task
             description: Task description
+            workspace_id: Workspace ID (required for proper multi-tenancy isolation)
             parameters: Task parameters
             user_id: User ID (defaults to "api_user")
             enable_agent_communication: Whether to enable agent communication
@@ -430,6 +432,7 @@ class TaskService(BaseTaskService):
             description=description,
             query=description,
             user_id=user_id or "api_user",
+            workspace_id=workspace_id,  # Required, no fallback
             agent_id=agent_id,
             status="pending",
             task_parameters=parameters or {},

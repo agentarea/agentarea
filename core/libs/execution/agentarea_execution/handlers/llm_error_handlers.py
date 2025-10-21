@@ -18,10 +18,14 @@ class LLMErrorHandler:
     async def handle_auth_failure(self, event: DomainEvent) -> None:
         """Handle LLM authentication failures."""
         try:
-            data = event.original_data or {}
-            model_id = data.get("model_id", "unknown")
-            error_message = data.get("error", "Unknown authentication error")
-            iteration = data.get("iteration", 0)
+            data = event.data.get("original_data")
+            if not data:
+                raise ValueError("Missing original_data in DomainEvent")
+
+            model_id = data["model_id"]  # Will raise KeyError if missing
+            error_message = data["error"]  # Will raise KeyError if missing
+            iteration = data.get("iteration", 0)  # iteration can have default
+            task_id = event.data["aggregate_id"]  # Will raise KeyError if missing
 
             # Track authentication failures
             if model_id not in self.auth_failures:
@@ -32,12 +36,12 @@ class LLMErrorHandler:
                     "timestamp": event.timestamp,
                     "error": error_message,
                     "iteration": iteration,
-                    "task_id": event.aggregate_id,
+                    "task_id": task_id,
                 }
             )
 
             logger.error(
-                f"LLM Authentication failure for model {model_id} in task {event.aggregate_id}: {error_message}"
+                f"LLM Authentication failure for model {model_id} in task {task_id}: {error_message}"
             )
 
             # Could add additional actions here:
@@ -60,12 +64,16 @@ class LLMErrorHandler:
     async def handle_rate_limit(self, event: DomainEvent) -> None:
         """Handle LLM rate limiting events."""
         try:
-            data = event.original_data or {}
-            model_id = data.get("model_id", "unknown")
-            error_message = data.get("error", "Rate limit exceeded")
+            data = event.data.get("original_data")
+            if not data:
+                raise ValueError("Missing original_data in DomainEvent")
+
+            model_id = data["model_id"]  # Will raise KeyError if missing
+            error_message = data["error"]  # Will raise KeyError if missing
+            task_id = event.data["aggregate_id"]  # Will raise KeyError if missing
 
             logger.warning(
-                f"LLM Rate limit exceeded for model {model_id} in task {event.aggregate_id}: {error_message}"
+                f"LLM Rate limit exceeded for model {model_id} in task {task_id}: {error_message}"
             )
 
             # Could implement backoff strategies or model switching here
@@ -76,12 +84,16 @@ class LLMErrorHandler:
     async def handle_quota_exceeded(self, event: DomainEvent) -> None:
         """Handle LLM quota exceeded events."""
         try:
-            data = event.original_data or {}
-            model_id = data.get("model_id", "unknown")
-            error_message = data.get("error", "Quota exceeded")
+            data = event.data.get("original_data")
+            if not data:
+                raise ValueError("Missing original_data in DomainEvent")
+
+            model_id = data["model_id"]  # Will raise KeyError if missing
+            error_message = data["error"]  # Will raise KeyError if missing
+            task_id = event.data["aggregate_id"]  # Will raise KeyError if missing
 
             logger.critical(
-                f"LLM Quota exceeded for model {model_id} in task {event.aggregate_id}: {error_message}"
+                f"LLM Quota exceeded for model {model_id} in task {task_id}: {error_message}"
             )
 
             # Could implement:
@@ -95,12 +107,16 @@ class LLMErrorHandler:
     async def handle_model_not_found(self, event: DomainEvent) -> None:
         """Handle model not found events."""
         try:
-            data = event.original_data or {}
-            model_id = data.get("model_id", "unknown")
-            error_message = data.get("error", "Model not found")
+            data = event.data.get("original_data")
+            if not data:
+                raise ValueError("Missing original_data in DomainEvent")
+
+            model_id = data["model_id"]  # Will raise KeyError if missing
+            error_message = data["error"]  # Will raise KeyError if missing
+            task_id = event.data["aggregate_id"]  # Will raise KeyError if missing
 
             logger.error(
-                f"LLM Model not found: {model_id} in task {event.aggregate_id}: {error_message}"
+                f"LLM Model not found: {model_id} in task {task_id}: {error_message}"
             )
 
             # Could implement:
@@ -127,7 +143,13 @@ llm_error_handler = LLMErrorHandler()
 
 async def handle_llm_error_event(event: DomainEvent) -> None:
     """Route LLM error events to appropriate handlers."""
-    event_type = event.original_event_type
+    # Try to get original_event_type, fallback to event_type (this fallback is reasonable)
+    event_type = event.data.get("original_event_type")
+    if not event_type:
+        event_type = event.event_type
+        logger.warning(
+            f"Event missing original_event_type, using event_type: {event_type}"
+        )
 
     if event_type == "LLMAuthFailed":
         await llm_error_handler.handle_auth_failure(event)

@@ -35,6 +35,7 @@ services:
       - WORKERS=${WORKERS:-1}
       # Infisical environment (if using Infisical secret manager)
       - INFISICAL_ENVIRONMENT=dev
+      - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
     volumes:
       - ./core/apps/api/agentarea_api:/app/apps/api/agentarea_api
       - ./core/libs:/app/libs
@@ -206,7 +207,7 @@ services:
 
   redis:
     image: redis
-    container_name: infisical-dev-redis
+    container_name: agentarea-redis
     env_file: .env
     restart: always
     environment:
@@ -314,7 +315,7 @@ services:
     tty: true
 
   temporal-ui:
-    container_name: temporal-ui
+    container_name: agentarea-temporal-ui
     depends_on:
       temporal:
         condition: service_healthy
@@ -364,6 +365,7 @@ services:
 
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
+      - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
 
       # Development
       - DEBUG=true
@@ -378,6 +380,22 @@ services:
     command: ["python", "-m", "agentarea_worker.cli", "dev"]
 
   # Ory Authentication Services
+
+  # Ory Kratos Migration
+  kratos-migrate:
+    image: oryd/kratos:v1.3.1
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
+    command: migrate sql -e --yes
+    volumes:
+      - ./config/auth/kratos:/etc/config/kratos
+    networks:
+      - auth-network
+    depends_on:
+      db:
+        condition: service_healthy
+      bootstrap_db:
+        condition: service_completed_successfully
 
   # Ory Kratos Identity Server
   kratos:
@@ -400,6 +418,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      kratos-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # # Ory Hydra OAuth2/OIDC Server

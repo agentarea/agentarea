@@ -30,8 +30,28 @@ class SecretManagerFactory:
 
         Args:
             settings: Secret manager configuration settings
+
+        Raises:
+            ValueError: If required configuration is missing
         """
         self.settings = settings
+
+        # Validate configuration at startup to fail fast
+        secret_type = settings.SECRET_MANAGER_TYPE.lower()
+
+        if secret_type == "database":
+            if not settings.SECRET_MANAGER_ENCRYPTION_KEY:
+                raise ValueError(
+                    "SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set when using database secret manager. "
+                    "Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+                )
+        elif secret_type == "infisical":
+            if not settings.SECRET_MANAGER_ACCESS_KEY or not settings.SECRET_MANAGER_SECRET_KEY:
+                raise ValueError(
+                    "Infisical credentials not configured. "
+                    "Set SECRET_MANAGER_ACCESS_KEY and SECRET_MANAGER_SECRET_KEY."
+                )
+
         logger.info(f"Initialized SecretManagerFactory with type: {settings.SECRET_MANAGER_TYPE}")
 
     def create(

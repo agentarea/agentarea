@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 import signal
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -11,8 +10,6 @@ from pathlib import Path
 from agentarea_common.di.container import get_container, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
-from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_secrets import get_real_secret_manager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -123,22 +120,12 @@ async def combined_lifespan(app: FastAPI):
 # Security schemes for OpenAPI documentation
 bearer_scheme = HTTPBearer(bearerFormat="JWT", description="JWT Bearer token for authentication")
 
-workspace_header_scheme = {
-    "type": "apiKey",
-    "in": "header",
-    "name": "X-Workspace-ID",
-    "description": "Workspace ID for data isolation",
-}
-
-# Global security requirement
-security_requirements = [{"bearer": []}, {"workspace_header": []}]
-
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="AgentArea API",
-        description="Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header and workspace ID in the X-Workspace-ID header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json.",
+        description="Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json.",
         version="0.1.0",
         lifespan=combined_lifespan,
         openapi_tags=[
@@ -159,10 +146,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # NOTE: Authentication is now handled by router-level dependencies
-    # instead of middleware. See api/v1/router.py for protected/public routers.
-    # This provides better control and follows FastAPI best practices.
 
     # Mount static files - this serves all files from static/ at /static/
     static_path = Path(__file__).parent / "static"
@@ -187,30 +170,40 @@ def create_app() -> FastAPI:
             "timestamp": datetime.now().isoformat(),
         }
 
-    # Add security schemes to OpenAPI
-    app.openapi_schema = None  # Force regeneration
-    if app.openapi_schema is None:
-        app.openapi_schema = get_openapi(
+    # Customize OpenAPI: add bearer scheme and ensure per-operation security
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+
+        openapi_schema = get_openapi(
             title=app.title,
             version=app.version,
             description=app.description,
             routes=app.routes,
         )
-        app.openapi_schema["components"]["securitySchemes"] = {
-            "bearer": {
-                "type": "http",
-                "scheme": "bearer",
-                "bearerFormat": "JWT",
-                "description": "JWT Bearer token for authentication",
-            },
-            "workspace_header": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-Workspace-ID",
-                "description": "Workspace ID for data isolation",
-            },
+
+        # Define security schemes
+        openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
+        openapi_schema["components"]["securitySchemes"]["bearer"] = {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT Bearer token for authentication",
         }
-        app.openapi_schema["security"] = [{"bearer": []}, {"workspace_header": []}]
+
+        # Apply global security and ensure operation-level security
+        default_security = [{"bearer": []}]
+        openapi_schema["security"] = default_security
+        for path_item in openapi_schema.get("paths", {}).values():
+            for method in ("get", "post", "put", "delete", "patch", "options", "head"):
+                op = path_item.get(method)
+                if op and "security" not in op:
+                    op["security"] = default_security
+
+        app.openapi_schema = openapi_schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi
 
     return app
 

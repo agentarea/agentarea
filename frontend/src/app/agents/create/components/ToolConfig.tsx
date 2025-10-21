@@ -223,8 +223,7 @@ const ToolConfig = ({
     if (!tool) return;
     try {
       const instanceId = tool.mcp_server_id as unknown as string;
-      // const { data: instance, error } = await getMCPServerInstance(instanceId);
-      const { data: instance, error } = { data: { name: 'test', description: 'test', json_spec: { environment: {} } }, error: null };
+      const { data: instance, error } = await getMCPServerInstance(instanceId);
       if (error || !instance) {
         toast.error('Failed to load instance for editing');
         return;

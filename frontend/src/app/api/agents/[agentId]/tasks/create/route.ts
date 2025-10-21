@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { env } from "@/env";
+import { getAuthToken } from "@/lib/getAuthToken";
 
 export async function POST(
   request: NextRequest,
@@ -8,32 +9,13 @@ export async function POST(
   const { agentId } = await params;
 
   try {
-    // Get auth token from the request
-    const authHeader = request.headers.get('authorization');
-
-    // Get token from auth API if not provided
-    let token = authHeader?.replace('Bearer ', '');
-    if (!token) {
-      try {
-        const tokenResponse = await fetch(`${request.nextUrl.origin}/api/auth/token`, {
-          headers: {
-            'cookie': request.headers.get('cookie') || ''
-          }
-        });
-        if (tokenResponse.ok) {
-          const tokenData = await tokenResponse.json();
-          token = tokenData.token;
-        }
-      } catch (error) {
-        console.error('Failed to get auth token:', error);
-      }
-    }
+    // Use session-based token retrieval only; do not handle workspace
+    const token = await getAuthToken();
 
     // Get the task creation data from request body
     const taskData = await request.json();
 
     // Create headers for backend request
-    // Note: workspace_id is already in the JWT token claims, no need to send separately
     const backendHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',

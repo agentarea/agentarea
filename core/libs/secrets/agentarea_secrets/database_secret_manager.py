@@ -5,7 +5,6 @@ symmetric encryption. Suitable for production use in self-hosted deployments.
 """
 
 import logging
-import os
 import uuid
 from datetime import datetime
 
@@ -69,29 +68,23 @@ class DatabaseSecretManager(BaseSecretManager):
         """Load or create a symmetric encryption key.
 
         Args:
-            encryption_key: Optional encryption key from config
+            encryption_key: Encryption key from settings (required)
 
         Returns:
             Fernet instance for encryption/decryption
-        """
-        if encryption_key:
-            # Use provided key
-            key = encryption_key.encode("utf-8")
-            logger.info("Using provided encryption key")
-        else:
-            # Try to get from environment
-            env_key = os.getenv("SECRET_MANAGER_ENCRYPTION_KEY")
-            if env_key:
-                key = env_key.encode("utf-8")
-                logger.info("Using encryption key from environment")
-            else:
-                # Auto-generate and warn
-                key = Fernet.generate_key()
-                logger.warning(
-                    "No encryption key provided. Auto-generated key. "
-                    "Set SECRET_MANAGER_ENCRYPTION_KEY environment variable for production."
-                )
 
+        Raises:
+            ValueError: If no encryption key is provided
+        """
+        if not encryption_key:
+            # Fail fast - encryption key is required
+            raise ValueError(
+                "Encryption key is required for DatabaseSecretManager. "
+                "This should have been validated at SecretManagerFactory initialization."
+            )
+
+        key = encryption_key.encode("utf-8")
+        logger.info("Using provided encryption key")
         return Fernet(key)
 
     def _encrypt(self, value: str) -> str:

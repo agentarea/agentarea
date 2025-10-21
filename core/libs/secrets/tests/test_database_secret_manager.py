@@ -40,15 +40,14 @@ class TestDatabaseSecretManager:
 
             assert manager._fernet is not None
 
-    def test_init_auto_generates_key(self, mock_db_session, test_user_context):
-        """Test initialization auto-generates key when none provided."""
+    def test_init_fails_without_key(self, mock_db_session, test_user_context):
+        """Test initialization fails when no encryption key is provided."""
         with patch.dict("os.environ", {}, clear=True):
-            manager = DatabaseSecretManager(
-                session=mock_db_session,
-                user_context=test_user_context,
-            )
-
-            assert manager._fernet is not None
+            with pytest.raises(ValueError, match="SECRET_MANAGER_ENCRYPTION_KEY"):
+                DatabaseSecretManager(
+                    session=mock_db_session,
+                    user_context=test_user_context,
+                )
 
     def test_encrypt_decrypt_roundtrip(self, mock_db_session, test_user_context, encryption_key):
         """Test encryption and decryption work correctly."""

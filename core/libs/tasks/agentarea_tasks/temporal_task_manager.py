@@ -42,7 +42,13 @@ class TemporalTaskManager(BaseTaskManager):
 
         # Handle different field names between Task domain model and TaskORM
         user_id = getattr(task, "user_id", None) or getattr(task, "created_by", None) or "system"
-        workspace_id = getattr(task, "workspace_id", None) or "system"
+        workspace_id = getattr(task, "workspace_id", None)
+
+        if not workspace_id:
+            raise ValueError(
+                f"Task {task.id} missing required workspace_id. "
+                "All tasks must have a workspace_id for proper multi-tenancy isolation."
+            )
 
         # Handle metadata field - could be dict, SQLAlchemy MetaData, or None
         metadata_raw = getattr(task, "metadata", None) or getattr(task, "task_metadata", None)
@@ -107,12 +113,19 @@ class TemporalTaskManager(BaseTaskManager):
             # Start temporal workflow for task execution
             workflow_id = f"task-{task.id}"
 
+            # Validate workspace_id is present
+            if not task.workspace_id:
+                raise ValueError(
+                    f"Task {task.id} missing required workspace_id. "
+                    "All tasks must have a workspace_id for proper multi-tenancy isolation."
+                )
+
             # Create AgentExecutionRequest format
             execution_request = AgentExecutionRequest(
                 task_id=task.id,
                 agent_id=task.agent_id,
                 user_id=task.user_id,
-                workspace_id=task.workspace_id or "system",  # Required field, fallback to system
+                workspace_id=task.workspace_id,
                 task_query=task.query,
                 task_parameters=task.task_parameters or {},
                 enable_agent_communication=bool(
@@ -130,6 +143,7 @@ class TemporalTaskManager(BaseTaskManager):
                 "task_id": str(execution_request.task_id),
                 "agent_id": str(execution_request.agent_id),
                 "user_id": execution_request.user_id,
+                "workspace_id": execution_request.workspace_id,
                 "task_query": execution_request.task_query,
                 "task_parameters": execution_request.task_parameters,
                 "timeout_seconds": execution_request.timeout_seconds,
@@ -143,6 +157,10 @@ class TemporalTaskManager(BaseTaskManager):
             config = WorkflowConfig(
                 task_queue="agent-tasks"  # Use the same task queue as the worker
             )
+
+            # Debug: Log args_dict to verify workspace_id is present
+            logger.info(f"Starting workflow {workflow_id} with args: {args_dict}")
+            logger.info(f"workspace_id in args_dict: {args_dict.get('workspace_id')}")
 
             execution_id = await self.temporal_executor.start_workflow(
                 workflow_name="AgentExecutionWorkflow",

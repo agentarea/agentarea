@@ -205,6 +205,7 @@ async def get_agent(
     return AgentResponse.from_domain(agent)
 
 
+@router.get("", response_model=list[AgentResponse])
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
     user_context: UserContextDep,

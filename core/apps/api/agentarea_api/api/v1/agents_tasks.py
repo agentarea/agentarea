@@ -230,6 +230,7 @@ async def create_task_for_agent_with_stream(
             task = await task_service.create_and_execute_task_with_workflow(
                 agent_id=agent_id,
                 description=data.description,
+                workspace_id=user_context.workspace_id,
                 parameters=data.parameters,
                 user_id=data.user_id,
                 enable_agent_communication=data.enable_agent_communication or True,
@@ -345,6 +346,7 @@ async def create_task_for_agent_sync(
         task = await task_service.create_and_execute_task_with_workflow(
             agent_id=agent_id,
             description=data.description,
+            workspace_id=user_context.workspace_id,
             parameters=data.parameters,
             user_id=data.user_id,
             enable_agent_communication=data.enable_agent_communication or True,

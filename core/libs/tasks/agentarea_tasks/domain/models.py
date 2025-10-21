@@ -134,7 +134,7 @@ class SimpleTask(BaseModel):
     description: str
     query: str
     user_id: str
-    workspace_id: str | None = None
+    workspace_id: str  # Required for proper multi-tenancy isolation
     agent_id: UUID
     status: str = "submitted"
     task_parameters: dict[str, Any] = {}

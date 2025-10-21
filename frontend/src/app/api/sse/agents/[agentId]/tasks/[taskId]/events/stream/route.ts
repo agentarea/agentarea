@@ -1,57 +1,37 @@
 import { NextRequest } from 'next/server';
 import { env } from "@/env";
+import { getAuthToken } from "@/lib/getAuthToken";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ agentId: string; taskId: string }> }
+  { params }: { params: Promise<{ agentId: string, taskId: string }> }
 ) {
   const { agentId, taskId } = await params;
 
   try {
-    // Get auth token from the request
-    const authHeader = request.headers.get('authorization');
+    // Use session-based token retrieval only; do not handle workspace
+    const token = await getAuthToken();
 
-    // Get token from auth API if not provided
-    let token = authHeader?.replace('Bearer ', '');
-    if (!token) {
-      try {
-        const tokenResponse = await fetch(`${request.nextUrl.origin}/api/auth/token`, {
-          headers: {
-            'cookie': request.headers.get('cookie') || ''
-          }
-        });
-        if (tokenResponse.ok) {
-          const tokenData = await tokenResponse.json();
-          token = tokenData.token;
-        }
-      } catch (error) {
-        console.error('Failed to get auth token:', error);
-      }
-    }
+    // Forward native SSE stream from backend
+    const backendUrl = env.API_URL;
+    const eventsUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream/`;
 
     // Create headers for backend request
-    // Note: workspace_id is already in the JWT token claims, no need to send separately
-    const backendHeaders: Record<string, string> = {
+    const headers: Record<string, string> = {
       'Accept': 'text/event-stream',
-      'Cache-Control': 'no-cache',
     };
 
     if (token) {
-      backendHeaders['Authorization'] = `Bearer ${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Connect to backend SSE endpoint (server-side only)
-    const backendUrl = env.API_URL;
-    const sseUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${taskId}/events/stream`;
-    
-    const response = await fetch(sseUrl, {
-      headers: backendHeaders,
+    const response = await fetch(eventsUrl, {
+      method: 'GET',
+      headers,
     });
 
     if (!response.ok) {
-      return new Response(`Backend SSE error: ${response.status}`, { 
-        status: response.status 
-      });
+      return new Response(`Backend SSE error: ${response.status}`, { status: response.status });
     }
 
     // Create a readable stream that forwards the SSE data
@@ -74,7 +54,7 @@ export async function GET(
               controller.enqueue(value);
             }
           } catch (error) {
-            console.error('SSE stream error:', error);
+            console.error('SSE events stream error:', error);
             controller.error(error);
           }
         };
@@ -83,7 +63,6 @@ export async function GET(
       },
     });
 
-    // Return SSE response with proper headers
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
@@ -95,7 +74,7 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('SSE proxy error:', error);
-    return new Response(`SSE proxy error: ${error}`, { status: 500 });
+    console.error('SSE events proxy error:', error);
+    return new Response(`SSE events proxy error: ${error}`, { status: 500 });
   }
 }

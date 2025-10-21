@@ -150,10 +150,10 @@ export const listProviderConfigsWithModelInstances = async (params?: {
   const specsById = Object.fromEntries(specsWithModels.map((s: any) => [s.id, s]));
   const configsWithModels = configs.map((config: any) => ({
     ...config,
-    models_list: config.models.map((modelId: string) => {
+    models_list: config.model_instance_ids.map((modelSpecId: string) => {
       const providerSpec = specsById[config.provider_spec_id];
       if (!providerSpec) return null;
-      return providerSpec.models.find((m: any) => m.model_id === modelId) || null;
+      return providerSpec.models.find((m: any) => m.id === modelSpecId) || null;
     }).filter(Boolean),
   }));
 

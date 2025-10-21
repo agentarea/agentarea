@@ -42,9 +42,16 @@ class ProviderConfigResponse(BaseModel):
     # Related data
     provider_spec_name: str | None = None
     provider_spec_key: str | None = None
+    model_instance_ids: list[str] = []
 
     @classmethod
     def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigResponse":
+        # Extract model instance IDs from the relationship if loaded
+        # Always return a list (empty if no model instances)
+        model_instance_ids: list[str] = []
+        if hasattr(provider_config, "model_instances") and provider_config.model_instances is not None:
+            model_instance_ids = [str(instance.model_spec_id) for instance in provider_config.model_instances]
+
         return cls(
             id=str(provider_config.id),
             provider_spec_id=str(provider_config.provider_spec_id),
@@ -62,6 +69,7 @@ class ProviderConfigResponse(BaseModel):
             provider_spec_key=provider_config.provider_spec.provider_key
             if hasattr(provider_config, "provider_spec") and provider_config.provider_spec
             else None,
+            model_instance_ids=model_instance_ids,
         )
 
 

@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 # Create MCP server
 mcp = FastMCP("AgentArea MCP Tools")
 
-
 async def get_services():
     """Get agent and task services for MCP tools."""
     try:
@@ -132,6 +131,7 @@ async def add_agent(
 async def create_task(
     agent_id: str,
     description: str,
+    workspace_id: str,
     parameters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a new task for an agent.
@@ -139,6 +139,7 @@ async def create_task(
     Args:
         agent_id: ID of the agent to assign the task to
         description: Task description
+        workspace_id: Workspace ID (required for proper multi-tenancy isolation)
         parameters: Optional task parameters
 
     Returns:
@@ -164,6 +165,7 @@ async def create_task(
         task = await task_service.create_and_execute_task_with_workflow(
             agent_id=agent_uuid,
             description=description,
+            workspace_id=workspace_id,  # Required parameter, no fallback
             parameters=parameters or {},
             user_id="mcp_user",  # Default user for MCP requests
             enable_agent_communication=True,
