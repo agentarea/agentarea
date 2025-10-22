@@ -564,6 +564,7 @@ class TaskService(BaseTaskService):
 
                 # Listen for messages
                 async for message in pubsub.listen():
+                    print(f"message: {message}")
                     try:
                         if message["type"] == "pmessage":
                             # Parse the JSON event data
@@ -575,7 +576,15 @@ class TaskService(BaseTaskService):
                             data = message["data"]
 
                             if isinstance(data, bytes):
-                                data = data.decode("utf-8")
+                                try:
+                                    data = data.decode("utf-8")
+                                except UnicodeDecodeError as e:
+                                    logger.error(
+                                        f"Failed to decode Redis message as UTF-8. "
+                                        f"Error: {e}. First bytes: {data[:20]!r}. "
+                                        f"Channel: {message['channel']}"
+                                    )
+                                    continue
 
                             if isinstance(data, str):
                                 try:

@@ -58,15 +58,14 @@ services:
       - default
       - mcp-network
       - temporal-network
-    command:
-      [
-        "python",
-        "-m",
-        "agentarea_api.cli",
-        "serve",
-        "--reload",
-        "--log-level=info",
-      ]
+    command: >
+      sh -c "python -m uvicorn agentarea_api.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --reload-dir /app/apps/api/agentarea_api
+      --reload-dir /app/libs
+      --log-level info"
 
   app_migrations:
     image: agentarea-backend:latest

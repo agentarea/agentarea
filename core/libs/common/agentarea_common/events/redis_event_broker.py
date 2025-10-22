@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, override
+from uuid import UUID
 
 from faststream.redis import RedisBroker
 
@@ -12,6 +16,19 @@ if TYPE_CHECKING:
     from .event_models import BaseEvent
 
 logger = logging.getLogger(__name__)
+
+
+class JSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime and UUID objects."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, UUID):
+            return str(obj)
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
 
 
 class RedisEventBroker(EventBroker):
@@ -59,7 +76,10 @@ class RedisEventBroker(EventBroker):
 
         logger.info(f"Publishing event to channel: {channel}")
 
-        await self.redis_broker.publish(message=event_data, channel=channel)
+        # JSON-serialize the message using custom encoder to handle datetime/UUID objects
+        # This ensures proper UTF-8 encoding and handles non-primitive types
+        serialized_message = json.dumps(event_data, cls=JSONEncoder)
+        await self.redis_broker.publish(message=serialized_message, channel=channel)
 
     def _get_channel_for_event(self, event_type: str) -> str:
         return event_type

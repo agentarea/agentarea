@@ -1,4 +1,4 @@
-"""Simple Dependency Injection Container for managing application dependencies."""
+"""Dependency Injection Container for managing application dependencies."""
 
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -7,7 +7,7 @@ T = TypeVar("T")
 
 
 class DIContainer:
-    """Simple dependency injection container."""
+    """dependency injection container."""
 
     def __init__(self):
         self._singletons: dict[type[Any], Any] = {}

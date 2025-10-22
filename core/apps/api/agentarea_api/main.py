@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import signal
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -56,25 +56,26 @@ async def cleanup_all_connections():
     print("🧹 Starting comprehensive connection cleanup...")
 
     try:
-        # Cleanup connection manager singletons
+        # Cleanup connection manager singletons with timeout
         from agentarea_common.infrastructure.connection_manager import cleanup_connections
 
-        await cleanup_connections()
+        await asyncio.wait_for(cleanup_connections(), timeout=2.0)
         print("✅ Connection manager cleanup completed")
+    except asyncio.TimeoutError:
+        print("⚠️  Connection manager cleanup timed out (reload mode)")
     except Exception as e:
         print(f"⚠️  Error in connection manager cleanup: {e}")
 
     try:
-        # Stop events router
+        # Stop events router with timeout
         from agentarea_api.api.events.events_router import stop_events_router
 
-        await stop_events_router()
+        await asyncio.wait_for(stop_events_router(), timeout=2.0)
         print("✅ Events router cleanup completed")
+    except asyncio.TimeoutError:
+        print("⚠️  Events router cleanup timed out (reload mode)")
     except Exception as e:
         print(f"⚠️  Error in events router cleanup: {e}")
-
-    # Give connections time to close
-    await asyncio.sleep(0.1)
 
     print("🎉 All connection cleanup completed")
 
@@ -82,13 +83,12 @@ async def cleanup_all_connections():
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Original application lifespan."""
+    import os
 
-    # Setup signal handlers for graceful shutdown
-    def signal_handler(signum, frame):
-        print(f"📡 Received signal {signum}, initiating graceful shutdown...")
+    # Detect if running with uvicorn reload
+    is_reload_mode = os.getenv("RELOAD", "").lower() == "true" or "--reload" in " ".join(sys.argv)
 
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
+    # NOTE: Don't override signal handlers - let uvicorn handle them for proper reload
 
     # Startup
     get_container()
@@ -103,9 +103,12 @@ async def app_lifespan(app: FastAPI):
     try:
         yield
     finally:
-        # Shutdown - ensure this always runs
-        print("Application shutting down")
-        await cleanup_all_connections()
+        # Shutdown - skip cleanup in reload mode for fast restarts
+        if is_reload_mode:
+            print("Application shutting down (reload mode - skipping cleanup)")
+        else:
+            print("Application shutting down (production mode - full cleanup)")
+            await cleanup_all_connections()
 
 
 @asynccontextmanager
