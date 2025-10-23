@@ -15,6 +15,7 @@ from agentarea_common.auth import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config import get_settings
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.infrastructure.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -176,6 +177,21 @@ async def get_task_manager(
     return TemporalTaskManager(task_repository)
 
 
+async def get_event_stream_service(
+    event_broker: EventBrokerDep,
+) -> EventStreamService:
+    """Get an EventStreamService instance for the current request."""
+    from agentarea_common.events.redis_event_broker import RedisEventBroker
+
+    if isinstance(event_broker, RedisEventBroker):
+        return EventStreamService(event_broker.redis_broker)
+    else:
+        raise ValueError(
+            f"Expected RedisEventBroker but got {type(event_broker).__name__}. "
+            "EventStreamService requires a Redis-backed broker."
+        )
+
+
 async def get_temporal_workflow_service() -> TemporalWorkflowService:
     """Get a TemporalWorkflowService instance for the current request.
 
@@ -221,6 +237,7 @@ ProviderServiceDep = Annotated[ProviderService, Depends(get_provider_service)]
 ModelInstanceServiceDep = Annotated[ModelInstanceService, Depends(get_model_instance_service)]
 TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
 TaskManagerDep = Annotated[TemporalTaskManager, Depends(get_task_manager)]
+EventStreamServiceDep = Annotated[EventStreamService, Depends(get_event_stream_service)]
 TemporalWorkflowServiceDep = Annotated[
     TemporalWorkflowService, Depends(get_temporal_workflow_service)
 ]
@@ -236,8 +253,6 @@ async def get_model_spec_repository(
 ) -> ModelSpecRepository:
     """Get a ModelSpecRepository instance for the current request."""
     return ModelSpecRepository(db_session, user_context)
-
-
 
 
 # Trigger Service dependencies

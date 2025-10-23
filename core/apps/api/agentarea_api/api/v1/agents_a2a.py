@@ -20,7 +20,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_api.api.deps.services import get_agent_service, get_task_service
+from agentarea_api.api.deps.services import (
+    get_agent_service,
+    get_event_stream_service,
+    get_task_service,
+)
 from agentarea_api.api.v1.a2a_auth import (
     A2AAuthContext,
     allow_public_access,
@@ -28,6 +32,7 @@ from agentarea_api.api.v1.a2a_auth import (
 )
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
+from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.utils.types import (
     AgentCapabilities,
     AgentCard,
@@ -638,7 +643,7 @@ async def handle_message_send(
 
 
 async def handle_message_stream_sse(
-    request, request_id, params, task_service, agent_id, auth_context, agent_service
+    request, request_id, params, task_service, agent_id, auth_context, agent_service, event_stream_service
 ):
     """Handle A2A message/stream method with proper TaskService integration, validation, and real event streaming."""
     start_time = time.time()
@@ -738,9 +743,9 @@ async def handle_message_stream_sse(
                 yield f"data: {json.dumps(initial_event)}\n\n"
                 event_count += 1
 
-                # Stream real events from TaskService
-                async for event in task_service.stream_task_events(
-                    created_task.id, include_history=False
+                # Stream real events from EventStreamService
+                async for event in event_stream_service.stream_events_for_task(
+                    created_task.id, event_patterns=["workflow.*"]
                 ):
                     event_count += 1
 
@@ -1235,6 +1240,7 @@ async def _dispatch_rpc_method(
     agent_service,
     agent_id,
     auth_context,
+    event_stream_service,
 ):
     """Dispatch A2A RPC method calls with proper error handling."""
     base_url = f"{request.url.scheme}://{request.url.netloc}" if request else None
@@ -1246,7 +1252,7 @@ async def _dispatch_rpc_method(
             request_id, params, task_service, agent_id, auth_context, agent_service
         ),
         "message/stream": lambda: handle_message_stream_sse(
-            request, request_id, params, task_service, agent_id, auth_context, agent_service
+            request, request_id, params, task_service, agent_id, auth_context, agent_service, event_stream_service
         ),
         "tasks/get": lambda: handle_task_get(
             request_id, params, task_service, agent_id, auth_context
@@ -1281,6 +1287,7 @@ async def handle_agent_jsonrpc(
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
+    event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ) -> JSONRPCResponse:
     """Handle A2A JSON-RPC requests with comprehensive error handling and validation."""
     request_start_time = time.time()
@@ -1368,6 +1375,7 @@ async def handle_agent_jsonrpc(
             agent_service=agent_service,
             agent_id=agent_id,
             auth_context=auth_context,
+            event_stream_service=event_stream_service,
         )
 
         # Calculate total request duration

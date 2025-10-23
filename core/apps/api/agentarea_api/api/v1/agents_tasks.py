@@ -10,10 +10,12 @@ from agentarea_agents.application.temporal_workflow_service import (
 )
 from agentarea_api.api.deps.services import (
     get_agent_service,
+    get_event_stream_service,
     get_task_service,
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -204,6 +206,7 @@ async def create_task_for_agent_with_stream(
     user_context: UserContextDep,
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
+    event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Create and execute a task for the specified agent with real-time SSE stream."""
     # Verify agent exists
@@ -251,9 +254,9 @@ async def create_task_for_agent_with_stream(
                 },
             )
 
-            # If workflow started successfully, stream events from task service
+            # If workflow started successfully, stream events from event stream service
             if task.execution_id and task.status in ["running", "pending"]:
-                async for event in task_service.stream_task_events(task.id, include_history=False):
+                async for event in event_stream_service.stream_events_for_task(task.id, event_patterns=["workflow.*"]):
                     # Convert task service event to SSE format
                     event_type = event.get("event_type", "task_event")
 
@@ -761,6 +764,7 @@ async def stream_task_events(
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
     task_service: TaskService = Depends(get_task_service),
+    event_stream_service: EventStreamService = Depends(get_event_stream_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""
     # Verify agent exists
@@ -790,8 +794,8 @@ async def stream_task_events(
                     },
                 )
 
-                # Stream events from task service
-                async for event in task_service.stream_task_events(task_id, include_history=True):
+                # Stream events from event stream service
+                async for event in event_stream_service.stream_events_for_task(task_id, event_patterns=["workflow.*"]):
                     # Use protocol event structure directly - task service already formats it properly
                     event_type = event.get("event_type", "task_event")
 

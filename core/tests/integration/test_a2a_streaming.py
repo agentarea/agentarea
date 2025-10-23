@@ -16,6 +16,8 @@ from agentarea_api.api.v1.a2a_auth import A2AAuthContext
 from agentarea_api.api.v1.agents_a2a import handle_message_stream_sse
 from agentarea_tasks.domain.models import SimpleTask
 from fastapi.responses import StreamingResponse
+from agentarea_common.events.event_stream_service import EventStreamService
+from agentarea_agents.application.agent_service import AgentService
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +36,24 @@ class MockTaskService:
         self.submitted_tasks.append(task)
         return task
 
-    async def stream_task_events(self, task_id: UUID, include_history: bool = True):
+
+class MockAgentService:
+    """Mock AgentService for testing A2A streaming."""
+
+    async def get(self, agent_id: UUID):
+        """Mock getting an agent."""
+        return {"id": agent_id, "name": "Test Agent", "status": "active"}
+
+
+class MockEventStreamService:
+    """Mock EventStreamService for testing A2A streaming."""
+
+    async def stream_events_for_task(self, task_id: UUID, event_patterns=None):
         """Mock event streaming that yields test events."""
         # Yield some test events
         test_events = [
             {
-                "event_type": "task_started",
+                "event_type": "workflow.task_started",
                 "timestamp": "2024-01-01T00:00:00Z",
                 "data": {
                     "task_id": str(task_id),
@@ -48,12 +62,12 @@ class MockTaskService:
                 },
             },
             {
-                "event_type": "llm_call_started",
+                "event_type": "workflow.llm_call_started",
                 "timestamp": "2024-01-01T00:00:01Z",
                 "data": {"task_id": str(task_id), "model": "gpt-4", "prompt": "Test prompt"},
             },
             {
-                "event_type": "task_completed",
+                "event_type": "workflow.task_completed",
                 "timestamp": "2024-01-01T00:00:02Z",
                 "data": {"task_id": str(task_id), "result": "Test result"},
             },
@@ -73,9 +87,11 @@ class MockRequest:
 
 @pytest.mark.asyncio
 async def test_a2a_streaming_uses_real_events():
-    """Test that A2A streaming uses real TaskService.stream_task_events()."""
+    """Test that A2A streaming uses real EventStreamService event streaming."""
     # Setup
     mock_task_service = MockTaskService()
+    mock_event_stream_service = MockEventStreamService()
+    mock_agent_service = MockAgentService()
     mock_request = MockRequest()
     agent_id = uuid4()
     request_id = "test-request-1"
@@ -90,7 +106,7 @@ async def test_a2a_streaming_uses_real_events():
 
     # Call the A2A streaming handler
     response = await handle_message_stream_sse(
-        mock_request, request_id, params, mock_task_service, agent_id, auth_context
+        mock_request, request_id, params, mock_task_service, agent_id, auth_context, mock_agent_service, mock_event_stream_service
     )
 
     # Verify response is StreamingResponse

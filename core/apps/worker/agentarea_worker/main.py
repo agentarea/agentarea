@@ -103,8 +103,6 @@ class AgentAreaWorker:
 
         # Create basic dependencies for activities
         dependencies = create_activity_dependencies()
-
-        # Create activities using the new factory pattern
         activities = create_activities_for_worker(dependencies)
 
         # Initialize DI container for workflows

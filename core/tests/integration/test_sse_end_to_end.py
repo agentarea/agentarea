@@ -14,9 +14,11 @@ from uuid import UUID, uuid4
 
 from agentarea_common.config.broker import RedisSettings
 from agentarea_common.events.base_events import DomainEvent
+from agentarea_common.events.event_stream_service import EventStreamService
 from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 from agentarea_tasks.domain.models import SimpleTask
 from agentarea_tasks.task_service import TaskService
+from faststream.redis import RedisBroker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -89,7 +91,7 @@ async def simulate_workflow_publishing(event_broker, task_id: UUID, num_events: 
         await asyncio.sleep(0.1)
 
 
-async def simulate_sse_consumption(task_service: TaskService, task_id: UUID, max_events: int = 5):
+async def simulate_sse_consumption(event_stream_service: EventStreamService, task_id: UUID, max_events: int = 5):
     """Simulate SSE endpoint consuming events."""
     logger.info(f"📥 Starting SSE event consumption for task {task_id}")
 
@@ -97,7 +99,7 @@ async def simulate_sse_consumption(task_service: TaskService, task_id: UUID, max
 
     try:
         # Stream events like SSE endpoint does
-        async for event in task_service.stream_task_events(task_id, include_history=False):
+        async for event in event_stream_service.stream_events_for_task(task_id, event_patterns=["workflow.*"]):
             events_received.append(event)
 
             event_type = event.get("event_type", "unknown")
@@ -135,6 +137,10 @@ async def test_end_to_end_workflow():
         task_repository=task_repository, event_broker=event_broker, task_manager=task_manager
     )
 
+    # Create EventStreamService for event streaming
+    redis_broker = RedisBroker("redis://localhost:6379/0")
+    event_stream_service = EventStreamService(redis_broker)
+
     # Create and store test task
     test_task = SimpleTask(
         id=task_id,
@@ -154,7 +160,7 @@ async def test_end_to_end_workflow():
 
         # Create consumption task
         consumption_task = asyncio.create_task(
-            simulate_sse_consumption(task_service, task_id, max_events=4)
+            simulate_sse_consumption(event_stream_service, task_id, max_events=4)
         )
 
         # Small delay to let subscription set up

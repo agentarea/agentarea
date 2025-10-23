@@ -7,9 +7,9 @@ class WorkflowSettings(BaseSettings):
     """Workflow execution configuration."""
 
     # Temporal-specific settings
-    TEMPORAL_SERVER_URL: str = "localhost:7233"
-    TEMPORAL_NAMESPACE: str = "default"
-    TEMPORAL_TASK_QUEUE: str = "agent-tasks"
+    TEMPORAL_SERVER_URL: str
+    TEMPORAL_NAMESPACE: str
+    TEMPORAL_TASK_QUEUE: str
     TEMPORAL_MAX_WORKFLOW_DURATION_DAYS: int = 7
 
     # Worker settings

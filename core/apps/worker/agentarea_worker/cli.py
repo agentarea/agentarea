@@ -19,7 +19,7 @@ def cli():
 
 
 @cli.command()
-@click.option("--debug", is_flag=True, help="Enable debug logging")
+@click.option("--debug", is_flag=False, help="Enable debug logging")
 @click.option("--max-activities", type=int, help="Max concurrent activities")
 @click.option("--max-workflows", type=int, help="Max concurrent workflows")
 def start(debug: bool, max_activities: int | None, max_workflows: int | None):
@@ -52,7 +52,7 @@ def start(debug: bool, max_activities: int | None, max_workflows: int | None):
 
 
 @cli.command()
-@click.option("--debug", is_flag=True, help="Enable debug logging")
+@click.option("--debug", is_flag=False, help="Enable debug logging")
 def dev(debug: bool):
     """Start the worker with auto-restart on file changes (development mode)."""
     import os
