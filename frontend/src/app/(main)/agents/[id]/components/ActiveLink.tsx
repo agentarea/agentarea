@@ -19,17 +19,15 @@ export default function ActiveLink({ href, children, className }: Props) {
       href={href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "text-xs flex items-center gap-1 p-1",
+        "flex items-center gap-1 p-1 text-xs",
         "transition-all duration-300",
         className,
         isActive
-          ? "bg-background text-primary bg-sidebar-accent rounded-sm"
-          : "text-muted-foreground hover:text-foreground "
+          ? "rounded-sm bg-background bg-sidebar-accent text-primary"
+          : "text-muted-foreground hover:text-foreground"
       )}
     >
       {children}
     </Link>
   );
 }
-
-

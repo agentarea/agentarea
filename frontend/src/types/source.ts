@@ -1,14 +1,14 @@
 export enum SourceType {
-  DATABASE = 'database',
-  API = 'api',
-  FILE = 'file',
-  STREAM = 'stream',
+  DATABASE = "database",
+  API = "api",
+  FILE = "file",
+  STREAM = "stream",
 }
 
 export enum SourceStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-  ERROR = 'error',
+  ACTIVE = "active",
+  INACTIVE = "inactive",
+  ERROR = "error",
 }
 
 export interface Source {
@@ -22,4 +22,4 @@ export interface Source {
   created_at: string;
   updated_at: string;
   status: SourceStatus;
-} 
+}

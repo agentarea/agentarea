@@ -13,6 +13,7 @@ This is the frontend application for the AgentArea platform, built with Next.js.
 ## Authentication
 
 The frontend uses NextAuth.js for authentication with multiple OIDC (OpenID Connect) providers:
+
 - Generic OIDC (fallback)
 - WorkOS
 - Keycloak

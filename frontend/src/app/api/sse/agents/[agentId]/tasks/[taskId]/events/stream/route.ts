@@ -1,10 +1,10 @@
-import { NextRequest } from 'next/server';
+import { NextRequest } from "next/server";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ agentId: string, taskId: string }> }
+  { params }: { params: Promise<{ agentId: string; taskId: string }> }
 ) {
   const { agentId, taskId } = await params;
 
@@ -18,20 +18,22 @@ export async function GET(
 
     // Create headers for backend request
     const headers: Record<string, string> = {
-      'Accept': 'text/event-stream',
+      Accept: "text/event-stream",
     };
 
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers["Authorization"] = `Bearer ${token}`;
     }
 
     const response = await fetch(eventsUrl, {
-      method: 'GET',
+      method: "GET",
       headers,
     });
 
     if (!response.ok) {
-      return new Response(`Backend SSE error: ${response.status}`, { status: response.status });
+      return new Response(`Backend SSE error: ${response.status}`, {
+        status: response.status,
+      });
     }
 
     // Create a readable stream that forwards the SSE data
@@ -54,7 +56,7 @@ export async function GET(
               controller.enqueue(value);
             }
           } catch (error) {
-            console.error('SSE events stream error:', error);
+            console.error("SSE events stream error:", error);
             controller.error(error);
           }
         };
@@ -65,16 +67,15 @@ export async function GET(
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Cache-Control",
       },
     });
-
   } catch (error) {
-    console.error('SSE events proxy error:', error);
+    console.error("SSE events proxy error:", error);
     return new Response(`SSE events proxy error: ${error}`, { status: 500 });
   }
 }

@@ -1,19 +1,33 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, Send, User, MessageCircle, Paperclip, X, ChevronDown } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Bot,
+  ChevronDown,
+  MessageCircle,
+  Paperclip,
+  Send,
+  User,
+  X,
+} from "lucide-react";
 import { AttachmentCard } from "@/components/ui/attachment-card";
-import { useSSE } from "@/hooks/useSSE";
-import { MessageRenderer, MessageComponentType } from "./MessageComponents";
-import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
-import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
-import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
-import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { env } from "@/env";
+import { useSSE } from "@/hooks/useSSE";
+import { cn } from "@/lib/utils";
+import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
+import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
+import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
+import { MessageComponentType, MessageRenderer } from "./MessageComponents";
 
 interface UserChatMessage {
   id: string;
@@ -52,12 +66,14 @@ export default function AgentChat({
   initialMessages = [],
   onTaskCreated,
   className = "",
-  height = "600px"
+  height = "600px",
 }: AgentChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(taskId || null);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(
+    taskId || null
+  );
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,21 +103,21 @@ export default function AgentChat({
   }, []);
 
   // SSE connection URL - only connect if we have a task
-  const sseUrl = currentTaskId 
+  const sseUrl = currentTaskId
     ? `/api/sse/agents/${agent.id}/tasks/${currentTaskId}/events/stream`
     : null;
 
   // Check if user is at bottom of scroll
   const checkIfAtBottom = useCallback(() => {
     if (!messagesContainerRef.current) return false;
-    
+
     const container = messagesContainerRef.current;
     const threshold = 100; // Увеличиваем порог для более стабильной работы
     const scrollTop = container.scrollTop;
     const clientHeight = container.clientHeight;
     const scrollHeight = container.scrollHeight;
     const isAtBottom = scrollTop + clientHeight >= scrollHeight - threshold;
-    
+
     return isAtBottom;
   }, []);
 
@@ -111,7 +127,7 @@ export default function AgentChat({
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
-    
+
     // Устанавливаем новый таймаут для debounce
     scrollTimeoutRef.current = setTimeout(() => {
       const atBottom = checkIfAtBottom();
@@ -126,11 +142,11 @@ export default function AgentChat({
       if (scrollRAFRef.current) {
         cancelAnimationFrame(scrollRAFRef.current);
       }
-      
+
       // Используем requestAnimationFrame для более плавного скролла
       scrollRAFRef.current = requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        
+
         // Проверяем позицию после скролла
         scrollRAFRef.current = requestAnimationFrame(() => {
           const atBottom = checkIfAtBottom();
@@ -152,7 +168,7 @@ export default function AgentChat({
         const atBottom = checkIfAtBottom();
         setIsAtBottom(atBottom);
       };
-      
+
       scrollRAFRef.current = requestAnimationFrame(checkPosition);
       return () => {
         if (scrollRAFRef.current) {
@@ -183,158 +199,188 @@ export default function AgentChat({
   }, []); // Empty dependency array - only run once
 
   // Handle SSE events
-  const handleSSEMessage = useCallback((event: { type: string; data: any }) => {
-    // Normalize event types to UI-friendly canonical names
-    const normalizeEventType = (type: string): string => {
-      const key = (type || '').toLowerCase().replace(/[^a-z]/g, '');
-      const map: Record<string, string> = {
-        // workflow core
-        workflowstarted: 'WorkflowStarted',
-        workflowcompleted: 'WorkflowCompleted',
-        workflowfailed: 'WorkflowFailed',
-        workflowcancelled: 'WorkflowCancelled',
-        started: 'WorkflowStarted',
-        completed: 'WorkflowCompleted',
-        failed: 'WorkflowFailed',
-        cancelled: 'WorkflowCancelled',
-        // llm
-        llmcallstarted: 'LLMCallStarted',
-        llmcallcompleted: 'LLMCallCompleted',
-        llmcallfailed: 'LLMCallFailed',
-        llmcallchunk: 'LLMCallChunk',
-        // tool
-        toolcallstarted: 'ToolCallStarted',
-        toolcallcompleted: 'ToolCallCompleted',
-        toolcallfailed: 'ToolCallFailed',
-        // task-level aliases
-        taskcompleted: 'WorkflowCompleted',
-        taskfailed: 'WorkflowFailed',
-        taskcancelled: 'WorkflowCancelled',
+  const handleSSEMessage = useCallback(
+    (event: { type: string; data: any }) => {
+      // Normalize event types to UI-friendly canonical names
+      const normalizeEventType = (type: string): string => {
+        const key = (type || "").toLowerCase().replace(/[^a-z]/g, "");
+        const map: Record<string, string> = {
+          // workflow core
+          workflowstarted: "WorkflowStarted",
+          workflowcompleted: "WorkflowCompleted",
+          workflowfailed: "WorkflowFailed",
+          workflowcancelled: "WorkflowCancelled",
+          started: "WorkflowStarted",
+          completed: "WorkflowCompleted",
+          failed: "WorkflowFailed",
+          cancelled: "WorkflowCancelled",
+          // llm
+          llmcallstarted: "LLMCallStarted",
+          llmcallcompleted: "LLMCallCompleted",
+          llmcallfailed: "LLMCallFailed",
+          llmcallchunk: "LLMCallChunk",
+          // tool
+          toolcallstarted: "ToolCallStarted",
+          toolcallcompleted: "ToolCallCompleted",
+          toolcallfailed: "ToolCallFailed",
+          // task-level aliases
+          taskcompleted: "WorkflowCompleted",
+          taskfailed: "WorkflowFailed",
+          taskcancelled: "WorkflowCancelled",
+        };
+        return map[key] || type.replace("workflow.", "");
       };
-      return map[key] || type.replace('workflow.', '');
-    };
 
-    const actualEventType = event.data?.event_type || event.data?.original_event_type || event.type;
-    
-    if (actualEventType === 'message' && !event.data?.event_type) {
-      return;
-    }
+      const actualEventType =
+        event.data?.event_type || event.data?.original_event_type || event.type;
 
-    // Normalize to canonical event type
-    const cleanEventType = normalizeEventType(actualEventType);
-
-    if (!shouldDisplayEvent(cleanEventType)) {
-      return;
-    }
-
-    // Tool started: add placeholder message to be replaced later
-    if (cleanEventType === 'ToolCallStarted') {
-      const placeholder = parseEventToMessage(cleanEventType, event.data);
-      if (placeholder) {
-        setMessages(prev => [...prev, placeholder]);
+      if (actualEventType === "message" && !event.data?.event_type) {
+        return;
       }
-      return;
-    }
 
-    // Tool completed: replace the last matching ToolCallStarted message
-    if (cleanEventType === 'ToolCallCompleted') {
-      const originalData = event.data.original_data || event.data;
-      const toolName = originalData.tool_name || event.data.tool_name;
-      const toolCallId = originalData.tool_call_id || event.data.tool_call_id;
+      // Normalize to canonical event type
+      const cleanEventType = normalizeEventType(actualEventType);
 
-      setMessages(prev => {
-        const lastToolCallIndex = [...prev].reverse().findIndex(msg => 
-          'type' in msg && msg.type === 'tool_call_started' && 
-          msg.data.tool_name === toolName && msg.data.tool_call_id === toolCallId
-        );
+      if (!shouldDisplayEvent(cleanEventType)) {
+        return;
+      }
 
-        if (lastToolCallIndex !== -1) {
-          const indexFromStart = prev.length - 1 - lastToolCallIndex;
-          const resultMessage = parseEventToMessage(cleanEventType, event.data);
-          if (resultMessage) {
-            const newMessages = [...prev];
-            newMessages[indexFromStart] = resultMessage;
-            return newMessages;
-          }
-        } else {
-          const resultMessage = parseEventToMessage(cleanEventType, event.data);
-          if (resultMessage) {
-            return [...prev, resultMessage];
-          }
+      // Tool started: add placeholder message to be replaced later
+      if (cleanEventType === "ToolCallStarted") {
+        const placeholder = parseEventToMessage(cleanEventType, event.data);
+        if (placeholder) {
+          setMessages((prev) => [...prev, placeholder]);
         }
-        return prev;
-      });
-      return;
-    }
+        return;
+      }
 
-    // LLM chunk: accumulate streaming content
-    if (cleanEventType === 'LLMCallChunk') {
-      const originalData = event.data.original_data || event.data;
-      const chunk = originalData.chunk || event.data.chunk;
-      const chunkIndex = originalData.chunk_index || event.data.chunk_index || 0;
-      const isFinal = originalData.is_final || event.data.is_final || false;
-      const taskId = originalData.task_id || event.data.task_id;
+      // Tool completed: replace the last matching ToolCallStarted message
+      if (cleanEventType === "ToolCallCompleted") {
+        const originalData = event.data.original_data || event.data;
+        const toolName = originalData.tool_name || event.data.tool_name;
+        const toolCallId = originalData.tool_call_id || event.data.tool_call_id;
 
-      setMessages(prev => {
-        const lastMessage = prev[prev.length - 1];
-        if (lastMessage && 'type' in lastMessage && lastMessage.type === 'llm_chunk' && lastMessage.data.id === taskId) {
-          const updatedMessage = {
-            ...lastMessage,
-            data: {
-              ...lastMessage.data,
-              chunk: lastMessage.data.chunk + chunk,
-              chunk_index: chunkIndex,
-              is_final: isFinal,
-            },
-          };
-          return [...prev.slice(0, -1), updatedMessage];
-        } else {
-          const newMessage = parseEventToMessage(cleanEventType, event.data);
-          if (newMessage) {
-            return [...prev, newMessage];
-          }
-          return prev;
-        }
-      });
+        setMessages((prev) => {
+          const lastToolCallIndex = [...prev]
+            .reverse()
+            .findIndex(
+              (msg) =>
+                "type" in msg &&
+                msg.type === "tool_call_started" &&
+                msg.data.tool_name === toolName &&
+                msg.data.tool_call_id === toolCallId
+            );
 
-      if (isFinal) {
-        setMessages(prev => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage && 'type' in lastMessage && lastMessage.type === 'llm_chunk' && lastMessage.data.id === taskId) {
-            const finalMessage = {
-              type: 'llm_response',
-              data: {
-                id: lastMessage.data.id,
-                timestamp: lastMessage.data.timestamp,
-                agent_id: lastMessage.data.agent_id,
-                event_type: 'LLMCallCompleted',
-                content: lastMessage.data.chunk,
-                role: 'assistant',
-              },
-            } as MessageComponentType;
-            return [...prev.slice(0, -1), finalMessage];
+          if (lastToolCallIndex !== -1) {
+            const indexFromStart = prev.length - 1 - lastToolCallIndex;
+            const resultMessage = parseEventToMessage(
+              cleanEventType,
+              event.data
+            );
+            if (resultMessage) {
+              const newMessages = [...prev];
+              newMessages[indexFromStart] = resultMessage;
+              return newMessages;
+            }
+          } else {
+            const resultMessage = parseEventToMessage(
+              cleanEventType,
+              event.data
+            );
+            if (resultMessage) {
+              return [...prev, resultMessage];
+            }
           }
           return prev;
         });
+        return;
       }
-      return;
-    }
 
-    // Workflow terminal events: stop loading
-    if (cleanEventType === 'WorkflowCompleted' || cleanEventType === 'WorkflowFailed' || cleanEventType === 'task_failed') {
-      setIsLoading(false);
-    }
+      // LLM chunk: accumulate streaming content
+      if (cleanEventType === "LLMCallChunk") {
+        const originalData = event.data.original_data || event.data;
+        const chunk = originalData.chunk || event.data.chunk;
+        const chunkIndex =
+          originalData.chunk_index || event.data.chunk_index || 0;
+        const isFinal = originalData.is_final || event.data.is_final || false;
+        const taskId = originalData.task_id || event.data.task_id;
 
-    // Default: parse and append
-    const messageComponent = parseEventToMessage(cleanEventType, event.data);
-    if (messageComponent) {
-      setMessages(prev => [...prev, messageComponent]);
-    }
-  }, [agent.id]);
+        setMessages((prev) => {
+          const lastMessage = prev[prev.length - 1];
+          if (
+            lastMessage &&
+            "type" in lastMessage &&
+            lastMessage.type === "llm_chunk" &&
+            lastMessage.data.id === taskId
+          ) {
+            const updatedMessage = {
+              ...lastMessage,
+              data: {
+                ...lastMessage.data,
+                chunk: lastMessage.data.chunk + chunk,
+                chunk_index: chunkIndex,
+                is_final: isFinal,
+              },
+            };
+            return [...prev.slice(0, -1), updatedMessage];
+          } else {
+            const newMessage = parseEventToMessage(cleanEventType, event.data);
+            if (newMessage) {
+              return [...prev, newMessage];
+            }
+            return prev;
+          }
+        });
+
+        if (isFinal) {
+          setMessages((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (
+              lastMessage &&
+              "type" in lastMessage &&
+              lastMessage.type === "llm_chunk" &&
+              lastMessage.data.id === taskId
+            ) {
+              const finalMessage = {
+                type: "llm_response",
+                data: {
+                  id: lastMessage.data.id,
+                  timestamp: lastMessage.data.timestamp,
+                  agent_id: lastMessage.data.agent_id,
+                  event_type: "LLMCallCompleted",
+                  content: lastMessage.data.chunk,
+                  role: "assistant",
+                },
+              } as MessageComponentType;
+              return [...prev.slice(0, -1), finalMessage];
+            }
+            return prev;
+          });
+        }
+        return;
+      }
+
+      // Workflow terminal events: stop loading
+      if (
+        cleanEventType === "WorkflowCompleted" ||
+        cleanEventType === "WorkflowFailed" ||
+        cleanEventType === "task_failed"
+      ) {
+        setIsLoading(false);
+      }
+
+      // Default: parse and append
+      const messageComponent = parseEventToMessage(cleanEventType, event.data);
+      if (messageComponent) {
+        setMessages((prev) => [...prev, messageComponent]);
+      }
+    },
+    [agent.id]
+  );
 
   // SSE event handlers
   const handleSSEError = useCallback((error: Event) => {
-    console.error('SSE connection error:', error);
+    console.error("SSE connection error:", error);
     setIsLoading(false);
   }, []);
 
@@ -349,11 +395,11 @@ export default function AgentChat({
   // File handling functions
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setSelectedFiles(prev => [...prev, ...files]);
+    setSelectedFiles((prev) => [...prev, ...files]);
   };
 
   const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const openFileDialog = () => {
@@ -364,7 +410,7 @@ export default function AgentChat({
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = 'auto';
+      textarea.style.height = "auto";
       const scrollHeight = textarea.scrollHeight;
       const maxHeight = 3 * 24; // 3 lines * 24px line height
       textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
@@ -382,7 +428,7 @@ export default function AgentChat({
     onMessage: handleSSEMessage,
     onError: handleSSEError,
     onOpen: handleSSEOpen,
-    onClose: handleSSEClose
+    onClose: handleSSEClose,
   });
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -398,23 +444,23 @@ export default function AgentChat({
     };
 
     // Add user message immediately
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setSelectedFiles([]);
     setIsLoading(true);
-    
+
     // Reset textarea height
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = "auto";
     }
 
     try {
       // Create task with SSE streaming through Next.js API route (handles auth)
       const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
         },
         body: JSON.stringify({
           description: userMessage.content,
@@ -433,7 +479,7 @@ export default function AgentChat({
       }
 
       if (!response.body) {
-        throw new Error('No response body');
+        throw new Error("No response body");
       }
 
       const reader = response.body.getReader();
@@ -445,15 +491,18 @@ export default function AgentChat({
           if (done) break;
 
           const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
+          const lines = chunk.split("\n");
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.startsWith("data: ")) {
               try {
                 const eventData = JSON.parse(line.slice(6));
-                handleSSEMessage({ type: eventData.type || 'message', data: eventData.data || eventData });
+                handleSSEMessage({
+                  type: eventData.type || "message",
+                  data: eventData.data || eventData,
+                });
               } catch (parseError) {
-                console.error('Failed to parse SSE event:', parseError);
+                console.error("Failed to parse SSE event:", parseError);
               }
             }
           }
@@ -461,9 +510,8 @@ export default function AgentChat({
       } finally {
         reader.releaseLock();
       }
-
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error("Failed to send message:", error);
       const errorMessage: WelcomeMessage = {
         id: (Date.now() + 1).toString(),
         content: `Sorry, I couldn't process your message. Error: ${error}`,
@@ -471,32 +519,43 @@ export default function AgentChat({
         timestamp: new Date().toISOString(),
         agent_id: agent.id,
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card className={cn("flex justify-between flex-col h-full overflow-hidden max-h-full shadow-none p-0 hover:shadow-none cursor-auto", className)}>
+    <Card
+      className={cn(
+        "flex h-full max-h-full cursor-auto flex-col justify-between overflow-hidden p-0 shadow-none hover:shadow-none",
+        className
+      )}
+    >
       <CardHeader className="border-b p-4">
-        <CardTitle className="flex items-center gap-2 ">
+        <CardTitle className="flex items-center gap-2">
           Chat with {agent.name}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col overflow-auto p-0 bg-chatBackground relative">
+      <CardContent className="relative flex flex-1 flex-col overflow-auto bg-chatBackground p-0">
         {/* Messages */}
-        <div 
+        <div
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto space-y-3 py-3 px-3"
+          className="flex-1 space-y-3 overflow-y-auto px-3 py-3"
         >
           {messages.map((message, index) => {
             // Handle different message types
-            if ('type' in message) {
+            if ("type" in message) {
               // This is a MessageComponentType - use MessageRenderer
-              return <MessageRenderer key={`${message.data.id}-${message.data.event_type}-${index}`} message={message} agent_name={agent.name} />;
-            } else if (message.role === 'user') {
+              return (
+                <MessageRenderer
+                  key={`${message.data.id}-${message.data.event_type}-${index}`}
+                  message={message}
+                  agent_name={agent.name}
+                />
+              );
+            } else if (message.role === "user") {
               // User message
               return (
                 <UserMessageComponent
@@ -523,14 +582,16 @@ export default function AgentChat({
           })}
           <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
-        
+
         {/* Scroll to bottom button */}
-        <div className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <div
+          className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? "pointer-events-none opacity-0" : "opacity-100"}`}
+        >
           <Button
             onClick={() => {
               // Принудительно скроллим к низу
               messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-              
+
               // Проверяем позицию после скролла
               requestAnimationFrame(() => {
                 const atBottom = checkIfAtBottom();
@@ -538,7 +599,7 @@ export default function AgentChat({
               });
             }}
             size="sm"
-            className="h-8 w-8 rounded-full hover:text-white shadow-lg bg-white text-text dark:bg-zinc-900 dark:text-zinc-200 "
+            className="h-8 w-8 rounded-full bg-white text-text shadow-lg hover:text-white dark:bg-zinc-900 dark:text-zinc-200"
           >
             <ChevronDown className="h-4 w-4" />
           </Button>
@@ -546,7 +607,7 @@ export default function AgentChat({
       </CardContent>
       <CardFooter className="p-0">
         {/* Input */}
-        <div className="border-t w-full p-4">
+        <div className="w-full border-t p-4">
           {/* Selected Files Display */}
           {selectedFiles.length > 0 && (
             <div className="mb-3 flex flex-row flex-wrap gap-2">
@@ -560,19 +621,19 @@ export default function AgentChat({
               ))}
             </div>
           )}
-          
+
           <form onSubmit={sendMessage} className="flex gap-3">
-            <div className="flex-1 relative">
+            <div className="relative flex-1">
               <Textarea
                 ref={textareaRef}
                 value={input}
                 onChange={handleInputChange}
                 placeholder={`Message ${agent.name}...`}
                 disabled={isLoading}
-                className="min-h-[40px] max-h-[72px] resize-none rounded-3xl border focus:border-primary/50 transition-colors duration-200 pr-12 py-2"
+                className="max-h-[72px] min-h-[40px] resize-none rounded-3xl border py-2 pr-12 transition-colors duration-200 focus:border-primary/50"
                 rows={1}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage(e);
                   }
@@ -584,25 +645,27 @@ export default function AgentChat({
                 size="sm"
                 onClick={openFileDialog}
                 disabled={isLoading}
-                className="absolute right-2 top-1 h-8 w-8 p-0 rounded-full hover:text-text hover:bg-zinc-200 dark:hover:bg-gray-800"
+                className="absolute right-2 top-1 h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
             </div>
-            <Button 
-              type="submit" 
-              size="icon" 
-              disabled={isLoading || (!input.trim() && selectedFiles.length === 0)}
-              className="rounded-full h-10 w-10 shadow-sm hover:shadow-md transition-all duration-200"
+            <Button
+              type="submit"
+              size="icon"
+              disabled={
+                isLoading || (!input.trim() && selectedFiles.length === 0)
+              }
+              className="h-10 w-10 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
             >
               {isLoading ? (
-                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
             </Button>
           </form>
-          
+
           {/* Hidden file input */}
           <input
             ref={fileInputRef}

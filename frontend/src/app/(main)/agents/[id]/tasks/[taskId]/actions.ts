@@ -1,11 +1,11 @@
 "use server";
 
 import {
+  cancelAgentTask,
+  getAgentTaskMessages,
   getAgentTaskStatus,
   pauseAgentTask,
   resumeAgentTask,
-  cancelAgentTask,
-  getAgentTaskMessages
 } from "@/lib/api";
 
 export async function getTaskStatus(agentId: string, taskId: string) {

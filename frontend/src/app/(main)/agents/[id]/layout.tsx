@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation";
-import { getAgent } from "@/lib/api";
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getTranslations } from "next-intl/server";
+import { notFound } from "next/navigation";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { getAgent } from "@/lib/api";
 import AgentHeaderTabs from "./components/AgentHeaderTabs";
 
 interface Props {
@@ -28,13 +28,9 @@ export default async function AgentLayout({ params, children }: Props) {
         ],
       }}
       className="p-0"
-      subheader={
-        <AgentHeaderTabs agentId={agent.id} />
-      }
+      subheader={<AgentHeaderTabs agentId={agent.id} />}
     >
       {children}
     </ContentBlock>
   );
 }
-
-

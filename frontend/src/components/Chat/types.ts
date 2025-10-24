@@ -79,15 +79,15 @@ export interface WorkflowResultData extends BaseMessageData {
 // System Message (for workflow events, debugging, etc.)
 export interface SystemData extends BaseMessageData {
   message: string;
-  level?: 'info' | 'warning' | 'error';
+  level?: "info" | "warning" | "error";
 }
 
 // Export all message component types
-export type MessageComponentType = 
-  | { type: 'llm_response'; data: LLMResponseData }
-  | { type: 'llm_chunk'; data: LLMChunkData }
-  | { type: 'tool_call_started'; data: ToolCallStartedData }
-  | { type: 'tool_result'; data: ToolResultData }
-  | { type: 'error'; data: ErrorData }
-  | { type: 'workflow_result'; data: WorkflowResultData }
-  | { type: 'system'; data: SystemData };
+export type MessageComponentType =
+  | { type: "llm_response"; data: LLMResponseData }
+  | { type: "llm_chunk"; data: LLMChunkData }
+  | { type: "tool_call_started"; data: ToolCallStartedData }
+  | { type: "tool_result"; data: ToolResultData }
+  | { type: "error"; data: ErrorData }
+  | { type: "workflow_result"; data: WorkflowResultData }
+  | { type: "system"; data: SystemData };

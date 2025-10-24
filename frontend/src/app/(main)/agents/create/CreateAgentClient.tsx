@@ -1,22 +1,22 @@
 "use client";
 
 import React from "react";
-import { addAgent } from './actions';
-import { generateAgentName } from './utils/agentNameGenerator';
-import type { components } from '@/api/schema';
-import AgentForm from '../shared/AgentForm';
-import { createAgentFormData } from '../shared/formDataUtils';
-import { useRouter } from 'next/navigation';
+import { useRouter } from "next/navigation";
+import type { components } from "@/api/schema";
+import AgentForm from "../shared/AgentForm";
+import { createAgentFormData } from "../shared/formDataUtils";
+import { addAgent } from "./actions";
+import { generateAgentName } from "./utils/agentNameGenerator";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
 
-export default function CreateAgentClient({ 
-  mcpServers, 
-  llmModelInstances, 
+export default function CreateAgentClient({
+  mcpServers,
+  llmModelInstances,
   mcpInstanceList,
-  builtinTools
-}: { 
+  builtinTools,
+}: {
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: any[];
@@ -26,21 +26,24 @@ export default function CreateAgentClient({
 
   const handleSubmit = async (data: any) => {
     const formData = createAgentFormData(data);
-    
+
     // Call server action
-    return await addAgent({ 
-      message: '', 
-      errors: {}, 
-      fieldValues: {
-        name: '',
-        description: '',
-        instruction: '',
-        model_id: '',
-        tools_config: { mcp_server_configs: [] },
-        events_config: { events: [] },
-        planning: false,
-      }
-    }, formData);
+    return await addAgent(
+      {
+        message: "",
+        errors: {},
+        fieldValues: {
+          name: "",
+          description: "",
+          instruction: "",
+          model_id: "",
+          tools_config: { mcp_server_configs: [] },
+          events_config: { events: [] },
+          planning: false,
+        },
+      },
+      formData
+    );
   };
 
   const handleSuccess = (result: any) => {
@@ -58,9 +61,9 @@ export default function CreateAgentClient({
       builtinTools={builtinTools}
       initialData={{
         name: generateAgentName(),
-        description: '',
-        instruction: '',
-        model_id: '',
+        description: "",
+        instruction: "",
+        model_id: "",
         tools_config: { mcp_server_configs: [], builtin_tools: [] },
         events_config: { events: [] },
         planning: false,

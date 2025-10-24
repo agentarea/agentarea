@@ -1,21 +1,25 @@
-import React, { useState, useRef } from "react";
+import React, { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
+import {
+  Controller,
+  FieldErrors,
+  UseFormRegister,
+  UseFormSetValue,
+} from "react-hook-form";
+import type { components } from "@/api/schema";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
-import { Bot, FileText, MessageSquare, Cpu } from "lucide-react";
-import { Controller, FieldErrors, UseFormRegister, UseFormSetValue } from 'react-hook-form';
-import { getNestedErrorMessage } from "../utils/formUtils";
+import { Textarea } from "@/components/ui/textarea";
 import type { AgentFormValues } from "../../create/types";
-import type { components } from '@/api/schema';
-import FormLabel from "@/components/FormLabel/FormLabel";
-import { Button } from "@/components/ui/button";
+import { getNestedErrorMessage } from "../utils/formUtils";
 import ConfigSheet from "./ConfigSheet";
-import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
-import { useTranslations } from "next-intl";
 
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
-
 
 type BasicInformationProps = {
   register: UseFormRegister<AgentFormValues>;
@@ -27,7 +31,15 @@ type BasicInformationProps = {
   onRefreshModels?: () => void;
 };
 
-const BasicInformation = ({ register, control, errors, setValue, llmModelInstances, onOpenConfigSheet, onRefreshModels }: BasicInformationProps) => {
+const BasicInformation = ({
+  register,
+  control,
+  errors,
+  setValue,
+  llmModelInstances,
+  onOpenConfigSheet,
+  onRefreshModels,
+}: BasicInformationProps) => {
   const [searchableSelectOpen, setSearchableSelectOpen] = useState(false);
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
@@ -66,74 +78,101 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
       </h2> */}
       <div className="grid grid-cols-1 gap-6">
         <div className="space-y-2">
-          <FormLabel htmlFor="name" icon={Bot}>{t("agentName")}</FormLabel>
+          <FormLabel htmlFor="name" icon={Bot}>
+            {t("agentName")}
+          </FormLabel>
           <Input
             id="name"
-            {...register('name', { required: "Agent name is required" })}
+            {...register("name", { required: "Agent name is required" })}
             placeholder={t("agentNamePlaceholder")}
             // className="mt-2 text-lg px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors"
-            aria-invalid={!!getNestedErrorMessage(errors, 'name')}
+            aria-invalid={!!getNestedErrorMessage(errors, "name")}
           />
-          {getNestedErrorMessage(errors, 'name') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'name')}</p>}
+          {getNestedErrorMessage(errors, "name") && (
+            <p className="mt-1 text-sm text-red-500">
+              {getNestedErrorMessage(errors, "name")}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="model_id" icon={Cpu}>{t("llmModel")}</FormLabel>
-           <Controller
-              name="model_id"
-              control={control}
-              rules={{ required: "Model is required" }}
-              render={({ field }) => (
-                <ProviderModelSelector
-                  modelInstances={llmModelInstances}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  placeholder={t("selectModel")}
-                  open={searchableSelectOpen}
-                  onOpenChange={setSearchableSelectOpen}
-                  onAddProvider={handleCreateConfigClick}
-                  emptyMessage={
-                    <div className="flex flex-col items-center gap-2 px-6">
-                      <div>{t("noConfigurationsYet")}</div>
-                      <div className="note">{t("createAndUseProviderConfiguration")}</div>
-                      <Button 
-                        size="sm" 
-                        onClick={handleCreateConfigClick}
-                        className="mt-2"
-                      >
-                        {t("createConfiguration")}
-                      </Button>
+          <FormLabel htmlFor="model_id" icon={Cpu}>
+            {t("llmModel")}
+          </FormLabel>
+          <Controller
+            name="model_id"
+            control={control}
+            rules={{ required: "Model is required" }}
+            render={({ field }) => (
+              <ProviderModelSelector
+                modelInstances={llmModelInstances}
+                value={field.value}
+                onValueChange={field.onChange}
+                placeholder={t("selectModel")}
+                open={searchableSelectOpen}
+                onOpenChange={setSearchableSelectOpen}
+                onAddProvider={handleCreateConfigClick}
+                emptyMessage={
+                  <div className="flex flex-col items-center gap-2 px-6">
+                    <div>{t("noConfigurationsYet")}</div>
+                    <div className="note">
+                      {t("createAndUseProviderConfiguration")}
                     </div>
-                  }
-                />
-              )}
-            />
-          {getNestedErrorMessage(errors, 'model_id') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'model_id')}</p>}
+                    <Button
+                      size="sm"
+                      onClick={handleCreateConfigClick}
+                      className="mt-2"
+                    >
+                      {t("createConfiguration")}
+                    </Button>
+                  </div>
+                }
+              />
+            )}
+          />
+          {getNestedErrorMessage(errors, "model_id") && (
+            <p className="mt-1 text-sm text-red-500">
+              {getNestedErrorMessage(errors, "model_id")}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="description" icon={FileText} optional>{t("description")}</FormLabel>
+          <FormLabel htmlFor="description" icon={FileText} optional>
+            {t("description")}
+          </FormLabel>
           <Textarea
             id="description"
-            {...register('description')}
+            {...register("description")}
             placeholder={t("descriptionPlaceholder")}
-            className="resize-none h-[100px]"
+            className="h-[100px] resize-none"
             // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
-            aria-invalid={!!getNestedErrorMessage(errors, 'description')}
+            aria-invalid={!!getNestedErrorMessage(errors, "description")}
           />
-          {getNestedErrorMessage(errors, 'description') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'description')}</p>}
+          {getNestedErrorMessage(errors, "description") && (
+            <p className="mt-1 text-sm text-red-500">
+              {getNestedErrorMessage(errors, "description")}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="instruction" icon={MessageSquare} required>{t("instruction")}</FormLabel>
+          <FormLabel htmlFor="instruction" icon={MessageSquare} required>
+            {t("instruction")}
+          </FormLabel>
           <Textarea
             id="instruction"
-            {...register('instruction', { required: "Instruction is required" })}
+            {...register("instruction", {
+              required: "Instruction is required",
+            })}
             placeholder={t("instructionPlaceholder")}
-            className="resize-none h-[200px]"
+            className="h-[200px] resize-none"
             // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
-            aria-invalid={!!getNestedErrorMessage(errors, 'instruction')}
+            aria-invalid={!!getNestedErrorMessage(errors, "instruction")}
           />
-          {getNestedErrorMessage(errors, 'instruction') && <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'instruction')}</p>}
+          {getNestedErrorMessage(errors, "instruction") && (
+            <p className="mt-1 text-sm text-red-500">
+              {getNestedErrorMessage(errors, "instruction")}
+            </p>
+          )}
         </div>
-
       </div>
 
       {/* ConfigSheet rendered outside of SearchableSelect */}
@@ -146,7 +185,7 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
         onOpenChange={handleConfigSheetOpenChange}
         triggerRef={configSheetTriggerRef}
       >
-        <ProviderConfigForm 
+        <ProviderConfigForm
           className="overflow-y-auto pb-6"
           onAfterSubmit={handleAfterSubmit}
           onCancel={handleCancel}
@@ -158,4 +197,4 @@ const BasicInformation = ({ register, control, errors, setValue, llmModelInstanc
   );
 };
 
-export default BasicInformation; 
+export default BasicInformation;

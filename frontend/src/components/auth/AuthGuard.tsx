@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -25,14 +25,18 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
   }
 
   if (!isSignedIn) {
-    return fallback || (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400">Redirecting to sign in...</p>
+    return (
+      fallback || (
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-center">
+            <p className="text-gray-600 dark:text-gray-400">
+              Redirecting to sign in...
+            </p>
+          </div>
         </div>
-      </div>
+      )
     );
   }
 
   return <>{children}</>;
-} 
+}

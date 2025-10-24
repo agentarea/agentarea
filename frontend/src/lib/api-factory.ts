@@ -1,6 +1,5 @@
-import type { paths } from "../api/schema";
-import type { components } from "../api/schema";
 import createClient from "openapi-fetch";
+import type { components, paths } from "../api/schema";
 
 type Client = ReturnType<typeof createClient<paths>>;
 
@@ -32,7 +31,10 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    updateAgent: async (agentId: string, agent: components["schemas"]["AgentUpdate"]) => {
+    updateAgent: async (
+      agentId: string,
+      agent: components["schemas"]["AgentUpdate"]
+    ) => {
       const { data, error } = await client.PATCH("/v1/agents/{agent_id}", {
         params: { path: { agent_id: agentId } },
         body: agent,
@@ -48,77 +50,103 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createAgentTask: async (agentId: string, task: components["schemas"]["TaskCreate"]) => {
-      const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/", {
-        params: { path: { agent_id: agentId } },
-        body: task,
-      });
+    createAgentTask: async (
+      agentId: string,
+      task: components["schemas"]["TaskCreate"]
+    ) => {
+      const { data, error } = await client.POST(
+        "/v1/agents/{agent_id}/tasks/",
+        {
+          params: { path: { agent_id: agentId } },
+          body: task,
+        }
+      );
       return { data, error };
     },
 
     getAgentTask: async (agentId: string, taskId: string) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}", {
-        params: { path: { agent_id: agentId, task_id: taskId } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/agents/{agent_id}/tasks/{task_id}",
+        {
+          params: { path: { agent_id: agentId, task_id: taskId } },
+        }
+      );
       return { data, error };
     },
 
     getAgentTaskById: async (agentId: string, taskId: string) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}", {
-        params: { path: { agent_id: agentId, task_id: taskId } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/agents/{agent_id}/tasks/{task_id}",
+        {
+          params: { path: { agent_id: agentId, task_id: taskId } },
+        }
+      );
       return { data, error };
     },
 
     cancelAgentTask: async (agentId: string, taskId: string) => {
-      const { data, error } = await client.DELETE("/v1/agents/{agent_id}/tasks/{task_id}", {
-        params: { path: { agent_id: agentId, task_id: taskId } },
-      });
+      const { data, error } = await client.DELETE(
+        "/v1/agents/{agent_id}/tasks/{task_id}",
+        {
+          params: { path: { agent_id: agentId, task_id: taskId } },
+        }
+      );
       return { data, error };
     },
 
     getAgentTaskStatus: async (agentId: string, taskId: string) => {
       try {
-        const response = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/status", {
-          params: { path: { agent_id: agentId, task_id: taskId } },
-        });
+        const response = await client.GET(
+          "/v1/agents/{agent_id}/tasks/{task_id}/status",
+          {
+            params: { path: { agent_id: agentId, task_id: taskId } },
+          }
+        );
         return {
-          data: response.data as {
-            task_id: string;
-            agent_id: string;
-            execution_id: string;
-            status: string;
-            start_time?: string;
-            end_time?: string;
-            execution_time?: string;
-            error?: string;
-            result?: any;
-            message?: string;
-            artifacts?: any;
-            session_id?: string;
-            usage_metadata?: any;
-          } | undefined,
-          error: response.error
+          data: response.data as
+            | {
+                task_id: string;
+                agent_id: string;
+                execution_id: string;
+                status: string;
+                start_time?: string;
+                end_time?: string;
+                execution_time?: string;
+                error?: string;
+                result?: any;
+                message?: string;
+                artifacts?: any;
+                session_id?: string;
+                usage_metadata?: any;
+              }
+            | undefined,
+          error: response.error,
         };
       } catch (error) {
         return {
           data: undefined,
-          error: error as Error
+          error: error as Error,
         };
       }
     },
 
     pauseAgentTask: async (agentId: string, taskId: string) => {
-      const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/{task_id}/pause", {
-        params: { path: { agent_id: agentId, task_id: taskId } },
-      });
+      const { data, error } = await client.POST(
+        "/v1/agents/{agent_id}/tasks/{task_id}/pause",
+        {
+          params: { path: { agent_id: agentId, task_id: taskId } },
+        }
+      );
       return { data, error };
     },
 
     resumeAgentTask: async (agentId: string, taskId: string) => {
-      const { data, error } = await client.POST("/v1/agents/{agent_id}/tasks/{task_id}/resume", {
-        params: { path: { agent_id: agentId, task_id: taskId } },
-      });
+      const { data, error } = await client.POST(
+        "/v1/agents/{agent_id}/tasks/{task_id}/resume",
+        {
+          params: { path: { agent_id: agentId, task_id: taskId } },
+        }
+      );
       return { data, error };
     },
 
@@ -131,22 +159,29 @@ export function createApiClient(client: Client) {
         event_type?: string;
       } = {}
     ) => {
-      const { data, error } = await client.GET("/v1/agents/{agent_id}/tasks/{task_id}/events", {
-        params: {
-          path: { agent_id: agentId, task_id: taskId },
-          query: {
-            page: options.page || 1,
-            page_size: options.page_size || 50,
-            ...(options.event_type && { event_type: options.event_type })
-          }
-        },
-      });
+      const { data, error } = await client.GET(
+        "/v1/agents/{agent_id}/tasks/{task_id}/events",
+        {
+          params: {
+            path: { agent_id: agentId, task_id: taskId },
+            query: {
+              page: options.page || 1,
+              page_size: options.page_size || 50,
+              ...(options.event_type && { event_type: options.event_type }),
+            },
+          },
+        }
+      );
       return { data, error };
     },
 
     // Chat API
-    sendMessage: async (message: components["schemas"]["ChatMessageRequest"]) => {
-      const { data, error } = await client.POST("/v1/chat/messages", { body: message });
+    sendMessage: async (
+      message: components["schemas"]["ChatMessageRequest"]
+    ) => {
+      const { data, error } = await client.POST("/v1/chat/messages", {
+        body: message,
+      });
       return { data, error };
     },
 
@@ -163,9 +198,12 @@ export function createApiClient(client: Client) {
     },
 
     getChatMessageStatus: async (taskId: string) => {
-      const { data, error } = await client.GET("/v1/chat/messages/{task_id}/status", {
-        params: { path: { task_id: taskId } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/chat/messages/{task_id}/status",
+        {
+          params: { path: { task_id: taskId } },
+        }
+      );
       return { data, error };
     },
 
@@ -181,8 +219,12 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createMCPServer: async (server: components["schemas"]["MCPServerCreate"]) => {
-      const { data, error } = await client.POST("/v1/mcp-servers/", { body: server });
+    createMCPServer: async (
+      server: components["schemas"]["MCPServerCreate"]
+    ) => {
+      const { data, error } = await client.POST("/v1/mcp-servers/", {
+        body: server,
+      });
       return { data, error };
     },
 
@@ -194,24 +236,36 @@ export function createApiClient(client: Client) {
     },
 
     deleteMCPServer: async (serverId: string) => {
-      const { data, error} = await client.DELETE("/v1/mcp-servers/{server_id}", {
-        params: { path: { server_id: serverId } },
-      });
+      const { data, error } = await client.DELETE(
+        "/v1/mcp-servers/{server_id}",
+        {
+          params: { path: { server_id: serverId } },
+        }
+      );
       return { data, error };
     },
 
-    updateMCPServer: async (serverId: string, server: components["schemas"]["MCPServerUpdate"]) => {
-      const { data, error } = await client.PATCH("/v1/mcp-servers/{server_id}", {
-        params: { path: { server_id: serverId } },
-        body: server,
-      });
+    updateMCPServer: async (
+      serverId: string,
+      server: components["schemas"]["MCPServerUpdate"]
+    ) => {
+      const { data, error } = await client.PATCH(
+        "/v1/mcp-servers/{server_id}",
+        {
+          params: { path: { server_id: serverId } },
+          body: server,
+        }
+      );
       return { data, error };
     },
 
     deployMCPServer: async (serverId: string) => {
-      const { data, error } = await client.POST("/v1/mcp-servers/{server_id}/deploy", {
-        params: { path: { server_id: serverId } },
-      });
+      const { data, error } = await client.POST(
+        "/v1/mcp-servers/{server_id}/deploy",
+        {
+          params: { path: { server_id: serverId } },
+        }
+      );
       return { data, error };
     },
 
@@ -221,58 +275,88 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    checkMCPServerInstanceConfiguration: async (checkRequest: { json_spec: Record<string, any> }) => {
-      const { data, error } = await client.POST("/v1/mcp-server-instances/check", {
-        body: checkRequest,
-      });
+    checkMCPServerInstanceConfiguration: async (checkRequest: {
+      json_spec: Record<string, any>;
+    }) => {
+      const { data, error } = await client.POST(
+        "/v1/mcp-server-instances/check",
+        {
+          body: checkRequest,
+        }
+      );
       return { data, error };
     },
 
-    createMCPServerInstance: async (instance: components["schemas"]["MCPServerInstanceCreateRequest"]) => {
-      const { data, error } = await client.POST("/v1/mcp-server-instances/", { body: instance });
-      return { data, error };
-    },
-
-    getMCPServerInstance: async (instanceId: string) => {
-      const { data, error } = await client.GET("/v1/mcp-server-instances/{instance_id}", {
-        params: { path: { instance_id: instanceId } },
-      });
-      return { data, error };
-    },
-
-    deleteMCPServerInstance: async (instanceId: string) => {
-      const { data, error } = await client.DELETE("/v1/mcp-server-instances/{instance_id}", {
-        params: { path: { instance_id: instanceId } },
-      });
-      return { data, error };
-    },
-
-    updateMCPServerInstance: async (instanceId: string, instance: components["schemas"]["MCPServerInstanceUpdate"]) => {
-      const { data, error } = await client.PATCH("/v1/mcp-server-instances/{instance_id}", {
-        params: { path: { instance_id: instanceId } },
+    createMCPServerInstance: async (
+      instance: components["schemas"]["MCPServerInstanceCreateRequest"]
+    ) => {
+      const { data, error } = await client.POST("/v1/mcp-server-instances/", {
         body: instance,
       });
       return { data, error };
     },
 
+    getMCPServerInstance: async (instanceId: string) => {
+      const { data, error } = await client.GET(
+        "/v1/mcp-server-instances/{instance_id}",
+        {
+          params: { path: { instance_id: instanceId } },
+        }
+      );
+      return { data, error };
+    },
+
+    deleteMCPServerInstance: async (instanceId: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/mcp-server-instances/{instance_id}",
+        {
+          params: { path: { instance_id: instanceId } },
+        }
+      );
+      return { data, error };
+    },
+
+    updateMCPServerInstance: async (
+      instanceId: string,
+      instance: components["schemas"]["MCPServerInstanceUpdate"]
+    ) => {
+      const { data, error } = await client.PATCH(
+        "/v1/mcp-server-instances/{instance_id}",
+        {
+          params: { path: { instance_id: instanceId } },
+          body: instance,
+        }
+      );
+      return { data, error };
+    },
+
     startMCPServerInstance: async (instanceId: string) => {
-      const { data, error } = await client.POST("/v1/mcp-server-instances/{instance_id}/start", {
-        params: { path: { instance_id: instanceId } },
-      });
+      const { data, error } = await client.POST(
+        "/v1/mcp-server-instances/{instance_id}/start",
+        {
+          params: { path: { instance_id: instanceId } },
+        }
+      );
       return { data, error };
     },
 
     stopMCPServerInstance: async (instanceId: string) => {
-      const { data, error } = await client.POST("/v1/mcp-server-instances/{instance_id}/stop", {
-        params: { path: { instance_id: instanceId } },
-      });
+      const { data, error } = await client.POST(
+        "/v1/mcp-server-instances/{instance_id}/stop",
+        {
+          params: { path: { instance_id: instanceId } },
+        }
+      );
       return { data, error };
     },
 
     getMCPServerInstanceEnvironment: async (instanceId: string) => {
-      const { data, error } = await client.GET("/v1/mcp-server-instances/{instance_id}/environment", {
-        params: { path: { instance_id: instanceId } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/mcp-server-instances/{instance_id}/environment",
+        {
+          params: { path: { instance_id: instanceId } },
+        }
+      );
       return { data, error };
     },
 
@@ -285,23 +369,32 @@ export function createApiClient(client: Client) {
     },
 
     listProviderSpecsWithModels: async (params?: { is_builtin?: boolean }) => {
-      const { data, error } = await client.GET("/v1/provider-specs/with-models", {
-        params: { query: params },
-      });
+      const { data, error } = await client.GET(
+        "/v1/provider-specs/with-models",
+        {
+          params: { query: params },
+        }
+      );
       return { data, error };
     },
 
     getProviderSpec: async (providerSpecId: string) => {
-      const { data, error } = await client.GET("/v1/provider-specs/{provider_spec_id}", {
-        params: { path: { provider_spec_id: providerSpecId } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/provider-specs/{provider_spec_id}",
+        {
+          params: { path: { provider_spec_id: providerSpecId } },
+        }
+      );
       return { data, error };
     },
 
     getProviderSpecByKey: async (providerKey: string) => {
-      const { data, error } = await client.GET("/v1/provider-specs/by-key/{provider_key}", {
-        params: { path: { provider_key: providerKey } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/provider-specs/by-key/{provider_key}",
+        {
+          params: { path: { provider_key: providerKey } },
+        }
+      );
       return { data, error };
     },
 
@@ -316,35 +409,50 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createProviderConfig: async (config: components["schemas"]["ProviderConfigCreate"]) => {
-      const { data, error } = await client.POST("/v1/provider-configs/", { body: config });
-      return { data, error };
-    },
-
-    getProviderConfig: async (id: string): Promise<components["schemas"]["ProviderConfigResponse"]> => {
-      const response = await client.GET('/v1/provider-configs/{config_id}', {
-        params: { path: { config_id: id } },
-      });
-
-      if (!response.data) {
-        throw new Error('Provider config not found');
-      }
-
-      return response.data;
-    },
-
-    updateProviderConfig: async (configId: string, config: components["schemas"]["ProviderConfigUpdate"]) => {
-      const { data, error } = await client.PUT("/v1/provider-configs/{config_id}", {
-        params: { path: { config_id: configId } },
+    createProviderConfig: async (
+      config: components["schemas"]["ProviderConfigCreate"]
+    ) => {
+      const { data, error } = await client.POST("/v1/provider-configs/", {
         body: config,
       });
       return { data, error };
     },
 
-    deleteProviderConfig: async (configId: string) => {
-      const { data, error } = await client.DELETE("/v1/provider-configs/{config_id}", {
-        params: { path: { config_id: configId } },
+    getProviderConfig: async (
+      id: string
+    ): Promise<components["schemas"]["ProviderConfigResponse"]> => {
+      const response = await client.GET("/v1/provider-configs/{config_id}", {
+        params: { path: { config_id: id } },
       });
+
+      if (!response.data) {
+        throw new Error("Provider config not found");
+      }
+
+      return response.data;
+    },
+
+    updateProviderConfig: async (
+      configId: string,
+      config: components["schemas"]["ProviderConfigUpdate"]
+    ) => {
+      const { data, error } = await client.PUT(
+        "/v1/provider-configs/{config_id}",
+        {
+          params: { path: { config_id: configId } },
+          body: config,
+        }
+      );
+      return { data, error };
+    },
+
+    deleteProviderConfig: async (configId: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/provider-configs/{config_id}",
+        {
+          params: { path: { config_id: configId } },
+        }
+      );
       return { data, error };
     },
 
@@ -360,51 +468,81 @@ export function createApiClient(client: Client) {
     },
 
     createModelSpec: async (spec: components["schemas"]["ModelSpecCreate"]) => {
-      const { data, error } = await client.POST("/v1/model-specs/", { body: spec });
-      return { data, error };
-    },
-
-    getModelSpec: async (modelSpecId: string) => {
-      const { data, error } = await client.GET("/v1/model-specs/{model_spec_id}", {
-        params: { path: { model_spec_id: modelSpecId } },
-      });
-      return { data, error };
-    },
-
-    deleteModelSpec: async (modelSpecId: string) => {
-      const { data, error } = await client.DELETE("/v1/model-specs/{model_spec_id}", {
-        params: { path: { model_spec_id: modelSpecId } },
-      });
-      return { data, error };
-    },
-
-    updateModelSpec: async (modelSpecId: string, spec: components["schemas"]["ModelSpecUpdate"]) => {
-      const { data, error } = await client.PATCH("/v1/model-specs/{model_spec_id}", {
-        params: { path: { model_spec_id: modelSpecId } },
+      const { data, error } = await client.POST("/v1/model-specs/", {
         body: spec,
       });
       return { data, error };
     },
 
-    listModelSpecsByProvider: async (providerSpecId: string, params?: { is_active?: boolean }) => {
-      const { data, error } = await client.GET("/v1/model-specs/by-provider/{provider_spec_id}", {
-        params: {
-          path: { provider_spec_id: providerSpecId },
-          query: params
-        },
-      });
+    getModelSpec: async (modelSpecId: string) => {
+      const { data, error } = await client.GET(
+        "/v1/model-specs/{model_spec_id}",
+        {
+          params: { path: { model_spec_id: modelSpecId } },
+        }
+      );
       return { data, error };
     },
 
-    getModelSpecByProviderAndName: async (providerSpecId: string, modelName: string) => {
-      const { data, error } = await client.GET("/v1/model-specs/by-provider/{provider_spec_id}/{model_name}", {
-        params: { path: { provider_spec_id: providerSpecId, model_name: modelName } },
-      });
+    deleteModelSpec: async (modelSpecId: string) => {
+      const { data, error } = await client.DELETE(
+        "/v1/model-specs/{model_spec_id}",
+        {
+          params: { path: { model_spec_id: modelSpecId } },
+        }
+      );
+      return { data, error };
+    },
+
+    updateModelSpec: async (
+      modelSpecId: string,
+      spec: components["schemas"]["ModelSpecUpdate"]
+    ) => {
+      const { data, error } = await client.PATCH(
+        "/v1/model-specs/{model_spec_id}",
+        {
+          params: { path: { model_spec_id: modelSpecId } },
+          body: spec,
+        }
+      );
+      return { data, error };
+    },
+
+    listModelSpecsByProvider: async (
+      providerSpecId: string,
+      params?: { is_active?: boolean }
+    ) => {
+      const { data, error } = await client.GET(
+        "/v1/model-specs/by-provider/{provider_spec_id}",
+        {
+          params: {
+            path: { provider_spec_id: providerSpecId },
+            query: params,
+          },
+        }
+      );
+      return { data, error };
+    },
+
+    getModelSpecByProviderAndName: async (
+      providerSpecId: string,
+      modelName: string
+    ) => {
+      const { data, error } = await client.GET(
+        "/v1/model-specs/by-provider/{provider_spec_id}/{model_name}",
+        {
+          params: {
+            path: { provider_spec_id: providerSpecId, model_name: modelName },
+          },
+        }
+      );
       return { data, error };
     },
 
     upsertModelSpec: async (spec: components["schemas"]["ModelSpecCreate"]) => {
-      const { data, error } = await client.POST("/v1/model-specs/upsert", { body: spec });
+      const { data, error } = await client.POST("/v1/model-specs/upsert", {
+        body: spec,
+      });
       return { data, error };
     },
 
@@ -420,8 +558,12 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    createModelInstance: async (instance: components["schemas"]["ModelInstanceCreate"]) => {
-      const { data, error } = await client.POST("/v1/model-instances/", { body: instance });
+    createModelInstance: async (
+      instance: components["schemas"]["ModelInstanceCreate"]
+    ) => {
+      const { data, error } = await client.POST("/v1/model-instances/", {
+        body: instance,
+      });
       return { data, error };
     },
 
@@ -431,20 +573,36 @@ export function createApiClient(client: Client) {
       test_message?: string;
     }) => {
       // TODO: Implement model instance testing endpoint
-      return { data: null, error: { detail: [{ msg: "Model instance testing not yet implemented", type: "error" }] } };
+      return {
+        data: null,
+        error: {
+          detail: [
+            {
+              msg: "Model instance testing not yet implemented",
+              type: "error",
+            },
+          ],
+        },
+      };
     },
 
     getModelInstance: async (instanceId: string) => {
-      const { data, error } = await client.GET("/v1/model-instances/{instance_id}", {
-        params: { path: { instance_id: instanceId } },
-      });
+      const { data, error } = await client.GET(
+        "/v1/model-instances/{instance_id}",
+        {
+          params: { path: { instance_id: instanceId } },
+        }
+      );
       return { data, error };
     },
 
     deleteModelInstance: async (instanceId: string) => {
-      const { data, error } = await client.DELETE("/v1/model-instances/{instance_id}", {
-        params: { path: { instance_id: instanceId } },
-      });
+      const { data, error } = await client.DELETE(
+        "/v1/model-instances/{instance_id}",
+        {
+          params: { path: { instance_id: instanceId } },
+        }
+      );
       return { data, error };
     },
 
@@ -467,7 +625,10 @@ export function createApiClient(client: Client) {
 
     // Builtin Tools API (outside generated schema)
     listBuiltinTools: async () => {
-      const { data, error } = await client.GET("/v1/agents/tools/builtin" as any, {});
+      const { data, error } = await client.GET(
+        "/v1/agents/tools/builtin" as any,
+        {}
+      );
       return { data, error };
     },
 
@@ -487,13 +648,15 @@ export function createApiClient(client: Client) {
       total: number;
     }> => {
       try {
-        const { data, error } = await client.GET('/v1/mcp-server-instances/health/containers');
+        const { data, error } = await client.GET(
+          "/v1/mcp-server-instances/health/containers"
+        );
         if (error || !data) {
           return { health_checks: [], total: 0 };
         }
         return data as any;
       } catch (error) {
-        console.warn('Failed to fetch MCP health status:', error);
+        console.warn("Failed to fetch MCP health status:", error);
         return { health_checks: [], total: 0 };
       }
     },

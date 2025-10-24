@@ -1,21 +1,24 @@
-'use client';
+"use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Agent } from "@/types";
-import AgentCard from "./AgentCard";
-import Table from "@/components/Table/Table";
 import { useRouter } from "next/navigation";
-import ModelBadge from "@/components/ui/model-badge";
-import { getToolAvatars } from "@/utils/toolsDisplay";
+import Table from "@/components/Table/Table";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
+import ModelBadge from "@/components/ui/model-badge";
+import { Agent } from "@/types";
+import { getToolAvatars } from "@/utils/toolsDisplay";
+import AgentCard from "./AgentCard";
 
 interface AgentsListProps {
   initialAgents: Agent[];
   viewMode?: string;
 }
 
-export default function AgentsList({ initialAgents, viewMode = "grid" }: AgentsListProps) {
+export default function AgentsList({
+  initialAgents,
+  viewMode = "grid",
+}: AgentsListProps) {
   const t = useTranslations("AgentsPage");
   const commonT = useTranslations("Common");
   const router = useRouter();
@@ -36,14 +39,16 @@ export default function AgentsList({ initialAgents, viewMode = "grid" }: AgentsL
       header: t("description") || "Description",
       cellClassName: "max-w-[300px]",
       render: (value: string) => (
-        <span className="truncate text-xs text-muted-foreground block">{value || '-'}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {value || "-"}
+        </span>
       ),
     },
     {
       accessor: "model_info",
       header: t("model") || "Model",
       render: (value: any) => (
-        <ModelBadge 
+        <ModelBadge
           providerName={value?.provider_name}
           modelDisplayName={value?.model_display_name}
           configName={value?.config_name}
@@ -55,18 +60,17 @@ export default function AgentsList({ initialAgents, viewMode = "grid" }: AgentsL
       header: t("tools") || "Tools",
       render: (value: any, item: Agent) => {
         const toolAvatars = getToolAvatars(item);
-        const toolUrls = toolAvatars.map(tool => ({ imageUrl: tool.imageUrl }));
-        
+        const toolUrls = toolAvatars.map((tool) => ({
+          imageUrl: tool.imageUrl,
+        }));
+
         if (toolUrls.length === 0) {
           return <span className="text-xs text-muted-foreground">-</span>;
         }
-        
+
         return (
           <div className="flex items-center gap-2">
-            <AvatarCircles
-              maxDisplay={3}
-              avatarUrls={toolUrls}
-            />
+            <AvatarCircles maxDisplay={3} avatarUrls={toolUrls} />
             <span className="text-xs text-muted-foreground">
               {toolAvatars.length}
             </span>
@@ -79,8 +83,8 @@ export default function AgentsList({ initialAgents, viewMode = "grid" }: AgentsL
   // Render table view
   if (viewMode === "table") {
     return (
-      <Table 
-        data={initialAgents} 
+      <Table
+        data={initialAgents}
         columns={agentColumns}
         onRowClick={(agent) => {
           router.push(`/agents/${agent.id}`);
@@ -91,13 +95,10 @@ export default function AgentsList({ initialAgents, viewMode = "grid" }: AgentsL
 
   // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
-      {
-        initialAgents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} />
-        ))
-      }
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      {initialAgents.map((agent) => (
+        <AgentCard key={agent.id} agent={agent} />
+      ))}
     </div>
   );
 }
-

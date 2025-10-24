@@ -91,7 +91,7 @@
       "addNewLlmButton": "Создать модель",
       "backToLlmModels": "Вернуться к моделям LLM",
       "modelName": "Имя модели",
-      "description": "Описание",    
+      "description": "Описание",
       "provider": "Поставщик",
       "modelType": "Тип модели",
       "endpointUrl": "URL-адрес конечной точки",
@@ -132,12 +132,12 @@
       "languageDescription": "Выберите свой предпочитаемый язык",
       "switchLanguage": "Сменить язык",
       "theme": "Тема",
-      "themeDescription": "Измените тему приложения" 
+      "themeDescription": "Измените тему приложения"
     },
     "subscription": {
       "title": "Подписка",
       "description": "Управление подпиской и счетами"
-    } 
+    }
   },
 
   "AgentsPage": {
@@ -214,7 +214,7 @@
       "selected": "Выбрано",
       "added": "Добавлено",
       "remove": "Удалить",
-      
+
       "tool": "Инструмент",
       "activeMcpServers": "Активные MCP серверы",
       "builtinTools": "Встроенные инструменты",
@@ -322,7 +322,7 @@
     "createConfigurationWithModels": "Создать конфигурацию{modelCount, plural, =0 {} one { + # модель} few { + # модели} many { + # моделей} other { + # модели}}",
     "modelCount": "{count, plural, =0 {} one {+ # модель} few {+ # модели} many {+ # моделей} other {+ # модели}}",
     "endpointUrl": "URL-адрес конечной точки",
-    "apiKey": "Ключ API", 
+    "apiKey": "Ключ API",
     "modelInstances": "Экземпляры моделей",
     "providerConfigurationUpdatedSuccessfully": "Конфигурация провайдера успешно обновлена",
     "providerConfigurationCreatedSuccessfully": "Конфигурация провайдера успешно создана",

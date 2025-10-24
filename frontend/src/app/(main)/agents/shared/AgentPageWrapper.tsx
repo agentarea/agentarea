@@ -1,6 +1,6 @@
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
+import { getTranslations } from "next-intl/server";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 interface BreadcrumbItem {
@@ -15,32 +15,34 @@ interface AgentPageWrapperProps {
   className?: string;
 }
 
-export default async function AgentPageWrapper({ 
-  children, 
-  breadcrumb, 
+export default async function AgentPageWrapper({
+  children,
+  breadcrumb,
   useContentBlock = true,
-  className = "h-full w-full px-4 py-5"
+  className = "h-full w-full px-4 py-5",
 }: AgentPageWrapperProps) {
   const t = await getTranslations("AgentsPage");
 
   const content = (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex h-64 items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      }
+    >
       {children}
     </Suspense>
   );
 
   if (useContentBlock) {
     return (
-      <ContentBlock 
+      <ContentBlock
         header={{
-          breadcrumb: breadcrumb.map(item => ({
+          breadcrumb: breadcrumb.map((item) => ({
             label: item.label,
-            href: item.href
-          }))
+            href: item.href,
+          })),
         }}
       >
         {content}
@@ -48,9 +50,5 @@ export default async function AgentPageWrapper({
     );
   }
 
-  return (
-    <div className={className}>
-      {content}
-    </div>
-  );
+  return <div className={className}>{content}</div>;
 }

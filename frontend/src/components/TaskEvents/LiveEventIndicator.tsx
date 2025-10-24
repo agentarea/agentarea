@@ -11,30 +11,30 @@ interface LiveEventIndicatorProps {
   className?: string;
 }
 
-export function LiveEventIndicator({ 
-  connected, 
-  latestEvent, 
-  eventCount, 
-  className = "" 
+export function LiveEventIndicator({
+  connected,
+  latestEvent,
+  eventCount,
+  className = "",
 }: LiveEventIndicatorProps) {
   const getStatusIcon = () => {
     if (!connected) {
       return <AlertCircle className="h-3 w-3 text-red-500" />;
     }
-    
+
     if (latestEvent) {
       switch (latestEvent.level) {
-        case 'success':
+        case "success":
           return <CheckCircle2 className="h-3 w-3 text-green-500" />;
-        case 'error':
+        case "error":
           return <AlertCircle className="h-3 w-3 text-red-500" />;
-        case 'warning':
+        case "warning":
           return <AlertCircle className="h-3 w-3 text-yellow-500" />;
         default:
           return <Activity className="h-3 w-3 text-blue-500" />;
       }
     }
-    
+
     return <Zap className="h-3 w-3 text-green-500" />;
   };
 
@@ -45,21 +45,22 @@ export function LiveEventIndicator({
   };
 
   const getStatusColor = (): string => {
-    if (!connected) return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
-    
+    if (!connected)
+      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
+
     if (latestEvent) {
       switch (latestEvent.level) {
-        case 'success':
+        case "success":
           return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
-        case 'error':
+        case "error":
           return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
-        case 'warning':
+        case "warning":
           return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
         default:
           return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
       }
     }
-    
+
     return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
   };
 
@@ -67,19 +68,17 @@ export function LiveEventIndicator({
     <div className={`flex items-center gap-2 ${className}`}>
       <div className="flex items-center gap-1">
         {getStatusIcon()}
-        <span className="text-xs text-muted-foreground">
-          {getStatusText()}
-        </span>
+        <span className="text-xs text-muted-foreground">{getStatusText()}</span>
       </div>
-      
+
       {eventCount > 0 && (
-        <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+        <Badge variant="secondary" className="px-1.5 py-0.5 text-xs">
           {eventCount} events
         </Badge>
       )}
-      
+
       {latestEvent && (
-        <Badge className={`text-xs px-1.5 py-0.5 ${getStatusColor()}`}>
+        <Badge className={`px-1.5 py-0.5 text-xs ${getStatusColor()}`}>
           Latest: {new Date(latestEvent.timestamp).toLocaleTimeString()}
         </Badge>
       )}

@@ -1,5 +1,5 @@
-import { getAllTasks, type TaskWithAgent } from "@/lib/api";
 import EmptyState from "@/components/EmptyState";
+import { getAllTasks, type TaskWithAgent } from "@/lib/api";
 import TasksList from "./TasksList";
 
 interface TasksDataProps {
@@ -7,7 +7,10 @@ interface TasksDataProps {
   viewMode?: string;
 }
 
-export async function TasksData({ searchQuery = "", viewMode = "grid" }: TasksDataProps) {
+export async function TasksData({
+  searchQuery = "",
+  viewMode = "grid",
+}: TasksDataProps) {
   // Fetch tasks on the server
   let allTasks: TaskWithAgent[] = [];
   let error: string | null = null;
@@ -27,10 +30,11 @@ export async function TasksData({ searchQuery = "", viewMode = "grid" }: TasksDa
   let filteredTasks = allTasks;
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
-    filteredTasks = allTasks.filter(task => 
-      task.description?.toLowerCase().includes(query) ||
-      task.agent_name?.toLowerCase().includes(query) ||
-      task.status?.toLowerCase().includes(query)
+    filteredTasks = allTasks.filter(
+      (task) =>
+        task.description?.toLowerCase().includes(query) ||
+        task.agent_name?.toLowerCase().includes(query) ||
+        task.status?.toLowerCase().includes(query)
     );
   }
 
@@ -38,17 +42,12 @@ export async function TasksData({ searchQuery = "", viewMode = "grid" }: TasksDa
   const hasNoResults = filteredTasks.length === 0 && !hasNoTasks;
 
   if (hasNoTasks) {
-    return (
-      <EmptyState 
-        title="No tasks found"
-        iconsType="tasks"
-      />
-    );
+    return <EmptyState title="No tasks found" iconsType="tasks" />;
   }
 
   if (hasNoResults) {
     return (
-      <EmptyState 
+      <EmptyState
         title="No matching tasks"
         description={`No tasks match your search query: "${searchQuery}"`}
         iconsType="tasks"
@@ -57,13 +56,8 @@ export async function TasksData({ searchQuery = "", viewMode = "grid" }: TasksDa
   }
 
   if (error) {
-    return (
-      <div className="text-center py-6 text-red-500">
-        {error}
-      </div>
-    );
+    return <div className="py-6 text-center text-red-500">{error}</div>;
   }
 
   return <TasksList initialTasks={filteredTasks} viewMode={viewMode} />;
 }
-

@@ -1,14 +1,20 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { CheckCircle, Loader2, Send } from "lucide-react";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getAgents, createTask } from "./actions";
-import { Loader2, Send, CheckCircle } from "lucide-react";
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { createTask, getAgents } from "./actions";
 
 interface Agent {
   id: string;
@@ -22,7 +28,11 @@ export default function TaskCreator() {
   const [taskDescription, setTaskDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingAgents, setLoadingAgents] = useState(true);
-  const [result, setResult] = useState<{ success: boolean; message: string; taskId?: string } | null>(null);
+  const [result, setResult] = useState<{
+    success: boolean;
+    message: string;
+    taskId?: string;
+  } | null>(null);
 
   // Load agents on mount
   useEffect(() => {
@@ -33,12 +43,12 @@ export default function TaskCreator() {
     try {
       setLoadingAgents(true);
       const { data: agentsData, error } = await getAgents();
-      
+
       if (error) {
         console.error("Failed to load agents:", error);
         setResult({ success: false, message: "Failed to load agents" });
       } else {
-        const transformedAgents = (agentsData || []).map(agent => ({
+        const transformedAgents = (agentsData || []).map((agent) => ({
           ...agent,
           description: agent.description || undefined,
           instruction: agent.instruction || undefined,
@@ -62,7 +72,10 @@ export default function TaskCreator() {
 
   const handleCreateTask = async () => {
     if (!selectedAgentId || !taskDescription.trim()) {
-      setResult({ success: false, message: "Please select an agent and enter a task description" });
+      setResult({
+        success: false,
+        message: "Please select an agent and enter a task description",
+      });
       return;
     }
 
@@ -74,31 +87,31 @@ export default function TaskCreator() {
         description: taskDescription,
         parameters: {
           created_via: "task_creator_ui",
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         },
         user_id: "ui_test_user",
-        enable_agent_communication: true
+        enable_agent_communication: true,
       };
 
       const { data: task, error } = await createTask(selectedAgentId, taskData);
 
       if (error) {
-        setResult({ 
-          success: false, 
-          message: `Failed to create task: ${error.detail?.[0]?.msg || 'Unknown error'}` 
+        setResult({
+          success: false,
+          message: `Failed to create task: ${error.detail?.[0]?.msg || "Unknown error"}`,
         });
       } else {
         setResult({
           success: true,
-          message: `Task created successfully!`
+          message: `Task created successfully!`,
         });
         setTaskDescription(""); // Clear the form
       }
     } catch (err) {
       console.error("Error creating task:", err);
-      setResult({ 
-        success: false, 
-        message: `Error creating task: ${err instanceof Error ? err.message : 'Unknown error'}` 
+      setResult({
+        success: false,
+        message: `Error creating task: ${err instanceof Error ? err.message : "Unknown error"}`,
       });
     } finally {
       setLoading(false);
@@ -107,12 +120,12 @@ export default function TaskCreator() {
 
   const handleViewTask = () => {
     if (result?.taskId) {
-      window.open(`/tasks/${result.taskId}`, '_blank');
+      window.open(`/tasks/${result.taskId}`, "_blank");
     }
   };
 
   const handleViewAllTasks = () => {
-    window.open('/tasks', '_blank');
+    window.open("/tasks", "_blank");
   };
 
   if (loadingAgents) {
@@ -163,19 +176,19 @@ export default function TaskCreator() {
         </div>
 
         {/* Create Task Button */}
-        <Button 
-          onClick={handleCreateTask} 
+        <Button
+          onClick={handleCreateTask}
           disabled={loading || !selectedAgentId || !taskDescription.trim()}
           className="w-full"
         >
           {loading ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Creating Task...
             </>
           ) : (
             <>
-              <Send className="h-4 w-4 mr-2" />
+              <Send className="mr-2 h-4 w-4" />
               Create Task
             </>
           )}
@@ -183,23 +196,37 @@ export default function TaskCreator() {
 
         {/* Result Display */}
         {result && (
-          <div className={`p-4 rounded-lg ${result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          <div
+            className={`rounded-lg p-4 ${result.success ? "border border-green-200 bg-green-50" : "border border-red-200 bg-red-50"}`}
+          >
             <div className="flex items-start gap-2">
               {result.success ? (
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                <CheckCircle className="mt-0.5 h-5 w-5 text-green-600" />
               ) : (
-                <div className="h-5 w-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center mt-0.5">!</div>
+                <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">
+                  !
+                </div>
               )}
               <div className="flex-1">
-                <p className={`text-sm ${result.success ? 'text-green-800' : 'text-red-800'}`}>
+                <p
+                  className={`text-sm ${result.success ? "text-green-800" : "text-red-800"}`}
+                >
                   {result.message}
                 </p>
                 {result.success && result.taskId && (
                   <div className="mt-3 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={handleViewTask}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleViewTask}
+                    >
                       View Task Details
                     </Button>
-                    <Button size="sm" variant="outline" onClick={handleViewAllTasks}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleViewAllTasks}
+                    >
                       View All Tasks
                     </Button>
                   </div>
@@ -217,14 +244,14 @@ export default function TaskCreator() {
               "What is the current time and date?",
               "Tell me a joke",
               "Explain what you can do",
-              "Help me with a simple calculation: 15 * 23"
+              "Help me with a simple calculation: 15 * 23",
             ].map((example, index) => (
               <Button
                 key={index}
                 variant="outline"
                 size="sm"
                 onClick={() => setTaskDescription(example)}
-                className="text-left justify-start h-auto py-2 px-3"
+                className="h-auto justify-start px-3 py-2 text-left"
               >
                 {example}
               </Button>

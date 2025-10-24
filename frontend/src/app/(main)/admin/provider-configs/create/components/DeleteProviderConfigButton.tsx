@@ -1,15 +1,18 @@
-'use client';
+"use client";
 
-import { deleteProviderConfig } from '../../actions';
-import DeleteButton from '@/components/DeleteButton';
-import { useTranslations } from 'next-intl';
+import { useTranslations } from "next-intl";
+import DeleteButton from "@/components/DeleteButton";
+import { deleteProviderConfig } from "../../actions";
 
 interface DeleteProviderConfigButtonProps {
   configId: string;
   configName: string;
 }
 
-export default function DeleteProviderConfigButton({ configId, configName }: DeleteProviderConfigButtonProps) {
+export default function DeleteProviderConfigButton({
+  configId,
+  configName,
+}: DeleteProviderConfigButtonProps) {
   const t = useTranslations("Models");
   const tProviderConfigForm = useTranslations("ProviderConfigForm");
 
@@ -25,7 +28,7 @@ export default function DeleteProviderConfigButton({ configId, configName }: Del
       errorMessages={{
         noIdProvided: t("error.noConfigIdProvided"),
         failedToDelete: t("error.failedToDeleteConfiguration"),
-        unexpectedError: t("error.unexpectedErrorWhileDeleting")
+        unexpectedError: t("error.unexpectedErrorWhileDeleting"),
       }}
     />
   );

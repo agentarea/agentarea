@@ -1,26 +1,26 @@
+import { getTranslations } from "next-intl/server";
+import EmptyState from "@/components/EmptyState";
 import { listAgents, listModelInstances } from "@/lib/api";
 import AgentsList from "./AgentsList";
-import EmptyState from "@/components/EmptyState";
-import { getTranslations } from 'next-intl/server';
 
 interface AgentsContentProps {
   searchQuery?: string;
   viewMode?: string;
 }
 
-export default async function AgentsContent({ 
-  searchQuery = "", 
-  viewMode = "grid" 
+export default async function AgentsContent({
+  searchQuery = "",
+  viewMode = "grid",
 }: AgentsContentProps) {
   const t = await getTranslations("AgentsPage");
-  
-  const [{ data: agents = [] }, { data: modelInstances = [] }] = await Promise.all([
-    listAgents(),
-    listModelInstances(),
-  ]);
+
+  const [{ data: agents = [] }, { data: modelInstances = [] }] =
+    await Promise.all([listAgents(), listModelInstances()]);
 
   const enrichedAgents = (agents as any[]).map((agent) => {
-    const model = (modelInstances as any[]).find((m) => m.id === agent.model_id);
+    const model = (modelInstances as any[]).find(
+      (m) => m.id === agent.model_id
+    );
     const model_info = model
       ? {
           provider_name: model.provider_name || undefined,
@@ -35,19 +35,20 @@ export default async function AgentsContent({
   let filteredAgents = enrichedAgents;
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
-    filteredAgents = enrichedAgents.filter(agent => 
-      agent.name?.toLowerCase().includes(query) ||
-      agent.description?.toLowerCase().includes(query) ||
-      agent.model_info?.provider_name?.toLowerCase().includes(query) ||
-      agent.model_info?.model_display_name?.toLowerCase().includes(query) ||
-      agent.model_info?.config_name?.toLowerCase().includes(query)
+    filteredAgents = enrichedAgents.filter(
+      (agent) =>
+        agent.name?.toLowerCase().includes(query) ||
+        agent.description?.toLowerCase().includes(query) ||
+        agent.model_info?.provider_name?.toLowerCase().includes(query) ||
+        agent.model_info?.model_display_name?.toLowerCase().includes(query) ||
+        agent.model_info?.config_name?.toLowerCase().includes(query)
     );
   }
 
   // Handle empty states
   if (enrichedAgents.length === 0) {
     return (
-      <EmptyState 
+      <EmptyState
         title={t("noAgentsTitle")}
         description={t("noAgentsDescription")}
         iconsType="agent"
@@ -57,7 +58,7 @@ export default async function AgentsContent({
 
   if (filteredAgents.length === 0) {
     return (
-      <EmptyState 
+      <EmptyState
         title={t("noMatchingAgents")}
         description={`${t("noMatchingAgentsDescription")}: "${searchQuery}"`}
         iconsType="agent"
@@ -65,5 +66,7 @@ export default async function AgentsContent({
     );
   }
 
-  return <AgentsList initialAgents={filteredAgents as any} viewMode={viewMode} />;
+  return (
+    <AgentsList initialAgents={filteredAgents as any} viewMode={viewMode} />
+  );
 }

@@ -1,5 +1,5 @@
-import { getProviderIconUrl } from "@/lib/provider-icons";
 import Image from "next/image";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
 
 interface ModelBadgeProps {
@@ -10,14 +10,13 @@ interface ModelBadgeProps {
   isLoading?: boolean;
 }
 
-export default function ModelBadge({ 
-  providerName, 
-  modelDisplayName, 
-  configName, 
-  className, 
-  isLoading = false 
+export default function ModelBadge({
+  providerName,
+  modelDisplayName,
+  configName,
+  className,
+  isLoading = false,
 }: ModelBadgeProps) {
-
   const getProviderIcon = () => {
     if (isLoading) {
       return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iI0YzRjNGMyIvPgo8Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iMyIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K";
@@ -35,12 +34,26 @@ export default function ModelBadge({
   };
 
   return (
-    <div className={cn("max-w-max flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-md text-sm", className)} title={`Model: ${getModelName()}${providerName ? ` (${providerName})` : ''}`}>
-      <Image src={getProviderIcon()} alt={providerName || "Model"} width={16} height={16} className="rounded-sm" />
-      <span className="text-xs font-medium text-gray-700">{getModelName()}</span>
-      {providerName && <span className="text-xs text-gray-500">({providerName})</span>}
+    <div
+      className={cn(
+        "flex max-w-max items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-sm",
+        className
+      )}
+      title={`Model: ${getModelName()}${providerName ? ` (${providerName})` : ""}`}
+    >
+      <Image
+        src={getProviderIcon()}
+        alt={providerName || "Model"}
+        width={16}
+        height={16}
+        className="rounded-sm"
+      />
+      <span className="text-xs font-medium text-gray-700">
+        {getModelName()}
+      </span>
+      {providerName && (
+        <span className="text-xs text-gray-500">({providerName})</span>
+      )}
     </div>
   );
 }
-
-

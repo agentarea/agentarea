@@ -1,7 +1,7 @@
 "use server";
 
-import { updateAgent as updateAgentAPI } from "@/lib/api";
 import type { components } from "@/api/schema";
+import { updateAgent as updateAgentAPI } from "@/lib/api";
 
 export async function updateAgentSettings(
   agentId: string,

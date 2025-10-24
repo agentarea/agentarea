@@ -1,44 +1,47 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 // Универсальный хук для работы с поиском с debounce
-export function useSearchWithDebounce(initialQuery: string = "", delay: number = 1000) {
-    const [searchState, setSearchState] = useState({
-        query: initialQuery,
-        debouncedQuery: initialQuery,
-        isSearching: false
-    });
+export function useSearchWithDebounce(
+  initialQuery: string = "",
+  delay: number = 1000
+) {
+  const [searchState, setSearchState] = useState({
+    query: initialQuery,
+    debouncedQuery: initialQuery,
+    isSearching: false,
+  });
 
-    useEffect(() => {
-        setSearchState(prev => ({ ...prev, isSearching: true }));
-        
-        const timer = setTimeout(() => {
-            setSearchState(prev => ({
-                ...prev,
-                debouncedQuery: prev.query,
-                isSearching: false
-            }));
-        }, delay);
+  useEffect(() => {
+    setSearchState((prev) => ({ ...prev, isSearching: true }));
 
-        return () => clearTimeout(timer);
-    }, [searchState.query, delay]);
+    const timer = setTimeout(() => {
+      setSearchState((prev) => ({
+        ...prev,
+        debouncedQuery: prev.query,
+        isSearching: false,
+      }));
+    }, delay);
 
-    const updateQuery = useCallback((newQuery: string) => {
-        setSearchState(prev => ({ ...prev, query: newQuery }));
-    }, []);
+    return () => clearTimeout(timer);
+  }, [searchState.query, delay]);
 
-    const forceUpdate = useCallback(() => {
-        setSearchState(prev => ({
-            ...prev,
-            debouncedQuery: prev.query,
-            isSearching: false
-        }));
-    }, []);
+  const updateQuery = useCallback((newQuery: string) => {
+    setSearchState((prev) => ({ ...prev, query: newQuery }));
+  }, []);
 
-    return {
-        query: searchState.query,
-        debouncedQuery: searchState.debouncedQuery,
-        isSearching: searchState.isSearching,
-        updateQuery,
-        forceUpdate
-    };
-} 
+  const forceUpdate = useCallback(() => {
+    setSearchState((prev) => ({
+      ...prev,
+      debouncedQuery: prev.query,
+      isSearching: false,
+    }));
+  }, []);
+
+  return {
+    query: searchState.query,
+    debouncedQuery: searchState.debouncedQuery,
+    isSearching: searchState.isSearching,
+    updateQuery,
+    forceUpdate,
+  };
+}

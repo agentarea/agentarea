@@ -1,12 +1,11 @@
-import { Controller } from "react-hook-form";
-import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
-import type { AgentFormValues } from "../types";
-import { Control } from "react-hook-form";
+import { Control, Controller } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { MethodsList } from "./MethodsList";
+import type { AgentFormValues } from "../types";
 import { MethodsIndicator } from "./MethodsIndicator";
+import { MethodsList } from "./MethodsList";
 
 interface Method {
   name: string;
@@ -40,16 +39,16 @@ interface TriggerControlProps {
   onMethodToggle?: (methodName: string, checked: boolean) => void;
 }
 
-export const TriggerControl = ({ 
-  trigger, 
-  index, 
-  control, 
-  removeEvent, 
-  editEvent, 
-  name, 
-  enabledName, 
-  selectedMethods = {}, 
-  onMethodToggle 
+export const TriggerControl = ({
+  trigger,
+  index,
+  control,
+  removeEvent,
+  editEvent,
+  name,
+  enabledName,
+  selectedMethods = {},
+  onMethodToggle,
 }: TriggerControlProps) => {
   if (!trigger) {
     return (
@@ -65,7 +64,7 @@ export const TriggerControl = ({
 
   const handleSelectAllMethods = (checked: boolean) => {
     if (!onMethodToggle || !hasMethods) return;
-    
+
     availableMethods.forEach((method) => {
       onMethodToggle(method.name, checked);
     });
@@ -73,7 +72,7 @@ export const TriggerControl = ({
 
   const renderMethodsIndicator = () => {
     if (!hasMethods || !hasMethodToggle) return null;
-    
+
     return (
       <MethodsIndicator
         methods={availableMethods}
@@ -91,7 +90,7 @@ export const TriggerControl = ({
       render={({ field }) => (
         <div className="flex items-center gap-1">
           <span
-            className="note cursor-pointer select-none hidden sm:block"
+            className="note hidden cursor-pointer select-none sm:block"
             onClick={() => field.onChange(!field.value)}
           >
             {field.value ? "enabled" : "disabled"}
@@ -109,14 +108,14 @@ export const TriggerControl = ({
 
   const renderEditButton = () => {
     if (!editEvent) return null;
-    
+
     return (
       <Button
         type="button"
         variant="ghost"
         size="icon"
         onClick={() => editEvent(index)}
-        className="text-muted-foreground/60 h-4 w-4 flex-shrink-0 hover:bg-transparent hover:text-primary"
+        className="h-4 w-4 flex-shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-primary"
         aria-label="Edit Event"
       >
         <Edit className="h-4 w-4" />
@@ -126,14 +125,14 @@ export const TriggerControl = ({
 
   const renderRemoveButton = () => {
     if (!removeEvent) return null;
-    
+
     return (
       <Button
         type="button"
         variant="ghost"
         size="icon"
         onClick={() => removeEvent(index)}
-        className="text-muted-foreground/60 h-4 w-4 flex-shrink-0 hover:bg-transparent hover:text-red-500"
+        className="h-4 w-4 flex-shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-red-500"
         aria-label="Remove Event"
       >
         <Trash2 className="h-4 w-4" />
@@ -157,8 +156,8 @@ export const TriggerControl = ({
 
     return (
       <div className="flex flex-row items-center gap-2 px-[7px] py-[7px]">
-        <trigger.icon className="w-5 h-5 text-muted-foreground" />
-        <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent">
+        <trigger.icon className="h-5 w-5 text-muted-foreground" />
+        <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
           {trigger.label || trigger.name}
         </h3>
       </div>
@@ -181,15 +180,20 @@ export const TriggerControl = ({
 
     return (
       <div className="space-y-1">
-        <p className="text-xs font-medium text-foreground">Available Methods:</p>
+        <p className="text-xs font-medium text-foreground">
+          Available Methods:
+        </p>
         <div className="space-y-1">
           {availableMethods.map((method) => (
-            <div key={method.name} className="flex items-center gap-2 p-1 rounded bg-muted/30">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+            <div
+              key={method.name}
+              className="flex items-center gap-2 rounded bg-muted/30 p-1"
+            >
+              <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
               <span className="text-xs text-foreground">
                 {method.display_name || method.name}
               </span>
-              <span className="text-xs text-muted-foreground ml-auto">
+              <span className="ml-auto text-xs text-muted-foreground">
                 {method.description}
               </span>
             </div>
@@ -200,19 +204,23 @@ export const TriggerControl = ({
   };
 
   const renderToolsSection = () => {
-    if (!trigger.available_tools || trigger.available_tools.length === 0) return null;
+    if (!trigger.available_tools || trigger.available_tools.length === 0)
+      return null;
 
     return (
       <div className="space-y-1">
         <p className="text-xs font-medium text-foreground">Available Tools:</p>
         <div className="space-y-1">
           {trigger.available_tools.map((tool) => (
-            <div key={tool.name} className="flex items-center gap-2 p-1 rounded bg-muted/30">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+            <div
+              key={tool.name}
+              className="flex items-center gap-2 rounded bg-muted/30 p-1"
+            >
+              <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
               <span className="text-xs text-foreground">
                 {tool.display_name || tool.name}
               </span>
-              <span className="text-xs text-muted-foreground ml-auto">
+              <span className="ml-auto text-xs text-muted-foreground">
                 {tool.description}
               </span>
             </div>
@@ -229,7 +237,7 @@ export const TriggerControl = ({
       title={renderTitle()}
       iconSrc={trigger.icon ? undefined : "/Icon.svg"}
     >
-      <div className="mt-2 p-2 space-y-2">
+      <div className="mt-2 space-y-2 p-2">
         <p className="text-xs text-muted-foreground">
           {trigger.description || trigger.label || trigger.name}
         </p>

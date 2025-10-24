@@ -1,8 +1,8 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 export default function ErrorPage() {
   const router = useRouter();
@@ -11,27 +11,27 @@ export default function ErrorPage() {
   const errorDescription = searchParams.get("error_description");
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-600 via-purple-600 to-indigo-700">
-      <Card className="w-full max-w-md p-8 bg-white/95 dark:bg-gray-800/95 shadow-2xl rounded-xl backdrop-blur-sm border border-white/20 dark:border-gray-700/20">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-600 via-purple-600 to-indigo-700">
+      <Card className="w-full max-w-md rounded-xl border border-white/20 bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:border-gray-700/20 dark:bg-gray-800/95">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
             Authentication Error
           </h1>
 
           {error && (
-            <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-md">
-              <p className="text-red-800 dark:text-red-200 font-medium">
+            <div className="mb-4 rounded-md border border-red-300 bg-red-100 p-4 dark:border-red-700 dark:bg-red-900/20">
+              <p className="font-medium text-red-800 dark:text-red-200">
                 {error}
               </p>
               {errorDescription && (
-                <p className="text-red-600 dark:text-red-300 text-sm mt-2">
+                <p className="mt-2 text-sm text-red-600 dark:text-red-300">
                   {errorDescription}
                 </p>
               )}
             </div>
           )}
 
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="mb-6 text-gray-600 dark:text-gray-400">
             Something went wrong during authentication. Please try again.
           </p>
 

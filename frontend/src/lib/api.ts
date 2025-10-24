@@ -1,6 +1,6 @@
-import { getServerClient } from "./server-client";
-import { createApiClient } from "./api-factory";
 import type { components } from "../api/schema";
+import { createApiClient } from "./api-factory";
+import { getServerClient } from "./server-client";
 
 // Create API client using server client
 const api = createApiClient(getServerClient());
@@ -97,18 +97,24 @@ export const {
 // Convenience helpers built on top of the generated API
 export const getAgentTaskMessages = async (agentId: string, taskId: string) => {
   // Build message history from task events
-  const { data: events, error } = await getAgentTaskEvents(agentId, taskId, { page_size: 100 } as any);
+  const { data: events, error } = await getAgentTaskEvents(agentId, taskId, {
+    page_size: 100,
+  } as any);
   if (error || !events) {
     return { data: [], error };
   }
 
   const messages = (events as any).events
-    .filter((event: any) => ['LLMCallCompleted', 'ToolCallCompleted', 'WorkflowCompleted'].includes(event.event_type))
+    .filter((event: any) =>
+      ["LLMCallCompleted", "ToolCallCompleted", "WorkflowCompleted"].includes(
+        event.event_type
+      )
+    )
     .map((event: any) => ({
       id: event.id,
-      content: event.data?.content || event.data?.result || '',
-      role: event.event_type === 'LLMCallCompleted' ? 'assistant' : 'system',
-      timestamp: event.timestamp
+      content: event.data?.content || event.data?.result || "",
+      role: event.event_type === "LLMCallCompleted" ? "assistant" : "system",
+      timestamp: event.timestamp,
     }));
 
   return { data: messages, error: null };
@@ -147,14 +153,20 @@ export const listProviderConfigsWithModelInstances = async (params?: {
   }
   const configs = configsResponse.data || [];
   const specsWithModels = providersResponse.data || [];
-  const specsById = Object.fromEntries(specsWithModels.map((s: any) => [s.id, s]));
+  const specsById = Object.fromEntries(
+    specsWithModels.map((s: any) => [s.id, s])
+  );
   const configsWithModels = configs.map((config: any) => ({
     ...config,
-    models_list: config.model_instance_ids.map((modelSpecId: string) => {
-      const providerSpec = specsById[config.provider_spec_id];
-      if (!providerSpec) return null;
-      return providerSpec.models.find((m: any) => m.id === modelSpecId) || null;
-    }).filter(Boolean),
+    models_list: config.model_instance_ids
+      .map((modelSpecId: string) => {
+        const providerSpec = specsById[config.provider_spec_id];
+        if (!providerSpec) return null;
+        return (
+          providerSpec.models.find((m: any) => m.id === modelSpecId) || null
+        );
+      })
+      .filter(Boolean),
   }));
 
   return { data: configsWithModels, error: null };
@@ -166,18 +178,26 @@ export const getProvidersAndConfigs = async () => {
     listProviderConfigs(),
   ]);
 
-  return { data: { providerSpecs: specs || [], providerConfigs: configs || [] }, error: null };
+  return {
+    data: { providerSpecs: specs || [], providerConfigs: configs || [] },
+    error: null,
+  };
 };
 
-export type Agent = components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+export type Agent =
+  components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
 export type MCPServer = components["schemas"]["MCPServerResponse"];
-export type MCPServerInstance = components["schemas"]["MCPServerInstanceResponse"];
+export type MCPServerInstance =
+  components["schemas"]["MCPServerInstanceResponse"];
 export type ProviderSpec = components["schemas"]["ProviderSpecResponse"];
-export type ProviderSpecWithModels = components["schemas"]["ProviderSpecWithModelsResponse"];
+export type ProviderSpecWithModels =
+  components["schemas"]["ProviderSpecWithModelsResponse"];
 export type ProviderConfig = components["schemas"]["ProviderConfigResponse"];
-export type ModelSpec = components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
+export type ModelSpec =
+  components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
 export type ModelInstance = components["schemas"]["ModelInstanceResponse"];
-export type ChatAgent = components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"];
+export type ChatAgent =
+  components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"];
 export type ChatResponse = components["schemas"]["ChatResponse"];
 export type ConversationResponse = any;
 export type TaskResponse = components["schemas"]["TaskResponse"];

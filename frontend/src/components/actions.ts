@@ -1,7 +1,7 @@
 "use server";
 
-import { listAgents, createAgentTask } from "@/lib/api";
 import type { components } from "@/api/schema";
+import { createAgentTask, listAgents } from "@/lib/api";
 
 export async function getAgents() {
   return await listAgents();

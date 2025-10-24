@@ -1,4 +1,11 @@
-import { listMCPServers, MCPServer, listModelInstances, listMCPServerInstances, listBuiltinTools, getAgent } from "@/lib/api";
+import {
+  getAgent,
+  listBuiltinTools,
+  listMCPServerInstances,
+  listMCPServers,
+  listModelInstances,
+  MCPServer,
+} from "@/lib/api";
 
 export interface AgentData {
   mcpServers: MCPServer[];
@@ -54,7 +61,9 @@ export async function loadAgentData(): Promise<AgentData> {
   };
 }
 
-export async function loadAgentEditData(agentId: string): Promise<AgentEditData> {
+export async function loadAgentEditData(
+  agentId: string
+): Promise<AgentEditData> {
   // Load base data
   const baseData = await loadAgentData();
 
@@ -63,21 +72,21 @@ export async function loadAgentEditData(agentId: string): Promise<AgentEditData>
   const agent = agentResponse.data;
 
   if (!agent) {
-    throw new Error('Agent not found');
+    throw new Error("Agent not found");
   }
 
   // Transform agent data to form format
   const initialData = {
     name: agent.name,
-    description: agent.description || '',
-    instruction: agent.instruction || '',
+    description: agent.description || "",
+    instruction: agent.instruction || "",
     model_id: agent.model_id,
     tools_config: {
       mcp_server_configs: agent.tools_config?.mcp_server_configs || [],
-      builtin_tools: agent.tools_config?.builtin_tools || []
+      builtin_tools: agent.tools_config?.builtin_tools || [],
     },
     events_config: {
-      events: agent.events_config?.events || []
+      events: agent.events_config?.events || [],
     },
     planning: agent.planning || false,
   };

@@ -1,6 +1,10 @@
 import React from "react";
-import { AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { ChevronRight } from "lucide-react";
+import {
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -55,33 +59,35 @@ export function CardAccordionItem({
   headerClassName,
   hideChevron = false,
 }: CardAccordionItemProps) {
-
   const generatedControls = controls;
 
   // Build default title node if title is plain text
-  const titleNode = typeof title === "string" ? (
-    <div className={cn("flex flex-row items-center gap-2 px-[7px] py-[7px] min-w-0", headerClassName)}>
-      {iconSrc && <img src={iconSrc} alt="" className="w-5 h-5 shrink-0" />}
-      <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent truncate">
-        {title}
-      </h3>
-    </div>
-  ) : (
-    title
-  );
+  const titleNode =
+    typeof title === "string" ? (
+      <div
+        className={cn(
+          "flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]",
+          headerClassName
+        )}
+      >
+        {iconSrc && <img src={iconSrc} alt="" className="h-5 w-5 shrink-0" />}
+        <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
+          {title}
+        </h3>
+      </div>
+    ) : (
+      title
+    );
 
   return (
     <AccordionItem
       value={value}
       id={htmlId}
-      className={cn(
-        "card-item data-[state=open]:border-accent",
-        className
-      )}
+      className={cn("card-item data-[state=open]:border-accent", className)}
     >
       <AccordionTrigger
         className={cn(
-          "group w-max flex flex-row gap-2 py-0 justify-start rotate-0 hover:no-underline [&[data-state=open]>svg]:rotate-90 [&[data-state=open]>svg]:text-accent",
+          "group flex w-max rotate-0 flex-row justify-start gap-2 py-0 hover:no-underline [&[data-state=open]>svg]:rotate-90 [&[data-state=open]>svg]:text-accent",
           triggerClassName
         )}
         controls={generatedControls}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface TimerProps {
   isTaskRunning?: boolean;
@@ -51,21 +51,26 @@ export default function Timer({
     const remainingSeconds = seconds % 60;
     return (
       <span className="flex items-baseline gap-1">
-        <span className="text-xl ">{minutes.toString().padStart(2, '0')}</span>
+        <span className="text-xl">{minutes.toString().padStart(2, "0")}</span>
         <span className="text-sm">:</span>
-        <span className="text-sm">{remainingSeconds.toString().padStart(2, '0')}</span>
+        <span className="text-sm">
+          {remainingSeconds.toString().padStart(2, "0")}
+        </span>
       </span>
     );
   };
 
   return (
-    <div className={`flex flex-row gap-2 items-center ${className}`} aria-live="polite">
+    <div
+      className={`flex flex-row items-center gap-2 ${className}`}
+      aria-live="polite"
+    >
       <p className={isRunning ? "text-green-600" : ""}>
         {formatTime(elapsedTime)}
       </p>
       {isRunning && (
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <div className="h-2 w-2 animate-pulse rounded-full bg-green-500"></div>
         </div>
       )}
     </div>

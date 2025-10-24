@@ -1,7 +1,7 @@
 "use server";
 
-import { env } from "@/env";
 import { cookies } from "next/headers";
+import { env } from "@/env";
 
 /**
  * Get authentication token from current session
@@ -15,8 +15,8 @@ export async function getAuthToken(): Promise<string | null> {
     // Get all cookies to forward to Kratos
     const allCookies = cookieStore.getAll();
     const cookieHeader = allCookies
-      .map(cookie => `${cookie.name}=${cookie.value}`)
-      .join('; ');
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
 
     if (!cookieHeader) {
       console.warn("[getAuthToken] No cookies found");
@@ -26,13 +26,16 @@ export async function getAuthToken(): Promise<string | null> {
     console.log("[getAuthToken] Calling Kratos whoami endpoint");
 
     // Call Kratos directly with fetch to get JWT token
-    const response = await fetch(`${env.ORY_SDK_URL}/sessions/whoami?tokenize_as=agentarea_jwt`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Cookie': cookieHeader
+    const response = await fetch(
+      `${env.ORY_SDK_URL}/sessions/whoami?tokenize_as=agentarea_jwt`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Cookie: cookieHeader,
+        },
       }
-    });
+    );
 
     console.log("[getAuthToken] Kratos response status:", response.status);
 
@@ -45,7 +48,11 @@ export async function getAuthToken(): Promise<string | null> {
         console.warn("[getAuthToken] No tokenized field in response");
       }
     } else {
-      console.error("[getAuthToken] Kratos response not OK:", response.status, response.statusText);
+      console.error(
+        "[getAuthToken] Kratos response not OK:",
+        response.status,
+        response.statusText
+      );
     }
 
     return null;

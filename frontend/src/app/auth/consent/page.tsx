@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 export default function ConsentPage() {
   const [loading, setLoading] = useState(true);
@@ -22,13 +22,15 @@ export default function ConsentPage() {
 
     // Get consent request information (server-side should use proxy or server action instead)
     // TODO: This should be moved to a server action to avoid exposing admin URL to browser
-    fetch(`http://localhost:4445/admin/oauth2/auth/requests/consent?consent_challenge=${consentChallenge}`)
-      .then(response => response.json())
-      .then(data => {
+    fetch(
+      `http://localhost:4445/admin/oauth2/auth/requests/consent?consent_challenge=${consentChallenge}`
+    )
+      .then((response) => response.json())
+      .then((data) => {
         setConsentRequest(data);
         setLoading(false);
       })
-      .catch(error => {
+      .catch((error) => {
         setError("Failed to fetch consent request");
         setLoading(false);
       });
@@ -39,22 +41,30 @@ export default function ConsentPage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:4445/admin/oauth2/auth/requests/consent/accept?consent_challenge=${consentChallenge}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          grant_scope: consentRequest?.requested_scope || ['openid', 'profile', 'email'],
-          grant_access_token_audience: consentRequest?.requested_access_token_audience || [],
-          session: {
-            id_token: {
-              email: consentRequest?.subject || '',
-              name: 'Ory User'
-            }
-          }
-        }),
-      });
+      const response = await fetch(
+        `http://localhost:4445/admin/oauth2/auth/requests/consent/accept?consent_challenge=${consentChallenge}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            grant_scope: consentRequest?.requested_scope || [
+              "openid",
+              "profile",
+              "email",
+            ],
+            grant_access_token_audience:
+              consentRequest?.requested_access_token_audience || [],
+            session: {
+              id_token: {
+                email: consentRequest?.subject || "",
+                name: "Ory User",
+              },
+            },
+          }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -74,16 +84,19 @@ export default function ConsentPage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:4445/admin/oauth2/auth/requests/consent/reject?consent_challenge=${consentChallenge}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          error: 'access_denied',
-          error_description: 'The user denied the request'
-        }),
-      });
+      const response = await fetch(
+        `http://localhost:4445/admin/oauth2/auth/requests/consent/reject?consent_challenge=${consentChallenge}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            error: "access_denied",
+            error_description: "The user denied the request",
+          }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -100,9 +113,9 @@ export default function ConsentPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full border-t-2 border-b-2 border-white h-6 w-6"></div>
+          <div className="inline-block h-6 w-6 animate-spin rounded-full border-b-2 border-t-2 border-white"></div>
           <p className="mt-2 text-sm text-white">Loading...</p>
         </div>
       </div>
@@ -110,29 +123,27 @@ export default function ConsentPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
-      <Card className="w-full max-w-md p-8 bg-white/95 dark:bg-gray-800/95 shadow-2xl rounded-xl backdrop-blur-sm border border-white/20 dark:border-gray-700/20">
-        <div className="text-center mb-8">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700">
+      <Card className="w-full max-w-md rounded-xl border border-white/20 bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:border-gray-700/20 dark:bg-gray-800/95">
+        <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Authorize Application
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
             AgentArea would like to access your account
           </p>
         </div>
 
         {error && (
-          <div className="text-red-600 text-sm text-center mb-4">
-            {error}
-          </div>
+          <div className="mb-4 text-center text-sm text-red-600">{error}</div>
         )}
 
         {consentRequest && (
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               Requested permissions:
             </h3>
-            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+            <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
               {consentRequest.requested_scope?.map((scope: string) => (
                 <li key={scope}>• {scope}</li>
               ))}

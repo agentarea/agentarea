@@ -5,7 +5,7 @@ export default async function CreateAgentContent() {
   const agentData = await loadAgentData();
 
   return (
-    <CreateAgentClient 
+    <CreateAgentClient
       mcpServers={agentData.mcpServers}
       llmModelInstances={agentData.llmModelInstances}
       mcpInstanceList={agentData.mcpInstanceList}
@@ -13,5 +13,3 @@ export default async function CreateAgentContent() {
     />
   );
 }
-
-

@@ -18,34 +18,36 @@ export const MethodsIndicator: React.FC<MethodsIndicatorProps> = ({
   methods,
   selectedMethods,
   onSelectAll,
-  className = ""
+  className = "",
 }) => {
   if (!methods || methods.length === 0) {
     return null;
   }
 
-  const selectedCount = methods.filter(method => selectedMethods[method.name] === true).length;
+  const selectedCount = methods.filter(
+    (method) => selectedMethods[method.name] === true
+  ).length;
   const totalCount = methods.length;
   const allSelected = selectedCount === totalCount;
   const someSelected = selectedCount > 0 && selectedCount < totalCount;
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-        <Checkbox
-          checked={allSelected}
+      <Checkbox
+        checked={allSelected}
         ref={(el) => {
           if (el) {
-            const input = el.querySelector('input');
+            const input = el.querySelector("input");
             if (input) {
               input.indeterminate = someSelected;
             }
           }
         }}
         onCheckedChange={onSelectAll}
-        className="h-4 w-4 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+        className="h-4 w-4 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
         aria-label="Select all methods"
       />
-      <span className="text-xs text-muted-foreground min-w-[50px] text-center bg-primary/15 px-2 py-0.5 rounded-full">
+      <span className="min-w-[50px] rounded-full bg-primary/15 px-2 py-0.5 text-center text-xs text-muted-foreground">
         {selectedCount}/{totalCount}
       </span>
     </div>

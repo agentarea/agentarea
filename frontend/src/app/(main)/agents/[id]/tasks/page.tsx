@@ -1,8 +1,8 @@
-import AgentTasksList from "./components/AgentTasksList";
-import { listAgentTasks, getAgentTaskStatus } from "@/lib/api";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { TaskWithStatus, TaskStatus } from "./types";
+import { getAgentTaskStatus, listAgentTasks } from "@/lib/api";
+import AgentTasksList from "./components/AgentTasksList";
+import { TaskStatus, TaskWithStatus } from "./types";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -10,7 +10,7 @@ interface Props {
 
 export default async function AgentTasksPage({ params }: Props) {
   const { id } = await params;
-  
+
   // Загружаем начальные данные на сервере
   let initialTasks: TaskWithStatus[] = [];
   try {
@@ -20,10 +20,11 @@ export default async function AgentTasksPage({ params }: Props) {
       const tasksWithStatuses = await Promise.all(
         tasksData.map(async (task) => {
           try {
-            const { data: statusData, error: statusError } = await getAgentTaskStatus(id, task.id);
+            const { data: statusData, error: statusError } =
+              await getAgentTaskStatus(id, task.id);
             return {
               ...task,
-              taskStatus: statusError ? undefined : statusData as TaskStatus,
+              taskStatus: statusError ? undefined : (statusData as TaskStatus),
             };
           } catch (error) {
             console.error(`Failed to load status for task ${task.id}:`, error);
@@ -39,18 +40,13 @@ export default async function AgentTasksPage({ params }: Props) {
 
   return (
     <Suspense
-      fallback={(
-        <div className="flex items-center justify-center h-32">
+      fallback={
+        <div className="flex h-32 items-center justify-center">
           <LoadingSpinner />
         </div>
-      )}
+      }
     >
-      <AgentTasksList
-        agentId={id}
-        initialTasks={initialTasks}
-      />
+      <AgentTasksList agentId={id} initialTasks={initialTasks} />
     </Suspense>
   );
 }
-
-

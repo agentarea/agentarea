@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Agent } from "@/types/agent";
-import FullChat from "@/components/Chat/FullChat";
-import TaskDetails from "./TaskDetails";
 import { useTranslations } from "next-intl";
+import FullChat from "@/components/Chat/FullChat";
+import { Agent } from "@/types/agent";
+import TaskDetails from "./TaskDetails";
 
 interface Props {
   agent: Agent;
@@ -27,20 +27,24 @@ export default function AgentNewTask({ agent }: Props) {
   };
 
   return (
-    <div className="flex flex-row items-start h-full w-full overflow-hidden gap-3 max-w-7xl mx-auto">
-      <div className="py-5 pl-3 h-full w-full overflow-hidden">
+    <div className="mx-auto flex h-full w-full max-w-7xl flex-row items-start gap-3 overflow-hidden">
+      <div className="h-full w-full overflow-hidden py-5 pl-3">
         <FullChat
           placeholder={t("placeholderNewTask", { agentName: agent.name })}
           agent={{
             id: agent.id,
             name: agent.name,
-            description: agent.description || undefined
+            description: agent.description || undefined,
           }}
           onTaskStarted={handleTaskCreated}
           onTaskFinished={handleTaskFinished}
         />
       </div>
-      <TaskDetails agent={agent} isTaskRunning={isTaskRunning} isTaskActive={isTaskActive} />
+      <TaskDetails
+        agent={agent}
+        isTaskRunning={isTaskRunning}
+        isTaskActive={isTaskActive}
+      />
     </div>
   );
 }

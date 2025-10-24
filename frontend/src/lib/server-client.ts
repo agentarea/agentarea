@@ -1,9 +1,8 @@
-import 'server-only';
-
+import "server-only";
 import createClient from "openapi-fetch";
+import { env } from "@/env";
 import type { paths } from "../api/schema";
 import { getAuthToken } from "./getAuthToken";
-import { env } from "@/env";
 
 // Lazy-initialized server client to prevent env.API_URL access during module load
 let serverClient: ReturnType<typeof createClient<paths>> | null = null;
@@ -28,10 +27,15 @@ export function getServerClient() {
             request.headers.set("Authorization", `Bearer ${authToken}`);
             console.log(`[Server Client] ${method} ${url} - Auth token added`);
           } else {
-            console.warn(`[Server Client] ${method} ${url} - No auth token available`);
+            console.warn(
+              `[Server Client] ${method} ${url} - No auth token available`
+            );
           }
         } catch (error: any) {
-          console.error(`[Server Client] ${method} ${url} - Error getting auth token:`, error);
+          console.error(
+            `[Server Client] ${method} ${url} - Error getting auth token:`,
+            error
+          );
           // Continue without Authorization header if authentication fails
         }
 
@@ -47,12 +51,14 @@ export function getServerClient() {
           console.error("[Server Client] 403 Forbidden details:", {
             url,
             status: response.status,
-            statusText: response.statusText
+            statusText: response.statusText,
           });
-          throw new Error(`Forbidden: Received a 403 response from the API (${url})`);
+          throw new Error(
+            `Forbidden: Received a 403 response from the API (${url})`
+          );
         }
         return response;
-      }
+      },
     });
   }
 

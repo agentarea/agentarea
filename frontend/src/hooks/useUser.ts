@@ -1,7 +1,7 @@
 "use client";
 
-import { useAuth } from './useAuth';
-import { User } from '@/types/auth';
+import { User } from "@/types/auth";
+import { useAuth } from "./useAuth";
 
 /**
  * Hook to get current user data
@@ -9,7 +9,7 @@ import { User } from '@/types/auth';
  */
 export function useUser(): { user: User | null; isLoaded: boolean } {
   const { user, isLoaded } = useAuth();
-  
+
   return {
     user,
     isLoaded,

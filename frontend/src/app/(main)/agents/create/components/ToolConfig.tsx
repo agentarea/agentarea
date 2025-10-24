@@ -1,29 +1,32 @@
-import React from "react";
-import { Wrench, ArrowRight } from "lucide-react";
-import { FieldErrors, UseFieldArrayReturn, UseFieldArrayAppend } from 'react-hook-form';
-import { getNestedErrorMessage } from "../utils/formUtils";
-import type { AgentFormValues } from "../types";
-import type { components } from '@/api/schema';
-import { useState, useEffect, useMemo } from "react";
-import { TriggerControl } from "./TriggerControl";
-import { Accordion } from "@/components/ui/accordion";
-import { SelectableList } from "./SelectableList";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import ConfigSheet from "./ConfigSheet";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import Image from "next/image";
+import { ArrowRight, Wrench } from "lucide-react";
 import {
-  createMCPServerInstance,
+  FieldErrors,
+  UseFieldArrayAppend,
+  UseFieldArrayReturn,
+} from "react-hook-form";
+import { toast } from "sonner";
+import type { components } from "@/api/schema";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
+import { Accordion } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import {
   checkMCPServerInstanceConfiguration,
+  createMCPServerInstance,
   getMCPServerInstance,
   updateMCPServerInstance,
 } from "@/lib/browser-api";
-import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
-import AccordionControl from "./AccordionControl";
-import FormLabel from "@/components/FormLabel/FormLabel";
+import type { AgentFormValues } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
+import { getNestedErrorMessage } from "../utils/formUtils";
+import AccordionControl from "./AccordionControl";
+import ConfigSheet from "./ConfigSheet";
 import { MethodsList } from "./MethodsList";
-import Image from "next/image";
+import { SelectableList } from "./SelectableList";
+import { TriggerControl } from "./TriggerControl";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -31,53 +34,80 @@ type ToolConfigProps = {
   control: any;
   setValue: any;
   errors: FieldErrors<AgentFormValues>;
-  toolFields: UseFieldArrayReturn<AgentFormValues, "tools_config.mcp_server_configs", "id">["fields"];
+  toolFields: UseFieldArrayReturn<
+    AgentFormValues,
+    "tools_config.mcp_server_configs",
+    "id"
+  >["fields"];
   removeTool: (index: number) => void;
-  appendTool: UseFieldArrayAppend<AgentFormValues, "tools_config.mcp_server_configs">;
+  appendTool: UseFieldArrayAppend<
+    AgentFormValues,
+    "tools_config.mcp_server_configs"
+  >;
   mcpServers: MCPServer[];
   mcpInstanceList: any[];
   builtinTools: any[];
-  builtinToolFields?: UseFieldArrayReturn<AgentFormValues, "tools_config.builtin_tools", "id">["fields"];
+  builtinToolFields?: UseFieldArrayReturn<
+    AgentFormValues,
+    "tools_config.builtin_tools",
+    "id"
+  >["fields"];
   removeBuiltinTool?: (index: number) => void;
-  appendBuiltinTool?: UseFieldArrayAppend<AgentFormValues, "tools_config.builtin_tools">;
+  appendBuiltinTool?: UseFieldArrayAppend<
+    AgentFormValues,
+    "tools_config.builtin_tools"
+  >;
 };
 
-const ToolConfig = ({ 
-  control, 
+const ToolConfig = ({
+  control,
   setValue,
-  errors, 
-  toolFields, 
-  removeTool, 
-  appendTool, 
-  mcpServers, 
+  errors,
+  toolFields,
+  removeTool,
+  appendTool,
+  mcpServers,
   mcpInstanceList,
   builtinTools,
   builtinToolFields,
   removeBuiltinTool,
-  appendBuiltinTool
+  appendBuiltinTool,
 }: ToolConfigProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [scrollToolId, setScrollToolId] = useState<string | null>(null);
-  const [scrollBuiltinToolId, setScrollBuiltinToolId] = useState<string | null>(null);
+  const [scrollBuiltinToolId, setScrollBuiltinToolId] = useState<string | null>(
+    null
+  );
   const [loadingBuiltinTools, setLoadingBuiltinTools] = useState(false);
-  const [selectedMethods, setSelectedMethods] = useState<Record<string, Record<string, boolean>>>({});
-  const t = useTranslations('AgentsPage');
+  const [selectedMethods, setSelectedMethods] = useState<
+    Record<string, Record<string, boolean>>
+  >({});
+  const t = useTranslations("AgentsPage");
 
   // Configure server overlay (like marketplace, but in sheet)
-  const [configureServerSheetOpen, setConfigureServerSheetOpen] = useState(false);
+  const [configureServerSheetOpen, setConfigureServerSheetOpen] =
+    useState(false);
   const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null);
   const [isEditingInstance, setIsEditingInstance] = useState(false);
-  const [editingInstanceId, setEditingInstanceId] = useState<string | null>(null);
+  const [editingInstanceId, setEditingInstanceId] = useState<string | null>(
+    null
+  );
   const [instanceName, setInstanceName] = useState("");
   const [instanceDescription, setInstanceDescription] = useState("");
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
   const [isChecking, setIsChecking] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [validationResult, setValidationResult] = useState<{ valid: boolean; errors: string[]; warnings: string[] } | null>(null);
+  const [validationResult, setValidationResult] = useState<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
 
   // Keep a local copy of active instances so the list updates immediately after creation
-  const [activeInstances, setActiveInstances] = useState<any[]>(mcpInstanceList || []);
+  const [activeInstances, setActiveInstances] = useState<any[]>(
+    mcpInstanceList || []
+  );
   useEffect(() => {
     setActiveInstances(mcpInstanceList || []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,113 +116,145 @@ const ToolConfig = ({
   // Initialize selectedMethods for sheet (all methods selected by default)
   useEffect(() => {
     if (!builtinTools?.length) return;
-    
-    const toolsMethods = builtinTools.reduce((acc, tool) => {
-      if (tool.available_methods) {
-        acc[tool.name] = tool.available_methods.reduce((methods: Record<string, boolean>, method: any) => {
-          methods[method.name] = true;
-          return methods;
-        }, {} as Record<string, boolean>);
-      }
-      return acc;
-    }, {} as Record<string, Record<string, boolean>>);
-    
+
+    const toolsMethods = builtinTools.reduce(
+      (acc, tool) => {
+        if (tool.available_methods) {
+          acc[tool.name] = tool.available_methods.reduce(
+            (methods: Record<string, boolean>, method: any) => {
+              methods[method.name] = true;
+              return methods;
+            },
+            {} as Record<string, boolean>
+          );
+        }
+        return acc;
+      },
+      {} as Record<string, Record<string, boolean>>
+    );
+
     setSelectedMethods(toolsMethods);
   }, [builtinTools]);
 
   const handleAddBuiltinTool = (toolName: string) => {
-    if (!appendBuiltinTool || builtinToolFields?.some(field => field.tool_name === toolName)) return;
-    
+    if (
+      !appendBuiltinTool ||
+      builtinToolFields?.some((field) => field.tool_name === toolName)
+    )
+      return;
+
     const currentState = selectedMethods[toolName];
-    const tool = builtinTools.find(t => t.name === toolName);
-    
+    const tool = builtinTools.find((t) => t.name === toolName);
+
     if (currentState && tool?.available_methods) {
       const disabledMethods = tool.available_methods
         .filter((method: any) => currentState[method.name] === false)
-        .reduce((acc: Record<string, boolean>, method: any) => {
-          acc[method.name] = false;
-          return acc;
-        }, {} as Record<string, boolean>);
-      
-      appendBuiltinTool({ 
+        .reduce(
+          (acc: Record<string, boolean>, method: any) => {
+            acc[method.name] = false;
+            return acc;
+          },
+          {} as Record<string, boolean>
+        );
+
+      appendBuiltinTool({
         tool_name: toolName,
-        disabled_methods: Object.keys(disabledMethods).length > 0 ? disabledMethods : undefined
+        disabled_methods:
+          Object.keys(disabledMethods).length > 0 ? disabledMethods : undefined,
       });
     } else {
       // Initialize selectedMethods for this tool if not already set
       if (tool?.available_methods && !currentState) {
-        const initialMethods = tool.available_methods.reduce((acc: Record<string, boolean>, method: any) => {
-          acc[method.name] = true;
-          return acc;
-        }, {} as Record<string, boolean>);
-        
-        setSelectedMethods(prev => ({
+        const initialMethods = tool.available_methods.reduce(
+          (acc: Record<string, boolean>, method: any) => {
+            acc[method.name] = true;
+            return acc;
+          },
+          {} as Record<string, boolean>
+        );
+
+        setSelectedMethods((prev) => ({
           ...prev,
-          [toolName]: initialMethods
+          [toolName]: initialMethods,
         }));
       }
-      
+
       appendBuiltinTool({ tool_name: toolName });
     }
   };
 
   const handleRemoveBuiltinTool = (toolName: string) => {
     if (!removeBuiltinTool) return;
-    
-    const index = builtinToolFields?.findIndex(field => field.tool_name === toolName);
+
+    const index = builtinToolFields?.findIndex(
+      (field) => field.tool_name === toolName
+    );
     if (index !== undefined && index !== -1) {
       removeBuiltinTool(index);
     }
   };
 
-  const handleMethodToggle = (toolName: string, methodName: string, checked: boolean) => {
-    setSelectedMethods(prev => ({
+  const handleMethodToggle = (
+    toolName: string,
+    methodName: string,
+    checked: boolean
+  ) => {
+    setSelectedMethods((prev) => ({
       ...prev,
       [toolName]: {
         ...prev[toolName],
-        [methodName]: checked
-      }
+        [methodName]: checked,
+      },
     }));
-    
-    const currentIndex = builtinToolFields?.findIndex(field => field.tool_name === toolName);
-    if (currentIndex === undefined || currentIndex === -1 || !builtinToolFields || !setValue) return;
-    
+
+    const currentIndex = builtinToolFields?.findIndex(
+      (field) => field.tool_name === toolName
+    );
+    if (
+      currentIndex === undefined ||
+      currentIndex === -1 ||
+      !builtinToolFields ||
+      !setValue
+    )
+      return;
+
     const field = builtinToolFields[currentIndex];
     const newDisabledMethods = { ...(field.disabled_methods || {}) };
-    
+
     if (checked) {
       delete newDisabledMethods[methodName];
     } else {
       newDisabledMethods[methodName] = false;
     }
-    
+
     // Update the existing field instead of removing and adding
-    setValue(`tools_config.builtin_tools.${currentIndex}.disabled_methods`, 
-      Object.keys(newDisabledMethods).length > 0 ? newDisabledMethods : undefined
+    setValue(
+      `tools_config.builtin_tools.${currentIndex}.disabled_methods`,
+      Object.keys(newDisabledMethods).length > 0
+        ? newDisabledMethods
+        : undefined
     );
   };
 
-
-
-  const getSelectedBuiltinTools = () => 
-    builtinToolFields?.map(field => ({
+  const getSelectedBuiltinTools = () =>
+    builtinToolFields?.map((field) => ({
       tool_name: field.tool_name,
-      disabled_methods: field.disabled_methods || {}
+      disabled_methods: field.disabled_methods || {},
     })) || [];
 
   const handleAddTools = (servers: MCPServer[]) => {
     if (!servers?.length) return;
-    
-    const configs = servers.map(server => ({
+
+    const configs = servers.map((server) => ({
       mcp_server_id: server.id,
       allowed_tools: [],
     }));
-    
+
     appendTool(configs);
   };
 
   const handleRemoveTool = (serverId: string) => {
-    const idx = toolFields.findIndex(item => item.mcp_server_id === serverId);
+    const idx = toolFields.findIndex((item) => item.mcp_server_id === serverId);
     if (idx !== -1) {
       removeTool(idx);
     }
@@ -225,34 +287,40 @@ const ToolConfig = ({
       const instanceId = tool.mcp_server_id as unknown as string;
       const { data: instance, error } = await getMCPServerInstance(instanceId);
       if (error || !instance) {
-        toast.error('Failed to load instance for editing');
+        toast.error("Failed to load instance for editing");
         return;
       }
-      const serverSpec = mcpServers.find((s) => s.id === (instance as any).server_spec_id) || null;
+      const serverSpec =
+        mcpServers.find((s) => s.id === (instance as any).server_spec_id) ||
+        null;
       if (!serverSpec) {
-        toast.error('Server specification not found');
+        toast.error("Server specification not found");
         return;
       }
       setSelectedServer(serverSpec);
       setIsEditingInstance(true);
       setEditingInstanceId(instanceId);
-      setInstanceName((instance as any).name || '');
-      setInstanceDescription((instance as any).description || '');
-      const env = ((instance as any).json_spec?.environment as Record<string, string>) || {};
+      setInstanceName((instance as any).name || "");
+      setInstanceDescription((instance as any).description || "");
+      const env =
+        ((instance as any).json_spec?.environment as Record<string, string>) ||
+        {};
       setEnvVars(env);
       setValidationResult(null);
       setConfigureServerSheetOpen(true);
     } catch (e) {
       console.error(e);
-      toast.error('Could not open edit form');
+      toast.error("Could not open edit form");
     }
   };
 
   useEffect(() => {
     if (isSheetOpen && scrollToolId) {
       const timer = setTimeout(() => {
-        const el = document.getElementById(`active-mcp-${scrollToolId}`) || document.getElementById(`mcp-${scrollToolId}`);
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const el =
+          document.getElementById(`active-mcp-${scrollToolId}`) ||
+          document.getElementById(`mcp-${scrollToolId}`);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -261,29 +329,39 @@ const ToolConfig = ({
   useEffect(() => {
     if (isSheetOpen && scrollBuiltinToolId) {
       const timer = setTimeout(() => {
-        const el = document.getElementById(`builtin-tool-${scrollBuiltinToolId}`);
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const el = document.getElementById(
+          `builtin-tool-${scrollBuiltinToolId}`
+        );
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 100);
       return () => clearTimeout(timer);
     }
   }, [isSheetOpen, scrollBuiltinToolId]);
 
-  const note = useMemo(() => (
-    <>  
-      <p>{t("create.agentToolsDescription")}</p>
-      <p>{t("create.agentToolsNote")}</p>
-    </>
-  ), []);
+  const note = useMemo(
+    () => (
+      <>
+        <p>{t("create.agentToolsDescription")}</p>
+        <p>{t("create.agentToolsNote")}</p>
+      </>
+    ),
+    []
+  );
 
-  const title = useMemo(() => (
-    <FormLabel icon={Wrench} className="cursor-pointer">{t("create.agentTools")}</FormLabel>
-  ), []);
+  const title = useMemo(
+    () => (
+      <FormLabel icon={Wrench} className="cursor-pointer">
+        {t("create.agentTools")}
+      </FormLabel>
+    ),
+    []
+  );
 
   return (
     <>
       {/* Builtin Tools Section */}
-      
-        {/* <Card>
+
+      {/* <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Tools Configuration
@@ -300,7 +378,6 @@ const ToolConfig = ({
             />
           </CardContent>
         </Card> */}
-       
 
       <AccordionControl
         id="tools"
@@ -310,24 +387,25 @@ const ToolConfig = ({
         note={note}
         mainControl={
           <ConfigSheet
-            title={t('create.toolsMcp')}
-            description={t('create.toolsMcpDescription')}
+            title={t("create.toolsMcp")}
+            description={t("create.toolsMcpDescription")}
             triggerText={t("create.tool")}
             className="ml-auto"
             open={isSheetOpen}
             onOpenChange={setIsSheetOpen}
           >
-            <div className="flex flex-col overflow-y-auto space-y-4">
+            <div className="flex flex-col space-y-4 overflow-y-auto">
               <div className="font-semibold">{t("create.builtinTools")}</div>
               <SelectableList
-                items={builtinTools.map(tool => ({ ...tool, id: tool.name }))}
+                items={builtinTools.map((tool) => ({ ...tool, id: tool.name }))}
                 prefix="builtin-tool"
                 extractTitle={(tool) => {
-                  const { IconComponent, displayName } = getBuiltinToolDisplayInfo(tool);
+                  const { IconComponent, displayName } =
+                    getBuiltinToolDisplayInfo(tool);
                   return (
                     <div className="flex flex-row items-center gap-2 px-[7px] py-[7px]">
-                      <IconComponent className="w-5 h-5 text-muted-foreground" />
-                      <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent">
+                      <IconComponent className="h-5 w-5 text-muted-foreground" />
+                      <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                         {displayName}
                       </h3>
                     </div>
@@ -335,18 +413,22 @@ const ToolConfig = ({
                 }}
                 onAdd={(tool) => handleAddBuiltinTool(tool.name)}
                 onRemove={(tool) => handleRemoveBuiltinTool(tool.name)}
-                selectedIds={getSelectedBuiltinTools().map(tool => tool.tool_name)}
+                selectedIds={getSelectedBuiltinTools().map(
+                  (tool) => tool.tool_name
+                )}
                 openItemId={scrollBuiltinToolId}
                 renderContent={(tool) => {
                   const methodsState = selectedMethods[tool.name] || {};
-                  
+
                   return (
-                    <div className="p-2 space-y-2">
-                      <p className="text-xs text-muted-foreground">{tool.description}</p>
+                    <div className="space-y-2 p-2">
+                      <p className="text-xs text-muted-foreground">
+                        {tool.description}
+                      </p>
                       <MethodsList
                         methods={tool.available_methods || []}
                         selectedMethods={methodsState}
-                        onMethodToggle={(methodName, checked) => 
+                        onMethodToggle={(methodName, checked) =>
                           handleMethodToggle(tool.name, methodName, checked)
                         }
                         toolName={tool.name}
@@ -354,7 +436,11 @@ const ToolConfig = ({
                         onSelectAll={(checked) => {
                           if (tool.available_methods) {
                             tool.available_methods.forEach((method: any) => {
-                              handleMethodToggle(tool.name, method.name, checked);
+                              handleMethodToggle(
+                                tool.name,
+                                method.name,
+                                checked
+                              );
                             });
                           }
                         }}
@@ -363,12 +449,12 @@ const ToolConfig = ({
                   );
                 }}
               />
-              <div className="font-semibold flex items-center gap-2">
-                <Image 
-                  src="/mcp.svg" 
-                  alt="MCP" 
-                  width={16} 
-                  height={16} 
+              <div className="flex items-center gap-2 font-semibold">
+                <Image
+                  src="/mcp.svg"
+                  alt="MCP"
+                  width={16}
+                  height={16}
                   className="text-current"
                 />
                 {t("create.activeMcpServers")}
@@ -377,11 +463,11 @@ const ToolConfig = ({
                 items={activeInstances}
                 prefix="active-mcp"
                 extractTitle={(instance) => (
-                  <div className="flex flex-row items-center gap-2 px-[7px] py-[7px] min-w-0">
+                  <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
                     <div className="relative shrink-0">
-                      <img src="/Icon.svg" alt="" className="w-5 h-5" />
+                      <img src="/Icon.svg" alt="" className="h-5 w-5" />
                     </div>
-                    <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent truncate">
+                    <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                       {instance.name || instance.id}
                     </h3>
                   </div>
@@ -391,31 +477,43 @@ const ToolConfig = ({
                 selectedIds={toolFields.map((item) => item.mcp_server_id)}
                 openItemId={scrollToolId}
                 renderContent={(instance) => (
-                  <div className="p-2 space-y-2">
-                    <p className="text-xs text-muted-foreground">Active MCP Server Instance</p>
-                    {instance.available_tools && instance.available_tools.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-foreground">Available Tools:</p>
+                  <div className="space-y-2 p-2">
+                    <p className="text-xs text-muted-foreground">
+                      Active MCP Server Instance
+                    </p>
+                    {instance.available_tools &&
+                      instance.available_tools.length > 0 && (
                         <div className="space-y-1">
-                          {instance.available_tools.map((tool: any) => (
-                            <div key={tool.name} className="flex items-center gap-2 p-1 rounded bg-muted/30">
-                              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
-                              <span className="text-xs text-foreground">{tool.display_name || tool.name}</span>
-                              <span className="text-xs text-muted-foreground ml-auto">{tool.description}</span>
-                            </div>
-                          ))}
+                          <p className="text-xs font-medium text-foreground">
+                            Available Tools:
+                          </p>
+                          <div className="space-y-1">
+                            {instance.available_tools.map((tool: any) => (
+                              <div
+                                key={tool.name}
+                                className="flex items-center gap-2 rounded bg-muted/30 p-1"
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+                                <span className="text-xs text-foreground">
+                                  {tool.display_name || tool.name}
+                                </span>
+                                <span className="ml-auto text-xs text-muted-foreground">
+                                  {tool.description}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </div>
                 )}
               />
-              <div className="font-semibold flex items-center gap-2">
-                <Image 
-                  src="/mcp.svg" 
-                  alt="MCP" 
-                  width={16} 
-                  height={16} 
+              <div className="flex items-center gap-2 font-semibold">
+                <Image
+                  src="/mcp.svg"
+                  alt="MCP"
+                  width={16}
+                  height={16}
                   className="text-current"
                 />
                 {t("create.availableMcpServers")}
@@ -425,11 +523,11 @@ const ToolConfig = ({
                 items={mcpServers}
                 prefix="mcp"
                 extractTitle={(server) => (
-                  <div className="flex flex-row items-center gap-2 px-[7px] py-[7px] min-w-0">
-                      <div className="relative shrink-0">
-                        <img src="/Icon.svg" alt="" className="w-5 h-5" />
-                      </div>
-                    <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent dark:group-hover:text-accent group-data-[state=open]:text-accent dark:group-data-[state=open]:text-accent truncate">
+                  <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
+                    <div className="relative shrink-0">
+                      <img src="/Icon.svg" alt="" className="h-5 w-5" />
+                    </div>
+                    <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                       {server.name}
                     </h3>
                   </div>
@@ -438,24 +536,42 @@ const ToolConfig = ({
                 onRemove={(server) => handleRemoveTool(server.id)}
                 selectedIds={toolFields.map((item) => item.mcp_server_id)}
                 openItemId={scrollToolId}
-                inactiveLabel={<>Configure <ArrowRight className="h-3 w-3" /></>}
+                inactiveLabel={
+                  <>
+                    Configure <ArrowRight className="h-3 w-3" />
+                  </>
+                }
                 renderContent={(server) => (
-                  <div className="p-2 space-y-2">
-                    <p className="text-xs text-muted-foreground">{server.description || 'Available MCP Server'}</p>
-                    {(server as any).available_tools && (server as any).available_tools.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-foreground">Available Tools:</p>
+                  <div className="space-y-2 p-2">
+                    <p className="text-xs text-muted-foreground">
+                      {server.description || "Available MCP Server"}
+                    </p>
+                    {(server as any).available_tools &&
+                      (server as any).available_tools.length > 0 && (
                         <div className="space-y-1">
-                          {(server as any).available_tools.map((tool: any) => (
-                            <div key={tool.name} className="flex items-center gap-2 p-1 rounded bg-muted/30">
-                              <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
-                              <span className="text-xs text-foreground">{tool.display_name || tool.name}</span>
-                              <span className="text-xs text-muted-foreground ml-auto">{tool.description}</span>
-                            </div>
-                          ))}
+                          <p className="text-xs font-medium text-foreground">
+                            Available Tools:
+                          </p>
+                          <div className="space-y-1">
+                            {(server as any).available_tools.map(
+                              (tool: any) => (
+                                <div
+                                  key={tool.name}
+                                  className="flex items-center gap-2 rounded bg-muted/30 p-1"
+                                >
+                                  <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+                                  <span className="text-xs text-foreground">
+                                    {tool.display_name || tool.name}
+                                  </span>
+                                  <span className="ml-auto text-xs text-muted-foreground">
+                                    {tool.description}
+                                  </span>
+                                </div>
+                              )
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </div>
                 )}
               />
@@ -467,16 +583,25 @@ const ToolConfig = ({
           {/* Built-in Tools Section */}
           {builtinToolFields && builtinToolFields.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-foreground">{t("create.builtinTools")}</h4>
-              <Accordion type="multiple" id="builtin-tools-items" className="space-y-2">
+              <h4 className="text-sm font-medium text-foreground">
+                {t("create.builtinTools")}
+              </h4>
+              <Accordion
+                type="multiple"
+                id="builtin-tools-items"
+                className="space-y-2"
+              >
                 {builtinToolFields.map((item, index) => {
-                  const builtinTool = builtinTools.find(tool => tool.name === item.tool_name);
+                  const builtinTool = builtinTools.find(
+                    (tool) => tool.name === item.tool_name
+                  );
                   if (!builtinTool) return null;
-                  
-                  const { IconComponent, displayName, description } = getBuiltinToolDisplayInfo(builtinTool);
-                  
+
+                  const { IconComponent, displayName, description } =
+                    getBuiltinToolDisplayInfo(builtinTool);
+
                   return (
-                    <TriggerControl 
+                    <TriggerControl
                       name={`tools_config.builtin_tools.${index}.tool_name`}
                       enabledName={`tools_config.builtin_tools.${index}.enabled`}
                       key={`builtin-tool-${index}`}
@@ -485,15 +610,19 @@ const ToolConfig = ({
                         name: displayName,
                         description: description,
                         icon: IconComponent,
-                        available_methods: builtinTool.available_methods
+                        available_methods: builtinTool.available_methods,
                       }}
                       index={index}
                       control={control}
                       removeEvent={() => removeBuiltinTool?.(index)}
                       // editEvent={() => {}}
                       selectedMethods={selectedMethods[builtinTool.name] || {}}
-                      onMethodToggle={(methodName: string, checked: boolean) => 
-                        handleMethodToggle(builtinTool.name, methodName, checked)
+                      onMethodToggle={(methodName: string, checked: boolean) =>
+                        handleMethodToggle(
+                          builtinTool.name,
+                          methodName,
+                          checked
+                        )
                       }
                     />
                   );
@@ -505,25 +634,33 @@ const ToolConfig = ({
           {/* MCP Tools Section */}
           {toolFields.length > 0 ? (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Image 
-                  src="/mcp.svg" 
-                  alt="MCP" 
-                  width={14} 
-                  height={14} 
+              <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Image
+                  src="/mcp.svg"
+                  alt="MCP"
+                  width={14}
+                  height={14}
                   className="text-current"
                 />
                 {t("create.mcpServers")}
               </h4>
-              <Accordion type="multiple" id="mcp-tools-items" className="space-y-2">
+              <Accordion
+                type="multiple"
+                id="mcp-tools-items"
+                className="space-y-2"
+              >
                 {toolFields.map((item, index) => (
-                  <TriggerControl 
+                  <TriggerControl
                     name={`tools_config.mcp_server_configs.${index}.mcp_server_id`}
                     enabledName={`tools_config.mcp_server_configs.${index}.enabled`}
                     key={`tool-${index}`}
                     trigger={
-                      activeInstances.find((option: any) => option.id === item.mcp_server_id) ||
-                      mcpServers.find((option) => option.id === item.mcp_server_id) ||
+                      activeInstances.find(
+                        (option: any) => option.id === item.mcp_server_id
+                      ) ||
+                      mcpServers.find(
+                        (option) => option.id === item.mcp_server_id
+                      ) ||
                       undefined
                     }
                     index={index}
@@ -535,7 +672,7 @@ const ToolConfig = ({
               </Accordion>
             </div>
           ) : (
-            <div className="cursor-default mt-2 items-center gap-2 p-3 border rounded-md text-muted-foreground/50 text-xs text-center">
+            <div className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
               {t("create.agentToolsDescription")}
               <p>{t("create.agentToolsNote")}</p>
             </div>
@@ -543,18 +680,31 @@ const ToolConfig = ({
         </div>
       </AccordionControl>
 
-      {getNestedErrorMessage(errors, 'tools_config.mcp_server_configs') && 
-        <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'tools_config.mcp_server_configs')}</p>}
-      {getNestedErrorMessage(errors, 'tools_config.builtin_tools') && 
-        <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'tools_config.builtin_tools')}</p>}
-      {getNestedErrorMessage(errors, 'tools_config') && 
-        <p className="text-sm text-red-500 mt-1">{getNestedErrorMessage(errors, 'tools_config')}</p>}
+      {getNestedErrorMessage(errors, "tools_config.mcp_server_configs") && (
+        <p className="mt-1 text-sm text-red-500">
+          {getNestedErrorMessage(errors, "tools_config.mcp_server_configs")}
+        </p>
+      )}
+      {getNestedErrorMessage(errors, "tools_config.builtin_tools") && (
+        <p className="mt-1 text-sm text-red-500">
+          {getNestedErrorMessage(errors, "tools_config.builtin_tools")}
+        </p>
+      )}
+      {getNestedErrorMessage(errors, "tools_config") && (
+        <p className="mt-1 text-sm text-red-500">
+          {getNestedErrorMessage(errors, "tools_config")}
+        </p>
+      )}
 
       {/* Configure Server Sheet overlay */}
       <ConfigSheet
         className="md:min-w-[500px]"
-        title={selectedServer ? `${isEditingInstance ? 'Edit' : 'Configure'} ${selectedServer.name} Instance` : 'Configure MCP Server'}
-        description={selectedServer?.description || ''}
+        title={
+          selectedServer
+            ? `${isEditingInstance ? "Edit" : "Configure"} ${selectedServer.name} Instance`
+            : "Configure MCP Server"
+        }
+        description={selectedServer?.description || ""}
         triggerClassName="hidden"
         open={configureServerSheetOpen}
         onOpenChange={setConfigureServerSheetOpen}
@@ -569,15 +719,204 @@ const ToolConfig = ({
               envVars={envVars}
               onChangeName={setInstanceName}
               onChangeDescription={setInstanceDescription}
-              onChangeEnvVar={(name, value) => { setEnvVars((prev) => ({ ...prev, [name]: value })); if (validationResult) setValidationResult(null); }}
-              onValidate={async () => { if (!selectedServer) return; setIsChecking(true); try { const check = await checkMCPServerInstanceConfiguration({ json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (check.error) { toast.error('Failed to validate configuration'); } else { const validationData = check.data as any; setValidationResult(validationData); if (validationData?.valid) toast.success('Configuration is valid!'); else toast.warning(`Configuration has ${validationData?.errors?.length || 0} error(s)`); } } catch (err) { console.error(err); toast.error('Validation failed'); } finally { setIsChecking(false); } }}
-              onForceCreate={isEditingInstance ? undefined : async () => { if (!selectedServer) return; setIsCreating(true); try { const res = await createMCPServerInstance({ name: instanceName, description: instanceDescription, server_spec_id: selectedServer.id, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (res.error) throw new Error(typeof res.error.detail === 'string' ? res.error.detail : 'Failed to create instance'); toast.success(`Successfully created ${instanceName}`); if (res.data?.id) { setActiveInstances((prev) => { const exists = prev.some((i) => i.id === res.data!.id); return exists ? prev : [res.data!, ...prev]; }); appendTool([{ mcp_server_id: res.data.id, allowed_tools: [] } as any]); } setConfigureServerSheetOpen(false); } catch (err: any) { console.error(err); toast.error(err?.message || 'Failed to create instance'); } finally { setIsCreating(false); } }}
-              onSubmit={async () => { if (!selectedServer) return; if (!isEditingInstance) { if (!validationResult) { toast.warning('Please validate the configuration first'); return; } if (validationResult && !validationResult.valid) { toast.error('Configuration validation failed. Use "Force Create" to proceed.'); return; } } setIsCreating(true); try { if (isEditingInstance && editingInstanceId) { const payload = { name: instanceName, description: instanceDescription, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } } as any; const { error } = await updateMCPServerInstance(editingInstanceId, payload); if (error) throw new Error(typeof (error as any).detail === 'string' ? (error as any).detail : 'Failed to update instance'); toast.success(`Successfully updated ${instanceName}`); setActiveInstances((prev) => prev.map((i: any) => i.id === editingInstanceId ? { ...i, name: instanceName, description: instanceDescription, json_spec: payload.json_spec } : i)); } else { const res = await createMCPServerInstance({ name: instanceName, description: instanceDescription, server_spec_id: selectedServer.id, json_spec: { image: selectedServer.docker_image_url, port: 8000, environment: envVars } }); if (res.error) throw new Error(typeof res.error.detail === 'string' ? res.error.detail : 'Failed to create instance'); toast.success(`Successfully created ${instanceName}`); if (res.data?.id) { setActiveInstances((prev) => { const exists = prev.some((i) => i.id === res.data!.id); return exists ? prev : [res.data!, ...prev]; }); appendTool([{ mcp_server_id: res.data.id, allowed_tools: [] } as any]); } } setConfigureServerSheetOpen(false); setIsEditingInstance(false); setEditingInstanceId(null); } catch (err: any) { console.error(err); toast.error(err?.message || (isEditingInstance ? 'Failed to update instance' : 'Failed to create instance')); } finally { setIsCreating(false); } }}
-              submitDisabled={isCreating || !instanceName.trim() || (!isEditingInstance && (validationResult ? !validationResult.valid : false))}
+              onChangeEnvVar={(name, value) => {
+                setEnvVars((prev) => ({ ...prev, [name]: value }));
+                if (validationResult) setValidationResult(null);
+              }}
+              onValidate={async () => {
+                if (!selectedServer) return;
+                setIsChecking(true);
+                try {
+                  const check = await checkMCPServerInstanceConfiguration({
+                    json_spec: {
+                      image: selectedServer.docker_image_url,
+                      port: 8000,
+                      environment: envVars,
+                    },
+                  });
+                  if (check.error) {
+                    toast.error("Failed to validate configuration");
+                  } else {
+                    const validationData = check.data as any;
+                    setValidationResult(validationData);
+                    if (validationData?.valid)
+                      toast.success("Configuration is valid!");
+                    else
+                      toast.warning(
+                        `Configuration has ${validationData?.errors?.length || 0} error(s)`
+                      );
+                  }
+                } catch (err) {
+                  console.error(err);
+                  toast.error("Validation failed");
+                } finally {
+                  setIsChecking(false);
+                }
+              }}
+              onForceCreate={
+                isEditingInstance
+                  ? undefined
+                  : async () => {
+                      if (!selectedServer) return;
+                      setIsCreating(true);
+                      try {
+                        const res = await createMCPServerInstance({
+                          name: instanceName,
+                          description: instanceDescription,
+                          server_spec_id: selectedServer.id,
+                          json_spec: {
+                            image: selectedServer.docker_image_url,
+                            port: 8000,
+                            environment: envVars,
+                          },
+                        });
+                        if (res.error)
+                          throw new Error(
+                            typeof res.error.detail === "string"
+                              ? res.error.detail
+                              : "Failed to create instance"
+                          );
+                        toast.success(`Successfully created ${instanceName}`);
+                        if (res.data?.id) {
+                          setActiveInstances((prev) => {
+                            const exists = prev.some(
+                              (i) => i.id === res.data!.id
+                            );
+                            return exists ? prev : [res.data!, ...prev];
+                          });
+                          appendTool([
+                            {
+                              mcp_server_id: res.data.id,
+                              allowed_tools: [],
+                            } as any,
+                          ]);
+                        }
+                        setConfigureServerSheetOpen(false);
+                      } catch (err: any) {
+                        console.error(err);
+                        toast.error(
+                          err?.message || "Failed to create instance"
+                        );
+                      } finally {
+                        setIsCreating(false);
+                      }
+                    }
+              }
+              onSubmit={async () => {
+                if (!selectedServer) return;
+                if (!isEditingInstance) {
+                  if (!validationResult) {
+                    toast.warning("Please validate the configuration first");
+                    return;
+                  }
+                  if (validationResult && !validationResult.valid) {
+                    toast.error(
+                      'Configuration validation failed. Use "Force Create" to proceed.'
+                    );
+                    return;
+                  }
+                }
+                setIsCreating(true);
+                try {
+                  if (isEditingInstance && editingInstanceId) {
+                    const payload = {
+                      name: instanceName,
+                      description: instanceDescription,
+                      json_spec: {
+                        image: selectedServer.docker_image_url,
+                        port: 8000,
+                        environment: envVars,
+                      },
+                    } as any;
+                    const { error } = await updateMCPServerInstance(
+                      editingInstanceId,
+                      payload
+                    );
+                    if (error)
+                      throw new Error(
+                        typeof (error as any).detail === "string"
+                          ? (error as any).detail
+                          : "Failed to update instance"
+                      );
+                    toast.success(`Successfully updated ${instanceName}`);
+                    setActiveInstances((prev) =>
+                      prev.map((i: any) =>
+                        i.id === editingInstanceId
+                          ? {
+                              ...i,
+                              name: instanceName,
+                              description: instanceDescription,
+                              json_spec: payload.json_spec,
+                            }
+                          : i
+                      )
+                    );
+                  } else {
+                    const res = await createMCPServerInstance({
+                      name: instanceName,
+                      description: instanceDescription,
+                      server_spec_id: selectedServer.id,
+                      json_spec: {
+                        image: selectedServer.docker_image_url,
+                        port: 8000,
+                        environment: envVars,
+                      },
+                    });
+                    if (res.error)
+                      throw new Error(
+                        typeof res.error.detail === "string"
+                          ? res.error.detail
+                          : "Failed to create instance"
+                      );
+                    toast.success(`Successfully created ${instanceName}`);
+                    if (res.data?.id) {
+                      setActiveInstances((prev) => {
+                        const exists = prev.some((i) => i.id === res.data!.id);
+                        return exists ? prev : [res.data!, ...prev];
+                      });
+                      appendTool([
+                        {
+                          mcp_server_id: res.data.id,
+                          allowed_tools: [],
+                        } as any,
+                      ]);
+                    }
+                  }
+                  setConfigureServerSheetOpen(false);
+                  setIsEditingInstance(false);
+                  setEditingInstanceId(null);
+                } catch (err: any) {
+                  console.error(err);
+                  toast.error(
+                    err?.message ||
+                      (isEditingInstance
+                        ? "Failed to update instance"
+                        : "Failed to create instance")
+                  );
+                } finally {
+                  setIsCreating(false);
+                }
+              }}
+              submitDisabled={
+                isCreating ||
+                !instanceName.trim() ||
+                (!isEditingInstance &&
+                  (validationResult ? !validationResult.valid : false))
+              }
               validateDisabled={isChecking || !instanceName.trim()}
-              forceCreateDisabled={isEditingInstance || isCreating || !instanceName.trim()}
-              submitLabel={isCreating ? (isEditingInstance ? 'Updating...' : 'Creating...') : (isEditingInstance ? 'Update Instance' : 'Create Instance')}
-              extraActions={(
+              forceCreateDisabled={
+                isEditingInstance || isCreating || !instanceName.trim()
+              }
+              submitLabel={
+                isCreating
+                  ? isEditingInstance
+                    ? "Updating..."
+                    : "Creating..."
+                  : isEditingInstance
+                    ? "Update Instance"
+                    : "Create Instance"
+              }
+              extraActions={
                 <Button
                   variant="outline"
                   onClick={() => setConfigureServerSheetOpen(false)}
@@ -586,7 +925,7 @@ const ToolConfig = ({
                 >
                   Cancel
                 </Button>
-              )}
+              }
             />
           </div>
         )}

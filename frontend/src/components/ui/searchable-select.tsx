@@ -1,45 +1,57 @@
-"use client"
+"use client";
 
-import * as React from "react"
-
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Button } from "@/components/ui/button"
-import { ChevronDown, Check, Bot } from "lucide-react"
-import { cn } from "@/lib/utils"
+import * as React from "react";
+import { Bot, Check, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 export interface SelectOption {
-  id: string | number
-  label: string
-  description?: string
-  icon?: string
+  id: string | number;
+  label: string;
+  description?: string;
+  icon?: string;
 }
 
 export interface SimpleSelectOption {
-  id: string | number
-  label: string
+  id: string | number;
+  label: string;
 }
 
 export interface SelectGroup {
-  label: string
-  icon?: string
-  options: (SelectOption | SimpleSelectOption)[]
+  label: string;
+  icon?: string;
+  options: (SelectOption | SimpleSelectOption)[];
 }
 
 interface SearchableSelectProps {
-  options: (SelectOption | SimpleSelectOption)[]
-  groups?: SelectGroup[]
-  value?: string | number
-  onValueChange: (value: string | number) => void
-  placeholder?: string
-  disabled?: boolean
-  className?: string
-  emptyMessage?: string | React.ReactNode
-  defaultIcon?: React.ReactNode
-  renderOption?: (option: SelectOption | SimpleSelectOption) => React.ReactNode
-  renderTrigger?: (selectedOption: SelectOption | SimpleSelectOption | undefined) => React.ReactNode
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
+  options: (SelectOption | SimpleSelectOption)[];
+  groups?: SelectGroup[];
+  value?: string | number;
+  onValueChange: (value: string | number) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  emptyMessage?: string | React.ReactNode;
+  defaultIcon?: React.ReactNode;
+  renderOption?: (option: SelectOption | SimpleSelectOption) => React.ReactNode;
+  renderTrigger?: (
+    selectedOption: SelectOption | SimpleSelectOption | undefined
+  ) => React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function SearchableSelect({
@@ -55,45 +67,45 @@ export function SearchableSelect({
   renderOption,
   renderTrigger,
   open: controlledOpen,
-  onOpenChange: setControlledOpen
+  onOpenChange: setControlledOpen,
 }: SearchableSelectProps) {
-  const [popoverWidth, setPopoverWidth] = React.useState<string>('auto')
-  const [popoverOpen, setPopoverOpen] = React.useState(false)
-  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  const [popoverWidth, setPopoverWidth] = React.useState<string>("auto");
+  const [popoverOpen, setPopoverOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   const selectedOption = (() => {
     // Сначала ищем в группах
     if (groups) {
       for (const group of groups) {
-        const found = group.options.find(option => option.id === value);
+        const found = group.options.find((option) => option.id === value);
         if (found) return found;
       }
     }
     // Затем ищем в обычных опциях
-    return options.find(option => option.id === value);
+    return options.find((option) => option.id === value);
   })();
 
   // Use controlled state if provided, otherwise use internal state
-  const isControlled = controlledOpen !== undefined
-  const isOpen = isControlled ? controlledOpen : popoverOpen
+  const isControlled = controlledOpen !== undefined;
+  const isOpen = isControlled ? controlledOpen : popoverOpen;
 
   const handlePopoverOpenChange = (open: boolean) => {
     if (isControlled) {
-      setControlledOpen?.(open)
+      setControlledOpen?.(open);
     } else {
-      setPopoverOpen(open)
+      setPopoverOpen(open);
     }
-    
+
     if (open && triggerRef.current) {
-      const width = triggerRef.current.offsetWidth
-      setPopoverWidth(`${width}px`)
+      const width = triggerRef.current.offsetWidth;
+      setPopoverWidth(`${width}px`);
     }
-  }
+  };
 
   const handleOptionChange = (optionId: string | number) => {
-    onValueChange(optionId)
-    handlePopoverOpenChange(false)
-  }
+    onValueChange(optionId);
+    handlePopoverOpenChange(false);
+  };
 
   const renderIcon = (option: SelectOption) => {
     if (option.icon) {
@@ -101,51 +113,53 @@ export function SearchableSelect({
         <img
           src={option.icon}
           alt={option.label}
-          className="w-5 h-5 rounded dark:invert"
+          className="h-5 w-5 rounded dark:invert"
           onError={(e) => {
             if (defaultIcon) {
-              e.currentTarget.style.display = 'none'
+              e.currentTarget.style.display = "none";
             }
           }}
         />
-      )
+      );
     }
-    
-    return defaultIcon || <Bot className="w-5 h-5 text-muted-foreground" />
-  }
+
+    return defaultIcon || <Bot className="h-5 w-5 text-muted-foreground" />;
+  };
 
   const renderOptionContent = (option: SelectOption | SimpleSelectOption) => (
-    <div className="flex gap-3 items-center">
-      <div className="flex items-center justify-center w-5 h-5 flex-shrink-0">
-        {'icon' in option && renderIcon(option as SelectOption)}
+    <div className="flex items-center gap-3">
+      <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+        {"icon" in option && renderIcon(option as SelectOption)}
       </div>
       <div className="flex flex-col items-start">
         <span>{option.label}</span>
-        {'description' in option && option.description && (
+        {"description" in option && option.description && (
           <span className="note">{option.description}</span>
         )}
       </div>
     </div>
-  )
+  );
 
-  const renderDefaultTrigger = (selectedOption: SelectOption | SimpleSelectOption | undefined) => {
+  const renderDefaultTrigger = (
+    selectedOption: SelectOption | SimpleSelectOption | undefined
+  ) => {
     if (selectedOption) {
-      return renderOptionContent(selectedOption)
+      return renderOptionContent(selectedOption);
     }
     return (
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground font-normal">{placeholder}</span>
+        <span className="font-normal text-muted-foreground">{placeholder}</span>
       </div>
-    )
-  }
+    );
+  };
 
   const renderDefaultOption = (option: SelectOption | SimpleSelectOption) => {
-    const isSelected = option.id === value
+    const isSelected = option.id === value;
     return (
       <>
         {renderOptionContent(option)}
         <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
-          <Check 
+          <Check
             className={cn(
               "h-4 w-4 text-accent dark:text-accent-foreground",
               isSelected ? "opacity-100" : "opacity-0"
@@ -153,8 +167,8 @@ export function SearchableSelect({
           />
         </span>
       </>
-    )
-  }
+    );
+  };
 
   return (
     <Popover open={isOpen} onOpenChange={handlePopoverOpenChange}>
@@ -164,19 +178,18 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           className={cn(
-            "rounded-md px-3 w-full justify-between hover:bg-background shadow-none text-foreground hover:text-foreground focus:border-primary focus-visible:border-primary focus-visible:ring-0 dark:focus:border-accent-foreground dark:focus-visible:border-accent-foreground dark:bg-zinc-900", 
+            "w-full justify-between rounded-md px-3 text-foreground shadow-none hover:bg-background hover:text-foreground focus:border-primary focus-visible:border-primary focus-visible:ring-0 dark:bg-zinc-900 dark:focus:border-accent-foreground dark:focus-visible:border-accent-foreground",
             className
           )}
           disabled={disabled}
         >
-          {renderTrigger ? renderTrigger(selectedOption) : renderDefaultTrigger(selectedOption)}
+          {renderTrigger
+            ? renderTrigger(selectedOption)
+            : renderDefaultTrigger(selectedOption)}
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent 
-        className="p-0"
-        style={{ width: popoverWidth }}
-      >
+      <PopoverContent className="p-0" style={{ width: popoverWidth }}>
         <Command>
           <CommandInput placeholder={placeholder} />
           <CommandList>
@@ -188,12 +201,14 @@ export function SearchableSelect({
                   {group.options.map((option) => (
                     <CommandItem
                       key={option.id}
-                      value={`${group.label} ${option.label} ${'description' in option && option.description ? option.description : ''}`}
+                      value={`${group.label} ${option.label} ${"description" in option && option.description ? option.description : ""}`}
                       onSelect={() => {
-                        handleOptionChange(option.id)
+                        handleOptionChange(option.id);
                       }}
                     >
-                      {renderOption ? renderOption(option) : renderDefaultOption(option)}
+                      {renderOption
+                        ? renderOption(option)
+                        : renderDefaultOption(option)}
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -204,12 +219,14 @@ export function SearchableSelect({
                 {options.map((option) => (
                   <CommandItem
                     key={option.id}
-                    value={`${option.label} ${'description' in option && option.description ? option.description : ''}`}
+                    value={`${option.label} ${"description" in option && option.description ? option.description : ""}`}
                     onSelect={() => {
-                      handleOptionChange(option.id)
+                      handleOptionChange(option.id);
                     }}
                   >
-                    {renderOption ? renderOption(option) : renderDefaultOption(option)}
+                    {renderOption
+                      ? renderOption(option)
+                      : renderDefaultOption(option)}
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -218,5 +235,5 @@ export function SearchableSelect({
         </Command>
       </PopoverContent>
     </Popover>
-  )
-} 
+  );
+}

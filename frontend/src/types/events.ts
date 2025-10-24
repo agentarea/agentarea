@@ -12,9 +12,9 @@ export interface SSEEvent {
 }
 
 // Specific event type definitions based on our backend implementation
-export type WorkflowEventType = 
+export type WorkflowEventType =
   | "WorkflowStarted"
-  | "WorkflowCompleted" 
+  | "WorkflowCompleted"
   | "WorkflowFailed"
   | "WorkflowCancelled"
   | "IterationStarted"
@@ -43,7 +43,7 @@ export interface SSEMessage {
       agent_id?: string;
       execution_id?: string;
       iteration?: number;
-      
+
       // LLM event fields
       content?: string;
       cost?: number;
@@ -57,17 +57,17 @@ export interface SSEMessage {
         arguments: any;
       }>;
       model_id?: string;
-      
+
       // Tool event fields
       tool_name?: string;
       result?: any;
       success?: boolean;
-      
+
       // Chunk event fields
       chunk?: string;
       chunk_index?: number;
       is_final?: boolean;
-      
+
       // Error fields
       error?: string;
       error_type?: string;
@@ -135,178 +135,187 @@ export interface UseTaskEventsOptions {
 }
 
 // Helper functions for event mapping
-export const EVENT_TYPE_CONFIG: Record<WorkflowEventType, {
-  title: string;
-  level: EventLevel;
-  icon: string;
-  color: string;
-}> = {
+export const EVENT_TYPE_CONFIG: Record<
+  WorkflowEventType,
+  {
+    title: string;
+    level: EventLevel;
+    icon: string;
+    color: string;
+  }
+> = {
   WorkflowStarted: {
-    title: "Workflow Started", 
+    title: "Workflow Started",
     level: "info",
     icon: "play-circle",
-    color: "blue"
+    color: "blue",
   },
   WorkflowCompleted: {
     title: "Workflow Completed",
-    level: "success", 
+    level: "success",
     icon: "check-circle",
-    color: "green"
+    color: "green",
   },
   WorkflowFailed: {
     title: "Workflow Failed",
     level: "error",
-    icon: "x-circle", 
-    color: "red"
+    icon: "x-circle",
+    color: "red",
   },
   WorkflowCancelled: {
     title: "Workflow Cancelled",
     level: "warning",
     icon: "stop-circle",
-    color: "yellow"
+    color: "yellow",
   },
   IterationStarted: {
     title: "Iteration Started",
     level: "info",
     icon: "refresh-cw",
-    color: "blue"
+    color: "blue",
   },
   IterationCompleted: {
-    title: "Iteration Completed", 
+    title: "Iteration Completed",
     level: "success",
     icon: "check",
-    color: "green"
+    color: "green",
   },
   LLMCallStarted: {
     title: "LLM Call Started",
     level: "info",
     icon: "brain",
-    color: "purple"
+    color: "purple",
   },
   LLMCallCompleted: {
     title: "LLM Response Received",
     level: "success",
     icon: "message-circle",
-    color: "purple"
+    color: "purple",
   },
   LLMCallFailed: {
     title: "LLM Call Failed",
-    level: "error", 
+    level: "error",
     icon: "alert-triangle",
-    color: "red"
+    color: "red",
   },
   ToolCallStarted: {
     title: "Tool Execution Started",
     level: "info",
     icon: "tool",
-    color: "orange"
+    color: "orange",
   },
   ToolCallCompleted: {
     title: "Tool Execution Completed",
     level: "success",
     icon: "check-square",
-    color: "orange"
+    color: "orange",
   },
   ToolCallFailed: {
     title: "Tool Execution Failed",
     level: "error",
-    icon: "alert-circle", 
-    color: "red"
+    icon: "alert-circle",
+    color: "red",
   },
   BudgetWarning: {
     title: "Budget Warning",
     level: "warning",
     icon: "dollar-sign",
-    color: "yellow"
+    color: "yellow",
   },
   BudgetExceeded: {
     title: "Budget Exceeded",
     level: "error",
     icon: "credit-card",
-    color: "red"
+    color: "red",
   },
   HumanApprovalRequested: {
     title: "Human Approval Requested",
     level: "warning",
     icon: "user-check",
-    color: "indigo"
+    color: "indigo",
   },
   HumanApprovalReceived: {
     title: "Human Approval Received",
     level: "success",
     icon: "user-check",
-    color: "green"
-  }
+    color: "green",
+  },
 };
 
 // Utility functions
-export const mapSSEToDisplayEvent = (sseEvent: SSEMessage, id?: string): DisplayEvent => {
+export const mapSSEToDisplayEvent = (
+  sseEvent: SSEMessage,
+  id?: string
+): DisplayEvent => {
   // Map event names to our internal event types - handle both PascalCase and snake_case
   const eventTypeMap: Record<string, WorkflowEventType> = {
-    'workflow_started': 'WorkflowStarted',
-    'workflowstarted': 'WorkflowStarted',
-    'workflow_completed': 'WorkflowCompleted',
-    'workflowcompleted': 'WorkflowCompleted',
-    'workflow_failed': 'WorkflowFailed',
-    'workflowfailed': 'WorkflowFailed',
-    'workflow_cancelled': 'WorkflowCancelled',
-    'workflowcancelled': 'WorkflowCancelled',
-    'iteration_started': 'IterationStarted',
-    'iterationstarted': 'IterationStarted',
-    'iteration_completed': 'IterationCompleted',
-    'iterationcompleted': 'IterationCompleted',
-    'llm_call_started': 'LLMCallStarted',
-    'llmcallstarted': 'LLMCallStarted',
-    'llm_call_completed': 'LLMCallCompleted',
-    'llmcallcompleted': 'LLMCallCompleted',
-    'llm_call_failed': 'LLMCallFailed',
-    'llmcallfailed': 'LLMCallFailed',
-    'llm_call_chunk': 'LLMCallCompleted', // Map chunks to completed for display
-    'llmcallchunk': 'LLMCallCompleted',
-    'tool_call_started': 'ToolCallStarted',
-    'toolcallstarted': 'ToolCallStarted',
-    'tool_call_completed': 'ToolCallCompleted',
-    'toolcallcompleted': 'ToolCallCompleted',
-    'tool_call_failed': 'ToolCallFailed',
-    'toolcallfailed': 'ToolCallFailed',
-    'budget_warning': 'BudgetWarning',
-    'budgetwarning': 'BudgetWarning',
-    'budget_exceeded': 'BudgetExceeded',
-    'budgetexceeded': 'BudgetExceeded',
-    'human_approval_requested': 'HumanApprovalRequested',
-    'humanapprovalrequested': 'HumanApprovalRequested',
-    'human_approval_received': 'HumanApprovalReceived',
-    'humanapprovalreceived': 'HumanApprovalReceived',
-    'task_completed': 'WorkflowCompleted',
-    'taskcompleted': 'WorkflowCompleted',
-    'task_failed': 'WorkflowFailed',
-    'taskfailed': 'WorkflowFailed',
+    workflow_started: "WorkflowStarted",
+    workflowstarted: "WorkflowStarted",
+    workflow_completed: "WorkflowCompleted",
+    workflowcompleted: "WorkflowCompleted",
+    workflow_failed: "WorkflowFailed",
+    workflowfailed: "WorkflowFailed",
+    workflow_cancelled: "WorkflowCancelled",
+    workflowcancelled: "WorkflowCancelled",
+    iteration_started: "IterationStarted",
+    iterationstarted: "IterationStarted",
+    iteration_completed: "IterationCompleted",
+    iterationcompleted: "IterationCompleted",
+    llm_call_started: "LLMCallStarted",
+    llmcallstarted: "LLMCallStarted",
+    llm_call_completed: "LLMCallCompleted",
+    llmcallcompleted: "LLMCallCompleted",
+    llm_call_failed: "LLMCallFailed",
+    llmcallfailed: "LLMCallFailed",
+    llm_call_chunk: "LLMCallCompleted", // Map chunks to completed for display
+    llmcallchunk: "LLMCallCompleted",
+    tool_call_started: "ToolCallStarted",
+    toolcallstarted: "ToolCallStarted",
+    tool_call_completed: "ToolCallCompleted",
+    toolcallcompleted: "ToolCallCompleted",
+    tool_call_failed: "ToolCallFailed",
+    toolcallfailed: "ToolCallFailed",
+    budget_warning: "BudgetWarning",
+    budgetwarning: "BudgetWarning",
+    budget_exceeded: "BudgetExceeded",
+    budgetexceeded: "BudgetExceeded",
+    human_approval_requested: "HumanApprovalRequested",
+    humanapprovalrequested: "HumanApprovalRequested",
+    human_approval_received: "HumanApprovalReceived",
+    humanapprovalreceived: "HumanApprovalReceived",
+    task_completed: "WorkflowCompleted",
+    taskcompleted: "WorkflowCompleted",
+    task_failed: "WorkflowFailed",
+    taskfailed: "WorkflowFailed",
   };
 
   // Get the mapped event type - try event name first, then event_type field
-  const eventKey = sseEvent.event.toLowerCase().replace(/[^a-z]/g, '');
-  const eventTypeKey = sseEvent.data.event_type?.toLowerCase().replace(/[^a-z]/g, '') || '';
-  
-  const mappedEventType = eventTypeMap[eventKey] || 
-                          eventTypeMap[eventTypeKey] ||
-                          (sseEvent.data.event_type as WorkflowEventType) ||
-                          'WorkflowStarted';
-  
+  const eventKey = sseEvent.event.toLowerCase().replace(/[^a-z]/g, "");
+  const eventTypeKey =
+    sseEvent.data.event_type?.toLowerCase().replace(/[^a-z]/g, "") || "";
+
+  const mappedEventType =
+    eventTypeMap[eventKey] ||
+    eventTypeMap[eventTypeKey] ||
+    (sseEvent.data.event_type as WorkflowEventType) ||
+    "WorkflowStarted";
+
   const config = EVENT_TYPE_CONFIG[mappedEventType];
   const eventData = sseEvent.data.data;
-  
+
   // Create meaningful descriptions based on event content
   let description = config?.title || mappedEventType;
-  
+
   // Check for content in tool_calls (like task_complete results)
   if (eventData.tool_calls && eventData.tool_calls.length > 0) {
     const toolCall = eventData.tool_calls[0];
-    if (toolCall.name === 'task_complete') {
+    if (toolCall.name === "task_complete") {
       try {
-        const args = typeof toolCall.arguments === 'string'
-          ? JSON.parse(toolCall.arguments)
-          : toolCall.arguments;
-        description = `Task completed: ${args.summary || args.result || 'Success'}`;
+        const args =
+          typeof toolCall.arguments === "string"
+            ? JSON.parse(toolCall.arguments)
+            : toolCall.arguments;
+        description = `Task completed: ${args.summary || args.result || "Success"}`;
       } catch (e) {
         description = `Task completed with ${toolCall.name}`;
       }
@@ -314,9 +323,9 @@ export const mapSSEToDisplayEvent = (sseEvent: SSEMessage, id?: string): Display
       description = `${config?.title}: ${toolCall.name}`;
     }
   } else if (eventData.content) {
-    description = eventData.chunk 
-      ? `AI is responding: ${eventData.chunk.substring(0, 100)}${eventData.chunk.length > 100 ? '...' : ''}`
-      : `AI responded: ${eventData.content.substring(0, 100)}${eventData.content.length > 100 ? '...' : ''}`;
+    description = eventData.chunk
+      ? `AI is responding: ${eventData.chunk.substring(0, 100)}${eventData.chunk.length > 100 ? "..." : ""}`
+      : `AI responded: ${eventData.content.substring(0, 100)}${eventData.content.length > 100 ? "..." : ""}`;
   } else if (eventData.tool_name) {
     description = `${config?.title}: ${eventData.tool_name}`;
   } else if (eventData.error) {
@@ -326,7 +335,7 @@ export const mapSSEToDisplayEvent = (sseEvent: SSEMessage, id?: string): Display
   } else if (eventData.iteration) {
     description = `${config?.title} ${eventData.iteration}`;
   }
-  
+
   return {
     id: id || `${eventData.task_id}-${mappedEventType}-${Date.now()}`,
     type: mappedEventType,
@@ -335,14 +344,16 @@ export const mapSSEToDisplayEvent = (sseEvent: SSEMessage, id?: string): Display
     description,
     level: config?.level || "info",
     data: eventData,
-    icon: config?.icon
+    icon: config?.icon,
   };
 };
 
-export const mapTaskEventToDisplayEvent = (taskEvent: TaskEvent): DisplayEvent => {
+export const mapTaskEventToDisplayEvent = (
+  taskEvent: TaskEvent
+): DisplayEvent => {
   const eventType = taskEvent.event_type as WorkflowEventType;
   const config = EVENT_TYPE_CONFIG[eventType];
-  
+
   return {
     id: taskEvent.id,
     type: eventType,
@@ -351,33 +362,44 @@ export const mapTaskEventToDisplayEvent = (taskEvent: TaskEvent): DisplayEvent =
     description: taskEvent.message,
     level: config?.level || "info",
     data: taskEvent.metadata,
-    icon: config?.icon
+    icon: config?.icon,
   };
 };
 
 export const getEventLevelColor = (level: EventLevel): string => {
   switch (level) {
-    case "success": return "text-green-600 bg-green-50 border-green-200";
-    case "error": return "text-red-600 bg-red-50 border-red-200"; 
-    case "warning": return "text-yellow-600 bg-yellow-50 border-yellow-200";
-    default: return "text-blue-600 bg-blue-50 border-blue-200";
+    case "success":
+      return "text-green-600 bg-green-50 border-green-200";
+    case "error":
+      return "text-red-600 bg-red-50 border-red-200";
+    case "warning":
+      return "text-yellow-600 bg-yellow-50 border-yellow-200";
+    default:
+      return "text-blue-600 bg-blue-50 border-blue-200";
   }
 };
 
 export const getEventStats = (events: DisplayEvent[]): EventStats => {
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  
+
   return {
     total: events.length,
-    byType: events.reduce((acc, event) => {
-      acc[event.type] = (acc[event.type] || 0) + 1;
-      return acc;
-    }, {} as Record<WorkflowEventType, number>),
-    byLevel: events.reduce((acc, event) => {
-      acc[event.level] = (acc[event.level] || 0) + 1;
-      return acc;
-    }, {} as Record<EventLevel, number>),
-    recentActivity: events.filter(event => event.timestamp > oneHourAgo).length
+    byType: events.reduce(
+      (acc, event) => {
+        acc[event.type] = (acc[event.type] || 0) + 1;
+        return acc;
+      },
+      {} as Record<WorkflowEventType, number>
+    ),
+    byLevel: events.reduce(
+      (acc, event) => {
+        acc[event.level] = (acc[event.level] || 0) + 1;
+        return acc;
+      },
+      {} as Record<EventLevel, number>
+    ),
+    recentActivity: events.filter((event) => event.timestamp > oneHourAgo)
+      .length,
   };
 };

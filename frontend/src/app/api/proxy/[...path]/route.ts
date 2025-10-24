@@ -1,6 +1,6 @@
-import { getAuthToken } from "@/lib/getAuthToken";
-import { env } from "@/env";
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "@/env";
+import { getAuthToken } from "@/lib/getAuthToken";
 
 /**
  * API Proxy Route Handler

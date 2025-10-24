@@ -1,4 +1,4 @@
-import type { OryClientConfiguration } from "@ory/elements-react"
+import type { OryClientConfiguration } from "@ory/elements-react";
 
 const config: OryClientConfiguration = {
   project: {
@@ -16,6 +16,6 @@ const config: OryClientConfiguration = {
     login_ui_url: "/auth/login",
     settings_ui_url: "/auth/settings",
   },
-}
+};
 
-export default config
+export default config;

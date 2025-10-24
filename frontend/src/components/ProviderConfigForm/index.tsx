@@ -1,3 +1,3 @@
-import ProviderConfigForm from './ProviderConfigForm';
+import ProviderConfigForm from "./ProviderConfigForm";
 
 export default ProviderConfigForm;

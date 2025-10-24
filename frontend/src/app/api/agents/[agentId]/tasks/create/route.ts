@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest } from "next/server";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 
@@ -17,12 +17,12 @@ export async function POST(
 
     // Create headers for backend request
     const backendHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
     };
 
     if (token) {
-      backendHeaders['Authorization'] = `Bearer ${token}`;
+      backendHeaders["Authorization"] = `Bearer ${token}`;
     }
 
     // Connect to backend task creation endpoint with SSE (server-side only)
@@ -30,14 +30,14 @@ export async function POST(
     const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/`;
 
     const response = await fetch(createTaskUrl, {
-      method: 'POST',
+      method: "POST",
       headers: backendHeaders,
       body: JSON.stringify(taskData),
     });
 
     if (!response.ok) {
       return new Response(`Backend task creation error: ${response.status}`, {
-        status: response.status
+        status: response.status,
       });
     }
 
@@ -61,7 +61,7 @@ export async function POST(
               controller.enqueue(value);
             }
           } catch (error) {
-            console.error('Task creation SSE stream error:', error);
+            console.error("Task creation SSE stream error:", error);
             controller.error(error);
           }
         };
@@ -73,16 +73,15 @@ export async function POST(
     // Return SSE response with proper headers
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Cache-Control",
       },
     });
-
   } catch (error) {
-    console.error('Task creation proxy error:', error);
+    console.error("Task creation proxy error:", error);
     return new Response(`Task creation proxy error: ${error}`, { status: 500 });
   }
 }

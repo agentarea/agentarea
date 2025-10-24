@@ -5,11 +5,13 @@ interface AgentEditContentProps {
   agentId: string;
 }
 
-export default async function AgentEditContent({ agentId }: AgentEditContentProps) {
+export default async function AgentEditContent({
+  agentId,
+}: AgentEditContentProps) {
   const agentData = await loadAgentEditData(agentId);
 
   return (
-    <AgentEditClient 
+    <AgentEditClient
       agentId={agentId}
       agent={agentData.agent}
       mcpServers={agentData.mcpServers}

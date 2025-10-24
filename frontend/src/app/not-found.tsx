@@ -1,8 +1,9 @@
-"use client"
-import React from 'react';
-import EmptyState from '@/components/EmptyState/EmptyState';
-import { useTranslations } from 'next-intl';
-import ContentBlock from '@/components/ContentBlock/ContentBlock';
+"use client";
+
+import React from "react";
+import { useTranslations } from "next-intl";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import EmptyState from "@/components/EmptyState/EmptyState";
 
 const NotFound = () => {
   const t = useTranslations("404");
@@ -11,22 +12,22 @@ const NotFound = () => {
     <ContentBlock
       header={{
         breadcrumb: [
-          {label: "Home", href: "/workplace"},
-          {label: t("title")}
-        ]
+          { label: "Home", href: "/workplace" },
+          { label: t("title") },
+        ],
       }}
     >
-      <EmptyState 
+      <EmptyState
         title={t("404")}
         description={t("description")}
         iconsType="404"
         action={{
           label: t("goHome"),
-          href: "/"
+          href: "/",
         }}
       />
     </ContentBlock>
-  )
-}
+  );
+};
 
-export default NotFound
+export default NotFound;

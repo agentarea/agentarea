@@ -1,7 +1,13 @@
-import { notFound } from 'next/navigation';
-import { getAgent, listMCPServers, listModelInstances, listMCPServerInstances, listBuiltinTools } from '@/lib/api';
-import EditAgentClient from './EditAgentClient';
-import ContentBlock from '@/components/ContentBlock/ContentBlock';
+import { notFound } from "next/navigation";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import {
+  getAgent,
+  listBuiltinTools,
+  listMCPServerInstances,
+  listMCPServers,
+  listModelInstances,
+} from "@/lib/api";
+import EditAgentClient from "./EditAgentClient";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -10,7 +16,13 @@ interface Props {
 export default async function EditAgentPage({ params }: Props) {
   const { id } = await params;
   try {
-    const [agentResponse, mcpResponse, llmResponse, mcpInstancesResponse, builtinToolsResponse] = await Promise.all([
+    const [
+      agentResponse,
+      mcpResponse,
+      llmResponse,
+      mcpInstancesResponse,
+      builtinToolsResponse,
+    ] = await Promise.all([
       getAgent(id),
       listMCPServers(),
       listModelInstances(),
@@ -25,7 +37,9 @@ export default async function EditAgentPage({ params }: Props) {
     const agent = agentResponse.data;
     const mcpServers = (mcpResponse.data || []).map((server: any) => ({
       ...server,
-      status: ["published", "draft", "pending", "rejected"].includes(server.status)
+      status: ["published", "draft", "pending", "rejected"].includes(
+        server.status
+      )
         ? server.status
         : "draft",
     }));
@@ -36,14 +50,15 @@ export default async function EditAgentPage({ params }: Props) {
       : Object.values(builtinToolsResponse.data || {});
 
     return (
-      <ContentBlock 
+      <ContentBlock
         header={{
           title: "Edit Agent",
           backLink: {
             label: "Back to Browse Agents",
-            href: "/agents"
-          }
-        }}>
+            href: "/agents",
+          },
+        }}
+      >
         <EditAgentClient
           agent={agent}
           mcpServers={mcpServers}
@@ -54,7 +69,7 @@ export default async function EditAgentPage({ params }: Props) {
       </ContentBlock>
     );
   } catch (error) {
-    console.error('Error loading agent:', error);
+    console.error("Error loading agent:", error);
     notFound();
   }
 }

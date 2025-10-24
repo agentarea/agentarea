@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
-import type { components } from "@/api/schema";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { Info } from "lucide-react";
+import type { components } from "@/api/schema";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -98,7 +98,7 @@ export default function MCPInstanceConfigForm({
             className={getErrorText("name") ? "border-red-500" : ""}
           />
           {getErrorText("name") && (
-            <p className="text-sm text-red-500 mt-1">{getErrorText("name")}</p>
+            <p className="mt-1 text-sm text-red-500">{getErrorText("name")}</p>
           )}
         </div>
         <div>
@@ -133,11 +133,16 @@ export default function MCPInstanceConfigForm({
                 return (
                   <div key={envName} className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Label htmlFor={`env_${envName}`} className="text-sm font-medium">
+                      <Label
+                        htmlFor={`env_${envName}`}
+                        className="text-sm font-medium"
+                      >
                         {envName}
                       </Label>
                       {isRequired && (
-                        <span className="text-[10px] px-1 rounded bg-red-100 text-red-700">Required</span>
+                        <span className="rounded bg-red-100 px-1 text-[10px] text-red-700">
+                          Required
+                        </span>
                       )}
                     </div>
                     <Input
@@ -149,16 +154,21 @@ export default function MCPInstanceConfigForm({
                       disabled={disabled}
                       required={isRequired}
                       className={
-                        (isRequired && !envVars[envName]?.trim()) || getErrorText(errorKey)
+                        (isRequired && !envVars[envName]?.trim()) ||
+                        getErrorText(errorKey)
                           ? "border-red-300"
                           : ""
                       }
                     />
                     {description && (
-                      <p className="text-xs text-muted-foreground">{description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {description}
+                      </p>
                     )}
                     {getErrorText(errorKey) && (
-                      <p className="text-xs text-red-500">{getErrorText(errorKey)}</p>
+                      <p className="text-xs text-red-500">
+                        {getErrorText(errorKey)}
+                      </p>
                     )}
                   </div>
                 );
@@ -190,9 +200,13 @@ export default function MCPInstanceConfigForm({
           <Separator />
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Container Configuration</h4>
-            <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-              <div className="text-xs"><span className="font-medium">Image:</span> {resolvedImage}</div>
-              <div className="text-xs"><span className="font-medium">Port:</span> {resolvedPort}</div>
+            <div className="space-y-1 rounded-lg bg-muted/50 p-3">
+              <div className="text-xs">
+                <span className="font-medium">Image:</span> {resolvedImage}
+              </div>
+              <div className="text-xs">
+                <span className="font-medium">Port:</span> {resolvedPort}
+              </div>
             </div>
           </div>
         </>
@@ -215,7 +229,11 @@ export default function MCPInstanceConfigForm({
             {submitLabel}
           </Button>
         ) : (
-          <Button type="button" disabled={!!submitDisabled} onClick={() => onSubmit && onSubmit()}>
+          <Button
+            type="button"
+            disabled={!!submitDisabled}
+            onClick={() => onSubmit && onSubmit()}
+          >
             {submitLabel}
           </Button>
         )}
@@ -234,5 +252,3 @@ export default function MCPInstanceConfigForm({
 
   return Content;
 }
-
-

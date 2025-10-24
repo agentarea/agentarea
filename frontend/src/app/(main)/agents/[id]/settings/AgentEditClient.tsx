@@ -1,16 +1,17 @@
 "use client";
 
 import React from "react";
-import { updateAgentSettings } from './actions';
-import type { components } from '@/api/schema';
-import AgentForm from '../../shared/AgentForm';
-import type { AgentFormValues } from '../../create/types';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import type { components } from "@/api/schema";
+import type { AgentFormValues } from "../../create/types";
+import AgentForm from "../../shared/AgentForm";
+import { updateAgentSettings } from "./actions";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
-type Agent = components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+type Agent =
+  components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
 
 interface AgentEditClientProps {
   agentId: string;
@@ -22,14 +23,14 @@ interface AgentEditClientProps {
   initialData: Partial<AgentFormValues>;
 }
 
-export default function AgentEditClient({ 
+export default function AgentEditClient({
   agentId,
   agent,
-  mcpServers, 
-  llmModelInstances, 
+  mcpServers,
+  llmModelInstances,
   mcpInstanceList,
   builtinTools,
-  initialData
+  initialData,
 }: AgentEditClientProps) {
   const router = useRouter();
 
@@ -53,32 +54,32 @@ export default function AgentEditClient({
       const { data, error } = await updateAgentSettings(agentId, updateData);
 
       if (error) {
-        console.error('Update error:', error);
-        toast.error('Failed to update agent');
+        console.error("Update error:", error);
+        toast.error("Failed to update agent");
         return {
-          message: 'Failed to update agent',
-          errors: { _form: ['Failed to update agent'] },
+          message: "Failed to update agent",
+          errors: { _form: ["Failed to update agent"] },
         };
       }
 
       if (data) {
-        toast.success('Agent updated successfully!');
+        toast.success("Agent updated successfully!");
         router.refresh();
         return {
-          message: 'Agent updated successfully!',
+          message: "Agent updated successfully!",
         };
       }
 
       return {
-        message: 'Unknown error',
-        errors: { _form: ['Unknown error'] },
+        message: "Unknown error",
+        errors: { _form: ["Unknown error"] },
       };
     } catch (err) {
-      console.error('Unexpected error:', err);
-      toast.error('Unexpected error occurred');
+      console.error("Unexpected error:", err);
+      toast.error("Unexpected error occurred");
       return {
-        message: 'Unexpected error occurred',
-        errors: { _form: ['Unexpected error occurred'] },
+        message: "Unexpected error occurred",
+        errors: { _form: ["Unexpected error occurred"] },
       };
     }
   };

@@ -58,7 +58,7 @@
         "description": "View AI provider specifications and available models"
       },
       "providerConfigs": {
-        "title": "Models", 
+        "title": "Models",
         "description": "Manage API configurations and credentials for AI providers"
       },
       "modelSpecs": {
@@ -399,7 +399,6 @@
       "arguments": "Arguments",
       "executionTime": "Execution Time",
       "result": "Result"
-      
     }
   },
 

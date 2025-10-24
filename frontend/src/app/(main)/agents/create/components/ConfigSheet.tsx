@@ -1,7 +1,14 @@
 import React, { ReactNode, useState } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 type ConfigSheetProps = {
@@ -18,21 +25,21 @@ type ConfigSheetProps = {
   triggerRef?: React.RefObject<HTMLButtonElement | null>; // Optional ref to trigger button
 };
 
-const ConfigSheet = ({ 
-  title, 
+const ConfigSheet = ({
+  title,
   className,
   triggerComponent,
   triggerClassName,
-  description, 
-  children, 
+  description,
+  children,
   triggerText = "Add",
   triggerIcon = <Plus className="h-4 w-4" />,
   open,
   onOpenChange,
-  triggerRef
+  triggerRef,
 }: ConfigSheetProps) => {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
-  
+
   // Use external open state if provided, otherwise use internal state
   const isOpen = open !== undefined ? open : internalIsOpen;
 
@@ -52,17 +59,20 @@ const ConfigSheet = ({
   return (
     <Sheet modal={false} open={isOpen} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        {
-            triggerComponent ? triggerComponent : (
-                <Button size="xs" ref={triggerRef} className={triggerClassName}>
-                    {triggerIcon}
-                    {triggerText}
-                </Button>
-            )
-        }
+        {triggerComponent ? (
+          triggerComponent
+        ) : (
+          <Button size="xs" ref={triggerRef} className={triggerClassName}>
+            {triggerIcon}
+            {triggerText}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent
-        className={cn("w-full flex flex-col sm:w-[540px] overflow-y-hidden pb-0 md:min-w-[500px]", className)}
+        className={cn(
+          "flex w-full flex-col overflow-y-hidden pb-0 sm:w-[540px] md:min-w-[500px]",
+          className
+        )}
         hideOverlay
         onPointerDownOutside={(e) => {
           const target = e.target as HTMLElement;
@@ -87,4 +97,4 @@ const ConfigSheet = ({
   );
 };
 
-export default ConfigSheet; 
+export default ConfigSheet;

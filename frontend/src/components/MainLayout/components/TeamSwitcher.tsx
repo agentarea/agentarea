@@ -1,8 +1,7 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { ChevronsUpDown, Plus } from "lucide-react"
-
+import * as React from "react";
+import { ChevronsUpDown, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,29 +10,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from "@/components/ui/dropdown-menu";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from '@/components/ui/sidebar'
+} from "@/components/ui/sidebar";
 
 export function TeamSwitcher({
   teams,
 }: {
   teams: {
-    name: string
-    logo: React.ElementType
-    plan: string
-    logoFile?: string
-  }[]
+    name: string;
+    logo: React.ElementType;
+    plan: string;
+    logoFile?: string;
+  }[];
 }) {
-  const { isMobile } = useSidebar()
-  const [activeTeam, setActiveTeam] = React.useState(teams[0])
+  const { isMobile } = useSidebar();
+  const [activeTeam, setActiveTeam] = React.useState(teams[0]);
 
   if (!activeTeam) {
-    return null
+    return null;
   }
 
   return (
@@ -43,16 +42,19 @@ export function TeamSwitcher({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
+              className="ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                {
-                  activeTeam.logoFile ? (
-                    <img src={activeTeam.logoFile} alt={activeTeam.name} width={32} height={32} />
-                  ) : (
-                    <activeTeam.logo className="size-4" />
-                  )
-                }
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                {activeTeam.logoFile ? (
+                  <img
+                    src={activeTeam.logoFile}
+                    alt={activeTeam.name}
+                    width={32}
+                    height={32}
+                  />
+                ) : (
+                  <activeTeam.logo className="size-4" />
+                )}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{activeTeam.name}</span>
@@ -67,7 +69,7 @@ export function TeamSwitcher({
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-muted-foreground text-xs">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
               Workspaces
             </DropdownMenuLabel>
             {teams.map((team, index) => (
@@ -77,13 +79,16 @@ export function TeamSwitcher({
                 className="gap-2 p-2"
               >
                 <div className="flex size-6 items-center justify-center rounded-md border">
-                  {
-                    team.logoFile ? (
-                      <img src={team.logoFile} alt={team.name} width={32} height={32} />
-                    ) : (
-                      <team.logo className="size-3.5 shrink-0" />
-                    )
-                  }
+                  {team.logoFile ? (
+                    <img
+                      src={team.logoFile}
+                      alt={team.name}
+                      width={32}
+                      height={32}
+                    />
+                  ) : (
+                    <team.logo className="size-3.5 shrink-0" />
+                  )}
                 </div>
                 {team.name}
                 <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
@@ -95,11 +100,15 @@ export function TeamSwitcher({
                 <Plus className="size-4" />
               </div>
               {/* <div className="text-muted-foreground font-medium">Add Workspace</div> */}
-              <div className="note">Add Workspace.<br/>Comming Soon...</div>
+              <div className="note">
+                Add Workspace.
+                <br />
+                Comming Soon...
+              </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
-  )
+  );
 }

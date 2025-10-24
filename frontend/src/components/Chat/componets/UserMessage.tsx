@@ -1,10 +1,10 @@
-import React from 'react';
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import React from "react";
 import { User } from "lucide-react";
-import MessageWrapper from './MessageWrapper';
-import BaseMessage from './BaseMessage';
-import { formatTimestamp } from '../../../utils/dateUtils';
-import { AttachmentCard } from '@/components/ui/attachment-card';
+import { AttachmentCard } from "@/components/ui/attachment-card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatTimestamp } from "../../../utils/dateUtils";
+import BaseMessage from "./BaseMessage";
+import MessageWrapper from "./MessageWrapper";
 
 interface UserMessageProps {
   id: string;
@@ -13,10 +13,15 @@ interface UserMessageProps {
   files?: File[];
 }
 
-export const UserMessage: React.FC<UserMessageProps> = ({ id, content, timestamp, files }) => {
+export const UserMessage: React.FC<UserMessageProps> = ({
+  id,
+  content,
+  timestamp,
+  files,
+}) => {
   const handleFileDownload = (file: File) => {
     const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = file.name;
     document.body.appendChild(a);
@@ -27,19 +32,23 @@ export const UserMessage: React.FC<UserMessageProps> = ({ id, content, timestamp
 
   return (
     <MessageWrapper type="user">
-      <BaseMessage isUser={true} headerLeft={"User"} headerRight={formatTimestamp(new Date().toISOString())}>
+      <BaseMessage
+        isUser={true}
+        headerLeft={"User"}
+        headerRight={formatTimestamp(new Date().toISOString())}
+      >
         <div className="space-y-3">
           {content && <div>{content}</div>}
           {files && files.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-3">
-                {files.map((file, index) => (
-                  <AttachmentCard
-                    key={index}
-                    file={file}
-                    onAction={() => handleFileDownload(file)}
-                    actionType="download"
-                  />
-                ))}
+              {files.map((file, index) => (
+                <AttachmentCard
+                  key={index}
+                  file={file}
+                  onAction={() => handleFileDownload(file)}
+                  actionType="download"
+                />
+              ))}
             </div>
           )}
         </div>

@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-import BaseModal from '@/components/BaseModal/BaseModal';
-import { useTranslations } from 'next-intl';
+import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import BaseModal from "@/components/BaseModal/BaseModal";
+import { Button } from "@/components/ui/button";
 
 interface DeleteButtonProps {
   itemId: string;
@@ -32,40 +32,41 @@ export default function DeleteButton({
   title = "Delete Item",
   description,
   errorMessages = {},
-  successMessage = "Item deleted successfully"
+  successMessage = "Item deleted successfully",
 }: DeleteButtonProps) {
   const router = useRouter();
   const tCommon = useTranslations("Common");
 
   const defaultErrorMessages = {
-    noIdProvided: 'No ID provided for deletion',
-    failedToDelete: 'Failed to delete item',
-    unexpectedError: 'Unexpected error while deleting',
-    ...errorMessages
+    noIdProvided: "No ID provided for deletion",
+    failedToDelete: "Failed to delete item",
+    unexpectedError: "Unexpected error while deleting",
+    ...errorMessages,
   };
 
-  const defaultDescription = description || tCommon("deleteDescription", { itemName });
+  const defaultDescription =
+    description || tCommon("deleteDescription", { itemName });
 
   const handleDelete = async () => {
     if (!itemId) {
-      console.error('No ID provided for deletion');
+      console.error("No ID provided for deletion");
       toast.error(defaultErrorMessages.noIdProvided);
       return;
     }
 
     try {
       const { error } = await onDelete(itemId);
-      
+
       if (error) {
-        console.error('Failed to delete item:', error);
-        const errorMessage = error.detail?.[0]?.msg || 'Unknown error';
+        console.error("Failed to delete item:", error);
+        const errorMessage = error.detail?.[0]?.msg || "Unknown error";
         toast.error(`${defaultErrorMessages.failedToDelete}: ${errorMessage}`);
         return;
       }
 
       // Success
       toast.success(successMessage);
-      
+
       if (onSuccess) {
         onSuccess();
       } else if (redirectPath) {
@@ -73,7 +74,7 @@ export default function DeleteButton({
         router.refresh();
       }
     } catch (err) {
-      console.error('Error deleting item:', err);
+      console.error("Error deleting item:", err);
       toast.error(defaultErrorMessages.unexpectedError);
     }
   };

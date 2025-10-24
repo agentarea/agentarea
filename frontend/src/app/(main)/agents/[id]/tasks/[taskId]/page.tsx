@@ -8,11 +8,11 @@ interface Props {
 
 export default async function AgentTaskPage({ params }: Props) {
   const { id, taskId } = await params;
-  
+
   // Load both agent and task data
   const [agentResponse, taskResponse] = await Promise.all([
     getAgent(id),
-    getAgentTaskById(id, taskId)
+    getAgentTaskById(id, taskId),
   ]);
 
   if (!agentResponse.data) {
@@ -22,7 +22,5 @@ export default async function AgentTaskPage({ params }: Props) {
   const agent = agentResponse.data;
   const task = taskResponse.data;
 
-  return (
-    <AgentTaskClient agent={agent} taskId={taskId} task={task} />
-  );
+  return <AgentTaskClient agent={agent} taskId={taskId} task={task} />;
 }

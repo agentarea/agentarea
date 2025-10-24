@@ -1,13 +1,13 @@
-import { ReactNode } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { LucideIcon } from 'lucide-react';
+import { ReactNode } from "react";
+import { LucideIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface SettingsSectionProps {
   title: string;
   description?: string;
   icon?: LucideIcon;
   badge?: string;
-  badgeVariant?: 'default' | 'secondary' | 'outline' | 'destructive';
+  badgeVariant?: "default" | "secondary" | "outline" | "destructive";
   children: ReactNode;
   className?: string;
 }
@@ -17,17 +17,19 @@ export default function SettingsSection({
   description,
   icon: Icon,
   badge,
-  badgeVariant = 'outline',
+  badgeVariant = "outline",
   children,
-  className = ''
+  className = "",
 }: SettingsSectionProps) {
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}>
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+    <div
+      className={`rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 ${className}`}
+    >
+      <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {Icon && (
-              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <div className="rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20">
                 <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
             )}
@@ -36,7 +38,7 @@ export default function SettingsSection({
                 {title}
               </h3>
               {description && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {description}
                 </p>
               )}
@@ -49,9 +51,7 @@ export default function SettingsSection({
           )}
         </div>
       </div>
-      <div className="p-6">
-        {children}
-      </div>
+      <div className="p-6">{children}</div>
     </div>
   );
 }

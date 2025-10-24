@@ -1,3 +1,3 @@
-import BaseModal from './BaseModal';
+import BaseModal from "./BaseModal";
 
 export default BaseModal;

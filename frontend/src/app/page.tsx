@@ -1,5 +1,5 @@
-import { getServerSession } from "@ory/nextjs/app";
 import { redirect } from "next/navigation";
+import { getServerSession } from "@ory/nextjs/app";
 
 export default async function RootPage() {
   const session = await getServerSession();

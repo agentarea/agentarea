@@ -1,7 +1,7 @@
 "use server";
 
-import { createMCPServerInstance as createMCPServerInstanceAPI } from "@/lib/api";
 import type { components } from "@/api/schema";
+import { createMCPServerInstance as createMCPServerInstanceAPI } from "@/lib/api";
 
 export async function createMCPServerInstance(
   instance: components["schemas"]["MCPServerInstanceCreateRequest"]

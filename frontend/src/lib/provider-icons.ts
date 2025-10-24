@@ -13,65 +13,65 @@ const API_BASE_URL = "/api";
 // Map of provider names to icon identifiers
 const PROVIDER_ICON_MAP: Record<string, string> = {
   // Major providers
-  "OpenAI": "openai",
-  "Anthropic": "anthropic", 
+  OpenAI: "openai",
+  Anthropic: "anthropic",
   "Mistral AI": "mistral",
-  "Mistral": "mistral",
-  "Groq": "groq",
+  Mistral: "mistral",
+  Groq: "groq",
   "Hugging Face": "huggingface",
-  "Ollama": "ollama",
+  Ollama: "ollama",
   "Azure OpenAI": "azure_openai",
   "Google VertexAI": "vertexai",
   "AWS Bedrock": "aws_bedrock",
-  "Meta": "meta",
-  "GitHub": "github",
-  "DeepSeek": "deepseek",
-  "Perplexity": "perplexity",
-  "Cohere": "cohere",
+  Meta: "meta",
+  GitHub: "github",
+  DeepSeek: "deepseek",
+  Perplexity: "perplexity",
+  Cohere: "cohere",
   "Together AI": "together",
   "Fireworks AI": "fireworks",
-  "OpenRouter": "openrouter",
-  "Anyscale": "anyscale",
-  "Replicate": "replicate",
-  "Baseten": "baseten",
+  OpenRouter: "openrouter",
+  Anyscale: "anyscale",
+  Replicate: "replicate",
+  Baseten: "baseten",
   "Voyage AI": "voyage",
   "Jina AI": "jina",
-  "AI21": "ai21",
+  AI21: "ai21",
   "NLP Cloud": "nlp_cloud",
   "Aleph Alpha": "aleph_alpha",
-  "SambaNova": "sambanova",
-  "Xinference": "xinference",
+  SambaNova: "sambanova",
+  Xinference: "xinference",
   "Cloudflare Workers AI": "cloudflare",
-  "DeepInfra": "deepinfra",
+  DeepInfra: "deepinfra",
   "Novita AI": "novita",
-  
+
   // Add fallback variations
-  "openai": "openai",
-  "anthropic": "anthropic",
-  "mistral": "mistral",
-  "groq": "groq",
-  "ollama": "ollama",
-  "azure": "azure_openai",
-  "google": "vertexai",
-  "aws": "aws_bedrock",
-  "meta": "meta",
-  "github": "github",
-  "deepseek": "deepseek",
-  "perplexity": "perplexity",
-  "cohere": "cohere",
-  "together": "together",
-  "fireworks": "fireworks",
-  "replicate": "replicate",
-  "baseten": "baseten",
-  "voyage": "voyage",
-  "jina": "jina",
-  "ai21": "ai21",
-  "aleph_alpha": "aleph_alpha",
-  "sambanova": "sambanova",
-  "xinference": "xinference",
-  "cloudflare": "cloudflare",
-  "deepinfra": "deepinfra",
-  "novita": "novita",
+  openai: "openai",
+  anthropic: "anthropic",
+  mistral: "mistral",
+  groq: "groq",
+  ollama: "ollama",
+  azure: "azure_openai",
+  google: "vertexai",
+  aws: "aws_bedrock",
+  meta: "meta",
+  github: "github",
+  deepseek: "deepseek",
+  perplexity: "perplexity",
+  cohere: "cohere",
+  together: "together",
+  fireworks: "fireworks",
+  replicate: "replicate",
+  baseten: "baseten",
+  voyage: "voyage",
+  jina: "jina",
+  ai21: "ai21",
+  aleph_alpha: "aleph_alpha",
+  sambanova: "sambanova",
+  xinference: "xinference",
+  cloudflare: "cloudflare",
+  deepinfra: "deepinfra",
+  novita: "novita",
 };
 
 /**
@@ -81,31 +81,34 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
  */
 export function getProviderIconUrl(providerName: string): string | null {
   if (!providerName) return null;
-  
+
   // Try exact match first
   let iconId = PROVIDER_ICON_MAP[providerName];
-  
+
   // Try lowercase match
   if (!iconId) {
     iconId = PROVIDER_ICON_MAP[providerName.toLowerCase()];
   }
-  
+
   // Try partial matches for common patterns
   if (!iconId) {
     const lowerName = providerName.toLowerCase();
     for (const [key, value] of Object.entries(PROVIDER_ICON_MAP)) {
-      if (lowerName.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerName)) {
+      if (
+        lowerName.includes(key.toLowerCase()) ||
+        key.toLowerCase().includes(lowerName)
+      ) {
         iconId = value;
         break;
       }
     }
   }
-  
+
   // Return full URL if icon found
   if (iconId) {
     return `${API_BASE_URL}/static/icons/providers/${iconId}.svg`;
   }
-  
+
   return null;
 }
 
@@ -114,4 +117,4 @@ export function getProviderIconUrl(providerName: string): string | null {
  */
 export function getDefaultProviderIconUrl(): string {
   return `${API_BASE_URL}/static/icons/providers/default.svg`;
-} 
+}

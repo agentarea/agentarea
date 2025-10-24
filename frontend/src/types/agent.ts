@@ -16,4 +16,4 @@ export interface Agent {
   tools_config?: Record<string, any> | null;
   events_config?: Record<string, any> | null;
   planning?: boolean | null;
-} 
+}

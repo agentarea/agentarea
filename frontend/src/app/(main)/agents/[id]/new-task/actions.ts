@@ -1,7 +1,7 @@
 "use server";
 
-import { createAgentTask } from "@/lib/api";
 import type { components } from "@/api/schema";
+import { createAgentTask } from "@/lib/api";
 
 export async function createTask(
   agentId: string,

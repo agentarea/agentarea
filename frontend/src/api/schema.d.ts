@@ -4,5876 +4,5878 @@
  */
 
 export interface paths {
-    "/v1/chat/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Send Message
-         * @description Send a chat message to a real agent.
-         *
-         *     Returns task_id immediately, executes via Temporal workflow asynchronously.
-         */
-        post: operations["send_message_v1_chat_messages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/chat/messages/{task_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Message Status
-         * @description Get the status of a chat message task.
-         *
-         *     Used for long polling - frontend calls this to check if message is complete.
-         */
-        get: operations["get_message_status_v1_chat_messages__task_id__status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/chat/agents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Available Agents
-         * @description Get list of real agents from database.
-         */
-        get: operations["get_available_agents_v1_chat_agents_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/chat/agents/{agent_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent
-         * @description Get details for a specific agent.
-         */
-        get: operations["get_agent_v1_chat_agents__agent_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Agents
-         * @description List all workspace agents with optional filtering by creator.
-         */
-        get: operations["list_agents_v1_agents__get"];
-        put?: never;
-        /**
-         * Create Agent
-         * @description Create a new agent.
-         */
-        post: operations["create_agent_v1_agents__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent
-         * @description Get an agent by ID.
-         */
-        get: operations["get_agent_v1_agents__agent_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Agent
-         * @description Delete an agent.
-         */
-        delete: operations["delete_agent_v1_agents__agent_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Agent
-         * @description Update an agent.
-         */
-        patch: operations["update_agent_v1_agents__agent_id__patch"];
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/a2a/rpc": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Handle Agent Jsonrpc */
-        post: operations["handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/a2a/well-known": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Agent Well Known */
-        get: operations["get_agent_well_known_v1_agents__agent_id__a2a_well_known_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/.well-known/agent.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Well Known Card
-         * @description Agent-specific well-known discovery endpoint.
-         *
-         *     Returns the agent card for this specific agent.
-         *     This endpoint can be accessed at: /v1/agents/{agent_id}/.well-known/agent.json
-         *
-         *     This allows each agent to have its own well-known endpoint, which is A2A compliant.
-         *     Later, this can be proxied to subdomains:
-         *     - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
-         */
-        get: operations["get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/.well-known/a2a-info.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent A2A Info
-         * @description Agent-specific A2A protocol information.
-         *
-         *     Provides A2A protocol information specific to this agent.
-         */
-        get: operations["get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/.well-known/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Well Known Index
-         * @description Agent-specific well-known endpoints index.
-         */
-        get: operations["get_agent_well_known_index_v1_agents__agent_id___well_known__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Agent Tasks
-         * @description List all tasks for the specified agent.
-         */
-        get: operations["list_agent_tasks_v1_agents__agent_id__tasks__get"];
-        put?: never;
-        /**
-         * Create Task For Agent With Stream
-         * @description Create and execute a task for the specified agent with real-time SSE stream.
-         */
-        post: operations["create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Task For Agent Sync
-         * @description Create and execute a task for the specified agent (synchronous response).
-         */
-        post: operations["create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/{task_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Task
-         * @description Get a specific task for the specified agent using workflow status.
-         */
-        get: operations["get_agent_task_v1_agents__agent_id__tasks__task_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Cancel Agent Task
-         * @description Cancel a specific task workflow for the specified agent.
-         */
-        delete: operations["cancel_agent_task_v1_agents__agent_id__tasks__task_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/{task_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Agent Task Status
-         * @description Get the execution status of a specific task workflow.
-         */
-        get: operations["get_agent_task_status_v1_agents__agent_id__tasks__task_id__status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/{task_id}/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pause Agent Task
-         * @description Pause a specific task workflow for the specified agent.
-         */
-        post: operations["pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/{task_id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resume Agent Task
-         * @description Resume a paused task workflow for the specified agent.
-         */
-        post: operations["resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/{task_id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Task Events
-         * @description Get paginated task execution events for the specified task.
-         */
-        get: operations["get_task_events_v1_agents__agent_id__tasks__task_id__events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{agent_id}/tasks/{task_id}/events/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stream Task Events
-         * @description Stream real-time task execution events via Server-Sent Events.
-         */
-        get: operations["stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/tasks/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get All Tasks
-         * @description Get all workspace tasks across all agents with optional filtering.
-         */
-        get: operations["get_all_tasks_v1_tasks__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Mcp Servers */
-        get: operations["list_mcp_servers_v1_mcp_servers__get"];
-        put?: never;
-        /** Create Mcp Server */
-        post: operations["create_mcp_server_v1_mcp_servers__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Mcp Server Templates
-         * @description Get all available MCP server templates from the YAML configuration.
-         */
-        get: operations["get_mcp_server_templates_v1_mcp_servers_templates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/templates/{template_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Mcp Server Template
-         * @description Get a specific MCP server template by key.
-         */
-        get: operations["get_mcp_server_template_v1_mcp_servers_templates__template_key__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/from-template/{template_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Mcp Server From Template
-         * @description Create an MCP server from a template.
-         */
-        post: operations["create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-servers/{server_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Mcp Server */
-        get: operations["get_mcp_server_v1_mcp_servers__server_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Mcp Server */
-        delete: operations["delete_mcp_server_v1_mcp_servers__server_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Mcp Server */
-        patch: operations["update_mcp_server_v1_mcp_servers__server_id__patch"];
-        trace?: never;
-    };
-    "/v1/mcp-servers/{server_id}/deploy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Deploy Mcp Server */
-        post: operations["deploy_mcp_server_v1_mcp_servers__server_id__deploy_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Mcp Server Instances */
-        get: operations["list_mcp_server_instances_v1_mcp_server_instances__get"];
-        put?: never;
-        /** Create Mcp Server Instance */
-        post: operations["create_mcp_server_instance_v1_mcp_server_instances__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Check Mcp Server Instance Configuration
-         * @description Check if an MCP server instance configuration is valid by validating it through the golang manager.
-         */
-        post: operations["check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/environment": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Instance Environment
-         * @description Get environment variables for an MCP server instance.
-         *
-         *     Note: This endpoint should have proper authentication and authorization in production.
-         */
-        get: operations["get_instance_environment_v1_mcp_server_instances__instance_id__environment_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Mcp Server Instance */
-        get: operations["get_mcp_server_instance_v1_mcp_server_instances__instance_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Mcp Server Instance */
-        delete: operations["delete_mcp_server_instance_v1_mcp_server_instances__instance_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Mcp Server Instance */
-        patch: operations["update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch"];
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start Mcp Server Instance */
-        post: operations["start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stop Mcp Server Instance */
-        post: operations["stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/health/containers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Containers Health
-         * @description Get health status of all MCP containers by proxying to the golang manager.
-         */
-        get: operations["get_containers_health_v1_mcp_server_instances_health_containers_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/tools": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Instance Available Tools
-         * @description Get available tools for a specific MCP server instance.
-         */
-        get: operations["get_instance_available_tools_v1_mcp_server_instances__instance_id__tools_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mcp-server-instances/{instance_id}/discover-tools": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Discover Instance Tools
-         * @description Trigger tool discovery for a specific MCP server instance.
-         */
-        post: operations["discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-specs/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Provider Specs
-         * @description List all provider specifications.
-         */
-        get: operations["list_provider_specs_v1_provider_specs__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-specs/with-models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Provider Specs With Models
-         * @description List all provider specifications with their available models.
-         */
-        get: operations["list_provider_specs_with_models_v1_provider_specs_with_models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-specs/{provider_spec_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Provider Spec
-         * @description Get a specific provider specification with its models.
-         */
-        get: operations["get_provider_spec_v1_provider_specs__provider_spec_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-specs/by-key/{provider_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Provider Spec By Key
-         * @description Get a provider specification by its key (e.g., 'openai', 'anthropic').
-         */
-        get: operations["get_provider_spec_by_key_v1_provider_specs_by_key__provider_key__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-configs/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Provider Configs
-         * @description List provider configurations.
-         */
-        get: operations["list_provider_configs_v1_provider_configs__get"];
-        put?: never;
-        /**
-         * Create Provider Config
-         * @description Create a new provider configuration.
-         */
-        post: operations["create_provider_config_v1_provider_configs__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-configs/{config_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Provider Config
-         * @description Get a specific provider configuration.
-         */
-        get: operations["get_provider_config_v1_provider_configs__config_id__get"];
-        /**
-         * Update Provider Config
-         * @description Update a provider configuration.
-         */
-        put: operations["update_provider_config_v1_provider_configs__config_id__put"];
-        post?: never;
-        /**
-         * Delete Provider Config
-         * @description Delete a provider configuration.
-         */
-        delete: operations["delete_provider_config_v1_provider_configs__config_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-configs/admin/{provider_key}/logo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Provider Logo
-         * @description Get provider logo via admin route pattern.
-         */
-        get: operations["get_provider_logo_v1_provider_configs_admin__provider_key__logo_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-specs/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Model Specs
-         * @description List model specifications with optional filtering.
-         */
-        get: operations["list_model_specs_v1_model_specs__get"];
-        put?: never;
-        /**
-         * Create Model Spec
-         * @description Create a new model specification.
-         */
-        post: operations["create_model_spec_v1_model_specs__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-specs/{model_spec_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Model Spec
-         * @description Get a specific model specification by ID.
-         */
-        get: operations["get_model_spec_v1_model_specs__model_spec_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Model Spec
-         * @description Delete a model specification.
-         */
-        delete: operations["delete_model_spec_v1_model_specs__model_spec_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Model Spec
-         * @description Update a model specification.
-         */
-        patch: operations["update_model_spec_v1_model_specs__model_spec_id__patch"];
-        trace?: never;
-    };
-    "/v1/model-specs/by-provider/{provider_spec_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Model Specs By Provider
-         * @description List all model specifications for a specific provider.
-         */
-        get: operations["list_model_specs_by_provider_v1_model_specs_by_provider__provider_spec_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-specs/by-provider/{provider_spec_id}/{model_name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Model Spec By Provider And Name
-         * @description Get a specific model specification by provider and model name.
-         */
-        get: operations["get_model_spec_by_provider_and_name_v1_model_specs_by_provider__provider_spec_id___model_name__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-specs/upsert": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upsert Model Spec
-         * @description Create or update a model specification by provider and model name.
-         *
-         *     This endpoint is useful for bulk operations and bootstrapping.
-         */
-        post: operations["upsert_model_spec_v1_model_specs_upsert_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-instances/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Model Instances
-         * @description List model instances.
-         */
-        get: operations["list_model_instances_v1_model_instances__get"];
-        put?: never;
-        /**
-         * Create Model Instance
-         * @description Create a new model instance.
-         */
-        post: operations["create_model_instance_v1_model_instances__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-instances/{instance_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Model Instance
-         * @description Get a specific model instance.
-         */
-        get: operations["get_model_instance_v1_model_instances__instance_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Model Instance
-         * @description Delete a model instance.
-         */
-        delete: operations["delete_model_instance_v1_model_instances__instance_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/webhooks/{webhook_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Handle webhook requests
-         * @description Process incoming webhook requests for registered triggers
-         */
-        get: operations["handle_webhook_v1_webhooks__webhook_id__options"];
-        /**
-         * Handle webhook requests
-         * @description Process incoming webhook requests for registered triggers
-         */
-        put: operations["handle_webhook_v1_webhooks__webhook_id__options"];
-        /**
-         * Handle webhook requests
-         * @description Process incoming webhook requests for registered triggers
-         */
-        post: operations["handle_webhook_v1_webhooks__webhook_id__options"];
-        /**
-         * Handle webhook requests
-         * @description Process incoming webhook requests for registered triggers
-         */
-        delete: operations["handle_webhook_v1_webhooks__webhook_id__options"];
-        /**
-         * Handle webhook requests
-         * @description Process incoming webhook requests for registered triggers
-         */
-        options: operations["handle_webhook_v1_webhooks__webhook_id__options"];
-        /**
-         * Handle webhook requests
-         * @description Process incoming webhook requests for registered triggers
-         */
-        head: operations["handle_webhook_v1_webhooks__webhook_id__options"];
-        /**
-         * Handle webhook requests
-         * @description Process incoming webhook requests for registered triggers
-         */
-        patch: operations["handle_webhook_v1_webhooks__webhook_id__options"];
-        trace?: never;
-    };
-    "/v1/webhooks/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Webhook system health check
-         * @description Check if the webhook system is healthy and operational
-         */
-        get: operations["webhook_health_check_v1_webhooks_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/webhooks/debug/{webhook_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug webhook configuration
-         * @description Get debug information about a webhook (admin only)
-         */
-        get: operations["debug_webhook_v1_webhooks_debug__webhook_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Triggers
-         * @description List triggers with optional filtering.
-         *
-         *     Returns a list of triggers that match the specified criteria. Supports
-         *     filtering by agent ID, trigger type, and active status.
-         *
-         *     Args:
-         *         agent_id: Optional agent ID filter
-         *         trigger_type: Optional trigger type filter
-         *         active_only: Whether to only return active triggers
-         *         limit: Maximum number of triggers to return
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         List of triggers matching the criteria
-         */
-        get: operations["list_triggers_v1_triggers__get"];
-        put?: never;
-        /**
-         * Create Trigger
-         * @description Create a new trigger.
-         *
-         *     Creates a new trigger with the specified configuration. The trigger will be
-         *     validated and, if it's a cron trigger, automatically scheduled.
-         *
-         *     Args:
-         *         request: Trigger creation request data
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         The created trigger
-         *
-         *     Raises:
-         *         HTTPException: If validation fails or creation errors occur
-         */
-        post: operations["create_trigger_v1_triggers__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Trigger
-         * @description Get a specific trigger by ID.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         The trigger data
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        get: operations["get_trigger_v1_triggers__trigger_id__get"];
-        /**
-         * Update Trigger
-         * @description Update an existing trigger.
-         *
-         *     Updates the specified trigger with the provided data. Only non-null fields
-         *     in the request will be updated.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         request: Trigger update request data
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         The updated trigger
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found or validation fails
-         */
-        put: operations["update_trigger_v1_triggers__trigger_id__put"];
-        post?: never;
-        /**
-         * Delete Trigger
-         * @description Delete a trigger.
-         *
-         *     Permanently deletes the specified trigger and all its execution history.
-         *     If it's a cron trigger, the schedule will also be removed.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        delete: operations["delete_trigger_v1_triggers__trigger_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enable Trigger
-         * @description Enable a trigger.
-         *
-         *     Enables the specified trigger, allowing it to execute when conditions are met.
-         *     For cron triggers, this will resume the schedule.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         Success status
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        post: operations["enable_trigger_v1_triggers__trigger_id__enable_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}/disable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Disable Trigger
-         * @description Disable a trigger.
-         *
-         *     Disables the specified trigger, preventing it from executing.
-         *     For cron triggers, this will pause the schedule.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         Success status
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        post: operations["disable_trigger_v1_triggers__trigger_id__disable_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}/executions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Execution History
-         * @description Get execution history for a trigger with filtering and pagination.
-         *
-         *     Returns paginated execution history for the specified trigger, including
-         *     success/failure status, execution times, and error messages. Supports
-         *     filtering by status and time range.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         page: Page number for pagination
-         *         page_size: Number of executions per page
-         *         status: Optional status filter (success, failed, timeout)
-         *         start_time: Optional start time filter
-         *         end_time: Optional end time filter
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         Paginated execution history
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found or invalid parameters
-         */
-        get: operations["get_execution_history_v1_triggers__trigger_id__executions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Trigger Status
-         * @description Get trigger status and schedule information.
-         *
-         *     Returns detailed status information about the trigger, including execution
-         *     status, rate limiting, and schedule information for cron triggers.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         Trigger status information
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        get: operations["get_trigger_status_v1_triggers__trigger_id__status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Execution Metrics
-         * @description Get execution metrics for a trigger.
-         *
-         *     Returns aggregated metrics including success rate, average execution time,
-         *     and failure counts for the specified time period.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         hours: Time period in hours to analyze (default 24, max 168)
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         Execution metrics for the trigger
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        get: operations["get_execution_metrics_v1_triggers__trigger_id__metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}/timeline": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Execution Timeline
-         * @description Get execution timeline for a trigger.
-         *
-         *     Returns time-bucketed execution counts and success rates for visualization
-         *     and trend analysis.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         hours: Time period in hours to analyze (default 24, max 168)
-         *         bucket_size_minutes: Size of time buckets in minutes (default 60)
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         Execution timeline data
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        get: operations["get_execution_timeline_v1_triggers__trigger_id__timeline_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/{trigger_id}/correlations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Execution Correlations
-         * @description Get execution correlation data for a trigger.
-         *
-         *     Returns execution data with correlation information to created tasks
-         *     and workflows for debugging and monitoring purposes.
-         *
-         *     Args:
-         *         trigger_id: The unique identifier of the trigger
-         *         page: Page number for pagination
-         *         page_size: Number of executions per page
-         *         auth_context: Authentication context
-         *         trigger_service: Injected trigger service
-         *
-         *     Returns:
-         *         Execution correlation data
-         *
-         *     Raises:
-         *         HTTPException: If trigger not found
-         */
-        get: operations["get_execution_correlations_v1_triggers__trigger_id__correlations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/triggers/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Triggers Health Check
-         * @description Comprehensive health check endpoint for trigger system.
-         *
-         *     Checks all trigger system components including:
-         *     - Database connectivity
-         *     - Temporal schedule manager
-         *     - Webhook manager
-         *     - Execution metrics
-         *
-         *     Returns:
-         *         Dictionary with detailed health status information
-         */
-        get: operations["triggers_health_check_v1_triggers_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/users/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Current User
-         * @description Get current user information.
-         *
-         *     This endpoint returns the user information extracted from the JWT token.
-         */
-        get: operations["get_current_user_v1_auth_users_me_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Token Info
-         * @description Get token information for debugging.
-         *
-         *     This endpoint returns information about the current authentication state.
-         */
-        get: operations["get_token_info_v1_auth_token_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/protected/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Test Protected Endpoint
-         * @description Test endpoint to verify authentication is working.
-         *
-         *     This endpoint requires a valid JWT token to access.
-         */
-        get: operations["test_protected_endpoint_v1_protected_test_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/protected/user": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get User Info
-         * @description Get user information from the JWT token.
-         *
-         *     This endpoint returns the user information extracted from the JWT token.
-         */
-        get: operations["get_user_info_v1_protected_user_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Dev Token
-         * @description Development mode information.
-         */
-        get: operations["get_dev_token_dev_token_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
+  "/v1/chat/messages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send Message
+     * @description Send a chat message to a real agent.
+     *
+     *     Returns task_id immediately, executes via Temporal workflow asynchronously.
+     */
+    post: operations["send_message_v1_chat_messages_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/chat/messages/{task_id}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Message Status
+     * @description Get the status of a chat message task.
+     *
+     *     Used for long polling - frontend calls this to check if message is complete.
+     */
+    get: operations["get_message_status_v1_chat_messages__task_id__status_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/chat/agents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Available Agents
+     * @description Get list of real agents from database.
+     */
+    get: operations["get_available_agents_v1_chat_agents_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/chat/agents/{agent_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Agent
+     * @description Get details for a specific agent.
+     */
+    get: operations["get_agent_v1_chat_agents__agent_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Agents
+     * @description List all workspace agents with optional filtering by creator.
+     */
+    get: operations["list_agents_v1_agents__get"];
+    put?: never;
+    /**
+     * Create Agent
+     * @description Create a new agent.
+     */
+    post: operations["create_agent_v1_agents__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Agent
+     * @description Get an agent by ID.
+     */
+    get: operations["get_agent_v1_agents__agent_id__get"];
+    put?: never;
+    post?: never;
+    /**
+     * Delete Agent
+     * @description Delete an agent.
+     */
+    delete: operations["delete_agent_v1_agents__agent_id__delete"];
+    options?: never;
+    head?: never;
+    /**
+     * Update Agent
+     * @description Update an agent.
+     */
+    patch: operations["update_agent_v1_agents__agent_id__patch"];
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/a2a/rpc": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Handle Agent Jsonrpc */
+    post: operations["handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/a2a/well-known": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Agent Well Known */
+    get: operations["get_agent_well_known_v1_agents__agent_id__a2a_well_known_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/.well-known/agent.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Agent Well Known Card
+     * @description Agent-specific well-known discovery endpoint.
+     *
+     *     Returns the agent card for this specific agent.
+     *     This endpoint can be accessed at: /v1/agents/{agent_id}/.well-known/agent.json
+     *
+     *     This allows each agent to have its own well-known endpoint, which is A2A compliant.
+     *     Later, this can be proxied to subdomains:
+     *     - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+     */
+    get: operations["get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/.well-known/a2a-info.json": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Agent A2A Info
+     * @description Agent-specific A2A protocol information.
+     *
+     *     Provides A2A protocol information specific to this agent.
+     */
+    get: operations["get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/.well-known/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Agent Well Known Index
+     * @description Agent-specific well-known endpoints index.
+     */
+    get: operations["get_agent_well_known_index_v1_agents__agent_id___well_known__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Agent Tasks
+     * @description List all tasks for the specified agent.
+     */
+    get: operations["list_agent_tasks_v1_agents__agent_id__tasks__get"];
+    put?: never;
+    /**
+     * Create Task For Agent With Stream
+     * @description Create and execute a task for the specified agent with real-time SSE stream.
+     */
+    post: operations["create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/sync": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create Task For Agent Sync
+     * @description Create and execute a task for the specified agent (synchronous response).
+     */
+    post: operations["create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/{task_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Agent Task
+     * @description Get a specific task for the specified agent using workflow status.
+     */
+    get: operations["get_agent_task_v1_agents__agent_id__tasks__task_id__get"];
+    put?: never;
+    post?: never;
+    /**
+     * Cancel Agent Task
+     * @description Cancel a specific task workflow for the specified agent.
+     */
+    delete: operations["cancel_agent_task_v1_agents__agent_id__tasks__task_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/{task_id}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Agent Task Status
+     * @description Get the execution status of a specific task workflow.
+     */
+    get: operations["get_agent_task_status_v1_agents__agent_id__tasks__task_id__status_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/{task_id}/pause": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Pause Agent Task
+     * @description Pause a specific task workflow for the specified agent.
+     */
+    post: operations["pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/{task_id}/resume": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Resume Agent Task
+     * @description Resume a paused task workflow for the specified agent.
+     */
+    post: operations["resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/{task_id}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Task Events
+     * @description Get paginated task execution events for the specified task.
+     */
+    get: operations["get_task_events_v1_agents__agent_id__tasks__task_id__events_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/agents/{agent_id}/tasks/{task_id}/events/stream": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Stream Task Events
+     * @description Stream real-time task execution events via Server-Sent Events.
+     */
+    get: operations["stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/tasks/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get All Tasks
+     * @description Get all workspace tasks across all agents with optional filtering.
+     */
+    get: operations["get_all_tasks_v1_tasks__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-servers/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Mcp Servers */
+    get: operations["list_mcp_servers_v1_mcp_servers__get"];
+    put?: never;
+    /** Create Mcp Server */
+    post: operations["create_mcp_server_v1_mcp_servers__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-servers/templates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Mcp Server Templates
+     * @description Get all available MCP server templates from the YAML configuration.
+     */
+    get: operations["get_mcp_server_templates_v1_mcp_servers_templates_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-servers/templates/{template_key}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Mcp Server Template
+     * @description Get a specific MCP server template by key.
+     */
+    get: operations["get_mcp_server_template_v1_mcp_servers_templates__template_key__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-servers/from-template/{template_key}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create Mcp Server From Template
+     * @description Create an MCP server from a template.
+     */
+    post: operations["create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-servers/{server_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Mcp Server */
+    get: operations["get_mcp_server_v1_mcp_servers__server_id__get"];
+    put?: never;
+    post?: never;
+    /** Delete Mcp Server */
+    delete: operations["delete_mcp_server_v1_mcp_servers__server_id__delete"];
+    options?: never;
+    head?: never;
+    /** Update Mcp Server */
+    patch: operations["update_mcp_server_v1_mcp_servers__server_id__patch"];
+    trace?: never;
+  };
+  "/v1/mcp-servers/{server_id}/deploy": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Deploy Mcp Server */
+    post: operations["deploy_mcp_server_v1_mcp_servers__server_id__deploy_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Mcp Server Instances */
+    get: operations["list_mcp_server_instances_v1_mcp_server_instances__get"];
+    put?: never;
+    /** Create Mcp Server Instance */
+    post: operations["create_mcp_server_instance_v1_mcp_server_instances__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Check Mcp Server Instance Configuration
+     * @description Check if an MCP server instance configuration is valid by validating it through the golang manager.
+     */
+    post: operations["check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/{instance_id}/environment": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Instance Environment
+     * @description Get environment variables for an MCP server instance.
+     *
+     *     Note: This endpoint should have proper authentication and authorization in production.
+     */
+    get: operations["get_instance_environment_v1_mcp_server_instances__instance_id__environment_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/{instance_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Mcp Server Instance */
+    get: operations["get_mcp_server_instance_v1_mcp_server_instances__instance_id__get"];
+    put?: never;
+    post?: never;
+    /** Delete Mcp Server Instance */
+    delete: operations["delete_mcp_server_instance_v1_mcp_server_instances__instance_id__delete"];
+    options?: never;
+    head?: never;
+    /** Update Mcp Server Instance */
+    patch: operations["update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch"];
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/{instance_id}/start": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start Mcp Server Instance */
+    post: operations["start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/{instance_id}/stop": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stop Mcp Server Instance */
+    post: operations["stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/health/containers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Containers Health
+     * @description Get health status of all MCP containers by proxying to the golang manager.
+     */
+    get: operations["get_containers_health_v1_mcp_server_instances_health_containers_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/{instance_id}/tools": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Instance Available Tools
+     * @description Get available tools for a specific MCP server instance.
+     */
+    get: operations["get_instance_available_tools_v1_mcp_server_instances__instance_id__tools_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mcp-server-instances/{instance_id}/discover-tools": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Discover Instance Tools
+     * @description Trigger tool discovery for a specific MCP server instance.
+     */
+    post: operations["discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/provider-specs/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Provider Specs
+     * @description List all provider specifications.
+     */
+    get: operations["list_provider_specs_v1_provider_specs__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/provider-specs/with-models": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Provider Specs With Models
+     * @description List all provider specifications with their available models.
+     */
+    get: operations["list_provider_specs_with_models_v1_provider_specs_with_models_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/provider-specs/{provider_spec_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Provider Spec
+     * @description Get a specific provider specification with its models.
+     */
+    get: operations["get_provider_spec_v1_provider_specs__provider_spec_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/provider-specs/by-key/{provider_key}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Provider Spec By Key
+     * @description Get a provider specification by its key (e.g., 'openai', 'anthropic').
+     */
+    get: operations["get_provider_spec_by_key_v1_provider_specs_by_key__provider_key__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/provider-configs/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Provider Configs
+     * @description List provider configurations.
+     */
+    get: operations["list_provider_configs_v1_provider_configs__get"];
+    put?: never;
+    /**
+     * Create Provider Config
+     * @description Create a new provider configuration.
+     */
+    post: operations["create_provider_config_v1_provider_configs__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/provider-configs/{config_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Provider Config
+     * @description Get a specific provider configuration.
+     */
+    get: operations["get_provider_config_v1_provider_configs__config_id__get"];
+    /**
+     * Update Provider Config
+     * @description Update a provider configuration.
+     */
+    put: operations["update_provider_config_v1_provider_configs__config_id__put"];
+    post?: never;
+    /**
+     * Delete Provider Config
+     * @description Delete a provider configuration.
+     */
+    delete: operations["delete_provider_config_v1_provider_configs__config_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/provider-configs/admin/{provider_key}/logo": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Provider Logo
+     * @description Get provider logo via admin route pattern.
+     */
+    get: operations["get_provider_logo_v1_provider_configs_admin__provider_key__logo_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/model-specs/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Model Specs
+     * @description List model specifications with optional filtering.
+     */
+    get: operations["list_model_specs_v1_model_specs__get"];
+    put?: never;
+    /**
+     * Create Model Spec
+     * @description Create a new model specification.
+     */
+    post: operations["create_model_spec_v1_model_specs__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/model-specs/{model_spec_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Model Spec
+     * @description Get a specific model specification by ID.
+     */
+    get: operations["get_model_spec_v1_model_specs__model_spec_id__get"];
+    put?: never;
+    post?: never;
+    /**
+     * Delete Model Spec
+     * @description Delete a model specification.
+     */
+    delete: operations["delete_model_spec_v1_model_specs__model_spec_id__delete"];
+    options?: never;
+    head?: never;
+    /**
+     * Update Model Spec
+     * @description Update a model specification.
+     */
+    patch: operations["update_model_spec_v1_model_specs__model_spec_id__patch"];
+    trace?: never;
+  };
+  "/v1/model-specs/by-provider/{provider_spec_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Model Specs By Provider
+     * @description List all model specifications for a specific provider.
+     */
+    get: operations["list_model_specs_by_provider_v1_model_specs_by_provider__provider_spec_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/model-specs/by-provider/{provider_spec_id}/{model_name}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Model Spec By Provider And Name
+     * @description Get a specific model specification by provider and model name.
+     */
+    get: operations["get_model_spec_by_provider_and_name_v1_model_specs_by_provider__provider_spec_id___model_name__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/model-specs/upsert": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Upsert Model Spec
+     * @description Create or update a model specification by provider and model name.
+     *
+     *     This endpoint is useful for bulk operations and bootstrapping.
+     */
+    post: operations["upsert_model_spec_v1_model_specs_upsert_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/model-instances/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Model Instances
+     * @description List model instances.
+     */
+    get: operations["list_model_instances_v1_model_instances__get"];
+    put?: never;
+    /**
+     * Create Model Instance
+     * @description Create a new model instance.
+     */
+    post: operations["create_model_instance_v1_model_instances__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/model-instances/{instance_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Model Instance
+     * @description Get a specific model instance.
+     */
+    get: operations["get_model_instance_v1_model_instances__instance_id__get"];
+    put?: never;
+    post?: never;
+    /**
+     * Delete Model Instance
+     * @description Delete a model instance.
+     */
+    delete: operations["delete_model_instance_v1_model_instances__instance_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/webhooks/{webhook_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Handle webhook requests
+     * @description Process incoming webhook requests for registered triggers
+     */
+    get: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+    /**
+     * Handle webhook requests
+     * @description Process incoming webhook requests for registered triggers
+     */
+    put: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+    /**
+     * Handle webhook requests
+     * @description Process incoming webhook requests for registered triggers
+     */
+    post: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+    /**
+     * Handle webhook requests
+     * @description Process incoming webhook requests for registered triggers
+     */
+    delete: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+    /**
+     * Handle webhook requests
+     * @description Process incoming webhook requests for registered triggers
+     */
+    options: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+    /**
+     * Handle webhook requests
+     * @description Process incoming webhook requests for registered triggers
+     */
+    head: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+    /**
+     * Handle webhook requests
+     * @description Process incoming webhook requests for registered triggers
+     */
+    patch: operations["handle_webhook_v1_webhooks__webhook_id__options"];
+    trace?: never;
+  };
+  "/v1/webhooks/health": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Webhook system health check
+     * @description Check if the webhook system is healthy and operational
+     */
+    get: operations["webhook_health_check_v1_webhooks_health_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/webhooks/debug/{webhook_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Debug webhook configuration
+     * @description Get debug information about a webhook (admin only)
+     */
+    get: operations["debug_webhook_v1_webhooks_debug__webhook_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Triggers
+     * @description List triggers with optional filtering.
+     *
+     *     Returns a list of triggers that match the specified criteria. Supports
+     *     filtering by agent ID, trigger type, and active status.
+     *
+     *     Args:
+     *         agent_id: Optional agent ID filter
+     *         trigger_type: Optional trigger type filter
+     *         active_only: Whether to only return active triggers
+     *         limit: Maximum number of triggers to return
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         List of triggers matching the criteria
+     */
+    get: operations["list_triggers_v1_triggers__get"];
+    put?: never;
+    /**
+     * Create Trigger
+     * @description Create a new trigger.
+     *
+     *     Creates a new trigger with the specified configuration. The trigger will be
+     *     validated and, if it's a cron trigger, automatically scheduled.
+     *
+     *     Args:
+     *         request: Trigger creation request data
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         The created trigger
+     *
+     *     Raises:
+     *         HTTPException: If validation fails or creation errors occur
+     */
+    post: operations["create_trigger_v1_triggers__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Trigger
+     * @description Get a specific trigger by ID.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         The trigger data
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    get: operations["get_trigger_v1_triggers__trigger_id__get"];
+    /**
+     * Update Trigger
+     * @description Update an existing trigger.
+     *
+     *     Updates the specified trigger with the provided data. Only non-null fields
+     *     in the request will be updated.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         request: Trigger update request data
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         The updated trigger
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found or validation fails
+     */
+    put: operations["update_trigger_v1_triggers__trigger_id__put"];
+    post?: never;
+    /**
+     * Delete Trigger
+     * @description Delete a trigger.
+     *
+     *     Permanently deletes the specified trigger and all its execution history.
+     *     If it's a cron trigger, the schedule will also be removed.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    delete: operations["delete_trigger_v1_triggers__trigger_id__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}/enable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Enable Trigger
+     * @description Enable a trigger.
+     *
+     *     Enables the specified trigger, allowing it to execute when conditions are met.
+     *     For cron triggers, this will resume the schedule.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         Success status
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    post: operations["enable_trigger_v1_triggers__trigger_id__enable_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}/disable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Disable Trigger
+     * @description Disable a trigger.
+     *
+     *     Disables the specified trigger, preventing it from executing.
+     *     For cron triggers, this will pause the schedule.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         Success status
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    post: operations["disable_trigger_v1_triggers__trigger_id__disable_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}/executions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Execution History
+     * @description Get execution history for a trigger with filtering and pagination.
+     *
+     *     Returns paginated execution history for the specified trigger, including
+     *     success/failure status, execution times, and error messages. Supports
+     *     filtering by status and time range.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         page: Page number for pagination
+     *         page_size: Number of executions per page
+     *         status: Optional status filter (success, failed, timeout)
+     *         start_time: Optional start time filter
+     *         end_time: Optional end time filter
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         Paginated execution history
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found or invalid parameters
+     */
+    get: operations["get_execution_history_v1_triggers__trigger_id__executions_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Trigger Status
+     * @description Get trigger status and schedule information.
+     *
+     *     Returns detailed status information about the trigger, including execution
+     *     status, rate limiting, and schedule information for cron triggers.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         Trigger status information
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    get: operations["get_trigger_status_v1_triggers__trigger_id__status_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}/metrics": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Execution Metrics
+     * @description Get execution metrics for a trigger.
+     *
+     *     Returns aggregated metrics including success rate, average execution time,
+     *     and failure counts for the specified time period.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         hours: Time period in hours to analyze (default 24, max 168)
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         Execution metrics for the trigger
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    get: operations["get_execution_metrics_v1_triggers__trigger_id__metrics_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}/timeline": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Execution Timeline
+     * @description Get execution timeline for a trigger.
+     *
+     *     Returns time-bucketed execution counts and success rates for visualization
+     *     and trend analysis.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         hours: Time period in hours to analyze (default 24, max 168)
+     *         bucket_size_minutes: Size of time buckets in minutes (default 60)
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         Execution timeline data
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    get: operations["get_execution_timeline_v1_triggers__trigger_id__timeline_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/{trigger_id}/correlations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Execution Correlations
+     * @description Get execution correlation data for a trigger.
+     *
+     *     Returns execution data with correlation information to created tasks
+     *     and workflows for debugging and monitoring purposes.
+     *
+     *     Args:
+     *         trigger_id: The unique identifier of the trigger
+     *         page: Page number for pagination
+     *         page_size: Number of executions per page
+     *         auth_context: Authentication context
+     *         trigger_service: Injected trigger service
+     *
+     *     Returns:
+     *         Execution correlation data
+     *
+     *     Raises:
+     *         HTTPException: If trigger not found
+     */
+    get: operations["get_execution_correlations_v1_triggers__trigger_id__correlations_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/triggers/health": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Triggers Health Check
+     * @description Comprehensive health check endpoint for trigger system.
+     *
+     *     Checks all trigger system components including:
+     *     - Database connectivity
+     *     - Temporal schedule manager
+     *     - Webhook manager
+     *     - Execution metrics
+     *
+     *     Returns:
+     *         Dictionary with detailed health status information
+     */
+    get: operations["triggers_health_check_v1_triggers_health_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/auth/users/me": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Current User
+     * @description Get current user information.
+     *
+     *     This endpoint returns the user information extracted from the JWT token.
+     */
+    get: operations["get_current_user_v1_auth_users_me_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/auth/token": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Token Info
+     * @description Get token information for debugging.
+     *
+     *     This endpoint returns information about the current authentication state.
+     */
+    get: operations["get_token_info_v1_auth_token_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/protected/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Test Protected Endpoint
+     * @description Test endpoint to verify authentication is working.
+     *
+     *     This endpoint requires a valid JWT token to access.
+     */
+    get: operations["test_protected_endpoint_v1_protected_test_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/protected/user": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get User Info
+     * @description Get user information from the JWT token.
+     *
+     *     This endpoint returns the user information extracted from the JWT token.
+     */
+    get: operations["get_user_info_v1_protected_user_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/dev/token": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Dev Token
+     * @description Development mode information.
+     */
+    get: operations["get_dev_token_dev_token_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        /** AgentAuthentication */
-        AgentAuthentication: {
-            /** Schemes */
-            schemes: string[];
-            /** Credentials */
-            credentials?: string | null;
-        };
-        /** AgentCapabilities */
-        AgentCapabilities: {
-            /**
-             * Streaming
-             * @default false
-             */
-            streaming: boolean;
-            /**
-             * Push Notifications
-             * @default false
-             */
-            push_notifications: boolean;
-            /**
-             * State Transition History
-             * @default false
-             */
-            state_transition_history: boolean;
-        };
-        /** AgentCard */
-        AgentCard: {
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /** Url */
-            url: string;
-            provider?: components["schemas"]["AgentProvider"] | null;
-            /** Version */
-            version: string;
-            /** Documentation Url */
-            documentation_url?: string | null;
-            capabilities: components["schemas"]["AgentCapabilities"];
-            authentication?: components["schemas"]["AgentAuthentication"] | null;
-            /**
-             * Default Input Modes
-             * @default [
-             *       "text"
-             *     ]
-             */
-            default_input_modes: string[];
-            /**
-             * Default Output Modes
-             * @default [
-             *       "text"
-             *     ]
-             */
-            default_output_modes: string[];
-            /** Skills */
-            skills: components["schemas"]["AgentSkill"][];
-        };
-        /** AgentCreate */
-        AgentCreate: {
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /** Instruction */
-            instruction: string;
-            /** Model Id */
-            model_id: string;
-            tools_config?: components["schemas"]["ToolsConfig"] | null;
-            events_config?: components["schemas"]["EventsConfig"] | null;
-            /** Planning */
-            planning?: boolean | null;
-        };
-        /** AgentProvider */
-        AgentProvider: {
-            /** Organization */
-            organization: string;
-            /** Url */
-            url?: string | null;
-        };
-        /** AgentSkill */
-        AgentSkill: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /** Tags */
-            tags?: string[] | null;
-            /** Examples */
-            examples?: string[] | null;
-            /** Input Modes */
-            input_modes?: string[] | null;
-            /** Output Modes */
-            output_modes?: string[] | null;
-        };
-        /** AgentUpdate */
-        AgentUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Capabilities */
-            capabilities?: string[] | null;
-            /** Description */
-            description?: string | null;
-            /** Instruction */
-            instruction?: string | null;
-            /** Model Id */
-            model_id?: string | null;
-            tools_config?: components["schemas"]["ToolsConfig"] | null;
-            events_config?: components["schemas"]["EventsConfig"] | null;
-            /** Planning */
-            planning?: boolean | null;
-        };
-        /**
-         * ChatMessageRequest
-         * @description Unified request model for sending chat messages.
-         */
-        ChatMessageRequest: {
-            /**
-             * Content
-             * @description Message content
-             */
-            content: string;
-            /**
-             * Agent Id
-             * @description Target agent ID
-             */
-            agent_id: string;
-            /**
-             * User Id
-             * @description User sending the message
-             */
-            user_id?: string | null;
-            /**
-             * Session Id
-             * @description Session/conversation ID
-             */
-            session_id?: string | null;
-            /**
-             * Context
-             * @description Additional context
-             */
-            context?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * ChatResponse
-         * @description Unified response model for chat messages.
-         */
-        ChatResponse: {
-            /**
-             * Task Id
-             * @description Task ID for the chat interaction
-             */
-            task_id: string;
-            /**
-             * Content
-             * @description Response content
-             */
-            content: string;
-            /**
-             * Role
-             * @description Role (user/assistant)
-             */
-            role: string;
-            /**
-             * Session Id
-             * @description Session/conversation ID
-             */
-            session_id: string;
-            /**
-             * Agent Id
-             * @description Agent ID
-             */
-            agent_id: string;
-            /**
-             * Status
-             * @description Task status
-             */
-            status: string;
-            /**
-             * Timestamp
-             * @description Message timestamp
-             */
-            timestamp: string;
-            /**
-             * Execution Id
-             * @description Temporal execution ID
-             */
-            execution_id?: string | null;
-        };
-        /** EventConfig */
-        EventConfig: {
-            /** Event Type */
-            event_type: string;
-            /** Config */
-            config?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Enabled
-             * @default true
-             */
-            enabled: boolean;
-        };
-        /** EventsConfig */
-        EventsConfig: {
-            /** Events */
-            events?: components["schemas"]["EventConfig"][] | null;
-        };
-        /**
-         * ExecutionCorrelationResponse
-         * @description Response model for execution correlation data.
-         */
-        ExecutionCorrelationResponse: {
-            /** Executions */
-            executions: {
-                [key: string]: unknown;
-            }[];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Has Next */
-            has_next: boolean;
-        };
-        /**
-         * ExecutionHistoryResponse
-         * @description Response model for paginated execution history.
-         */
-        ExecutionHistoryResponse: {
-            /** Executions */
-            executions: components["schemas"]["TriggerExecutionResponse"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Has Next */
-            has_next: boolean;
-        };
-        /**
-         * ExecutionMetricsResponse
-         * @description Response model for execution metrics.
-         */
-        ExecutionMetricsResponse: {
-            /**
-             * Trigger Id
-             * Format: uuid
-             */
-            trigger_id: string;
-            /** Period Hours */
-            period_hours: number;
-            /** Total Executions */
-            total_executions: number;
-            /** Successful Executions */
-            successful_executions: number;
-            /** Failed Executions */
-            failed_executions: number;
-            /** Timeout Executions */
-            timeout_executions: number;
-            /** Success Rate */
-            success_rate: number;
-            /** Failure Rate */
-            failure_rate: number;
-            /** Avg Execution Time Ms */
-            avg_execution_time_ms: number;
-            /** Min Execution Time Ms */
-            min_execution_time_ms: number;
-            /** Max Execution Time Ms */
-            max_execution_time_ms: number;
-        };
-        /**
-         * ExecutionTimelineResponse
-         * @description Response model for execution timeline.
-         */
-        ExecutionTimelineResponse: {
-            /**
-             * Trigger Id
-             * Format: uuid
-             */
-            trigger_id: string;
-            /** Period Hours */
-            period_hours: number;
-            /** Timeline */
-            timeline: {
-                [key: string]: unknown;
-            }[];
-        };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
-        /** JSONRPCError */
-        JSONRPCError: {
-            /** Code */
-            code: number;
-            /** Message */
-            message: string;
-            /** Data */
-            data?: unknown | null;
-        };
-        /** JSONRPCResponse */
-        JSONRPCResponse: {
-            /**
-             * Jsonrpc
-             * @default 2.0
-             * @constant
-             */
-            jsonrpc: "2.0";
-            /** Id */
-            id?: number | string | null;
-            /** Result */
-            result?: unknown | null;
-            error?: components["schemas"]["JSONRPCError"] | null;
-        };
-        /** MCPConfig */
-        MCPConfig: {
-            /** Mcp Server Id */
-            mcp_server_id: string;
-            /** Allowed Tools */
-            allowed_tools?: components["schemas"]["MCPToolConfig"][] | null;
-        };
-        /** MCPServerCreate */
-        MCPServerCreate: {
-            /**
-             * Name
-             * @description Name of the MCP server
-             */
-            name: string;
-            /**
-             * Description
-             * @description Description of the MCP server
-             */
-            description: string;
-            /**
-             * Docker Image Url
-             * @description Docker image URL
-             */
-            docker_image_url: string;
-            /**
-             * Version
-             * @description Version of the MCP server
-             * @default 1.0.0
-             */
-            version: string;
-            /**
-             * Tags
-             * @description Tags for categorization
-             */
-            tags?: string[];
-            /**
-             * Is Public
-             * @description Whether the server is public
-             * @default false
-             */
-            is_public: boolean;
-            /**
-             * Env Schema
-             * @description Environment variable schema
-             */
-            env_schema?: {
-                [key: string]: unknown;
-            }[] | null;
-            /**
-             * Cmd
-             * @description Custom command to override container CMD (useful for switching between stdio and HTTP modes)
-             */
-            cmd?: string[] | null;
-        };
-        /** MCPServerInstanceCreateRequest */
-        MCPServerInstanceCreateRequest: {
-            /**
-             * Name
-             * @description Name of the MCP server instance
-             */
-            name: string;
-            /**
-             * Description
-             * @description Description of the instance
-             */
-            description?: string | null;
-            /**
-             * Server Spec Id
-             * @description ID of the MCP server spec (optional)
-             */
-            server_spec_id?: string | null;
-            /**
-             * Json Spec
-             * @description Configuration specification as JSON
-             */
-            json_spec: {
-                [key: string]: unknown;
-            };
-        };
-        /** MCPServerInstanceResponse */
-        MCPServerInstanceResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string | null;
-            /** Server Spec Id */
-            server_spec_id: string | null;
-            /** Json Spec */
-            json_spec: {
-                [key: string]: unknown;
-            };
-            /** Status */
-            status: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** MCPServerInstanceUpdate */
-        MCPServerInstanceUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Json Spec */
-            json_spec?: {
-                [key: string]: unknown;
-            } | null;
-            /** Status */
-            status?: string | null;
-        };
-        /** MCPServerResponse */
-        MCPServerResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /** Docker Image Url */
-            docker_image_url: string;
-            /** Version */
-            version: string;
-            /** Tags */
-            tags: string[];
-            /** Is Public */
-            is_public: boolean;
-            /** Env Schema */
-            env_schema: {
-                name: string;
-                description: string;
-                required: boolean;
-                default?: string;
-            }[];
-            /** Cmd */
-            cmd: string[] | null;
-            /** Status */
-            status: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** MCPServerUpdate */
-        MCPServerUpdate: {
-            /**
-             * Name
-             * @description Name of the MCP server
-             */
-            name?: string | null;
-            /**
-             * Description
-             * @description Description of the MCP server
-             */
-            description?: string | null;
-            /**
-             * Docker Image Url
-             * @description Docker image URL
-             */
-            docker_image_url?: string | null;
-            /**
-             * Version
-             * @description Version of the MCP server
-             */
-            version?: string | null;
-            /**
-             * Tags
-             * @description Tags for categorization
-             */
-            tags?: string[] | null;
-            /**
-             * Is Public
-             * @description Whether the server is public
-             */
-            is_public?: boolean | null;
-            /**
-             * Status
-             * @description Status of the MCP server
-             */
-            status?: string | null;
-            /**
-             * Cmd
-             * @description Custom command to override container CMD
-             */
-            cmd?: string[] | null;
-        };
-        /** MCPToolConfig */
-        MCPToolConfig: {
-            /** Tool Name */
-            tool_name: string;
-            /**
-             * Requires User Confirmation
-             * @default false
-             */
-            requires_user_confirmation: boolean;
-        };
-        /** ModelInstanceCreate */
-        ModelInstanceCreate: {
-            /**
-             * Provider Config Id
-             * Format: uuid
-             */
-            provider_config_id: string;
-            /**
-             * Model Spec Id
-             * Format: uuid
-             */
-            model_spec_id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Is Public
-             * @default false
-             */
-            is_public: boolean;
-        };
-        /** ModelInstanceResponse */
-        ModelInstanceResponse: {
-            /** Id */
-            id: string;
-            /** Provider Config Id */
-            provider_config_id: string;
-            /** Model Spec Id */
-            model_spec_id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string | null;
-            /** Is Active */
-            is_active: boolean;
-            /** Is Public */
-            is_public: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Provider Name */
-            provider_name?: string | null;
-            /** Provider Key */
-            provider_key?: string | null;
-            /** Model Name */
-            model_name?: string | null;
-            /** Model Display Name */
-            model_display_name?: string | null;
-            /** Config Name */
-            config_name?: string | null;
-        };
-        /** ModelSpecCreate */
-        ModelSpecCreate: {
-            /**
-             * Provider Spec Id
-             * Format: uuid
-             */
-            provider_spec_id: string;
-            /** Model Name */
-            model_name: string;
-            /** Display Name */
-            display_name: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Context Window
-             * @default 4096
-             */
-            context_window: number;
-            /**
-             * Is Active
-             * @default true
-             */
-            is_active: boolean;
-        };
-        /** ModelSpecUpdate */
-        ModelSpecUpdate: {
-            /** Display Name */
-            display_name?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Context Window */
-            context_window?: number | null;
-            /** Is Active */
-            is_active?: boolean | null;
-        };
-        /** ProviderConfigCreate */
-        ProviderConfigCreate: {
-            /**
-             * Provider Spec Id
-             * Format: uuid
-             */
-            provider_spec_id: string;
-            /** Name */
-            name: string;
-            /** Api Key */
-            api_key: string;
-            /** Endpoint Url */
-            endpoint_url?: string | null;
-            /**
-             * Is Public
-             * @default false
-             */
-            is_public: boolean;
-        };
-        /** ProviderConfigResponse */
-        ProviderConfigResponse: {
-            /** Id */
-            id: string;
-            /** Provider Spec Id */
-            provider_spec_id: string;
-            /** Name */
-            name: string;
-            /** Endpoint Url */
-            endpoint_url: string | null;
-            /** User Id */
-            user_id: string | null;
-            /** Is Active */
-            is_active: boolean;
-            /** Is Public */
-            is_public: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Provider Spec Name */
-            provider_spec_name?: string | null;
-            /** Provider Spec Key */
-            provider_spec_key?: string | null;
-        };
-        /** ProviderConfigUpdate */
-        ProviderConfigUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Api Key */
-            api_key?: string | null;
-            /** Endpoint Url */
-            endpoint_url?: string | null;
-            /** Is Active */
-            is_active?: boolean | null;
-        };
-        /** ProviderSpecResponse */
-        ProviderSpecResponse: {
-            /** Id */
-            id: string;
-            /** Provider Key */
-            provider_key: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string | null;
-            /** Provider Type */
-            provider_type: string;
-            /** Icon */
-            icon: string | null;
-            /** Icon Url */
-            icon_url: string | null;
-            /** Is Builtin */
-            is_builtin: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** ProviderSpecWithModelsResponse */
-        ProviderSpecWithModelsResponse: {
-            /** Id */
-            id: string;
-            /** Provider Key */
-            provider_key: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string | null;
-            /** Provider Type */
-            provider_type: string;
-            /** Icon */
-            icon: string | null;
-            /** Icon Url */
-            icon_url: string | null;
-            /** Is Builtin */
-            is_builtin: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Models */
-            models: components["schemas"]["agentarea_api__api__v1__provider_specs__ModelSpecResponse"][];
-        };
-        /** TaskCreate */
-        TaskCreate: {
-            /** Description */
-            description: string;
-            /**
-             * Parameters
-             * @default {}
-             */
-            parameters: {
-                [key: string]: unknown;
-            };
-            /**
-             * User Id
-             * @default api_user
-             */
-            user_id: string | null;
-            /**
-             * Enable Agent Communication
-             * @default true
-             */
-            enable_agent_communication: boolean | null;
-        };
-        /**
-         * TaskEvent
-         * @description Model for task execution events.
-         */
-        TaskEvent: {
-            /** Id */
-            id: string;
-            /** Task Id */
-            task_id: string;
-            /** Agent Id */
-            agent_id: string;
-            /** Execution Id */
-            execution_id: string;
-            /**
-             * Timestamp
-             * Format: date-time
-             */
-            timestamp: string;
-            /** Event Type */
-            event_type: string;
-            /** Message */
-            message: string;
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
-        };
-        /**
-         * TaskEventResponse
-         * @description Response model for paginated task events.
-         */
-        TaskEventResponse: {
-            /** Events */
-            events: components["schemas"]["TaskEvent"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Has Next */
-            has_next: boolean;
-        };
-        /** TaskResponse */
-        TaskResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Agent Id
-             * Format: uuid
-             */
-            agent_id: string;
-            /** Description */
-            description: string;
-            /** Parameters */
-            parameters: {
-                [key: string]: unknown;
-            };
-            /** Status */
-            status: string;
-            /** Result */
-            result?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Execution Id */
-            execution_id?: string | null;
-        };
-        /**
-         * TaskWithAgent
-         * @description Task response with agent information for global task listing.
-         */
-        TaskWithAgent: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Agent Id
-             * Format: uuid
-             */
-            agent_id: string;
-            /** Agent Name */
-            agent_name: string;
-            /** Description */
-            description: string;
-            /** Parameters */
-            parameters: {
-                [key: string]: unknown;
-            };
-            /** Status */
-            status: string;
-            /** Result */
-            result?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Execution Id */
-            execution_id?: string | null;
-        };
-        /** ToolsConfig */
-        ToolsConfig: {
-            /** Mcp Server Configs */
-            mcp_server_configs?: components["schemas"]["MCPConfig"][] | null;
-            /** Planning */
-            planning?: boolean | null;
-        };
-        /**
-         * TriggerCreateRequest
-         * @description Request model for creating a trigger.
-         */
-        TriggerCreateRequest: {
-            /** Name */
-            name: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /**
-             * Agent Id
-             * Format: uuid
-             */
-            agent_id: string;
-            /** Trigger Type */
-            trigger_type: string;
-            /** Task Parameters */
-            task_parameters?: {
-                [key: string]: unknown;
-            };
-            /** Conditions */
-            conditions?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Failure Threshold
-             * @default 5
-             */
-            failure_threshold: number;
-            /** Cron Expression */
-            cron_expression?: string | null;
-            /**
-             * Timezone
-             * @default UTC
-             */
-            timezone: string;
-            /** Webhook Id */
-            webhook_id?: string | null;
-            /** Allowed Methods */
-            allowed_methods?: string[];
-            /**
-             * Webhook Type
-             * @default generic
-             */
-            webhook_type: string;
-            /** Validation Rules */
-            validation_rules?: {
-                [key: string]: unknown;
-            };
-            /** Webhook Config */
-            webhook_config?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * TriggerExecutionResponse
-         * @description Response model for trigger execution data.
-         */
-        TriggerExecutionResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Trigger Id
-             * Format: uuid
-             */
-            trigger_id: string;
-            /**
-             * Executed At
-             * Format: date-time
-             */
-            executed_at: string;
-            /** Status */
-            status: string;
-            /** Task Id */
-            task_id?: string | null;
-            /** Execution Time Ms */
-            execution_time_ms: number;
-            /** Error Message */
-            error_message?: string | null;
-            /** Trigger Data */
-            trigger_data: {
-                [key: string]: unknown;
-            };
-            /** Workflow Id */
-            workflow_id?: string | null;
-            /** Run Id */
-            run_id?: string | null;
-        };
-        /**
-         * TriggerResponse
-         * @description Response model for trigger data.
-         */
-        TriggerResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /**
-             * Agent Id
-             * Format: uuid
-             */
-            agent_id: string;
-            /** Trigger Type */
-            trigger_type: string;
-            /** Is Active */
-            is_active: boolean;
-            /** Task Parameters */
-            task_parameters: {
-                [key: string]: unknown;
-            };
-            /** Conditions */
-            conditions: {
-                [key: string]: unknown;
-            };
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Created By */
-            created_by: string;
-            /** Failure Threshold */
-            failure_threshold: number;
-            /** Consecutive Failures */
-            consecutive_failures: number;
-            /** Last Execution At */
-            last_execution_at?: string | null;
-            /** Cron Expression */
-            cron_expression?: string | null;
-            /** Timezone */
-            timezone?: string | null;
-            /** Next Run Time */
-            next_run_time?: string | null;
-            /** Webhook Id */
-            webhook_id?: string | null;
-            /** Allowed Methods */
-            allowed_methods?: string[] | null;
-            /** Webhook Type */
-            webhook_type?: string | null;
-            /** Validation Rules */
-            validation_rules?: {
-                [key: string]: unknown;
-            } | null;
-            /** Webhook Config */
-            webhook_config?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * TriggerStatusResponse
-         * @description Response model for trigger status information.
-         */
-        TriggerStatusResponse: {
-            /**
-             * Trigger Id
-             * Format: uuid
-             */
-            trigger_id: string;
-            /** Is Active */
-            is_active: boolean;
-            /** Last Execution At */
-            last_execution_at?: string | null;
-            /** Consecutive Failures */
-            consecutive_failures: number;
-            /** Should Disable Due To Failures */
-            should_disable_due_to_failures: boolean;
-            /** Schedule Info */
-            schedule_info?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * TriggerUpdateRequest
-         * @description Request model for updating a trigger.
-         */
-        TriggerUpdateRequest: {
-            /** Name */
-            name?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Is Active */
-            is_active?: boolean | null;
-            /** Task Parameters */
-            task_parameters?: {
-                [key: string]: unknown;
-            } | null;
-            /** Conditions */
-            conditions?: {
-                [key: string]: unknown;
-            } | null;
-            /** Failure Threshold */
-            failure_threshold?: number | null;
-            /** Cron Expression */
-            cron_expression?: string | null;
-            /** Timezone */
-            timezone?: string | null;
-            /** Allowed Methods */
-            allowed_methods?: string[] | null;
-            /** Webhook Type */
-            webhook_type?: string | null;
-            /** Validation Rules */
-            validation_rules?: {
-                [key: string]: unknown;
-            } | null;
-            /** Webhook Config */
-            webhook_config?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
-        /** AgentResponse */
-        agentarea_api__api__v1__agents__AgentResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /** Status */
-            status: string;
-            /** Description */
-            description?: string | null;
-            /** Instruction */
-            instruction?: string | null;
-            /** Model Id */
-            model_id?: string | null;
-            /** Tools Config */
-            tools_config?: {
-                [key: string]: unknown;
-            } | null;
-            /** Events Config */
-            events_config?: {
-                [key: string]: unknown;
-            } | null;
-            /** Planning */
-            planning?: boolean | null;
-        };
-        /**
-         * AgentResponse
-         * @description Response model for agent information.
-         */
-        agentarea_api__api__v1__chat__AgentResponse: {
-            /**
-             * Id
-             * @description Agent ID
-             */
-            id: string;
-            /**
-             * Name
-             * @description Agent name
-             */
-            name: string;
-            /**
-             * Description
-             * @description Agent description
-             */
-            description?: string | null;
-            /**
-             * Status
-             * @description Agent status
-             */
-            status: string;
-        };
-        /** ModelSpecResponse */
-        agentarea_api__api__v1__model_specs__ModelSpecResponse: {
-            /** Id */
-            id: string;
-            /** Provider Spec Id */
-            provider_spec_id: string;
-            /** Model Name */
-            model_name: string;
-            /** Display Name */
-            display_name: string;
-            /** Description */
-            description: string | null;
-            /** Context Window */
-            context_window: number;
-            /** Is Active */
-            is_active: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Provider Name */
-            provider_name?: string | null;
-            /** Provider Key */
-            provider_key?: string | null;
-        };
-        /** ModelSpecResponse */
-        agentarea_api__api__v1__provider_specs__ModelSpecResponse: {
-            /** Id */
-            id: string;
-            /** Provider Spec Id */
-            provider_spec_id: string;
-            /** Model Name */
-            model_name: string;
-            /** Display Name */
-            display_name: string;
-            /** Description */
-            description: string | null;
-            /** Context Window */
-            context_window: number;
-            /** Is Active */
-            is_active: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
+  schemas: {
+    /** AgentAuthentication */
+    AgentAuthentication: {
+      /** Schemes */
+      schemes: string[];
+      /** Credentials */
+      credentials?: string | null;
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /** AgentCapabilities */
+    AgentCapabilities: {
+      /**
+       * Streaming
+       * @default false
+       */
+      streaming: boolean;
+      /**
+       * Push Notifications
+       * @default false
+       */
+      push_notifications: boolean;
+      /**
+       * State Transition History
+       * @default false
+       */
+      state_transition_history: boolean;
+    };
+    /** AgentCard */
+    AgentCard: {
+      /** Name */
+      name: string;
+      /** Description */
+      description?: string | null;
+      /** Url */
+      url: string;
+      provider?: components["schemas"]["AgentProvider"] | null;
+      /** Version */
+      version: string;
+      /** Documentation Url */
+      documentation_url?: string | null;
+      capabilities: components["schemas"]["AgentCapabilities"];
+      authentication?: components["schemas"]["AgentAuthentication"] | null;
+      /**
+       * Default Input Modes
+       * @default [
+       *       "text"
+       *     ]
+       */
+      default_input_modes: string[];
+      /**
+       * Default Output Modes
+       * @default [
+       *       "text"
+       *     ]
+       */
+      default_output_modes: string[];
+      /** Skills */
+      skills: components["schemas"]["AgentSkill"][];
+    };
+    /** AgentCreate */
+    AgentCreate: {
+      /** Name */
+      name: string;
+      /** Description */
+      description: string;
+      /** Instruction */
+      instruction: string;
+      /** Model Id */
+      model_id: string;
+      tools_config?: components["schemas"]["ToolsConfig"] | null;
+      events_config?: components["schemas"]["EventsConfig"] | null;
+      /** Planning */
+      planning?: boolean | null;
+    };
+    /** AgentProvider */
+    AgentProvider: {
+      /** Organization */
+      organization: string;
+      /** Url */
+      url?: string | null;
+    };
+    /** AgentSkill */
+    AgentSkill: {
+      /** Id */
+      id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description?: string | null;
+      /** Tags */
+      tags?: string[] | null;
+      /** Examples */
+      examples?: string[] | null;
+      /** Input Modes */
+      input_modes?: string[] | null;
+      /** Output Modes */
+      output_modes?: string[] | null;
+    };
+    /** AgentUpdate */
+    AgentUpdate: {
+      /** Name */
+      name?: string | null;
+      /** Capabilities */
+      capabilities?: string[] | null;
+      /** Description */
+      description?: string | null;
+      /** Instruction */
+      instruction?: string | null;
+      /** Model Id */
+      model_id?: string | null;
+      tools_config?: components["schemas"]["ToolsConfig"] | null;
+      events_config?: components["schemas"]["EventsConfig"] | null;
+      /** Planning */
+      planning?: boolean | null;
+    };
+    /**
+     * ChatMessageRequest
+     * @description Unified request model for sending chat messages.
+     */
+    ChatMessageRequest: {
+      /**
+       * Content
+       * @description Message content
+       */
+      content: string;
+      /**
+       * Agent Id
+       * @description Target agent ID
+       */
+      agent_id: string;
+      /**
+       * User Id
+       * @description User sending the message
+       */
+      user_id?: string | null;
+      /**
+       * Session Id
+       * @description Session/conversation ID
+       */
+      session_id?: string | null;
+      /**
+       * Context
+       * @description Additional context
+       */
+      context?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /**
+     * ChatResponse
+     * @description Unified response model for chat messages.
+     */
+    ChatResponse: {
+      /**
+       * Task Id
+       * @description Task ID for the chat interaction
+       */
+      task_id: string;
+      /**
+       * Content
+       * @description Response content
+       */
+      content: string;
+      /**
+       * Role
+       * @description Role (user/assistant)
+       */
+      role: string;
+      /**
+       * Session Id
+       * @description Session/conversation ID
+       */
+      session_id: string;
+      /**
+       * Agent Id
+       * @description Agent ID
+       */
+      agent_id: string;
+      /**
+       * Status
+       * @description Task status
+       */
+      status: string;
+      /**
+       * Timestamp
+       * @description Message timestamp
+       */
+      timestamp: string;
+      /**
+       * Execution Id
+       * @description Temporal execution ID
+       */
+      execution_id?: string | null;
+    };
+    /** EventConfig */
+    EventConfig: {
+      /** Event Type */
+      event_type: string;
+      /** Config */
+      config?: {
+        [key: string]: unknown;
+      } | null;
+      /**
+       * Enabled
+       * @default true
+       */
+      enabled: boolean;
+    };
+    /** EventsConfig */
+    EventsConfig: {
+      /** Events */
+      events?: components["schemas"]["EventConfig"][] | null;
+    };
+    /**
+     * ExecutionCorrelationResponse
+     * @description Response model for execution correlation data.
+     */
+    ExecutionCorrelationResponse: {
+      /** Executions */
+      executions: {
+        [key: string]: unknown;
+      }[];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Page Size */
+      page_size: number;
+      /** Has Next */
+      has_next: boolean;
+    };
+    /**
+     * ExecutionHistoryResponse
+     * @description Response model for paginated execution history.
+     */
+    ExecutionHistoryResponse: {
+      /** Executions */
+      executions: components["schemas"]["TriggerExecutionResponse"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Page Size */
+      page_size: number;
+      /** Has Next */
+      has_next: boolean;
+    };
+    /**
+     * ExecutionMetricsResponse
+     * @description Response model for execution metrics.
+     */
+    ExecutionMetricsResponse: {
+      /**
+       * Trigger Id
+       * Format: uuid
+       */
+      trigger_id: string;
+      /** Period Hours */
+      period_hours: number;
+      /** Total Executions */
+      total_executions: number;
+      /** Successful Executions */
+      successful_executions: number;
+      /** Failed Executions */
+      failed_executions: number;
+      /** Timeout Executions */
+      timeout_executions: number;
+      /** Success Rate */
+      success_rate: number;
+      /** Failure Rate */
+      failure_rate: number;
+      /** Avg Execution Time Ms */
+      avg_execution_time_ms: number;
+      /** Min Execution Time Ms */
+      min_execution_time_ms: number;
+      /** Max Execution Time Ms */
+      max_execution_time_ms: number;
+    };
+    /**
+     * ExecutionTimelineResponse
+     * @description Response model for execution timeline.
+     */
+    ExecutionTimelineResponse: {
+      /**
+       * Trigger Id
+       * Format: uuid
+       */
+      trigger_id: string;
+      /** Period Hours */
+      period_hours: number;
+      /** Timeline */
+      timeline: {
+        [key: string]: unknown;
+      }[];
+    };
+    /** HTTPValidationError */
+    HTTPValidationError: {
+      /** Detail */
+      detail?: components["schemas"]["ValidationError"][];
+    };
+    /** JSONRPCError */
+    JSONRPCError: {
+      /** Code */
+      code: number;
+      /** Message */
+      message: string;
+      /** Data */
+      data?: unknown | null;
+    };
+    /** JSONRPCResponse */
+    JSONRPCResponse: {
+      /**
+       * Jsonrpc
+       * @default 2.0
+       * @constant
+       */
+      jsonrpc: "2.0";
+      /** Id */
+      id?: number | string | null;
+      /** Result */
+      result?: unknown | null;
+      error?: components["schemas"]["JSONRPCError"] | null;
+    };
+    /** MCPConfig */
+    MCPConfig: {
+      /** Mcp Server Id */
+      mcp_server_id: string;
+      /** Allowed Tools */
+      allowed_tools?: components["schemas"]["MCPToolConfig"][] | null;
+    };
+    /** MCPServerCreate */
+    MCPServerCreate: {
+      /**
+       * Name
+       * @description Name of the MCP server
+       */
+      name: string;
+      /**
+       * Description
+       * @description Description of the MCP server
+       */
+      description: string;
+      /**
+       * Docker Image Url
+       * @description Docker image URL
+       */
+      docker_image_url: string;
+      /**
+       * Version
+       * @description Version of the MCP server
+       * @default 1.0.0
+       */
+      version: string;
+      /**
+       * Tags
+       * @description Tags for categorization
+       */
+      tags?: string[];
+      /**
+       * Is Public
+       * @description Whether the server is public
+       * @default false
+       */
+      is_public: boolean;
+      /**
+       * Env Schema
+       * @description Environment variable schema
+       */
+      env_schema?:
+        | {
+            [key: string]: unknown;
+          }[]
+        | null;
+      /**
+       * Cmd
+       * @description Custom command to override container CMD (useful for switching between stdio and HTTP modes)
+       */
+      cmd?: string[] | null;
+    };
+    /** MCPServerInstanceCreateRequest */
+    MCPServerInstanceCreateRequest: {
+      /**
+       * Name
+       * @description Name of the MCP server instance
+       */
+      name: string;
+      /**
+       * Description
+       * @description Description of the instance
+       */
+      description?: string | null;
+      /**
+       * Server Spec Id
+       * @description ID of the MCP server spec (optional)
+       */
+      server_spec_id?: string | null;
+      /**
+       * Json Spec
+       * @description Configuration specification as JSON
+       */
+      json_spec: {
+        [key: string]: unknown;
+      };
+    };
+    /** MCPServerInstanceResponse */
+    MCPServerInstanceResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string | null;
+      /** Server Spec Id */
+      server_spec_id: string | null;
+      /** Json Spec */
+      json_spec: {
+        [key: string]: unknown;
+      };
+      /** Status */
+      status: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** MCPServerInstanceUpdate */
+    MCPServerInstanceUpdate: {
+      /** Name */
+      name?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Json Spec */
+      json_spec?: {
+        [key: string]: unknown;
+      } | null;
+      /** Status */
+      status?: string | null;
+    };
+    /** MCPServerResponse */
+    MCPServerResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string;
+      /** Docker Image Url */
+      docker_image_url: string;
+      /** Version */
+      version: string;
+      /** Tags */
+      tags: string[];
+      /** Is Public */
+      is_public: boolean;
+      /** Env Schema */
+      env_schema: {
+        name: string;
+        description: string;
+        required: boolean;
+        default?: string;
+      }[];
+      /** Cmd */
+      cmd: string[] | null;
+      /** Status */
+      status: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** MCPServerUpdate */
+    MCPServerUpdate: {
+      /**
+       * Name
+       * @description Name of the MCP server
+       */
+      name?: string | null;
+      /**
+       * Description
+       * @description Description of the MCP server
+       */
+      description?: string | null;
+      /**
+       * Docker Image Url
+       * @description Docker image URL
+       */
+      docker_image_url?: string | null;
+      /**
+       * Version
+       * @description Version of the MCP server
+       */
+      version?: string | null;
+      /**
+       * Tags
+       * @description Tags for categorization
+       */
+      tags?: string[] | null;
+      /**
+       * Is Public
+       * @description Whether the server is public
+       */
+      is_public?: boolean | null;
+      /**
+       * Status
+       * @description Status of the MCP server
+       */
+      status?: string | null;
+      /**
+       * Cmd
+       * @description Custom command to override container CMD
+       */
+      cmd?: string[] | null;
+    };
+    /** MCPToolConfig */
+    MCPToolConfig: {
+      /** Tool Name */
+      tool_name: string;
+      /**
+       * Requires User Confirmation
+       * @default false
+       */
+      requires_user_confirmation: boolean;
+    };
+    /** ModelInstanceCreate */
+    ModelInstanceCreate: {
+      /**
+       * Provider Config Id
+       * Format: uuid
+       */
+      provider_config_id: string;
+      /**
+       * Model Spec Id
+       * Format: uuid
+       */
+      model_spec_id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description?: string | null;
+      /**
+       * Is Public
+       * @default false
+       */
+      is_public: boolean;
+    };
+    /** ModelInstanceResponse */
+    ModelInstanceResponse: {
+      /** Id */
+      id: string;
+      /** Provider Config Id */
+      provider_config_id: string;
+      /** Model Spec Id */
+      model_spec_id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string | null;
+      /** Is Active */
+      is_active: boolean;
+      /** Is Public */
+      is_public: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Provider Name */
+      provider_name?: string | null;
+      /** Provider Key */
+      provider_key?: string | null;
+      /** Model Name */
+      model_name?: string | null;
+      /** Model Display Name */
+      model_display_name?: string | null;
+      /** Config Name */
+      config_name?: string | null;
+    };
+    /** ModelSpecCreate */
+    ModelSpecCreate: {
+      /**
+       * Provider Spec Id
+       * Format: uuid
+       */
+      provider_spec_id: string;
+      /** Model Name */
+      model_name: string;
+      /** Display Name */
+      display_name: string;
+      /** Description */
+      description?: string | null;
+      /**
+       * Context Window
+       * @default 4096
+       */
+      context_window: number;
+      /**
+       * Is Active
+       * @default true
+       */
+      is_active: boolean;
+    };
+    /** ModelSpecUpdate */
+    ModelSpecUpdate: {
+      /** Display Name */
+      display_name?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Context Window */
+      context_window?: number | null;
+      /** Is Active */
+      is_active?: boolean | null;
+    };
+    /** ProviderConfigCreate */
+    ProviderConfigCreate: {
+      /**
+       * Provider Spec Id
+       * Format: uuid
+       */
+      provider_spec_id: string;
+      /** Name */
+      name: string;
+      /** Api Key */
+      api_key: string;
+      /** Endpoint Url */
+      endpoint_url?: string | null;
+      /**
+       * Is Public
+       * @default false
+       */
+      is_public: boolean;
+    };
+    /** ProviderConfigResponse */
+    ProviderConfigResponse: {
+      /** Id */
+      id: string;
+      /** Provider Spec Id */
+      provider_spec_id: string;
+      /** Name */
+      name: string;
+      /** Endpoint Url */
+      endpoint_url: string | null;
+      /** User Id */
+      user_id: string | null;
+      /** Is Active */
+      is_active: boolean;
+      /** Is Public */
+      is_public: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Provider Spec Name */
+      provider_spec_name?: string | null;
+      /** Provider Spec Key */
+      provider_spec_key?: string | null;
+    };
+    /** ProviderConfigUpdate */
+    ProviderConfigUpdate: {
+      /** Name */
+      name?: string | null;
+      /** Api Key */
+      api_key?: string | null;
+      /** Endpoint Url */
+      endpoint_url?: string | null;
+      /** Is Active */
+      is_active?: boolean | null;
+    };
+    /** ProviderSpecResponse */
+    ProviderSpecResponse: {
+      /** Id */
+      id: string;
+      /** Provider Key */
+      provider_key: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string | null;
+      /** Provider Type */
+      provider_type: string;
+      /** Icon */
+      icon: string | null;
+      /** Icon Url */
+      icon_url: string | null;
+      /** Is Builtin */
+      is_builtin: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** ProviderSpecWithModelsResponse */
+    ProviderSpecWithModelsResponse: {
+      /** Id */
+      id: string;
+      /** Provider Key */
+      provider_key: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string | null;
+      /** Provider Type */
+      provider_type: string;
+      /** Icon */
+      icon: string | null;
+      /** Icon Url */
+      icon_url: string | null;
+      /** Is Builtin */
+      is_builtin: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Models */
+      models: components["schemas"]["agentarea_api__api__v1__provider_specs__ModelSpecResponse"][];
+    };
+    /** TaskCreate */
+    TaskCreate: {
+      /** Description */
+      description: string;
+      /**
+       * Parameters
+       * @default {}
+       */
+      parameters: {
+        [key: string]: unknown;
+      };
+      /**
+       * User Id
+       * @default api_user
+       */
+      user_id: string | null;
+      /**
+       * Enable Agent Communication
+       * @default true
+       */
+      enable_agent_communication: boolean | null;
+    };
+    /**
+     * TaskEvent
+     * @description Model for task execution events.
+     */
+    TaskEvent: {
+      /** Id */
+      id: string;
+      /** Task Id */
+      task_id: string;
+      /** Agent Id */
+      agent_id: string;
+      /** Execution Id */
+      execution_id: string;
+      /**
+       * Timestamp
+       * Format: date-time
+       */
+      timestamp: string;
+      /** Event Type */
+      event_type: string;
+      /** Message */
+      message: string;
+      /**
+       * Metadata
+       * @default {}
+       */
+      metadata: {
+        [key: string]: unknown;
+      };
+    };
+    /**
+     * TaskEventResponse
+     * @description Response model for paginated task events.
+     */
+    TaskEventResponse: {
+      /** Events */
+      events: components["schemas"]["TaskEvent"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Page Size */
+      page_size: number;
+      /** Has Next */
+      has_next: boolean;
+    };
+    /** TaskResponse */
+    TaskResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Agent Id
+       * Format: uuid
+       */
+      agent_id: string;
+      /** Description */
+      description: string;
+      /** Parameters */
+      parameters: {
+        [key: string]: unknown;
+      };
+      /** Status */
+      status: string;
+      /** Result */
+      result?: {
+        [key: string]: unknown;
+      } | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Execution Id */
+      execution_id?: string | null;
+    };
+    /**
+     * TaskWithAgent
+     * @description Task response with agent information for global task listing.
+     */
+    TaskWithAgent: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Agent Id
+       * Format: uuid
+       */
+      agent_id: string;
+      /** Agent Name */
+      agent_name: string;
+      /** Description */
+      description: string;
+      /** Parameters */
+      parameters: {
+        [key: string]: unknown;
+      };
+      /** Status */
+      status: string;
+      /** Result */
+      result?: {
+        [key: string]: unknown;
+      } | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Execution Id */
+      execution_id?: string | null;
+    };
+    /** ToolsConfig */
+    ToolsConfig: {
+      /** Mcp Server Configs */
+      mcp_server_configs?: components["schemas"]["MCPConfig"][] | null;
+      /** Planning */
+      planning?: boolean | null;
+    };
+    /**
+     * TriggerCreateRequest
+     * @description Request model for creating a trigger.
+     */
+    TriggerCreateRequest: {
+      /** Name */
+      name: string;
+      /**
+       * Description
+       * @default
+       */
+      description: string;
+      /**
+       * Agent Id
+       * Format: uuid
+       */
+      agent_id: string;
+      /** Trigger Type */
+      trigger_type: string;
+      /** Task Parameters */
+      task_parameters?: {
+        [key: string]: unknown;
+      };
+      /** Conditions */
+      conditions?: {
+        [key: string]: unknown;
+      };
+      /**
+       * Failure Threshold
+       * @default 5
+       */
+      failure_threshold: number;
+      /** Cron Expression */
+      cron_expression?: string | null;
+      /**
+       * Timezone
+       * @default UTC
+       */
+      timezone: string;
+      /** Webhook Id */
+      webhook_id?: string | null;
+      /** Allowed Methods */
+      allowed_methods?: string[];
+      /**
+       * Webhook Type
+       * @default generic
+       */
+      webhook_type: string;
+      /** Validation Rules */
+      validation_rules?: {
+        [key: string]: unknown;
+      };
+      /** Webhook Config */
+      webhook_config?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /**
+     * TriggerExecutionResponse
+     * @description Response model for trigger execution data.
+     */
+    TriggerExecutionResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Trigger Id
+       * Format: uuid
+       */
+      trigger_id: string;
+      /**
+       * Executed At
+       * Format: date-time
+       */
+      executed_at: string;
+      /** Status */
+      status: string;
+      /** Task Id */
+      task_id?: string | null;
+      /** Execution Time Ms */
+      execution_time_ms: number;
+      /** Error Message */
+      error_message?: string | null;
+      /** Trigger Data */
+      trigger_data: {
+        [key: string]: unknown;
+      };
+      /** Workflow Id */
+      workflow_id?: string | null;
+      /** Run Id */
+      run_id?: string | null;
+    };
+    /**
+     * TriggerResponse
+     * @description Response model for trigger data.
+     */
+    TriggerResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string;
+      /**
+       * Agent Id
+       * Format: uuid
+       */
+      agent_id: string;
+      /** Trigger Type */
+      trigger_type: string;
+      /** Is Active */
+      is_active: boolean;
+      /** Task Parameters */
+      task_parameters: {
+        [key: string]: unknown;
+      };
+      /** Conditions */
+      conditions: {
+        [key: string]: unknown;
+      };
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Created By */
+      created_by: string;
+      /** Failure Threshold */
+      failure_threshold: number;
+      /** Consecutive Failures */
+      consecutive_failures: number;
+      /** Last Execution At */
+      last_execution_at?: string | null;
+      /** Cron Expression */
+      cron_expression?: string | null;
+      /** Timezone */
+      timezone?: string | null;
+      /** Next Run Time */
+      next_run_time?: string | null;
+      /** Webhook Id */
+      webhook_id?: string | null;
+      /** Allowed Methods */
+      allowed_methods?: string[] | null;
+      /** Webhook Type */
+      webhook_type?: string | null;
+      /** Validation Rules */
+      validation_rules?: {
+        [key: string]: unknown;
+      } | null;
+      /** Webhook Config */
+      webhook_config?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /**
+     * TriggerStatusResponse
+     * @description Response model for trigger status information.
+     */
+    TriggerStatusResponse: {
+      /**
+       * Trigger Id
+       * Format: uuid
+       */
+      trigger_id: string;
+      /** Is Active */
+      is_active: boolean;
+      /** Last Execution At */
+      last_execution_at?: string | null;
+      /** Consecutive Failures */
+      consecutive_failures: number;
+      /** Should Disable Due To Failures */
+      should_disable_due_to_failures: boolean;
+      /** Schedule Info */
+      schedule_info?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /**
+     * TriggerUpdateRequest
+     * @description Request model for updating a trigger.
+     */
+    TriggerUpdateRequest: {
+      /** Name */
+      name?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Is Active */
+      is_active?: boolean | null;
+      /** Task Parameters */
+      task_parameters?: {
+        [key: string]: unknown;
+      } | null;
+      /** Conditions */
+      conditions?: {
+        [key: string]: unknown;
+      } | null;
+      /** Failure Threshold */
+      failure_threshold?: number | null;
+      /** Cron Expression */
+      cron_expression?: string | null;
+      /** Timezone */
+      timezone?: string | null;
+      /** Allowed Methods */
+      allowed_methods?: string[] | null;
+      /** Webhook Type */
+      webhook_type?: string | null;
+      /** Validation Rules */
+      validation_rules?: {
+        [key: string]: unknown;
+      } | null;
+      /** Webhook Config */
+      webhook_config?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /** ValidationError */
+    ValidationError: {
+      /** Location */
+      loc: (string | number)[];
+      /** Message */
+      msg: string;
+      /** Error Type */
+      type: string;
+    };
+    /** AgentResponse */
+    agentarea_api__api__v1__agents__AgentResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Name */
+      name: string;
+      /** Status */
+      status: string;
+      /** Description */
+      description?: string | null;
+      /** Instruction */
+      instruction?: string | null;
+      /** Model Id */
+      model_id?: string | null;
+      /** Tools Config */
+      tools_config?: {
+        [key: string]: unknown;
+      } | null;
+      /** Events Config */
+      events_config?: {
+        [key: string]: unknown;
+      } | null;
+      /** Planning */
+      planning?: boolean | null;
+    };
+    /**
+     * AgentResponse
+     * @description Response model for agent information.
+     */
+    agentarea_api__api__v1__chat__AgentResponse: {
+      /**
+       * Id
+       * @description Agent ID
+       */
+      id: string;
+      /**
+       * Name
+       * @description Agent name
+       */
+      name: string;
+      /**
+       * Description
+       * @description Agent description
+       */
+      description?: string | null;
+      /**
+       * Status
+       * @description Agent status
+       */
+      status: string;
+    };
+    /** ModelSpecResponse */
+    agentarea_api__api__v1__model_specs__ModelSpecResponse: {
+      /** Id */
+      id: string;
+      /** Provider Spec Id */
+      provider_spec_id: string;
+      /** Model Name */
+      model_name: string;
+      /** Display Name */
+      display_name: string;
+      /** Description */
+      description: string | null;
+      /** Context Window */
+      context_window: number;
+      /** Is Active */
+      is_active: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Provider Name */
+      provider_name?: string | null;
+      /** Provider Key */
+      provider_key?: string | null;
+    };
+    /** ModelSpecResponse */
+    agentarea_api__api__v1__provider_specs__ModelSpecResponse: {
+      /** Id */
+      id: string;
+      /** Provider Spec Id */
+      provider_spec_id: string;
+      /** Model Name */
+      model_name: string;
+      /** Display Name */
+      display_name: string;
+      /** Description */
+      description: string | null;
+      /** Context Window */
+      context_window: number;
+      /** Is Active */
+      is_active: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    send_message_v1_chat_messages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatMessageRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_message_status_v1_chat_messages__task_id__status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_available_agents_v1_chat_agents_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"][];
-                };
-            };
-        };
-    };
-    get_agent_v1_chat_agents__agent_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_agents_v1_agents__get: {
-        parameters: {
-            query?: {
-                /** @description Filter by creator: 'me' for current user's agents only */
-                created_by?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_agent_v1_agents__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_v1_agents__agent_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_agent_v1_agents__agent_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_agent_v1_agents__agent_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JSONRPCResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_well_known_v1_agents__agent_id__a2a_well_known_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentCard"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentCard"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_well_known_index_v1_agents__agent_id___well_known__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_agent_tasks_v1_agents__agent_id__tasks__get: {
-        parameters: {
-            query?: {
-                /** @description Filter by task status */
-                status?: string | null;
-                /** @description Filter by creator: 'me' for current user's tasks only */
-                created_by?: string | null;
-                /** @description Maximum number of tasks to return */
-                limit?: number;
-                /** @description Number of tasks to skip */
-                offset?: number;
-            };
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TaskCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TaskCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_task_v1_agents__agent_id__tasks__task_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_agent_task_v1_agents__agent_id__tasks__task_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_task_status_v1_agents__agent_id__tasks__task_id__status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_task_events_v1_agents__agent_id__tasks__task_id__events_get: {
-        parameters: {
-            query?: {
-                /** @description Page number */
-                page?: number;
-                /** @description Number of events per page */
-                page_size?: number;
-                /** @description Filter by event type */
-                event_type?: string | null;
-            };
-            header?: never;
-            path: {
-                agent_id: string;
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskEventResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_all_tasks_v1_tasks__get: {
-        parameters: {
-            query?: {
-                /** @description Filter by task status */
-                status?: string | null;
-                /** @description Filter by creator: 'me' for current user's tasks only */
-                created_by?: string | null;
-                /** @description Maximum number of tasks to return */
-                limit?: number;
-                /** @description Number of tasks to skip */
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskWithAgent"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_mcp_servers_v1_mcp_servers__get: {
-        parameters: {
-            query?: {
-                status?: string | null;
-                is_public?: boolean | null;
-                tag?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_mcp_server_v1_mcp_servers__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MCPServerCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_mcp_server_templates_v1_mcp_servers_templates_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-        };
-    };
-    get_mcp_server_template_v1_mcp_servers_templates__template_key__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post: {
-        parameters: {
-            query: {
-                server_name: string;
-                server_description?: string;
-                version?: string;
-            };
-            header?: never;
-            path: {
-                template_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_mcp_server_v1_mcp_servers__server_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                server_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_mcp_server_v1_mcp_servers__server_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                server_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_mcp_server_v1_mcp_servers__server_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                server_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MCPServerUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    deploy_mcp_server_v1_mcp_servers__server_id__deploy_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                server_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_mcp_server_instances_v1_mcp_server_instances__get: {
-        parameters: {
-            query?: {
-                /** @description Filter by creator: 'me' for current user's instances only */
-                created_by?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerInstanceResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_mcp_server_instance_v1_mcp_server_instances__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MCPServerInstanceCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerInstanceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_instance_environment_v1_mcp_server_instances__instance_id__environment_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_mcp_server_instance_v1_mcp_server_instances__instance_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerInstanceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_mcp_server_instance_v1_mcp_server_instances__instance_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MCPServerInstanceUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MCPServerInstanceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_containers_health_v1_mcp_server_instances_health_containers_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_instance_available_tools_v1_mcp_server_instances__instance_id__tools_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_provider_specs_v1_provider_specs__get: {
-        parameters: {
-            query?: {
-                is_builtin?: boolean | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderSpecResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_provider_specs_with_models_v1_provider_specs_with_models_get: {
-        parameters: {
-            query?: {
-                is_builtin?: boolean | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderSpecWithModelsResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_provider_spec_v1_provider_specs__provider_spec_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_spec_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderSpecWithModelsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_provider_spec_by_key_v1_provider_specs_by_key__provider_key__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderSpecWithModelsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_provider_configs_v1_provider_configs__get: {
-        parameters: {
-            query?: {
-                provider_spec_id?: string | null;
-                is_active?: boolean | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderConfigResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_provider_config_v1_provider_configs__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderConfigCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderConfigResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_provider_config_v1_provider_configs__config_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                config_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderConfigResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_provider_config_v1_provider_configs__config_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                config_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderConfigResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_provider_config_v1_provider_configs__config_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                config_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_provider_logo_v1_provider_configs_admin__provider_key__logo_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_model_specs_v1_model_specs__get: {
-        parameters: {
-            query?: {
-                provider_spec_id?: string | null;
-                is_active?: boolean | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_model_spec_v1_model_specs__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelSpecCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_model_spec_v1_model_specs__model_spec_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                model_spec_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_model_spec_v1_model_specs__model_spec_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                model_spec_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_model_spec_v1_model_specs__model_spec_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                model_spec_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelSpecUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_model_specs_by_provider_v1_model_specs_by_provider__provider_spec_id__get: {
-        parameters: {
-            query?: {
-                is_active?: boolean | null;
-            };
-            header?: never;
-            path: {
-                provider_spec_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_model_spec_by_provider_and_name_v1_model_specs_by_provider__provider_spec_id___model_name__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_spec_id: string;
-                model_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_model_spec_v1_model_specs_upsert_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelSpecCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_model_instances_v1_model_instances__get: {
-        parameters: {
-            query?: {
-                provider_config_id?: string | null;
-                model_spec_id?: string | null;
-                is_active?: boolean | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelInstanceResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_model_instance_v1_model_instances__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelInstanceCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelInstanceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_model_instance_v1_model_instances__instance_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelInstanceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_model_instance_v1_model_instances__instance_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                instance_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_webhook_v1_webhooks__webhook_id__options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_webhook_v1_webhooks__webhook_id__options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_webhook_v1_webhooks__webhook_id__options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_webhook_v1_webhooks__webhook_id__options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_webhook_v1_webhooks__webhook_id__options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_webhook_v1_webhooks__webhook_id__options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    handle_webhook_v1_webhooks__webhook_id__options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    webhook_health_check_v1_webhooks_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    debug_webhook_v1_webhooks_debug__webhook_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhook_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_triggers_v1_triggers__get: {
-        parameters: {
-            query: {
-                agent_id: string;
-                /** @description Filter by trigger type (cron, webhook) */
-                trigger_type?: string | null;
-                /** @description Only return active triggers */
-                active_only?: boolean;
-                /** @description Filter by creator: 'me' for current user's triggers only */
-                created_by?: string | null;
-                /** @description Maximum number of triggers to return */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TriggerResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_trigger_v1_triggers__post: {
-        parameters: {
-            query: {
-                agent_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TriggerCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TriggerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_trigger_v1_triggers__trigger_id__get: {
-        parameters: {
-            query: {
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TriggerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_trigger_v1_triggers__trigger_id__put: {
-        parameters: {
-            query: {
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TriggerUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TriggerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_trigger_v1_triggers__trigger_id__delete: {
-        parameters: {
-            query: {
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enable_trigger_v1_triggers__trigger_id__enable_post: {
-        parameters: {
-            query: {
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    disable_trigger_v1_triggers__trigger_id__disable_post: {
-        parameters: {
-            query: {
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_execution_history_v1_triggers__trigger_id__executions_get: {
-        parameters: {
-            query: {
-                /** @description Page number */
-                page?: number;
-                /** @description Number of executions per page */
-                page_size?: number;
-                /** @description Filter by execution status (success, failed, timeout) */
-                status?: string | null;
-                /** @description Filter executions after this time */
-                start_time?: string | null;
-                /** @description Filter executions before this time */
-                end_time?: string | null;
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExecutionHistoryResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_trigger_status_v1_triggers__trigger_id__status_get: {
-        parameters: {
-            query: {
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TriggerStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_execution_metrics_v1_triggers__trigger_id__metrics_get: {
-        parameters: {
-            query: {
-                /** @description Time period in hours (max 7 days) */
-                hours?: number;
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExecutionMetricsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_execution_timeline_v1_triggers__trigger_id__timeline_get: {
-        parameters: {
-            query: {
-                /** @description Time period in hours (max 7 days) */
-                hours?: number;
-                /** @description Time bucket size in minutes */
-                bucket_size_minutes?: number;
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExecutionTimelineResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_execution_correlations_v1_triggers__trigger_id__correlations_get: {
-        parameters: {
-            query: {
-                /** @description Page number */
-                page?: number;
-                /** @description Number of executions per page */
-                page_size?: number;
-                agent_id: string;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExecutionCorrelationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    triggers_health_check_v1_triggers_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    get_current_user_v1_auth_users_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_token_info_v1_auth_token_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    test_protected_endpoint_v1_protected_test_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_user_info_v1_protected_user_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_dev_token_dev_token_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
+  send_message_v1_chat_messages_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatMessageRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_message_status_v1_chat_messages__task_id__status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_available_agents_v1_chat_agents_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"][];
+        };
+      };
+    };
+  };
+  get_agent_v1_chat_agents__agent_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__chat__AgentResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_agents_v1_agents__get: {
+    parameters: {
+      query?: {
+        /** @description Filter by creator: 'me' for current user's agents only */
+        created_by?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_agent_v1_agents__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AgentCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_agent_v1_agents__agent_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_agent_v1_agents__agent_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_agent_v1_agents__agent_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AgentUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JSONRPCResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_agent_well_known_v1_agents__agent_id__a2a_well_known_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentCard"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentCard"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_agent_a2a_info_v1_agents__agent_id___well_known_a2a_info_json_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_agent_well_known_index_v1_agents__agent_id___well_known__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_agent_tasks_v1_agents__agent_id__tasks__get: {
+    parameters: {
+      query?: {
+        /** @description Filter by task status */
+        status?: string | null;
+        /** @description Filter by creator: 'me' for current user's tasks only */
+        created_by?: string | null;
+        /** @description Maximum number of tasks to return */
+        limit?: number;
+        /** @description Number of tasks to skip */
+        offset?: number;
+      };
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TaskResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_task_for_agent_with_stream_v1_agents__agent_id__tasks__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TaskCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_task_for_agent_sync_v1_agents__agent_id__tasks_sync_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TaskCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TaskResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_agent_task_v1_agents__agent_id__tasks__task_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TaskResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  cancel_agent_task_v1_agents__agent_id__tasks__task_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_agent_task_status_v1_agents__agent_id__tasks__task_id__status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  pause_agent_task_v1_agents__agent_id__tasks__task_id__pause_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  resume_agent_task_v1_agents__agent_id__tasks__task_id__resume_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_task_events_v1_agents__agent_id__tasks__task_id__events_get: {
+    parameters: {
+      query?: {
+        /** @description Page number */
+        page?: number;
+        /** @description Number of events per page */
+        page_size?: number;
+        /** @description Filter by event type */
+        event_type?: string | null;
+      };
+      header?: never;
+      path: {
+        agent_id: string;
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TaskEventResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  stream_task_events_v1_agents__agent_id__tasks__task_id__events_stream_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agent_id: string;
+        task_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_all_tasks_v1_tasks__get: {
+    parameters: {
+      query?: {
+        /** @description Filter by task status */
+        status?: string | null;
+        /** @description Filter by creator: 'me' for current user's tasks only */
+        created_by?: string | null;
+        /** @description Maximum number of tasks to return */
+        limit?: number;
+        /** @description Number of tasks to skip */
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TaskWithAgent"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_mcp_servers_v1_mcp_servers__get: {
+    parameters: {
+      query?: {
+        status?: string | null;
+        is_public?: boolean | null;
+        tag?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_mcp_server_v1_mcp_servers__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MCPServerCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_mcp_server_templates_v1_mcp_servers_templates_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          }[];
+        };
+      };
+    };
+  };
+  get_mcp_server_template_v1_mcp_servers_templates__template_key__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        template_key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_mcp_server_from_template_v1_mcp_servers_from_template__template_key__post: {
+    parameters: {
+      query: {
+        server_name: string;
+        server_description?: string;
+        version?: string;
+      };
+      header?: never;
+      path: {
+        template_key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_mcp_server_v1_mcp_servers__server_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        server_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_mcp_server_v1_mcp_servers__server_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        server_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_mcp_server_v1_mcp_servers__server_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        server_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MCPServerUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  deploy_mcp_server_v1_mcp_servers__server_id__deploy_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        server_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_mcp_server_instances_v1_mcp_server_instances__get: {
+    parameters: {
+      query?: {
+        /** @description Filter by creator: 'me' for current user's instances only */
+        created_by?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerInstanceResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_mcp_server_instance_v1_mcp_server_instances__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MCPServerInstanceCreateRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerInstanceResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  check_mcp_server_instance_configuration_v1_mcp_server_instances_check_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_instance_environment_v1_mcp_server_instances__instance_id__environment_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_mcp_server_instance_v1_mcp_server_instances__instance_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerInstanceResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_mcp_server_instance_v1_mcp_server_instances__instance_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_mcp_server_instance_v1_mcp_server_instances__instance_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MCPServerInstanceUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MCPServerInstanceResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  start_mcp_server_instance_v1_mcp_server_instances__instance_id__start_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  stop_mcp_server_instance_v1_mcp_server_instances__instance_id__stop_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_containers_health_v1_mcp_server_instances_health_containers_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  get_instance_available_tools_v1_mcp_server_instances__instance_id__tools_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          }[];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  discover_instance_tools_v1_mcp_server_instances__instance_id__discover_tools_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_provider_specs_v1_provider_specs__get: {
+    parameters: {
+      query?: {
+        is_builtin?: boolean | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderSpecResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_provider_specs_with_models_v1_provider_specs_with_models_get: {
+    parameters: {
+      query?: {
+        is_builtin?: boolean | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderSpecWithModelsResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_provider_spec_v1_provider_specs__provider_spec_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        provider_spec_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderSpecWithModelsResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_provider_spec_by_key_v1_provider_specs_by_key__provider_key__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        provider_key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderSpecWithModelsResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_provider_configs_v1_provider_configs__get: {
+    parameters: {
+      query?: {
+        provider_spec_id?: string | null;
+        is_active?: boolean | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderConfigResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_provider_config_v1_provider_configs__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProviderConfigCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderConfigResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_provider_config_v1_provider_configs__config_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        config_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderConfigResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_provider_config_v1_provider_configs__config_id__put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        config_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProviderConfigUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProviderConfigResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_provider_config_v1_provider_configs__config_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        config_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_provider_logo_v1_provider_configs_admin__provider_key__logo_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        provider_key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_model_specs_v1_model_specs__get: {
+    parameters: {
+      query?: {
+        provider_spec_id?: string | null;
+        is_active?: boolean | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_model_spec_v1_model_specs__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModelSpecCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_model_spec_v1_model_specs__model_spec_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        model_spec_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_model_spec_v1_model_specs__model_spec_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        model_spec_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_model_spec_v1_model_specs__model_spec_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        model_spec_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModelSpecUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_model_specs_by_provider_v1_model_specs_by_provider__provider_spec_id__get: {
+    parameters: {
+      query?: {
+        is_active?: boolean | null;
+      };
+      header?: never;
+      path: {
+        provider_spec_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_model_spec_by_provider_and_name_v1_model_specs_by_provider__provider_spec_id___model_name__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        provider_spec_id: string;
+        model_name: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  upsert_model_spec_v1_model_specs_upsert_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModelSpecCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_model_instances_v1_model_instances__get: {
+    parameters: {
+      query?: {
+        provider_config_id?: string | null;
+        model_spec_id?: string | null;
+        is_active?: boolean | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModelInstanceResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_model_instance_v1_model_instances__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModelInstanceCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModelInstanceResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_model_instance_v1_model_instances__instance_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModelInstanceResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_model_instance_v1_model_instances__instance_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        instance_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_webhook_v1_webhooks__webhook_id__options: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_webhook_v1_webhooks__webhook_id__options: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_webhook_v1_webhooks__webhook_id__options: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_webhook_v1_webhooks__webhook_id__options: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_webhook_v1_webhooks__webhook_id__options: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_webhook_v1_webhooks__webhook_id__options: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  handle_webhook_v1_webhooks__webhook_id__options: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  webhook_health_check_v1_webhooks_health_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+    };
+  };
+  debug_webhook_v1_webhooks_debug__webhook_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhook_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_triggers_v1_triggers__get: {
+    parameters: {
+      query: {
+        agent_id: string;
+        /** @description Filter by trigger type (cron, webhook) */
+        trigger_type?: string | null;
+        /** @description Only return active triggers */
+        active_only?: boolean;
+        /** @description Filter by creator: 'me' for current user's triggers only */
+        created_by?: string | null;
+        /** @description Maximum number of triggers to return */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriggerResponse"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_trigger_v1_triggers__post: {
+    parameters: {
+      query: {
+        agent_id: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TriggerCreateRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriggerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_trigger_v1_triggers__trigger_id__get: {
+    parameters: {
+      query: {
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriggerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_trigger_v1_triggers__trigger_id__put: {
+    parameters: {
+      query: {
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TriggerUpdateRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriggerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_trigger_v1_triggers__trigger_id__delete: {
+    parameters: {
+      query: {
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  enable_trigger_v1_triggers__trigger_id__enable_post: {
+    parameters: {
+      query: {
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  disable_trigger_v1_triggers__trigger_id__disable_post: {
+    parameters: {
+      query: {
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_execution_history_v1_triggers__trigger_id__executions_get: {
+    parameters: {
+      query: {
+        /** @description Page number */
+        page?: number;
+        /** @description Number of executions per page */
+        page_size?: number;
+        /** @description Filter by execution status (success, failed, timeout) */
+        status?: string | null;
+        /** @description Filter executions after this time */
+        start_time?: string | null;
+        /** @description Filter executions before this time */
+        end_time?: string | null;
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionHistoryResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_trigger_status_v1_triggers__trigger_id__status_get: {
+    parameters: {
+      query: {
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TriggerStatusResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_execution_metrics_v1_triggers__trigger_id__metrics_get: {
+    parameters: {
+      query: {
+        /** @description Time period in hours (max 7 days) */
+        hours?: number;
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionMetricsResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_execution_timeline_v1_triggers__trigger_id__timeline_get: {
+    parameters: {
+      query: {
+        /** @description Time period in hours (max 7 days) */
+        hours?: number;
+        /** @description Time bucket size in minutes */
+        bucket_size_minutes?: number;
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionTimelineResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_execution_correlations_v1_triggers__trigger_id__correlations_get: {
+    parameters: {
+      query: {
+        /** @description Page number */
+        page?: number;
+        /** @description Number of executions per page */
+        page_size?: number;
+        agent_id: string;
+      };
+      header?: never;
+      path: {
+        trigger_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionCorrelationResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  triggers_health_check_v1_triggers_health_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+    };
+  };
+  get_current_user_v1_auth_users_me_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  get_token_info_v1_auth_token_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  test_protected_endpoint_v1_protected_test_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  get_user_info_v1_protected_user_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  get_dev_token_dev_token_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
 }

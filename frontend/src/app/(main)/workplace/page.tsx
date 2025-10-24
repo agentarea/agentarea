@@ -1,23 +1,23 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import AuthGuard from "@/components/auth/AuthGuard";
-import { Card } from "@/components/ui/card";
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { 
-  Bot, 
-  MessageSquare, 
-  Send, 
-  Bell, 
-  CheckCircle2,
-  Clock,
+import React, { useEffect, useRef, useState } from "react";
+import {
   AlertCircle,
+  Bell,
+  Bot,
+  CheckCircle2,
   ChevronRight,
+  Clock,
+  MessageSquare,
+  Send,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import AuthGuard from "@/components/auth/AuthGuard";
+import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Message {
   id: string;
@@ -50,25 +50,27 @@ export default function WorkplacePage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
-      content: "Hello! I'm your AgentMesh assistant. What tasks can I help you with today?",
+      content:
+        "Hello! I'm your AgentMesh assistant. What tasks can I help you with today?",
       sender: "agent",
       timestamp: new Date(),
     },
   ]);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  
+
   // Sample data for tasks and notifications
   const [tasks] = useState<Task[]>([
     {
       id: "task-1",
       title: "Analyze Q1 Sales Data",
-      description: "Generate insights from Q1 sales data and create a summary report",
+      description:
+        "Generate insights from Q1 sales data and create a summary report",
       status: "in_progress",
       priority: "high",
       assignedAgent: "Data Analytics Agent",
       createdAt: "2 hours ago",
-      hasUpdates: true
+      hasUpdates: true,
     },
     {
       id: "task-2",
@@ -77,7 +79,7 @@ export default function WorkplacePage() {
       status: "needs_input",
       priority: "medium",
       assignedAgent: "Content Management Agent",
-      createdAt: "5 hours ago"
+      createdAt: "5 hours ago",
     },
     {
       id: "task-3",
@@ -86,20 +88,21 @@ export default function WorkplacePage() {
       status: "pending",
       priority: "medium",
       assignedAgent: "Monitoring Agent",
-      createdAt: "1 day ago"
+      createdAt: "1 day ago",
     },
     {
       id: "task-4",
       title: "Generate Weekly Analytics Report",
-      description: "Prepare the standard weekly analytics report for distribution",
+      description:
+        "Prepare the standard weekly analytics report for distribution",
       status: "completed",
       priority: "high",
       assignedAgent: "Reporting Agent",
       createdAt: "2 days ago",
-      hasUpdates: true
-    }
+      hasUpdates: true,
+    },
   ]);
-  
+
   const [notifications, setNotifications] = useState<Notification[]>([
     {
       id: "notif-1",
@@ -107,24 +110,26 @@ export default function WorkplacePage() {
       message: "The Content Management Agent needs your input on FAQ updates",
       type: "warning",
       time: "30 minutes ago",
-      isRead: false
+      isRead: false,
     },
     {
       id: "notif-2",
       title: "Analysis Complete",
-      message: "Weekly summary report has been generated and is ready for review",
+      message:
+        "Weekly summary report has been generated and is ready for review",
       type: "info",
       time: "2 hours ago",
-      isRead: false
+      isRead: false,
     },
     {
       id: "notif-3",
       title: "System Alert",
-      message: "Database connection issues detected. Some agents may experience delays",
+      message:
+        "Database connection issues detected. Some agents may experience delays",
       type: "error",
       time: "3 hours ago",
-      isRead: true
-    }
+      isRead: true,
+    },
   ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,7 +138,7 @@ export default function WorkplacePage() {
 
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
-    
+
     // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -141,10 +146,10 @@ export default function WorkplacePage() {
       sender: "user",
       timestamp: new Date(),
     };
-    
+
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
-    
+
     // Simulate agent response
     setTimeout(() => {
       const agentMessage: Message = {
@@ -158,53 +163,61 @@ export default function WorkplacePage() {
   };
 
   const markNotificationAsRead = (id: string) => {
-    setNotifications(notifications.map(notif => 
-      notif.id === id ? { ...notif, isRead: true } : notif
-    ));
+    setNotifications(
+      notifications.map((notif) =>
+        notif.id === id ? { ...notif, isRead: true } : notif
+      )
+    );
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-  
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
   // Get tasks that need input
-  const tasksNeedingInput = tasks.filter(task => task.status === "needs_input");
-  
+  const tasksNeedingInput = tasks.filter(
+    (task) => task.status === "needs_input"
+  );
+
   // Get tasks with updates
-  const tasksWithUpdates = tasks.filter(task => task.hasUpdates);
+  const tasksWithUpdates = tasks.filter((task) => task.hasUpdates);
 
   const getStatusTagClasses = (status: string) => {
-    switch(status) {
-      case 'in_progress': return 'bg-blue-100 text-blue-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+    switch (status) {
+      case "in_progress":
+        return "bg-blue-100 text-blue-800";
+      case "completed":
+        return "bg-green-100 text-green-800";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
   return (
     <AuthGuard>
       <ContentBlock
-      header={{
-        // title: "Workplace",
-        breadcrumb: [
-          {label: "Workplace", href: "/workplace"},
-        ],
-        description: "Your command center for managing agents and tasks"
-      }}
-    >
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        header={{
+          // title: "Workplace",
+          breadcrumb: [{ label: "Workplace", href: "/workplace" }],
+          description: "Your command center for managing agents and tasks",
+        }}
+      >
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Task creation and chat section */}
           <div className="lg:col-span-2">
-            <Card className="p-6 border border-gray-200 shadow-sm bg-white rounded-xl">
-              <div className="flex items-center justify-between mb-4">
+            <Card className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <MessageSquare className="h-5 w-5 text-indigo-500" />
                   <h2 className="text-lg font-semibold">New Task</h2>
                 </div>
-                <Badge variant="outline" className="flex gap-1 items-center border-gray-200">
+                <Badge
+                  variant="outline"
+                  className="flex items-center gap-1 border-gray-200"
+                >
                   <Bot className="h-3 w-3" />
                   <span>Agents Ready</span>
                 </Badge>
               </div>
-              
+
               <div className="mb-4">
                 <div className="relative">
                   <Input
@@ -212,25 +225,27 @@ export default function WorkplacePage() {
                     placeholder="Describe a task for agents to perform..."
                     value={inputValue}
                     onChange={handleInputChange}
-                    className="bg-white border-gray-200 pr-24 py-6 pl-4 rounded-lg"
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                    className="rounded-lg border-gray-200 bg-white py-6 pl-4 pr-24"
+                    onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
                   />
-                  <Button 
-                    onClick={handleSendMessage} 
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 px-4 bg-indigo-500 hover:bg-indigo-600"
+                  <Button
+                    onClick={handleSendMessage}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 transform bg-indigo-500 px-4 hover:bg-indigo-600"
                   >
-                    <Send className="h-4 w-4 mr-2" />
+                    <Send className="mr-2 h-4 w-4" />
                     <span>Send</span>
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="mt-2 text-xs text-gray-500">
                   Describe what you want agents to do, or ask a question.
                 </p>
               </div>
-              
+
               {/* Recent messages */}
               <div className="space-y-3">
-                <h3 className="text-sm font-medium text-gray-700">Recent Messages</h3>
+                <h3 className="text-sm font-medium text-gray-700">
+                  Recent Messages
+                </h3>
                 <ScrollArea className="h-32">
                   <div className="space-y-2">
                     {messages.slice(-3).map((message) => (
@@ -239,7 +254,7 @@ export default function WorkplacePage() {
                         className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                          className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
                             message.sender === "user"
                               ? "bg-indigo-500 text-white"
                               : "bg-gray-100 text-gray-800"
@@ -258,27 +273,31 @@ export default function WorkplacePage() {
           {/* Sidebar with tasks and notifications */}
           <div className="space-y-6">
             {/* Active Tasks */}
-            <Card className="p-4 border border-gray-200 shadow-sm bg-white rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-700">Active Tasks</h3>
-                <Badge variant="outline" className="text-xs border-gray-200">
+            <Card className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-700">
+                  Active Tasks
+                </h3>
+                <Badge variant="outline" className="border-gray-200 text-xs">
                   {tasks.length}
                 </Badge>
               </div>
               <div className="space-y-2">
                 {tasks.slice(0, 3).map((task) => (
-                  <div key={task.id} className="p-3 bg-gray-50 rounded-lg">
+                  <div key={task.id} className="rounded-lg bg-gray-50 p-3">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h4 className="text-sm font-medium text-gray-800 truncate">
+                        <h4 className="truncate text-sm font-medium text-gray-800">
                           {task.title}
                         </h4>
-                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                        <p className="mt-1 line-clamp-2 text-xs text-gray-600">
                           {task.description}
                         </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusTagClasses(task.status)}`}>
-                            {task.status.replace('_', ' ')}
+                        <div className="mt-2 flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusTagClasses(task.status)}`}
+                          >
+                            {task.status.replace("_", " ")}
                           </span>
                           <span className="text-xs text-gray-500">
                             {task.assignedAgent}
@@ -287,27 +306,33 @@ export default function WorkplacePage() {
                       </div>
                       {task.hasUpdates && (
                         <div className="ml-2">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <div className="h-2 w-2 rounded-full bg-blue-500"></div>
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
                 {tasks.length > 3 && (
-                  <Button variant="ghost" size="sm" className="w-full text-xs text-gray-600 hover:text-gray-800">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs text-gray-600 hover:text-gray-800"
+                  >
                     View all {tasks.length} tasks
-                    <ChevronRight className="h-3 w-3 ml-1" />
+                    <ChevronRight className="ml-1 h-3 w-3" />
                   </Button>
                 )}
               </div>
             </Card>
 
             {/* Notifications */}
-            <Card className="p-4 border border-gray-200 shadow-sm bg-white rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-700">Notifications</h3>
+            <Card className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-700">
+                  Notifications
+                </h3>
                 {unreadCount > 0 && (
-                  <Badge variant="outline" className="text-xs border-gray-200">
+                  <Badge variant="outline" className="border-gray-200 text-xs">
                     {unreadCount} new
                   </Badge>
                 )}
@@ -316,31 +341,44 @@ export default function WorkplacePage() {
                 {notifications.slice(0, 3).map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                    className={`cursor-pointer rounded-lg p-3 transition-colors ${
                       notification.isRead ? "bg-gray-50" : "bg-blue-50"
                     }`}
                     onClick={() => markNotificationAsRead(notification.id)}
                   >
                     <div className="flex items-start gap-2">
-                      <div className={`mt-1 ${
-                        notification.type === "error" ? "text-red-500" :
-                        notification.type === "warning" ? "text-yellow-500" :
-                        notification.type === "success" ? "text-green-500" :
-                        "text-blue-500"
-                      }`}>
-                        {notification.type === "error" && <AlertCircle className="h-4 w-4" />}
-                        {notification.type === "warning" && <AlertCircle className="h-4 w-4" />}
-                        {notification.type === "success" && <CheckCircle2 className="h-4 w-4" />}
-                        {notification.type === "info" && <Bell className="h-4 w-4" />}
+                      <div
+                        className={`mt-1 ${
+                          notification.type === "error"
+                            ? "text-red-500"
+                            : notification.type === "warning"
+                              ? "text-yellow-500"
+                              : notification.type === "success"
+                                ? "text-green-500"
+                                : "text-blue-500"
+                        }`}
+                      >
+                        {notification.type === "error" && (
+                          <AlertCircle className="h-4 w-4" />
+                        )}
+                        {notification.type === "warning" && (
+                          <AlertCircle className="h-4 w-4" />
+                        )}
+                        {notification.type === "success" && (
+                          <CheckCircle2 className="h-4 w-4" />
+                        )}
+                        {notification.type === "info" && (
+                          <Bell className="h-4 w-4" />
+                        )}
                       </div>
                       <div className="flex-1">
                         <h4 className="text-sm font-medium text-gray-800">
                           {notification.title}
                         </h4>
-                        <p className="text-xs text-gray-600 mt-1">
+                        <p className="mt-1 text-xs text-gray-600">
                           {notification.message}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="mt-1 text-xs text-gray-500">
                           {notification.time}
                         </p>
                       </div>
@@ -348,35 +386,53 @@ export default function WorkplacePage() {
                   </div>
                 ))}
                 {notifications.length > 3 && (
-                  <Button variant="ghost" size="sm" className="w-full text-xs text-gray-600 hover:text-gray-800">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs text-gray-600 hover:text-gray-800"
+                  >
                     View all {notifications.length} notifications
-                    <ChevronRight className="h-3 w-3 ml-1" />
+                    <ChevronRight className="ml-1 h-3 w-3" />
                   </Button>
                 )}
               </div>
             </Card>
 
             {/* Quick Actions */}
-            <Card className="p-4 border border-gray-200 shadow-sm bg-white rounded-xl">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
+            <Card className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-medium text-gray-700">
+                Quick Actions
+              </h3>
               <div className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
-                  <Bot className="h-3 w-3 mr-2" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                >
+                  <Bot className="mr-2 h-3 w-3" />
                   Create New Agent
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
-                  <MessageSquare className="h-3 w-3 mr-2" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                >
+                  <MessageSquare className="mr-2 h-3 w-3" />
                   Start Chat Session
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
-                  <Clock className="h-3 w-3 mr-2" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                >
+                  <Clock className="mr-2 h-3 w-3" />
                   Schedule Task
                 </Button>
               </div>
             </Card>
           </div>
         </div>
-    </ContentBlock>
+      </ContentBlock>
     </AuthGuard>
   );
-} 
+}

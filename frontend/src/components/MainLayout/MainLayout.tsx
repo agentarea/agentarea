@@ -1,15 +1,15 @@
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   Bot,
-  Home,
-  Plug,
   ClipboardList,
-  Key,
   GalleryVerticalEnd,
+  Home,
+  Key,
+  LucideProps,
+  Plug,
   SquareTerminal,
 } from "lucide-react";
-import { LucideProps } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AppSidebar } from "./components/AppSidebar";
 
 export type NavSection = {
@@ -46,46 +46,49 @@ const navData = {
       logo: GalleryVerticalEnd,
       plan: "Base workspace",
       logoFile: "/starlogo.svg",
-    }
+    },
   ],
   navMain: [
     {
-        title: "Workplace",
-        titleKey: "workplace",
-        url: "/workplace",
-        icon: Home,
-    }, {
-        title: "Browse",
-        titleKey: "browse",
-        url: "/agents",
-        icon: Bot,
-    }, {
-        title: "Tasks",
-        titleKey: "tasks",
-        url: "/tasks",
-        icon: ClipboardList,
-    }, {
-        title: "Connections",
-        titleKey: "connections",
-        url: "/mcp-servers",
-        icon: Plug,
-    }, {
+      title: "Workplace",
+      titleKey: "workplace",
+      url: "/workplace",
+      icon: Home,
+    },
+    {
+      title: "Browse",
+      titleKey: "browse",
+      url: "/agents",
+      icon: Bot,
+    },
+    {
+      title: "Tasks",
+      titleKey: "tasks",
+      url: "/tasks",
+      icon: ClipboardList,
+    },
+    {
+      title: "Connections",
+      titleKey: "connections",
+      url: "/mcp-servers",
+      icon: Plug,
+    },
+    {
       title: "Admin",
       titleKey: "admin",
       url: "#",
       icon: SquareTerminal,
       items: [
         {
-            title: "Models",
-            titleKey: "providerConfigs",
-            url: "/admin/provider-configs",
-            icon: Key,
-          },
+          title: "Models",
+          titleKey: "providerConfigs",
+          url: "/admin/provider-configs",
+          icon: Key,
+        },
       ],
     },
   ],
-}
-
+};
 
 export default function MainLayout({
   children,
@@ -97,11 +100,11 @@ export default function MainLayout({
   return (
     <>
       <SidebarProvider defaultOpen={sidebarDefaultOpen}>
-        <div className="flex md:flex-row flex-col h-screen w-screen overflow-hidden bg-white dark:bg-zinc-800">
+        <div className="flex h-screen w-screen flex-col overflow-hidden bg-white dark:bg-zinc-800 md:flex-row">
           <AppSidebar data={navData} />
-          <main className="flex-1 overflow-hidden max-h-screen bg-[url('/dots3.png')] bg-contain bg-repeat bg-size-100 dark:bg-zinc-900 dark:bg-none h-full overflow-y-auto ">
-          {/* <main className="flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto "> */}
-              {children}
+          <main className="bg-size-100 h-full max-h-screen flex-1 overflow-hidden overflow-y-auto bg-[url('/dots3.png')] bg-contain bg-repeat dark:bg-zinc-900 dark:bg-none">
+            {/* <main className="flex-1 overflow-hidden  max-h-screen bg-[#fafbfc] dark:bg-zinc-900 h-full overflow-y-auto "> */}
+            {children}
           </main>
         </div>
       </SidebarProvider>

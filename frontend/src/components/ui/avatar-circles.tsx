@@ -4,33 +4,35 @@ import { cn } from "@/lib/utils";
 
 interface Avatar {
   imageUrl: string;
-//   profileUrl: string;
+  //   profileUrl: string;
 }
 interface AvatarCirclesProps {
   className?: string;
-//   numPeople?: number;
+  //   numPeople?: number;
   maxDisplay: number;
   avatarUrls: Avatar[];
 }
 
 export const AvatarCircles = ({
-//   numPeople,
+  //   numPeople,
   className,
   maxDisplay,
   avatarUrls,
 }: AvatarCirclesProps) => {
   return (
-    <div className={cn("z-10 flex -space-x-1.5 rtl:space-x-reverse", className)}>
+    <div
+      className={cn("z-10 flex -space-x-1.5 rtl:space-x-reverse", className)}
+    >
       {avatarUrls.slice(0, maxDisplay).map((url, index) => (
         <div
           key={index}
-        //   href={url.profileUrl}
-        //   target="_blank"
+          //   href={url.profileUrl}
+          //   target="_blank"
           rel="noopener noreferrer"
         >
           <img
             key={index}
-            className="h-6 w-6 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white"
+            className="h-6 w-6 rounded-full border border-zinc-200 bg-white dark:border-zinc-800"
             src={url.imageUrl}
             width={40}
             height={40}
@@ -39,9 +41,7 @@ export const AvatarCircles = ({
         </div>
       ))}
       {maxDisplay < avatarUrls.length && (
-        <div
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 text-zinc-400 bg-white font-light text-center text-xs dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-        >
+        <div className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white text-center text-xs font-light text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
           +{avatarUrls.length - maxDisplay}
         </div>
       )}

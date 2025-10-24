@@ -13,8 +13,8 @@ export async function getCurrentUser() {
     // Get all cookies to forward to Kratos
     const allCookies = cookieStore.getAll();
     const cookieHeader = allCookies
-      .map(cookie => `${cookie.name}=${cookie.value}`)
-      .join('; ');
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
 
     if (!cookieHeader) {
       return null;
@@ -22,11 +22,11 @@ export async function getCurrentUser() {
 
     // Call Kratos directly with fetch
     const response = await fetch(`${env.ORY_SDK_URL}/sessions/whoami`, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Accept': 'application/json',
-        'Cookie': cookieHeader
-      }
+        Accept: "application/json",
+        Cookie: cookieHeader,
+      },
     });
 
     if (response.ok) {
@@ -36,7 +36,7 @@ export async function getCurrentUser() {
           id: data.identity.id,
           email: data.identity.traits?.email,
           name: data.identity.traits?.name?.first
-            ? `${data.identity.traits.name.first} ${data.identity.traits.name.last || ''}`.trim()
+            ? `${data.identity.traits.name.first} ${data.identity.traits.name.last || ""}`.trim()
             : data.identity.traits?.username || data.identity.traits?.email,
         };
       }

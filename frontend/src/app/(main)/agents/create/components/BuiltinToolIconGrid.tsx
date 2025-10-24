@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Calculator, Files, Globe, Settings, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Calculator,
+  ChevronDown,
+  ChevronUp,
+  Files,
+  Globe,
+  Settings,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,29 +34,32 @@ type BuiltinToolIconGridProps = {
   selectedTools: ToolConfig[];
   onAddTool: (toolName: string) => void;
   onRemoveTool: (toolName: string) => void;
-  onUpdateToolConfig: (toolName: string, disabledMethods: { [methodName: string]: boolean }) => void;
+  onUpdateToolConfig: (
+    toolName: string,
+    disabledMethods: { [methodName: string]: boolean }
+  ) => void;
   loading?: boolean;
 };
 
 // Icon mapping for different tools
 const getToolIcon = (toolName: string, category?: string) => {
   switch (toolName) {
-    case 'calculator':
+    case "calculator":
       return Calculator;
-    case 'math_toolset':
+    case "math_toolset":
       return Calculator;
-    case 'file_toolset':
+    case "file_toolset":
       return Files;
-    case 'web_toolset':
+    case "web_toolset":
       return Globe;
     default:
       // Default icon based on category
       switch (category) {
-        case 'math':
+        case "math":
           return Calculator;
-        case 'utility':
+        case "utility":
           return Settings;
-        case 'information':
+        case "information":
           return Globe;
         default:
           return Settings;
@@ -63,23 +73,23 @@ export const BuiltinToolIconGrid = ({
   onAddTool,
   onRemoveTool,
   onUpdateToolConfig,
-  loading = false
+  loading = false,
 }: BuiltinToolIconGridProps) => {
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 
   const isToolSelected = (toolName: string) => {
-    return selectedTools.some(config => config.tool_name === toolName);
+    return selectedTools.some((config) => config.tool_name === toolName);
   };
 
   const getToolConfig = (toolName: string) => {
-    return selectedTools.find(config => config.tool_name === toolName);
+    return selectedTools.find((config) => config.tool_name === toolName);
   };
 
   const handleToolToggle = (toolName: string) => {
     if (isToolSelected(toolName)) {
       onRemoveTool(toolName);
       // Collapse when removing
-      setExpandedTools(prev => {
+      setExpandedTools((prev) => {
         const newSet = new Set(prev);
         newSet.delete(toolName);
         return newSet;
@@ -90,7 +100,7 @@ export const BuiltinToolIconGrid = ({
   };
 
   const toggleExpanded = (toolName: string) => {
-    setExpandedTools(prev => {
+    setExpandedTools((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(toolName)) {
         newSet.delete(toolName);
@@ -101,10 +111,14 @@ export const BuiltinToolIconGrid = ({
     });
   };
 
-  const handleMethodToggle = (toolName: string, methodName: string, enabled: boolean) => {
+  const handleMethodToggle = (
+    toolName: string,
+    methodName: string,
+    enabled: boolean
+  ) => {
     const toolConfig = getToolConfig(toolName);
     const currentDisabled = toolConfig?.disabled_methods || {};
-    
+
     const newDisabledMethods = { ...currentDisabled };
     if (enabled) {
       // Remove from disabled list (method is now enabled)
@@ -138,20 +152,25 @@ export const BuiltinToolIconGrid = ({
     <div className="space-y-4">
       <div>
         <h4 className="text-sm font-medium text-foreground">Built-in Tools</h4>
-        <p className="text-xs text-muted-foreground">Tap to enable tools for your agent</p>
+        <p className="text-xs text-muted-foreground">
+          Tap to enable tools for your agent
+        </p>
       </div>
-      
+
       <div className="space-y-3">
         {builtinTools.map((tool) => {
           const isSelected = isToolSelected(tool.name);
           const isExpanded = expandedTools.has(tool.name);
           const IconComponent = getToolIcon(tool.name, tool.category);
-          const hasMethodSelection = tool.available_methods && tool.available_methods.length > 0;
+          const hasMethodSelection =
+            tool.available_methods && tool.available_methods.length > 0;
           const toolConfig = getToolConfig(tool.name);
-          const enabledMethodsCount = hasMethodSelection 
-            ? tool.available_methods!.filter(method => isMethodEnabled(tool.name, method.name)).length
+          const enabledMethodsCount = hasMethodSelection
+            ? tool.available_methods!.filter((method) =>
+                isMethodEnabled(tool.name, method.name)
+              ).length
             : 0;
-          
+
           return (
             <div key={tool.name} className="space-y-2">
               {/* Main tool card */}
@@ -159,46 +178,51 @@ export const BuiltinToolIconGrid = ({
                 className={cn(
                   "relative transition-all duration-200 ease-out",
                   "border-0 shadow-sm hover:shadow-md",
-                  isSelected 
-                    ? "bg-primary/8 ring-1 ring-primary/20" 
+                  isSelected
+                    ? "bg-primary/8 ring-1 ring-primary/20"
                     : "bg-background hover:bg-muted/30"
                 )}
               >
-                <div 
-                  className="flex items-center p-3 cursor-pointer"
+                <div
+                  className="flex cursor-pointer items-center p-3"
                   onClick={() => handleToolToggle(tool.name)}
                 >
                   {/* Icon */}
-                  <div className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-lg transition-colors",
-                    isSelected ? "bg-primary/15" : "bg-muted/50"
-                  )}>
-                    <IconComponent 
+                  <div
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                      isSelected ? "bg-primary/15" : "bg-muted/50"
+                    )}
+                  >
+                    <IconComponent
                       className={cn(
-                        "w-4 h-4 transition-colors",
+                        "h-4 w-4 transition-colors",
                         isSelected ? "text-primary" : "text-muted-foreground"
-                      )} 
+                      )}
                     />
                   </div>
-                  
+
                   {/* Tool info */}
-                  <div className="flex-1 ml-3 min-w-0">
+                  <div className="ml-3 min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <p className={cn(
-                        "text-sm font-medium truncate",
-                        isSelected ? "text-primary" : "text-foreground"
-                      )}>
+                      <p
+                        className={cn(
+                          "truncate text-sm font-medium",
+                          isSelected ? "text-primary" : "text-foreground"
+                        )}
+                      >
                         {tool.display_name}
                       </p>
-                      
+
                       {/* Method count or expand button */}
-                      <div className="flex items-center space-x-2 ml-2">
+                      <div className="ml-2 flex items-center space-x-2">
                         {isSelected && hasMethodSelection && (
-                          <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                            {enabledMethodsCount}/{tool.available_methods!.length}
+                          <span className="rounded-full bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
+                            {enabledMethodsCount}/
+                            {tool.available_methods!.length}
                           </span>
                         )}
-                        
+
                         {isSelected && hasMethodSelection && (
                           <Button
                             type="button"
@@ -219,47 +243,59 @@ export const BuiltinToolIconGrid = ({
                         )}
                       </div>
                     </div>
-                    
+
                     {!isExpanded && (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {tool.description}
                       </p>
                     )}
                   </div>
-                  
+
                   {/* Selection indicator */}
                   {isSelected && (
-                    <div className="ml-2 w-2 h-2 bg-primary rounded-full" />
+                    <div className="ml-2 h-2 w-2 rounded-full bg-primary" />
                   )}
                 </div>
-                
+
                 {/* Method selection (expanded) */}
                 {isSelected && isExpanded && hasMethodSelection && (
-                  <div className="border-t border-border/50 p-3 pt-2 space-y-2">
-                    <p className="text-xs text-muted-foreground mb-2">{tool.description}</p>
-                    
+                  <div className="space-y-2 border-t border-border/50 p-3 pt-2">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      {tool.description}
+                    </p>
+
                     <div className="space-y-1.5">
                       {tool.available_methods!.map((method) => {
-                        const isEnabled = isMethodEnabled(tool.name, method.name);
-                        
+                        const isEnabled = isMethodEnabled(
+                          tool.name,
+                          method.name
+                        );
+
                         return (
-                          <div key={method.name} className="flex items-start space-x-2">
+                          <div
+                            key={method.name}
+                            className="flex items-start space-x-2"
+                          >
                             <Checkbox
                               id={`${tool.name}-${method.name}`}
                               checked={isEnabled}
-                              onCheckedChange={(checked) => 
-                                handleMethodToggle(tool.name, method.name, checked as boolean)
+                              onCheckedChange={(checked) =>
+                                handleMethodToggle(
+                                  tool.name,
+                                  method.name,
+                                  checked as boolean
+                                )
                               }
                               className="mt-0.5"
                             />
-                            <div className="flex-1 min-w-0">
-                              <label 
+                            <div className="min-w-0 flex-1">
+                              <label
                                 htmlFor={`${tool.name}-${method.name}`}
-                                className="text-xs font-medium text-foreground cursor-pointer"
+                                className="cursor-pointer text-xs font-medium text-foreground"
                               >
                                 {method.display_name}
                               </label>
-                              <p className="text-xs text-muted-foreground truncate">
+                              <p className="truncate text-xs text-muted-foreground">
                                 {method.description}
                               </p>
                             </div>
@@ -277,9 +313,10 @@ export const BuiltinToolIconGrid = ({
 
       {/* Selected tools summary */}
       {selectedTools.length > 0 && (
-        <div className="pt-2 border-t border-border/30">
+        <div className="border-t border-border/30 pt-2">
           <p className="text-xs text-muted-foreground">
-            <span className="font-medium">{selectedTools.length}</span> tool{selectedTools.length !== 1 ? 's' : ''} enabled
+            <span className="font-medium">{selectedTools.length}</span> tool
+            {selectedTools.length !== 1 ? "s" : ""} enabled
           </p>
         </div>
       )}

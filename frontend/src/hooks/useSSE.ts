@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
 interface SSEEvent {
   type: string;
@@ -26,7 +26,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
     onOpen,
     onClose,
     reconnect = true,
-    reconnectInterval = 3000
+    reconnectInterval = 3000,
   } = options;
 
   const connect = () => {
@@ -45,23 +45,36 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          onMessage?.({ type: event.type || 'message', data });
+          onMessage?.({ type: event.type || "message", data });
         } catch (e) {
-          console.error('Failed to parse SSE message:', e);
+          console.error("Failed to parse SSE message:", e);
         }
       };
 
       // Handle custom event types - updated to match our workflow events
       const eventTypes = [
-        'task_completed', 'task_failed', 'workflow_completed', 'workflow_failed',
-        'workflow_started', 'iteration_started', 'iteration_completed',
-        'llm_call_started', 'llm_call_completed', 'llm_call_failed',
-        'tool_call_started', 'tool_call_completed', 'tool_call_failed',
-        'budget_warning', 'budget_exceeded', 'human_approval_requested',
-        'human_approval_received', 'connected', 'error'
+        "task_completed",
+        "task_failed",
+        "workflow_completed",
+        "workflow_failed",
+        "workflow_started",
+        "iteration_started",
+        "iteration_completed",
+        "llm_call_started",
+        "llm_call_completed",
+        "llm_call_failed",
+        "tool_call_started",
+        "tool_call_completed",
+        "tool_call_failed",
+        "budget_warning",
+        "budget_exceeded",
+        "human_approval_requested",
+        "human_approval_received",
+        "connected",
+        "error",
       ];
 
-      eventTypes.forEach(eventType => {
+      eventTypes.forEach((eventType) => {
         eventSource.addEventListener(eventType, (event) => {
           try {
             const data = JSON.parse((event as MessageEvent).data);
@@ -69,14 +82,17 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
           } catch (e) {
             console.error(`Failed to parse ${eventType} event:`, e);
             // Try to send raw data if JSON parsing fails
-            onMessage?.({ type: eventType, data: (event as MessageEvent).data });
+            onMessage?.({
+              type: eventType,
+              data: (event as MessageEvent).data,
+            });
           }
         });
       });
 
       eventSource.onerror = (event) => {
         setIsConnected(false);
-        setError('Connection error');
+        setError("Connection error");
         onError?.(event);
 
         // Auto-reconnect if enabled
@@ -87,10 +103,9 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
           }, reconnectInterval);
         }
       };
-
     } catch (e) {
       setError(`Failed to connect: ${e}`);
-      console.error('SSE connection error:', e);
+      console.error("SSE connection error:", e);
     }
   };
 
@@ -123,6 +138,6 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
     isConnected,
     error,
     connect,
-    disconnect
+    disconnect,
   };
 }

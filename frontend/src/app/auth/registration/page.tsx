@@ -3,7 +3,6 @@
 import { Registration } from "@ory/elements-react/theme";
 import { getRegistrationFlow, OryPageParams } from "@ory/nextjs/app";
 import "@ory/elements-react/theme/styles.css";
-
 import config from "@/ory.config";
 
 export default async function RegistrationPage(props: OryPageParams) {
@@ -14,7 +13,7 @@ export default async function RegistrationPage(props: OryPageParams) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center">
       <Registration flow={flow} config={config} />
     </div>
   );

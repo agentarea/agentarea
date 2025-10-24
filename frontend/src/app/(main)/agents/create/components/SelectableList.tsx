@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { Accordion } from "@/components/ui/accordion";
-import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
-import { Badge } from "@/components/ui/badge";
-import { Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Plus, X } from "lucide-react";
+import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
+import { Accordion } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 
 interface SelectableListProps<T extends { id: string }> {
   items: T[];
@@ -71,21 +71,39 @@ export function SelectableList<T extends { id: string }>({
               <Badge
                 variant="destructive"
                 onClick={() => onRemove(item)}
-                className={disableExpand ? "cursor-pointer border group-hover:border-destructive group-hover:bg-destructive group-hover:text-white" : "cursor-pointer border hover:border-destructive"}
+                className={
+                  disableExpand
+                    ? "cursor-pointer border group-hover:border-destructive group-hover:bg-destructive group-hover:text-white"
+                    : "cursor-pointer border hover:border-destructive"
+                }
               >
-                {activeLabel || <><X className="h-4 w-4" /> {t("create.remove")}</>}
+                {activeLabel || (
+                  <>
+                    <X className="h-4 w-4" /> {t("create.remove")}
+                  </>
+                )}
               </Badge>
             ) : (
               <Badge
                 variant="light"
                 onClick={() => onAdd(item)}
-                className={disableExpand ? "cursor-pointer border group-hover:border-primary group-hover:text-primary dark:group-hover:bg-primary dark:group-hover:text-white" : "cursor-pointer border hover:border-primary hover:text-primary dark:hover:bg-primary dark:hover:text-white"}
+                className={
+                  disableExpand
+                    ? "cursor-pointer border group-hover:border-primary group-hover:text-primary dark:group-hover:bg-primary dark:group-hover:text-white"
+                    : "cursor-pointer border hover:border-primary hover:text-primary dark:hover:bg-primary dark:hover:text-white"
+                }
               >
-                {inactiveLabel || <><Plus className="h-4 w-4" /> {t("create.add")}</>}
+                {inactiveLabel || (
+                  <>
+                    <Plus className="h-4 w-4" /> {t("create.add")}
+                  </>
+                )}
               </Badge>
             )
           }
-          onHeaderClick={disableExpand ? () => handleHeaderClick(item) : undefined}
+          onHeaderClick={
+            disableExpand ? () => handleHeaderClick(item) : undefined
+          }
           headerClassName={disableExpand ? "cursor-pointer" : undefined}
           hideChevron={disableExpand}
         >
@@ -94,4 +112,4 @@ export function SelectableList<T extends { id: string }>({
       ))}
     </Accordion>
   );
-} 
+}

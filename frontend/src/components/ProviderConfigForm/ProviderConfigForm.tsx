@@ -1,37 +1,37 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  createProviderConfig,
-  createModelInstance,
-  updateProviderConfig,
-  listProviderSpecs,
-  listProviderSpecsWithModels,
-  deleteModelInstance,
-} from "@/lib/browser-api";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, Bot, Server } from "lucide-react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import BaseInfo from "./components/BaseInfo";
-import ModelInstances from "./components/ModelInstances";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import {
+  createModelInstance,
+  createProviderConfig,
+  deleteModelInstance,
+  listProviderSpecs,
+  listProviderSpecsWithModels,
+  updateProviderConfig,
+} from "@/lib/browser-api";
 import { getProviderIconUrl } from "@/lib/provider-icons";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { useTranslations } from "next-intl";
 import {
-  ProviderSpec,
   ModelSpec,
-  SelectedModel,
   ProviderConfigFormProps,
+  ProviderSpec,
+  SelectedModel,
 } from "@/types/provider";
+import BaseInfo from "./components/BaseInfo";
+import ModelInstances from "./components/ModelInstances";
 
 // Form validation schema
 const providerConfigSchema = z.object({
@@ -544,9 +544,9 @@ export default function ProviderConfigForm({
                   placeholder={t("selectProvider")}
                   disabled={!!preselectedProviderId && !isEdit && !initialData}
                   emptyMessage={
-                    <div className="flex flex-col items-center justify-center h-full gap-1">
-                      <div className="flex items-center justify-center w-7 h-7 bg-primary/20 rounded-md dark:bg-primary-foreground/20">
-                        <Bot className="w-5 h-5 text-primary dark:text-primary-foreground" />
+                    <div className="flex h-full flex-col items-center justify-center gap-1">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/20 dark:bg-primary-foreground/20">
+                        <Bot className="h-5 w-5 text-primary dark:text-primary-foreground" />
                       </div>
                       <span className="text-muted-foreground">
                         {t("noProvidersFound")}

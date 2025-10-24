@@ -1,8 +1,8 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAgent, listModelInstances } from "@/lib/api";
 import AgentNewTask from "./components/AgentNewTask";
-import { Suspense } from "react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -31,15 +31,13 @@ export default async function AgentNewTaskPage({ params }: Props) {
 
   return (
     <Suspense
-      fallback={(
-        <div className="flex items-center justify-center h-32">
+      fallback={
+        <div className="flex h-32 items-center justify-center">
           <LoadingSpinner />
         </div>
-      )}
+      }
     >
       <AgentNewTask agent={{ ...agent, model_info } as any} />
     </Suspense>
   );
 }
-
-

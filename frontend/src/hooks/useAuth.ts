@@ -23,7 +23,7 @@ export function useAuth(): AuthState {
     ? {
         id: session.identity.id,
         name: session.identity.traits?.name?.first
-          ? `${session.identity.traits.name.first} ${session.identity.traits.name.last || ''}`.trim()
+          ? `${session.identity.traits.name.first} ${session.identity.traits.name.last || ""}`.trim()
           : session.identity.traits?.username || session.identity.traits?.email,
         email: session.identity.traits?.email,
       }

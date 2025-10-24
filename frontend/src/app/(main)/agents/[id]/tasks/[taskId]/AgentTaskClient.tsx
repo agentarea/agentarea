@@ -1,26 +1,26 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { 
-  Bot, 
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Bot,
   CheckCircle,
+  Clock,
   Pause,
   Play,
   Square,
-  ArrowLeft,
-  Clock
 } from "lucide-react";
-import Link from "next/link";
+import AgentChat from "@/components/Chat/AgentChat";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
+  cancelTask,
+  getTaskMessages,
   getTaskStatus,
   pauseTask,
   resumeTask,
-  cancelTask,
-  getTaskMessages
 } from "./actions";
-import AgentChat from "@/components/Chat/AgentChat";
 
 interface Agent {
   id: string;
@@ -115,29 +115,38 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const getStatusBadge = () => {
     const status = task?.status || taskStatus?.status;
     const statusColors = {
-      "completed": "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800",
-      "running": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
-      "failed": "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800",
-      "paused": "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-300 dark:border-yellow-800"
+      completed:
+        "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800",
+      running:
+        "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
+      failed:
+        "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800",
+      paused:
+        "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-300 dark:border-yellow-800",
     };
 
     return (
-      <Badge 
-        variant="outline" 
-        className={statusColors[status as keyof typeof statusColors] || "bg-gray-50 text-gray-700 border-gray-200"}
+      <Badge
+        variant="outline"
+        className={
+          statusColors[status as keyof typeof statusColors] ||
+          "border-gray-200 bg-gray-50 text-gray-700"
+        }
       >
         {status}
       </Badge>
     );
   };
 
-  const isActiveTask = ["running", "paused"].includes(task?.status || taskStatus?.status || "");
+  const isActiveTask = ["running", "paused"].includes(
+    task?.status || taskStatus?.status || ""
+  );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
           <span className="text-sm text-gray-500">Loading task...</span>
         </div>
       </div>
@@ -147,10 +156,10 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   return (
     <div className="space-y-6">
       {/* Task Header */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        <div className="flex items-start justify-between mb-4">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
+        <div className="mb-4 flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gray-800 to-gray-900 shadow-sm">
               <Bot className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -172,7 +181,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                     variant="outline"
                     onClick={() => handleTaskAction("pause")}
                   >
-                    <Pause className="h-4 w-4 mr-2" />
+                    <Pause className="mr-2 h-4 w-4" />
                     Pause
                   </Button>
                 )}
@@ -182,7 +191,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                     variant="outline"
                     onClick={() => handleTaskAction("resume")}
                   >
-                    <Play className="h-4 w-4 mr-2" />
+                    <Play className="mr-2 h-4 w-4" />
                     Resume
                   </Button>
                 )}
@@ -191,7 +200,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                   variant="destructive"
                   onClick={() => handleTaskAction("cancel")}
                 >
-                  <Square className="h-4 w-4 mr-2" />
+                  <Square className="mr-2 h-4 w-4" />
                   Cancel
                 </Button>
               </div>
@@ -203,22 +212,32 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
         {task && (
           <div className="space-y-2">
             <div>
-              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Description:</span>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{task.description}</p>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Description:
+              </span>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                {task.description}
+              </p>
             </div>
             <div className="flex gap-4 text-xs text-gray-500 dark:text-gray-400">
               <div className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                <span>Created {new Date(task.created_at).toLocaleString()}</span>
+                <span>
+                  Created {new Date(task.created_at).toLocaleString()}
+                </span>
               </div>
               {taskStatus?.start_time && (
                 <div className="flex items-center gap-1">
-                  <span>Started {new Date(taskStatus.start_time).toLocaleString()}</span>
+                  <span>
+                    Started {new Date(taskStatus.start_time).toLocaleString()}
+                  </span>
                 </div>
               )}
               {taskStatus?.end_time && (
                 <div className="flex items-center gap-1">
-                  <span>Ended {new Date(taskStatus.end_time).toLocaleString()}</span>
+                  <span>
+                    Ended {new Date(taskStatus.end_time).toLocaleString()}
+                  </span>
                 </div>
               )}
             </div>
@@ -227,14 +246,16 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
 
         {/* Error Display */}
         {taskStatus?.error && (
-          <div className="mt-4 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-700 dark:text-red-300">{taskStatus.error}</p>
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm text-red-700 dark:text-red-300">
+              {taskStatus.error}
+            </p>
           </div>
         )}
       </div>
 
       {/* Chat Interface */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
         <AgentChat
           agent={agent}
           taskId={taskId}

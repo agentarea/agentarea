@@ -10,7 +10,7 @@ type StatusBadgeProps = {
 // Функция для определения цвета badge на основе статуса
 const getStatusBadgeVariant = (status: string, variant: string = "default") => {
   const statusLower = status.toLowerCase();
-  
+
   // Логика для агентов
   if (variant === "agent") {
     switch (statusLower) {
@@ -34,7 +34,7 @@ const getStatusBadgeVariant = (status: string, variant: string = "default") => {
         return "secondary";
     }
   }
-  
+
   // Логика для задач
   if (variant === "task") {
     switch (statusLower) {
@@ -60,7 +60,7 @@ const getStatusBadgeVariant = (status: string, variant: string = "default") => {
         return "secondary";
     }
   }
-  
+
   // Общая логика по умолчанию
   switch (statusLower) {
     case "success":
@@ -93,13 +93,17 @@ const getStatusBadgeVariant = (status: string, variant: string = "default") => {
   }
 };
 
-export function StatusBadge({ status, className, variant = "default" }: StatusBadgeProps) {
+export function StatusBadge({
+  status,
+  className,
+  variant = "default",
+}: StatusBadgeProps) {
   return (
-    <Badge 
-      variant={getStatusBadgeVariant(status, variant)} 
+    <Badge
+      variant={getStatusBadgeVariant(status, variant)}
       className={cn("text-xs", className)}
     >
       {status}
     </Badge>
   );
-} 
+}

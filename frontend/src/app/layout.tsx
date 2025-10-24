@@ -1,14 +1,13 @@
 import "./globals.css";
-
-import { ThemeProvider } from "@/components/providers/theme-provider";
-import ConditionalLayout from "@/components/ConditionalLayout";
-import { Toaster } from "@/components/ui/sonner";
-import { Open_Sans, Montserrat } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
+import { Montserrat, Open_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { SessionProvider } from "@ory/elements-react/client";
 import { getServerSession } from "@ory/nextjs/app";
+import ConditionalLayout from "@/components/ConditionalLayout";
+import { ThemeProvider } from "@/components/providers/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 const openSans = Open_Sans({
   subsets: ["latin"],
@@ -28,7 +27,8 @@ export default async function RootLayout({
   const locale = await getLocale();
   const cookieStore = await cookies();
   const sidebarCookie = cookieStore.get("sidebar_state")?.value;
-  const sidebarDefaultOpen = sidebarCookie !== undefined ? sidebarCookie === "true" : true;
+  const sidebarDefaultOpen =
+    sidebarCookie !== undefined ? sidebarCookie === "true" : true;
   const session = await getServerSession();
 
   return (
@@ -37,7 +37,9 @@ export default async function RootLayout({
         <SessionProvider session={session}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <NextIntlClientProvider>
-              <ConditionalLayout sidebarDefaultOpen={sidebarDefaultOpen}>{children}</ConditionalLayout>
+              <ConditionalLayout sidebarDefaultOpen={sidebarDefaultOpen}>
+                {children}
+              </ConditionalLayout>
             </NextIntlClientProvider>
           </ThemeProvider>
         </SessionProvider>

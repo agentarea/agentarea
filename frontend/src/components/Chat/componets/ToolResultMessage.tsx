@@ -1,8 +1,8 @@
-import React from 'react';
-import BaseMessage from './BaseMessage';
-import { useTranslations } from 'next-intl';
-import MessageWrapper from './MessageWrapper';
-import { Streamdown } from 'streamdown';
+import React from "react";
+import { useTranslations } from "next-intl";
+import { Streamdown } from "streamdown";
+import BaseMessage from "./BaseMessage";
+import MessageWrapper from "./MessageWrapper";
 
 interface ToolResultData {
   tool_name: string;
@@ -14,13 +14,22 @@ interface ToolResultData {
 
 const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
   const t = useTranslations("Chat.Messages");
-  
+
   const formatResult = (result: any) => {
-    if (typeof result === 'string') {
+    if (typeof result === "string") {
       return (
-        <Streamdown className="prose prose-sm dark:prose-invert max-w-none" components={{ think: ({ children }: any) => (
-          <div className="text-xs text-gray-400 dark:text-gray-300">{children}</div>
-        ) } as any}>
+        <Streamdown
+          className="prose prose-sm dark:prose-invert max-w-none"
+          components={
+            {
+              think: ({ children }: any) => (
+                <div className="text-xs text-gray-400 dark:text-gray-300">
+                  {children}
+                </div>
+              ),
+            } as any
+          }
+        >
           {result}
         </Streamdown>
       );
@@ -31,17 +40,19 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
   const getStatusColor = () => {
     if (data.success === false) {
       return {
-        container: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800",
+        container:
+          "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800",
         header: "text-red-700 dark:text-red-300",
         content: "text-red-800 dark:text-red-200",
-        icon: "\u274c"
+        icon: "\u274c",
       };
     }
     return {
-      container: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800",
+      container:
+        "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800",
       header: "text-green-700 dark:text-green-300",
       content: "text-green-800 dark:text-green-200",
-      icon: "\u2705"
+      icon: "\u2705",
     };
   };
 
@@ -49,28 +60,35 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
 
   return (
     <MessageWrapper type="tool-result">
-      <BaseMessage headerLeft={<span>{`${t("toolCall")}: ${data.tool_name}`}</span>} collapsed={true}>
+      <BaseMessage
+        headerLeft={<span>{`${t("toolCall")}: ${data.tool_name}`}</span>}
+        collapsed={true}
+      >
         <div className={`text-sm leading-relaxed ${colors.content}`}>
-          {typeof data.result === 'string' ? (
+          {typeof data.result === "string" ? (
             formatResult(data.result)
           ) : (
-            <pre className="whitespace-pre-wrap overflow-x-auto">
+            <pre className="overflow-x-auto whitespace-pre-wrap">
               {formatResult(data.result)}
             </pre>
           )}
         </div>
         {Object.keys(data.arguments || {}).length > 0 && (
-          <div className="mt-3 pt-2 border-t border-current/20">
+          <div className="border-current/20 mt-3 border-t pt-2">
             <details className="cursor-pointer">
-              <summary className={`text-xs ${colors.header} hover:opacity-80`}>Arguments</summary>
-              <pre className="mt-1 p-2 bg-black/5 dark:bg-white/5 rounded text-xs overflow-x-auto">
+              <summary className={`text-xs ${colors.header} hover:opacity-80`}>
+                Arguments
+              </summary>
+              <pre className="mt-1 overflow-x-auto rounded bg-black/5 p-2 text-xs dark:bg-white/5">
                 {JSON.stringify(data.arguments, null, 2)}
               </pre>
             </details>
           </div>
         )}
         {data.execution_time && (
-          <div className={`text-xs mt-2 pt-2 border-t border-current/20 ${colors.header}`}>
+          <div
+            className={`border-current/20 mt-2 border-t pt-2 text-xs ${colors.header}`}
+          >
             Execution time: {data.execution_time}
           </div>
         )}

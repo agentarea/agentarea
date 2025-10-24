@@ -1,10 +1,11 @@
-import { components } from '@/api/schema';
+import { components } from "@/api/schema";
 
 // Re-export types from API schema for convenience
-export type ProviderSpec = components['schemas']['ProviderSpecResponse'];
-export type ProviderConfig = components['schemas']['ProviderConfigResponse'];
-export type ModelSpec = components['schemas']['agentarea_api__api__v1__model_specs__ModelSpecResponse'];
-export type ModelInstance = components['schemas']['ModelInstanceResponse'];
+export type ProviderSpec = components["schemas"]["ProviderSpecResponse"];
+export type ProviderConfig = components["schemas"]["ProviderConfigResponse"];
+export type ModelSpec =
+  components["schemas"]["agentarea_api__api__v1__model_specs__ModelSpecResponse"];
+export type ModelInstance = components["schemas"]["ModelInstanceResponse"];
 
 // Custom types for the form
 export interface SelectedModel {
@@ -37,4 +38,4 @@ export interface ProviderConfigFormProps {
   showModelSelection?: boolean;
   autoRedirect?: boolean;
   existingModelInstances?: ModelInstance[];
-} 
+}
