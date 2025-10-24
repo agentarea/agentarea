@@ -11,7 +11,6 @@ from code.populate_providers_new_arch import main as populate_providers_new_arch
 from code.populate_mcp_providers import main as populate_mcp_providers_main
 from code.minio_setup import minio_setup
 from code.infisical_setup import infisical_setup
-from code.database_setup import database_setup
 
 
 def main():
@@ -20,28 +19,24 @@ def main():
     print("=" * 50)
 
     try:
-        print("1. Setting up databases...")
-        database_setup()
-        print("✓ Database setup completed")
-
-        print("\n2. Setting up MinIO...")
+        print("1. Setting up MinIO...")
         minio_setup()
         print("✓ MinIO setup completed")
 
         # Check if Infisical is enabled
         secret_manager_type = os.getenv("SECRET_MANAGER_TYPE", "database").lower()
         if secret_manager_type == "infisical":
-            print("\n3. Setting up Infisical (including database creation)...")
+            print("\n2. Setting up Infisical...")
             infisical_setup()
             print("✓ Infisical setup completed")
         else:
-            print(f"\n3. Skipping Infisical setup (SECRET_MANAGER_TYPE={secret_manager_type})")
+            print(f"\n2. Skipping Infisical setup (SECRET_MANAGER_TYPE={secret_manager_type})")
 
-        print("\n4. Populating provider specs and model specs (new architecture)...")
+        print("\n3. Populating provider specs and model specs (new architecture)...")
         populate_providers_new_arch_main()
         print("✓ Provider specs and model specs populated")
 
-        print("\n5. Populating MCP server specifications...")
+        print("\n4. Populating MCP server specifications...")
         populate_mcp_providers_main()
         print("✓ MCP server specifications populated")
 
