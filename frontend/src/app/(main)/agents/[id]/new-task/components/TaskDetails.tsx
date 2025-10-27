@@ -20,7 +20,7 @@ export default function TaskDetails({
 }: Props) {
   const t = useTranslations("AgentsPage.descriptionPage");
   return (
-    <Card className="flex h-full flex-col gap-3 overflow-auto rounded-none border-b-0 border-r-0 border-t-0 md:min-w-[250px] md:max-w-[250px] lg:min-w-[300px] lg:max-w-[300px]">
+    <Card className="flex h-full flex-col gap-3 overflow-auto rounded-none border-b-0 border-r-0 border-t-0 md:min-w-[250px] md:max-w-[250px] lg:min-w-[300px] lg:max-w-[300px] cursor-auto">
       <h3 className="">{t("agentDetails")}</h3>
       <div className="flex flex-col space-y-2">
         <div className="flex flex-row items-center gap-2">

@@ -45,11 +45,18 @@ export default async function ProvidersData({
   const providerSpecs = (specsResponse.data || []) as ProviderSpec[];
   const providerConfigs = (configsResponse.data || []) as ProviderConfig[];
 
+  // Normalize configs to ensure model_instances is populated (fallback to models_list from API helper)
+  const normalizedConfigs = (providerConfigs as any[]).map((config) => ({
+    ...config,
+    model_instances:
+      config.model_instances ?? (config as any).models_list ?? [],
+  }));
+
   // Create a map of provider specs for easy lookup
   const specsMap = new Map(providerSpecs.map((spec) => [spec.id, spec]));
 
   // Enhance configs with spec information
-  const enhancedConfigs: ProviderConfig[] = providerConfigs.map((config) => ({
+  const enhancedConfigs: ProviderConfig[] = normalizedConfigs.map((config: any) => ({
     ...config,
     spec: specsMap.get(config.provider_spec_id),
   }));

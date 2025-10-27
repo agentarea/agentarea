@@ -1,5 +1,8 @@
+import { Badge } from "@/components/ui/badge";
 import { Agent } from "@/types/agent";
 import { getToolsForDisplay } from "@/utils/toolsDisplay";
+import { AlertCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface Props {
   agent: Agent;
@@ -7,9 +10,15 @@ interface Props {
 
 export default function ToolsDisplay({ agent }: Props) {
   const tools = getToolsForDisplay(agent);
+  const t = useTranslations("AgentsPage");
 
   if (tools.length === 0) {
-    return <span className="text-gray-500">No tools configured</span>;
+    return (
+      <Badge size="sm" variant="yellow">
+        <AlertCircle className="mr-1 h-3 w-3" />
+        {t("noToolsConf")}
+      </Badge>
+    );
   }
 
   return (

@@ -16,13 +16,13 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
     <Link
       href={`/admin/provider-configs/create?provider_spec_id=${config.id}&isEdit=true`}
     >
-      <Card className="h-full px-4 py-5">
+      <Card className="h-full px-4 py-4">
         <div className="mb-2 flex gap-2">
           {config.spec?.icon_url && (
             <img
               src={config.spec.icon_url}
               alt={`${config.spec.name} icon`}
-              className="h-6 w-6 rounded dark:invert"
+              className="h-5 w-5 rounded dark:invert"
             />
           )}
           <div className="min-w-0 flex-1">
@@ -54,13 +54,13 @@ interface ProviderSpecCardProps {
 export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
   return (
     <Link href={`/admin/provider-configs/create?provider_spec_id=${spec.id}`}>
-      <Card className="h-full px-4 py-5">
+      <Card className="h-full px-4 py-4">
         <div className="flex items-center gap-2">
           {spec.icon_url && (
             <img
               src={spec.icon_url}
               alt={`${spec.name} icon`}
-              className="h-6 w-6 rounded dark:invert"
+              className="h-5 w-5 rounded dark:invert"
             />
           )}
           <div className="min-w-0 flex-1">

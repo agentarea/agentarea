@@ -2,22 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  AlertCircle,
-  CheckCircle,
-  FileText,
-  Pause,
-  Play,
-  Square,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { AlertCircle, CheckCircle, Pause, Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TaskItem, type TaskItemData } from "@/components/TaskItem";
 import {
-  cancelAgentTask,
   getAgentTaskStatus,
   listAgentTasks,
-  pauseAgentTask,
-  resumeAgentTask,
 } from "@/lib/browser-api";
 import { TaskStatus, TaskWithStatus } from "../types";
 
@@ -95,35 +85,9 @@ export default function AgentTasksList({
     }
   };
 
-  const handleTaskAction = async (
-    taskId: string,
-    action: "pause" | "resume" | "cancel"
-  ) => {
-    try {
-      let result;
-      switch (action) {
-        case "pause":
-          result = await pauseAgentTask(agentId, taskId);
-          break;
-        case "resume":
-          result = await resumeAgentTask(agentId, taskId);
-          break;
-        case "cancel":
-          result = await cancelAgentTask(agentId, taskId);
-          break;
-      }
-
-      if (!result.error) {
-        void loadTaskStatus(taskId);
-        void loadTasks();
-      }
-    } catch (error) {
-      console.error(`Failed to ${action} task:`, error);
-    }
-  };
 
   return (
-    <div className="h-full space-y-2 overflow-auto">
+    <div className="h-full space-y-2 overflow-auto px-4 py-5">
       {tasksLoading ? (
         <div className="flex items-center justify-center py-8">
           <div className="flex items-center gap-2">
@@ -147,84 +111,20 @@ export default function AgentTasksList({
           </Link>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
           {tasks.map((task) => {
             const status = taskStatuses[task.id];
-            const isActive = ["running", "paused"].includes(task.status);
 
             return (
-              <div
-                key={task.id}
-                className="rounded border border-gray-200 bg-white p-3 transition-colors hover:border-gray-300"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
-                      <Badge
-                        variant="secondary"
-                        className={`px-2 py-0.5 text-xs ${
-                          task.status === "completed"
-                            ? "border-green-200 bg-green-50 text-green-700"
-                            : task.status === "running"
-                              ? "border-blue-200 bg-blue-50 text-blue-700"
-                              : task.status === "failed"
-                                ? "border-red-200 bg-red-50 text-red-700"
-                                : "border-gray-200 bg-gray-50 text-gray-700"
-                        }`}
-                      >
-                        {task.status}
-                      </Badge>
-                      <span className="text-xs text-gray-500">
-                        {new Date(task.created_at).toLocaleDateString()}
-                      </span>
+              <div key={task.id} className="space-y-1">
+                <TaskItem task={task as unknown as TaskItemData} showAgentName={false} />
+                <div className="flex items-center justify-between px-1">
+                  {status?.error && (
+                    <div className="flex items-center gap-1 text-xs text-red-600">
+                      <AlertCircle className="h-3 w-3" />
+                      <span className="truncate">{status.error}</span>
                     </div>
-                    <p className="mb-1 truncate text-sm font-medium text-gray-900">
-                      {task.description}
-                    </p>
-                    {status?.error && (
-                      <div className="flex items-center gap-1 text-xs text-red-600">
-                        <AlertCircle className="h-3 w-3" />
-                        <span className="truncate">{status.error}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="ml-3 flex flex-shrink-0 gap-1">
-                    {task.status === "running" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleTaskAction(task.id, "pause")}
-                        className="h-7 px-2"
-                      >
-                        <Pause className="h-3 w-3" />
-                      </Button>
-                    )}
-                    {task.status === "paused" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleTaskAction(task.id, "resume")}
-                        className="h-7 px-2"
-                      >
-                        <Play className="h-3 w-3" />
-                      </Button>
-                    )}
-                    {isActive && (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleTaskAction(task.id, "cancel")}
-                        className="h-7 px-2"
-                      >
-                        <Square className="h-3 w-3" />
-                      </Button>
-                    )}
-                    <Link href={`/tasks/${task.id}`}>
-                      <Button size="sm" variant="ghost" className="h-7 px-2">
-                        <FileText className="h-3 w-3" />
-                      </Button>
-                    </Link>
-                  </div>
+                  )}
                 </div>
               </div>
             );

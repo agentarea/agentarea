@@ -16,7 +16,8 @@ export default function ModelsList({ models }: { models: any[] }) {
               )}
             >
               <span className="block overflow-hidden text-ellipsis whitespace-nowrap">
-                {model.display_name ||
+                {model.model_display_name ||
+                  model.display_name ||
                   model.model_name ||
                   model.name ||
                   "Unknown"}

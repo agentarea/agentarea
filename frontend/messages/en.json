@@ -183,6 +183,7 @@
   },
 
   "AgentsPage": {
+    "noToolsConf": "No tools configured",
     "name": "Name",
     "status": "Status",
     "settings": "Settings",

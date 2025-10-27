@@ -389,7 +389,7 @@ export default function TaskDetailsPage() {
           { label: "Tasks", href: "/tasks" },
           {
             label: task?.agent_name || `Agent ${task?.agent_id || "Unknown"}`,
-            href: task?.agent_id ? `/agents/${task.agent_id}` : undefined,
+            href: task?.agent_id ? `/agents/${task.agent_id}/tasks` : undefined,
           },
           { label: task?.description || "Task Details" },
         ],
