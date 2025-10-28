@@ -83,7 +83,7 @@ export default function MCPInstanceConfigForm({
   const resolvedPort = containerPort ?? 8000;
 
   const Content = (
-    <div className="flex flex-col gap-4 overflow-y-auto pb-4">
+    <div className="form-content flex flex-col overflow-y-auto pb-4">
       <div className="space-y-3">
         <div>
           <Label htmlFor="name">Name</Label>

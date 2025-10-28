@@ -76,7 +76,7 @@ const BasicInformation = ({
       {/* <h2 className="mb-6 label">
         <Sparkles className="h-5 w-5 text-accent" /> Basic Information
       </h2> */}
-      <div className="grid grid-cols-1 gap-6">
+      <div className="form-content">
         <div className="space-y-2">
           <FormLabel htmlFor="name" icon={Bot}>
             {t("agentName")}

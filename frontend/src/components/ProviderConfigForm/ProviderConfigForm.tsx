@@ -501,7 +501,7 @@ export default function ProviderConfigForm({
         e.stopPropagation();
         handleSubmit(onSubmit)(e);
       }}
-      className={cn("space-y-6", className)}
+      className={cn("form-content", className)}
     >
       <AnimatePresence>
         {error && (
@@ -521,7 +521,7 @@ export default function ProviderConfigForm({
       <div className="mx-auto max-w-4xl">
         <div
           className={cn(
-            "grid grid-cols-1 gap-6",
+            "grid grid-cols-1 form-content",
             isClear ? "p-0" : "card card-shadow"
           )}
         >

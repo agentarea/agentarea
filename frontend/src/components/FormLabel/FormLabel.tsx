@@ -23,7 +23,7 @@ export default function FormLabel({
   return (
     <Label htmlFor={htmlFor} className={cn("label", className)}>
       {IconComponent && (
-        <div className="rounded-sm bg-gradient-to-br from-primary/10 to-[#966DFF]/10 p-1">
+        <div className="rounded-sm bg-gradient-to-br from-primary/10 to-[#966DFF]/10 p-[3px]">
           <IconComponent className="label-icon" style={{ strokeWidth: 1.5 }} />
         </div>
       )}

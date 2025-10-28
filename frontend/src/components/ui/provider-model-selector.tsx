@@ -36,25 +36,29 @@ export interface ProviderModelSelectorProps {
   onAddProvider?: () => void;
 }
 
-// Группируем модели по провайдерам
-const groupModelsByProvider = (instances: LLMModelInstance[]) => {
+// Группируем модели по конфигурациям провайдера (config_name)
+const groupModelsByConfig = (instances: LLMModelInstance[]) => {
   const grouped = instances.reduce(
     (acc, instance) => {
-      const providerName = instance.provider_name || "Unknown Provider";
-      if (!acc[providerName]) {
-        acc[providerName] = [];
+      const configName = instance.config_name || "Default Configuration";
+      if (!acc[configName]) {
+        acc[configName] = [];
       }
-      acc[providerName].push(instance);
+      acc[configName].push(instance);
       return acc;
     },
     {} as Record<string, LLMModelInstance[]>
   );
 
-  return Object.entries(grouped).map(([providerName, instances]) => ({
-    providerName,
-    instances,
-    icon: getProviderIconUrl(providerName),
-  }));
+  return Object.entries(grouped).map(([configName, instances]) => {
+    const providerName = instances[0]?.provider_name || "Unknown Provider";
+    return {
+      configName,
+      instances,
+      providerName,
+      icon: getProviderIconUrl(providerName),
+    };
+  });
 };
 
 export function ProviderModelSelector({
@@ -77,7 +81,7 @@ export function ProviderModelSelector({
   const [searchQuery, setSearchQuery] = React.useState("");
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 
-  const providers = groupModelsByProvider(modelInstances);
+  const providers = groupModelsByConfig(modelInstances);
 
   // Находим выбранную модель
   const selectedModel = React.useMemo(() => {
@@ -85,10 +89,10 @@ export function ProviderModelSelector({
     return modelInstances.find((instance) => instance.id === value);
   }, [value, modelInstances]);
 
-  // Находим провайдера выбранной модели
+  // Находим конфигурацию выбранной модели
   const selectedProviderName = React.useMemo(() => {
     if (!selectedModel) return null;
-    return selectedModel.provider_name;
+    return selectedModel.config_name ?? "Default Configuration";
   }, [selectedModel]);
 
   // Use controlled state if provided, otherwise use internal state
@@ -106,11 +110,11 @@ export function ProviderModelSelector({
       const width = triggerRef.current.offsetWidth;
       setPopoverWidth(`${Math.max(width, 400)}px`);
 
-      // Если модель не выбрана, выбираем первый провайдер
+      // Если модель не выбрана, выбираем первую конфигурацию
       if (!selectedModel && providers.length > 0) {
-        setSelectedProvider(providers[0].providerName);
+        setSelectedProvider(providers[0].configName);
       } else if (selectedModel && selectedProviderName) {
-        // Если модель выбрана, выбираем соответствующий провайдер
+        // Если модель выбрана, выбираем соответствующую конфигурацию
         setSelectedProvider(selectedProviderName);
       }
     } else if (!open) {
@@ -128,12 +132,15 @@ export function ProviderModelSelector({
     setSelectedProvider(providerName);
   };
 
-  // Фильтруем провайдеры и модели по общему поиску
+  // Фильтруем конфигурации и модели по общему поиску
   const filteredProviders = React.useMemo(() => {
     if (!searchQuery) return providers;
 
     return providers.filter(
       (provider) =>
+        provider.configName
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
         provider.providerName
           .toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
@@ -148,11 +155,11 @@ export function ProviderModelSelector({
     );
   }, [providers, searchQuery]);
 
-  // Фильтруем модели по выбранному провайдеру и поиску
+  // Фильтруем модели по выбранной конфигурации и поиску
   const filteredModels = React.useMemo(() => {
     if (!selectedProvider) return [];
 
-    const provider = providers.find((p) => p.providerName === selectedProvider);
+    const provider = providers.find((p) => p.configName === selectedProvider);
     if (!provider) return [];
 
     if (!searchQuery) return provider.instances;
@@ -201,7 +208,7 @@ export function ProviderModelSelector({
           </div>
           <div className="flex flex-col items-start">
             <span className="text-xs">{selectedModel.name}</span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[10px] leading-none text-muted-foreground font-normal">
               {selectedModel.config_name || selectedModel.provider_name}
             </span>
           </div>
@@ -210,7 +217,7 @@ export function ProviderModelSelector({
     }
     return (
       <div className="flex items-center gap-2">
-        <span className="font-normal text-muted-foreground">{placeholder}</span>
+        <span className="font-normal text-inputSize text-muted-foreground">{placeholder}</span>
       </div>
     );
   };
@@ -251,7 +258,7 @@ export function ProviderModelSelector({
                 <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
                   <Input
-                    placeholder="Search provider and models"
+                    placeholder="Search configurations and models"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full border-none pl-9"
@@ -260,10 +267,10 @@ export function ProviderModelSelector({
               </div>
 
               <div className="flex h-full flex-1 overflow-hidden">
-                {/* Левая панель - Провайдеры */}
-                <div className="flex w-1/3 min-w-[120px] flex-col border-r border-border bg-muted/20">
+                {/* Левая панель - Конфигурации */}
+                <div className="flex w-[40%] flex-col border-r border-border bg-muted/20">
                   <div className="flex h-8 items-center justify-between border-b border-border px-2 py-1">
-                    <h3 className="text-xs font-medium">Providers</h3>
+                    <h3 className="text-xs font-medium">Configurations</h3>
                     {onAddProvider && (
                       <Button
                         variant="secondary"
@@ -278,13 +285,13 @@ export function ProviderModelSelector({
                   <div className="flex-1 overflow-y-auto p-1">
                     {filteredProviders.map((provider) => (
                       <button
-                        key={provider.providerName}
+                        key={provider.configName}
                         onClick={() =>
-                          handleProviderSelect(provider.providerName)
+                          handleProviderSelect(provider.configName)
                         }
                         className={cn(
                           "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left transition-colors",
-                          selectedProvider === provider.providerName &&
+                          selectedProvider === provider.configName &&
                             "bg-accent/20"
                         )}
                       >
@@ -294,8 +301,11 @@ export function ProviderModelSelector({
                             provider.icon
                           )}
                         </div>
-                        <span className="truncate text-sm font-medium">
-                          {provider.providerName}
+                        <span className="truncate text-xs font-medium">
+                          {provider.configName}
+                          <div className="text-[10px] leading-none text-muted-foreground font-normal">
+                            {provider.providerName}
+                          </div>
                         </span>
                       </button>
                     ))}
@@ -303,7 +313,7 @@ export function ProviderModelSelector({
                 </div>
 
                 {/* Правая панель - Модели */}
-                <div className="flex h-full w-2/3 min-w-[280px] flex-col overflow-hidden">
+                <div className="flex h-full w-[60%] flex-col overflow-hidden">
                   <div className="h-8 flex-shrink-0 border-b border-border px-2 py-2">
                     <h3 className="text-xs font-medium">Models</h3>
                   </div>
@@ -311,7 +321,7 @@ export function ProviderModelSelector({
                     {!selectedProvider ? (
                       <div className="flex h-full items-center justify-center text-muted-foreground">
                         <span className="text-sm">
-                          Select a provider to view models
+                          Select a configuration to view models
                         </span>
                       </div>
                     ) : (
@@ -330,9 +340,6 @@ export function ProviderModelSelector({
                                   <div className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
                                     <span className="w-full truncate text-xs font-medium">
                                       {model.name}
-                                    </span>
-                                    <span className="w-full truncate text-xs text-muted-foreground">
-                                      {model.config_name || model.provider_name}
                                     </span>
                                   </div>
                                 </div>

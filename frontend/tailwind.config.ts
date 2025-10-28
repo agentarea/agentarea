@@ -68,6 +68,9 @@ export default {
       fontFamily: {
         montserrat: ["var(--font-montserrat)"],
       },
+      fontSize: {
+        inputSize: "13px",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

@@ -149,7 +149,7 @@ export function AddMCPServerForm() {
 
   return (
     <form action={formAction}>
-      <CardContent className="space-y-4">
+      <CardContent className="form-content">
         {/* Display general form errors */}
         {state.errors?._form && (
           <div className="text-sm text-red-500">

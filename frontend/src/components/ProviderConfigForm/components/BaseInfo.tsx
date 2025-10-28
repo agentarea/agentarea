@@ -28,7 +28,7 @@ export default function BaseInfo({
           animate={{ height: "auto", opacity: 1, overflow: "visible" }}
           exit={{ height: 0, opacity: 0, overflow: "hidden" }}
           transition={{ duration: 0.4, ease: "easeOut" }}
-          className="space-y-6"
+          className="form-content"
         >
           <div className="space-y-2">
             <FormLabel htmlFor="name" icon={Settings} required>

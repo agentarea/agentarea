@@ -167,7 +167,7 @@ body {
   }
 
   .label {
-    @apply flex items-center gap-2;
+    @apply flex items-center gap-[5px];
   }
 
   .label-icon {
@@ -177,6 +177,10 @@ body {
 
   .note {
     @apply text-xs text-zinc-400;
+  }
+
+  .form-content {
+    @apply space-y-5;
   }
 
   .small-link {

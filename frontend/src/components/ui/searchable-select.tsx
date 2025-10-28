@@ -127,11 +127,11 @@ export function SearchableSelect({
   };
 
   const renderOptionContent = (option: SelectOption | SimpleSelectOption) => (
-    <div className="flex items-center gap-3">
-      <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+    <div className="flex items-center gap-2">
+      <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
         {"icon" in option && renderIcon(option as SelectOption)}
       </div>
-      <div className="flex flex-col items-start">
+      <div className="flex flex-col items-start text-inputSize">
         <span>{option.label}</span>
         {"description" in option && option.description && (
           <span className="note">{option.description}</span>
@@ -148,7 +148,7 @@ export function SearchableSelect({
     }
     return (
       <div className="flex items-center gap-2">
-        <span className="font-normal text-muted-foreground">{placeholder}</span>
+        <span className="font-normal text-muted-foreground text-inputSize">{placeholder}</span>
       </div>
     );
   };
