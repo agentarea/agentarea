@@ -13,6 +13,7 @@ import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import Note from "@/components/ui/note";
 import {
   checkMCPServerInstanceConfiguration,
   createMCPServerInstance,
@@ -395,7 +396,7 @@ const ToolConfig = ({
             onOpenChange={setIsSheetOpen}
           >
             <div className="flex flex-col space-y-4 overflow-y-auto">
-              <div className="font-semibold">{t("create.builtinTools")}</div>
+              <div className="font-semibold text-sm">{t("create.builtinTools")}</div>
               <SelectableList
                 items={builtinTools.map((tool) => ({ ...tool, id: tool.name }))}
                 prefix="builtin-tool"
@@ -449,7 +450,7 @@ const ToolConfig = ({
                   );
                 }}
               />
-              <div className="flex items-center gap-2 font-semibold">
+              <div className="flex items-center gap-2 font-semibold text-sm">
                 <Image
                   src="/mcp.svg"
                   alt="MCP"
@@ -459,102 +460,37 @@ const ToolConfig = ({
                 />
                 {t("create.activeMcpServers")}
               </div>
-              <SelectableList
-                items={activeInstances}
-                prefix="active-mcp"
-                extractTitle={(instance) => (
-                  <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
-                    <div className="relative shrink-0">
-                      <img src="/Icon.svg" alt="" className="h-5 w-5" />
+              {activeInstances.length > 0 ? (
+                <SelectableList
+                  items={activeInstances}
+                  prefix="active-mcp"
+                  extractTitle={(instance) => (
+                    <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
+                      <div className="relative shrink-0">
+                        <img src="/Icon.svg" alt="" className="h-5 w-5" />
+                      </div>
+                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
+                        {instance.name || instance.id}
+                      </h3>
                     </div>
-                    <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                      {instance.name || instance.id}
-                    </h3>
-                  </div>
-                )}
-                onAdd={(instance) => handleAddTools([instance])}
-                onRemove={(instance) => handleRemoveTool(instance.id)}
-                selectedIds={toolFields.map((item) => item.mcp_server_id)}
-                openItemId={scrollToolId}
-                renderContent={(instance) => (
-                  <div className="space-y-2 p-2">
-                    <p className="text-xs text-muted-foreground">
-                      Active MCP Server Instance
-                    </p>
-                    {instance.available_tools &&
-                      instance.available_tools.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-foreground">
-                            Available Tools:
-                          </p>
+                  )}
+                  onAdd={(instance) => handleAddTools([instance])}
+                  onRemove={(instance) => handleRemoveTool(instance.id)}
+                  selectedIds={toolFields.map((item) => item.mcp_server_id)}
+                  openItemId={scrollToolId}
+                  renderContent={(instance) => (
+                    <div className="space-y-2 p-2">
+                      <p className="text-xs text-muted-foreground">
+                        Active MCP Server Instance
+                      </p>
+                      {instance.available_tools &&
+                        instance.available_tools.length > 0 && (
                           <div className="space-y-1">
-                            {instance.available_tools.map((tool: any) => (
-                              <div
-                                key={tool.name}
-                                className="flex items-center gap-2 rounded bg-muted/30 p-1"
-                              >
-                                <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-                                <span className="text-xs text-foreground">
-                                  {tool.display_name || tool.name}
-                                </span>
-                                <span className="ml-auto text-xs text-muted-foreground">
-                                  {tool.description}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                )}
-              />
-              <div className="flex items-center gap-2 font-semibold">
-                <Image
-                  src="/mcp.svg"
-                  alt="MCP"
-                  width={16}
-                  height={16}
-                  className="text-current"
-                />
-                {t("create.availableMcpServers")}
-              </div>
-              <SelectableList
-                disableExpand={true}
-                items={mcpServers}
-                prefix="mcp"
-                extractTitle={(server) => (
-                  <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
-                    <div className="relative shrink-0">
-                      <img src="/Icon.svg" alt="" className="h-5 w-5" />
-                    </div>
-                    <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                      {server.name}
-                    </h3>
-                  </div>
-                )}
-                onAdd={(server) => handleAddConfigurationTools(server)}
-                onRemove={(server) => handleRemoveTool(server.id)}
-                selectedIds={toolFields.map((item) => item.mcp_server_id)}
-                openItemId={scrollToolId}
-                inactiveLabel={
-                  <>
-                    Configure <ArrowRight className="h-3 w-3" />
-                  </>
-                }
-                renderContent={(server) => (
-                  <div className="space-y-2 p-2">
-                    <p className="text-xs text-muted-foreground">
-                      {server.description || "Available MCP Server"}
-                    </p>
-                    {(server as any).available_tools &&
-                      (server as any).available_tools.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-foreground">
-                            Available Tools:
-                          </p>
-                          <div className="space-y-1">
-                            {(server as any).available_tools.map(
-                              (tool: any) => (
+                            <p className="text-xs font-medium text-foreground">
+                              Available Tools:
+                            </p>
+                            <div className="space-y-1">
+                              {instance.available_tools.map((tool: any) => (
                                 <div
                                   key={tool.name}
                                   className="flex items-center gap-2 rounded bg-muted/30 p-1"
@@ -567,14 +503,91 @@ const ToolConfig = ({
                                     {tool.description}
                                   </span>
                                 </div>
-                              )
-                            )}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                  </div>
-                )}
-              />
+                        )}
+                    </div>
+                  )}
+                />
+              ) : (
+                <Note>
+                  <p>{t("create.noActiveMcpServersDescription")}</p>
+                </Note>
+              )}
+              <div className="flex items-center gap-2 font-semibold text-sm">
+                <Image
+                  src="/mcp.svg"
+                  alt="MCP"
+                  width={16}
+                  height={16}
+                  className="text-current"
+                />
+                {t("create.availableMcpServers")}
+              </div>
+              {mcpServers.length > 0 ? (
+                <SelectableList
+                  disableExpand={true}
+                  items={mcpServers}
+                  prefix="mcp"
+                  extractTitle={(server) => (
+                    <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
+                      <div className="relative shrink-0">
+                        <img src="/Icon.svg" alt="" className="h-5 w-5" />
+                      </div>
+                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
+                        {server.name}
+                      </h3>
+                    </div>
+                  )}
+                  onAdd={(server) => handleAddConfigurationTools(server)}
+                  onRemove={(server) => handleRemoveTool(server.id)}
+                  selectedIds={toolFields.map((item) => item.mcp_server_id)}
+                  openItemId={scrollToolId}
+                  inactiveLabel={
+                    <>
+                      Configure <ArrowRight className="h-3 w-3" />
+                    </>
+                  }
+                  renderContent={(server) => (
+                    <div className="space-y-2 p-2">
+                      <p className="text-xs text-muted-foreground">
+                        {server.description || "Available MCP Server"}
+                      </p>
+                      {(server as any).available_tools &&
+                        (server as any).available_tools.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium text-foreground">
+                              Available Tools:
+                            </p>
+                            <div className="space-y-1">
+                              {(server as any).available_tools.map(
+                                (tool: any) => (
+                                  <div
+                                    key={tool.name}
+                                    className="flex items-center gap-2 rounded bg-muted/30 p-1"
+                                  >
+                                    <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+                                    <span className="text-xs text-foreground">
+                                      {tool.display_name || tool.name}
+                                    </span>
+                                    <span className="ml-auto text-xs text-muted-foreground">
+                                      {tool.description}
+                                    </span>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  )}
+                />
+              ) : (
+                <Note>
+                  <p>{t("create.noAvailableMcpServersDescription")}</p>
+                </Note>
+              )}
             </div>
           </ConfigSheet>
         }
@@ -672,10 +685,10 @@ const ToolConfig = ({
               </Accordion>
             </div>
           ) : (
-            <div className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
-              {t("create.agentToolsDescription")}
+            <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
+              <p>{t("create.agentToolsDescription")}</p>  
               <p>{t("create.agentToolsNote")}</p>
-            </div>
+            </Note>
           )}
         </div>
       </AccordionControl>

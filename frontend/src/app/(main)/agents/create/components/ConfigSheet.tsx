@@ -87,7 +87,7 @@ const ConfigSheet = ({
           }
         }}
       >
-        <SheetHeader className="mb-[12px] md:mb-[24px]">
+        <SheetHeader className="">
           <SheetTitle>{title}</SheetTitle>
           <SheetDescription className="text-xs">{description}</SheetDescription>
         </SheetHeader>

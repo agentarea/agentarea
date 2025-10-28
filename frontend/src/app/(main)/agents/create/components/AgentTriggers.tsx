@@ -10,6 +10,7 @@ import AccordionControl from "./AccordionControl";
 import ConfigSheet from "./ConfigSheet";
 import { SelectableList } from "./SelectableList";
 import { TriggerControl } from "./TriggerControl";
+import Note from "@/components/ui/note";
 
 // Icon components
 const TelegramIcon = ({ className }: { className?: string }) => (
@@ -190,9 +191,9 @@ const AgentTriggers = ({
               ))}
             </Accordion>
           ) : (
-            <div className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
+            <Note>
               {note}
-            </div>
+            </Note>
           )}
         </div>
       </AccordionControl>
