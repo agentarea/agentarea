@@ -47,7 +47,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 logger.info(f"Connected to Temporal at {self.temporal_address}")
             except ImportError as e:
                 logger.error(f"Temporal library not installed: {e}")
-                raise RuntimeError("Temporal integration is not ready (missing 'temporalio')") from e
+                raise RuntimeError(
+                    "Temporal integration is not ready (missing 'temporalio')"
+                ) from e
             except Exception as e:
                 logger.error(f"Failed to connect to Temporal: {e}")
                 raise RuntimeError(f"Temporal client connection failed: {e}") from e
@@ -123,7 +125,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
             except ImportError as e:
                 logger.error(f"Agent execution library not available: {e}")
-                raise RuntimeError("Agent execution integration is not ready (missing 'agentarea_execution')") from e
+                raise RuntimeError(
+                    "Agent execution integration is not ready (missing 'agentarea_execution')"
+                ) from e
 
             logger.info(f"Started Temporal workflow: {execution_id}")
 

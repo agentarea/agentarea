@@ -906,9 +906,15 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
             if isinstance(original_data, dict):
                 # Start with domain fields (excluding internal ones)
                 result = {
-                    k: v for k, v in data.items()
-                    if k not in ("original_event_type", "original_data",
-                                 "aggregate_id", "aggregate_type")
+                    k: v
+                    for k, v in data.items()
+                    if k
+                    not in (
+                        "original_event_type",
+                        "original_data",
+                        "aggregate_id",
+                        "aggregate_type",
+                    )
                 }
                 # Merge in original_data fields (UI-relevant content)
                 result.update(original_data)

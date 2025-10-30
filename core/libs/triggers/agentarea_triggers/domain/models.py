@@ -32,6 +32,7 @@ class Trigger(BaseModel):
 
     class Config:
         """Pydantic model configuration."""
+
         from_attributes = True
 
     @field_validator("name")
@@ -152,6 +153,7 @@ class TriggerExecution(BaseModel):
 
     class Config:
         """Pydantic model configuration."""
+
         from_attributes = True
 
     @field_validator("execution_time_ms")

@@ -10,4 +10,5 @@ class ContextConfig(BaseSettings):
 
     class Config:
         """Configuration for ContextConfig."""
+
         env_prefix = "CONTEXT_"

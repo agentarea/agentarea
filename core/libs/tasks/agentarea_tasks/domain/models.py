@@ -45,6 +45,7 @@ class Task(BaseModel):
 
     class Config:
         """Pydantic model configuration."""
+
         from_attributes = True
 
 
@@ -152,6 +153,7 @@ class SimpleTask(BaseModel):
 
     class Config:
         """Pydantic model configuration."""
+
         from_attributes = True
 
     def model_post_init(self, __context: Any) -> None:
@@ -223,6 +225,7 @@ class TaskEvent(BaseModel):
 
     class Config:
         """Pydantic model configuration."""
+
         from_attributes = True
 
     @classmethod

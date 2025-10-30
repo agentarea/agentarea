@@ -1601,4 +1601,6 @@ async def get_agent_well_known(
             duration_ms=duration_ms,
             error=f"Failed to get agent discovery info: {e}",
         )
-        raise HTTPException(status_code=500, detail=f"Failed to get agent discovery info: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get agent discovery info: {e}"
+        ) from e
