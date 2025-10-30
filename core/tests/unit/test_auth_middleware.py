@@ -1,9 +1,8 @@
 """Unit tests for authentication middleware."""
 
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
 from agentarea_common.auth.interfaces import AuthResult, AuthToken
 from agentarea_common.auth.middleware import AuthMiddleware

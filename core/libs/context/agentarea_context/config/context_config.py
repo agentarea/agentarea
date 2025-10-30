@@ -9,4 +9,5 @@ class ContextConfig(BaseSettings):
     max_context_length: int = 1000
 
     class Config:
+        """Configuration for ContextConfig."""
         env_prefix = "CONTEXT_"

@@ -1,3 +1,5 @@
+"""Agents API endpoints for managing AI agents."""
+
 import re
 from uuid import UUID
 

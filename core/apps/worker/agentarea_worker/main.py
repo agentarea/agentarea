@@ -24,7 +24,6 @@ from agentarea_execution.interfaces import ActivityDependencies
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
-from agentarea_secrets import get_real_secret_manager
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
@@ -43,7 +42,9 @@ import os  # noqa: E402
 import litellm  # noqa: E402
 
 os.environ["OLLAMA_API_BASE"] = "http://host.docker.internal:11434"
-print(litellm.supports_function_calling("ollama_chat/qwen2.5"))
+logger.debug(
+    "Function calling supported: %s", litellm.supports_function_calling("ollama_chat/qwen2.5")
+)
 
 
 def create_activity_dependencies() -> ActivityDependencies:

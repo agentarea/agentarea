@@ -9,11 +9,8 @@ import pytest
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_api.api.v1.agents_tasks import (
-    TaskEventResponse,
-    get_task_events,
     pause_agent_task,
     resume_agent_task,
-    stream_task_events,
 )
 from fastapi import HTTPException
 

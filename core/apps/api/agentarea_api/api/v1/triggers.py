@@ -26,7 +26,6 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_api.api.v1.a2a_auth import A2AAuthContext, require_a2a_execute_auth
-from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
 from agentarea_triggers.domain.models import (
     TriggerCreate,
@@ -439,10 +438,10 @@ async def create_trigger(
 
     except TriggerValidationError as e:
         logger.warning(f"Trigger validation failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to create trigger: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create trigger: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to create trigger: {e!s}") from e
 
 
 @router.get("/", response_model=list[TriggerResponse])
@@ -466,6 +465,7 @@ async def list_triggers(
         agent_id: Optional agent ID filter
         trigger_type: Optional trigger type filter
         active_only: Whether to only return active triggers
+        created_by: Optional creator filter ('me' for current user's triggers)
         limit: Maximum number of triggers to return
         auth_context: Authentication context
         trigger_service: Injected trigger service
@@ -513,7 +513,7 @@ async def list_triggers(
         raise
     except Exception as e:
         logger.error(f"Failed to list triggers: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list triggers: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to list triggers: {e!s}") from e
 
 
 @router.get("/{trigger_id}", response_model=TriggerResponse)
@@ -549,7 +549,7 @@ async def get_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to get trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get trigger: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to get trigger: {e!s}") from e
 
 
 @router.put("/{trigger_id}", response_model=TriggerResponse)
@@ -590,13 +590,13 @@ async def update_trigger(
         return TriggerResponse.from_domain_model(updated_trigger)
 
     except TriggerNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except TriggerValidationError as e:
         logger.warning(f"Trigger validation failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to update trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update trigger: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to update trigger: {e!s}") from e
 
 
 @router.delete("/{trigger_id}", status_code=204)
@@ -632,7 +632,7 @@ async def delete_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to delete trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete trigger: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete trigger: {e!s}") from e
 
 
 @router.post("/{trigger_id}/enable", response_model=dict[str, Any])
@@ -678,7 +678,7 @@ async def enable_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to enable trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to enable trigger: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to enable trigger: {e!s}") from e
 
 
 @router.post("/{trigger_id}/disable", response_model=dict[str, Any])
@@ -724,7 +724,7 @@ async def disable_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to disable trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to disable trigger: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to disable trigger: {e!s}") from e
 
 
 @router.get("/{trigger_id}/executions", response_model=ExecutionHistoryResponse)
@@ -780,8 +780,8 @@ async def get_execution_history(
 
                 try:
                     status_enum = ExecutionStatus(status.upper())
-                except ValueError:
-                    raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from e
 
         # Calculate offset
         offset = (page - 1) * page_size
@@ -816,7 +816,7 @@ async def get_execution_history(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution history for trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get execution history: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to get execution history: {e!s}") from e
 
 
 @router.get("/{trigger_id}/status", response_model=TriggerStatusResponse)
@@ -867,7 +867,7 @@ async def get_trigger_status(
         raise
     except Exception as e:
         logger.error(f"Failed to get trigger status for {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get trigger status: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to get trigger status: {e!s}") from e
 
 
 @router.get("/{trigger_id}/metrics", response_model=ExecutionMetricsResponse)
@@ -911,7 +911,7 @@ async def get_execution_metrics(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution metrics for trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get execution metrics: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to get execution metrics: {e!s}") from e
 
 
 @router.get("/{trigger_id}/timeline", response_model=ExecutionTimelineResponse)
@@ -961,7 +961,7 @@ async def get_execution_timeline(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution timeline for trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get execution timeline: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to get execution timeline: {e!s}") from e
 
 
 @router.get("/{trigger_id}/correlations", response_model=ExecutionCorrelationResponse)
@@ -1017,7 +1017,7 @@ async def get_execution_correlations(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution correlations for trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get execution correlations: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to get execution correlations: {e!s}") from e
 
 
 # Health check endpoint

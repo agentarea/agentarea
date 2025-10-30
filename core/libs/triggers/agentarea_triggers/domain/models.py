@@ -31,6 +31,7 @@ class Trigger(BaseModel):
     last_execution_at: datetime | None = None
 
     class Config:
+        """Pydantic model configuration."""
         from_attributes = True
 
     @field_validator("name")
@@ -150,6 +151,7 @@ class TriggerExecution(BaseModel):
     run_id: str | None = None  # Temporal run ID
 
     class Config:
+        """Pydantic model configuration."""
         from_attributes = True
 
     @field_validator("execution_time_ms")

@@ -7,7 +7,6 @@ High-level service that orchestrates task management by:
 4. Validating agent existence before task submission
 """
 
-import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -502,7 +501,6 @@ class TaskService(BaseTaskService):
         # Execute it
         async for event in self.execute_task(task.id, enable_agent_communication):
             yield event
-
 
     async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
         """Get historical events for a task from the database with proper session management."""

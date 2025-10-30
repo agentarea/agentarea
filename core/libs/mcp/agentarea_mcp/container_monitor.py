@@ -30,6 +30,7 @@ class ContainerHealthStatus:
         self.last_check = timestamp
 
     def __str__(self):
+        """Return human-readable container health summary."""
         return f"ContainerHealthStatus(service='{self.service_name}', healthy={self.is_healthy}, status='{self.status}')"
 
 
@@ -186,7 +187,7 @@ class MCPContainerMonitor:
             # Generate a UUID from service name for consistency
             import hashlib
 
-            service_uuid = UUID(hashlib.md5(status.service_name.encode()).hexdigest())
+            service_uuid = UUID(hashlib.md5(status.service_name.encode()).hexdigest())  # noqa: S324
 
             event = MCPServerInstanceUpdated(
                 instance_id=service_uuid,
@@ -249,7 +250,9 @@ async def start_container_monitoring(event_broker: EventBroker) -> MCPContainerM
     monitor = await get_container_monitor(event_broker)
 
     # Start monitoring in background task
-    asyncio.create_task(monitor.start())
+    task = asyncio.create_task(monitor.start())
+    # Store task reference to prevent garbage collection
+    monitor._background_task = task
 
     return monitor
 

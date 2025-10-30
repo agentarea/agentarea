@@ -10,7 +10,7 @@ Provides:
 """
 
 import logging
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -103,7 +103,9 @@ async def get_user_context(
         # Set context in ContextManager for backward compatibility
         ContextManager.set_context(user_context)
 
-        logger.debug(f"Authenticated user: {user_context.user_id} in workspace: {user_context.workspace_id}")
+        logger.debug(
+            f"Authenticated user: {user_context.user_id} in workspace: {user_context.workspace_id}"
+        )
 
         return user_context
 
@@ -114,13 +116,13 @@ async def get_user_context(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during authentication",
-        )
+        ) from e
 
 
 async def get_optional_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
-) -> Optional[UserContext]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+) -> UserContext | None:
     """Optionally authenticate user if token is provided (OPTIONAL authentication).
 
     This dependency allows endpoints to work with or without authentication.

@@ -27,7 +27,7 @@ class DatabaseSettings(BaseAppSettings):
     """Database configuration and connection settings."""
 
     POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"  # noqa: S105
     POSTGRES_HOST: str = "db"
     POSTGRES_PORT: str = "5432"
     POSTGRES_DB: str = "aiagents"

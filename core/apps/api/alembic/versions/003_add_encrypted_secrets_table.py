@@ -41,7 +41,9 @@ def upgrade() -> None:
             onupdate=sa.func.now(),
         ),
         # Constraints
-        sa.UniqueConstraint("workspace_id", "secret_name", name="uq_encrypted_secrets_workspace_name"),
+        sa.UniqueConstraint(
+            "workspace_id", "secret_name", name="uq_encrypted_secrets_workspace_name"
+        ),
     )
 
     # Index for fast lookups by workspace and secret name

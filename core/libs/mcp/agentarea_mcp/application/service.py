@@ -1,4 +1,5 @@
 import builtins
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -30,6 +31,8 @@ from agentarea_mcp.schemas import MCPServerStatus
 
 from .mcp_env_service import MCPEnvironmentService
 from .validation_service import MCPConfigurationValidator, MCPValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class MCPServerService(BaseCrudService[MCPServer]):
@@ -322,7 +325,7 @@ class MCPServerInstanceService:
 
         # Get environment variables for container startup
         env_vars = await self.get_instance_environment(id)
-        print(f"Starting instance {id} with {len(env_vars)} environment variables")
+        logger.info("Starting instance %s with %d environment variables", id, len(env_vars))
 
         updated_instance = await self.repository.update(id, status="running")
         if not updated_instance:
@@ -452,5 +455,5 @@ class MCPServerInstanceService:
             return updated_instance is not None
 
         except Exception as e:
-            print(f"Error discovering tools for instance {instance_id}: {e}")
+            logger.error("Error discovering tools for instance %s: %s", instance_id, e)
             return False

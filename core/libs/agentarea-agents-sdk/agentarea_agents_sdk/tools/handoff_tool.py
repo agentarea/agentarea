@@ -143,7 +143,7 @@ class AgentHandoffTool(BaseTool):
 
         except Exception as e:
             logger.error(f"Agent handoff failed: {str(e)}")
-            raise ToolExecutionError(self.name, str(e), e)
+            raise ToolExecutionError(self.name, str(e), e) from e
 
 
 class AgentRegistryTool(BaseTool):
@@ -223,4 +223,4 @@ class AgentRegistryTool(BaseTool):
 
         except Exception as e:
             logger.error(f"Agent discovery failed: {str(e)}")
-            raise ToolExecutionError(self.name, str(e), e)
+            raise ToolExecutionError(self.name, str(e), e) from e

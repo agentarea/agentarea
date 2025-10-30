@@ -27,6 +27,7 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     )
 
     def __repr__(self):
+        """Return a concise string representation for debugging."""
         return f"<ProviderSpec {self.name} ({self.provider_key})>"
 
 
@@ -52,6 +53,7 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     )
 
     def __repr__(self):
+        """Return a concise string representation for debugging."""
         return f"<ProviderConfig {self.name} ({self.id})>"
 
 
@@ -79,6 +81,7 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     )
 
     def __repr__(self):
+        """Return a concise string representation for debugging."""
         return f"<ModelSpec {self.display_name} ({self.model_name})>"
 
 
@@ -103,4 +106,5 @@ class ModelInstance(BaseModel, WorkspaceScopedMixin):
     model_spec = relationship("ModelSpec", back_populates="model_instances")
 
     def __repr__(self):
+        """Return a concise string representation for debugging."""
         return f"<ModelInstance {self.name} ({self.id})>"

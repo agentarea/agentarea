@@ -120,7 +120,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     logger.error(error_msg, trigger_id=trigger_id)
                     raise TriggerExecutionError(
                         error_msg, trigger_id=str(trigger_id), original_error=str(e)
-                    )
+                    ) from None
 
                 # Check if trigger is active
                 if not trigger.is_active:

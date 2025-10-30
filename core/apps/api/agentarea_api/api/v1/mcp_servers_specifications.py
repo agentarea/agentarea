@@ -150,7 +150,7 @@ def load_mcp_provider_templates() -> dict[str, Any]:
         # If all paths fail, raise the original error with helpful info
         raise FileNotFoundError(
             f"Could not find mcp_providers.yaml. Tried paths: {yaml_path}, {alternative_paths}"
-        )
+        ) from None
 
 
 @router.get("/templates", response_model=list[dict[str, Any]])

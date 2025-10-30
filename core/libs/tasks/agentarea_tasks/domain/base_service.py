@@ -389,7 +389,7 @@ class BaseTaskService(ABC):
         try:
             task._validate_datetime_fields()
         except ValueError as e:
-            raise TaskValidationError(str(e))
+            raise TaskValidationError(str(e)) from e
 
     async def _publish_task_event(self, event) -> None:
         """Publish a task-related domain event.

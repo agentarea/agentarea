@@ -1,6 +1,6 @@
 """Workspace-scoped repository base class."""
 
-from typing import Any, TypeVar, overload
+from typing import Any, TypeVar
 from uuid import UUID
 
 from sqlalchemy import and_, func, select

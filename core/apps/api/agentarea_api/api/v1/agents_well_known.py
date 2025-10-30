@@ -83,7 +83,7 @@ async def get_agent_well_known_card(
         raise
     except Exception as e:
         logger.error(f"Error in agent well-known discovery for {agent_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Agent discovery failed")
+        raise HTTPException(status_code=500, detail="Agent discovery failed") from e
 
 
 @router.get("/.well-known/a2a-info.json")
@@ -150,7 +150,7 @@ async def get_agent_a2a_info(
         raise
     except Exception as e:
         logger.error(f"Error getting A2A info for agent {agent_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="A2A info failed")
+        raise HTTPException(status_code=500, detail="A2A info failed") from e
 
 
 @router.get("/.well-known/")
@@ -184,4 +184,4 @@ async def get_agent_well_known_index(
         raise
     except Exception as e:
         logger.error(f"Error getting well-known index for agent {agent_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Well-known index failed")
+        raise HTTPException(status_code=500, detail="Well-known index failed") from e

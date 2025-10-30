@@ -6,17 +6,15 @@ symmetric encryption. Suitable for production use in self-hosted deployments.
 
 import logging
 import uuid
-from datetime import datetime
 
 from agentarea_common.auth import UserContext
+from agentarea_common.base.models import BaseModel
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
-
-from agentarea_common.base.models import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +58,7 @@ class DatabaseSecretManager(BaseSecretManager):
         # Initialize encryption
         self._fernet = self._load_or_create_key(encryption_key)
 
-        logger.info(
-            f"Initialized DatabaseSecretManager for workspace {self.workspace_id}"
-        )
+        logger.info(f"Initialized DatabaseSecretManager for workspace {self.workspace_id}")
 
     def _load_or_create_key(self, encryption_key: str | None) -> Fernet:
         """Load or create a symmetric encryption key.
@@ -132,15 +128,11 @@ class DatabaseSecretManager(BaseSecretManager):
             secret = result.scalar_one_or_none()
 
             if secret is None:
-                logger.debug(
-                    f"Secret '{secret_name}' not found in workspace {self.workspace_id}"
-                )
+                logger.debug(f"Secret '{secret_name}' not found in workspace {self.workspace_id}")
                 return None
 
             decrypted_value = self._decrypt(secret.encrypted_value)
-            logger.debug(
-                f"Retrieved secret '{secret_name}' from workspace {self.workspace_id}"
-            )
+            logger.debug(f"Retrieved secret '{secret_name}' from workspace {self.workspace_id}")
             return decrypted_value
 
         except Exception as e:
@@ -182,9 +174,7 @@ class DatabaseSecretManager(BaseSecretManager):
                         updated_at=func.now(),
                     )
                 )
-                logger.info(
-                    f"Updated secret '{secret_name}' in workspace {self.workspace_id}"
-                )
+                logger.info(f"Updated secret '{secret_name}' in workspace {self.workspace_id}")
             else:
                 # Create new secret
                 new_secret = EncryptedSecret(
@@ -195,9 +185,7 @@ class DatabaseSecretManager(BaseSecretManager):
                     created_by=self.user_context.user_id,
                 )
                 self.session.add(new_secret)
-                logger.info(
-                    f"Created secret '{secret_name}' in workspace {self.workspace_id}"
-                )
+                logger.info(f"Created secret '{secret_name}' in workspace {self.workspace_id}")
 
             await self.session.commit()
 
@@ -235,9 +223,7 @@ class DatabaseSecretManager(BaseSecretManager):
             await self.session.delete(secret)
             await self.session.commit()
 
-            logger.info(
-                f"Deleted secret '{secret_name}' from workspace {self.workspace_id}"
-            )
+            logger.info(f"Deleted secret '{secret_name}' from workspace {self.workspace_id}")
             return True
 
         except Exception as e:

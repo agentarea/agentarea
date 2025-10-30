@@ -25,6 +25,7 @@ class MockModel(WorkspaceScopedMixin):
 
     @classmethod
     def __name__(cls):
+        """Return the mock model name used in tests."""
         return "MockModel"
 
 

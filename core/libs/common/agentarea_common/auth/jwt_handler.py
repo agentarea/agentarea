@@ -1,7 +1,6 @@
 """JWT token handler for user and workspace context extraction."""
 
 import logging
-import os
 
 import jwt
 from fastapi import Request
@@ -72,7 +71,9 @@ class JWTTokenHandler:
 
         except jwt.InvalidTokenError as e:
             self.logger.error(f"JWT validation failed: {e}")
-            raise InvalidJWTToken(reason=f"Token validation failed: {e!s}", token_present=True)
+            raise InvalidJWTToken(
+                reason=f"Token validation failed: {e!s}", token_present=True
+            ) from e
 
     def _extract_token_from_header(self, request: Request) -> str | None:
         """Extract Bearer token from Authorization header.

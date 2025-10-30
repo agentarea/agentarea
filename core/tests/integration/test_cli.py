@@ -1,6 +1,5 @@
 """Test script for the AgentArea CLI."""
 
-import pytest
 
 
 def test_cli_imports():

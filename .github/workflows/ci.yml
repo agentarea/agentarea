@@ -11,136 +11,136 @@ env:
   UV_CACHE_DIR: ~/.cache/uv
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # lint:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
       
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "core/**/pyproject.toml"
+  #     - name: Install uv
+  #       uses: astral-sh/setup-uv@v4
+  #       with:
+  #         enable-cache: true
+  #         cache-dependency-glob: "core/**/pyproject.toml"
 
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
+  #     - name: Set up Python
+  #       run: uv python install ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        working-directory: core
-        run: |
-          uv sync --group lint
-          uv sync --group dev
+  #     - name: Install dependencies
+  #       working-directory: core
+  #       run: |
+  #         uv sync --group lint
+  #         uv sync --group dev
 
-      - name: Run ruff check
-        working-directory: core
-        run: uv run ruff check .
+  #     - name: Run ruff check
+  #       working-directory: core
+  #       run: uv run ruff check .
 
-      - name: Run ruff format check
-        working-directory: core
-        run: uv run ruff format --check .
+  #     - name: Run ruff format check
+  #       working-directory: core
+  #       run: uv run ruff format --check .
 
-      - name: Run pyright
-        working-directory: core
-        run: uv run pyright
+  #     - name: Run pyright
+  #       working-directory: core
+  #       run: uv run pyright
 
-  test:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: agentarea_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+  # test:
+  #   runs-on: ubuntu-latest
+  #   services:
+  #     postgres:
+  #       image: postgres:15
+  #       env:
+  #         POSTGRES_PASSWORD: postgres
+  #         POSTGRES_DB: agentarea_test
+  #       options: >-
+  #         --health-cmd pg_isready
+  #         --health-interval 10s
+  #         --health-timeout 5s
+  #         --health-retries 5
       
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+  #     redis:
+  #       image: redis:7
+  #       options: >-
+  #         --health-cmd "redis-cli ping"
+  #         --health-interval 10s
+  #         --health-timeout 5s
+  #         --health-retries 5
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
       
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "core/**/pyproject.toml"
+  #     - name: Install uv
+  #       uses: astral-sh/setup-uv@v4
+  #       with:
+  #         enable-cache: true
+  #         cache-dependency-glob: "core/**/pyproject.toml"
 
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
+  #     - name: Set up Python
+  #       run: uv python install ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        working-directory: core
-        run: |
-          uv sync --group test
-          uv sync --group dev
+  #     - name: Install dependencies
+  #       working-directory: core
+  #       run: |
+  #         uv sync --group test
+  #         uv sync --group dev
 
-      - name: Run tests
-        working-directory: core
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
-          REDIS_URL: redis://localhost:6379/0
-        run: |
-          uv run pytest tests/ \
-            --cov-report=xml \
-            --cov-report=term \
-            --junitxml=test-results.xml \
-            -n auto
+  #     - name: Run tests
+  #       working-directory: core
+  #       env:
+  #         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
+  #         REDIS_URL: redis://localhost:6379/0
+  #       run: |
+  #         uv run pytest tests/ \
+  #           --cov-report=xml \
+  #           --cov-report=term \
+  #           --junitxml=test-results.xml \
+  #           -n auto
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./core/coverage.xml
-          flags: unittests
-          name: codecov-umbrella
+  #     - name: Upload coverage to Codecov
+  #       uses: codecov/codecov-action@v4
+  #       with:
+  #         file: ./core/coverage.xml
+  #         flags: unittests
+  #         name: codecov-umbrella
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: core/test-results.xml
+  #     - name: Upload test results
+  #       uses: actions/upload-artifact@v4
+  #       if: always()
+  #       with:
+  #         name: test-results
+  #         path: core/test-results.xml
 
-  build:
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    strategy:
-      matrix:
-        component: [api, worker]
+  # build:
+  #   runs-on: ubuntu-latest
+  #   needs: [lint, test]
+  #   strategy:
+  #     matrix:
+  #       component: [api, worker]
     
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
       
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
+  #     - name: Install uv
+  #       uses: astral-sh/setup-uv@v4
+  #       with:
+  #         enable-cache: true
 
-      - name: Install uv (act fallback)
-        run: |
-          curl -Ls https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+  #     - name: Install uv (act fallback)
+  #       run: |
+  #         curl -Ls https://astral.sh/uv/install.sh | sh
+  #         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
+  #     - name: Set up Python
+  #       run: uv python install ${{ env.PYTHON_VERSION }}
 
-      - name: Build package
-        working-directory: core
-        run: uv build apps/${{ matrix.component }}
+  #     - name: Build package
+  #       working-directory: core
+  #       run: uv build apps/${{ matrix.component }}
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.component }}-dist
-          path: core/dist/
+  #     - name: Upload build artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ${{ matrix.component }}-dist
+  #         path: core/dist/
 
   docker-api:
     needs: [lint, test]

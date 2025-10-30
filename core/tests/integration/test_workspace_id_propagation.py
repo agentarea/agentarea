@@ -163,16 +163,15 @@ class TestWorkspaceIdPropagation:
 
         # Verify the object was created successfully
         assert execution_request.workspace_id == "test-workspace-789"
-        logger.info(f"✅ AgentExecutionRequest correctly reconstructed with workspace_id")
+        logger.info("✅ AgentExecutionRequest correctly reconstructed with workspace_id")
 
     @pytest.mark.asyncio
     async def test_task_service_requires_workspace_id(self, repository_factory, event_broker):
         """Test that TaskService.create_and_execute_task_with_workflow requires workspace_id."""
-        from agentarea_tasks.task_service import TaskService
-        from agentarea_tasks.temporal_task_manager import TemporalTaskManager
-
         # Create task repository
         from agentarea_tasks.infrastructure.repository import TaskRepository
+        from agentarea_tasks.task_service import TaskService
+        from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
         task_repository = repository_factory.create_repository(TaskRepository)
         task_manager = TemporalTaskManager(task_repository)

@@ -224,7 +224,7 @@ async def validate_agent_exists(agent_service: AgentService, agent_id: UUID) -> 
         raise
     except Exception as e:
         logger.error(f"Error validating agent existence for {agent_id}: {e}")
-        raise A2AValidationError(f"Failed to validate agent availability: {e}", -32603)
+        raise A2AValidationError(f"Failed to validate agent availability: {e}", -32603) from None
 
 
 def validate_message_send_params(params: dict[str, Any]) -> MessageSendParams:
@@ -246,9 +246,11 @@ def validate_message_send_params(params: dict[str, Any]) -> MessageSendParams:
         for error in e.errors():
             field = ".".join(str(x) for x in error["loc"])
             error_details.append(f"{field}: {error['msg']}")
-        raise A2AValidationError(f"Invalid message parameters: {'; '.join(error_details)}", -32602)
+        raise A2AValidationError(
+            f"Invalid message parameters: {'; '.join(error_details)}", -32602
+        ) from None
     except Exception as e:
-        raise A2AValidationError(f"Failed to parse message parameters: {e}", -32602)
+        raise A2AValidationError(f"Failed to parse message parameters: {e}", -32602) from None
 
 
 def validate_task_id_param(params: dict[str, Any]) -> UUID:
@@ -269,8 +271,8 @@ def validate_task_id_param(params: dict[str, Any]) -> UUID:
 
     try:
         return UUID(task_id_str)
-    except ValueError:
-        raise A2AValidationError(f"Invalid task ID format: {task_id_str}", -32602)
+    except ValueError as e:
+        raise A2AValidationError(f"Invalid task ID format: {task_id_str}", -32602) from e
 
 
 def _extract_text_from_parts(parts):
@@ -643,7 +645,14 @@ async def handle_message_send(
 
 
 async def handle_message_stream_sse(
-    request, request_id, params, task_service, agent_id, auth_context, agent_service, event_stream_service
+    request,
+    request_id,
+    params,
+    task_service,
+    agent_id,
+    auth_context,
+    agent_service,
+    event_stream_service,
 ):
     """Handle A2A message/stream method with proper TaskService integration, validation, and real event streaming."""
     start_time = time.time()
@@ -756,8 +765,9 @@ async def handle_message_stream_sse(
                         event_type = event_type[9:]
 
                     # Add A2A-specific metadata to event data
-                    event_data = event.get("data", {})
-                    event_data["a2a_metadata"] = {
+                    # Note: event_stream_service returns "event_data" containing the full event data
+                    event_data_dict = event.get("event_data", {})
+                    event_data_dict["a2a_metadata"] = {
                         "source": "a2a",
                         "method": "message/stream",
                         "request_id": request_id,
@@ -767,8 +777,8 @@ async def handle_message_stream_sse(
                     a2a_event = {
                         "event": event_type,
                         "task_id": str(created_task.id),
-                        "timestamp": event.get("timestamp"),
-                        "data": event_data,
+                        "timestamp": event_data_dict.get("timestamp"),
+                        "data": event_data_dict,
                     }
 
                     yield f"data: {json.dumps(a2a_event)}\n\n"
@@ -1252,7 +1262,14 @@ async def _dispatch_rpc_method(
             request_id, params, task_service, agent_id, auth_context, agent_service
         ),
         "message/stream": lambda: handle_message_stream_sse(
-            request, request_id, params, task_service, agent_id, auth_context, agent_service, event_stream_service
+            request,
+            request_id,
+            params,
+            task_service,
+            agent_id,
+            auth_context,
+            agent_service,
+            event_stream_service,
         ),
         "tasks/get": lambda: handle_task_get(
             request_id, params, task_service, agent_id, auth_context
@@ -1571,9 +1588,9 @@ async def get_agent_well_known(
             error=str(e),
         )
         if e.code == -32602:  # Agent not found
-            raise HTTPException(status_code=404, detail=e.message)
+            raise HTTPException(status_code=404, detail=e.message) from e
         else:
-            raise HTTPException(status_code=500, detail=e.message)
+            raise HTTPException(status_code=500, detail=e.message) from e
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         log_a2a_operation(
@@ -1584,4 +1601,4 @@ async def get_agent_well_known(
             duration_ms=duration_ms,
             error=f"Failed to get agent discovery info: {e}",
         )
-        raise HTTPException(status_code=500, detail=f"Failed to get agent discovery info: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get agent discovery info: {e}") from e

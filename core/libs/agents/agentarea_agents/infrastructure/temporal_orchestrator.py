@@ -45,12 +45,12 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     data_converter=pydantic_data_converter,
                 )
                 logger.info(f"Connected to Temporal at {self.temporal_address}")
-            except ImportError:
-                logger.warning("Temporal not available - using fallback")
-                return None
+            except ImportError as e:
+                logger.error(f"Temporal library not installed: {e}")
+                raise RuntimeError("Temporal integration is not ready (missing 'temporalio')") from e
             except Exception as e:
                 logger.error(f"Failed to connect to Temporal: {e}")
-                return None
+                raise RuntimeError(f"Temporal client connection failed: {e}") from e
         return self._client
 
     async def close(self):
@@ -67,10 +67,6 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
     async def start_workflow(self, execution_id: str, request: ExecutionRequest) -> dict[str, Any]:
         """Start Temporal workflow execution."""
         client = await self._get_client()
-
-        if not client:
-            # Fallback to in-memory simulation
-            return await self._simulate_workflow_start(execution_id, request)
 
         try:
             # Try to import from execution library - fallback if not available
@@ -125,40 +121,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     task_queue=self.task_queue,
                 )
 
-            except ImportError:
-                # Fallback to simple string-based workflow if execution library not available
-                if execution_id.startswith("agent-task-"):
-                    task_id_str = execution_id.replace("agent-task-", "")
-                else:
-                    task_id_str = execution_id
-
-                try:
-                    # Ensure task_id is a valid UUID string for the workflow
-                    UUID(task_id_str)
-                except ValueError:
-                    # If not, log a warning and generate a new one to avoid workflow failure
-                    from uuid import uuid4
-
-                    task_id_str = str(uuid4())
-                    logger.warning(
-                        f"Could not parse UUID from execution_id '{execution_id}'. "
-                        f"Generated new task_id: {task_id_str}"
-                    )
-
-                handle = await client.start_workflow(
-                    "AgentExecutionWorkflow",
-                    {
-                        "agent_id": str(request.agent_id),
-                        "task_id": task_id_str,  # Corrected: pass valid UUID string
-                        "user_id": request.user_id,
-                        "task_query": request.task_query,  # FIXED: was 'query', now 'task_query'
-                        "session_id": request.session_id,
-                        "task_parameters": request.task_parameters,
-                        "timeout_seconds": request.timeout_seconds,
-                    },
-                    id=execution_id,
-                    task_queue=self.task_queue,
-                )
+            except ImportError as e:
+                logger.error(f"Agent execution library not available: {e}")
+                raise RuntimeError("Agent execution integration is not ready (missing 'agentarea_execution')") from e
 
             logger.info(f"Started Temporal workflow: {execution_id}")
 
@@ -172,14 +137,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
         except Exception as e:
             logger.error(f"Failed to start Temporal workflow: {e}")
-            return await self._simulate_workflow_start(execution_id, request)
+            raise RuntimeError(f"Failed to start Temporal workflow: {e}") from e
 
     async def get_workflow_status(self, execution_id: str) -> dict[str, Any]:
         """Get Temporal workflow status."""
         client = await self._get_client()
-
-        if not client:
-            return await self._simulate_workflow_status(execution_id)
 
         try:
             handle = client.get_workflow_handle(execution_id)
@@ -210,15 +172,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
         except Exception as e:
             logger.error(f"Failed to get workflow status: {e}")
-            return await self._simulate_workflow_status(execution_id)
+            raise RuntimeError(f"Failed to get workflow status: {e}") from e
 
     async def cancel_workflow(self, execution_id: str) -> bool:
         """Cancel Temporal workflow."""
         client = await self._get_client()
-
-        if not client:
-            logger.info(f"Simulated cancellation of workflow: {execution_id}")
-            return True
 
         try:
             handle = client.get_workflow_handle(execution_id)
@@ -234,10 +192,6 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         """Pause Temporal workflow using signals."""
         client = await self._get_client()
 
-        if not client:
-            logger.info(f"Simulated pause of workflow: {execution_id}")
-            return await self._simulate_workflow_pause(execution_id)
-
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.signal("pause_execution", "User requested pause")
@@ -252,10 +206,6 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         """Resume Temporal workflow using signals."""
         client = await self._get_client()
 
-        if not client:
-            logger.info(f"Simulated resume of workflow: {execution_id}")
-            return await self._simulate_workflow_resume(execution_id)
-
         try:
             handle = client.get_workflow_handle(execution_id)
             await handle.signal("resume_execution", "User requested resume")
@@ -264,137 +214,4 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
         except Exception as e:
             logger.error(f"Failed to resume workflow: {e}")
-            return False
-
-    async def _simulate_workflow_start(
-        self, execution_id: str, request: ExecutionRequest
-    ) -> dict[str, Any]:
-        """Simulate workflow start when Temporal is not available."""
-        logger.info(f"Simulating workflow start: {execution_id}")
-
-        # Create a simple simulation file for tracking
-        import json
-        import os
-        import time
-
-        state_dir = "/tmp/agentarea_workflows"
-        os.makedirs(state_dir, exist_ok=True)
-
-        state_file = f"{state_dir}/{execution_id}.json"
-        state_data = {
-            "execution_id": execution_id,
-            "agent_id": str(request.agent_id),
-            "query": request.task_query,
-            "user_id": request.user_id,
-            "start_time": time.time(),
-            "status": "running",
-        }
-
-        with open(state_file, "w") as f:
-            json.dump(state_data, f)
-
-        return {
-            "success": True,
-            "status": "started",
-            "content": "Workflow simulation started",
-            "execution_id": execution_id,
-            "temporal_available": False,
-        }
-
-    async def _simulate_workflow_status(self, execution_id: str) -> dict[str, Any]:
-        """Simulate workflow status check."""
-        import json
-        import os
-        import time
-
-        state_file = f"/tmp/agentarea_workflows/{execution_id}.json"
-
-        if not os.path.exists(state_file):
-            return {
-                "status": "not_found",
-                "success": False,
-                "error": "Workflow not found",
-            }
-
-        with open(state_file) as f:
-            state_data = json.load(f)
-
-        # Simulate completion after 3 seconds
-        start_time = state_data.get("start_time", time.time())
-        if time.time() - start_time > 3:
-            return {
-                "status": "completed",
-                "success": True,
-                "result": {
-                    "response": f"Hello! I've processed your query: {state_data.get('query', 'unknown')}. This is a simulated response.",
-                    "conversation_history": [],
-                    "execution_metrics": {"simulated": True},
-                },
-                "end_time": datetime.now().isoformat(),
-            }
-
-        return {
-            "status": "running",
-            "success": None,
-            "result": None,
-        }
-
-    async def _simulate_workflow_pause(self, execution_id: str) -> bool:
-        """Simulate workflow pause."""
-        import json
-        import os
-
-        state_file = f"/tmp/agentarea_workflows/{execution_id}.json"
-
-        if not os.path.exists(state_file):
-            logger.warning(f"Cannot pause workflow {execution_id}: state file not found")
-            return False
-
-        try:
-            with open(state_file) as f:
-                state_data = json.load(f)
-
-            state_data["status"] = "paused"
-            state_data["paused_at"] = datetime.now().isoformat()
-
-            with open(state_file, "w") as f:
-                json.dump(state_data, f)
-
-            logger.info(f"Simulated pause of workflow: {execution_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to simulate workflow pause: {e}")
-            return False
-
-    async def _simulate_workflow_resume(self, execution_id: str) -> bool:
-        """Simulate workflow resume."""
-        import json
-        import os
-
-        state_file = f"/tmp/agentarea_workflows/{execution_id}.json"
-
-        if not os.path.exists(state_file):
-            logger.warning(f"Cannot resume workflow {execution_id}: state file not found")
-            return False
-
-        try:
-            with open(state_file) as f:
-                state_data = json.load(f)
-
-            if state_data.get("status") != "paused":
-                logger.warning(f"Cannot resume workflow {execution_id}: not in paused state")
-                return False
-
-            state_data["status"] = "running"
-            state_data["resumed_at"] = datetime.now().isoformat()
-
-            with open(state_file, "w") as f:
-                json.dump(state_data, f)
-
-            logger.info(f"Simulated resume of workflow: {execution_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to simulate workflow resume: {e}")
             return False

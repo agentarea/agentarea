@@ -42,9 +42,9 @@ Future Consideration:
   this can be simplified without changing the interface
 """
 
-import logging
 import asyncio
 import json
+import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
@@ -107,10 +107,7 @@ class EventStreamService:
                 yield event
 
         except Exception as e:
-            logger.error(
-                f"EventStreamService error for task {task_id}: {e}",
-                exc_info=True
-            )
+            logger.error(f"EventStreamService error for task {task_id}: {e}", exc_info=True)
             raise
 
     async def stream_events(
@@ -162,9 +159,9 @@ class EventStreamService:
         if hasattr(self.broker, "connect"):
             try:
                 await self.broker.connect()
-            except Exception:
+            except Exception as e:
                 # Connection may already be established; ignore failures
-                pass
+                logger.debug(f"Broker connection attempt ignored: {e}")
 
         for pattern in event_patterns:
             logger.info(
@@ -210,11 +207,11 @@ class EventStreamService:
                                 payload = msg  # fallback
 
                             # Normalize bytes/str payloads to dict
-                            if isinstance(payload, (bytes, bytearray)):
+                            if isinstance(payload, bytes | bytearray):
                                 try:
                                     payload = payload.decode("utf-8")
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    logger.debug(f"Could not decode payload as UTF-8: {e}")
                             if isinstance(payload, str):
                                 try:
                                     payload = json.loads(payload)
@@ -236,27 +233,24 @@ class EventStreamService:
                                 else:
                                     try:
                                         maybe_ack()
-                                    except Exception:
-                                        pass
+                                    except Exception as e:
+                                        logger.debug(f"Could not ack message: {e}")
 
                         except Exception as e:
                             logger.error(
                                 f"Error processing message from pattern '{pattern}': {e}",
-                                exc_info=True
+                                exc_info=True,
                             )
                             continue
                 finally:
                     # Stop the subscriber
                     try:
                         await subscriber.stop()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not stop subscriber: {e}")
 
             except Exception as e:
-                logger.error(
-                    f"Error subscribing to pattern '{pattern}': {e}",
-                    exc_info=True
-                )
+                logger.error(f"Error subscribing to pattern '{pattern}': {e}", exc_info=True)
                 # Continue to next pattern
                 continue
 
@@ -334,7 +328,9 @@ class EventStreamService:
             # Build response structure
             logger.debug(f"EventStreamService: parsed event_data={event_data}")
             return {
-                "event_type": event_data.get("event_type") if isinstance(event_data, dict) else None,
+                "event_type": event_data.get("event_type")
+                if isinstance(event_data, dict)
+                else None,
                 "event_data": event_data,
                 "task_id": str(task_id_filter) if task_id_filter else None,
                 "channel": channel,

@@ -10,7 +10,7 @@ class AWSSettings(BaseAppSettings):
     """AWS and S3 configuration."""
 
     AWS_ACCESS_KEY_ID: str = "minioadmin"
-    AWS_SECRET_ACCESS_KEY: str = "minioadmin"
+    AWS_SECRET_ACCESS_KEY: str = "minioadmin"  # noqa: S105
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: str = "ai-agents-bucket"
     AWS_ENDPOINT_URL: str | None = None

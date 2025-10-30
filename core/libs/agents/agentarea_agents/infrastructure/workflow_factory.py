@@ -51,9 +51,9 @@ class WorkflowFactory:
         logger.info(f"Created Temporal orchestrator with injected config: {address}")
         return orchestrator
 
-    def create_default_orchestrator(self) -> WorkflowOrchestratorInterface:
-        """Create default workflow orchestrator (Temporal)."""
-        return self.create_temporal_orchestrator()
+    # def create_default_orchestrator(self) -> WorkflowOrchestratorInterface:
+    #     """Create default workflow orchestrator (Temporal)."""
+    #     return self.create_temporal_orchestrator()
 
     def clear_cache(self) -> None:
         """Clear orchestrator cache."""

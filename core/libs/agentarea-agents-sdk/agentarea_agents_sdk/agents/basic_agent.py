@@ -19,11 +19,15 @@ Run examples:
 
 import argparse
 import asyncio
+import logging
+import sys
 
 from agentarea_agents_sdk.tools.example_decorator_tool import MathToolset
 from agentarea_agents_sdk.tools.file_toolset import FileToolset
 
 from .agent import Agent
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -114,19 +118,20 @@ async def run_agent(
         tools=[MathToolset(), FileToolset()],
     )
 
-    print(f"Agent: {name} | Model: {model}")
-    print("Task:", task)
+    logger.info("Agent: %s | Model: %s", name, model)
+    logger.info("Task: %s", task)
     if goal:
-        print("Goal:", goal)
-    print("-" * 40)
+        logger.info("Goal: %s", goal)
+    logger.info("%s", "-" * 40)
 
     if stream:
         async for content in agent.run_stream(task, goal=goal):
-            print(content, end="", flush=True)
-        print()
+            sys.stdout.write(content)
+            sys.stdout.flush()
+        sys.stdout.write("\n")
     else:
         result = await agent.run(task, goal=goal)
-        print(result)
+        logger.info("%s", result)
 
 
 def main() -> None:

@@ -17,8 +17,6 @@ from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
 from agentarea_api.api.events import events_router
-
-# Import MCP server
 from agentarea_api.api.v1.mcp import mcp_app
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
 
@@ -42,42 +40,42 @@ async def initialize_services():
         # secret_manager = get_real_secret_manager()
         # register_singleton(BaseSecretManager, secret_manager)
 
-        print(
-            f"Real services initialized successfully - "
-            f"Event Broker: {type(event_broker).__name__}"
+        logger.info(
+            "Real services initialized successfully - Event Broker: %s",
+            type(event_broker).__name__,
         )
     except Exception as e:
-        print(f"ERROR: Service initialization failed: {e}")
+        logger.error("Service initialization failed: %s", e)
         raise e
 
 
 async def cleanup_all_connections():
     """Comprehensive cleanup of all connections."""
-    print("🧹 Starting comprehensive connection cleanup...")
+    logger.info("🧹 Starting comprehensive connection cleanup...")
 
     try:
         # Cleanup connection manager singletons with timeout
         from agentarea_common.infrastructure.connection_manager import cleanup_connections
 
         await asyncio.wait_for(cleanup_connections(), timeout=2.0)
-        print("✅ Connection manager cleanup completed")
-    except asyncio.TimeoutError:
-        print("⚠️  Connection manager cleanup timed out (reload mode)")
+        logger.info("✅ Connection manager cleanup completed")
+    except TimeoutError:
+        logger.warning("⚠️  Connection manager cleanup timed out (reload mode)")
     except Exception as e:
-        print(f"⚠️  Error in connection manager cleanup: {e}")
+        logger.error("⚠️  Error in connection manager cleanup: %s", e)
 
     try:
         # Stop events router with timeout
         from agentarea_api.api.events.events_router import stop_events_router
 
         await asyncio.wait_for(stop_events_router(), timeout=2.0)
-        print("✅ Events router cleanup completed")
-    except asyncio.TimeoutError:
-        print("⚠️  Events router cleanup timed out (reload mode)")
+        logger.info("✅ Events router cleanup completed")
+    except TimeoutError:
+        logger.warning("⚠️  Events router cleanup timed out (reload mode)")
     except Exception as e:
-        print(f"⚠️  Error in events router cleanup: {e}")
+        logger.error("⚠️  Error in events router cleanup: %s", e)
 
-    print("🎉 All connection cleanup completed")
+    logger.info("🎉 All connection cleanup completed")
 
 
 @asynccontextmanager
@@ -98,16 +96,16 @@ async def app_lifespan(app: FastAPI):
 
     await start_events_router()
 
-    print("Application started successfully")
+    logger.info("Application started successfully")
 
     try:
         yield
     finally:
         # Shutdown - skip cleanup in reload mode for fast restarts
         if is_reload_mode:
-            print("Application shutting down (reload mode - skipping cleanup)")
+            logger.info("Application shutting down (reload mode - skipping cleanup)")
         else:
-            print("Application shutting down (production mode - full cleanup)")
+            logger.info("Application shutting down (production mode - full cleanup)")
             await cleanup_all_connections()
 
 

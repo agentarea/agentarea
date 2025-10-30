@@ -16,8 +16,6 @@ from agentarea_api.api.v1.a2a_auth import A2AAuthContext
 from agentarea_api.api.v1.agents_a2a import handle_message_stream_sse
 from agentarea_tasks.domain.models import SimpleTask
 from fastapi.responses import StreamingResponse
-from agentarea_common.events.event_stream_service import EventStreamService
-from agentarea_agents.application.agent_service import AgentService
 
 logger = logging.getLogger(__name__)
 

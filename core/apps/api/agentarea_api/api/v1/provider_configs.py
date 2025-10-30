@@ -49,8 +49,13 @@ class ProviderConfigResponse(BaseModel):
         # Extract model instance IDs from the relationship if loaded
         # Always return a list (empty if no model instances)
         model_instance_ids: list[str] = []
-        if hasattr(provider_config, "model_instances") and provider_config.model_instances is not None:
-            model_instance_ids = [str(instance.model_spec_id) for instance in provider_config.model_instances]
+        if (
+            hasattr(provider_config, "model_instances")
+            and provider_config.model_instances is not None
+        ):
+            model_instance_ids = [
+                str(instance.model_spec_id) for instance in provider_config.model_instances
+            ]
 
         return cls(
             id=str(provider_config.id),

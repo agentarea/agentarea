@@ -6,8 +6,9 @@ These tests verify that:
 3. Admin users have appropriate privileges
 """
 
-import pytest
 from uuid import uuid4
+
+import pytest
 
 
 @pytest.mark.integration

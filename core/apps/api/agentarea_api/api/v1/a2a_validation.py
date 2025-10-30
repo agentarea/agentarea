@@ -122,9 +122,7 @@ class A2AValidator:
         try:
             return A2ATaskParams(**params)
         except ValidationError as e:
-            raise A2AValidationError(
-                f"Invalid task parameters: {e}", "INVALID_PARAMS"
-            ) from e
+            raise A2AValidationError(f"Invalid task parameters: {e}", "INVALID_PARAMS") from e
 
     @classmethod
     def validate_agent_id(cls, agent_id: str) -> UUID:
@@ -157,7 +155,7 @@ class A2AValidator:
         try:
             body = await request.json()
         except json.JSONDecodeError as e:
-            raise A2AValidationError(f"Invalid JSON body: {e}", "INVALID_JSON")
+            raise A2AValidationError(f"Invalid JSON body: {e}", "INVALID_JSON") from e
 
         # Validate JSON-RPC format
         json_rpc_request = cls.validate_json_rpc_request(body)
@@ -220,14 +218,14 @@ async def validate_a2a_middleware(request: Request, agent_id: UUID) -> dict[str,
         try:
             body = await request.json()
             request_id = body.get("id")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not extract request ID from request body: {e}")
 
         # Return error response
         error_response = create_a2a_error_response(request_id, e)
 
         # Convert to HTTP exception
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_response)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_response) from e
 
 
 # Dependency for A2A validation

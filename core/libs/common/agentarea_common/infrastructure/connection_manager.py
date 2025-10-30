@@ -20,6 +20,7 @@ class ConnectionManager:
     _lock = Lock()
 
     def __new__(cls) -> "ConnectionManager":
+        """Return the thread-safe singleton instance."""
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:

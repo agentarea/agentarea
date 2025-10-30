@@ -9,6 +9,7 @@ These tests verify that:
 
 import pytest
 from fastapi.testclient import TestClient
+
 from apps.api.agentarea_api.main import app
 
 
@@ -155,7 +156,7 @@ class TestA2AEndpoints:
         # Should NOT be 401 or 403 (these endpoints use A2A auth, not JWT)
         # May be 404 (not found), 422 (validation), or 200 (success)
         if response.status_code in [401, 403]:
-            pytest.skip(f"A2A endpoints incorrectly require JWT auth - should use A2A auth only")
+            pytest.skip("A2A endpoints incorrectly require JWT auth - should use A2A auth only")
 
 
 class TestSecurityHeaders:
@@ -208,6 +209,6 @@ class TestEndpointDiscovery:
         assert protected_count > 0, "Should have at least one protected /v1 endpoint"
 
         # Log the counts for visibility
-        print(f"\nEndpoint security summary:")
+        print("\nEndpoint security summary:")
         print(f"  Public /v1 endpoints: {public_count}")
         print(f"  Protected /v1 endpoints: {protected_count}")

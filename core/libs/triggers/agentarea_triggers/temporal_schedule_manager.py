@@ -122,7 +122,7 @@ class TemporalScheduleManager:
                 trigger_id=str(trigger_id),
                 schedule_id=schedule_id,
                 original_error=str(e),
-            )
+            ) from None
         except Exception as e:
             error_msg = f"Unexpected error creating schedule: {e}"
             logger.error(
@@ -136,7 +136,7 @@ class TemporalScheduleManager:
                 trigger_id=str(trigger_id),
                 schedule_id=schedule_id,
                 original_error=str(e),
-            )
+            ) from None
 
     async def update_cron_schedule(
         self, trigger_id: UUID, cron_expression: str, timezone: str = "UTC"

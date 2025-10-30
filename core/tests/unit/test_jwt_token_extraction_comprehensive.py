@@ -18,7 +18,7 @@ from agentarea_common.auth.test_utils import (
     generate_test_jwt_token,
 )
 from agentarea_common.exceptions.workspace import InvalidJWTToken, MissingWorkspaceContext
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 
 class TestJWTTokenHandler:

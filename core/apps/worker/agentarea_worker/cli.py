@@ -83,7 +83,7 @@ def dev(debug: bool):
         click.echo(f"📁 Watching: {worker_path} and {libs_path}")
 
         # Run watchfiles to monitor and restart the worker
-        subprocess.run(
+        subprocess.run(  # noqa: S603
             [
                 sys.executable,
                 "-m",

@@ -61,7 +61,7 @@ class ToolExecutor:
             raise
         except Exception as e:
             logger.error(f"Tool execution failed for '{tool_name}': {e}")
-            raise ToolExecutionError(tool_name, str(e), e)
+            raise ToolExecutionError(tool_name, str(e), e) from e
 
     async def _create_mcp_tool(
         self,

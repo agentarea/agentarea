@@ -39,13 +39,13 @@ class SecretManagerFactory:
         # Validate configuration at startup to fail fast
         secret_type = settings.SECRET_MANAGER_TYPE.lower()
 
-        if secret_type == "database":
+        if secret_type == "database":  # noqa: S105
             if not settings.SECRET_MANAGER_ENCRYPTION_KEY:
                 raise ValueError(
                     "SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set when using database secret manager. "
                     "Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
                 )
-        elif secret_type == "infisical":
+        elif secret_type == "infisical":  # noqa: S105
             if not settings.SECRET_MANAGER_ACCESS_KEY or not settings.SECRET_MANAGER_SECRET_KEY:
                 raise ValueError(
                     "Infisical credentials not configured. "
@@ -73,7 +73,7 @@ class SecretManagerFactory:
         """
         secret_type = self.settings.SECRET_MANAGER_TYPE.lower()
 
-        if secret_type == "database":
+        if secret_type == "database":  # noqa: S105
             from .database_secret_manager import DatabaseSecretManager
 
             logger.debug(
@@ -85,7 +85,7 @@ class SecretManagerFactory:
                 encryption_key=self.settings.SECRET_MANAGER_ENCRYPTION_KEY,
             )
 
-        elif secret_type == "infisical":
+        elif secret_type == "infisical":  # noqa: S105
             try:
                 from infisical_sdk.client import InfisicalSDKClient
 
@@ -101,8 +101,7 @@ class SecretManagerFactory:
                     )
 
                 client = InfisicalSDKClient(
-                    host=self.settings.SECRET_MANAGER_ENDPOINT
-                    or "https://app.infisical.com",
+                    host=self.settings.SECRET_MANAGER_ENDPOINT or "https://app.infisical.com",
                     client_id=self.settings.SECRET_MANAGER_ACCESS_KEY,
                     client_secret=self.settings.SECRET_MANAGER_SECRET_KEY,
                 )

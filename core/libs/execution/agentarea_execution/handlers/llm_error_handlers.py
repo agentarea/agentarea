@@ -115,9 +115,7 @@ class LLMErrorHandler:
             error_message = data["error"]  # Will raise KeyError if missing
             task_id = event.data["aggregate_id"]  # Will raise KeyError if missing
 
-            logger.error(
-                f"LLM Model not found: {model_id} in task {task_id}: {error_message}"
-            )
+            logger.error(f"LLM Model not found: {model_id} in task {task_id}: {error_message}")
 
             # Could implement:
             # - Mark model as unavailable
@@ -147,9 +145,7 @@ async def handle_llm_error_event(event: DomainEvent) -> None:
     event_type = event.data.get("original_event_type")
     if not event_type:
         event_type = event.event_type
-        logger.warning(
-            f"Event missing original_event_type, using event_type: {event_type}"
-        )
+        logger.warning(f"Event missing original_event_type, using event_type: {event_type}")
 
     if event_type == "LLMAuthFailed":
         await llm_error_handler.handle_auth_failure(event)

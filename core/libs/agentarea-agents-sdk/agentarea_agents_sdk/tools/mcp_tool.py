@@ -132,7 +132,7 @@ class MCPTool(BaseTool):
             raise
         except Exception as e:
             logger.error(f"MCP tool execution failed for {self.name}: {e}")
-            raise ToolExecutionError(self.name, str(e), e)
+            raise ToolExecutionError(self.name, str(e), e) from e
 
 
 class MCPToolFactory:

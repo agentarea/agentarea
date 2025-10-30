@@ -7,11 +7,10 @@ These tests verify that:
 """
 
 import os
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from httpx import AsyncClient
-from jwt import PyJWT
-from datetime import datetime, timedelta, UTC
-
 
 # Test configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")

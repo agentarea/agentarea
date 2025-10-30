@@ -118,9 +118,11 @@ class ActivityContext:
         self._sessions = []
 
     async def __aenter__(self):
+        """Enter async context and return the activity context."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit async context, commit/rollback, and close sessions."""
         # Handle commits/rollbacks first
         for session in self._sessions:
             try:

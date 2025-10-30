@@ -134,6 +134,7 @@ async def debug_webhook(
 
     Args:
         webhook_id: Unique identifier for the webhook
+        user_context: User context for authorization
         webhook_manager: Injected webhook manager service
 
     Returns:
@@ -153,4 +154,4 @@ async def debug_webhook(
 
     except Exception as e:
         logger.error(f"Error debugging webhook {webhook_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error debugging webhook: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Error debugging webhook: {e!s}") from e

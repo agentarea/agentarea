@@ -158,7 +158,7 @@ async def delete_model_instance(
 
 
 @router.post("/test", response_model=ModelInstanceTestResponse)
-async def test_model_instance(
+async def validate_model_instance(
     data: ModelInstanceTestRequest,
     user_context: UserContextDep,
     provider_service: ProviderService = Depends(get_provider_service),

@@ -157,7 +157,7 @@ class TriggerService:
                 correlation_id=correlation_id,
                 trigger_name=trigger_data.name,
                 agent_id=str(trigger_data.agent_id),
-            )
+            ) from None
 
     async def get_trigger(self, trigger_id: UUID) -> Trigger | None:
         """Get a trigger by ID.
@@ -461,7 +461,7 @@ class TriggerService:
             )
             raise TriggerExecutionError(
                 error_msg, trigger_id=str(trigger_id), status=status.value, original_error=str(e)
-            )
+            ) from None
 
     async def _update_trigger_execution_tracking(
         self, trigger_id: UUID, status: ExecutionStatus
@@ -629,7 +629,7 @@ class TriggerService:
                 trigger_id=str(trigger.id),
                 cron_expression=trigger.cron_expression,
                 original_error=str(e),
-            )
+            ) from None
 
     async def unschedule_cron_trigger(self, trigger_id: UUID) -> None:
         """Unschedule a cron trigger by deleting its Temporal Schedule.
@@ -783,7 +783,7 @@ class TriggerService:
                 dependency="agent_repository",
                 agent_id=str(agent_id),
                 original_error=str(e),
-            )
+            ) from e
 
     async def _validate_trigger_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate trigger configuration based on type.

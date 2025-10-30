@@ -6,6 +6,7 @@ scattered across the codebase into a single shared location.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from agentarea_common.events.base_events import DomainEvent, EventEnvelope
@@ -14,6 +15,8 @@ from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
 if TYPE_CHECKING:
     from agentarea_common.events.event_models import BaseEvent
+
+logger = logging.getLogger(__name__)
 
 
 class TestEventBroker(EventBroker):
@@ -33,7 +36,7 @@ class TestEventBroker(EventBroker):
         identity/equality with mock events or legacy DomainEvent instances.
         """
         self.published_events.append(event)
-        print(f"Test Event Published: {event}")
+        logger.debug("Test Event Published: %s", event)
 
     def get_published_events(self) -> list[object]:
         """Get all published events for test assertions."""
@@ -61,7 +64,7 @@ class TestSecretManager(BaseSecretManager):
     async def set_secret(self, secret_name: str, secret_value: str) -> None:
         """Set a secret value."""
         self._secrets[secret_name] = secret_value
-        print(f"Test Secret Set: {secret_name}")
+        logger.debug("Test Secret Set: %s", secret_name)
 
     async def delete_secret(self, secret_name: str) -> bool:
         """Delete a secret and return True if it existed."""

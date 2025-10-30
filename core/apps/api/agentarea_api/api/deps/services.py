@@ -84,6 +84,7 @@ DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 # Common event broker dependency
 EventBrokerDep = Annotated[EventBroker, Depends(get_event_broker)]
 
+
 # Secret Manager dependencies
 async def get_secret_manager(
     db_session: DatabaseSessionDep,
@@ -92,7 +93,7 @@ async def get_secret_manager(
     """Get SecretManager instance based on configuration."""
     from agentarea_common.config.secrets import get_secret_manager_settings
 
-    settings = get_secret_manager_settings()
+    get_secret_manager_settings()
     return get_real_secret_manager(
         session=db_session,
         user_context=user_context,

@@ -168,6 +168,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     # Create secret manager from factory with workspace context
                     # We need to create a new session for the secret manager
                     from agentarea_common.config import get_database
+
                     secret_session = get_database().async_session_factory()
                     try:
                         secret_manager = dependencies.secret_manager_factory.create(

@@ -263,7 +263,7 @@ class TriggerExecutionWorkflow:
             )
 
             # Convert to ApplicationError for proper workflow failure handling
-            raise ApplicationError(f"Unexpected trigger execution error: {e!s}")
+            raise ApplicationError(f"Unexpected trigger execution error: {e!s}") from e
 
     @workflow.signal
     async def cancel_execution(self) -> None:

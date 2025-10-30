@@ -44,6 +44,7 @@ class Task(BaseModel):
         super().__setattr__(name, value)
 
     class Config:
+        """Pydantic model configuration."""
         from_attributes = True
 
 
@@ -150,6 +151,7 @@ class SimpleTask(BaseModel):
     metadata: dict[str, Any] = {}  # Additional metadata for task management
 
     class Config:
+        """Pydantic model configuration."""
         from_attributes = True
 
     def model_post_init(self, __context: Any) -> None:
@@ -220,6 +222,7 @@ class TaskEvent(BaseModel):
     created_by: str = "system"
 
     class Config:
+        """Pydantic model configuration."""
         from_attributes = True
 
     @classmethod

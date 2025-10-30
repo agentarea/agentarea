@@ -43,7 +43,7 @@ class KratosAuthProvider(BaseAuthProvider):
             jwks_json = base64.b64decode(self.jwks_b64).decode("utf-8")
             self._jwks = json.loads(jwks_json)
         except Exception as e:
-            raise ValueError(f"Failed to decode JWKS: {e}")
+            raise ValueError(f"Failed to decode JWKS: {e}") from e
 
     async def verify_token(self, token: str) -> AuthResult:
         """Verify a Kratos JWT token.

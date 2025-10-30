@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 import jwt
 import pytest
 from agentarea_common.auth.providers.kratos import KratosAuthProvider
-from agentarea_common.auth.interfaces import AuthResult
 
 
 class TestKratosAuthProvider:

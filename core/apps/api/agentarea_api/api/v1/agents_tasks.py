@@ -256,12 +256,14 @@ async def create_task_for_agent_with_stream(
 
             # If workflow started successfully, stream events from event stream service
             if task.execution_id and task.status in ["running", "pending"]:
-                async for event in event_stream_service.stream_events_for_task(task.id, event_patterns=["workflow.*"]):
+                async for event in event_stream_service.stream_events_for_task(
+                    task.id, event_patterns=["workflow.*"]
+                ):
                     # Convert task service event to SSE format
                     event_type = event.get("event_type", "task_event")
 
-                    # Add execution context
-                    event_data = event.get("data", {})
+                    # Add execution context (use full event_data from stream service)
+                    event_data = event.get("event_data", {})
                     event_data.update(
                         {
                             "task_id": str(task.id),
@@ -795,16 +797,20 @@ async def stream_task_events(
                 )
 
                 # Stream events from event stream service
-                async for event in event_stream_service.stream_events_for_task(task_id, event_patterns=["workflow.*"]):
+                async for event in event_stream_service.stream_events_for_task(
+                    task_id, event_patterns=["workflow.*"]
+                ):
                     # Use protocol event structure directly - task service already formats it properly
                     event_type = event.get("event_type", "task_event")
+                    event_data_dict = event.get("event_data", {})
 
                     # Create protocol-compliant SSE event with filtered data
+                    # Note: event_stream_service returns "event_data" containing the full event data
                     sse_event = {
                         "event_type": event_type,
-                        "event_id": event.get("event_id"),
-                        "timestamp": event.get("timestamp"),
-                        "data": _filter_domain_fields(event.get("data", {})),
+                        "event_id": event_data_dict.get("event_id"),
+                        "timestamp": event_data_dict.get("timestamp"),
+                        "data": _filter_domain_fields(event_data_dict),
                     }
 
                     yield _format_sse_event(event_type, sse_event)
@@ -857,12 +863,37 @@ async def stream_task_events(
 def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
     """Remove domain-specific fields from protocol event data for internal streams.
 
-    Preserves original_data for tool events and LLM events that need it for proper UI display.
+    For tool and LLM events, extracts original_data fields and merges them with the response
+    to ensure proper UI display of event content.
     """
     if not isinstance(data, dict):
         return data
 
-    # For tool events and LLM events, preserve original_data as it contains essential display information
+    # Handle nested payloads where event structure is wrapped under "data"
+    # Example shape:
+    # {
+    #   "event_id": "...",
+    #   "timestamp": "...",
+    #   "event_type": "workflow.LLMCallChunk",
+    #   "data": {
+    #       "aggregate_id": "...",
+    #       "original_event_type": "LLMCallChunk",
+    #       "original_data": {"task_id": "...", "chunk": "...", ...}
+    #   }
+    # }
+    if "data" in data and isinstance(data["data"], dict):
+        outer_context = {k: v for k, v in data.items() if k != "data"}
+        inner_data = data["data"]
+
+        # Recursively filter inner structure first
+        processed_inner = _filter_domain_fields(inner_data)
+
+        # Merge inner (UI-relevant) fields with outer context fields we injected upstream
+        # Inner fields should take precedence for content fields; outer provides task/agent/execution ids
+        merged: dict[str, Any] = {**outer_context, **processed_inner}
+        return merged
+
+    # For tool events and LLM events, extract original_data content for UI display
     if "original_event_type" in data:
         original_event_type = data.get("original_event_type", "")
         if (
@@ -870,7 +901,19 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
             or original_event_type.startswith("LLMCall")
             or "tool_name" in str(data.get("original_data", {}))
         ):
-            # Keep original_data for tool and LLM events
+            # Extract original_data and merge it with filtered domain fields
+            original_data = data.get("original_data", {})
+            if isinstance(original_data, dict):
+                # Start with domain fields (excluding internal ones)
+                result = {
+                    k: v for k, v in data.items()
+                    if k not in ("original_event_type", "original_data",
+                                 "aggregate_id", "aggregate_type")
+                }
+                # Merge in original_data fields (UI-relevant content)
+                result.update(original_data)
+                return result
+            # Fallback: keep original_data as nested field
             return {k: v for k, v in data.items() if k != "original_event_type"}
 
     # For other events, filter out both original_event_type and original_data

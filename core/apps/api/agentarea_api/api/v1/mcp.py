@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Create MCP server
 mcp = FastMCP("AgentArea MCP Tools")
 
+
 async def get_services():
     """Get agent and task services for MCP tools."""
     try:
@@ -56,7 +57,7 @@ async def get_services():
 
     except Exception as e:
         logger.error(f"Failed to initialize MCP services: {e}")
-        raise HTTPException(status_code=500, detail=f"Service initialization failed: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Service initialization failed: {e!s}") from e
 
 
 @mcp.tool

@@ -147,7 +147,7 @@ class Agent:
             if final_tool_calls:
                 assistant_message["tool_calls"] = final_tool_calls
             messages.append(assistant_message)
-            print(assistant_message)
+            logger.debug("Assistant message: %s", assistant_message)
 
             # Execute tools if any were called
             if final_tool_calls:

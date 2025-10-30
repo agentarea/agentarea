@@ -124,7 +124,7 @@ async def test_task_service_event_streaming():
                     # Stop after receiving a few events
                     if len(events_received) >= 3:
                         break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.info("No events received within timeout (this is ok if Redis has no recent events)")
 
         logger.info(f"Successfully checked event streaming: {len(events_received)} events received")
