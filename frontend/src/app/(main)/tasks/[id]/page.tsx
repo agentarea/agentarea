@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import EmptyState from "@/components/EmptyState";
 import EventsDisplay from "@/components/TaskEvents/EventsDisplay";
 import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
 import { Badge } from "@/components/ui/badge";
@@ -136,7 +137,9 @@ export default function TaskDetailsPage() {
       const foundTask = allTasks.find((task) => task.id.toString() === id);
 
       if (!foundTask) {
-        throw new Error("Task not found");
+        setError("Task not found");
+        setTask(null);
+        return;
       }
 
       // Set basic task data
@@ -347,28 +350,29 @@ export default function TaskDetailsPage() {
     );
   }
 
-  // Show error state
+  // Show error state inside ContentBlock
   if (error || !task) {
     return (
-      <div className="p-8">
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-destructive" />
-            <h3 className="mb-2 text-lg font-semibold">Task Not Found</h3>
-            <p className="mb-4 text-muted-foreground">
-              {error || "The requested task could not be found."}
-            </p>
-            <div className="flex justify-center gap-2">
-              <Button onClick={() => router.push("/tasks")} variant="outline">
-                Back to Tasks
-              </Button>
-              <Button onClick={handleRefresh} variant="default">
-                Try Again
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ContentBlock
+        header={{
+          breadcrumb: [
+            { label: "Tasks", href: "/tasks" },
+            {
+              label: task?.agent_name || `Agent ${task?.agent_id || "Unknown"}`,
+              href: task?.agent_id ? `/agents/${task.agent_id}/tasks` : undefined,
+            },
+            { label: task?.description || "Task Details" },
+          ],
+        }}
+      >
+        <EmptyState
+          title="Task Not Found"
+          description={"The requested task could not be found."}
+          iconsType="tasks"
+          action={{ label: "Back to Tasks", href: "/tasks" }}
+          additionAction={{ label: "Try Again", onClick: handleRefresh }}
+        />
+      </ContentBlock>
     );
   }
 

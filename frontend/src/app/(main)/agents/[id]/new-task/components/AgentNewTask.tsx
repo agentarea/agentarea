@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import FullChat from "@/components/Chat/FullChat";
 import { Agent } from "@/types/agent";
@@ -11,6 +12,9 @@ interface Props {
 }
 
 export default function AgentNewTask({ agent }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isTaskRunning, setIsTaskRunning] = useState(false);
   const [isTaskActive, setIsTaskActive] = useState(false);
   const t = useTranslations("AgentsPage.descriptionPage");
@@ -19,6 +23,10 @@ export default function AgentNewTask({ agent }: Props) {
   const handleTaskCreated = (taskId: string) => {
     setIsTaskActive(true);
     setIsTaskRunning(true);
+    // Change path to /tasks/[id] without navigation
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/tasks/${taskId}`);
+    }
   };
 
   // Handle task completion
