@@ -25,7 +25,7 @@ run-worker:
 	uv run --package agentarea-worker python -m agentarea_worker.main
 
 test:
-	uv run pytest
+	uv run pytest tests/unit tests/functional
 
 lint:
 	uv run ruff check

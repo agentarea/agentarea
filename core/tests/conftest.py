@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 
 import jwt
 import pytest
-from agentarea_common.auth.context import UserContext
 
 
 # Configure asyncio for pytest
@@ -86,6 +85,8 @@ def test_jwt_secret():
 @pytest.fixture
 def test_user_context():
     """Create test user context."""
+    from agentarea_common.auth.context import UserContext
+
     return UserContext(
         user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"]
     )
@@ -94,6 +95,8 @@ def test_user_context():
 @pytest.fixture
 def test_admin_context():
     """Create test admin user context."""
+    from agentarea_common.auth.context import UserContext
+
     return UserContext(
         user_id="admin-user-123", workspace_id="test-workspace-456", roles=["user", "admin"]
     )
@@ -187,8 +190,20 @@ def admin_jwt_token(test_jwt_secret):
 
 
 # Pytest configuration
+import os
+
 def pytest_configure(config):
-    """Configure pytest with custom markers."""
+    """Configure pytest with custom markers and environment variables."""
+    # Set required environment variables for WorkflowSettings
+    os.environ.setdefault("WORKFLOW__TEMPORAL_SERVER_URL", "localhost:7233")
+    os.environ.setdefault("WORKFLOW__TEMPORAL_NAMESPACE", "default")
+    os.environ.setdefault("WORKFLOW__TEMPORAL_TASK_QUEUE", "agent-tasks")
+
+    # Set required Kratos settings for auth
+    os.environ.setdefault("KRATOS_ISSUER", "http://localhost:4433")
+    os.environ.setdefault("KRATOS_AUDIENCE", "agentarea")
+    os.environ.setdefault("KRATOS_JWKS_B64", base64.b64encode(json.dumps({"keys": []}).encode()).decode())
+
     config.addinivalue_line("markers", "asyncio: mark test as async")
     config.addinivalue_line("markers", "integration: mark test as integration test")
     config.addinivalue_line("markers", "unit: mark test as unit test")
