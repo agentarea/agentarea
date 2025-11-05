@@ -24,7 +24,7 @@ export function AppSidebar({
     <Sidebar
       collapsible="icon"
       {...props}
-      className="bg-white dark:bg-zinc-800"
+      className=""
     >
       {/* <SidebarHeader className="flex items-center justify-between overflow-hidden flex-row">
           <LogoIcon className="h-[32px] mt-2" />
