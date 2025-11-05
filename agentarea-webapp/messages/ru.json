@@ -1,6 +1,7 @@
 {
   "Common": {
     "search": "Поиск",
+    "saveChanges": "Сохранить изменения",
     "grid": "Сетка",
     "table": "Таблица",
     "delete": "Удалить",
@@ -141,6 +142,7 @@
   },
 
   "AgentsPage": {
+    "createAgent": "Создать агента",
     "noToolsConf": "Нет настроенных инструментов",
     "name": "Имя",
     "status": "Статус",
@@ -280,6 +282,7 @@
     "deleteProviderConfiguration": "Удалить конфигурацию провайдера",
     "deleteProviderConfigurationDescription": "Вы уверены, что хотите удалить конфигурацию провайдера \"{configName}\"? Это действие не может быть отменено и приведет к удалению конфигурации.",
     "thisProviderConfiguration": "эту конфигурацию провайдера",
+    "createConfig": "Создать конфигурацию",
     "table": {
       "provider": "Провайдер",
       "description": "Описание",

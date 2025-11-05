@@ -13,6 +13,7 @@ interface AgentPageWrapperProps {
   breadcrumb: BreadcrumbItem[];
   useContentBlock?: boolean;
   className?: string;
+  controls?: React.ReactNode;
 }
 
 export default async function AgentPageWrapper({
@@ -20,6 +21,7 @@ export default async function AgentPageWrapper({
   breadcrumb,
   useContentBlock = true,
   className = "h-full w-full px-4 py-5",
+  controls,
 }: AgentPageWrapperProps) {
   const t = await getTranslations("AgentsPage");
 
@@ -43,6 +45,7 @@ export default async function AgentPageWrapper({
             label: item.label,
             href: item.href,
           })),
+          controls,
         }}
       >
         {content}

@@ -1,6 +1,7 @@
 {
   "Common": {
     "search": "Search",
+    "saveChanges": "Save changes",
     "grid": "Grid",
     "table": "Table",
     "delete": "Delete",
@@ -183,6 +184,7 @@
   },
 
   "AgentsPage": {
+    "createAgent": "Create agent",
     "noToolsConf": "No tools configured",
     "name": "Name",
     "status": "Status",
@@ -318,6 +320,7 @@
     "providerConfigsSection": "Provider Configs",
     "providerSpecsSection": "Provider Specs",
     "deleteProviderConfiguration": "Delete Provider Configuration",
+    "createConfig": "Create Configuration",
     "deleteProviderConfigurationDescription": "Are you sure you want to delete the provider configuration \"{configName}\"? This action cannot be undone and will permanently remove the configuration.",
     "thisProviderConfiguration": "this provider configuration",
     "table": {

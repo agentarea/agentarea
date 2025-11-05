@@ -32,9 +32,14 @@ export default async function CreateProviderConfigPage({
             ]
           : [
               { label: t("title"), href: "/admin/provider-configs" },
-              { label: tCommon("create") },
               { label: t("configureProvider") },
             ],
+        controls: (
+          <CreateProviderConfigHeaderControls
+            label={isEdit ? (tCommon("save") as string) : (tCommon("create") as string)}
+            formId="provider-config-form"
+          />
+        ),
       }}
     >
       <Suspense

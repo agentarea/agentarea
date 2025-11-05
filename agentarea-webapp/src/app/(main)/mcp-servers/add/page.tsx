@@ -17,7 +17,6 @@ export default async function AddMCPServerPage() {
       header={{
         breadcrumb: [
           { label: t("title"), href: "/mcp-servers" },
-          { label: commonT("create") },
           { label: t("newServer.title") },
         ],
         description: t("newServer.description"),

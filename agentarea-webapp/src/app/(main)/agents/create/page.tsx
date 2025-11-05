@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import AgentPageWrapper from "../shared/AgentPageWrapper";
 import CreateAgentContent from "./CreateAgentContent";
+import CreateAgentHeaderControls from "./CreateAgentHeaderControls";
 
 export default async function CreateAgentPage() {
   const t = await getTranslations("AgentsPage");
@@ -12,10 +13,10 @@ export default async function CreateAgentPage() {
     <AgentPageWrapper
       breadcrumb={[
         { label: t("browseAgents"), href: "/agents" },
-        { label: tCommon("create") },
         { label: t("newAgent") },
       ]}
       useContentBlock={true}
+      controls={<CreateAgentHeaderControls label={t("createAgent")} />}
     >
       <Suspense
         fallback={
