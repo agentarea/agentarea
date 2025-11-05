@@ -100,7 +100,7 @@ export default function MainLayout({
   return (
     <>
       <SidebarProvider defaultOpen={sidebarDefaultOpen}>
-        <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2">
+        <div className="flex h-screen w-screen flex-row overflow-hidden bg-layoutBackground py-2 pr-2 pl-2 md:pl-0">
           <AppSidebar data={navData} />
           {/* <main className="bg-size-100 h-full max-h-screen flex-1 overflow-hidden overflow-y-auto bg-[url('/dots3.png')] bg-contain bg-repeat dark:bg-zinc-900 dark:bg-none"> */}
             <main className="flex-1 rounded-sm overflow-hidden  max-h-screen bg-white dark:bg-zinc-800 h-full overflow-y-auto border border-sidebar-border">

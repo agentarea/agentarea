@@ -7,11 +7,9 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-// import LogoIcon from "./LogoIcon";
 import { NavMain } from "./NavMain";
 import { NavUser } from "./NavUser";
 import { TeamSwitcher } from "./TeamSwitcher";
@@ -26,10 +24,6 @@ export function AppSidebar({
       {...props}
       className=""
     >
-      {/* <SidebarHeader className="flex items-center justify-between overflow-hidden flex-row">
-          <LogoIcon className="h-[32px] mt-2" />
-          <SidebarTrigger/>
-      </SidebarHeader> */}
       <SidebarHeader>
         <TeamSwitcher teams={props.data.workspaces} />
       </SidebarHeader>
@@ -43,7 +37,6 @@ export function AppSidebar({
         )}
       >
         <NavUser />
-        <SidebarTrigger className="hidden md:flex" />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

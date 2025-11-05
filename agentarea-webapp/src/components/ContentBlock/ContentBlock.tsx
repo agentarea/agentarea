@@ -66,8 +66,8 @@ export default function ContentBlock({
           ) : (
             <>
               <div className="flex items-start gap-2">
-                <SidebarTrigger className="h-5 w-5 md:hidden" />
-                <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700 md:hidden" />
+                <SidebarTrigger className="h-5 w-5" />
+                <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
                 <div className="flex flex-col gap-1">
                   <Breadcrumb>
                     <BreadcrumbList>
