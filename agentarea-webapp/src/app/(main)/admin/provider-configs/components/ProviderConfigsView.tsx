@@ -76,7 +76,7 @@ export default function ProviderConfigsView({
         columns={configColumns}
         onRowClick={(config) => {
           router.push(
-            `/admin/provider-configs/create?provider_spec_id=${config.id}&isEdit=true`
+            `/admin/provider-configs/edit/${config.id}`
           );
         }}
       />

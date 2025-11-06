@@ -81,7 +81,7 @@ export default function ProviderSpecView({
         columns={specColumns}
         onRowClick={(spec) => {
           router.push(
-            `/admin/provider-configs/create?provider_spec_id=${spec.id}`
+            `/admin/provider-configs/create/${spec.id}`
           );
         }}
       />

@@ -496,6 +496,7 @@ export default function ProviderConfigForm({
 
   return (
     <form
+      id="provider-config-form"
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -542,7 +543,7 @@ export default function ProviderConfigForm({
                   value={field.value}
                   onValueChange={handleProviderChange}
                   placeholder={t("selectProvider")}
-                  disabled={!!preselectedProviderId && !isEdit && !initialData}
+                  disabled={isEdit || (!!preselectedProviderId && !initialData)}
                   emptyMessage={
                     <div className="flex h-full flex-col items-center justify-center gap-1">
                       <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/20 dark:bg-primary-foreground/20">
@@ -606,38 +607,40 @@ export default function ProviderConfigForm({
         </div>
       </div>
 
-      {/* Submit Button */}
-      <div className="flex justify-end space-x-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleCancel();
-          }}
-        >
-          {cancelButtonText || tCommon("cancel")}
-        </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting || !isValid}
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
-        >
-          {isSubmitting
-            ? isEdit
-              ? t("loading.updating")
-              : t("loading.creating")
-            : submitButtonText ||
-              (isEdit
-                ? t("updateConfiguration")
-                : t("createConfigurationWithModels", {
-                    modelCount: selectedModels.length,
-                  }))}
-        </Button>
-      </div>
+      {/* Submit Button - only show in sheet (when onCancel is provided) */}
+      {onCancel && (
+        <div className="flex justify-end space-x-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleCancel();
+            }}
+          >
+            {cancelButtonText || tCommon("cancel")}
+          </Button>
+          <Button
+            type="submit"
+            disabled={isSubmitting || !isValid}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            {isSubmitting
+              ? isEdit
+                ? t("loading.updating")
+                : t("loading.creating")
+              : submitButtonText ||
+                (isEdit
+                  ? t("updateConfiguration")
+                  : t("createConfigurationWithModels", {
+                      modelCount: selectedModels.length,
+                    }))}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }

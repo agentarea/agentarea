@@ -14,7 +14,7 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
 
   return (
     <Link
-      href={`/admin/provider-configs/create?provider_spec_id=${config.id}&isEdit=true`}
+      href={`/admin/provider-configs/edit/${config.id}`}
     >
       <Card className="h-full px-4 py-4">
         <div className="mb-2 flex gap-2">
@@ -53,7 +53,7 @@ interface ProviderSpecCardProps {
 
 export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
   return (
-    <Link href={`/admin/provider-configs/create?provider_spec_id=${spec.id}`}>
+    <Link href={`/admin/provider-configs/create/${spec.id}`}>
       <Card className="h-full px-4 py-4">
         <div className="flex items-center gap-2">
           {spec.icon_url && (
