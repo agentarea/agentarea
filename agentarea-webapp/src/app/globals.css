@@ -218,6 +218,29 @@ body {
   .card-item {
     @apply rounded-md border border-border pr-[7px] transition-colors dark:border-zinc-700;
   }
+
+  .loader {
+    aspect-ratio: 1;
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+    --loader-size: 8px;
+    background: 
+      radial-gradient(farthest-side, hsl(var(--primary)) 94%,#0000) top/var(--loader-size) var(--loader-size) no-repeat,
+      conic-gradient(#0000 30%, hsl(var(--primary)));
+    -webkit-mask: radial-gradient(farthest-side,#0000 calc(100% - var(--loader-size)),#000 0);
+  }
+  .loader-small {
+    --loader-size: 3px;
+  }
+  .loader-medium {
+    --loader-size: 6px;
+  }
+  .loader-large {
+    --loader-size: 8px;
+  }
+  @keyframes spin{ 
+    100%{transform: rotate(1turn)}
+  }
 }
 
 /* Hide dashed separator for the last message */

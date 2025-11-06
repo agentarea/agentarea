@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 interface LoadingSpinnerProps {
   size?: "sm" | "md" | "lg";
   text?: string;
@@ -12,15 +14,18 @@ export function LoadingSpinner({
   className = "",
 }: LoadingSpinnerProps) {
   const sizeClasses = {
-    sm: "h-4 w-4",
-    md: "h-6 w-6",
-    lg: "h-8 w-8",
+    sm: "h-4 w-4 loader-small",
+    md: "h-8 w-8 loader-medium",
+    lg: "h-10 w-10 loader-large",
   };
 
   const spinner = (
     <div className="text-center">
       <div
-        className={`inline-block animate-spin rounded-full border-b-2 border-t-2 border-blue-500 ${sizeClasses[size]}`}
+        className={cn(
+          "loader",
+          sizeClasses[size],
+        )}
       ></div>
       {text && (
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{text}</p>

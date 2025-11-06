@@ -3,6 +3,8 @@ import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ProviderConfigFormWrapper from "./components/ProviderConfigFormWrapper";
+import { Button } from "@/components/ui/button";
+import { getProviderConfig, getProviderSpec } from "@/lib/api";
 
 export default async function CreateProviderConfigPage({
   searchParams,
@@ -22,23 +24,46 @@ export default async function CreateProviderConfigPage({
   // Check if this is edit mode
   const isEdit = resolvedSearchParams.isEdit === "true";
 
+  // Load provider config name for breadcrumb in edit mode
+  let providerConfigName: string | undefined;
+  if (isEdit && preselectedProviderId) {
+    try {
+      const configResponse = await getProviderConfig(preselectedProviderId);
+      providerConfigName = configResponse?.name;
+    } catch (error) {
+      console.error("Failed to load provider config name:", error);
+    }
+  }
+
+  // Load provider spec name for breadcrumb in create mode
+  let providerSpecName: string | undefined;
+  if (!isEdit && preselectedProviderId) {
+    try {
+      const specResponse = await getProviderSpec(preselectedProviderId);
+      providerSpecName = specResponse?.data?.name;
+    } catch (error) {
+      console.error("Failed to load provider spec name:", error);
+    }
+  }
+
   return (
     <ContentBlock
       header={{
         breadcrumb: isEdit
           ? [
               { label: t("title"), href: "/admin/provider-configs" },
-              { label: tCommon("edit") },
+              { label: providerConfigName ? `${tCommon("edit")} ${providerConfigName}` : tCommon("edit") },
             ]
           : [
               { label: t("title"), href: "/admin/provider-configs" },
-              { label: t("configureProvider") },
+              { label: providerSpecName || t("createConfig") },
             ],
         controls: (
-          <CreateProviderConfigHeaderControls
-            label={isEdit ? (tCommon("save") as string) : (tCommon("create") as string)}
-            formId="provider-config-form"
-          />
+          <div className="flex items-center gap-2 py-1">
+            <Button size="xs" type="submit" form="provider-config-form">
+              {isEdit ? (tCommon("saveChanges") as string) : (t("createConfig") as string)}
+            </Button>
+          </div>
         ),
       }}
     >
