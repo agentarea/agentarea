@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CheckCircle, Pause, Play, Square } from "lucide-react";
+import { AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { TaskItem, type TaskItemData } from "@/components/TaskItem";
 import {
   getAgentTaskStatus,
@@ -89,11 +90,8 @@ export default function AgentTasksList({
   return (
     <div className="h-full space-y-2 overflow-auto px-4 py-5">
       {tasksLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
-            <span className="text-sm text-gray-500">Loading tasks...</span>
-          </div>
+        <div className="flex h-32 items-center justify-center">
+          <LoadingSpinner />
         </div>
       ) : tasks.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-white py-8 text-center">
