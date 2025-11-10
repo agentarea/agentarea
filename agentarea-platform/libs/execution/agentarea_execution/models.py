@@ -217,7 +217,7 @@ class MCPToolRequest(BaseModel):
     tool_name: str
     tool_args: dict[str, Any]
     server_instance_id: UUID | None = None
-    workspace_id: str = "system"
+    workspace_id: str  # Required - must be provided explicitly
     tools_config: dict[str, Any] | None = None
 
 
@@ -269,6 +269,8 @@ class WorkflowEventsRequest(BaseModel):
     """Request for publishing workflow events."""
 
     events_json: list[str]
+    workspace_id: str  # Required - from workflow state
+    user_id: str  # Required - from workflow state
 
 
 class WorkflowEventsResult(BaseModel):

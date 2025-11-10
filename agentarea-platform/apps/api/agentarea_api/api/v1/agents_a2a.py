@@ -143,20 +143,25 @@ def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
 
     Args:
         auth_context: A2A authentication context from the request
+        
+    Raises:
+        ValueError: If authentication context is missing required user_id or workspace_id
     """
-    # Extract user context from A2A auth
-    if auth_context.authenticated and auth_context.user_id:
-        user_id = auth_context.user_id
-        workspace_id = auth_context.workspace_id or "default"
-    else:
-        # For unauthenticated A2A requests, use system defaults
-        user_id = "a2a_anonymous"
-        workspace_id = "default"
-
+    # Require authentication for A2A requests
+    if not auth_context.authenticated or not auth_context.user_id:
+        raise ValueError(
+            "A2A requests require authentication. Unauthenticated requests are not supported."
+        )
+    
+    if not auth_context.workspace_id:
+        raise ValueError(
+            f"A2A request missing workspace_id for authenticated user {auth_context.user_id}"
+        )
+    
     # Create UserContext for repository layer
     user_context = UserContext(
-        user_id=user_id,
-        workspace_id=workspace_id,
+        user_id=auth_context.user_id,
+        workspace_id=auth_context.workspace_id,
         roles=[],  # A2A doesn't use roles, use permissions instead
     )
 
@@ -164,7 +169,7 @@ def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
     ContextManager.set_context(user_context)
 
     logger.debug(
-        f"Set user context for A2A request: user_id={user_id}, workspace_id={workspace_id}"
+        f"Set user context for A2A request: user_id={auth_context.user_id}, workspace_id={auth_context.workspace_id}"
     )
 
 
@@ -298,13 +303,18 @@ def convert_a2a_message_to_task(
 
     # Extract proper user context from authentication
     # Note: The user context should already be set in ContextManager by set_user_context_from_a2a_auth()
-    if auth_context.authenticated and auth_context.user_id:
-        user_id = auth_context.user_id
-        workspace_id = auth_context.workspace_id or "default"
-    else:
-        # For unauthenticated requests, use system defaults
-        user_id = "a2a_anonymous"
-        workspace_id = "default"
+    if not auth_context.authenticated or not auth_context.user_id:
+        raise A2AValidationError(
+            "Authentication required for task submission", -32600
+        )
+    
+    if not auth_context.workspace_id:
+        raise A2AValidationError(
+            f"Missing workspace_id in authentication context for user {auth_context.user_id}", -32600
+        )
+    
+    user_id = auth_context.user_id
+    workspace_id = auth_context.workspace_id
 
     # Create comprehensive A2A metadata with security context and monitoring information
     a2a_metadata = {

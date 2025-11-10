@@ -85,3 +85,4 @@ memory-bank/
 mcp-infrastructure/traefik/
 mcp-infrastructure/go-mcp-manager/bin
 .specify
+specs

@@ -1,0 +1,31 @@
+# dependencies
+node_modules
+.pnpm
+.pnpm-debug.log
+yarn.lock
+package-lock.json
+
+# production outputs
+.next
+out
+
+# misc
+npm-debug.log*
+.DS_Store
+.env*
+!.env.example
+
+# docker
+Dockerfile
+docker-compose*
+# vscode/editor configs
+.vscode
+.idea
+
+# system files
+Thumbs.db
+# ignore coverage and test data
+coverage
+*.lcov
+# Next.js build cache
+.next/cache

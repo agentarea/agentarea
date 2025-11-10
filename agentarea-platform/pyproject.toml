@@ -15,7 +15,6 @@ license = {text = "EPL-2.0"}
 requires-python = ">=3.12"
 dependencies = [
     "a2a-sdk>=0.2.8",
-    "google-adk>=1.1.1",
     "python-dotenv>=1.1.0",
     "pytz>=2025.2",
     "pyyaml>=6.0.2",

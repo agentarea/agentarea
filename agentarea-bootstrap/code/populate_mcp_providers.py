@@ -77,6 +77,9 @@ def upsert_mcp_server(
         return server_id
 
     # Insert new server
+    # NOTE: Using "system" for workspace_id and created_by is intentional for bootstrap/system-level data.
+    # These are built-in MCP server specs available to all workspaces, created during system initialization
+    # before any users/workspaces exist. This is acceptable for bootstrap scripts.
     conn.execute(
         text("""INSERT INTO mcp_servers 
                 (id, name, description, docker_image_url, version, tags, status, is_public, env_schema, created_by, workspace_id, created_at, updated_at) 
@@ -92,8 +95,8 @@ def upsert_mcp_server(
             "status": "active",
             "is_public": True,
             "env_schema": json.dumps(env_schema),
-            "created_by": "system",
-            "workspace_id": "system",
+            "created_by": "system",  # Intentional: system-level bootstrap data
+            "workspace_id": "system",  # Intentional: system-level bootstrap data
         },
     )
     return server_id

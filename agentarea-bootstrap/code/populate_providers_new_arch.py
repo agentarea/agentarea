@@ -70,6 +70,9 @@ def upsert_provider_spec(
         return existing_id
 
     # Insert new provider spec
+    # NOTE: Using "system" for workspace_id and created_by is intentional for bootstrap/system-level data.
+    # These are built-in providers available to all workspaces, created during system initialization
+    # before any users/workspaces exist. This is acceptable for bootstrap scripts.
     conn.execute(
         text("""
             INSERT INTO provider_specs 
@@ -84,8 +87,8 @@ def upsert_provider_spec(
             "provider_type": provider_type,
             "icon": icon,
             "is_builtin": is_builtin,
-            "created_by": "system",
-            "workspace_id": "system",
+            "created_by": "system",  # Intentional: system-level bootstrap data
+            "workspace_id": "system",  # Intentional: system-level bootstrap data
         },
     )
     return provider_id
@@ -131,6 +134,9 @@ def upsert_model_spec(
         return existing_id
     
     # Insert new model spec
+    # NOTE: Using "system" for workspace_id and created_by is intentional for bootstrap/system-level data.
+    # These are built-in model specs available to all workspaces, created during system initialization
+    # before any users/workspaces exist. This is acceptable for bootstrap scripts.
     model_spec_id = str(uuid.uuid4())
     conn.execute(
         text("""
@@ -147,8 +153,8 @@ def upsert_model_spec(
             "display_name": display_name,
             "description": description,
             "context_window": context_window,
-            "created_by": "system",
-            "workspace_id": "system",
+            "created_by": "system",  # Intentional: system-level bootstrap data
+            "workspace_id": "system",  # Intentional: system-level bootstrap data
         },
     )
     return model_spec_id

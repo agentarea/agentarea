@@ -468,19 +468,26 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     # 2. Store event in database using proper service layer
                     try:
-                        workspace_id = event["data"].get("workspace_id", "default")
-                        user_context = UserContext(user_id="workflow", workspace_id=workspace_id)
+                        # Use workspace_id and user_id from workflow request (already present)
+                        workspace_id = request.workspace_id
+                        user_id = request.user_id
+                        
+                        # Create proper user context with values from workflow
+                        user_context = UserContext(
+                            user_id=user_id,
+                            workspace_id=workspace_id,
+                        )
 
                         async with ActivityContext(container, user_context) as ctx:
                             task_event_service = await ctx.get_task_event_service()
 
-                            # Create event using service
+                            # Create event using service - workspace_id and created_by are provided
                             await task_event_service.create_workflow_event(
                                 task_id=UUID(task_id),
                                 event_type=event["event_type"],
                                 data=event["data"],
                                 workspace_id=workspace_id,
-                                created_by="workflow",
+                                created_by=user_id,
                             )
 
                             # Commit is handled by the service

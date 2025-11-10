@@ -12,8 +12,8 @@ COPY README.md ./
 COPY libs/ ./libs/
 COPY apps/ ./apps/
 
-# Use uv to install dependencies and project packages
-RUN uv sync --frozen
+# Use uv to install dependencies and project packages (exclude dev and test dependencies)
+RUN uv sync --frozen --no-dev --no-group test
 
 # Runtime stage
 FROM python:3.12-slim
