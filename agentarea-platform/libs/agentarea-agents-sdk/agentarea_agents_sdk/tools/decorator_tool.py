@@ -98,8 +98,7 @@ class Toolset(ABC):
                         properties[f"{method_name}_{param_name}"] = {
                             **param_schema,
                             "description": (
-                                f"[For {method_name}] "
-                                f"{param_schema.get('description', '')}"
+                                f"[For {method_name}] {param_schema.get('description', '')}"
                             ),
                         }
 
@@ -163,8 +162,7 @@ class Toolset(ABC):
                     return {
                         "success": False,
                         "result": (
-                            f"Invalid action. Available actions: "
-                            f"{list(self._tool_methods.keys())}"
+                            f"Invalid action. Available actions: {list(self._tool_methods.keys())}"
                         ),
                         "tool_name": self.name,
                         "error": "Invalid action",

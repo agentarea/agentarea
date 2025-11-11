@@ -306,14 +306,11 @@ def convert_a2a_message_to_task(
     # Note: The user context should already be set in ContextManager by
     # set_user_context_from_a2a_auth()
     if not auth_context.authenticated or not auth_context.user_id:
-        raise A2AValidationError(
-            "Authentication required for task submission", -32600
-        )
+        raise A2AValidationError("Authentication required for task submission", -32600)
 
     if not auth_context.workspace_id:
         raise A2AValidationError(
-            f"Missing workspace_id in authentication context for user "
-            f"{auth_context.user_id}",
+            f"Missing workspace_id in authentication context for user {auth_context.user_id}",
             -32600,
         )
 
@@ -848,9 +845,9 @@ async def handle_message_stream_sse(
                     },
                 )
                 error_data = {
-                    'event': 'error',
-                    'code': -32603,
-                    'message': str(stream_error),
+                    "event": "error",
+                    "code": -32603,
+                    "message": str(stream_error),
                 }
                 yield f"data: {json.dumps(error_data)}\n\n"
 
@@ -879,7 +876,7 @@ async def handle_message_stream_sse(
         error_message = e.message
 
         async def error_stream():
-            error_data = {'event': 'error', 'code': error_code, 'message': error_message}
+            error_data = {"event": "error", "code": error_code, "message": error_message}
             yield f"data: {json.dumps(error_data)}\n\n"
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
@@ -899,14 +896,14 @@ async def handle_message_stream_sse(
         error_message = e.message
 
         async def error_stream():
-            error_data = {'event': 'error', 'code': error_code, 'message': error_message}
+            error_data = {"event": "error", "code": error_code, "message": error_message}
             yield f"data: {json.dumps(error_data)}\n\n"
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
     except ValueError as e:
         # Handle TaskService validation errors (e.g., agent not found in TaskService)
         duration_ms = (time.time() - start_time) * 1000
-        error_message = f'Invalid parameters: {e}'
+        error_message = f"Invalid parameters: {e}"
         log_a2a_operation(
             "message_stream",
             agent_id,
@@ -919,9 +916,9 @@ async def handle_message_stream_sse(
 
         async def error_stream():
             error_data = {
-                'event': 'error',
-                'code': -32602,
-                'message': error_message,
+                "event": "error",
+                "code": -32602,
+                "message": error_message,
             }
             yield f"data: {json.dumps(error_data)}\n\n"
 

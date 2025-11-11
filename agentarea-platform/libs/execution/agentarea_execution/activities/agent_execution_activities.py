@@ -383,8 +383,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             logger.error(f"Failed to create execution plan: {e}")
             return ExecutionPlanResult(
                 plan=(
-                    f"Execute the task '{request.goal.get('description', 'Unknown')}' "
-                    "step by step"
+                    f"Execute the task '{request.goal.get('description', 'Unknown')}' step by step"
                 ),
                 estimated_steps=5,
                 key_tools=[],

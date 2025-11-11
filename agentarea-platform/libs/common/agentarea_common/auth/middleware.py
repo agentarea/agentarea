@@ -84,12 +84,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
             # Require workspace_id - fail if missing
             if not workspace_id:
-                user_id = (
-                    auth_result.token.user_id if auth_result.token else "unknown"
-                )
-                logger.error(
-                    f"Token and header missing workspace_id for user {user_id}"
-                )
+                user_id = auth_result.token.user_id if auth_result.token else "unknown"
+                logger.error(f"Token and header missing workspace_id for user {user_id}")
                 return JSONResponse(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     content={

@@ -63,8 +63,7 @@ class AgentHandoffTool(BaseTool):
                     "handoff_reason": {
                         "type": "string",
                         "description": (
-                            "Explanation of why this agent is better suited "
-                            "for the task"
+                            "Explanation of why this agent is better suited for the task"
                         ),
                     },
                     "task_context": {
@@ -149,8 +148,7 @@ class AgentHandoffTool(BaseTool):
                 "error": None,
                 "tool_name": self.name,
                 "message": (
-                    f"Task handed off to "
-                    f"{self.available_agents[target_agent_id]['name']} agent"
+                    f"Task handed off to {self.available_agents[target_agent_id]['name']} agent"
                 ),
             }
 

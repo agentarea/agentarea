@@ -257,7 +257,7 @@ class TestTaskOrchestration:
                                 '"handoff_reason": '
                                 '"Expert in data analysis and trend identification", '
                                 '"task_context": "Analyze European EV market data to '
-                                'identify competitive patterns, market leaders, and growth '
+                                "identify competitive patterns, market leaders, and growth "
                                 'trends", "expected_deliverable": '
                                 '"Data analysis report with key findings and insights"}'
                             ),
@@ -330,7 +330,7 @@ class TestTaskOrchestration:
                             "name": "completion",
                             "arguments": (
                                 '{"result": "Successfully completed comprehensive European '
-                                'EV market analysis with strategic recommendations from '
+                                "EV market analysis with strategic recommendations from "
                                 'research, analysis, and reporting specialists"}'
                             ),
                         },
@@ -399,8 +399,8 @@ class TestTaskOrchestration:
                             "name": "completion",
                             "arguments": (
                                 '{"result": "European EV market research complete: Sales '
-                                'data shows Norway leading at 80% EV adoption, Germany '
-                                'growing 35% YoY, regulatory support strong across EU with '
+                                "data shows Norway leading at 80% EV adoption, Germany "
+                                "growing 35% YoY, regulatory support strong across EU with "
                                 '2035 ICE ban driving adoption"}'
                             ),
                         },
@@ -466,8 +466,8 @@ class TestTaskOrchestration:
                             "name": "completion",
                             "arguments": (
                                 '{"result": "EV market analysis complete: Tesla leads '
-                                'premium (25% market share), VW Group dominates mass market '
-                                '(18%), Chinese manufacturers gaining ground. Key trend: '
+                                "premium (25% market share), VW Group dominates mass market "
+                                "(18%), Chinese manufacturers gaining ground. Key trend: "
                                 'Rapid charging infrastructure expansion driving adoption"}'
                             ),
                         },
@@ -534,7 +534,7 @@ class TestTaskOrchestration:
                             "name": "completion",
                             "arguments": (
                                 '{"result": "Strategic EV market entry report complete with 4 key '
-                                'recommendations: mass market focus, charging partnerships, '
+                                "recommendations: mass market focus, charging partnerships, "
                                 'Germany/France targeting, and competitive monitoring strategy"}'
                             ),
                         },

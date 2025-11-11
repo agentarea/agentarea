@@ -53,8 +53,7 @@ class TaskEventService:
 
                 if not task:
                     raise ValueError(
-                        f"Task {task_id} not found. Cannot create event without "
-                        "task context."
+                        f"Task {task_id} not found. Cannot create event without task context."
                     )
 
                 # Extract from task if not provided

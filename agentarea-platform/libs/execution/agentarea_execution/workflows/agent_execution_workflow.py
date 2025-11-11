@@ -605,7 +605,9 @@ class AgentExecutionWorkflow:
         try:
             # Create Pydantic request model for MCP tool execution
             # Extract workspace_id from state (should be set from request)
-            workspace_id = self.state.workspace_id or self.state.user_context_data.get("workspace_id")
+            workspace_id = self.state.workspace_id or self.state.user_context_data.get(
+                "workspace_id"
+            )
             if not workspace_id:
                 raise ValueError(
                     f"Missing workspace_id in workflow state for task {self.state.task_id}"

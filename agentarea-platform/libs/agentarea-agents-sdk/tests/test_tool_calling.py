@@ -171,8 +171,7 @@ class TestToolCalling:
                 {
                     "role": "user",
                     "content": (
-                        "Calculate 10 * 5, then add 15 to the result, and tell "
-                        "me the final answer."
+                        "Calculate 10 * 5, then add 15 to the result, and tell me the final answer."
                     ),
                 },
             ]

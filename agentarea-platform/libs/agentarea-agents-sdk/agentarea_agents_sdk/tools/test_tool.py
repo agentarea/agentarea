@@ -32,8 +32,7 @@ class TestTool(BaseTool):
                     "action": {
                         "type": "string",
                         "description": (
-                            "Action to perform: 'get_data', 'calculate', "
-                            "'check_status', 'search'"
+                            "Action to perform: 'get_data', 'calculate', 'check_status', 'search'"
                         ),
                         "enum": ["get_data", "calculate", "check_status", "search"],
                     },
