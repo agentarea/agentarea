@@ -101,7 +101,7 @@ export default function ServerList({
         routeChange="/mcp-servers"
         cardContent={(item: any) => (
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 font-montserrat text-[16px] font-[500]">
+            <div className="flex items-center gap-2 text-[16px] font-[500]">
               <Server className="h-4 w-4 text-primary" />
               {item.name}
             </div>

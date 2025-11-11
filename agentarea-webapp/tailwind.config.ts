@@ -67,7 +67,7 @@ export default {
         },
       },
       fontFamily: {
-        montserrat: ["var(--font-montserrat)"],
+        inter: ["var(--font-inter)"],
       },
       fontSize: {
         inputSize: "13px",

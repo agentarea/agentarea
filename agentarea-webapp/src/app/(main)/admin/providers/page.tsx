@@ -132,7 +132,7 @@ export default async function ProviderSpecsPage({
                 />
               )}
               <div>
-                <div className="font-montserrat text-[16px] font-[500]">
+                <div className="text-[16px] font-[500]">
                   {item.name}
                 </div>
                 <div className="text-xs text-muted-foreground">

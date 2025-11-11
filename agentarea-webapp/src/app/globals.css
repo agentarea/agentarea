@@ -17,10 +17,6 @@
   }
 }
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
 @layer base {
   :root {
     --layout-background: 0 0% 98%;
@@ -141,12 +137,10 @@ body {
 
   h1 {
     @apply text-xl font-bold md:text-2xl;
-    /* @apply font-montserrat; */
   }
 
   h2 {
     @apply text-lg font-semibold md:text-xl;
-    /* @apply font-montserrat; */
   }
 
   h3 {
