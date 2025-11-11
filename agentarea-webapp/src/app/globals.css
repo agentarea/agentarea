@@ -152,7 +152,7 @@
   }
 
   .card {
-    @apply rounded-lg bg-white dark:bg-zinc-800;
+    @apply rounded-md bg-white dark:bg-zinc-800;
     @apply cursor-pointer p-[16px] md:p-[20px] lg:p-[24px];
     @apply border border-zinc-200 dark:border-zinc-700;
     @apply transition-all duration-300 hover:shadow-md;

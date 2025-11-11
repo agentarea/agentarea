@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { Card } from "@/components/ui/card";
 import ModelBadge from "@/components/ui/model-badge";
@@ -42,7 +42,14 @@ export default function AgentCard({ agent }: AgentCardProps) {
           </p>
         </div>
 
-        <div className="flex items-center justify-between border-t border-zinc-200 px-[16px] py-[10px] transition-colors duration-300 group-hover:bg-zinc-100/70 dark:border-zinc-700 dark:group-hover:bg-zinc-700/80 md:px-[20px] lg:px-[24px]">
+        <div className="  
+          flex items-center justify-between border-t border-zinc-200 relative
+          pl-[16px] pr-[8px] py-[10px] md:pl-[20px] md:pr-[10px] lg:pl-[24px] lg:pr-[10px]
+          transition-colors duration-500 
+          transition-background-position duration-500
+          group-hover:bg-[url('/lines.png')] bg-cover bg-left group-hover:bg-right
+          dark:border-zinc-700 dark:group-hover:bg-[url('/lines-dark.png')]
+        ">
           {(() => {
             const toolAvatars = getToolAvatarUrls(agent);
             return toolAvatars.length > 0 ? (
@@ -51,9 +58,9 @@ export default function AgentCard({ agent }: AgentCardProps) {
               <span className="text-xs text-muted-foreground">No tools</span>
             );
           })()}
-          <div className="small-link text-muted-foreground/70 group-hover:text-primary">
-            View agent
-            <ArrowRight className="h-4 w-4" />
+          <div className="small-link text-muted-foreground/70 group-hover:text-primary gap-1">
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-500">View agent</span>
+            <ArrowUpRight className="h-6 w-6 group-hover:scale-110 transition-transform duration-500" strokeWidth={1.5} />
           </div>
         </div>
       </Card>
