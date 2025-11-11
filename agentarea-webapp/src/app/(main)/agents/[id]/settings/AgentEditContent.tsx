@@ -13,7 +13,6 @@ export default async function AgentEditContent({
   return (
     <AgentEditClient
       agentId={agentId}
-      agent={agentData.agent}
       mcpServers={agentData.mcpServers}
       llmModelInstances={agentData.llmModelInstances}
       mcpInstanceList={agentData.mcpInstanceList}

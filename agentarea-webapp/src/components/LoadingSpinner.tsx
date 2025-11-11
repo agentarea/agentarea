@@ -5,10 +5,12 @@ interface LoadingSpinnerProps {
   text?: string;
   fullScreen?: boolean;
   className?: string;
+  variant?: "light" | "primary";
 }
 
 export function LoadingSpinner({
   size = "md",
+  variant = "primary",
   text,
   fullScreen = false,
   className = "",
@@ -19,12 +21,18 @@ export function LoadingSpinner({
     lg: "h-10 w-10 loader-large",
   };
 
+  const variantClasses = {
+    light: "loader-light",
+    primary: "loader-primary",
+  };
+
   const spinner = (
     <div className="text-center">
       <div
         className={cn(
           "loader",
           sizeClasses[size],
+          variantClasses[variant],
         )}
       ></div>
       {text && (

@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useTransition } from "react";
+import React, { useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { components } from "@/api/schema";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   AgentTriggers,
   BasicInformation,
   ToolConfig,
 } from "../create/components";
-import type { AgentFormValues, EventConfig } from "../create/types";
+import type { AgentFormValues } from "../create/types";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
@@ -45,8 +44,9 @@ export default function AgentForm({
   onError,
   isLoading = false,
 }: AgentFormProps) {
-  const [isPending, startTransition] = useTransition();
+  const [_, startTransition] = useTransition();
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const {
     register,
     control,
@@ -106,7 +106,15 @@ export default function AgentForm({
 
   // Handle form submission with react-hook-form validation
   const handleFormSubmit = (data: AgentFormValues) => {
+    const form = formRef.current;
+    if (!form) return;
+
+    // Set form data attribute and dispatch event SYNCHRONOUSLY before async operations
+    form.setAttribute("data-submitting", "true");
+    form.dispatchEvent(new CustomEvent("form-submitting", { detail: { isSubmitting: true } }));
+
     startTransition(async () => {
+      let shouldKeepSubmitting = false;
       try {
         const result = await onSubmit(data);
 
@@ -117,6 +125,11 @@ export default function AgentForm({
           });
 
           if (onSuccess) {
+            // Check if this is a creation (has id in result) - keep submitting state until navigation
+            const createdId = (result.fieldValues as any)?.id;
+            if (createdId) {
+              shouldKeepSubmitting = true;
+            }
             onSuccess(result);
           }
         } else if (result?.errors?._form && result.errors._form.length > 0) {
@@ -147,12 +160,21 @@ export default function AgentForm({
         if (onError) {
           onError(error);
         }
+      } finally {
+        // Remove form data attribute when submission is complete
+        // But keep it if this is a successful creation (will navigate away)
+        if (!shouldKeepSubmitting && formRef.current) {
+          formRef.current.removeAttribute("data-submitting");
+          formRef.current.dispatchEvent(
+            new CustomEvent("form-submitting", { detail: { isSubmitting: false } })
+          );
+        }
       }
     });
   };
 
   return (
-    <form id="agent-form" onSubmit={handleSubmit(handleFormSubmit)}>
+    <form ref={formRef} id="agent-form" onSubmit={handleSubmit(handleFormSubmit)}>
       <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-[12px] lg:grid-cols-2 lg:gap-x-[12px]">
         <div className="">
           <BasicInformation

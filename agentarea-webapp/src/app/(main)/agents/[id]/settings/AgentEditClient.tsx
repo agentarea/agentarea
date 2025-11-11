@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { components } from "@/api/schema";
@@ -10,12 +9,9 @@ import { updateAgentSettings } from "./actions";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
-type Agent =
-  components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
 
 interface AgentEditClientProps {
   agentId: string;
-  agent: Agent;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: any[];
@@ -25,7 +21,6 @@ interface AgentEditClientProps {
 
 export default function AgentEditClient({
   agentId,
-  agent,
   mcpServers,
   llmModelInstances,
   mcpInstanceList,
@@ -64,6 +59,7 @@ export default function AgentEditClient({
 
       if (data) {
         toast.success("Agent updated successfully!");
+        // Refresh layout to update agent name in breadcrumb
         router.refresh();
         return {
           message: "Agent updated successfully!",

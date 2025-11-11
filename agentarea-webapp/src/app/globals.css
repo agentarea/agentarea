@@ -225,9 +225,15 @@ body {
     animation: spin 1s infinite linear;
     --loader-size: 8px;
     background: 
-      radial-gradient(farthest-side, hsl(var(--primary)) 94%,#0000) top/var(--loader-size) var(--loader-size) no-repeat,
-      conic-gradient(#0000 30%, hsl(var(--primary)));
+      radial-gradient(farthest-side, var(--loader-color) 94%,#0000) top/var(--loader-size) var(--loader-size) no-repeat,
+      conic-gradient(#0000 30%, var(--loader-color));
     -webkit-mask: radial-gradient(farthest-side,#0000 calc(100% - var(--loader-size)),#000 0);
+  }
+  .loader-light {
+    --loader-color: hsl(0 0% 100%);
+  }
+  .loader-primary {
+    --loader-color: hsl(var(--primary));
   }
   .loader-small {
     --loader-size: 3px;
