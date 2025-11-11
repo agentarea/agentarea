@@ -33,7 +33,10 @@ class WorkspaceContextFilter(logging.Filter):
 
             # Also add to the message if not already present
             if not hasattr(record, "user_id_added"):
-                record.msg = f"[workspace:{self.user_context.workspace_id}] [user:{self.user_context.user_id}] {record.msg}"
+                record.msg = (
+                    f"[workspace:{self.user_context.workspace_id}] "
+                    f"[user:{self.user_context.user_id}] {record.msg}"
+                )
                 record.user_id_added = True
 
         return True

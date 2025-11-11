@@ -33,7 +33,8 @@ def wait_for_postgres():
         except psycopg2.OperationalError as e:
             if attempt < max_retries - 1:
                 print(
-                    f"PostgreSQL not ready, waiting... (attempt {attempt + 1}/{max_retries})"
+                    f"PostgreSQL not ready, waiting... "
+                    f"(attempt {attempt + 1}/{max_retries})"
                 )
                 time.sleep(2)
             else:
@@ -50,7 +51,8 @@ def create_database_if_not_exists(cursor, db_name, description=""):
         exists = cursor.fetchone()
 
         if not exists:
-            print(f"  Creating database '{db_name}'{f' ({description})' if description else ''}...")
+            desc_part = f" ({description})" if description else ""
+            print(f"  Creating database '{db_name}'{desc_part}...")
             cursor.execute(f'CREATE DATABASE "{db_name}"')
             print(f"  ✓ Database '{db_name}' created successfully")
         else:
@@ -96,16 +98,21 @@ def database_setup():
 
         # Create all databases
         create_database_if_not_exists(cursor, main_db, "AgentArea main application")
-        
+
         # Only create Infisical database if using Infisical secret manager
         secret_manager_type = os.getenv("SECRET_MANAGER_TYPE", "database").lower()
         if secret_manager_type == "infisical" or os.getenv("INFISICAL_DB"):
             create_database_if_not_exists(cursor, infisical_db, "Secrets management")
         else:
-            print(f"  ⊘ Skipping Infisical database (SECRET_MANAGER_TYPE={secret_manager_type})")
-        
+            print(
+                f"  ⊘ Skipping Infisical database "
+                f"(SECRET_MANAGER_TYPE={secret_manager_type})"
+            )
+
         create_database_if_not_exists(cursor, temporal_db, "Workflow engine")
-        create_database_if_not_exists(cursor, "temporal_visibility", "Temporal visibility")
+        create_database_if_not_exists(
+            cursor, "temporal_visibility", "Temporal visibility"
+        )
         create_database_if_not_exists(cursor, kratos_db, "Identity management")
         create_database_if_not_exists(cursor, hydra_db, "OAuth2/OIDC")
 
@@ -117,7 +124,7 @@ def database_setup():
         if secret_manager_type == "infisical" or os.getenv("INFISICAL_DB"):
             print(f"  - {infisical_db} (secrets management)")
         print(f"  - {temporal_db} (workflow engine)")
-        print(f"  - temporal_visibility (workflow visibility)")
+        print("  - temporal_visibility (workflow visibility)")
         print(f"  - {kratos_db} (identity management)")
         print(f"  - {hydra_db} (OAuth2/OIDC)")
         print("=" * 50)

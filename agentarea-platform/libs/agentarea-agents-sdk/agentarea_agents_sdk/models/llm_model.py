@@ -516,7 +516,8 @@ class LLMModel:
             )
 
             logger.info(
-                f"Streaming LLM call completed successfully, cost: ${result.cost:.6f}, chunks: {chunk_index}"
+                f"Streaming LLM call completed successfully, "
+                f"cost: ${result.cost:.6f}, chunks: {chunk_index}"
             )
             return result
 

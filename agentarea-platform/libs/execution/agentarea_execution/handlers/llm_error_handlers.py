@@ -41,7 +41,8 @@ class LLMErrorHandler:
             )
 
             logger.error(
-                f"LLM Authentication failure for model {model_id} in task {task_id}: {error_message}"
+                f"LLM Authentication failure for model {model_id} in task "
+                f"{task_id}: {error_message}"
             )
 
             # Could add additional actions here:

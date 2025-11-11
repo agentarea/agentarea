@@ -39,7 +39,8 @@ class WorkflowEventHandler:
 
                 # Create service with dependencies
                 repository_factory = RepositoryFactory(session, user_context)
-                # Note: We don't have event_broker here, but TaskEventService doesn't use it for persistence
+                # Note: We don't have event_broker here, but TaskEventService
+                # doesn't use it for persistence
                 task_event_service = TaskEventService(repository_factory, None)
 
                 # Create event using service

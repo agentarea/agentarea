@@ -92,7 +92,9 @@ async def check_mcp_server_instance_configuration(
         get_mcp_server_instance_service
     ),
 ):
-    """Check if an MCP server instance configuration is valid by validating it through the golang manager."""
+    """Check if an MCP server instance configuration is valid by validating it
+    through the golang manager.
+    """
     try:
         settings = get_settings()
 

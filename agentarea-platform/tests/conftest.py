@@ -192,6 +192,7 @@ def admin_jwt_token(test_jwt_secret):
 # Pytest configuration
 import os
 
+
 def pytest_configure(config):
     """Configure pytest with custom markers and environment variables."""
     # Set required environment variables for WorkflowSettings

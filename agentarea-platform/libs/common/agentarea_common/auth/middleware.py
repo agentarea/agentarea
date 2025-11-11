@@ -77,20 +77,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
             workspace_id = None
             if auth_result.token and auth_result.token.claims:
                 workspace_id = auth_result.token.claims.get("workspace_id")
-            
+
             # Fallback to header if not in token
             if not workspace_id:
                 workspace_id = request.headers.get("X-Workspace-ID")
-            
+
             # Require workspace_id - fail if missing
             if not workspace_id:
+                user_id = (
+                    auth_result.token.user_id if auth_result.token else "unknown"
+                )
                 logger.error(
-                    f"Token and header missing workspace_id for user {auth_result.token.user_id if auth_result.token else 'unknown'}"
+                    f"Token and header missing workspace_id for user {user_id}"
                 )
                 return JSONResponse(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     content={
-                        "detail": "Missing workspace_id. Provide it in token claims or X-Workspace-ID header."
+                        "detail": (
+                            "Missing workspace_id. Provide it in token claims or "
+                            "X-Workspace-ID header."
+                        )
                     },
                 )
 
@@ -99,7 +105,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
                     workspace_id=workspace_id,
-                    roles=[],  # In a real implementation, this would come from the token or database
+                    # In a real implementation, roles would come from token or DB
+                    roles=[],
                 )
                 ContextManager.set_context(user_context)
 

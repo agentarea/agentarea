@@ -188,7 +188,8 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         try:
             # Convert args dict to positional arguments based on workflow type
             if workflow_name == "AgentTaskWorkflow":
-                # Based on AgentTaskWorkflow.run signature: agent_id, task_id, query, user_id, task_parameters, metadata
+                # Based on AgentTaskWorkflow.run signature:
+                # agent_id, task_id, query, user_id, task_parameters, metadata
                 workflow_args = [
                     args.get("agent_id"),
                     args.get("task_id"),
@@ -347,7 +348,8 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     execution_time_seconds = description.execution_time.total_seconds()
                 else:
                     logger.warning(
-                        f"Unexpected execution_time type in wait_for_result: {type(description.execution_time)}"
+                        f"Unexpected execution_time type in wait_for_result: "
+                        f"{type(description.execution_time)}"
                     )
 
             return WorkflowResult(

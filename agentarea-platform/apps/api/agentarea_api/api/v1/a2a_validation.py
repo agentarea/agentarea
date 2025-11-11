@@ -95,7 +95,8 @@ class A2AValidator:
             # Check method is supported
             if request.method not in cls.SUPPORTED_METHODS:
                 raise A2AValidationError(
-                    f"Unsupported method: {request.method}. Supported: {list(cls.SUPPORTED_METHODS)}",
+                    f"Unsupported method: {request.method}. "
+                    f"Supported: {list(cls.SUPPORTED_METHODS)}",
                     "METHOD_NOT_FOUND",
                 )
 

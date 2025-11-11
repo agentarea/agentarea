@@ -112,14 +112,14 @@ async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
         workspace_id = None
         if auth_result.token.claims:
             workspace_id = auth_result.token.claims.get("workspace_id")
-        
+
         if not workspace_id:
             logger.warning(
                 f"Token missing workspace_id claim for user {auth_result.token.user_id}. "
                 "A2A requests require workspace_id in token."
             )
             return None
-        
+
         return {
             "user_id": auth_result.token.user_id,
             "workspace_id": workspace_id,
@@ -185,7 +185,8 @@ async def get_a2a_auth_context(
         context.agent_id = agent_id
 
         logger.info(
-            f"A2A authentication successful: user={context.user_id}, workspace={context.workspace_id}, method={context.auth_method}"
+            f"A2A authentication successful: user={context.user_id}, "
+            f"workspace={context.workspace_id}, method={context.auth_method}"
         )
     else:
         logger.info(f"A2A authentication failed or not provided: method={auth_info['method']}")

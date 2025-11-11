@@ -35,23 +35,28 @@ class TaskEventService:
 
         This is the proper way to handle workflow events instead of
         direct database access in activities.
-        
+
         Args:
             task_id: Task ID for the event
             event_type: Type of event
             data: Event data dictionary
-            workspace_id: Workspace ID (will be fetched from task if not provided)
-            created_by: User/entity that created the event (will be fetched from task if not provided)
+            workspace_id: Workspace ID (will be fetched from task if not
+                provided)
+            created_by: User/entity that created the event (will be fetched from
+                task if not provided)
         """
         try:
             # If workspace_id or created_by not provided, fetch from task
             if not workspace_id or not created_by:
                 task_repository = self.repository_factory.create_repository(TaskRepository)
                 task = await task_repository.get_task(task_id)
-                
+
                 if not task:
-                    raise ValueError(f"Task {task_id} not found. Cannot create event without task context.")
-                
+                    raise ValueError(
+                        f"Task {task_id} not found. Cannot create event without "
+                        "task context."
+                    )
+
                 # Extract from task if not provided
                 if not workspace_id:
                     workspace_id = task.workspace_id
@@ -62,12 +67,12 @@ class TaskEventService:
                             f"Task {task_id} missing user_id. "
                             "Cannot create event without user context."
                         )
-            
+
             if not workspace_id:
                 raise ValueError(f"workspace_id is required for task {task_id} event")
             if not created_by:
                 raise ValueError(f"created_by is required for task {task_id} event")
-            
+
             # Create domain model
             event = TaskEvent.create_workflow_event(
                 task_id=task_id,
@@ -112,11 +117,11 @@ class TaskEventService:
         for event_data in events_data:
             try:
                 task_id = UUID(event_data["task_id"])
-                
+
                 # Extract workspace_id and created_by from event_data if provided
                 workspace_id = event_data.get("workspace_id")
                 created_by = event_data.get("created_by")
-                
+
                 event = await self.create_workflow_event(
                     task_id=task_id,
                     event_type=event_data["event_type"],

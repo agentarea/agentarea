@@ -118,7 +118,8 @@ async def _start_temporal_workflow_for_task(
             e
         ):
             logger.info(
-                f"Workflow for task {task_id} is already running - this is expected for duplicate events"
+                f"Workflow for task {task_id} is already running - "
+                "this is expected for duplicate events"
             )
         else:
             logger.error(f"Error starting Temporal workflow for task {task_id}: {e}", exc_info=True)

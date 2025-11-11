@@ -238,7 +238,7 @@ class TaskEvent(BaseModel):
         created_by: str,  # Required - no default
     ) -> "TaskEvent":
         """Create a workflow event with proper formatting.
-        
+
         Args:
             task_id: Task ID for the event
             event_type: Type of event

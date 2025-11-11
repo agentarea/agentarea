@@ -1,10 +1,12 @@
 """Agent-specific well-known endpoints for A2A protocol.
 
 This module provides well-known endpoints for individual agents.
-Each agent gets its own /.well-known/agent.json endpoint at /v1/agents/{agent_id}/.well-known/agent.json
+Each agent gets its own /.well-known/agent.json endpoint at
+/v1/agents/{agent_id}/.well-known/agent.json
 
-This allows for proper A2A compliance where each agent can be discovered individually,
-and later can be proxied to subdomains (agent1.domain.com -> /v1/agents/{id}/.well-known/)
+This allows for proper A2A compliance where each agent can be discovered
+individually, and later can be proxied to subdomains
+(agent1.domain.com -> /v1/agents/{id}/.well-known/)
 """
 
 import logging

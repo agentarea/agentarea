@@ -36,7 +36,10 @@ def load_builtin_tools_config() -> dict[str, Any]:
                 "calculator": {
                     "name": "calculator",
                     "display_name": "Calculator",
-                    "description": "Perform basic mathematical calculations like addition, subtraction, multiplication, division",
+                    "description": (
+                        "Perform basic mathematical calculations like addition, "
+                        "subtraction, multiplication, division"
+                    ),
                     "class_path": "agentarea_agents_sdk.tools.calculate_tool.CalculateTool",
                     "category": "utility",
                     "enabled_by_default": False,

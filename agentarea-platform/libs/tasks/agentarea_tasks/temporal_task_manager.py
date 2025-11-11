@@ -49,7 +49,7 @@ class TemporalTaskManager(BaseTaskManager):
                 f"Task {task.id} missing required workspace_id. "
                 "All tasks must have a workspace_id for proper multi-tenancy isolation."
             )
-        
+
         if not user_id:
             raise ValueError(
                 f"Task {task.id} missing required user_id or created_by. "

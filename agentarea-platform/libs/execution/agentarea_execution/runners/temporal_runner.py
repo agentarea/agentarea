@@ -159,16 +159,16 @@ class TemporalAgentRunner(BaseAgentRunner):
         user_context_data = state.agent_config.get("user_context_data", {})
         workspace_id = user_context_data.get("workspace_id")
         user_id = user_context_data.get("user_id")
-        
+
         if not workspace_id:
             raise ValueError(
-                f"Missing workspace_id in agent_config.user_context_data for workflow execution"
+                "Missing workspace_id in agent_config.user_context_data for workflow execution"
             )
         if not user_id:
             raise ValueError(
-                f"Missing user_id in agent_config.user_context_data for workflow execution"
+                "Missing user_id in agent_config.user_context_data for workflow execution"
             )
-        
+
         llm_request = LLMCallRequest(
             messages=messages_dict,
             model_id=state.agent_config.get("model_id") or "gpt-4",  # Provide default model
@@ -234,12 +234,12 @@ class TemporalAgentRunner(BaseAgentRunner):
                 # Extract workspace_id from agent_config.user_context_data
                 user_context_data = state.agent_config.get("user_context_data", {})
                 workspace_id = user_context_data.get("workspace_id")
-                
+
                 if not workspace_id:
                     raise ValueError(
-                        f"Missing workspace_id in agent_config.user_context_data for MCP tool execution"
+                        "Missing workspace_id in agent_config.user_context_data for MCP tool execution"
                     )
-                
+
                 # Create Pydantic request model for MCP tool execution
                 mcp_request = MCPToolRequest(
                     tool_name=tool_name,

@@ -340,7 +340,8 @@ class EventAgent:
                                 action = (
                                     tool_args.get("action") if isinstance(tool_args, dict) else None
                                 )
-                                # result.get("result") is expected to be a JSON string from TasksToolset
+                                # result.get("result") is expected to be a JSON
+                                # string from TasksToolset
                                 payload = result.get("result")
                                 if isinstance(payload, str):
                                     parsed = json.loads(payload)

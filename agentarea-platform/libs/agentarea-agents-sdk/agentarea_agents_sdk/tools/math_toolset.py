@@ -8,7 +8,10 @@ from .decorator_tool import Toolset, tool_method
 
 
 class MathToolset(Toolset):
-    """A toolset for mathematical operations including basic arithmetic, advanced math, and utility functions."""
+    """
+    A toolset for mathematical operations including basic arithmetic, advanced
+    math, and utility functions.
+    """
 
     def __init__(
         self,

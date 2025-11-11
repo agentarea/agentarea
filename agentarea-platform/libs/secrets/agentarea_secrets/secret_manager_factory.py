@@ -42,8 +42,10 @@ class SecretManagerFactory:
         if secret_type == "database":  # noqa: S105
             if not settings.SECRET_MANAGER_ENCRYPTION_KEY:
                 raise ValueError(
-                    "SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set when using database secret manager. "
-                    "Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+                    "SECRET_MANAGER_ENCRYPTION_KEY environment variable must be "
+                    "set when using database secret manager. Generate one with: "
+                    "python -c 'from cryptography.fernet import Fernet; "
+                    "print(Fernet.generate_key().decode())'"
                 )
         elif secret_type == "infisical":  # noqa: S105
             if not settings.SECRET_MANAGER_ACCESS_KEY or not settings.SECRET_MANAGER_SECRET_KEY:

@@ -236,7 +236,9 @@ class AgentExecutionWorkflow:
         """
         # Debug logging
         workflow.logger.info(
-            f"Checking termination conditions - success: {self.state.success} (type: {type(self.state.success)}), iteration: {self.state.current_iteration}"
+            f"Checking termination conditions - success: "
+            f"{self.state.success} (type: {type(self.state.success)}), "
+            f"iteration: {self.state.current_iteration}"
         )
         workflow.logger.info(f"State object id: {id(self.state)}")
 
@@ -608,7 +610,7 @@ class AgentExecutionWorkflow:
                 raise ValueError(
                     f"Missing workspace_id in workflow state for task {self.state.task_id}"
                 )
-            
+
             mcp_request = MCPToolRequest(
                 tool_name=tool_name,
                 tool_args=tool_args,
