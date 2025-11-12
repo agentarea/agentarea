@@ -4,8 +4,15 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-import faiss
-import numpy as np
+try:
+    import faiss
+    import numpy as np
+except ImportError as e:
+    raise ImportError(
+        "faiss-cpu and numpy are required for FAISSContextProvider. "
+        "Install them with: uv pip install 'agentarea-context[faiss]'"
+    ) from e
+
 from agentarea_llm.application.embedding_service import EmbeddingService
 
 from agentarea_context.config.context_config import ContextConfig

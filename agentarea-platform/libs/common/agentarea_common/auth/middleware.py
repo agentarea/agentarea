@@ -82,19 +82,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not workspace_id:
                 workspace_id = request.headers.get("X-Workspace-ID")
 
-            # Require workspace_id - fail if missing
+            # Default to "default" if workspace_id is not provided
             if not workspace_id:
+                workspace_id = "default"
                 user_id = auth_result.token.user_id if auth_result.token else "unknown"
-                logger.error(f"Token and header missing workspace_id for user {user_id}")
-                return JSONResponse(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    content={
-                        "detail": (
-                            "Missing workspace_id. Provide it in token claims or "
-                            "X-Workspace-ID header."
-                        )
-                    },
-                )
+                logger.warning(f"Token and header missing workspace_id for user {user_id}, defaulting to 'default'")
 
             # Set user context
             if auth_result.token:

@@ -56,7 +56,6 @@ agentarea-cli = { workspace = true }
 [dependency-groups]
 dev = [
     "ruff>=0.11.4",
-    "pyright>=1.1.400",
     "aiosqlite>=0.21.0",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
@@ -71,7 +70,7 @@ dev = [
     "agentarea-tasks",
     "agentarea-secrets",
     "agentarea-execution",
-    "agentarea-context",
+    "agentarea-context[faiss]",
     "agentarea-triggers",
     "agentarea-api",
     "agentarea-worker",

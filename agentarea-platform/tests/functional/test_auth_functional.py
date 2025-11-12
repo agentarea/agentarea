@@ -20,6 +20,7 @@ class TestAuthenticationEnforcement:
     """Test that authentication is properly enforced on all endpoints."""
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_list_agents_without_auth_returns_403(self):
         """Test that listing agents without authentication returns 403."""
         async with AsyncClient(base_url=API_BASE_URL) as client:
@@ -29,6 +30,7 @@ class TestAuthenticationEnforcement:
             assert response.json()["detail"] == "Not authenticated"
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_create_agent_without_auth_returns_403(self):
         """Test that creating an agent without authentication returns 403."""
         async with AsyncClient(base_url=API_BASE_URL) as client:
@@ -46,6 +48,7 @@ class TestAuthenticationEnforcement:
             assert response.json()["detail"] == "Not authenticated"
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_list_agents_with_invalid_token_returns_401(self):
         """Test that listing agents with invalid token returns 401."""
         async with AsyncClient(base_url=API_BASE_URL) as client:
@@ -58,6 +61,7 @@ class TestAuthenticationEnforcement:
             assert "Invalid token" in response.json()["detail"]
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_list_agents_with_expired_token_returns_401(self):
         """Test that listing agents with expired token returns 401."""
         # Create an expired JWT token
@@ -78,6 +82,7 @@ class TestAuthenticationEnforcement:
             assert "detail" in response.json()
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_list_agents_with_malformed_token_returns_401(self):
         """Test that listing agents with malformed token returns 401."""
         malformed_tokens = [
@@ -96,6 +101,7 @@ class TestAuthenticationEnforcement:
                 assert response.status_code == 401, f"Token '{token}' should return 401"
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_all_protected_endpoints_require_auth(self):
         """Test that all major protected endpoints require authentication."""
         protected_endpoints = [

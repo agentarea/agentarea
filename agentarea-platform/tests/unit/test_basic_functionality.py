@@ -68,7 +68,11 @@ class TestBasicFunctionality:
         task_id = uuid4()
 
         event = TaskEvent.create_workflow_event(
-            task_id=task_id, event_type="TaskStarted", data={"agent_id": str(uuid4())}
+            task_id=task_id,
+            event_type="TaskStarted",
+            data={"agent_id": str(uuid4())},
+            workspace_id="default",
+            created_by="workflow",
         )
 
         # Verify defaults are applied
@@ -85,6 +89,7 @@ class TestBasicFunctionality:
             event_type="LLMCallStarted",
             data={"model": "gpt-4", "temperature": 0.7},
             workspace_id="test-workspace",
+            created_by="workflow",
         )
 
         # Test JSON serialization

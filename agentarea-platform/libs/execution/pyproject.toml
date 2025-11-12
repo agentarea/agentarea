@@ -5,7 +5,7 @@ description = "AgentArea execution library"
 license = {text = "EPL-2.0"}
 requires-python = ">=3.11"
 dependencies = [
-    "temporalio>=1.0.0",
+    "temporalio>=1.18.2",
     "pydantic>=2.0.0",
     "agentarea-agents-sdk",
 ]
