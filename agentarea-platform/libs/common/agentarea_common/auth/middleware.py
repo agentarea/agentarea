@@ -86,7 +86,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not workspace_id:
                 workspace_id = "default"
                 user_id = auth_result.token.user_id if auth_result.token else "unknown"
-                logger.warning(f"Token and header missing workspace_id for user {user_id}, defaulting to 'default'")
+                logger.warning(
+                    f"Token and header missing workspace_id for user {user_id}, defaulting to 'default'"
+                )
 
             # Set user context
             if auth_result.token:
