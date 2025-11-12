@@ -13,7 +13,7 @@ help:
 
 install:
 	uv venv
-	uv sync --all-packages
+	uv sync --all-packages --group lint --group dev
 
 sync:
 	uv sync --all-packages
