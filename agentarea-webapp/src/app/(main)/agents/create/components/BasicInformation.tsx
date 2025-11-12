@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { Textarea } from "@/components/ui/textarea";
+import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
 import type { AgentFormValues } from "../../create/types";
 import { getNestedErrorMessage } from "../utils/formUtils";
 import ConfigSheet from "./ConfigSheet";
@@ -157,15 +158,20 @@ const BasicInformation = ({
           <FormLabel htmlFor="instruction" icon={MessageSquare} required>
             {t("instruction")}
           </FormLabel>
-          <Textarea
-            id="instruction"
-            {...register("instruction", {
-              required: "Instruction is required",
-            })}
-            placeholder={t("instructionPlaceholder")}
-            className="h-[200px] resize-none"
-            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-indigo-400 transition-colors h-32"
-            aria-invalid={!!getNestedErrorMessage(errors, "instruction")}
+          <Controller
+            name="instruction"
+            control={control}
+            rules={{ required: "Instruction is required" }}
+            render={({ field }) => (
+              <MarkdownTextarea
+                id="instruction"
+                value={field.value || ""}
+                onChange={field.onChange}
+                placeholder={t("instructionPlaceholder")}
+                className="h-[200px] resize-none"
+                aria-invalid={!!getNestedErrorMessage(errors, "instruction")}
+              />
+            )}
           />
           {getNestedErrorMessage(errors, "instruction") && (
             <p className="mt-1 text-sm text-red-500">
