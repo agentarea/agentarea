@@ -90,7 +90,7 @@ const BasicInformation = ({
             aria-invalid={!!getNestedErrorMessage(errors, "name")}
           />
           {getNestedErrorMessage(errors, "name") && (
-            <p className="mt-1 text-sm text-red-500">
+            <p className="form-error">
               {getNestedErrorMessage(errors, "name")}
             </p>
           )}
@@ -131,7 +131,7 @@ const BasicInformation = ({
             )}
           />
           {getNestedErrorMessage(errors, "model_id") && (
-            <p className="mt-1 text-sm text-red-500">
+            <p className="form-error">
               {getNestedErrorMessage(errors, "model_id")}
             </p>
           )}
@@ -149,7 +149,7 @@ const BasicInformation = ({
             aria-invalid={!!getNestedErrorMessage(errors, "description")}
           />
           {getNestedErrorMessage(errors, "description") && (
-            <p className="mt-1 text-sm text-red-500">
+            <p className="form-error">
               {getNestedErrorMessage(errors, "description")}
             </p>
           )}
@@ -174,7 +174,7 @@ const BasicInformation = ({
             )}
           />
           {getNestedErrorMessage(errors, "instruction") && (
-            <p className="mt-1 text-sm text-red-500">
+            <p className="form-error">
               {getNestedErrorMessage(errors, "instruction")}
             </p>
           )}

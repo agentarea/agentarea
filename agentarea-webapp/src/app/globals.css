@@ -15,6 +15,9 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  .form-error {
+    @apply text-xs text-red-500;
+  }
 }
 
 @layer base {

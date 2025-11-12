@@ -98,7 +98,7 @@ export default function MCPInstanceConfigForm({
             className={getErrorText("name") ? "border-red-500" : ""}
           />
           {getErrorText("name") && (
-            <p className="mt-1 text-sm text-red-500">{getErrorText("name")}</p>
+            <p className="form-error">{getErrorText("name")}</p>
           )}
         </div>
         <div>
@@ -166,7 +166,7 @@ export default function MCPInstanceConfigForm({
                       </p>
                     )}
                     {getErrorText(errorKey) && (
-                      <p className="text-xs text-red-500">
+                      <p className="form-error">
                         {getErrorText(errorKey)}
                       </p>
                     )}

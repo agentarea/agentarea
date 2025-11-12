@@ -558,7 +558,7 @@ export default function ProviderConfigForm({
               )}
             />
             {errors.provider_spec_id && (
-              <p className="text-sm text-red-600">
+              <p className="form-error">
                 {errors.provider_spec_id.message}
               </p>
             )}

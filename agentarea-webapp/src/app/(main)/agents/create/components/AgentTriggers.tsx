@@ -199,7 +199,7 @@ const AgentTriggers = ({
       </AccordionControl>
 
       {getNestedErrorMessage(errors, "events_config.events") && (
-        <p className="mt-1 text-sm text-red-500">
+        <p className="form-error">
           {getNestedErrorMessage(errors, "events_config.events")}
         </p>
       )}

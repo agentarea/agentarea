@@ -207,7 +207,7 @@ export default function EditAgentClient({
 
       <div className="sticky bottom-0 z-10 -mx-4 mx-auto flex max-w-6xl flex-row items-end justify-end gap-4 px-4 pb-2 pt-6">
         {state?.errors?._form && (
-          <p className="mb-2 text-sm text-red-500">
+          <p className="mb-2 form-error">
             {state.errors._form.join(", ")}
           </p>
         )}

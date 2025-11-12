@@ -48,7 +48,7 @@ export default function BaseInfo({
               )}
             />
             {errors.name && (
-              <p className="text-sm text-red-600">
+              <p className="form-error">
                 {String(errors.name.message)}
               </p>
             )}
@@ -76,7 +76,7 @@ export default function BaseInfo({
               }
             />
             {errors.api_key && (
-              <p className="text-sm text-red-600">
+              <p className="form-error">
                 {String(errors.api_key.message)}
               </p>
             )}
@@ -100,7 +100,7 @@ export default function BaseInfo({
               )}
             />
             {errors.endpoint_url && (
-              <p className="text-sm text-red-600">
+              <p className="form-error">
                 {String(errors.endpoint_url.message)}
               </p>
             )}

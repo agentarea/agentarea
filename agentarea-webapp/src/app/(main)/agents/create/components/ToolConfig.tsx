@@ -694,17 +694,17 @@ const ToolConfig = ({
       </AccordionControl>
 
       {getNestedErrorMessage(errors, "tools_config.mcp_server_configs") && (
-        <p className="mt-1 text-sm text-red-500">
+        <p className="form-error">
           {getNestedErrorMessage(errors, "tools_config.mcp_server_configs")}
         </p>
       )}
       {getNestedErrorMessage(errors, "tools_config.builtin_tools") && (
-        <p className="mt-1 text-sm text-red-500">
+        <p className="form-error">
           {getNestedErrorMessage(errors, "tools_config.builtin_tools")}
         </p>
       )}
       {getNestedErrorMessage(errors, "tools_config") && (
-        <p className="mt-1 text-sm text-red-500">
+        <p className="form-error">
           {getNestedErrorMessage(errors, "tools_config")}
         </p>
       )}

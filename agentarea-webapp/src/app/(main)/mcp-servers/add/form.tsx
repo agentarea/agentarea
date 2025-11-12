@@ -152,7 +152,7 @@ export function AddMCPServerForm() {
       <CardContent className="form-content">
         {/* Display general form errors */}
         {state.errors?._form && (
-          <div className="text-sm text-red-500">
+          <div className="form-error">
             {state.errors._form.join(", ")}
           </div>
         )}
@@ -183,7 +183,7 @@ export function AddMCPServerForm() {
           />
           <input type="hidden" {...register("type")} />
           {combinedErrors.type && (
-            <p className="text-sm text-red-500">
+            <p className="form-error">
               {getErrorMessage(combinedErrors.type)}
             </p>
           )}
@@ -199,7 +199,7 @@ export function AddMCPServerForm() {
             aria-invalid={!!combinedErrors.name}
           />
           {combinedErrors.name && (
-            <p className="text-sm text-red-500">
+            <p className="form-error">
               {getErrorMessage(combinedErrors.name)}
             </p>
           )}
@@ -215,7 +215,7 @@ export function AddMCPServerForm() {
             aria-invalid={!!combinedErrors.description}
           />
           {combinedErrors.description && (
-            <p className="text-sm text-red-500">
+            <p className="form-error">
               {getErrorMessage(combinedErrors.description)}
             </p>
           )}
@@ -233,7 +233,7 @@ export function AddMCPServerForm() {
                 aria-invalid={!!combinedErrors.dockerImageUrl}
               />
               {combinedErrors.dockerImageUrl && (
-                <p className="text-sm text-red-500">
+                <p className="form-error">
                   {getErrorMessage(combinedErrors.dockerImageUrl)}
                 </p>
               )}
@@ -253,7 +253,7 @@ export function AddMCPServerForm() {
                 aria-invalid={!!combinedErrors.version}
               />
               {combinedErrors.version && (
-                <p className="text-sm text-red-500">
+                <p className="form-error">
                   {getErrorMessage(combinedErrors.version)}
                 </p>
               )}
@@ -273,7 +273,7 @@ export function AddMCPServerForm() {
                 aria-invalid={!!combinedErrors.endpointUrl}
               />
               {combinedErrors.endpointUrl && (
-                <p className="text-sm text-red-500">
+                <p className="form-error">
                   {getErrorMessage(combinedErrors.endpointUrl)}
                 </p>
               )}
@@ -367,7 +367,7 @@ export function AddMCPServerForm() {
           )}
         />
         {combinedErrors.isPublic && (
-          <p className="text-sm text-red-500">
+          <p className="form-error">
             {getErrorMessage(combinedErrors.isPublic)}
           </p>
         )}
