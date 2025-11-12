@@ -27,9 +27,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: agentarea-platform
-        run: |
-          uv sync --group lint
-          uv sync --group dev
+        run: uv sync --all-extras --group dev --group lint
 
       - name: Run ruff check
         working-directory: agentarea-platform
