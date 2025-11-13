@@ -137,22 +137,26 @@ export default function FullChat({
 
   // Auto-scroll to bottom when messages change (only if user was at bottom)
   useEffect(() => {
-    if (isAtBottom) {
+    if (isAtBottom && messagesContainerRef.current) {
       // Отменяем предыдущий RAF если он есть
       if (scrollRAFRef.current) {
         cancelAnimationFrame(scrollRAFRef.current);
       }
 
-      // Используем requestAnimationFrame для более плавного скролла
+      // Используем прямую прокрутку контейнера вместо scrollIntoView
+      // чтобы не прокручивать всю страницу
       scrollRAFRef.current = requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        const container = messagesContainerRef.current;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
 
         // Проверяем позицию после скролла
         scrollRAFRef.current = requestAnimationFrame(() => {
           const atBottom = checkIfAtBottom();
-          if (!atBottom) {
+          if (!atBottom && messagesContainerRef.current) {
             // Принудительно скроллим еще раз если не достигли низа
-            messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
           }
         });
       });
@@ -746,8 +750,10 @@ export default function FullChat({
         >
           <Button
             onClick={() => {
-              // Принудительно скроллим к низу
-              messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+              // Принудительно скроллим к низу контейнера, а не всей страницы
+              if (messagesContainerRef.current) {
+                messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+              }
 
               // Проверяем позицию после скролла
               requestAnimationFrame(() => {

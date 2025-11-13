@@ -82,6 +82,7 @@ export default function AgentEditClient({
 
   return (
     <AgentForm
+      className="pl-5"
       mcpServers={mcpServers}
       llmModelInstances={llmModelInstances}
       mcpInstanceList={mcpInstanceList}
