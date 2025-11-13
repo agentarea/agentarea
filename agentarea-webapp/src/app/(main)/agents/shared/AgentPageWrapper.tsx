@@ -47,6 +47,7 @@ export default async function AgentPageWrapper({
           })),
           controls,
         }}
+        className="overflow-hidden py-0 pr-0"
       >
         {content}
       </ContentBlock>

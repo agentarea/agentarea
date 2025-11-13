@@ -11,7 +11,6 @@ import type { components } from "@/api/schema";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,13 +72,13 @@ const BasicInformation = ({
   };
 
   return (
-    <Card className="">
+    <div>
       {/* <h2 className="mb-6 label">
         <Sparkles className="h-5 w-5 text-accent" /> Basic Information
       </h2> */}
       <div className="form-content">
         <div className="space-y-2">
-          <FormLabel htmlFor="name" icon={Bot}>
+          <FormLabel htmlFor="name" icon={Bot} required>
             {t("agentName")}
           </FormLabel>
           <Input
@@ -96,7 +95,7 @@ const BasicInformation = ({
           )}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="model_id" icon={Cpu}>
+          <FormLabel htmlFor="model_id" icon={Cpu} required>
             {t("llmModel")}
           </FormLabel>
           <Controller
@@ -199,7 +198,7 @@ const BasicInformation = ({
           autoRedirect={false}
         />
       </ConfigSheet>
-    </Card>
+    </div>
   );
 };
 

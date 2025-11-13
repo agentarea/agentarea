@@ -6,7 +6,9 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { components } from "@/api/schema";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { Card } from "@/components/ui/card";
+import FullChat from "@/components/Chat/FullChat";
+import { Play } from "lucide-react";
+import Divider from "@/components/ui/divider";
 import {
   AgentTriggers,
   BasicInformation,
@@ -174,52 +176,51 @@ export default function AgentForm({
   };
 
   return (
-    <form ref={formRef} id="agent-form" onSubmit={handleSubmit(handleFormSubmit)}>
-      <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-[12px] lg:grid-cols-2 lg:gap-x-[12px]">
-        <div className="">
-          <BasicInformation
-            register={register}
-            control={control}
-            errors={errors}
-            setValue={setValue}
-            llmModelInstances={llmModelInstances}
-            onOpenConfigSheet={() => {}}
-            onRefreshModels={() => router.refresh()}
+    <div className="h-full w-full flex flex-col gap-0.5 lg:flex-row">
+      <form ref={formRef} id="agent-form" onSubmit={handleSubmit(handleFormSubmit)} className="overflow-auto h-full w-[60%] py-5 pr-5">
+        <BasicInformation
+          register={register}
+          control={control}
+          errors={errors}
+          setValue={setValue}
+          llmModelInstances={llmModelInstances}
+          onOpenConfigSheet={() => {}}
+          onRefreshModels={() => router.refresh()}
+        />
+        <Divider/>        
+        <AgentTriggers
+          control={control}
+          errors={errors}
+            eventFields={eventFields}
+            removeEvent={removeEvent}
+            appendEvent={appendEvent}
           />
+        <Divider/>
+        <ToolConfig
+          control={control}
+          setValue={setValue}
+          errors={errors}
+          toolFields={toolFields}
+          removeTool={removeTool}
+          appendTool={appendTool}
+          mcpServers={mcpServers}
+          mcpInstanceList={mcpInstanceList}
+          builtinTools={builtinTools}
+          builtinToolFields={builtinToolFields}
+          removeBuiltinTool={removeBuiltinTool}
+          appendBuiltinTool={appendBuiltinTool}
+        />
+        {/* Submit button moved to header controls */}
+      </form>
+      <div className="w-[40%] overflow-hidden h-full flex-1 border-l border-zinc-200 dark:border-zinc-700 flex flex-col">
+        <div className="min-h-[40px] text-sm flex items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
+          <Play className="h-4 w-4" />
+          Test Agent
         </div>
-        <div className="space-y-[12px]">
-          <Card className="px-0">
-            <div className="px-6">
-              <AgentTriggers
-                control={control}
-                errors={errors}
-                eventFields={eventFields}
-                removeEvent={removeEvent}
-                appendEvent={appendEvent}
-              />
-            </div>
-            <div className="my-6 h-[1px] w-full bg-slate-200" />
-            <div className="px-6">
-              <ToolConfig
-                control={control}
-                setValue={setValue}
-                errors={errors}
-                toolFields={toolFields}
-                removeTool={removeTool}
-                appendTool={appendTool}
-                mcpServers={mcpServers}
-                mcpInstanceList={mcpInstanceList}
-                builtinTools={builtinTools}
-                builtinToolFields={builtinToolFields}
-                removeBuiltinTool={removeBuiltinTool}
-                appendBuiltinTool={appendBuiltinTool}
-              />
-            </div>
-          </Card>
+        <div className="h-full py-5 px-3 flex-1 overflow-auto">
+          <FullChat agent={{ id: "1", name: "Test Agent" }} />
         </div>
       </div>
-
-      {/* Submit button moved to header controls */}
-    </form>
+    </div>
   );
 }

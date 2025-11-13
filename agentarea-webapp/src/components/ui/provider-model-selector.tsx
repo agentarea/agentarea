@@ -242,7 +242,7 @@ export function ProviderModelSelector({
       <PopoverContent className="p-0" style={{ width: popoverWidth }}>
         <div
           className={cn(
-            "flex w-full max-w-[600px] flex-col",
+            "flex w-full flex-col",
             modelInstances.length === 0 ? "h-[200px]" : "h-[270px]"
           )}
         >

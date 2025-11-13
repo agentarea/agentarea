@@ -2,10 +2,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, Paperclip, Send } from "lucide-react";
+import { ChevronDown, Paperclip, ArrowUp } from "lucide-react";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { env } from "@/env";
 import { useSSE } from "@/hooks/useSSE";
 import { cn } from "@/lib/utils";
@@ -809,7 +810,7 @@ export default function FullChat({
                 size="sm"
                 onClick={openFileDialog}
                 disabled={isLoading}
-                className="h-10 w-10 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
+                className="h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -819,12 +820,12 @@ export default function FullChat({
                 disabled={
                   isLoading || (!input.trim() && selectedFiles.length === 0)
                 }
-                className="h-10 w-10 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
               >
                 {isLoading ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <LoadingSpinner variant="light" size="sm" />
                 ) : (
-                  <Send className="h-4 w-4" />
+                  <ArrowUp className="h-4 w-4" />
                 )}
               </Button>
             </div>
