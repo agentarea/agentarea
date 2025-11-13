@@ -92,15 +92,6 @@ importers:
       '@tiptap/extension-placeholder':
         specifier: ^3.10.5
         version: 3.10.5(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))
-      '@tiptap/extension-task-item':
-        specifier: ^3.10.5
-        version: 3.10.5(@tiptap/extension-list@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))
-      '@tiptap/extension-task-list':
-        specifier: ^3.10.5
-        version: 3.10.5(@tiptap/extension-list@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))
-      '@tiptap/pm':
-        specifier: ^3.10.5
-        version: 3.10.5
       '@tiptap/react':
         specifier: ^3.10.5
         version: 3.10.5(@floating-ui/dom@1.7.4)(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -2635,16 +2626,6 @@ packages:
     resolution: {integrity: sha512-tyJs3ArYGaYi/cy79NWKfkb7nIcWocFmou3JW229mZ+lFH1jNy9jGnIITN8BG8aizC6QkXBaeEy8+uBUJ+5Tkw==}
     peerDependencies:
       '@tiptap/core': ^3.10.5
-
-  '@tiptap/extension-task-item@3.10.5':
-    resolution: {integrity: sha512-IdliDx9T0ygmPg6LvByGmeYJtNGJFVb0c9XhU9GbFqQyRbnpvs5USlKR3dYOmgAbveLnv+mGHoUoZJ510T3p9g==}
-    peerDependencies:
-      '@tiptap/extension-list': ^3.10.5
-
-  '@tiptap/extension-task-list@3.10.5':
-    resolution: {integrity: sha512-BqzKBq98aHNzjZdfKP2OHbwFmL2b0KVijpC4uyLb8/c6sT3G7CvqxvUZbkuuJMGI9JVlyL58zR6FnEc1F8+y7g==}
-    peerDependencies:
-      '@tiptap/extension-list': ^3.10.5
 
   '@tiptap/extension-text@3.10.5':
     resolution: {integrity: sha512-anLb/bJ9TfjVjOAdqQGQTDYsvI5Tgid1RgRokpK6vOxVhukBW7q8RnIsyWYj/uV6UefS6YtVOl5H9DAnpCVfvg==}
@@ -9847,14 +9828,6 @@ snapshots:
   '@tiptap/extension-strike@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))':
     dependencies:
       '@tiptap/core': 3.10.5(@tiptap/pm@3.10.5)
-
-  '@tiptap/extension-task-item@3.10.5(@tiptap/extension-list@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))':
-    dependencies:
-      '@tiptap/extension-list': 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)
-
-  '@tiptap/extension-task-list@3.10.5(@tiptap/extension-list@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))':
-    dependencies:
-      '@tiptap/extension-list': 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)
 
   '@tiptap/extension-text@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))':
     dependencies:
