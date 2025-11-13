@@ -361,25 +361,6 @@ const ToolConfig = ({
   return (
     <>
       {/* Builtin Tools Section */}
-
-      {/* <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Tools Configuration
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BuiltinToolIconGrid
-              builtinTools={builtinTools}
-              selectedTools={getSelectedBuiltinTools()}
-              onAddTool={handleAddBuiltinTool}
-              onRemoveTool={handleRemoveBuiltinTool}
-              onUpdateToolConfig={() => console.log('update tool config')}
-              loading={loadingBuiltinTools}
-            />
-          </CardContent>
-        </Card> */}
-
       <AccordionControl
         id="tools"
         accordionValue={accordionValue}
@@ -405,7 +386,7 @@ const ToolConfig = ({
                     getBuiltinToolDisplayInfo(tool);
                   return (
                     <div className="flex flex-row items-center gap-2 px-[7px] py-[7px]">
-                      <IconComponent className="h-5 w-5 text-muted-foreground" />
+                      <IconComponent className="h-4 w-4 text-muted-foreground" />
                       <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                         {displayName}
                       </h3>
@@ -465,9 +446,9 @@ const ToolConfig = ({
                   items={activeInstances}
                   prefix="active-mcp"
                   extractTitle={(instance) => (
-                    <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
+                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
                       <div className="relative shrink-0">
-                        <img src="/Icon.svg" alt="" className="h-5 w-5" />
+                        <img src="/Icon.svg" alt="" className="h-4 w-4" />
                       </div>
                       <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                         {instance.name || instance.id}
@@ -531,9 +512,9 @@ const ToolConfig = ({
                   items={mcpServers}
                   prefix="mcp"
                   extractTitle={(server) => (
-                    <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
+                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
                       <div className="relative shrink-0">
-                        <img src="/Icon.svg" alt="" className="h-5 w-5" />
+                        <img src="/Icon.svg" alt="" className="h-4 w-4" />
                       </div>
                       <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                         {server.name}
@@ -645,7 +626,7 @@ const ToolConfig = ({
           )}
 
           {/* MCP Tools Section */}
-          {toolFields.length > 0 ? (
+          {toolFields.length > 0 && (
             <div className="space-y-2">
               <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <Image
@@ -684,12 +665,16 @@ const ToolConfig = ({
                 ))}
               </Accordion>
             </div>
-          ) : (
-            <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
-              <p>{t("create.agentToolsDescription")}</p>  
-              <p>{t("create.agentToolsNote")}</p>
-            </Note>
           )}
+
+          {/* Empty state - only show if no tools at all */}
+          {(!builtinToolFields || builtinToolFields.length === 0) &&
+            toolFields.length === 0 && (
+              <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
+                <p>{t("create.agentToolsDescription")}</p>
+                <p>{t("create.agentToolsNote")}</p>
+              </Note>
+            )}
         </div>
       </AccordionControl>
 

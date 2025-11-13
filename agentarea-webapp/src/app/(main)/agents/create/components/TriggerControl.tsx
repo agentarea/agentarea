@@ -155,8 +155,8 @@ export const TriggerControl = ({
     }
 
     return (
-      <div className="flex flex-row items-center gap-2 px-[7px] py-[7px]">
-        <trigger.icon className="h-5 w-5 text-muted-foreground" />
+      <div className="flex flex-row items-center gap-1 px-[7px] py-[7px]">
+        <trigger.icon className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
           {trigger.label || trigger.name}
         </h3>
@@ -237,7 +237,7 @@ export const TriggerControl = ({
       title={renderTitle()}
       iconSrc={trigger.icon ? undefined : "/Icon.svg"}
     >
-      <div className="mt-2 space-y-2 p-2">
+      <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
           {trigger.description || trigger.label || trigger.name}
         </p>

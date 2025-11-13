@@ -238,7 +238,7 @@ export default function AgentForm({
             Test Agent
           </div>
           <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
-            <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-contain bg-center bg-repeat opacity-25 pointer-events-none" />
+            <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
             <div className="relative z-1 h-full">
               <FullChat agent={{ id: "1", name: "Test Agent" }} />
             </div>

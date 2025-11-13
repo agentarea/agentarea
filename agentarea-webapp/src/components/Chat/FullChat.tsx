@@ -675,11 +675,12 @@ export default function FullChat({
       className={cn(
         "mx-auto flex h-full w-full flex-col gap-0 overflow-hidden rounded-lg transition-all duration-700 ease-out",
         "transition-all duration-700 ease-out",
+        "justify-between",
         // hasUserMessages ? 'justify-between border bg-chatBackground' : 'justify-center')}>
-        className,
-        hasUserMessages
-          ? "justify-between border border-b-0 bg-chatBackground"
-          : "justify-between"
+        // className,
+        // hasUserMessages
+        //   ? "justify-between border border-b-0 bg-chatBackground"
+        //   : "justify-between"
       )}
     >
       {!hasUserMessages && placeholder ? (
@@ -773,9 +774,9 @@ export default function FullChat({
           "card mx-auto w-full cursor-auto bg-white hover:shadow-none dark:bg-zinc-900",
           "px-2 pb-2 pt-0",
           // "transition-width transition-height duration-500 ease-out transition-border-none",
-          hasUserMessages
-            ? "max-w-full rounded-t-none border-l-0 border-r-0"
-            : "w-full max-w-5xl"
+          // hasUserMessages
+          //   ? "max-w-full rounded-t-none border-l-0 border-r-0"
+          //   : "w-full max-w-5xl"
         )}
       >
         <form

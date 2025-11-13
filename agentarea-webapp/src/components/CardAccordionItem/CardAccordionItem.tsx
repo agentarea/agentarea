@@ -66,11 +66,11 @@ export function CardAccordionItem({
     typeof title === "string" ? (
       <div
         className={cn(
-          "flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]",
+          "flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]",
           headerClassName
         )}
       >
-        {iconSrc && <img src={iconSrc} alt="" className="h-5 w-5 shrink-0" />}
+        {iconSrc && <img src={iconSrc} alt="" className="h-4 w-4 shrink-0" />}
         <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
           {title}
         </h3>
@@ -87,7 +87,7 @@ export function CardAccordionItem({
     >
       <AccordionTrigger
         className={cn(
-          "group flex w-max rotate-0 flex-row justify-start gap-2 py-0 hover:no-underline [&[data-state=open]>svg]:rotate-90 [&[data-state=open]>svg]:text-accent",
+          "group flex w-max rotate-0 flex-row justify-start gap-2 py-0 hover:no-underline",
           triggerClassName
         )}
         controls={generatedControls}
@@ -95,7 +95,7 @@ export function CardAccordionItem({
           hideChevron
             ? null
             : chevron || (
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all duration-300 group-hover:text-accent" />
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all duration-300 group-hover:text-accent group-data-[state=open]:rotate-90" />
               )
         }
         onClick={onHeaderClick}
