@@ -9,6 +9,11 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import FullChat from "@/components/Chat/FullChat";
 import { Play } from "lucide-react";
 import Divider from "@/components/ui/divider";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { cn } from "@/lib/utils";
 import {
   AgentTriggers,
@@ -179,54 +184,67 @@ export default function AgentForm({
   };
 
   return (
-    <div className={cn("h-full w-full flex flex-col gap-0.5 lg:flex-row", className)}>
-      <form ref={formRef} id="agent-form" onSubmit={handleSubmit(handleFormSubmit)} className="overflow-auto h-full w-[60%] py-5 pr-5">
-        <BasicInformation
-          register={register}
-          control={control}
-          errors={errors}
-          setValue={setValue}
-          llmModelInstances={llmModelInstances}
-          onOpenConfigSheet={() => {}}
-          onRefreshModels={() => router.refresh()}
-        />
-        <Divider/>        
-        <AgentTriggers
-          control={control}
-          errors={errors}
+    <ResizablePanelGroup
+      direction="horizontal"
+      className={cn("h-full w-full", className)}
+    >
+      <ResizablePanel defaultSize={60} minSize={30}>
+        <form
+          ref={formRef}
+          id="agent-form"
+          onSubmit={handleSubmit(handleFormSubmit)}
+          className="overflow-auto h-full py-5 pr-5"
+        >
+          <BasicInformation
+            register={register}
+            control={control}
+            errors={errors}
+            setValue={setValue}
+            llmModelInstances={llmModelInstances}
+            onOpenConfigSheet={() => {}}
+            onRefreshModels={() => router.refresh()}
+          />
+          <Divider />
+          <AgentTriggers
+            control={control}
+            errors={errors}
             eventFields={eventFields}
             removeEvent={removeEvent}
             appendEvent={appendEvent}
           />
-        <Divider/>
-        <ToolConfig
-          control={control}
-          setValue={setValue}
-          errors={errors}
-          toolFields={toolFields}
-          removeTool={removeTool}
-          appendTool={appendTool}
-          mcpServers={mcpServers}
-          mcpInstanceList={mcpInstanceList}
-          builtinTools={builtinTools}
-          builtinToolFields={builtinToolFields}
-          removeBuiltinTool={removeBuiltinTool}
-          appendBuiltinTool={appendBuiltinTool}
-        />
-        {/* Submit button moved to header controls */}
-      </form>
-      <div className="w-[40%] overflow-hidden h-full flex-1 border-l border-zinc-200 dark:border-zinc-700 flex flex-col">
-        <div className="min-h-[40px] text-sm flex items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
-          <Play className="h-4 w-4" />
-          Test Agent
-        </div>
-        <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
-          <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-contain bg-center bg-repeat opacity-25 pointer-events-none" />
-          <div className="relative z-1 h-full">
-            <FullChat agent={{ id: "1", name: "Test Agent" }} />
+          <Divider />
+          <ToolConfig
+            control={control}
+            setValue={setValue}
+            errors={errors}
+            toolFields={toolFields}
+            removeTool={removeTool}
+            appendTool={appendTool}
+            mcpServers={mcpServers}
+            mcpInstanceList={mcpInstanceList}
+            builtinTools={builtinTools}
+            builtinToolFields={builtinToolFields}
+            removeBuiltinTool={removeBuiltinTool}
+            appendBuiltinTool={appendBuiltinTool}
+          />
+          {/* Submit button moved to header controls */}
+        </form>
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={40} minSize={20}>
+        <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
+          <div className="min-h-[40px] text-sm flex items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
+            <Play className="h-4 w-4" />
+            Test Agent
+          </div>
+          <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
+            <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-contain bg-center bg-repeat opacity-25 pointer-events-none" />
+            <div className="relative z-1 h-full">
+              <FullChat agent={{ id: "1", name: "Test Agent" }} />
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }
