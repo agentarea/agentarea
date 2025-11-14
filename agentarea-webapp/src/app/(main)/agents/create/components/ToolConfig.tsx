@@ -670,11 +670,11 @@ const ToolConfig = ({
           {/* Empty state - only show if no tools at all */}
           {(!builtinToolFields || builtinToolFields.length === 0) &&
             toolFields.length === 0 && (
-              <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
-                <p>{t("create.agentToolsDescription")}</p>
-                <p>{t("create.agentToolsNote")}</p>
-              </Note>
-            )}
+            <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground/50">
+              <p>{t("create.agentToolsDescription")}</p>  
+              <p>{t("create.agentToolsNote")}</p>
+            </Note>
+          )}
         </div>
       </AccordionControl>
 

@@ -4,7 +4,6 @@ import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionI
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { AgentFormValues } from "../types";
-import { MethodsIndicator } from "./MethodsIndicator";
 import { MethodsList } from "./MethodsList";
 
 interface Method {
@@ -62,6 +61,14 @@ export const TriggerControl = ({
   const hasMethods = availableMethods.length > 0;
   const hasMethodToggle = !!onMethodToggle;
 
+  // Calculate selected methods count for indicator
+  const selectedCount = hasMethods && hasMethodToggle
+    ? availableMethods.filter(
+        (method) => selectedMethods[method.name] === true
+      ).length
+    : 0;
+  const totalCount = availableMethods.length;
+
   const handleSelectAllMethods = (checked: boolean) => {
     if (!onMethodToggle || !hasMethods) return;
 
@@ -70,17 +77,6 @@ export const TriggerControl = ({
     });
   };
 
-  const renderMethodsIndicator = () => {
-    if (!hasMethods || !hasMethodToggle) return null;
-
-    return (
-      <MethodsIndicator
-        methods={availableMethods}
-        selectedMethods={selectedMethods}
-        onSelectAll={handleSelectAllMethods}
-      />
-    );
-  };
 
   const renderEnabledSwitch = () => (
     <Controller
@@ -142,8 +138,12 @@ export const TriggerControl = ({
 
   const controls = (
     <div className="flex flex-row items-center gap-3">
-      {renderMethodsIndicator()}
       {/* {renderEnabledSwitch()} */}
+      {hasMethods && hasMethodToggle && totalCount > 0 && (
+        <span className="min-w-[50px] rounded-full bg-primary/15 px-2 py-0.5 text-center text-xs text-muted-foreground">
+          {selectedCount}/{totalCount}
+        </span>
+      )}
       {renderEditButton()}
       {renderRemoveButton()}
     </div>
@@ -174,6 +174,8 @@ export const TriggerControl = ({
           selectedMethods={selectedMethods}
           onMethodToggle={onMethodToggle!}
           toolName={trigger.name || trigger.id || `trigger-${index}`}
+          showSelectAll={true}
+          onSelectAll={handleSelectAllMethods}
         />
       );
     }
