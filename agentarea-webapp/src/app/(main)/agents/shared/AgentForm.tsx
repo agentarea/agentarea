@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useTransition } from "react";
+import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -62,6 +62,7 @@ export default function AgentForm({
     control,
     setValue,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<AgentFormValues>({
     defaultValues: {
@@ -104,6 +105,14 @@ export default function AgentForm({
     control,
     name: "events_config.events",
   });
+
+  // Watch agent name to update chat header (client-side only to avoid hydration issues)
+  const watchedName = watch("name");
+  const [agentName, setAgentName] = useState("");
+
+  useEffect(() => {
+    setAgentName(watchedName || "New Agent");
+  }, [watchedName]);
 
   // Show loading spinner if data is still loading (hooks are already initialized above)
   if (isLoading) {
@@ -232,15 +241,15 @@ export default function AgentForm({
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={40} minSize={20}>
-        <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
+          <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
           <div className="min-h-[40px] text-sm flex items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
             <Play className="h-4 w-4" />
-            Test Agent
+            Test {agentName ? <span className="font-bold">{agentName}</span> : "New Agent"}
           </div>
           <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
             <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
             <div className="relative z-1 h-full">
-              <FullChat agent={{ id: "1", name: "Test Agent" }} />
+              <FullChat agent={{ id: "1", name: agentName }} placeholder={`Write a new task for ${agentName}`}/>
             </div>
           </div>
         </div>
