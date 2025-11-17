@@ -88,6 +88,7 @@ export default function AgentEditClient({
       mcpInstanceList={mcpInstanceList}
       builtinTools={builtinTools}
       initialData={initialData}
+      agentId={agentId}
       onSubmit={handleSubmit}
       submitButtonText="Save Changes"
       submitButtonLoadingText="Saving..."
