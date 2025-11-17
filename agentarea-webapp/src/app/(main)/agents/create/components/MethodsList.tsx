@@ -41,10 +41,10 @@ export const MethodsList: React.FC<MethodsListProps> = ({
 
   return (
     <div className={cn(`space-y-1`, className)}>
-      <p className="text-xs font-medium text-foreground">
-        Available Methods:
-      </p>
-      {showSelectAll && onSelectAll && (
+        <p className="text-xs font-medium text-foreground">
+          Available Methods:
+        </p>
+        {showSelectAll && onSelectAll && (
         <div className="flex items-center gap-2 pl-1">
           <Checkbox
             id={`${toolName}-select-all`}
@@ -68,7 +68,7 @@ export const MethodsList: React.FC<MethodsListProps> = ({
             Select all
           </label>
         </div>
-      )}
+        )}
       <Divider />
       <div className="max-h-60 space-y-1 overflow-y-auto pr-2">
         {methods.map((method) => {

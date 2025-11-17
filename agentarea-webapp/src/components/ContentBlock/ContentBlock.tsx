@@ -42,7 +42,7 @@ export default function ContentBlock({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {header && (
-        <div className="flex min-h-[40px] flex-row items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="flex min-h-[40px] flex-row items-center justify-between border-b border-zinc-200 bg-white px-2 sm:px-4 dark:border-zinc-700 dark:bg-zinc-800">
           {"title" in header ? (
             <>
               <div className="flex flex-col gap-1">
@@ -65,12 +65,12 @@ export default function ContentBlock({
             </>
           ) : (
             <>
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-1.5 md:gap-2">
                 <SidebarTrigger className="h-5 w-5" />
                 <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
                 <div className="flex flex-col gap-1">
                   <Breadcrumb>
-                    <BreadcrumbList>
+                    <BreadcrumbList className="gap-1 sm:gap-2.5 max-sm:text-xs max-sm:leading-[22px]">
                       {header.breadcrumb.map((item, index) => (
                         <React.Fragment key={`breadcrumb-${index}`}>
                           <BreadcrumbItem>
@@ -95,13 +95,6 @@ export default function ContentBlock({
                       ))}
                     </BreadcrumbList>
                   </Breadcrumb>
-                  {/* {
-                                    header.description && (
-                                        <p className="note">
-                                            {header.description}
-                                        </p>
-                                    )
-                                } */}
                 </div>
               </div>
               {header.controls}
