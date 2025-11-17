@@ -155,13 +155,26 @@ class TemporalAgentRunner(BaseAgentRunner):
         ]
 
         # Create Pydantic request model for LLM call
-        # NOTE: This runner uses state from workflow which should have workspace_id set
+        # Extract workspace_id and user_id from agent_config.user_context_data
+        user_context_data = state.agent_config.get("user_context_data", {})
+        workspace_id = user_context_data.get("workspace_id")
+        user_id = user_context_data.get("user_id")
+
+        if not workspace_id:
+            raise ValueError(
+                "Missing workspace_id in agent_config.user_context_data for workflow execution"
+            )
+        if not user_id:
+            raise ValueError(
+                "Missing user_id in agent_config.user_context_data for workflow execution"
+            )
+
         llm_request = LLMCallRequest(
             messages=messages_dict,
             model_id=state.agent_config.get("model_id") or "gpt-4",  # Provide default model
             tools=state.available_tools,
-            workspace_id=state.agent_config.get("workspace_id", "system"),  # Fallback to system
-            user_context_data=state.agent_config.get("user_context_data", {"user_id": "system"}),
+            workspace_id=workspace_id,
+            user_context_data=user_context_data,
         )
 
         # Call LLM via activity using Pydantic model
@@ -218,12 +231,21 @@ class TemporalAgentRunner(BaseAgentRunner):
                 except (json.JSONDecodeError, KeyError):
                     tool_args = {}
 
+                # Extract workspace_id from agent_config.user_context_data
+                user_context_data = state.agent_config.get("user_context_data", {})
+                workspace_id = user_context_data.get("workspace_id")
+
+                if not workspace_id:
+                    raise ValueError(
+                        "Missing workspace_id in agent_config.user_context_data for MCP tool execution"
+                    )
+
                 # Create Pydantic request model for MCP tool execution
                 mcp_request = MCPToolRequest(
                     tool_name=tool_name,
                     tool_args=tool_args,
                     server_instance_id=None,
-                    workspace_id="system",
+                    workspace_id=workspace_id,
                     tools_config=state.agent_config.get("tools_config"),
                 )
 

@@ -38,9 +38,10 @@ def upsert_mcp_server(
     if result:
         # Update existing server
         conn.execute(
-            text("""UPDATE mcp_servers 
-                    SET name = :name, description = :description, docker_image_url = :docker_image_url, 
-                        env_schema = :env_schema, updated_at = now() 
+            text("""UPDATE mcp_servers
+                    SET name = :name, description = :description,
+                        docker_image_url = :docker_image_url,
+                        env_schema = :env_schema, updated_at = now()
                     WHERE id = :id"""),
             {
                 "id": server_id,
@@ -62,9 +63,10 @@ def upsert_mcp_server(
         if str(existing_id) != server_id:
             # Update existing server with new ID
             conn.execute(
-                text("""UPDATE mcp_servers 
-                        SET id = :new_id, description = :description, docker_image_url = :docker_image_url,
-                            env_schema = :env_schema, updated_at = now() 
+                text("""UPDATE mcp_servers
+                        SET id = :new_id, description = :description,
+                            docker_image_url = :docker_image_url,
+                            env_schema = :env_schema, updated_at = now()
                         WHERE id = :old_id"""),
                 {
                     "new_id": server_id,
@@ -77,11 +79,20 @@ def upsert_mcp_server(
         return server_id
 
     # Insert new server
+    # NOTE: Using "system" for workspace_id and created_by is intentional for
+    # bootstrap/system-level data.
+    # These are built-in MCP server specs available to all workspaces, created
+    # during system initialization before any users/workspaces exist. This is
+    # acceptable for bootstrap scripts.
     conn.execute(
-        text("""INSERT INTO mcp_servers 
-                (id, name, description, docker_image_url, version, tags, status, is_public, env_schema, created_by, workspace_id, created_at, updated_at) 
-                VALUES 
-                (:id, :name, :description, :docker_image_url, :version, :tags, :status, :is_public, :env_schema, :created_by, :workspace_id, now(), now())"""),
+        text("""INSERT INTO mcp_servers
+                (id, name, description, docker_image_url, version, tags,
+                 status, is_public, env_schema, created_by, workspace_id,
+                 created_at, updated_at)
+                VALUES
+                (:id, :name, :description, :docker_image_url, :version,
+                 :tags, :status, :is_public, :env_schema, :created_by,
+                 :workspace_id, now(), now())"""),
         {
             "id": server_id,
             "name": server_name,
@@ -92,8 +103,8 @@ def upsert_mcp_server(
             "status": "active",
             "is_public": True,
             "env_schema": json.dumps(env_schema),
-            "created_by": "system",
-            "workspace_id": "system",
+            "created_by": "system",  # Intentional: system-level bootstrap data
+            "workspace_id": "system",  # Intentional: system-level bootstrap data
         },
     )
     return server_id

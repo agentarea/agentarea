@@ -91,16 +91,46 @@ class ActivityServiceContainer:
 
 
 def create_user_context(user_context_data: dict[str, Any]) -> UserContext:
-    """Helper to create UserContext from data dictionary."""
+    """Helper to create UserContext from data dictionary.
+
+    Args:
+        user_context_data: Dictionary containing user_id and workspace_id
+
+    Raises:
+        ValueError: If user_id or workspace_id is missing
+    """
+    user_id = user_context_data.get("user_id")
+    workspace_id = user_context_data.get("workspace_id")
+
+    if not user_id:
+        raise ValueError("user_id is required in user_context_data")
+    if not workspace_id:
+        raise ValueError("workspace_id is required in user_context_data")
+
     return UserContext(
-        user_id=user_context_data.get("user_id", "system"),
-        workspace_id=user_context_data["workspace_id"],
+        user_id=user_id,
+        workspace_id=workspace_id,
     )
 
 
-def create_system_context(workspace_id: str) -> UserContext:
-    """Helper to create system context for background tasks."""
-    return UserContext(user_id="system", workspace_id=workspace_id)
+def create_system_context(workspace_id: str, user_id: str | None = None) -> UserContext:
+    """Helper to create system context for background tasks.
+
+    Args:
+        workspace_id: Workspace ID (required)
+        user_id: User ID for system operations (optional, defaults to workspace_id if not provided)
+
+    Note:
+        This should only be used for truly system-level operations where no user context exists.
+        Prefer using actual user context when available.
+    """
+    if not workspace_id:
+        raise ValueError("workspace_id is required for system context")
+
+    # Use provided user_id or workspace_id as fallback for system operations
+    effective_user_id = user_id or workspace_id
+
+    return UserContext(user_id=effective_user_id, workspace_id=workspace_id)
 
 
 class ActivityContext:

@@ -135,7 +135,10 @@ class TestTaskOrchestration:
         )
 
         # 📋 SCENARIO: Market analysis project
-        initial_goal = "Analyze the competitive landscape for electric vehicles in Europe and provide strategic recommendations"
+        initial_goal = (
+            "Analyze the competitive landscape for electric vehicles in Europe "
+            "and provide strategic recommendations"
+        )
 
         logger.info("🚀 Starting multi-agent orchestration test")
         logger.info(f"📋 Goal: {initial_goal}")
@@ -162,7 +165,12 @@ class TestTaskOrchestration:
                         "type": "function",
                         "function": {
                             "name": "tasks",
-                            "arguments": '{"action": "create_task", "title": "European EV Market Analysis", "description": "Comprehensive analysis of competitive landscape for electric vehicles in Europe", "priority": 3}',
+                            "arguments": (
+                                '{"action": "create_task", '
+                                '"title": "European EV Market Analysis", '
+                                '"description": "Comprehensive analysis of competitive '
+                                'landscape for electric vehicles in Europe", "priority": 3}'
+                            ),
                         },
                     }
                 ],
@@ -178,7 +186,13 @@ class TestTaskOrchestration:
                         "type": "function",
                         "function": {
                             "name": "tasks",
-                            "arguments": '{"action": "add_subtask", "parent_id": "TASK_ID_PLACEHOLDER", "title": "Market Data Collection", "description": "Gather EV sales data, manufacturer info, and regulatory landscape for Europe", "priority": 3}',
+                            "arguments": (
+                                '{"action": "add_subtask", '
+                                '"parent_id": "TASK_ID_PLACEHOLDER", '
+                                '"title": "Market Data Collection", '
+                                '"description": "Gather EV sales data, manufacturer info, '
+                                'and regulatory landscape for Europe", "priority": 3}'
+                            ),
                         },
                     }
                 ],
@@ -194,7 +208,12 @@ class TestTaskOrchestration:
                         "type": "function",
                         "function": {
                             "name": "handoff_to_agent",
-                            "arguments": '{"target_agent_id": "research_agent", "handoff_reason": "Specialized in market research", "task_context": "Research EV market in Europe", "expected_deliverable": "Market research report"}',
+                            "arguments": (
+                                '{"target_agent_id": "research_agent", '
+                                '"handoff_reason": "Specialized in market research", '
+                                '"task_context": "Research EV market in Europe", '
+                                '"expected_deliverable": "Market research report"}'
+                            ),
                         },
                     }
                 ],
@@ -211,7 +230,13 @@ class TestTaskOrchestration:
                         "type": "function",
                         "function": {
                             "name": "tasks",
-                            "arguments": '{"action": "add_subtask", "parent_id": "TASK_ID_PLACEHOLDER", "title": "Data Analysis & Trends", "description": "Analyze collected market data to identify trends and competitive positioning", "priority": 3}',
+                            "arguments": (
+                                '{"action": "add_subtask", '
+                                '"parent_id": "TASK_ID_PLACEHOLDER", '
+                                '"title": "Data Analysis & Trends", '
+                                '"description": "Analyze collected market data to identify '
+                                'trends and competitive positioning", "priority": 3}'
+                            ),
                         },
                     }
                 ],
@@ -227,7 +252,15 @@ class TestTaskOrchestration:
                         "type": "function",
                         "function": {
                             "name": "handoff_to_agent",
-                            "arguments": '{"target_agent_id": "analysis_agent", "handoff_reason": "Expert in data analysis and trend identification", "task_context": "Analyze European EV market data to identify competitive patterns, market leaders, and growth trends", "expected_deliverable": "Data analysis report with key findings and insights"}',
+                            "arguments": (
+                                '{"target_agent_id": "analysis_agent", '
+                                '"handoff_reason": '
+                                '"Expert in data analysis and trend identification", '
+                                '"task_context": "Analyze European EV market data to '
+                                "identify competitive patterns, market leaders, and growth "
+                                'trends", "expected_deliverable": '
+                                '"Data analysis report with key findings and insights"}'
+                            ),
                         },
                     }
                 ],
@@ -244,7 +277,13 @@ class TestTaskOrchestration:
                         "type": "function",
                         "function": {
                             "name": "tasks",
-                            "arguments": '{"action": "add_subtask", "parent_id": "TASK_ID_PLACEHOLDER", "title": "Strategic Report Generation", "description": "Create comprehensive report with strategic recommendations", "priority": 3}',
+                            "arguments": (
+                                '{"action": "add_subtask", '
+                                '"parent_id": "TASK_ID_PLACEHOLDER", '
+                                '"title": "Strategic Report Generation", '
+                                '"description": "Create comprehensive report with strategic '
+                                'recommendations", "priority": 3}'
+                            ),
                         },
                     }
                 ],
@@ -260,7 +299,16 @@ class TestTaskOrchestration:
                         "type": "function",
                         "function": {
                             "name": "handoff_to_agent",
-                            "arguments": '{"target_agent_id": "reporting_agent", "handoff_reason": "Specialized in creating comprehensive strategic reports", "task_context": "Generate final strategic recommendations report based on research and analysis findings", "expected_deliverable": "Executive report with strategic recommendations for EV market entry"}',
+                            "arguments": (
+                                '{"target_agent_id": "reporting_agent", '
+                                '"handoff_reason": '
+                                '"Specialized in creating comprehensive strategic reports", '
+                                '"task_context": "Generate final strategic recommendations '
+                                'report based on research and analysis findings", '
+                                '"expected_deliverable": '
+                                '"Executive report with strategic recommendations for EV '
+                                'market entry"}'
+                            ),
                         },
                     }
                 ],
@@ -270,14 +318,21 @@ class TestTaskOrchestration:
         # Final completion
         fake_llm.add_response(
             ScriptedResponse(
-                content="All agents have completed their tasks. The European EV market analysis is complete with strategic recommendations ready.",
+                content=(
+                    "All agents have completed their tasks. The European EV market analysis is "
+                    "complete with strategic recommendations ready."
+                ),
                 tool_calls=[
                     {
                         "id": "call_8",
                         "type": "function",
                         "function": {
                             "name": "completion",
-                            "arguments": '{"result": "Successfully completed comprehensive European EV market analysis with strategic recommendations from research, analysis, and reporting specialists"}',
+                            "arguments": (
+                                '{"result": "Successfully completed comprehensive European '
+                                "EV market analysis with strategic recommendations from "
+                                'research, analysis, and reporting specialists"}'
+                            ),
                         },
                     }
                 ],
@@ -290,7 +345,11 @@ class TestTaskOrchestration:
 
         return EventAgent(
             name="Market Analysis Orchestrator",
-            instruction="You are a project manager specializing in market analysis. Break down complex tasks into subtasks, delegate to specialist agents, and track progress using the task management system.",
+            instruction=(
+                "You are a project manager specializing in market analysis. Break down complex "
+                "tasks into subtasks, delegate to specialist agents, and track progress using the "
+                "task management system."
+            ),
             llm_executor=fake_llm,
             tools=[tasks_toolset, handoff_tool],
             include_default_tools=True,  # Includes completion tool
@@ -303,14 +362,22 @@ class TestTaskOrchestration:
 
         fake_llm.add_response(
             ScriptedResponse(
-                content="I'll conduct comprehensive research on the European EV market. Let me start by setting up my research tasks:",
+                content=(
+                    "I'll conduct comprehensive research on the European EV market. Let me start "
+                    "by setting up my research tasks:"
+                ),
                 tool_calls=[
                     {
                         "id": "research_1",
                         "type": "function",
                         "function": {
                             "name": "tasks",
-                            "arguments": '{"action": "create_task", "title": "EV Sales Data Collection", "description": "Gather 2023-2024 EV sales figures for major European markets", "priority": 2}',
+                            "arguments": (
+                                '{"action": "create_task", '
+                                '"title": "EV Sales Data Collection", '
+                                '"description": "Gather 2023-2024 EV sales figures for major '
+                                'European markets", "priority": 2}'
+                            ),
                         },
                     }
                 ],
@@ -319,14 +386,23 @@ class TestTaskOrchestration:
 
         fake_llm.add_response(
             ScriptedResponse(
-                content="Research completed successfully. I've gathered comprehensive EV market data including sales figures from Germany, France, Norway, and UK, plus regulatory landscape analysis.",
+                content=(
+                    "Research completed successfully. I've gathered comprehensive EV market data "
+                    "including sales figures from Germany, France, Norway, and UK, plus regulatory "
+                    "landscape analysis."
+                ),
                 tool_calls=[
                     {
                         "id": "research_2",
                         "type": "function",
                         "function": {
                             "name": "completion",
-                            "arguments": '{"result": "European EV market research complete: Sales data shows Norway leading at 80% EV adoption, Germany growing 35% YoY, regulatory support strong across EU with 2035 ICE ban driving adoption"}',
+                            "arguments": (
+                                '{"result": "European EV market research complete: Sales '
+                                "data shows Norway leading at 80% EV adoption, Germany "
+                                "growing 35% YoY, regulatory support strong across EU with "
+                                '2035 ICE ban driving adoption"}'
+                            ),
                         },
                     }
                 ],
@@ -337,7 +413,10 @@ class TestTaskOrchestration:
 
         return EventAgent(
             name="Market Research Specialist",
-            instruction="You are an expert market researcher specializing in automotive industry data collection and analysis.",
+            instruction=(
+                "You are an expert market researcher specializing in automotive industry data "
+                "collection and analysis."
+            ),
             llm_executor=fake_llm,
             tools=[tasks_toolset],
             include_default_tools=True,
@@ -350,14 +429,22 @@ class TestTaskOrchestration:
 
         fake_llm.add_response(
             ScriptedResponse(
-                content="I'll analyze the collected market data to identify key trends and competitive patterns:",
+                content=(
+                    "I'll analyze the collected market data to identify key trends and competitive "
+                    "patterns:"
+                ),
                 tool_calls=[
                     {
                         "id": "analysis_1",
                         "type": "function",
                         "function": {
                             "name": "tasks",
-                            "arguments": '{"action": "create_task", "title": "Competitive Positioning Analysis", "description": "Analyze market share and positioning of major EV manufacturers", "priority": 2}',
+                            "arguments": (
+                                '{"action": "create_task", '
+                                '"title": "Competitive Positioning Analysis", '
+                                '"description": "Analyze market share and positioning of '
+                                'major EV manufacturers", "priority": 2}'
+                            ),
                         },
                     }
                 ],
@@ -366,14 +453,23 @@ class TestTaskOrchestration:
 
         fake_llm.add_response(
             ScriptedResponse(
-                content="Analysis complete. Key findings: Tesla maintains premium segment leadership but VW Group is rapidly gaining market share in mass market. Chinese manufacturers like BYD are entering European market aggressively.",
+                content=(
+                    "Analysis complete. Key findings: Tesla maintains premium segment leadership "
+                    "but VW Group is rapidly gaining market share in mass market. Chinese "
+                    "manufacturers like BYD are entering European market aggressively."
+                ),
                 tool_calls=[
                     {
                         "id": "analysis_2",
                         "type": "function",
                         "function": {
                             "name": "completion",
-                            "arguments": '{"result": "EV market analysis complete: Tesla leads premium (25% market share), VW Group dominates mass market (18%), Chinese manufacturers gaining ground. Key trend: Rapid charging infrastructure expansion driving adoption"}',
+                            "arguments": (
+                                '{"result": "EV market analysis complete: Tesla leads '
+                                "premium (25% market share), VW Group dominates mass market "
+                                "(18%), Chinese manufacturers gaining ground. Key trend: "
+                                'Rapid charging infrastructure expansion driving adoption"}'
+                            ),
                         },
                     }
                 ],
@@ -384,7 +480,10 @@ class TestTaskOrchestration:
 
         return EventAgent(
             name="Data Analysis Specialist",
-            instruction="You are an expert data analyst specializing in automotive market trends and competitive intelligence.",
+            instruction=(
+                "You are an expert data analyst specializing in automotive market trends and "
+                "competitive intelligence."
+            ),
             llm_executor=fake_llm,
             tools=[tasks_toolset],
             include_default_tools=True,
@@ -397,14 +496,22 @@ class TestTaskOrchestration:
 
         fake_llm.add_response(
             ScriptedResponse(
-                content="I'll create a comprehensive strategic report based on the research and analysis findings:",
+                content=(
+                    "I'll create a comprehensive strategic report based on the research and "
+                    "analysis findings:"
+                ),
                 tool_calls=[
                     {
                         "id": "report_1",
                         "type": "function",
                         "function": {
                             "name": "tasks",
-                            "arguments": '{"action": "create_task", "title": "Executive Summary Creation", "description": "Create executive summary with key recommendations", "priority": 3}',
+                            "arguments": (
+                                '{"action": "create_task", '
+                                '"title": "Executive Summary Creation", '
+                                '"description": "Create executive summary with key '
+                                'recommendations", "priority": 3}'
+                            ),
                         },
                     }
                 ],
@@ -413,14 +520,23 @@ class TestTaskOrchestration:
 
         fake_llm.add_response(
             ScriptedResponse(
-                content="Strategic report completed. Recommendations: 1) Target mass market segment to compete with VW Group, 2) Establish charging partnerships to accelerate adoption, 3) Focus on Germany/France markets with highest growth potential, 4) Monitor Chinese competition closely.",
+                content=(
+                    "Strategic report completed. Recommendations: 1) Target mass market segment "
+                    "to compete with VW Group, 2) Establish charging partnerships to accelerate "
+                    "adoption, 3) Focus on Germany/France markets with highest growth potential, "
+                    "4) Monitor Chinese competition closely."
+                ),
                 tool_calls=[
                     {
                         "id": "report_2",
                         "type": "function",
                         "function": {
                             "name": "completion",
-                            "arguments": '{"result": "Strategic EV market entry report complete with 4 key recommendations: mass market focus, charging partnerships, Germany/France targeting, and competitive monitoring strategy"}',
+                            "arguments": (
+                                '{"result": "Strategic EV market entry report complete with 4 key '
+                                "recommendations: mass market focus, charging partnerships, "
+                                'Germany/France targeting, and competitive monitoring strategy"}'
+                            ),
                         },
                     }
                 ],
@@ -431,7 +547,10 @@ class TestTaskOrchestration:
 
         return EventAgent(
             name="Strategic Reporting Specialist",
-            instruction="You are an expert business strategist specializing in creating comprehensive market entry reports and strategic recommendations.",
+            instruction=(
+                "You are an expert business strategist specializing in creating comprehensive "
+                "market entry reports and strategic recommendations."
+            ),
             llm_executor=fake_llm,
             tools=[tasks_toolset],
             include_default_tools=True,
@@ -524,7 +643,8 @@ class TestTaskOrchestration:
         # Continue main agent execution to complete orchestration
         final_response_parts = []
         async for chunk in main_agent.run_stream(
-            "All specialized agents have completed their tasks. Please review results and complete the project."
+            "All specialized agents have completed their tasks. Please review results and "
+            "complete the project."
         ):
             final_response_parts.append(chunk)
 
@@ -621,7 +741,8 @@ class TestTaskOrchestration:
         logger.info("✅ Goal completion: Evidence of strategic recommendations and completion")
 
         logger.info(
-            "\n🎉 ORCHESTRATION TEST PASSED: Multi-agent task delegation with task management successful!"
+            "\n🎉 ORCHESTRATION TEST PASSED: Multi-agent task delegation with task management "
+            "successful!"
         )
 
 

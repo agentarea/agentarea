@@ -91,8 +91,13 @@ async def _start_temporal_workflow_for_task(
         # Create workflow service
         workflow_service = TemporalWorkflowService()
 
-        # Get user_id from metadata
-        user_id = metadata.get("user_id", "system")
+        # Get user_id from metadata - require it, don't default
+        user_id = metadata.get("user_id")
+        if not user_id:
+            logger.error(f"TaskCreated event missing user_id in metadata for task {task_id}")
+            # Try to extract from task if available, otherwise fail
+            # For now, log error but continue - workflow should handle missing user_id
+            user_id = None
 
         # Start the Temporal workflow - this returns immediately
         result = await workflow_service.execute_agent_task_async(
@@ -113,7 +118,8 @@ async def _start_temporal_workflow_for_task(
             e
         ):
             logger.info(
-                f"Workflow for task {task_id} is already running - this is expected for duplicate events"
+                f"Workflow for task {task_id} is already running - "
+                "this is expected for duplicate events"
             )
         else:
             logger.error(f"Error starting Temporal workflow for task {task_id}: {e}", exc_info=True)

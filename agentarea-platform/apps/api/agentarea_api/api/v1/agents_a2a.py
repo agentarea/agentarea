@@ -143,20 +143,25 @@ def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
 
     Args:
         auth_context: A2A authentication context from the request
+
+    Raises:
+        ValueError: If authentication context is missing required user_id or workspace_id
     """
-    # Extract user context from A2A auth
-    if auth_context.authenticated and auth_context.user_id:
-        user_id = auth_context.user_id
-        workspace_id = auth_context.workspace_id or "default"
-    else:
-        # For unauthenticated A2A requests, use system defaults
-        user_id = "a2a_anonymous"
-        workspace_id = "default"
+    # Require authentication for A2A requests
+    if not auth_context.authenticated or not auth_context.user_id:
+        raise ValueError(
+            "A2A requests require authentication. Unauthenticated requests are not supported."
+        )
+
+    if not auth_context.workspace_id:
+        raise ValueError(
+            f"A2A request missing workspace_id for authenticated user {auth_context.user_id}"
+        )
 
     # Create UserContext for repository layer
     user_context = UserContext(
-        user_id=user_id,
-        workspace_id=workspace_id,
+        user_id=auth_context.user_id,
+        workspace_id=auth_context.workspace_id,
         roles=[],  # A2A doesn't use roles, use permissions instead
     )
 
@@ -164,7 +169,8 @@ def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
     ContextManager.set_context(user_context)
 
     logger.debug(
-        f"Set user context for A2A request: user_id={user_id}, workspace_id={workspace_id}"
+        f"Set user context for A2A request: user_id={auth_context.user_id}, "
+        f"workspace_id={auth_context.workspace_id}"
     )
 
 
@@ -297,14 +303,19 @@ def convert_a2a_message_to_task(
                 message_content += part.text
 
     # Extract proper user context from authentication
-    # Note: The user context should already be set in ContextManager by set_user_context_from_a2a_auth()
-    if auth_context.authenticated and auth_context.user_id:
-        user_id = auth_context.user_id
-        workspace_id = auth_context.workspace_id or "default"
-    else:
-        # For unauthenticated requests, use system defaults
-        user_id = "a2a_anonymous"
-        workspace_id = "default"
+    # Note: The user context should already be set in ContextManager by
+    # set_user_context_from_a2a_auth()
+    if not auth_context.authenticated or not auth_context.user_id:
+        raise A2AValidationError("Authentication required for task submission", -32600)
+
+    if not auth_context.workspace_id:
+        raise A2AValidationError(
+            f"Missing workspace_id in authentication context for user {auth_context.user_id}",
+            -32600,
+        )
+
+    user_id = auth_context.user_id
+    workspace_id = auth_context.workspace_id
 
     # Create comprehensive A2A metadata with security context and monitoring information
     a2a_metadata = {
@@ -654,7 +665,10 @@ async def handle_message_stream_sse(
     agent_service,
     event_stream_service,
 ):
-    """Handle A2A message/stream method with proper TaskService integration, validation, and real event streaming."""
+    """Handle A2A message/stream method with proper TaskService integration.
+
+    Includes validation and real event streaming.
+    """
     start_time = time.time()
 
     # Log operation start
@@ -830,7 +844,12 @@ async def handle_message_stream_sse(
                         "stream_duration_ms": stream_duration_ms,
                     },
                 )
-                yield f"data: {json.dumps({'event': 'error', 'code': -32603, 'message': str(stream_error)})}\n\n"
+                error_data = {
+                    "event": "error",
+                    "code": -32603,
+                    "message": str(stream_error),
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
 
         return StreamingResponse(
             event_stream(),
@@ -853,8 +872,12 @@ async def handle_message_stream_sse(
             error=str(e),
         )
 
+        error_code = e.code
+        error_message = e.message
+
         async def error_stream():
-            yield f"data: {json.dumps({'event': 'error', 'code': e.code, 'message': e.message})}\n\n"  # noqa: F821
+            error_data = {"event": "error", "code": error_code, "message": error_message}
+            yield f"data: {json.dumps(error_data)}\n\n"
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
     except A2ATaskServiceError as e:
@@ -869,13 +892,18 @@ async def handle_message_stream_sse(
             error=str(e),
         )
 
+        error_code = e.code
+        error_message = e.message
+
         async def error_stream():
-            yield f"data: {json.dumps({'event': 'error', 'code': e.code, 'message': e.message})}\n\n"  # noqa: F821
+            error_data = {"event": "error", "code": error_code, "message": error_message}
+            yield f"data: {json.dumps(error_data)}\n\n"
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
     except ValueError as e:
         # Handle TaskService validation errors (e.g., agent not found in TaskService)
         duration_ms = (time.time() - start_time) * 1000
+        error_message = f"Invalid parameters: {e}"
         log_a2a_operation(
             "message_stream",
             agent_id,
@@ -883,11 +911,16 @@ async def handle_message_stream_sse(
             request_id,
             status="failed",
             duration_ms=duration_ms,
-            error=f"Invalid parameters: {e}",
+            error=error_message,
         )
 
         async def error_stream():
-            yield f"data: {json.dumps({'event': 'error', 'code': -32602, 'message': f'Invalid parameters: {e}'})}\n\n"  # noqa: F821
+            error_data = {
+                "event": "error",
+                "code": -32602,
+                "message": error_message,
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
     except Exception as e:
@@ -1105,7 +1138,10 @@ async def handle_task_cancel(request_id, params, task_service, agent_id, auth_co
 
 
 async def handle_agent_card(request_id, params, agent_service, agent_id, base_url, auth_context):
-    """Handle A2A agent/authenticatedExtendedCard method with current agent data and proper validation."""
+    """Handle A2A agent/authenticatedExtendedCard method.
+
+    Includes current agent data and proper validation.
+    """
     start_time = time.time()
 
     # Log operation start
@@ -1378,7 +1414,8 @@ async def handle_agent_jsonrpc(
             },
         )
 
-        # Set user context from A2A auth for repository layer (for methods that don't set it themselves)
+        # Set user context from A2A auth for repository layer
+        # (for methods that don't set it themselves)
         if method not in ["tasks/send", "message/send", "message/stream"]:
             set_user_context_from_a2a_auth(auth_context)
 

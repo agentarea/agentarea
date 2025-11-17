@@ -31,7 +31,10 @@ class ContainerHealthStatus:
 
     def __str__(self):
         """Return human-readable container health summary."""
-        return f"ContainerHealthStatus(service='{self.service_name}', healthy={self.is_healthy}, status='{self.status}')"
+        return (
+            f"ContainerHealthStatus(service='{self.service_name}', "
+            f"healthy={self.is_healthy}, status='{self.status}')"
+        )
 
 
 class MCPContainerMonitor:

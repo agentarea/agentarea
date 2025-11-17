@@ -69,7 +69,10 @@ async def reasoning_example():
         model="ollama_chat/qwen2.5",
     )
 
-    task = "If I have 12 apples and I give away 1/3 of them, then buy 8 more apples, how many apples do I have in total?"
+    task = (
+        "If I have 12 apples and I give away 1/3 of them, then buy 8 more "
+        "apples, how many apples do I have in total?"
+    )
 
     print(f"Task: {task}\n")
     print("Agent Response:")

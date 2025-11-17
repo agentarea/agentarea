@@ -1,7 +1,8 @@
 """JWT Middleware for FastAPI.
 
 This module provides JWT authentication middleware for the FastAPI application.
-It validates JWT tokens from OIDC providers and extracts user information for authenticated requests.
+It validates JWT tokens from OIDC providers and extracts user information for
+authenticated requests.
 """
 
 import logging

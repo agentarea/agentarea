@@ -97,7 +97,9 @@ class Toolset(ABC):
                     ].items():
                         properties[f"{method_name}_{param_name}"] = {
                             **param_schema,
-                            "description": f"[For {method_name}] {param_schema.get('description', '')}",
+                            "description": (
+                                f"[For {method_name}] {param_schema.get('description', '')}"
+                            ),
                         }
 
             return {
@@ -159,7 +161,9 @@ class Toolset(ABC):
                 if not action or action not in self._tool_methods:
                     return {
                         "success": False,
-                        "result": f"Invalid action. Available actions: {list(self._tool_methods.keys())}",
+                        "result": (
+                            f"Invalid action. Available actions: {list(self._tool_methods.keys())}"
+                        ),
                         "tool_name": self.name,
                         "error": "Invalid action",
                     }

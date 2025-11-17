@@ -12,8 +12,9 @@ COPY README.md ./
 COPY libs/ ./libs/
 COPY apps/ ./apps/
 
-# Use uv to install dependencies and project packages
-RUN uv sync --frozen
+# Use uv to install dependencies and project packages (exclude dev and test dependencies)
+# --all-packages ensures workspace packages and their dependencies are installed
+RUN uv sync --frozen --no-dev --no-group test --all-packages
 
 # Runtime stage
 FROM python:3.12-slim
@@ -30,15 +31,16 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
-# Copy project files
-COPY libs ./libs
-COPY apps/worker ./apps/worker
-COPY pyproject.toml ./
+# Copy project files with correct ownership
+COPY --chown=appuser:appuser libs ./libs
+COPY --chown=appuser:appuser apps/worker ./apps/worker
+COPY --chown=appuser:appuser apps/worker/docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=appuser:appuser pyproject.toml ./
 
-# Set proper permissions
-RUN chown -R appuser:appuser /app
+# Make entrypoint executable (small operation, minimal layer impact)
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -51,4 +53,8 @@ USER appuser
 # Stay in root directory
 WORKDIR /app
 
-CMD ["python", "-m", "agentarea_worker.cli", "start"] 
+# Set entrypoint to handle agentarea-worker command conversion
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# Default command: start the worker
+CMD ["agentarea-worker", "start"] 

@@ -88,11 +88,14 @@ CRITICAL RULES:
 - NEVER call tools without first showing your **Thought** and **Observation**
 - NEVER call completion without first demonstrating your work step-by-step
 - You must show your reasoning process for EVERY action, including the final completion
-- The completion tool requires detailed summary, reasoning, and result - prepare these thoughtfully
+- The completion tool requires detailed summary, reasoning, and result - prepare
+  these thoughtfully
 
-Continue this pattern until the task is complete, then use the completion tool with comprehensive details.
+Continue this pattern until the task is complete, then use the completion tool
+with comprehensive details.
 
-Remember: ALWAYS show your reasoning before taking actions. Users want to see your thought process."""
+Remember: ALWAYS show your reasoning before taking actions. Users want to see
+your thought process."""
 
     # Status and feedback messages (not part of system prompt)
     ITERATION_STATUS: Final[str] = "Iteration {current_iteration}/{max_iterations}"

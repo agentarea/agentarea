@@ -73,15 +73,30 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     content={"detail": auth_result.error or "Invalid token"},
                 )
 
-            # Extract workspace_id from header if not in token
-            workspace_id = request.headers.get("X-Workspace-ID", "default")
+            # Extract workspace_id from token claims first, then header
+            workspace_id = None
+            if auth_result.token and auth_result.token.claims:
+                workspace_id = auth_result.token.claims.get("workspace_id")
+
+            # Fallback to header if not in token
+            if not workspace_id:
+                workspace_id = request.headers.get("X-Workspace-ID")
+
+            # Default to "default" if workspace_id is not provided
+            if not workspace_id:
+                workspace_id = "default"
+                user_id = auth_result.token.user_id if auth_result.token else "unknown"
+                logger.warning(
+                    f"Token and header missing workspace_id for user {user_id}, defaulting to 'default'"
+                )
 
             # Set user context
             if auth_result.token:
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
                     workspace_id=workspace_id,
-                    roles=[],  # In a real implementation, this would come from the token or database
+                    # In a real implementation, roles would come from token or DB
+                    roles=[],
                 )
                 ContextManager.set_context(user_context)
 

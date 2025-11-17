@@ -90,7 +90,10 @@ class ExecutionTerminator:
         if self.budget_tracker and self.budget_tracker.is_exceeded():
             return (
                 False,
-                f"Budget exceeded (${self.budget_tracker.cost:.2f}/${self.budget_tracker.budget_limit:.2f})",
+                (
+                    f"Budget exceeded (${self.budget_tracker.cost:.2f}/"
+                    f"${self.budget_tracker.budget_limit:.2f})"
+                ),
             )
 
         # If we get here, execution should continue

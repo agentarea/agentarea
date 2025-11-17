@@ -8,8 +8,8 @@ import pytest
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
 from agentarea_tasks.application.task_event_service import TaskEventService
-from agentarea_tasks.domain.models import TaskEvent
-from agentarea_tasks.infrastructure.repository import TaskEventRepository
+from agentarea_tasks.domain.models import Task, TaskEvent
+from agentarea_tasks.infrastructure.repository import TaskEventRepository, TaskRepository
 
 
 @pytest.fixture
@@ -30,6 +30,13 @@ def mock_event_broker():
 def mock_task_event_repository():
     """Mock task event repository."""
     repo = AsyncMock(spec=TaskEventRepository)
+    return repo
+
+
+@pytest.fixture
+def mock_task_repository():
+    """Mock task repository."""
+    repo = AsyncMock(spec=TaskRepository)
     return repo
 
 
@@ -102,6 +109,7 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
+        mock_task_repository,
         sample_task_event,
     ):
         """Test workflow event creation with default parameters."""
@@ -110,7 +118,29 @@ class TestTaskEventService:
         event_type = "TaskCompleted"
         data = {"result": "success"}
 
-        mock_repository_factory.create_repository.return_value = mock_task_event_repository
+        # Mock task repository to return a task with workspace_id and user_id
+        mock_task = Task(
+            id=task_id,
+            agent_id=uuid4(),
+            description="Test task",
+            parameters={},
+            status="running",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            workspace_id="default",
+            user_id="workflow",
+        )
+        mock_task_repository.get_task = AsyncMock(return_value=mock_task)
+
+        # Configure factory to return appropriate repository based on type
+        def create_repo(repo_type):
+            if repo_type == TaskRepository:
+                return mock_task_repository
+            elif repo_type == TaskEventRepository:
+                return mock_task_event_repository
+            return None
+
+        mock_repository_factory.create_repository.side_effect = create_repo
         mock_task_event_repository.create_event.return_value = sample_task_event
 
         # Execute (using defaults for workspace_id and created_by)
@@ -126,7 +156,7 @@ class TestTaskEventService:
 
     @pytest.mark.asyncio
     async def test_create_workflow_event_repository_error(
-        self, task_event_service, mock_repository_factory, mock_task_event_repository
+        self, task_event_service, mock_repository_factory, mock_task_event_repository, mock_task_repository
     ):
         """Test handling of repository errors during event creation."""
         # Setup
@@ -134,7 +164,29 @@ class TestTaskEventService:
         event_type = "LLMCallFailed"
         data = {"error": "API timeout"}
 
-        mock_repository_factory.create_repository.return_value = mock_task_event_repository
+        # Mock task repository to return a task
+        mock_task = Task(
+            id=task_id,
+            agent_id=uuid4(),
+            description="Test task",
+            parameters={},
+            status="running",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            workspace_id="test-workspace",
+            user_id="test-user",
+        )
+        mock_task_repository.get_task = AsyncMock(return_value=mock_task)
+
+        # Configure factory to return appropriate repository based on type
+        def create_repo(repo_type):
+            if repo_type == TaskRepository:
+                return mock_task_repository
+            elif repo_type == TaskEventRepository:
+                return mock_task_event_repository
+            return None
+
+        mock_repository_factory.create_repository.side_effect = create_repo
         mock_task_event_repository.create_event.side_effect = Exception("Database error")
 
         # Execute & Verify
@@ -233,15 +285,20 @@ class TestTaskEventService:
         task_event_service,
         mock_repository_factory,
         mock_task_event_repository,
+        mock_task_repository,
         sample_task_event,
     ):
         """Test creating multiple events with some failures."""
         # Setup
+        task_id_1 = uuid4()
+        task_id_3 = uuid4()
         events_data = [
             {
-                "task_id": str(uuid4()),
+                "task_id": str(task_id_1),
                 "event_type": "LLMCallStarted",
                 "data": {"model": "gpt-4"},
+                "workspace_id": "test-workspace",
+                "created_by": "workflow",
             },
             {
                 "task_id": "invalid-uuid",  # This will cause an error
@@ -249,9 +306,11 @@ class TestTaskEventService:
                 "data": {"tokens": 150},
             },
             {
-                "task_id": str(uuid4()),
+                "task_id": str(task_id_3),
                 "event_type": "TaskCompleted",
                 "data": {"result": "success"},
+                "workspace_id": "test-workspace",
+                "created_by": "workflow",
             },
         ]
 
@@ -327,7 +386,13 @@ class TestTaskEventDomainModel:
         event_type = "TaskCompleted"
         data = {"result": "success"}
 
-        event = TaskEvent.create_workflow_event(task_id=task_id, event_type=event_type, data=data)
+        event = TaskEvent.create_workflow_event(
+            task_id=task_id,
+            event_type=event_type,
+            data=data,
+            workspace_id="default",
+            created_by="workflow",
+        )
 
         assert event.workspace_id == "default"
         assert event.created_by == "workflow"

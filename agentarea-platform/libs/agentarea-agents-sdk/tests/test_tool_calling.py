@@ -47,7 +47,10 @@ class TestToolCalling:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant. Use the calculate tool to solve math problems.",
+                        "content": (
+                            "You are a helpful assistant. Use the calculate tool "
+                            "to solve math problems."
+                        ),
                     },
                     {"role": "user", "content": "What is 15 + 27?"},
                 ],
@@ -160,11 +163,16 @@ class TestToolCalling:
             messages = [
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant. Use tools to solve problems step by step. When you're done, use completion.",
+                    "content": (
+                        "You are a helpful assistant. Use tools to solve problems "
+                        "step by step. When you're done, use completion."
+                    ),
                 },
                 {
                     "role": "user",
-                    "content": "Calculate 10 * 5, then add 15 to the result, and tell me the final answer.",
+                    "content": (
+                        "Calculate 10 * 5, then add 15 to the result, and tell me the final answer."
+                    ),
                 },
             ]
 
@@ -275,7 +283,10 @@ class TestToolCalling:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant. When you complete a task, use the completion tool.",
+                        "content": (
+                            "You are a helpful assistant. When you complete a task, "
+                            "use the completion tool."
+                        ),
                     },
                     {"role": "user", "content": "Say hello and then mark the task as complete."},
                 ],
@@ -359,7 +370,10 @@ class TestToolCalling:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant. Use the test_tool with message 'Hello World'.",
+                        "content": (
+                            "You are a helpful assistant. Use the test_tool with "
+                            "message 'Hello World'."
+                        ),
                     },
                     {"role": "user", "content": "Please use the test tool."},
                 ],

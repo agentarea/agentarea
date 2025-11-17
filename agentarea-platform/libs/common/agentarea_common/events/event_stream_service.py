@@ -299,7 +299,8 @@ class EventStreamService:
                 # Fallback: convert to string if not already a dict
                 event_data = {"data": str(message)}
 
-            # Flatten DomainEvent nested 'data' if present: {'data': {'event_type': ..., 'data': {...}}}
+            # Flatten DomainEvent nested 'data' if present:
+            # {'data': {'event_type': ..., 'data': {...}}}
             if (
                 isinstance(event_data, dict)
                 and isinstance(event_data.get("data"), dict)

@@ -20,7 +20,8 @@ class AgentHandoffTool(BaseTool):
         """Initialize the handoff tool.
 
         Args:
-            available_agents: Dict mapping agent_id to agent metadata (name, description, capabilities)
+            available_agents: Dict mapping agent_id to agent metadata
+                (name, description, capabilities)
             handoff_callback: Async callback function to execute the handoff
         """
         self.available_agents = available_agents or {}
@@ -53,16 +54,24 @@ class AgentHandoffTool(BaseTool):
                 "properties": {
                     "target_agent_id": {
                         "type": "string",
-                        "description": f"ID of the target agent to hand off to. Available agents: {json.dumps(agent_options, indent=2)}",
+                        "description": (
+                            f"ID of the target agent to hand off to. "
+                            f"Available agents: {json.dumps(agent_options, indent=2)}"
+                        ),
                         "enum": list(self.available_agents.keys()) if self.available_agents else [],
                     },
                     "handoff_reason": {
                         "type": "string",
-                        "description": "Explanation of why this agent is better suited for the task",
+                        "description": (
+                            "Explanation of why this agent is better suited for the task"
+                        ),
                     },
                     "task_context": {
                         "type": "string",
-                        "description": "Current task context and any relevant information to pass to the target agent",
+                        "description": (
+                            "Current task context and any relevant information "
+                            "to pass to the target agent"
+                        ),
                     },
                     "priority": {
                         "type": "string",
@@ -138,7 +147,9 @@ class AgentHandoffTool(BaseTool):
                 },
                 "error": None,
                 "tool_name": self.name,
-                "message": f"Task handed off to {self.available_agents[target_agent_id]['name']} agent",
+                "message": (
+                    f"Task handed off to {self.available_agents[target_agent_id]['name']} agent"
+                ),
             }
 
         except Exception as e:

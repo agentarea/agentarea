@@ -73,14 +73,18 @@ class MCPTool(BaseTool):
             if status != "running":
                 raise ToolExecutionError(
                     self.name,
-                    f"MCP server instance {self.server_instance_id} is not running (status: {status})",
+                    (
+                        f"MCP server instance {self.server_instance_id} is not "
+                        f"running (status: {status})"
+                    ),
                 )
 
             # Prefer a dedicated execute method on the service if available
             service_execute = getattr(self.mcp_server_instance_service, "execute_tool", None)
             if callable(service_execute):
                 logger.info(
-                    f"Executing MCP tool via service: instance={self.server_instance_id}, tool={self.name}, args={kwargs}"
+                    f"Executing MCP tool via service: instance="
+                    f"{self.server_instance_id}, tool={self.name}, args={kwargs}"
                 )
                 result = await service_execute(
                     server_instance_id=self.server_instance_id,
@@ -102,7 +106,8 @@ class MCPTool(BaseTool):
                 fn = getattr(self.mcp_server_instance_service, alt_method, None)
                 if callable(fn):
                     logger.info(
-                        f"Executing MCP tool via service.{alt_method}: instance={self.server_instance_id}, tool={self.name}"
+                        f"Executing MCP tool via service.{alt_method}: "
+                        f"instance={self.server_instance_id}, tool={self.name}"
                     )
                     result = await fn(self.server_instance_id, self.name, kwargs)
                     if not isinstance(result, dict):
@@ -115,7 +120,8 @@ class MCPTool(BaseTool):
 
             # If we reach here, integration method is not yet implemented on the service
             logger.warning(
-                f"MCP tool execution not yet implemented on service for tool {self.name}; service missing execute method"
+                f"MCP tool execution not yet implemented on service for tool "
+                f"{self.name}; service missing execute method"
             )
 
             # Placeholder return for now

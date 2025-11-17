@@ -236,7 +236,9 @@ class AgentExecutionWorkflow:
         """
         # Debug logging
         workflow.logger.info(
-            f"Checking termination conditions - success: {self.state.success} (type: {type(self.state.success)}), iteration: {self.state.current_iteration}"
+            f"Checking termination conditions - success: "
+            f"{self.state.success} (type: {type(self.state.success)}), "
+            f"iteration: {self.state.current_iteration}"
         )
         workflow.logger.info(f"State object id: {id(self.state)}")
 
@@ -602,11 +604,20 @@ class AgentExecutionWorkflow:
 
         try:
             # Create Pydantic request model for MCP tool execution
+            # Extract workspace_id from state (should be set from request)
+            workspace_id = self.state.workspace_id or self.state.user_context_data.get(
+                "workspace_id"
+            )
+            if not workspace_id:
+                raise ValueError(
+                    f"Missing workspace_id in workflow state for task {self.state.task_id}"
+                )
+
             mcp_request = MCPToolRequest(
                 tool_name=tool_name,
                 tool_args=tool_args,
                 server_instance_id=None,
-                workspace_id="system",
+                workspace_id=workspace_id,
                 tools_config=self.state.agent_config.get("tools_config"),
             )
 
@@ -767,7 +778,11 @@ class AgentExecutionWorkflow:
             events_json = [json.dumps(event) for event in events]
 
             # Create Pydantic request model for event publishing
-            events_request = WorkflowEventsRequest(events_json=events_json)
+            events_request = WorkflowEventsRequest(
+                events_json=events_json,
+                workspace_id=self.state.workspace_id,
+                user_id=self.state.user_id,
+            )
 
             await workflow.execute_activity(
                 Activities.PUBLISH_WORKFLOW_EVENTS,

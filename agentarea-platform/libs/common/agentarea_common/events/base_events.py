@@ -75,9 +75,11 @@ class EventEnvelope(BaseModel):
         timestamp = payload.get("timestamp", datetime.now(UTC))
         event_type = payload.get("event_type") or payload.get("type") or "UnknownEvent"
         data = payload.get("data", {})
-        # If the payload looks like a DomainEvent.data dict (no top-level metadata), wrap it
+        # If the payload looks like a DomainEvent.data dict (no top-level
+        # metadata), wrap it
         if data == {}:
-            # Heuristic: treat payload as data when it contains aggregate_id/original_event_type etc.
+            # Heuristic: treat payload as data when it contains
+            # aggregate_id/original_event_type etc.
             known_keys = {
                 "aggregate_id",
                 "original_event_type",

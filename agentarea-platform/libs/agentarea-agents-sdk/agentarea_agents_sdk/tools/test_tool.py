@@ -31,7 +31,9 @@ class TestTool(BaseTool):
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "Action to perform: 'get_data', 'calculate', 'check_status', 'search'",
+                        "description": (
+                            "Action to perform: 'get_data', 'calculate', 'check_status', 'search'"
+                        ),
                         "enum": ["get_data", "calculate", "check_status", "search"],
                     },
                     "query": {"type": "string", "description": "Query or parameter for the action"},
@@ -57,7 +59,10 @@ class TestTool(BaseTool):
         if action == "get_data":
             return {
                 "success": True,
-                "result": f"Retrieved data for '{query}': Sample dataset contains 42 records with total size 1.2MB. Last updated: 2024-01-15.",
+                "result": (
+                    f"Retrieved data for '{query}': Sample dataset contains "
+                    f"42 records with total size 1.2MB. Last updated: 2024-01-15."
+                ),
                 "data_count": 42,
                 "size_mb": 1.2,
                 "tool_name": self.name,
@@ -66,7 +71,10 @@ class TestTool(BaseTool):
 
         elif action == "calculate":
             # Simple calculation simulation
-            result = f"Calculation for '{query}': Result is 73.5 (based on input parameters). Confidence: 95%"
+            result = (
+                f"Calculation for '{query}': Result is 73.5 "
+                f"(based on input parameters). Confidence: 95%"
+            )
             return {
                 "success": True,
                 "result": result,
@@ -79,7 +87,10 @@ class TestTool(BaseTool):
         elif action == "check_status":
             return {
                 "success": True,
-                "result": f"Status check for '{query}': System is operational. CPU: 45%, Memory: 62%, Disk: 78%",
+                "result": (
+                    f"Status check for '{query}': System is operational. "
+                    f"CPU: 45%, Memory: 62%, Disk: 78%"
+                ),
                 "status": "operational",
                 "cpu_usage": 45,
                 "memory_usage": 62,
@@ -91,7 +102,10 @@ class TestTool(BaseTool):
         elif action == "search":
             return {
                 "success": True,
-                "result": f"Search results for '{query}': Found 5 matching items. Top result: 'Advanced Analytics Guide' (relevance: 0.89)",
+                "result": (
+                    f"Search results for '{query}': Found 5 matching items. "
+                    f"Top result: 'Advanced Analytics Guide' (relevance: 0.89)"
+                ),
                 "results_count": 5,
                 "top_result": "Advanced Analytics Guide",
                 "relevance": 0.89,

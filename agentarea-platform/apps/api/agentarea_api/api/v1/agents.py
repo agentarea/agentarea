@@ -22,7 +22,7 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 
 async def validate_model_id(model_id: str, user_context: UserContext) -> None:
-    """Validate that the model_id corresponds to an existing model instance or is a valid model identifier.
+    """Validate that model_id is an existing model instance or a valid identifier.
 
     Args:
         model_id: The model ID to validate
@@ -53,7 +53,8 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
             # Not a UUID, continue to check if it's a valid model name
             pass
 
-        # If not a valid UUID or model instance not found, check if it's a reasonable model identifier
+        # If not a valid UUID or model instance not found, check if it's a
+        # reasonable model identifier
         # For now, we'll allow certain patterns that are commonly used for model names
         valid_model_patterns = [
             # OpenAI-style models (specific patterns first)
@@ -75,7 +76,11 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
         # If we get here, the model_id doesn't match any valid pattern
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid model_id '{model_id}'. Must be either a valid model instance UUID or a recognized model identifier (e.g., 'qwen2.5', 'gpt-4', 'claude-3', etc.)",
+            detail=(
+                f"Invalid model_id '{model_id}'. Must be either a valid model "
+                f"instance UUID or a recognized model identifier "
+                f"(e.g., 'qwen2.5', 'gpt-4', 'claude-3', etc.)"
+            ),
         )
 
 
@@ -179,7 +184,10 @@ async def create_agent(
         if invalid_tools:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid builtin tools: {invalid_tools}. Available tools: {list(available_tools.keys())}",
+                detail=(
+                    f"Invalid builtin tools: {invalid_tools}. "
+                    f"Available tools: {list(available_tools.keys())}"
+                ),
             )
 
     agent = await agent_service.create_agent(

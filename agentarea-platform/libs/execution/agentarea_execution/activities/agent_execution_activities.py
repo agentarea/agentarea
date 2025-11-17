@@ -138,7 +138,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_uuid = UUID(request.model_id)
             except ValueError as e:
                 raise ValueError(
-                    f"Invalid model_id: {request.model_id}. Must be a valid UUID representing a model instance."
+                    f"Invalid model_id: {request.model_id}. "
+                    "Must be a valid UUID representing a model instance."
                 ) from e
 
             # Create context - prefer workspace_id, fallback to user_context_data
@@ -161,7 +162,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_name = model_instance.model_spec.model_name
                 endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
 
-                # Decode API key from secret manager (provider_config.api_key is a secret name/placeholder)
+                # Decode API key from secret manager
+                # (provider_config.api_key is a secret name/placeholder)
                 api_key = None
                 api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                 if api_key_secret_name:
@@ -364,7 +366,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
             tool_names = [tool.get("name", "unknown") for tool in request.available_tools]
 
             return ExecutionPlanResult(
-                plan=f"Execute the task '{request.goal.get('description', 'Unknown')}' systematically using available tools",
+                plan=(
+                    f"Execute the task '{request.goal.get('description', 'Unknown')}' "
+                    "systematically using available tools"
+                ),
                 estimated_steps=min(max(len(request.available_tools), 3), 8),  # Between 3-8 steps
                 key_tools=tool_names[:3],  # First 3 tools
                 risk_factors=[
@@ -377,7 +382,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
         except Exception as e:
             logger.error(f"Failed to create execution plan: {e}")
             return ExecutionPlanResult(
-                plan=f"Execute the task '{request.goal.get('description', 'Unknown')}' step by step",
+                plan=(
+                    f"Execute the task '{request.goal.get('description', 'Unknown')}' step by step"
+                ),
                 estimated_steps=5,
                 key_tools=[],
                 risk_factors=["Planning failed - proceeding with default approach"],
@@ -430,7 +437,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # dependencies.event_broker is a RedisRouter, we need RedisEventBroker to publish
             if not hasattr(dependencies.event_broker, "broker"):
                 logger.error(
-                    f"Event broker {type(dependencies.event_broker)} does not have 'broker' attribute"
+                    f"Event broker {type(dependencies.event_broker)} "
+                    "does not have 'broker' attribute"
                 )
                 return WorkflowEventsResult(
                     success=False, errors=["Event broker configuration error"]
@@ -460,7 +468,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         ],  # Include the original event data for tool calls
                     )
 
-                    # 1. Publish via RedisEventBroker (uses FastStream infrastructure) for real-time SSE
+                    # 1. Publish via RedisEventBroker (uses FastStream
+                    # infrastructure) for real-time SSE
                     await redis_event_broker.publish(domain_event)
                     logger.debug(
                         f"Published workflow event: {event['event_type']} for task {task_id}"
@@ -468,19 +477,26 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     # 2. Store event in database using proper service layer
                     try:
-                        workspace_id = event["data"].get("workspace_id", "default")
-                        user_context = UserContext(user_id="workflow", workspace_id=workspace_id)
+                        # Use workspace_id and user_id from workflow request (already present)
+                        workspace_id = request.workspace_id
+                        user_id = request.user_id
+
+                        # Create proper user context with values from workflow
+                        user_context = UserContext(
+                            user_id=user_id,
+                            workspace_id=workspace_id,
+                        )
 
                         async with ActivityContext(container, user_context) as ctx:
                             task_event_service = await ctx.get_task_event_service()
 
-                            # Create event using service
+                            # Create event using service - workspace_id and created_by are provided
                             await task_event_service.create_workflow_event(
                                 task_id=UUID(task_id),
                                 event_type=event["event_type"],
                                 data=event["data"],
                                 workspace_id=workspace_id,
-                                created_by="workflow",
+                                created_by=user_id,
                             )
 
                             # Commit is handled by the service

@@ -18,7 +18,7 @@ class TestWorkspaceIsolation:
     def test_agents_workspace_isolation(self, client, generate_jwt_token):
         """Test agents are isolated by workspace."""
         # User 1 in workspace-1
-        token1 = generate_jwt_token(
+        token1: str = generate_jwt_token(
             user_id="user-1",
             workspace_id="workspace-1",
             roles=["user"],

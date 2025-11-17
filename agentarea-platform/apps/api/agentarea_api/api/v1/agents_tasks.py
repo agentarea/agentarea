@@ -800,7 +800,8 @@ async def stream_task_events(
                 async for event in event_stream_service.stream_events_for_task(
                     task_id, event_patterns=["workflow.*"]
                 ):
-                    # Use protocol event structure directly - task service already formats it properly
+                    # Use protocol event structure directly - task service already
+                    # formats it properly
                     event_type = event.get("event_type", "task_event")
                     event_data_dict = event.get("event_data", {})
 
@@ -888,8 +889,9 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
         # Recursively filter inner structure first
         processed_inner = _filter_domain_fields(inner_data)
 
-        # Merge inner (UI-relevant) fields with outer context fields we injected upstream
-        # Inner fields should take precedence for content fields; outer provides task/agent/execution ids
+        # Merge inner (UI-relevant) fields with outer context fields we injected
+        # upstream. Inner fields should take precedence for content fields;
+        # outer provides task/agent/execution ids
         merged: dict[str, Any] = {**outer_context, **processed_inner}
         return merged
 

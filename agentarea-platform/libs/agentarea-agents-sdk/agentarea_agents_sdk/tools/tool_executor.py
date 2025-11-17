@@ -80,7 +80,8 @@ class ToolExecutor:
                 return None
             if getattr(instance, "status", None) != "running":
                 logger.info(
-                    f"MCP instance {server_instance_id} is not running; cannot create tool '{tool_name}'"
+                    f"MCP instance {server_instance_id} is not running; cannot "
+                    f"create tool '{tool_name}'"
                 )
                 return None
 

@@ -60,7 +60,8 @@ CONTEXT_FAISS_INDEX_PATH=./data/context_index.faiss
 
 ### FAISS Provider
 - Local vector storage with FAISS
-- No external dependencies
+- Requires optional dependencies: `faiss-cpu` and `numpy`
+- Install with: `uv pip install 'agentarea-context[faiss]'`
 - Perfect for development and small-scale deployments
 
 ### Future Providers
@@ -72,8 +73,11 @@ CONTEXT_FAISS_INDEX_PATH=./data/context_index.faiss
 ## Development
 
 ```bash
-# Install dependencies
-uv sync
+# Install dependencies (including faiss optional dependencies for tests)
+uv sync --group dev
+
+# Or install faiss dependencies explicitly
+uv pip install 'agentarea-context[faiss]'
 
 # Run tests
 uv run pytest libs/agentarea-context/tests/

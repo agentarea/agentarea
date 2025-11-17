@@ -220,8 +220,8 @@ class TaskEvent(BaseModel):
     timestamp: datetime
     data: dict[str, Any]
     metadata: dict[str, Any] = Field(default_factory=dict)
-    workspace_id: str = "default"
-    created_by: str = "system"
+    workspace_id: str  # Required - must be provided explicitly
+    created_by: str  # Required - must be provided explicitly
 
     class Config:
         """Pydantic model configuration."""
@@ -234,10 +234,18 @@ class TaskEvent(BaseModel):
         task_id: UUID,
         event_type: str,
         data: dict[str, Any],
-        workspace_id: str = "default",
-        created_by: str = "workflow",
+        workspace_id: str,  # Required - no default
+        created_by: str,  # Required - no default
     ) -> "TaskEvent":
-        """Create a workflow event with proper formatting."""
+        """Create a workflow event with proper formatting.
+
+        Args:
+            task_id: Task ID for the event
+            event_type: Type of event
+            data: Event data dictionary
+            workspace_id: Workspace ID (required)
+            created_by: User/entity that created the event (required)
+        """
         return cls(
             task_id=task_id,
             event_type=event_type,

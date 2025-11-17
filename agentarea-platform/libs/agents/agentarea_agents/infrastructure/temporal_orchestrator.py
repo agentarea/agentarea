@@ -90,7 +90,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
                         task_id_uuid = uuid4()
                         logger.warning(
-                            f"Failed to extract UUID from execution_id {execution_id}, using new UUID: {task_id_uuid}"
+                            f"Failed to extract UUID from execution_id "
+                            f"{execution_id}, using new UUID: {task_id_uuid}"
                         )
                 else:
                     # If execution_id doesn't match expected pattern, try to parse it as UUID
@@ -102,7 +103,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
                         task_id_uuid = uuid4()
                         logger.warning(
-                            f"execution_id {execution_id} is not a valid UUID pattern, using new UUID: {task_id_uuid}"
+                            f"execution_id {execution_id} is not a valid UUID "
+                            f"pattern, using new UUID: {task_id_uuid}"
                         )
 
                 # Convert to execution request format with proper UUID

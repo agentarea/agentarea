@@ -57,7 +57,8 @@ class ConnectionManager:
                 router = get_event_router(settings.broker)
                 self._event_broker_singleton = create_event_broker_from_router(router)
                 logger.info(
-                    f"Created Redis event broker singleton: {type(self._event_broker_singleton).__name__}"
+                    f"Created Redis event broker singleton: "
+                    f"{type(self._event_broker_singleton).__name__}"
                 )
             except Exception as e:
                 logger.error(f"Failed to create Redis event broker: {e}")

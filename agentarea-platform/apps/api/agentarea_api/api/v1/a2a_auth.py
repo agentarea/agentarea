@@ -108,9 +108,21 @@ async def authenticate_bearer_token(token: str) -> dict[str, Any] | None:
             return None
 
         # Extract user information from validated token
+        # Extract workspace_id from token claims if available
+        workspace_id = None
+        if auth_result.token.claims:
+            workspace_id = auth_result.token.claims.get("workspace_id")
+
+        if not workspace_id:
+            logger.warning(
+                f"Token missing workspace_id claim for user {auth_result.token.user_id}. "
+                "A2A requests require workspace_id in token."
+            )
+            return None
+
         return {
             "user_id": auth_result.token.user_id,
-            "workspace_id": "default",  # TODO: Extract from token or user metadata
+            "workspace_id": workspace_id,
             "permissions": A2APermissions.USER_PERMISSIONS,
             "valid": True,
         }
@@ -159,12 +171,22 @@ async def get_a2a_auth_context(
     if auth_result and auth_result.get("valid"):
         context.authenticated = True
         context.user_id = auth_result["user_id"]
-        context.workspace_id = auth_result.get("workspace_id", "default")
+        workspace_id = auth_result.get("workspace_id")
+        if not workspace_id:
+            logger.warning(
+                f"Authentication result missing workspace_id for user {auth_result['user_id']}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication token missing required workspace_id claim",
+            )
+        context.workspace_id = workspace_id
         context.permissions = auth_result["permissions"]
         context.agent_id = agent_id
 
         logger.info(
-            f"A2A authentication successful: user={context.user_id}, workspace={context.workspace_id}, method={context.auth_method}"
+            f"A2A authentication successful: user={context.user_id}, "
+            f"workspace={context.workspace_id}, method={context.auth_method}"
         )
     else:
         logger.info(f"A2A authentication failed or not provided: method={auth_info['method']}")

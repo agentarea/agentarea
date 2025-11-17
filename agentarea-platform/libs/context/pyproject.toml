@@ -13,6 +13,10 @@ dependencies = [
     "agentarea-common",
     "agentarea-llm",
     "pydantic>=2.4.2",
+]
+
+[project.optional-dependencies]
+faiss = [
     "faiss-cpu>=1.7.4",
     "numpy>=1.24.0",
 ]

@@ -18,4 +18,5 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     planning: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
     # Relationships
-    # chat_sessions = relationship("ChatSession", back_populates="agent")  # Disabled - ChatSession model not implemented
+    # chat_sessions = relationship("ChatSession", back_populates="agent")
+    # Disabled - ChatSession model not implemented

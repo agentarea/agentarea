@@ -17,7 +17,10 @@ class CalculateTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Perform basic mathematical calculations like addition, subtraction, multiplication, division"
+        return (
+            "Perform basic mathematical calculations like addition, "
+            "subtraction, multiplication, division"
+        )
 
     def get_schema(self) -> dict[str, Any]:
         """Get the tool parameter schema."""
@@ -27,7 +30,10 @@ class CalculateTool(BaseTool):
                 "properties": {
                     "expression": {
                         "type": "string",
-                        "description": "Mathematical expression to calculate (e.g., '2 + 2', '15 * 8', '120 + 12')",
+                        "description": (
+                            "Mathematical expression to calculate "
+                            "(e.g., '2 + 2', '15 * 8', '120 + 12')"
+                        ),
                     }
                 },
                 "required": ["expression"],

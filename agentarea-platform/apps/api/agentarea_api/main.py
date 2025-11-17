@@ -126,7 +126,13 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="AgentArea API",
-        description="Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json.",
+        description=(
+            "Modular and extensible framework for building AI agents. "
+            "This API requires JWT Bearer token authentication for most "
+            "endpoints. Include your JWT token in the Authorization header. "
+            "Public endpoints include /, /health, /docs, /redoc, and "
+            "/openapi.json."
+        ),
         version="0.1.0",
         lifespan=combined_lifespan,
         openapi_tags=[

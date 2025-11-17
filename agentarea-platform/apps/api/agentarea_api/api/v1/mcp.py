@@ -163,12 +163,17 @@ async def create_task(
             }
 
         # Create and execute the task using the service
+        # Use workspace_id as user_id fallback since MCP requests may not have
+        # user context. In production, MCP endpoints should require
+        # authentication and extract user_id from context
         task = await task_service.create_and_execute_task_with_workflow(
             agent_id=agent_uuid,
             description=description,
             workspace_id=workspace_id,  # Required parameter, no fallback
             parameters=parameters or {},
-            user_id="mcp_user",  # Default user for MCP requests
+            # Use workspace_id as user_id for MCP requests (no authenticated user
+            # context)
+            user_id=workspace_id,
             enable_agent_communication=True,
         )
 

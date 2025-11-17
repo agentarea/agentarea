@@ -63,7 +63,8 @@ class ToolManager:
                     disabled_methods = tool_config.get("disabled_methods", {})
                     enabled_methods = tool_config.get("enabled_methods", {})
 
-                    # Convert disabled_methods to constructor arguments (all True except disabled ones)
+                    # Convert disabled_methods to constructor arguments (all True
+                    # except disabled ones)
                     if disabled_methods:
                         toolset_methods = {method: False for method in disabled_methods.keys()}
                     elif enabled_methods:

@@ -30,7 +30,10 @@ def main():
             infisical_setup()
             print("✓ Infisical setup completed")
         else:
-            print(f"\n2. Skipping Infisical setup (SECRET_MANAGER_TYPE={secret_manager_type})")
+            print(
+                f"\n2. Skipping Infisical setup "
+                f"(SECRET_MANAGER_TYPE={secret_manager_type})"
+            )
 
         print("\n3. Populating provider specs and model specs (new architecture)...")
         populate_providers_new_arch_main()

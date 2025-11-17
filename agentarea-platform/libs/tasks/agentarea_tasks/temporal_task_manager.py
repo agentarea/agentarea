@@ -41,13 +41,19 @@ class TemporalTaskManager(BaseTaskManager):
         from .domain.models import SimpleTask
 
         # Handle different field names between Task domain model and TaskORM
-        user_id = getattr(task, "user_id", None) or getattr(task, "created_by", None) or "system"
+        user_id = getattr(task, "user_id", None) or getattr(task, "created_by", None)
         workspace_id = getattr(task, "workspace_id", None)
 
         if not workspace_id:
             raise ValueError(
                 f"Task {task.id} missing required workspace_id. "
                 "All tasks must have a workspace_id for proper multi-tenancy isolation."
+            )
+
+        if not user_id:
+            raise ValueError(
+                f"Task {task.id} missing required user_id or created_by. "
+                "All tasks must have a user_id for proper audit tracking."
             )
 
         # Handle metadata field - could be dict, SQLAlchemy MetaData, or None

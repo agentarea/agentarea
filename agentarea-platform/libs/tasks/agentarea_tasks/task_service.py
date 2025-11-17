@@ -36,7 +36,9 @@ class TaskService(BaseTaskService):
         task_manager: BaseTaskManager,
         workflow_service: Any | None = None,
     ):
-        """Initialize with repository factory, event broker, task manager, and optional dependencies."""
+        """Initialize with repository factory, event broker, task manager, and
+        optional dependencies.
+        """
         # Create repositories using factory
         task_repository = repository_factory.create_repository(TaskRepository)
         super().__init__(task_repository, event_broker)

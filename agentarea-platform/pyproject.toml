@@ -15,7 +15,6 @@ license = {text = "EPL-2.0"}
 requires-python = ">=3.12"
 dependencies = [
     "a2a-sdk>=0.2.8",
-    "google-adk>=1.1.1",
     "python-dotenv>=1.1.0",
     "pytz>=2025.2",
     "pyyaml>=6.0.2",
@@ -57,7 +56,6 @@ agentarea-cli = { workspace = true }
 [dependency-groups]
 dev = [
     "ruff>=0.11.4",
-    "pyright>=1.1.400",
     "aiosqlite>=0.21.0",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
@@ -72,7 +70,7 @@ dev = [
     "agentarea-tasks",
     "agentarea-secrets",
     "agentarea-execution",
-    "agentarea-context",
+    "agentarea-context[faiss]",
     "agentarea-triggers",
     "agentarea-api",
     "agentarea-worker",
@@ -241,8 +239,8 @@ directory = "htmlcov"
 
 [tool.pyright]
 include = [
-    "libs/*/agentarea_*",
-    "apps/*/agentarea_*",
+    "libs/*/agentarea_*/**/*.py",
+    "apps/*/agentarea_*/**/*.py",
     # Exclude tests from type checking to avoid noisy fixture/type issues
     # Unit tests are covered by pytest; keeping pyright focused on app/libs code
     # (CI runs ruff + pytest for tests)

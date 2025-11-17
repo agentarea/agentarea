@@ -46,13 +46,17 @@ jobs:
             uv-${{ runner.os }}-
 
       - name: Install dependencies with dev dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --all-extras --group dev --group lint
 
       - name: Run ruff linting
         run: uv run ruff check .
 
       - name: Run ruff formatting check
         run: uv run ruff format --check .
+
+      # TODO: Re-enable pyright after fixing type errors
+      # - name: Run pyright type checking
+      #   run: uv run pyright
 
       - name: Run unit tests only
         run: uv run python -m pytest tests/unit/ --tb=short -v

@@ -1,0 +1,90 @@
+# Byte-compiled / optimized / DLL files
+**/__pycache__/
+**/__pycache__
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+.uv/
+.uv-cache/
+uv-env/
+.uv-env/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+**/.pytest_cache/
+**/.ruff_cache/
+test-results/
+**/tests/
+**/tests/**
+**/test_*.py
+**/*_test.py
+tests/
+libs/**/tests/
+apps/**/tests/
+
+# Database, secrets, local dev
+*.sqlite3
+*.db
+*.pkl
+*.log
+*.bak
+*.swp
+*.swo
+.env
+.env.*
+!.env.example
+setup_test_database.sql
+**/init-db.sql/
+
+# Development and documentation
+docs/
+scripts/
+Makefile
+pytest.ini
+**/pytest.ini
+temporal-config/
+*.md
+!README.md
+
+# Misc
+*.egg-info/
+dist/
+build/
+.eggs/
+*.manifest
+*.spec
+
+# Editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Docker itself
+**/Dockerfile
+docker-compose*
+alembic.ini
+!apps/api/alembic.ini
