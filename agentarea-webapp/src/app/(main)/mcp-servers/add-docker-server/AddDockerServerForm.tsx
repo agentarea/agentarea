@@ -91,9 +91,9 @@ export default function AddDockerServerForm() {
       ref={formRef}
       id="mcp-server-form"
       onSubmit={handleSubmit(handleFormSubmit)}
-      className="overflow-auto h-full py-5 pr-5"
+      className="overflow-auto h-full"
     >
-      <div className="form-content">
+      <div className="form-content lg:max-w-xl lg:mx-auto">
         <div className="space-y-2">
           <FormLabel htmlFor="name" icon={Server} required>
             {t("serverName")}

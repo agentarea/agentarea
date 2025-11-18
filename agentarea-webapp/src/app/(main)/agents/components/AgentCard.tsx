@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 import { AvatarCircles } from "@/components/ui/avatar-circles";
 import { Card } from "@/components/ui/card";
+import { HoverLink } from "@/components/ui/hover-link";
 import ModelBadge from "@/components/ui/model-badge";
 import { Agent } from "@/types";
 import { getToolAvatarUrls } from "@/utils/toolsDisplay";
@@ -58,10 +58,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
               <span className="text-xs text-muted-foreground">No tools</span>
             );
           })()}
-          <div className="small-link text-muted-foreground/70 group-hover:text-primary gap-1">
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-500">View agent</span>
-            <ArrowUpRight className="h-[18px] w-[18px] group-hover:scale-110 transition-transform duration-500" strokeWidth={1.5} />
-          </div>
+          <HoverLink text="View agent" />
         </div>
       </Card>
     </Link>

@@ -7,7 +7,7 @@ import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { getMCPHealthStatus } from "@/lib/browser-api";
-import { MCPInstanceCard } from "./MCPCard";
+import { MCPInstanceCard, MCPSpec } from "./MCPCard";
 
 interface MCPInstance {
   id: string;
@@ -32,6 +32,7 @@ interface HealthCheck {
 
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
+  mcpServers: MCPSpec[];
   viewMode?: string;
   searchQuery?: string;
   hasNoData?: boolean;
@@ -39,6 +40,7 @@ interface MyMCPsSectionProps {
 
 export function MyMCPsSection({
   mcpInstances,
+  mcpServers,
   viewMode = "grid",
   searchQuery = "",
   hasNoData = false,
@@ -204,12 +206,12 @@ export function MyMCPsSection({
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {mcpInstances.map((instance) => {
-        const healthStatus = getHealthStatus(instance);
+        const serverSpec = mcpServers.find((server) => server.id === instance.server_spec_id);
         return (
           <MCPInstanceCard
             key={instance.id}
             instance={instance}
-            healthStatus={healthStatus}
+            serverSpec={serverSpec}
           />
         );
       })}

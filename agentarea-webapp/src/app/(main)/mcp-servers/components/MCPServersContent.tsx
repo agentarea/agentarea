@@ -136,6 +136,7 @@ export default async function MCPServersContent({
         </h4>
         <MyMCPsSection
           mcpInstances={filteredInstances}
+          mcpServers={mcpServers}
           viewMode={viewMode}
           searchQuery={searchQuery}
           hasNoData={hasNoInstances}
