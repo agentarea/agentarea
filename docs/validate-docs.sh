@@ -64,8 +64,10 @@ if 'navigation' in config:
     for section in groups:
         if 'pages' in section:
             for page in section['pages']:
-                # Check for .md file
-                md_file = f"{page}.md"
+                name = page if isinstance(page, str) else (page.get('page') or '')
+                if not name:
+                    continue
+                md_file = f"{name}.md"
                 if not os.path.exists(md_file):
                     missing_files.append(md_file)
                 else:
@@ -92,17 +94,17 @@ fi
 
 echo -e "${BLUE}📋 Step 4: Running Mintlify validation...${NC}"
 
-# Run Mintlify validation
+# Run Mintlify validation (broken links)
 if command -v mint > /dev/null 2>&1; then
     echo -e "${YELLOW}🔧 Using global mint CLI...${NC}"
-    mint validate
+    mint broken-links
 elif [ -f "node_modules/.bin/mint" ]; then
     echo -e "${YELLOW}🔧 Using local mint CLI...${NC}"
-    npx mint validate
+    npx mint broken-links
 else
     echo -e "${YELLOW}⚠️  Mint CLI not found. Installing globally...${NC}"
     npm install -g mintlify
-    mint validate
+    mint broken-links
 fi
 
 echo -e "${BLUE}📋 Step 5: Testing local preview...${NC}"

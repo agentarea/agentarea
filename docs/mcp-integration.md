@@ -28,7 +28,7 @@ Python API ──(Domain Events)──> Redis ──(Pub/Sub)──> Go MCP Mana
 ### 2. Unified Configuration Pattern
 
 **Pattern**: JSON Specification with Schema Validation
-**Implementation**: Inspired by Airbyte Connectors
+**Implementation**: Industry-standard connector design
 
 ```python
 # MCPServer defines the schema
@@ -375,4 +375,4 @@ instance = {
 }
 ```
 
-This architecture provides a flexible, scalable foundation for managing MCP servers with strong separation of concerns, event-driven communication, and secure secret management. 
+This architecture provides a flexible, scalable foundation for managing MCP servers with strong separation of concerns, event-driven communication, and secure secret management.

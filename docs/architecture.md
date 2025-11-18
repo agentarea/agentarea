@@ -50,7 +50,7 @@ await self.event_broker.publish(
 
 ### **2. Unified Configuration Pattern (json_spec)**
 
-**Inspired by Airbyte Connectors** - all configuration stored in single JSON field:
+**Unified connector configuration** - all configuration stored in single JSON field:
 
 ```python
 # External MCP Provider
@@ -74,7 +74,7 @@ await self.event_broker.publish(
 - ✅ No need for explicit provider_type field - self-describing configuration
 - ✅ Flexible schema - can add new provider types without DB migrations
 - ✅ MCP Infrastructure determines behavior from content analysis
-- ✅ Similar to modern integration platforms (Airbyte, Zapier)
+- ✅ Similar to modern integration platforms (Zapier)
 - ✅ Supports complex nested configurations and environment-specific overrides
 - ✅ Enables A/B testing and gradual rollouts through configuration
 

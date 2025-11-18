@@ -90,8 +90,11 @@ jobs:
               for section in groups:
                   if 'pages' in section:
                       for page in section['pages']:
-                          # Check for .md file
-                          md_file = f"{page}.md"
+                          # Page can be string or object {"page": "name", ...}
+                          name = page if isinstance(page, str) else (page.get('page') or '')
+                          if not name:
+                              continue
+                          md_file = f"{name}.md"
                           if not os.path.exists(md_file):
                               missing_files.append(md_file)
           
