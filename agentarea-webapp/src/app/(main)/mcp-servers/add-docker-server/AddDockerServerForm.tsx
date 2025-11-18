@@ -37,9 +37,11 @@ export default function AddDockerServerForm() {
     const form = formRef.current;
     if (!form) return;
 
-    // Set form data attribute and dispatch event for submitting state
+    // Set form submitting state
     form.setAttribute("data-submitting", "true");
-    form.dispatchEvent(new CustomEvent("form-submitting", { detail: { isSubmitting: true } }));
+    form.dispatchEvent(
+      new CustomEvent("form-submitting", { detail: { isSubmitting: true } })
+    );
 
     try {
       const response = await createMCPServer({
@@ -53,10 +55,13 @@ export default function AddDockerServerForm() {
       });
 
       if (response.error) {
+        const errorDetail = response.error.detail;
         const errorMessage =
-          typeof response.error.detail === "string"
-            ? response.error.detail
-            : response.error.detail?.[0]?.msg || "Failed to create MCP server";
+          typeof errorDetail === "string"
+            ? errorDetail
+            : Array.isArray(errorDetail) && errorDetail[0]?.msg
+              ? errorDetail[0].msg
+              : "Failed to create MCP server";
         throw new Error(errorMessage);
       }
 
@@ -68,10 +73,11 @@ export default function AddDockerServerForm() {
       router.push("/mcp-servers");
       router.refresh();
     } catch (error) {
-      // Error handling - show toast or error message
       console.error("Error submitting form:", error);
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to create MCP server";
+        error instanceof Error
+          ? error.message
+          : "Failed to create MCP server";
       toast.error("Failed to create MCP server", {
         description: errorMessage,
       });
@@ -80,7 +86,9 @@ export default function AddDockerServerForm() {
       if (formRef.current) {
         formRef.current.removeAttribute("data-submitting");
         formRef.current.dispatchEvent(
-          new CustomEvent("form-submitting", { detail: { isSubmitting: false } })
+          new CustomEvent("form-submitting", {
+            detail: { isSubmitting: false },
+          })
         );
       }
     }

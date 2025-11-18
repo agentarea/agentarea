@@ -1,41 +1,18 @@
 import Link from "next/link";
-import {
-  Server,
-} from "lucide-react";
+import { Server } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
-
-export interface MCPSpec {
-  id: string;
-  name: string;
-  description: string;
-  docker_image_url: string;
-  version: string;
-  tags: string[];
-  status: string;
-  is_public: boolean;
-  updated_at: string;
-}
+import { MCPServer, MCPInstance } from "../types";
 
 interface MCPServerSpecCardProps {
-  server: MCPSpec;
-  onConfigure: (server: MCPSpec) => void;
-}
-
-interface MCPInstance {
-  id: string;
-  name: string;
-  description?: string | null;
-  status: string;
-  endpoint_url?: string;
-  created_at: string;
-  server_spec_id?: string | null;
+  server: MCPServer;
+  onConfigure: (server: MCPServer) => void;
 }
 
 interface MCPInstanceCardProps {
   instance: MCPInstance;
-  serverSpec?: MCPSpec;
+  serverSpec?: MCPServer;
 }
 
 export function MCPInstanceCard({
@@ -60,9 +37,9 @@ export function MCPInstanceCard({
             )}
           </div>
         </div>
-        <div className="flex justify-end -mb-2 -mt-1 -mr-2">
-          <HoverLink text="View instance" />
-        </div>
+      <div className="flex justify-end -mb-2 -mt-1 -mr-2">
+        <HoverLink text="View" />
+      </div>
       </Card>
     </Link>
   );
@@ -95,7 +72,7 @@ export function MCPServerSpecCard({
         </div>
       </div>
       <div className="flex justify-end -mb-2 -mt-1 -mr-2">
-        <HoverLink text="Configure server" />
+        <HoverLink text="Configure" />
       </div>
     </Card>
   );

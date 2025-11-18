@@ -1,40 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { checkMCPServerInstanceConfiguration } from "@/lib/browser-api";
 import { createMCPServerInstance } from "../actions";
-
-interface MCPServer {
-  id: string;
-  name: string;
-  description: string;
-  docker_image_url: string;
-  version: string;
-  tags: string[];
-  status: string;
-  is_public: boolean;
-  env_schema?: Array<{
-    name: string;
-    description: string;
-    required: boolean;
-    default?: string;
-  }>;
-}
+import { MCPServer } from "../types";
+import { MCP_CONSTANTS } from "../utils";
 
 interface CreateInstanceDialogProps {
   open: boolean;
@@ -80,6 +62,72 @@ export function CreateInstanceDialog({
     setValidationResult(null);
   };
 
+  const resetForm = useCallback(() => {
+    setInstanceName("");
+    setInstanceDescription("");
+    setEnvVars({});
+    setValidationResult(null);
+  }, []);
+
+  const createInstance = useCallback(
+    async (skipValidation = false) => {
+      if (!skipValidation && !validationResult?.valid) {
+        toast.error(
+          'Configuration validation failed. Use "Force Create" to proceed.'
+        );
+        return;
+      }
+
+      setIsCreating(true);
+      try {
+        const instanceResult = await createMCPServerInstance({
+          name: instanceName,
+          description: instanceDescription,
+          server_spec_id: mcpServer.id,
+          json_spec: {
+            image: mcpServer.docker_image_url,
+            port: MCP_CONSTANTS.DEFAULT_CONTAINER_PORT,
+            environment: envVars,
+          },
+        });
+
+        if (instanceResult.error) {
+          const errorDetail = instanceResult.error.detail;
+          const errorMessage =
+            typeof errorDetail === "string"
+              ? errorDetail
+              : Array.isArray(errorDetail) && errorDetail[0]?.msg
+                ? errorDetail[0].msg
+                : "Failed to create MCP instance";
+          throw new Error(errorMessage);
+        }
+
+        toast.success(`Successfully created ${instanceName}`);
+        onOpenChange(false);
+        router.refresh();
+        resetForm();
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to create MCP instance";
+        console.error("Instance creation error:", error);
+        toast.error(errorMessage);
+      } finally {
+        setIsCreating(false);
+      }
+    },
+    [
+      instanceName,
+      instanceDescription,
+      envVars,
+      validationResult,
+      mcpServer,
+      router,
+      resetForm,
+    ]
+  );
+
   if (!mcpServer) return null;
 
   return (
@@ -113,7 +161,7 @@ export function CreateInstanceDialog({
                 const checkResult = await checkMCPServerInstanceConfiguration({
                   json_spec: {
                     image: mcpServer.docker_image_url,
-                    port: 8000,
+                    port: MCP_CONSTANTS.DEFAULT_CONTAINER_PORT,
                     environment: envVars,
                   },
                 });
@@ -137,40 +185,7 @@ export function CreateInstanceDialog({
               }
             }}
             validateDisabled={isChecking || !instanceName.trim()}
-            onForceCreate={async () => {
-              setIsCreating(true);
-              try {
-                const instanceResult = await createMCPServerInstance({
-                  name: instanceName,
-                  description: instanceDescription,
-                  server_spec_id: mcpServer.id,
-                  json_spec: {
-                    image: mcpServer.docker_image_url,
-                    port: 8000,
-                    environment: envVars,
-                  },
-                });
-                if (instanceResult.error) {
-                  const msg =
-                    typeof instanceResult.error.detail === "string"
-                      ? instanceResult.error.detail
-                      : "Failed to create MCP instance";
-                  throw new Error(msg);
-                }
-                toast.success(`Successfully created ${instanceName}`);
-                onOpenChange(false);
-                router.refresh();
-                setInstanceName("");
-                setInstanceDescription("");
-                setEnvVars({});
-                setValidationResult(null);
-              } catch (error: any) {
-                console.error("Instance creation error:", error);
-                toast.error(error?.message || "Failed to create MCP instance");
-              } finally {
-                setIsCreating(false);
-              }
-            }}
+            onForceCreate={() => createInstance(true)}
             forceCreateDisabled={isCreating || !instanceName.trim()}
             onSubmit={async (e) => {
               e?.preventDefault();
@@ -178,44 +193,7 @@ export function CreateInstanceDialog({
                 toast.warning("Please validate the configuration first");
                 return;
               }
-              if (validationResult && !validationResult.valid) {
-                toast.error(
-                  'Configuration validation failed. Use "Force Create" to proceed.'
-                );
-                return;
-              }
-              setIsCreating(true);
-              try {
-                const instanceResult = await createMCPServerInstance({
-                  name: instanceName,
-                  description: instanceDescription,
-                  server_spec_id: mcpServer.id,
-                  json_spec: {
-                    image: mcpServer.docker_image_url,
-                    port: 8000,
-                    environment: envVars,
-                  },
-                });
-                if (instanceResult.error) {
-                  const msg =
-                    typeof instanceResult.error.detail === "string"
-                      ? instanceResult.error.detail
-                      : "Failed to create MCP instance";
-                  throw new Error(msg);
-                }
-                toast.success(`Successfully created ${instanceName}`);
-                onOpenChange(false);
-                router.refresh();
-                setInstanceName("");
-                setInstanceDescription("");
-                setEnvVars({});
-                setValidationResult(null);
-              } catch (error: any) {
-                console.error("Instance creation error:", error);
-                toast.error(error?.message || "Failed to create MCP instance");
-              } finally {
-                setIsCreating(false);
-              }
+              await createInstance(false);
             }}
             submitDisabled={
               isCreating ||
@@ -235,7 +213,7 @@ export function CreateInstanceDialog({
             }
             showContainerSummary
             containerImage={mcpServer.docker_image_url}
-            containerPort={8000}
+            containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}
           />
         </div>
       </DialogContent>

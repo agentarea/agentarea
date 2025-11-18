@@ -3,37 +3,7 @@ import EmptyState from "@/components/EmptyState";
 import { listMCPServerInstances, listMCPServers } from "@/lib/api";
 import { MCPSpecsSection } from "./MCPSpecsSection";
 import { MyMCPsSection } from "./MyMCPsSection";
-
-interface MCPInstance {
-  id: string;
-  name: string;
-  description?: string | null;
-  status: string;
-  endpoint_url?: string;
-  created_at: string;
-  server_spec_id?: string | null;
-  json_spec?: any;
-}
-
-interface MCPSpec {
-  id: string;
-  name: string;
-  description: string;
-  docker_image_url: string;
-  version: string;
-  tags: string[];
-  status: string;
-  is_public: boolean;
-  env_schema?: Array<{
-    name: string;
-    description: string;
-    required: boolean;
-    default?: string;
-  }>;
-  cmd?: string[] | null;
-  created_at: string;
-  updated_at: string;
-}
+import { MCPInstance, MCPServer } from "../types";
 
 interface MCPServersContentProps {
   searchQuery?: string;
@@ -54,47 +24,48 @@ export default async function MCPServersContent({
 
   // Handle API errors
   if (serversResponse.error || instancesResponse.error) {
-    const serversError = serversResponse.error as any;
-    const instancesError = instancesResponse.error as any;
+    const errorMessage =
+      (serversResponse.error as { detail?: Array<{ msg?: string }> })?.detail?.[0]
+        ?.msg ||
+      (instancesResponse.error as { detail?: Array<{ msg?: string }> })?.detail?.[0]
+        ?.msg ||
+      "Unknown error occurred";
 
     return (
       <div className="py-10 text-center">
-        <p className="text-red-500">
-          Error loading data:{" "}
-          {serversError?.detail?.[0]?.msg ||
-            instancesError?.detail?.[0]?.msg ||
-            "Unknown error occurred"}
-        </p>
+        <p className="text-destructive">Error loading data: {errorMessage}</p>
       </div>
     );
   }
 
-  const mcpServers = (serversResponse.data || []) as MCPSpec[];
+  const mcpServers = (serversResponse.data || []) as MCPServer[];
   const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
 
   // Filter MCP instances based on search query
-  let filteredInstances = mcpInstances;
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filteredInstances = mcpInstances.filter(
-      (instance) =>
-        instance.name?.toLowerCase().includes(query) ||
-        instance.description?.toLowerCase().includes(query) ||
-        instance.endpoint_url?.toLowerCase().includes(query)
-    );
-  }
+  const filteredInstances = searchQuery.trim()
+    ? (() => {
+        const query = searchQuery.toLowerCase();
+        return mcpInstances.filter(
+          (instance) =>
+            instance.name?.toLowerCase().includes(query) ||
+            instance.description?.toLowerCase().includes(query) ||
+            instance.endpoint_url?.toLowerCase().includes(query)
+        );
+      })()
+    : mcpInstances;
 
   // Filter MCP specs based on search query
-  let filteredServers = mcpServers;
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filteredServers = mcpServers.filter(
-      (server) =>
-        server.name?.toLowerCase().includes(query) ||
-        server.description?.toLowerCase().includes(query) ||
-        (server.tags || []).some((tag) => tag.toLowerCase().includes(query))
-    );
-  }
+  const filteredServers = searchQuery.trim()
+    ? (() => {
+        const query = searchQuery.toLowerCase();
+        return mcpServers.filter(
+          (server) =>
+            server.name?.toLowerCase().includes(query) ||
+            server.description?.toLowerCase().includes(query) ||
+            (server.tags || []).some((tag) => tag.toLowerCase().includes(query))
+        );
+      })()
+    : mcpServers;
 
   // Check for empty states (including user-created servers)
   const hasNoInstances = mcpInstances.length === 0;
@@ -105,7 +76,7 @@ export default async function MCPServersContent({
     filteredServers.length === 0 &&
     !hasNoData;
 
-    // Handle global empty states
+  // Handle global empty states
   if (hasNoData) {
     return (
       <EmptyState
