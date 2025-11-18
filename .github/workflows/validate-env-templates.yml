@@ -2,9 +2,9 @@ name: Validate Env Templates
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
-    branches: ["**"]
+    branches: ["main"]
 
 jobs:
   validate-env-templates:
