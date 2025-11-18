@@ -262,7 +262,19 @@
     },
     "newServer": {
       "title": "Новый MCP сервер",
-      "description": "Подключите MCP сервер к вашему рабочему пространству"
+      "description": "Подключите MCP сервер к вашему рабочему пространству",
+      "docker": {
+        "title": "Новый Docker-based сервер",
+        "serverName": "Имя Docker-based сервера",
+        "serverNamePlaceholder": "File System MCP",
+        "serverNameRequired": "Имя сервера является обязательным",
+        "dockerImageUrl": "URL-адрес Docker образа",
+        "dockerImageUrlPlaceholder": "ghcr.io/anthropic/mcp-file-server:latest",
+        "dockerImageUrlRequired": "URL-адрес Docker образа является обязательным",
+        "version": "Версия",
+        "versionPlaceholder": "1.0.0",
+        "versionRequired": "Версия является обязательной"
+      }
     },
     "marketplace": {
       "title": "Маркетплейс",

@@ -96,16 +96,16 @@ export default async function MCPServersContent({
     );
   }
 
-  // Check for empty states
+  // Check for empty states (including user-created servers)
   const hasNoInstances = mcpInstances.length === 0;
-  const hasNoServers = mcpServers.filter((s) => s.is_public).length === 0;
+  const hasNoServers = mcpServers.length === 0;
   const hasNoData = hasNoInstances && hasNoServers;
   const hasNoResults =
     filteredInstances.length === 0 &&
-    filteredServers.filter((s) => s.is_public).length === 0 &&
+    filteredServers.length === 0 &&
     !hasNoData;
 
-  // Handle global empty states
+    // Handle global empty states
   if (hasNoData) {
     return (
       <EmptyState
@@ -145,12 +145,12 @@ export default async function MCPServersContent({
       {/* Browse MCP Specifications Section */}
       <div id="specs-section">
         <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          Browse MCP Specifications (
-          {filteredServers.filter((s) => s.is_public).length})
+          Browse MCP Specifications ({filteredServers.length})
         </h4>
         <MCPSpecsSection
           mcpServers={filteredServers}
           searchParams={{ search: searchQuery }}
+          viewMode={viewMode}
         />
       </div>
     </div>

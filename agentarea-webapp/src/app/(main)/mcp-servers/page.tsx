@@ -36,7 +36,7 @@ export default async function MCPServersPage({
         breadcrumb: [{ label: t("title") }],
         description: t("description"),
         controls: (
-          <Link href="/mcp-servers/add">
+          <Link href="/mcp-servers/add-docker-server">
             <Button
               className="shrink-0 gap-2"
               size="xs"

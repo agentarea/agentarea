@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Bot,
@@ -27,7 +28,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import Table from "@/components/Table/Table";
 import { CreateInstanceDialog } from "./CreateInstanceDialog";
+import EmptyState from "@/components/EmptyState";
 
 interface MCPServer {
   id: string;
@@ -53,6 +56,7 @@ interface MCPSpecsSectionProps {
   mcpServers: MCPServer[];
   searchParams: { [key: string]: string | string[] | undefined };
   isLoading?: boolean;
+  viewMode?: string;
 }
 
 // Enhanced category mapping with icons
@@ -180,13 +184,22 @@ const getCategoryColor = (category: string) => {
   }
 };
 
-// Get popularity badge
+// Get popularity badge (deterministic based on server ID)
 const getPopularityInfo = (server: MCPServer) => {
-  // This would ideally come from server data
-  const randomFactor = Math.random();
-  if (randomFactor > 0.8)
+  // Use deterministic hash from server ID instead of Math.random()
+  // This ensures the same result on server and client
+  let hash = 0;
+  for (let i = 0; i < server.id.length; i++) {
+    const char = server.id.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  // Normalize to 0-1 range
+  const deterministicFactor = Math.abs(hash % 100) / 100;
+  
+  if (deterministicFactor > 0.8)
     return { label: "Popular", variant: "default" as const, icon: Star };
-  if (randomFactor > 0.6)
+  if (deterministicFactor > 0.6)
     return { label: "New", variant: "secondary" as const, icon: Sparkles };
   return null;
 };
@@ -195,30 +208,29 @@ export function MCPSpecsSection({
   mcpServers,
   searchParams,
   isLoading = false,
+  viewMode = "grid",
 }: MCPSpecsSectionProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState(
     (searchParams.search as string) || ""
   );
   const [selectedCategory, setSelectedCategory] = useState(
     (searchParams.category as string) || "All"
   );
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Get unique categories from servers
+  // Get unique categories from servers (including user-created)
   const categories = useMemo(() => {
     const cats = new Set<string>();
     mcpServers.forEach((server) => {
-      if (server.is_public) {
-        cats.add(getCategory(server.tags || []));
-      }
+      cats.add(getCategory(server.tags || []));
     });
     return ["All", ...Array.from(cats).sort()];
   }, [mcpServers]);
 
-  // Filter servers based on search and category
+  // Filter servers based on search and category (including user-created)
   const filteredServers = useMemo(() => {
     return mcpServers.filter((server) => {
       const matchesSearch =
@@ -230,8 +242,7 @@ export function MCPSpecsSection({
       const matchesCategory =
         selectedCategory === "All" ||
         getCategory(server.tags || []) === selectedCategory;
-      const isPublic = server.is_public;
-      return matchesSearch && matchesCategory && isPublic;
+      return matchesSearch && matchesCategory;
     });
   }, [mcpServers, searchQuery, selectedCategory]);
 
@@ -246,6 +257,105 @@ export function MCPSpecsSection({
     setSearchQuery("");
     setSelectedCategory("All");
   };
+
+  // Get status badge component
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return (
+          <Badge variant="default" className="text-xs">
+            <CheckCircle className="mr-1 h-3 w-3" />
+            {status}
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="secondary" className="text-xs">
+            {status}
+          </Badge>
+        );
+    }
+  };
+
+  // Define table columns for servers
+  const serverColumns = [
+    {
+      accessor: "name",
+      header: "Name",
+      render: (value: string, item: MCPServer) => {
+        const popularityInfo = getPopularityInfo(item);
+        const category = getCategory(item.tags || []);
+        return (
+          <div className="flex items-center gap-2">
+            <span className="truncate font-semibold">{value}</span>
+            {!item.is_public && (
+              <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300 shrink-0">
+                Custom
+              </Badge>
+            )}
+            {popularityInfo && (
+              <Badge variant={popularityInfo.variant} className="text-xs shrink-0">
+                {popularityInfo.label}
+              </Badge>
+            )}
+            <Badge className={`border text-xs shrink-0 ${getCategoryColor(category)}`}>
+              {category}
+            </Badge>
+          </div>
+        );
+      },
+    },
+    {
+      accessor: "description",
+      header: "Description",
+      render: (value: string) => (
+        <span className="truncate text-sm text-muted-foreground">
+          {value || "-"}
+        </span>
+      ),
+    },
+    {
+      accessor: "version",
+      header: "Version",
+      render: (value: string) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          v{value}
+        </span>
+      ),
+    },
+    {
+      accessor: "tags",
+      header: "Tags",
+      render: (value: string[]) => (
+        <div className="flex flex-wrap gap-1">
+          {(value || []).slice(0, 3).map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
+          {(value || []).length > 3 && (
+            <Badge variant="outline" className="text-xs">
+              +{(value || []).length - 3}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      accessor: "status",
+      header: "Status",
+      render: (_: string, item: MCPServer) => getStatusBadge(item.status),
+    },
+    {
+      accessor: "updated_at",
+      header: "Updated",
+      render: (value: string) => (
+        <span className="text-xs text-muted-foreground">
+          {new Date(value).toLocaleDateString()}
+        </span>
+      ),
+    },
+  ];
 
   // Enhanced List Item
   const renderServerCard = (server: MCPServer) => {
@@ -281,6 +391,11 @@ export function MCPSpecsSection({
                 <h3 className="truncate font-semibold text-slate-900 dark:text-white">
                   {server.name}
                 </h3>
+                {!server.is_public && (
+                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300">
+                    Custom
+                  </Badge>
+                )}
                 {popularityInfo && (
                   <Badge variant={popularityInfo.variant} className="text-xs">
                     {popularityInfo.label}
@@ -364,9 +479,16 @@ export function MCPSpecsSection({
               <IconComponent className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="line-clamp-1 font-semibold transition-colors group-hover:text-primary">
-                {server.name}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="line-clamp-1 font-semibold transition-colors group-hover:text-primary">
+                  {server.name}
+                </h3>
+                {!server.is_public && (
+                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300 shrink-0">
+                    Custom
+                  </Badge>
+                )}
+              </div>
               <div className="mt-1 flex items-center gap-2">
                 <Badge className={`border text-xs ${categoryColor}`}>
                   {category}
@@ -425,208 +547,45 @@ export function MCPSpecsSection({
     );
   };
 
+  // Empty state handling
+  if (filteredServers.length === 0) {
+    return (
+      <EmptyState
+        title="No MCP specifications found"
+        description="No MCP server instances or specifications are available"
+        iconsType="mcp"
+      />
+    );
+  }
+
+  // Render table view
+  if (viewMode === "table") {
+    return (
+      <Table
+        data={filteredServers}
+        columns={serverColumns}
+        onRowClick={(server) => {
+          handleConfigureInstance(server);
+        }}
+      />
+    );
+  }
+
+  // Render grid/list view (default)
   return (
-    <div className="space-y-6 pt-6">
-      {/* Enhanced Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-500">
-          <Globe className="h-4 w-4 text-white" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold">Browse MCP Specifications</h2>
-          <p className="text-muted-foreground">
-            Discover and deploy verified MCP servers from our community catalog
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       <div>
-        <div className="space-y-4">
-          {/* Enhanced Search */}
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search servers, tags, or descriptions..."
-                className="border-2 pl-10 pr-10 focus:border-primary/50"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute right-3 top-3 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowFilters(!showFilters)}
-                className={showFilters ? "bg-primary/10" : ""}
-              >
-                <Filter className="mr-2 h-4 w-4" />
-                Filters
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "grid" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("grid")}
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Enhanced Category Filters */}
-          {(showFilters || selectedCategory !== "All" || searchQuery) && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Categories</span>
-                {(selectedCategory !== "All" || searchQuery) && (
-                  <Button variant="ghost" size="sm" onClick={clearSearch}>
-                    <X className="mr-1 h-4 w-4" />
-                    Clear filters
-                  </Button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((category) => {
-                  const isSelected = selectedCategory === category;
-                  const categoryColor =
-                    category === "All"
-                      ? "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950/30 dark:text-slate-300 dark:border-slate-800"
-                      : getCategoryColor(category);
-
-                  return (
-                    <Badge
-                      key={category}
-                      className={`cursor-pointer border-2 px-3 py-1 transition-all duration-200 ${
-                        isSelected
-                          ? `${categoryColor} shadow-sm ring-2 ring-primary/50`
-                          : "border-border bg-background hover:border-primary/50 hover:bg-secondary"
-                      }`}
-                      onClick={() => setSelectedCategory(category)}
-                    >
-                      {category}
-                      {category !== "All" && (
-                        <span className="ml-2 text-xs opacity-60">
-                          {
-                            mcpServers.filter(
-                              (s) =>
-                                s.is_public &&
-                                getCategory(s.tags || []) === category
-                            ).length
-                          }
-                        </span>
-                      )}
-                    </Badge>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Results summary */}
-          <div className="flex items-center justify-between pb-2 text-sm text-muted-foreground">
-            <span>
-              {filteredServers.length}{" "}
-              {filteredServers.length === 1 ? "server" : "servers"} found
-              {selectedCategory !== "All" && ` in ${selectedCategory}`}
-              {searchQuery && ` matching "${searchQuery}"`}
-            </span>
-            <span>
-              {mcpServers.filter((s) => s.is_public).length} total available
-            </span>
-          </div>
-        </div>
-
-        <div>
-          {isLoading ? (
-            <div className="space-y-4">
-              <div
-                className={
-                  viewMode === "grid"
-                    ? "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
-                    : "space-y-4"
-                }
-              >
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={
-                      viewMode === "grid"
-                        ? "space-y-4 rounded-xl border-2 p-4"
-                        : "rounded-xl border-2 p-4"
-                    }
-                  >
-                    <div className="flex items-center gap-4">
-                      <Skeleton className="h-12 w-12 rounded-xl" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-40" />
-                        <Skeleton className="h-3 w-full" />
-                        <div className="flex gap-2">
-                          <Skeleton className="h-5 w-12" />
-                          <Skeleton className="h-5 w-16" />
-                          <Skeleton className="h-5 w-14" />
-                        </div>
-                      </div>
-                      {viewMode === "list" && <Skeleton className="h-8 w-24" />}
-                    </div>
-                    {viewMode === "grid" && (
-                      <div className="space-y-2">
-                        <Skeleton className="h-3 w-full" />
-                        <Skeleton className="h-3 w-3/4" />
-                        <Skeleton className="h-8 w-full" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : filteredServers.length === 0 ? (
-            <div className="py-12 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
-                <Search className="h-8 w-8 text-slate-400" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold">No servers found</h3>
-              <p className="mb-4 text-muted-foreground">
-                {searchQuery || selectedCategory !== "All"
-                  ? "Try adjusting your search terms or category filter."
-                  : "No MCP servers are available in the catalog yet."}
-              </p>
-              {(searchQuery || selectedCategory !== "All") && (
-                <Button variant="outline" onClick={clearSearch}>
-                  <X className="mr-2 h-4 w-4" />
-                  Clear filters
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div
-              className={
-                viewMode === "grid"
-                  ? "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
-                  : "space-y-4"
-              }
-            >
-              {filteredServers.map((server) =>
-                viewMode === "grid"
-                  ? renderServerGrid(server)
-                  : renderServerCard(server)
-              )}
-            </div>
+        <div
+          className={
+            viewMode === "grid"
+              ? "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+              : "space-y-4"
+          }
+        >
+          {filteredServers.map((server) =>
+            viewMode === "grid"
+              ? renderServerGrid(server)
+              : renderServerCard(server)
           )}
         </div>
       </div>

@@ -302,11 +302,19 @@
     },
     "newServer": {
       "title": "New MCP Server",
-      "description": "Connect an MCP server to your workspace"
-    },
-    "marketplace": {
-      "title": "Marketplace",
-      "description": "Discover and install MCP servers that provide tools, context, and capabilities to your agents"
+      "description": "Connect an MCP server to your workspace",
+      "docker": {
+        "title": "New Docker-based Server",
+        "serverName": "Docker-based Server Name",
+        "serverNamePlaceholder": "File System MCP",
+        "serverNameRequired": "Server name is required",
+        "dockerImageUrl": "Docker Image URL",
+        "dockerImageUrlPlaceholder": "ghcr.io/anthropic/mcp-file-server:latest",
+        "dockerImageUrlRequired": "Docker image URL is required",
+        "version": "Version",
+        "versionPlaceholder": "1.0.0",
+        "versionRequired": "Version is required"
+      }
     }
   },
 

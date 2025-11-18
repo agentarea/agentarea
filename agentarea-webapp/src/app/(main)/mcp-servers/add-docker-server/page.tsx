@@ -2,43 +2,36 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { AddMCPServerForm } from "./form";
+import AddDockerServerForm from "./AddDockerServerForm";
+import AddDockerServerHeaderControls from "./AddDockerServerHeaderControls";
 
 export default async function AddMCPServerPage() {
   const t = await getTranslations("MCPServersPage");
-  const commonT = await getTranslations("Common");
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [
           { label: t("title"), href: "/mcp-servers" },
-          { label: t("newServer.title") },
+          { label: t("newServer.docker.title") },
         ],
         description: t("newServer.description"),
         backLink: {
           label: "Back to MCP Servers",
           href: "/mcp-servers",
         },
+        controls: <AddDockerServerHeaderControls />,
       }}
     >
-      <div className="mx-auto max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Add MCP Server</CardTitle>
-            <CardDescription>
-              Connect an MCP server to your workspace
-            </CardDescription>
-          </CardHeader>
-          <AddMCPServerForm />
-        </Card>
-      </div>
+        <Suspense
+          fallback={
+            <div className="flex h-32 items-center justify-center">
+              <LoadingSpinner />
+            </div>
+          }
+        >
+          <AddDockerServerForm />
+        </Suspense>
     </ContentBlock>
   );
 }
