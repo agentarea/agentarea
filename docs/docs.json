@@ -110,10 +110,6 @@
           {
             "page": "security",
             "icon": "shield"
-          },
-          {
-            "page": "troubleshooting",
-            "icon": "help-circle"
           }
         ]
       },
