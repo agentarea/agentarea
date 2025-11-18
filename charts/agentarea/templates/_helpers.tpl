@@ -5,6 +5,17 @@ Expand the name of the chart.
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- define "agentarea.timeToSeconds" -}}
+{{- $v := . -}}
+{{- if kindIs "int" $v -}}
+{{ $v }}
+{{- else if kindIs "string" $v -}}
+{{- regexFind "[0-9]+" $v -}}
+{{- else -}}
+0
+{{- end -}}
+{{- end }}
+
 {{/*
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).

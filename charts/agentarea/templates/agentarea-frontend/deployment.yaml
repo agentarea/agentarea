@@ -6,8 +6,16 @@ metadata:
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: frontend
+    {{- with .Values.global.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   replicas: {{ .Values.frontend.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
@@ -17,57 +25,115 @@ spec:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
+        {{- with .Values.global.extraSelectorLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.frontend.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
+        {{- with .Values.frontend.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: frontend
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
-          ports:
-            - name: http
-              containerPort: 3000
-              protocol: TCP
-          env:
-            - name: PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-frontend-env
-                  key: PORT
-            - name: NODE_ENV
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-frontend-env
-                  key: NODE_ENV
-            - name: NEXT_PUBLIC_API_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-frontend-env
-                  key: NEXT_PUBLIC_API_URL
-            - name: KRATOS_PUBLIC_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-frontend-env
-                  key: KRATOS_PUBLIC_URL
-            - name: KRATOS_ADMIN_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-frontend-env
-                  key: KRATOS_ADMIN_URL
-            - name: HYDRA_PUBLIC_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-frontend-env
-                  key: HYDRA_PUBLIC_URL
-            - name: HYDRA_ADMIN_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-frontend-env
-                  key: HYDRA_ADMIN_URL
-            {{- if .Values.frontend.extraEnv }}
-            {{- toYaml .Values.frontend.extraEnv | nindent 12 }}
-            {{- end }}
-          {{- with .Values.frontend.resources }}
-          resources:
+          {{- with .Values.global.security.containerSecurityContext }}
+          securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.frontend.service.port }}
+              protocol: TCP
+          envFrom:
+            # Import all configuration from centralized ConfigMap
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-env
+          env:
+            # Monitoring configuration
+            - name: METRICS_ENABLED
+              value: {{ .Values.global.monitoring.prometheus.enabled | quote }}
+            - name: HEALTH_CHECK_ENABLED
+              value: {{ .Values.global.monitoring.health.enabled | quote }}
+            {{- if .Values.frontend.extraEnv }}
+            # Extra environment variables from values
+            {{- toYaml .Values.frontend.extraEnv | nindent 12 }}
+            {{- end }}
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.frontend.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.frontend.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.frontend.livenessProbe.failureThreshold }}
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.frontend.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.frontend.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.frontend.readinessProbe.failureThreshold }}
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+            successThreshold: 1
+          {{- if or .Values.frontend.resources .Values.global.workloads.resources.mainContainer }}
+          resources:
+            {{- if .Values.frontend.resources }}
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+            {{- else }}
+            limits:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.limit }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.limit }}
+            requests:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.request }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.frontend.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.frontend.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.extraContainers }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
 {{- end }}

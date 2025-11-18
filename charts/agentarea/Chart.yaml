@@ -1,6 +1,6 @@
 apiVersion: v2
 name: agentarea
-description: A Helm chart for Kubernetes
+description: AgentArea Platform
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -27,18 +27,12 @@ appVersion: "0.0.1"
 dependencies:
   # PostgreSQL - main database for application, temporal, and infisical
   - name: postgresql
-    version: "12.10.0"
+    version: "18.1.10"
     repository: "https://charts.bitnami.com/bitnami"
     condition: postgresql.enabled
 
   # Redis - for caching and event streaming
   - name: redis
-    version: "18.10.0"
+    version: "23.2.12"
     repository: "https://charts.bitnami.com/bitnami"
     condition: redis.enabled
-
-  # MinIO - S3-compatible object storage
-  - name: minio
-    version: "14.7.0"
-    repository: "https://charts.bitnami.com/bitnami"
-    condition: minio.enabled

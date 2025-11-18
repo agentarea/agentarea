@@ -1,0 +1,61 @@
+{{/*
+Centralized ConfigMap for all AgentArea services
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  # Database configuration (shared across all services)
+  {{- include "agentarea.database.configVars" . | nindent 2 }}
+
+  # Redis configuration (shared across all services)
+  {{- include "agentarea.redis.configVars" . | nindent 2 }}
+
+  # Storage configuration (shared across all services)
+  {{- include "agentarea.storage.configVars" . | nindent 2 }}
+
+  # Temporal configuration (shared across backend and worker)
+  {{- include "agentarea.temporal.configVars" . | nindent 2 }}
+
+  # Temporal server runtime configuration
+  {{- include "agentarea.temporalServer.configVars" . | nindent 2 }}
+
+  # MCP Manager configuration (shared across backend and MCP manager)
+  {{- include "agentarea.mcpManager.configVars" . | nindent 2 }}
+
+  # Backend-specific configuration
+  {{- if .Values.backend.enabled }}
+  {{- include "agentarea.backend.configVars" . | nindent 2 }}
+  {{- end }}
+
+  # Worker-specific configuration
+  {{- if .Values.worker.enabled }}
+  {{- include "agentarea.worker.configVars" . | nindent 2 }}
+  {{- end }}
+
+  # Frontend-specific configuration
+  {{- if .Values.frontend.enabled }}
+  {{- include "agentarea.frontend.configVars" . | nindent 2 }}
+  {{- end }}
+
+  # Temporal UI configuration
+  {{- if .Values.temporalUi.enabled }}
+  {{- include "agentarea.temporalUi.configVars" . | nindent 2 }}
+  {{- end }}
+
+  # MCP Manager-specific configuration
+  {{- if .Values.mcpManager.enabled }}
+  {{- include "agentarea.mcpManagerOnly.configVars" . | nindent 2 }}
+  {{- end }}
+
+  # Additional config fragments loaded from files
+  {{- range $path, $bytes := .Files.Glob "configs/env.d/*.{yaml,yml}" }}
+  {{ $bytes | toString | nindent 2 }}
+  {{- end }}

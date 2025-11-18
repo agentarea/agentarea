@@ -1,0 +1,166 @@
+{{- if .Values.minio.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-minio
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: minio
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: minio
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: minio
+          image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "minio/minio" .Values.minio.image.repository }}:{{ default "latest" .Values.minio.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          args: ["server","/data","--console-address",":9001"]
+          ports:
+            - name: minio
+              containerPort: 9000
+              protocol: TCP
+            - name: console
+              containerPort: 9001
+              protocol: TCP
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-password
+          readinessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: minio
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: minio
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          {{- if or .Values.minio.resources .Values.global.workloads.resources.mainContainer }}
+          resources:
+            {{- if .Values.minio.resources }}
+            {{- toYaml .Values.minio.resources | nindent 12 }}
+            {{- else }}
+            limits:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.limit }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.limit }}
+            requests:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.request }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        {{- if .Values.minio.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-minio-pvc
+        {{- else }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-minio
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9000
+      targetPort: minio
+      protocol: TCP
+      name: minio
+    - port: 9001
+      targetPort: console
+      protocol: TCP
+      name: console
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: minio
+---
+{{- if .Values.minio.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-minio-pvc
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.minio.persistence.size }}
+{{- end }}
+---
+{{- if .Values.minio.defaultBuckets }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-minio-bucket-init
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio-bucket-init
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: minio-bucket-init
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mc
+          image: "minio/mc:latest"
+          command:
+            - sh
+            - -c
+            - |
+              mc alias set local http://{{ .Release.Name }}-minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+              mc mb -p local/{{ .Values.minio.defaultBuckets }} || true
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.minio }}
+                  key: root-password
+{{- end }}
+{{- end }}

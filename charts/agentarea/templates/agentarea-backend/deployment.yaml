@@ -6,8 +6,16 @@ metadata:
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: backend
+    {{- with .Values.global.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   replicas: {{ .Values.backend.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
@@ -17,44 +25,142 @@ spec:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
+        {{- with .Values.global.extraSelectorLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.backend.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
+        {{- with .Values.backend.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.backend.waitForDependencies }}
+      initContainers:
+        # Wait for database to be ready
+        - name: wait-for-db
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.database.host" . }} {{ .Values.global.database.port }}; do
+                echo "Waiting for database..."
+                sleep 2
+              done
+              echo "Database is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+        # Wait for Redis to be ready
+        - name: wait-for-redis
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.redis.host" . }} {{ .Values.global.redis.port }}; do
+                echo "Waiting for Redis..."
+                sleep 2
+              done
+              echo "Redis is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+        # Wait for MinIO to be ready
+        - name: wait-for-minio
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.minio.host" . }} 9000; do
+                echo "Waiting for MinIO..."
+                sleep 2
+              done
+              echo "MinIO is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+        # Wait for Temporal to be ready
+        - name: wait-for-temporal
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.temporal.host" . }} {{ .Values.global.temporal.port }}; do
+                echo "Waiting for Temporal..."
+                sleep 2
+              done
+              echo "Temporal is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+      {{- end }}
       containers:
         - name: backend
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.security.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.global.api.port }}
               protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.global.monitoring.prometheus.port }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.global.monitoring.health.port }}
+              protocol: TCP
+          envFrom:
+            # Import all configuration from centralized ConfigMap
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-env
           env:
-            # Backend configuration
-            - name: PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: PORT
-            - name: LOG_LEVEL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: LOG_LEVEL
-            # Database configuration
-            - name: POSTGRES_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: POSTGRES_HOST
-            - name: POSTGRES_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: POSTGRES_PORT
-            - name: POSTGRES_DB
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: POSTGRES_DB
+            # Database credentials
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
@@ -65,40 +171,16 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
-            # Redis configuration
-            - name: REDIS_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: REDIS_HOST
-            - name: REDIS_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: REDIS_PORT
+            # Redis password
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.redis }}
                   key: redis-password
+            # Computed Redis URL (depends on other env vars)
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
-            # Storage (S3/MinIO) configuration
-            - name: AWS_REGION
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: AWS_REGION
-            - name: S3_BUCKET_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: S3_BUCKET_NAME
-            - name: AWS_ENDPOINT_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: AWS_ENDPOINT_URL
+            # MinIO/S3 credentials
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -109,56 +191,95 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.minio }}
                   key: root-password
-            # Temporal configuration
-            - name: WORKFLOW__TEMPORAL_SERVER_URL
+            # Application encryption key
+            - name: SECRET_MANAGER_ENCRYPTION_KEY
               valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: WORKFLOW__TEMPORAL_SERVER_URL
-            - name: WORKFLOW__TEMPORAL_NAMESPACE
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.application }}
+                  key: encryption-key
+            # API configuration
+            - name: API_HOST
+              value: {{ .Values.global.api.host }}
+            - name: API_PORT
+              value: {{ .Values.global.api.port | quote }}
+            - name: API_AUTH_ENABLED
+              value: {{ .Values.global.api.auth.enabled | quote }}
+            {{- if .Values.global.api.auth.enabled }}
+            - name: API_AUTH_HEADER_NAME
+              value: {{ .Values.global.api.auth.headerName }}
+            - name: API_AUTH_HEADER_VALUE
               valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: WORKFLOW__TEMPORAL_NAMESPACE
-            - name: WORKFLOW__TEMPORAL_TASK_QUEUE
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: WORKFLOW__TEMPORAL_TASK_QUEUE
-            # MCP Manager configuration
-            - name: MCP_MANAGER_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: MCP_MANAGER_URL
-            - name: MCP_PROXY_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: MCP_PROXY_HOST
-            - name: MCP_CLIENT_TIMEOUT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-backend-env
-                  key: MCP_CLIENT_TIMEOUT
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.application }}
+                  key: api-auth-header-value
+            {{- end }}
+            # Rate limiting
+            - name: API_RATE_LIMIT_ENABLED
+              value: {{ .Values.global.api.rateLimit.enabled | quote }}
+            - name: API_RATE_LIMIT_REQUESTS_PER_MINUTE
+              value: {{ .Values.global.api.rateLimit.requestsPerMinute | quote }}
+            # Monitoring configuration
+            - name: METRICS_ENABLED
+              value: {{ .Values.global.monitoring.prometheus.enabled | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.global.monitoring.prometheus.port | quote }}
+            - name: HEALTH_CHECK_ENABLED
+              value: {{ .Values.global.monitoring.health.enabled | quote }}
+            - name: HEALTH_CHECK_PORT
+              value: {{ .Values.global.monitoring.health.port | quote }}
             {{- if .Values.backend.extraEnv }}
             # Extra environment variables from values
             {{- toYaml .Values.backend.extraEnv | nindent 12 }}
             {{- end }}
           livenessProbe:
             httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 30
-            periodSeconds: 10
+              path: {{ .Values.global.monitoring.health.path }}
+              port: health
+            initialDelaySeconds: {{ .Values.backend.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.livenessProbe.failureThreshold }}
+            successThreshold: 1
           readinessProbe:
             httpGet:
-              path: /health
-              port: http
+              path: {{ .Values.global.monitoring.health.path }}
+              port: health
+            initialDelaySeconds: {{ .Values.backend.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.readinessProbe.failureThreshold }}
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: {{ .Values.global.monitoring.health.path }}
+              port: health
             initialDelaySeconds: 10
             periodSeconds: 5
-          {{- with .Values.backend.resources }}
+            timeoutSeconds: 3
+            failureThreshold: 30
+            successThreshold: 1
+          {{- if or .Values.backend.resources .Values.global.workloads.resources.mainContainer }}
           resources:
+            {{- if .Values.backend.resources }}
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+            {{- else }}
+            limits:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.limit }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.limit }}
+            requests:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.request }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.backend.extraVolumeMounts }}
+          volumeMounts:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- with .Values.backend.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.extraContainers }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
 {{- end }}

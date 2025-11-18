@@ -31,44 +31,74 @@ spec:
             - name: http
               containerPort: 80
               protocol: TCP
+          envFrom:
+            # Import all configuration from centralized ConfigMap
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-env
           env:
-            - name: LOG_LEVEL
+            - name: POSTGRES_USER
               valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
-                  key: LOG_LEVEL
-            - name: CORE_API_URL
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: username
+            - name: POSTGRES_PASSWORD
               valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
-                  key: CORE_API_URL
-            - name: MCP_PROXY_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
-                  key: MCP_PROXY_HOST
-            - name: REDIS_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
-                  key: REDIS_HOST
-            - name: REDIS_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-mcp-manager-env
-                  key: REDIS_PORT
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+            # Redis password
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.redis }}
                   key: redis-password
+            # Computed Redis URL (depends on other env vars)
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
+            - name: SECRET_MANAGER_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.application }}
+                  key: encryption-key
             {{- if .Values.mcpManager.extraEnv }}
+            # Extra environment variables from values
             {{- toYaml .Values.mcpManager.extraEnv | nindent 12 }}
             {{- end }}
           {{- with .Values.mcpManager.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: run
+              mountPath: /run
+            - name: containers-storage
+              mountPath: /var/lib/containers/storage
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: containers-storage
+          emptyDir: {}
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
 {{- end }}

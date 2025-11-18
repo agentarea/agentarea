@@ -6,6 +6,16 @@ metadata:
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: backend
+    {{- with .Values.global.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.backend.service.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- with .Values.backend.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   type: {{ .Values.backend.service.type }}
   ports:
@@ -13,6 +23,14 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+    - port: {{ .Values.global.monitoring.prometheus.port }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    - port: {{ .Values.global.monitoring.health.port }}
+      targetPort: health
+      protocol: TCP
+      name: health
   selector:
     {{- include "agentarea.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: backend

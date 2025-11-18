@@ -27,11 +27,10 @@ spec:
             - name: temporal
               containerPort: 7233
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-env
           env:
-            - name: DB
-              value: "postgres12"
-            - name: DB_PORT
-              value: "5432"
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
@@ -42,17 +41,25 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
-            - name: POSTGRES_SEEDS
-              value: "{{ .Release.Name }}-postgresql"
-            - name: DBNAME
-              value: "temporal"
             - name: DYNAMIC_CONFIG_FILE_PATH
-              value: "config/dynamicconfig/development-sql.yaml"
-            - name: BIND_ON_IP
-              value: "0.0.0.0"
+              value: "/etc/temporal/config/dynamicconfig/development-sql.yaml"
             {{- if .Values.temporal.extraEnv }}
             {{- toYaml .Values.temporal.extraEnv | nindent 12 }}
             {{- end }}
+          readinessProbe:
+            tcpSocket:
+              port: temporal
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            tcpSocket:
+              port: temporal
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
           volumeMounts:
             - name: temporal-config
               mountPath: /etc/temporal/config/dynamicconfig
@@ -63,7 +70,7 @@ spec:
       volumes:
         - name: temporal-config
           configMap:
-            name: {{ include "agentarea.fullname" . }}-temporal-config
+            name: {{ .Release.Name }}-temporal-dynamicconfig
 ---
 {{- if .Values.temporalUi.enabled }}
 apiVersion: apps/v1
@@ -94,14 +101,29 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-env
+          {{- if .Values.temporalUi.extraEnv }}
           env:
-            - name: TEMPORAL_ADDRESS
-              value: "{{ include "agentarea.fullname" . }}-temporal:7233"
-            - name: TEMPORAL_CORS_ORIGINS
-              value: "http://localhost:3000"
-            {{- if .Values.temporalUi.extraEnv }}
             {{- toYaml .Values.temporalUi.extraEnv | nindent 12 }}
-            {{- end }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
           {{- with .Values.temporalUi.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

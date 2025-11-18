@@ -1,3 +1,4 @@
+{{- if .Values.jobs.bootstrap.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -19,6 +20,37 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      initContainers:
+        # Wait for PostgreSQL to be ready
+        - name: wait-for-postgres
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Release.Name }}-postgresql -p {{ .Values.global.database.port }} -U postgres; do
+                echo "Waiting for PostgreSQL to be ready..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
+        # Wait for MinIO to be ready
+        - name: wait-for-minio
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              until curl -f http://{{ .Release.Name }}-minio:9000/minio/health/live; do
+                echo "Waiting for MinIO to be ready..."
+                sleep 2
+              done
+              echo "MinIO is ready!"
       containers:
         - name: bootstrap
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}agentarea/agentarea-bootstrap:latest"
@@ -54,7 +86,7 @@ spec:
             - name: POSTGRES_PORT
               value: "{{ .Values.global.database.port }}"
             - name: DATABASE_URL
-              value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.database }}"
+              value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}"
 
             # Admin user configuration (can be overridden via extraEnv)
             - name: ADMIN_EMAIL
@@ -70,3 +102,4 @@ spec:
               value: "/app/llm/providers.yaml"
             - name: MCP_PROVIDERS_YAML
               value: "/app/llm/mcp_providers.yaml"
+{{- end }}

@@ -1,18 +1,40 @@
 # Default values for agentarea.
 # This is a YAML-formatted file.
+# Helm chart default values
 
-# Service account
+# Service account configuration
 serviceAccount:
   create: true
   annotations: {}
-  name: ""
+  name: &service-account-name "agentarea"  # YAML anchor for reuse
+
+# Name overrides
+nameOverride: ""
+fullnameOverride: ""
 
 # Global configuration shared across all components
 global:
+  # Edition and deployment info
+  edition: "community"
+  version: "0.0.1"
+  
+  # Cluster configuration
+  cluster:
+    type: "kubernetes"
+    name: "agentarea"
+  
+  # Deployment environment
+  deploymentEnv: "production"
+  
   # Image configuration
   image:
     pullPolicy: IfNotPresent
-    registry: ""  # Optional: Set custom registry (e.g., "myregistry.com")
+    registry: ""  # Optional: Set custom registry (e.g., "myregistry.com", "ghcr.io")
+    pullSecrets: []  # Optional: List of image pull secret names
+    # - name: regcred
+
+  # Service account (uses YAML anchor)
+  serviceAccountName: *service-account-name
 
   # Secret references - users can create these secrets before installation
   # If secrets don't exist, they will be auto-generated
@@ -28,41 +50,266 @@ global:
 
   # Database configuration
   database:
+    # Secret name where database credentials are stored
+    secretName: "agentarea-postgresql-secret"
+    # Database connection details
     host: ""  # Auto-set from postgresql.fullnameOverride if empty
     port: 5432
-    database: "agentarea"
+    name: "agentarea"  # Changed from 'database' to 'name' per v2.0
+    # SSL configuration
+    ssl: false
+    sslMode: "prefer"
+    # Connection pool settings
+    maxConnections: 100
+    connectionTimeout: 30s
+    # Migration settings
+    migrations:
+      runAtStartup: true
+      initializationTimeout: 300s
 
   # Redis configuration
   redis:
     host: ""  # Auto-set from redis.fullnameOverride if empty
     port: 6379
+    # Redis settings
+    database: 0
+    ssl: false
+    # Connection pool settings
+    maxConnections: 50
+    connectionTimeout: 5s
 
-  # MinIO/S3 configuration
+  # Storage configuration - S3/MinIO compatible
   storage:
+    # Storage type (s3, minio, gcs)
+    type: "minio"
     endpoint: ""  # Auto-set from minio service if empty
     bucket: "agentarea-documents"
     region: "us-east-1"
+    # S3 settings
+    s3:
+      accessKeyId: ""
+      secretAccessKey: ""
+      sessionToken: ""
+    # GCS settings
+    gcs:
+      projectId: ""
+      credentials: ""
+    # MinIO settings
+    minio:
+      accessKey: ""
+      secretKey: ""
 
-  # Temporal configuration
+  # Temporal configuration - Workflow engine
   temporal:
     host: ""  # Auto-set from temporal service if empty
     port: 7233
     namespace: "default"
     taskQueue: "agent-tasks"
+    # Temporal client settings
+    client:
+      connectionTimeout: 10s
+      rpcTimeout: 10s
+      longPollTimeout: 60s
+    # Worker settings
+    worker:
+      maxConcurrentActivityExecutions: 10
+      maxConcurrentWorkflowTaskExecutions: 5
+      maxConcurrentSessionExecutions: 1000
+
+  # API configuration
+  api:
+    # API server settings
+    host: "0.0.0.0"
+    port: 8000
+    # Authentication
+    auth:
+      enabled: false
+      headerName: ""
+      headerValue: ""
+    # Rate limiting
+    rateLimit:
+      enabled: true
+      requestsPerMinute: 1000
+
+  # Web application configuration
+  webapp:
+    url: ""  # Will be set from ingress or service
+    
+  # Jobs configuration - Background task processing
+  jobs:
+    kube:
+      # Kubernetes job settings
+      namespace: ""  # Use release namespace if empty
+      serviceAccount: ""  # Use global service account if empty
+      # Job scheduling
+      scheduling:
+        # Node selectors for different job types
+        spec:
+          nodeSelectors: {}
+        check:
+          nodeSelectors: {}
+        discover:
+          nodeSelectors: {}
+      # Job resources
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+        requests:
+          cpu: 500m
+          memory: 512Mi
+      # Job timeouts
+      timeouts:
+        spec: 300s
+        check: 600s
+        discover: 900s
+      # Image pull settings
+      mainContainerImagePullPolicy: IfNotPresent
+      sidecarContainerImagePullPolicy: IfNotPresent
+      # Container images
+      images:
+        socat: "alpine/socat:latest"
+        busybox: "busybox:latest"
+        curl: "curlimages/curl:latest"
+
+  # Workload configuration - Main application workloads
+  workloads:
+    resources:
+      mainContainer:
+        cpu:
+          request: 500m
+          limit: 1000m
+        memory:
+          request: 512Mi
+          limit: 1Gi
+      sidecarContainer:
+        cpu:
+          request: 100m
+          limit: 200m
+        memory:
+          request: 128Mi
+          limit: 256Mi
+
+  # Service mesh configuration
+  serviceMesh:
+    enabled: false
+    type: "istio"  # istio, linkerd
+
+  # Monitoring configuration
+  monitoring:
+    # Prometheus metrics
+    prometheus:
+      enabled: true
+      port: 9090
+      path: "/metrics"
+    # Health checks
+    health:
+      enabled: true
+      port: 8080
+      path: "/health"
+
+  # Security configuration
+  security:
+    # Pod security context
+    podSecurityContext:
+      fsGroup: 1000
+      runAsUser: 1000
+      runAsNonRoot: true
+    # Container security context
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
+
+  # Extra labels to add to all resources
+  extraLabels: {}
+  # team: platform
+  # environment: production
+
+  # Extra selector labels for pods
+  extraSelectorLabels: {}
 
 # Backend API Service
 backend:
   enabled: true
   replicaCount: 1
+
   image:
-    repository: agentarea/agentarea-backend
+    repository: agentarea/agentarea-api
     tag: "latest"
+    pullPolicy: ""  # Overrides global.image.pullPolicy if set
+
   service:
     type: ClusterIP
     port: 8000
+    annotations: {}
+    labels: {}
+
+  # Resource limits and requests
   resources: {}
-  # Extra environment variables
+  #   limits:
+  #     cpu: 1000m
+  #     memory: 1Gi
+  #   requests:
+  #     cpu: 500m
+  #     memory: 512Mi
+
+  # Enhanced health check configuration
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # Pod scheduling
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Pod annotations and labels
+  podAnnotations: {}
+  podLabels: {}
+
+  # Additional configuration
+  extraEnvFrom: []
+  # - configMapRef:
+  #     name: custom-config
+
+  extraInitContainers: []
+  # - name: init
+  #   image: busybox:latest
+  #   command: ['sh', '-c', 'echo initializing']
+
+  # Security context
+  podSecurityContext: {}
+  #   fsGroup: 1000
+  #   runAsUser: 1000
+  #   runAsNonRoot: true
+
+  containerSecurityContext: {}
+  #   allowPrivilegeEscalation: false
+  #   readOnlyRootFilesystem: true
+  #   runAsNonRoot: true
+  #   capabilities:
+  #     drop:
+  #       - ALL
+
+  # Extension points
   extraEnv: []
+
+  # Dependency wait initContainers (disable for production)
+  waitForDependencies: false
   # - name: CUSTOM_VAR
   #   value: "custom-value"
 
@@ -73,11 +320,44 @@ frontend:
   image:
     repository: agentarea/agentarea-frontend
     tag: "latest"
+    pullPolicy: ""  # Overrides global.image.pullPolicy if set
   service:
     type: ClusterIP
     port: 3000
+    annotations: {}
+    labels: {}
+  # Enhanced health checks
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 15
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  # Resource management
   resources: {}
+  #   limits:
+  #     cpu: 500m
+  #     memory: 512Mi
+  #   requests:
+  #     cpu: 250m
+  #     memory: 256Mi
+  # Pod configuration
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Additional configuration
   extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  extraContainers: []
 
 # Worker Service (Temporal worker)
 worker:
@@ -86,15 +366,36 @@ worker:
   image:
     repository: agentarea/agentarea-worker
     tag: "latest"
+    pullPolicy: ""  # Overrides global.image.pullPolicy if set
+  # Resource management
   resources: {}
+  #   limits:
+  #     cpu: 1000m
+  #     memory: 1Gi
+  #   requests:
+  #     cpu: 500m
+  #     memory: 512Mi
+  # Pod configuration
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Additional configuration
   extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  extraContainers: []
+
+  # Dependency wait initContainers (disable for production)
+  waitForDependencies: false
 
 # MCP Manager Service
 mcpManager:
   enabled: true
   replicaCount: 1
   image:
-    repository: agentarea/mcp-manager
+    repository: agentarea/agentarea-mcp-manager
     tag: "latest"
   service:
     type: ClusterIP
@@ -114,7 +415,7 @@ temporal:
   replicaCount: 1
   image:
     repository: temporalio/auto-setup
-    tag: "1.28"
+    tag: "1.29.1"
   service:
     type: ClusterIP
     port: 7233
@@ -156,10 +457,6 @@ postgresql:
     persistence:
       enabled: true
       size: 8Gi
-  # PostgreSQL init scripts to create additional databases
-  initdbScripts:
-    init_databases.sql: |
-      CREATE DATABASE IF NOT EXISTS temporal;
 
 # Bitnami Redis dependency configuration
 redis:
@@ -182,6 +479,9 @@ redis:
 # Bitnami MinIO dependency configuration
 minio:
   enabled: true
+  image:
+    repository: "minio/minio"
+    tag: "latest"
   auth:
     existingSecret: "agentarea-minio-secret"
   defaultBuckets: "agentarea-documents"
@@ -195,3 +495,12 @@ minio:
   persistence:
     enabled: true
     size: 10Gi
+
+# Job toggles
+jobs:
+  bootstrap:
+    enabled: false
+  dbMigration:
+    enabled: false
+  appMigration:
+    enabled: false

@@ -6,8 +6,16 @@ metadata:
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: worker
+    {{- with .Values.global.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   replicas: {{ .Values.worker.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
@@ -17,29 +25,113 @@ spec:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: worker
+        {{- with .Values.global.extraSelectorLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.worker.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
+        {{- with .Values.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.worker.waitForDependencies }}
+      initContainers:
+        # Wait for database to be ready
+        - name: wait-for-db
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.database.host" . }} {{ .Values.global.database.port }}; do
+                echo "Waiting for database..."
+                sleep 2
+              done
+              echo "Database is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+        # Wait for Redis to be ready
+        - name: wait-for-redis
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.redis.host" . }} {{ .Values.global.redis.port }}; do
+                echo "Waiting for Redis..."
+                sleep 2
+              done
+              echo "Redis is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+        # Wait for Temporal to be ready
+        - name: wait-for-temporal
+          image: {{ .Values.global.jobs.kube.images.busybox }}
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "agentarea.temporal.host" . }} {{ .Values.global.temporal.port }}; do
+                echo "Waiting for Temporal..."
+                sleep 2
+              done
+              echo "Temporal is ready!"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+      {{- end }}
       containers:
         - name: worker
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.security.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          envFrom:
+            # Import all configuration from centralized ConfigMap
+            - configMapRef:
+                name: {{ include "agentarea.fullname" . }}-env
           env:
-            # Database configuration
-            - name: POSTGRES_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: POSTGRES_HOST
-            - name: POSTGRES_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: POSTGRES_PORT
-            - name: POSTGRES_DB
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: POSTGRES_DB
+            # Database credentials
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
@@ -50,84 +142,62 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
+            # Computed Database URL (depends on other env vars)
             - name: DATABASE_URL
               value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
-            # Redis configuration
-            - name: REDIS_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: REDIS_HOST
-            - name: REDIS_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: REDIS_PORT
+            # Redis password
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.redis }}
                   key: redis-password
+            # Computed Redis URL (depends on other env vars)
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
-            # Temporal configuration
-            - name: WORKFLOW__USE_WORKFLOW_EXECUTION
+            # Application encryption key
+            - name: SECRET_MANAGER_ENCRYPTION_KEY
               valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: WORKFLOW__USE_WORKFLOW_EXECUTION
-            - name: WORKFLOW__WORKFLOW_ENGINE
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: WORKFLOW__WORKFLOW_ENGINE
-            - name: WORKFLOW__TEMPORAL_SERVER_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: WORKFLOW__TEMPORAL_SERVER_URL
-            - name: WORKFLOW__TEMPORAL_NAMESPACE
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: WORKFLOW__TEMPORAL_NAMESPACE
-            - name: WORKFLOW__TEMPORAL_TASK_QUEUE
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: WORKFLOW__TEMPORAL_TASK_QUEUE
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.application }}
+                  key: encryption-key
+            # Temporal worker configuration
             - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
+              value: {{ .Values.global.temporal.worker.maxConcurrentActivityExecutions | quote }}
             - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS
-            # Task configuration
-            - name: TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY
-            # Environment
-            - name: DEBUG
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: DEBUG
-            - name: ENVIRONMENT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "agentarea.fullname" . }}-worker-env
-                  key: ENVIRONMENT
+              value: {{ .Values.global.temporal.worker.maxConcurrentWorkflowTaskExecutions | quote }}
+            - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_SESSIONS
+              value: {{ .Values.global.temporal.worker.maxConcurrentSessionExecutions | quote }}
+            # Monitoring configuration
+            - name: METRICS_ENABLED
+              value: {{ .Values.global.monitoring.prometheus.enabled | quote }}
+            - name: HEALTH_CHECK_ENABLED
+              value: {{ .Values.global.monitoring.health.enabled | quote }}
             {{- if .Values.worker.extraEnv }}
+            # Extra environment variables from values
             {{- toYaml .Values.worker.extraEnv | nindent 12 }}
             {{- end }}
-          {{- with .Values.worker.resources }}
+          {{- if or .Values.worker.resources .Values.global.workloads.resources.mainContainer }}
           resources:
+            {{- if .Values.worker.resources }}
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+            {{- else }}
+            limits:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.limit }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.limit }}
+            requests:
+              cpu: {{ .Values.global.workloads.resources.mainContainer.cpu.request }}
+              memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.worker.extraVolumeMounts }}
+          volumeMounts:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- with .Values.worker.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.extraContainers }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
 {{- end }}

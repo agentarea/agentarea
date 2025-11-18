@@ -1,3 +1,4 @@
+{{- if .Values.jobs.appMigration.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -18,6 +19,25 @@ spec:
         app.kubernetes.io/component: migration
     spec:
       restartPolicy: Never
+      initContainers:
+        # Wait for PostgreSQL to be ready
+        - name: wait-for-postgres
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Release.Name }}-postgresql -p {{ .Values.global.database.port }} -U postgres; do
+                echo "Waiting for PostgreSQL to be ready..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.postgresql }}
+                  key: password
       containers:
         - name: migration
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
@@ -44,7 +64,7 @@ spec:
             - name: POSTGRES_PORT
               value: "{{ .Values.global.database.port }}"
             - name: POSTGRES_DB
-              value: "{{ .Values.global.database.database }}"
+              value: "{{ .Values.global.database.name }}"
 
             # S3/MinIO configuration (required even for migrations)
             - name: AWS_ACCESS_KEY_ID
@@ -63,3 +83,4 @@ spec:
               value: "{{ .Values.global.storage.bucket }}"
             - name: AWS_ENDPOINT_URL
               value: "http://{{ .Release.Name }}-minio:9000"
+{{- end }}
