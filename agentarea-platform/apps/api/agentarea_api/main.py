@@ -10,18 +10,103 @@ from pathlib import Path
 from agentarea_common.di.container import get_container, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
 from agentarea_api.api.events import events_router
-from agentarea_api.api.v1.mcp import mcp_app
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
+from fastapi_mcp import AuthConfig, FastApiMCP
 
 logger = logging.getLogger(__name__)
 container = get_container()
+
+# Cache auth provider to avoid recreating it on every request
+_mcp_auth_provider = None
+
+
+def _get_mcp_auth_provider():
+    """Get or create the MCP auth provider (cached singleton).
+
+    This avoids recreating the provider and decoding JWKS on every request.
+    """
+    global _mcp_auth_provider
+
+    if _mcp_auth_provider is not None:
+        return _mcp_auth_provider
+
+    from agentarea_common.auth.providers.factory import AuthProviderFactory
+    from agentarea_common.config.app import get_app_settings
+
+    settings = get_app_settings()
+    _mcp_auth_provider = AuthProviderFactory.create_provider(
+        "kratos",
+        config={
+            "jwks_b64": settings.KRATOS_JWKS_B64,
+            "issuer": settings.KRATOS_ISSUER,
+            "audience": settings.KRATOS_AUDIENCE,
+        },
+    )
+
+    logger.info("MCP auth provider initialized (cached for performance)")
+    return _mcp_auth_provider
+
+
+async def verify_mcp_auth(request: Request) -> None:
+    """Verify MCP authentication via JWT Bearer token.
+
+    Validates JWT tokens using the cached auth provider (e.g., Kratos).
+    Requires Authorization header with format: 'Bearer <jwt_token>'
+
+    Args:
+        request: FastAPI request object
+
+    Raises:
+        HTTPException: If authentication fails (missing token, invalid token, etc.)
+    """
+    auth_header = request.headers.get("Authorization", "")
+
+    # Check for Bearer token
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid Authorization header. Expected: 'Bearer <token>'",
+        )
+
+    token = auth_header[7:]  # Remove "Bearer " prefix
+
+    try:
+        # Get cached auth provider (avoids recreating on every request)
+        auth_provider = _get_mcp_auth_provider()
+
+        # Verify the JWT token
+        auth_result = await auth_provider.verify_token(token)
+
+        if not auth_result.is_authenticated or not auth_result.token:
+            logger.warning(f"MCP JWT validation failed: {auth_result.error}")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired authentication token",
+            )
+
+        # Token is valid - add user info to request state for downstream use
+        request.state.user_id = auth_result.token.user_id
+        if auth_result.token.claims:
+            request.state.workspace_id = auth_result.token.claims.get("workspace_id")
+
+        logger.debug(f"MCP authentication successful for user: {auth_result.token.user_id}")
+
+    except HTTPException:
+        # Re-raise HTTPException as-is
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during MCP JWT validation: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication validation failed",
+        ) from e
 
 
 async def initialize_services():
@@ -111,11 +196,10 @@ async def app_lifespan(app: FastAPI):
 
 @asynccontextmanager
 async def combined_lifespan(app: FastAPI):
-    """Combined lifespan for app and MCP server."""
-    # Run both lifespans - app first, then MCP
+    """Combined lifespan for app and FastAPI-MCP server."""
+    # Run app lifespan - FastAPI-MCP is integrated directly
     async with app_lifespan(app):
-        async with mcp_app.lifespan(app):
-            yield
+        yield
 
 
 # Security schemes for OpenAPI documentation
@@ -158,12 +242,23 @@ def create_app() -> FastAPI:
     static_path = Path(__file__).parent / "static"
 
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
-    app.mount("/llm", mcp_app)
 
     # Add routers - PUBLIC routes first (no auth), then PROTECTED routes (auth required)
     app.include_router(events_router, prefix="/events", tags=["events"])
-    app.include_router(public_v1_router, tags=["v1", "public"])
-    app.include_router(protected_v1_router, tags=["v1", "protected"])
+    app.include_router(public_v1_router, tags=["v1"])
+    app.include_router(protected_v1_router, tags=["v1"])
+
+    mcp_server = FastApiMCP(
+        app,
+        auth_config=AuthConfig(
+            dependencies=[Depends(verify_mcp_auth)],
+        ),
+    )
+    # Mount HTTP MCP server at /mcp endpoint
+    # Accepts JSON-RPC 2.0 requests with streamable-http transport
+    mcp_server.mount_http()
+
+    logger.info("FastAPI-MCP server mounted at /mcp with authentication enabled")
 
     # Register workspace error handlers
     register_workspace_error_handlers(app)

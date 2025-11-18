@@ -6,6 +6,7 @@ services:
     ports:
       - "8000:8000"
     restart: always
+    pull_policy: always
     environment:
       # S3 settings
       - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
@@ -53,6 +54,7 @@ services:
 
   app_migrations:
     image: agentarea/agentarea-api:${VERSION:-latest}
+    pull_policy: always
     environment:
       ## Have to add it for now
       # S3 settings
@@ -78,6 +80,7 @@ services:
   # Bootstrap Database Creation - creates all required databases
   bootstrap_db:
     image: agentarea/agentarea-bootstrap:${VERSION:-latest}
+    pull_policy: always
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -95,6 +98,7 @@ services:
   # Bootstrap Application Setup - runs after migrations
   bootstrap:
     image: agentarea/agentarea-bootstrap:${VERSION:-latest}
+    pull_policy: always
     volumes:
       - ./data:/app/llm
     environment:
@@ -130,6 +134,7 @@ services:
     ports:
       - "3000:3000"
     restart: always
+    pull_policy: always
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
@@ -198,6 +203,7 @@ services:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
     container_name: agentarea-mcp-manager
     restart: unless-stopped
+    pull_policy: always
     privileged: true
     ports:
       - "7999:80" # Traefik proxy (unified entry point)
@@ -229,7 +235,7 @@ services:
 
   # Temporal Infrastructure Services
   temporal:
-    image: temporalio/auto-setup:1.28
+    image: temporalio/auto-setup:1.29.1
     container_name: agentarea-temporal
     restart: unless-stopped
     depends_on:
@@ -265,7 +271,7 @@ services:
       start_period: 120s
 
   temporal-admin-tools:
-    image: temporalio/admin-tools:1.28
+    image: temporalio/admin-tools:1.29.1
     container_name: agentarea-temporal-admin-tools
     depends_on:
       - temporal
@@ -292,6 +298,7 @@ services:
 
   # AgentArea Worker Service
   agentarea-worker:
+    pull_policy: always
     image: agentarea/agentarea-worker:${VERSION:-latest}
     container_name: agentarea-worker
     depends_on:

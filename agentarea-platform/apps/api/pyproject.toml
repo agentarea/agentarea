@@ -25,6 +25,7 @@ dependencies = [
     "click>=8.1.8",
     "pyjwt>=2.8.0",
     "fastmcp>=2.11.0",
+    "fastapi-mcp>=0.4.0",
 ]
 
 [tool.uv.sources]

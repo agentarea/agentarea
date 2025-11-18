@@ -56,10 +56,38 @@ def migrate():
             connection.execute(text("SELECT 1"))
         click.echo("✅ Database connection successful")
 
-        # Run migrations
+        # Determine current revision and handle pre-existing schema gracefully
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+        from sqlalchemy import inspect
+
         alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        click.echo("✅ Migrations completed successfully")
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_rev = script.get_current_head()
+
+        with engine.connect() as connection:
+            context = MigrationContext.configure(connection)
+            current = context.get_current_revision()
+
+            if current is None:
+                inspector = inspect(connection)
+                existing_tables = set(inspector.get_table_names())
+
+                # If schema already exists (e.g., tables created by bootstrap), stamp head
+                if existing_tables:
+                    click.echo(
+                        "⚠️  No Alembic revision found but tables exist. Stamping head without applying migrations."
+                    )
+                    command.stamp(alembic_cfg, head_rev)
+                    click.echo("✅ Stamped database to head revision")
+                else:
+                    click.echo("ℹ️  Empty database detected. Applying migrations to head...")
+                    command.upgrade(alembic_cfg, "head")
+                    click.echo("✅ Migrations applied to head")
+            else:
+                # Normal path: apply outstanding migrations
+                command.upgrade(alembic_cfg, "head")
+                click.echo("✅ Migrations completed successfully")
 
     except Exception as e:
         click.echo(f"❌ Migration failed: {e}")

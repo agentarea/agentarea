@@ -3,8 +3,9 @@ FROM python:3.12-slim as builder
 
 WORKDIR /app
 
-# Install uv
-RUN pip install uv
+# Install uv via official installer
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && ln -sf /root/.local/bin/uv /usr/local/bin/uv
 
 # Copy workspace configuration and source
 COPY pyproject.toml uv.lock ./

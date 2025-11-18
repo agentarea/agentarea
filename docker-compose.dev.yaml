@@ -168,8 +168,6 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=postgres  # Use default postgres DB, bootstrap will create all others
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -189,8 +187,6 @@ services:
     restart: always
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
-    ports:
-      - 6379:6379
     volumes:
       - redis_data:/data
     networks:
@@ -241,7 +237,7 @@ services:
 
   # Temporal Infrastructure Services
   temporal:
-    image: temporalio/auto-setup:1.28
+    image: temporalio/auto-setup:1.29.1
     container_name: agentarea-temporal
     restart: unless-stopped
     depends_on:
@@ -277,7 +273,7 @@ services:
       start_period: 120s
 
   temporal-admin-tools:
-    image: temporalio/admin-tools:1.28
+    image: temporalio/admin-tools:1.29.1
     container_name: agentarea-temporal-admin-tools
     depends_on:
       - temporal
