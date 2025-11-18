@@ -71,6 +71,11 @@ export function CreateInstanceDialog({
 
   const createInstance = useCallback(
     async (skipValidation = false) => {
+      if (!mcpServer) {
+        toast.error("MCP server is not selected");
+        return;
+      }
+
       if (!skipValidation && !validationResult?.valid) {
         toast.error(
           'Configuration validation failed. Use "Force Create" to proceed.'
