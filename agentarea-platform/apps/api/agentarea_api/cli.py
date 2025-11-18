@@ -81,7 +81,7 @@ def migrate():
                     command.stamp(alembic_cfg, head_rev)
                     click.echo("✅ Stamped database to head revision")
                 else:
-                    click.echo("ℹ️  Empty database detected. Applying migrations to head...")
+                    click.echo("Empty database detected. Applying migrations to head...")
                     command.upgrade(alembic_cfg, "head")
                     click.echo("✅ Migrations applied to head")
             else:
