@@ -1,5 +1,4 @@
 import { useTranslations } from "next-intl";
-import { AnimatePresence, motion } from "framer-motion";
 import { Key, Link, Settings } from "lucide-react";
 import { Control, Controller, FieldErrors } from "react-hook-form";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -21,15 +20,9 @@ export default function BaseInfo({
 }: BaseInfoProps) {
   const t = useTranslations("ProviderConfigForm");
   return (
-    <AnimatePresence>
+    <>
       {providerSpecId && (
-        <motion.div
-          initial={{ height: 0, opacity: 0, overflow: "hidden" }}
-          animate={{ height: "auto", opacity: 1, overflow: "visible" }}
-          exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          className="form-content"
-        >
+        <div className="form-content">
           <div className="space-y-2">
             <FormLabel htmlFor="name" icon={Settings} required>
               {t("configurationName")}
@@ -105,8 +98,8 @@ export default function BaseInfo({
               </p>
             )}
           </div>
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }

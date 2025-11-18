@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, Bot, Server } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -504,21 +503,12 @@ export default function ProviderConfigForm({
       }}
       className={cn("form-content", className)}
     >
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, height: 0, scale: 0.95 }}
-            animate={{ opacity: 1, height: "auto", scale: 1 }}
-            exit={{ opacity: 0, height: 0, scale: 0.95 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       <div className="mx-auto max-w-4xl">
         <div
           className={cn(
@@ -575,34 +565,20 @@ export default function ProviderConfigForm({
           />
 
           {selectedProvider && showModelSelection && (
-            <AnimatePresence>
-              <motion.div
-                key="model-instances"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{
-                  height: { duration: 0.3, ease: "easeOut" },
-                  opacity: { duration: 0.2, ease: "easeOut" },
-                }}
-                style={{ overflow: "hidden" }}
-              >
-                <ModelInstances
-                  selectedProvider={selectedProvider}
-                  availableModels={availableModels}
-                  selectedModels={selectedModels}
-                  setSelectedModels={setSelectedModels}
-                  isEdit={isEdit}
-                  providerConfigId={
-                    createdProviderConfigId ||
-                    (isEdit && initialData ? initialData.id : undefined)
-                  }
-                  canTest={
-                    !!createdProviderConfigId || (isEdit && !!initialData)
-                  }
-                />
-              </motion.div>
-            </AnimatePresence>
+            <ModelInstances
+              selectedProvider={selectedProvider}
+              availableModels={availableModels}
+              selectedModels={selectedModels}
+              setSelectedModels={setSelectedModels}
+              isEdit={isEdit}
+              providerConfigId={
+                createdProviderConfigId ||
+                (isEdit && initialData ? initialData.id : undefined)
+              }
+              canTest={
+                !!createdProviderConfigId || (isEdit && !!initialData)
+              }
+            />
           )}
         </div>
       </div>
