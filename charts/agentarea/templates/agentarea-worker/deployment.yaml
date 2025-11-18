@@ -120,60 +120,35 @@ spec:
       {{- end }}
       containers:
         - name: worker
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.worker.image.repository }}:{{ default .Chart.AppVersion .Values.worker.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          envFrom:
-            # Import all configuration from centralized ConfigMap
-            - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-env
           env:
-            # Database credentials
-            - name: POSTGRES_USER
+            {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.envs" . | nindent 12 }}
+            {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.temporal.envs" . | nindent 12 }}
+            {{- include "agentarea.worker.envs" . | nindent 12 }}
+            {{- if or .Values.worker.envVars .Values.global.envVars }}
+            {{- range $k, $v := mergeOverwrite .Values.worker.envVars .Values.global.envVars }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.worker.secrets }}
+            {{- $secretName := ( .Values.worker.secretsName | default (printf "%s-worker-secrets" .Release.Name) ) }}
+            {{- range $k, $v := .Values.worker.secrets }}
+            - name: {{ $k }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: password
-            # Computed Database URL (depends on other env vars)
-            - name: DATABASE_URL
-              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
-            # Redis password
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.redis }}
-                  key: redis-password
-            # Computed Redis URL (depends on other env vars)
-            - name: REDIS_URL
-              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
-            # Application encryption key
-            - name: SECRET_MANAGER_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.application }}
-                  key: encryption-key
-            # Temporal worker configuration
-            - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
-              value: {{ .Values.global.temporal.worker.maxConcurrentActivityExecutions | quote }}
-            - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS
-              value: {{ .Values.global.temporal.worker.maxConcurrentWorkflowTaskExecutions | quote }}
-            - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_SESSIONS
-              value: {{ .Values.global.temporal.worker.maxConcurrentSessionExecutions | quote }}
-            # Monitoring configuration
-            - name: METRICS_ENABLED
-              value: {{ .Values.global.monitoring.prometheus.enabled | quote }}
-            - name: HEALTH_CHECK_ENABLED
-              value: {{ .Values.global.monitoring.health.enabled | quote }}
+                  name: {{ $secretName }}
+                  key: {{ $k }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.worker.extraEnv }}
-            # Extra environment variables from values
             {{- toYaml .Values.worker.extraEnv | nindent 12 }}
             {{- end }}
           {{- if or .Values.worker.resources .Values.global.workloads.resources.mainContainer }}

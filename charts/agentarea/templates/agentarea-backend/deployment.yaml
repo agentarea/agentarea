@@ -11,11 +11,6 @@ metadata:
     {{- end }}
 spec:
   replicas: {{ .Values.backend.replicaCount }}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
@@ -139,7 +134,7 @@ spec:
       {{- end }}
       containers:
         - name: backend
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
@@ -155,86 +150,38 @@ spec:
             - name: health
               containerPort: {{ .Values.global.monitoring.health.port }}
               protocol: TCP
-          envFrom:
-            # Import all configuration from centralized ConfigMap
-            - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-env
           env:
-            # Database credentials
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: password
-            # Redis password
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.redis }}
-                  key: redis-password
-            # Computed Redis URL (depends on other env vars)
-            - name: REDIS_URL
-              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
-            # MinIO/S3 credentials
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
-                  key: root-user
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
-                  key: root-password
-            # Application encryption key
-            - name: SECRET_MANAGER_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.application }}
-                  key: encryption-key
-            # API configuration
-            - name: API_HOST
-              value: {{ .Values.global.api.host }}
-            - name: API_PORT
-              value: {{ .Values.global.api.port | quote }}
-            - name: API_AUTH_ENABLED
-              value: {{ .Values.global.api.auth.enabled | quote }}
-            {{- if .Values.global.api.auth.enabled }}
-            - name: API_AUTH_HEADER_NAME
-              value: {{ .Values.global.api.auth.headerName }}
-            - name: API_AUTH_HEADER_VALUE
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.application }}
-                  key: api-auth-header-value
+            {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.envs" . | nindent 12 }}
+            {{- include "agentarea.storage.envs" . | nindent 12 }}
+            {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.temporal.envs" . | nindent 12 }}
+            {{- include "agentarea.backend.envs" . | nindent 12 }}
+            {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}
+            {{- if or .Values.backend.envVars .Values.global.envVars }}
+            {{- range $k, $v := mergeOverwrite .Values.backend.envVars .Values.global.envVars }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
             {{- end }}
-            # Rate limiting
-            - name: API_RATE_LIMIT_ENABLED
-              value: {{ .Values.global.api.rateLimit.enabled | quote }}
-            - name: API_RATE_LIMIT_REQUESTS_PER_MINUTE
-              value: {{ .Values.global.api.rateLimit.requestsPerMinute | quote }}
-            # Monitoring configuration
-            - name: METRICS_ENABLED
-              value: {{ .Values.global.monitoring.prometheus.enabled | quote }}
-            - name: METRICS_PORT
-              value: {{ .Values.global.monitoring.prometheus.port | quote }}
-            - name: HEALTH_CHECK_ENABLED
-              value: {{ .Values.global.monitoring.health.enabled | quote }}
-            - name: HEALTH_CHECK_PORT
-              value: {{ .Values.global.monitoring.health.port | quote }}
+            {{- end }}
+            {{- if .Values.backend.secrets }}
+            {{- $secretName := ( .Values.backend.secretsName | default (printf "%s-backend-secrets" .Release.Name) ) }}
+            {{- range $k, $v := .Values.backend.secrets }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $k }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.backend.extraEnv }}
-            # Extra environment variables from values
             {{- toYaml .Values.backend.extraEnv | nindent 12 }}
             {{- end }}
           livenessProbe:
             httpGet:
               path: {{ .Values.global.monitoring.health.path }}
-              port: health
+              port: {{ .Values.global.api.port }}
             initialDelaySeconds: {{ .Values.backend.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.backend.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.backend.livenessProbe.timeoutSeconds }}
@@ -243,7 +190,7 @@ spec:
           readinessProbe:
             httpGet:
               path: {{ .Values.global.monitoring.health.path }}
-              port: health
+              port: {{ .Values.global.api.port }}
             initialDelaySeconds: {{ .Values.backend.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.backend.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.backend.readinessProbe.timeoutSeconds }}
@@ -252,7 +199,7 @@ spec:
           startupProbe:
             httpGet:
               path: {{ .Values.global.monitoring.health.path }}
-              port: health
+              port: {{ .Values.global.api.port }}
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 3

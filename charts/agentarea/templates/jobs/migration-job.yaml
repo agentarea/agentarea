@@ -40,7 +40,7 @@ spec:
                   key: password
       containers:
         - name: migration
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           command:
             - python
@@ -48,39 +48,7 @@ spec:
             - agentarea_api.cli
             - migrate
           env:
-            # Database configuration
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: password
-            - name: POSTGRES_HOST
-              value: "{{ .Release.Name }}-postgresql"
-            - name: POSTGRES_PORT
-              value: "{{ .Values.global.database.port }}"
-            - name: POSTGRES_DB
-              value: "{{ .Values.global.database.name }}"
-
-            # S3/MinIO configuration (required even for migrations)
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
-                  key: root-user
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.minio }}
-                  key: root-password
-            - name: AWS_REGION
-              value: "{{ .Values.global.storage.region }}"
-            - name: S3_BUCKET_NAME
-              value: "{{ .Values.global.storage.bucket }}"
-            - name: AWS_ENDPOINT_URL
-              value: "http://{{ .Release.Name }}-minio:9000"
+            {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.storage.envs" . | nindent 12 }}
+            {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
 {{- end }}

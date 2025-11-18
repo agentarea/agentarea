@@ -56,4 +56,4 @@ Check specific component:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📚 Documentation: https://github.com/yourusername/agentarea
+📚 Documentation: https://github.com/agentarea/agentarea

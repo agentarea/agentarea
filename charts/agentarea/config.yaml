@@ -1,0 +1,141 @@
+groups:
+  database:
+    configVars:
+      POSTGRES_HOST: '{{ .Release.Name }}-postgresql'
+      POSTGRES_PORT: '{{ .Values.global.database.port }}'
+      POSTGRES_DB: '{{ .Values.global.database.name }}'
+    secrets:
+      - name: POSTGRES_USER
+        secretName: "{{ .Values.global.secrets.postgresql }}"
+        key: "username"
+      - name: POSTGRES_PASSWORD
+        secretName: "{{ .Values.global.secrets.postgresql }}"
+        key: "password"
+    envExtras:
+      - name: DATABASE_URL
+        value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+
+  redis:
+    configVars:
+      REDIS_HOST: '{{ .Release.Name }}-redis-master'
+      REDIS_PORT: '{{ .Values.global.redis.port }}'
+    secrets:
+      - name: REDIS_PASSWORD
+        secretName: "{{ .Values.global.secrets.redis }}"
+        key: "redis-password"
+    envExtras:
+      - name: REDIS_URL
+        value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
+
+  storage:
+    configVars:
+      AWS_REGION: '{{ .Values.global.storage.region }}'
+      S3_BUCKET_NAME: '{{ .Values.global.storage.bucket }}'
+      AWS_ENDPOINT_URL: 'http://{{ .Release.Name }}-minio:9000'
+    secrets:
+      - name: AWS_ACCESS_KEY_ID
+        secretName: "{{ .Values.global.secrets.minio }}"
+        key: "root-user"
+      - name: AWS_SECRET_ACCESS_KEY
+        secretName: "{{ .Values.global.secrets.minio }}"
+        key: "root-password"
+
+  temporal:
+    configVars:
+      WORKFLOW__TEMPORAL_SERVER_URL: '{{ include "agentarea.fullname" . }}-temporal:{{ .Values.global.temporal.port }}'
+      WORKFLOW__TEMPORAL_NAMESPACE: '{{ .Values.global.temporal.namespace }}'
+      WORKFLOW__TEMPORAL_TASK_QUEUE: '{{ .Values.global.temporal.taskQueue }}'
+
+  temporalServer:
+    configVars:
+      DB: 'postgres12'
+      DB_PORT: '5432'
+      POSTGRES_SEEDS: '{{ .Release.Name }}-postgresql'
+      DBNAME: '{{ .Values.global.database.name }}'
+      BIND_ON_IP: '0.0.0.0'
+    secrets:
+      - name: POSTGRES_USER
+        secretName: "{{ .Values.global.secrets.postgresql }}"
+        key: "username"
+      - name: POSTGRES_PWD
+        secretName: "{{ .Values.global.secrets.postgresql }}"
+        key: "password"
+
+  frontend:
+    configVars:
+      PORT: '3000'
+      NODE_ENV: 'production'
+      API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
+      ORY_ADMIN_URL: 'http://ory-kratos-admin:4434'
+      ORY_SDK_URL: 'http://ory-kratos-public:4433'
+      NEXT_PUBLIC_ORY_SDK_URL: 'http://ory-kratos-public:4433'
+      METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
+      HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
+
+  backend:
+    configVars:
+      PORT: '8000'
+      LOG_LEVEL: 'info'
+      MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      MCP_CLIENT_TIMEOUT: '30'
+      API_HOST: '{{ .Values.global.api.host }}'
+      API_PORT: '{{ .Values.global.api.port }}'
+      API_AUTH_ENABLED: '{{ .Values.global.api.auth.enabled }}'
+      API_RATE_LIMIT_ENABLED: '{{ .Values.global.api.rateLimit.enabled }}'
+      API_RATE_LIMIT_REQUESTS_PER_MINUTE: '{{ .Values.global.api.rateLimit.requestsPerMinute }}'
+      METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
+      METRICS_PORT: '{{ .Values.global.monitoring.prometheus.port }}'
+      HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
+      HEALTH_CHECK_PORT: '{{ .Values.global.monitoring.health.port }}'
+    secrets:
+      - name: API_AUTH_HEADER_NAME
+        value: "{{ .Values.global.api.auth.headerName }}"
+      - name: API_AUTH_HEADER_VALUE
+        secretName: "{{ .Values.global.secrets.application }}"
+        key: "api-auth-header-value"
+
+  mcpManager:
+    configVars:
+      LOG_LEVEL: 'INFO'
+      CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
+      TRAEFIK_NETWORK: 'podman'
+      SERVER_HOST: '0.0.0.0'
+      SERVER_PORT: '80'
+      MCP_PROXY_HOST: 'http://{{ include "agentarea.fullname" . }}-mcp-manager'
+
+  temporalUi:
+    configVars:
+      TEMPORAL_ADDRESS: '{{ include "agentarea.fullname" . }}-temporal:7233'
+      TEMPORAL_CORS_ORIGINS: 'http://localhost:3000'
+
+  worker:
+    configVars:
+      WORKFLOW__USE_WORKFLOW_EXECUTION: 'true'
+      WORKFLOW__WORKFLOW_ENGINE: 'temporal'
+      WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES: '10'
+      WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS: '5'
+      TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY: 'true'
+      DEBUG: 'false'
+      ENVIRONMENT: 'production'
+
+  application:
+    secrets:
+      - name: SECRET_MANAGER_ENCRYPTION_KEY
+        secretName: '{{ .Values.global.secrets.application }}'
+        key: 'encryption-key'
+
+  databaseJobs:
+    configVars:
+      POSTGRES_HOST: '{{ .Release.Name }}-postgresql'
+      POSTGRES_PORT: '{{ .Values.global.database.port }}'
+      POSTGRES_DB: '{{ .Values.global.database.name }}'
+    secrets:
+      - name: POSTGRES_USER
+        secretName: '{{ .Values.global.secrets.postgresql }}'
+        key: 'username'
+      - name: POSTGRES_PASSWORD
+        secretName: '{{ .Values.global.secrets.postgresql }}'
+        key: 'password'
+    envExtras:
+      - name: DATABASE_URL
+        value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"

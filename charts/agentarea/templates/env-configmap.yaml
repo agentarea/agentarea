@@ -27,9 +27,6 @@ data:
   # Temporal server runtime configuration
   {{- include "agentarea.temporalServer.configVars" . | nindent 2 }}
 
-  # MCP Manager configuration (shared across backend and MCP manager)
-  {{- include "agentarea.mcpManager.configVars" . | nindent 2 }}
-
   # Backend-specific configuration
   {{- if .Values.backend.enabled }}
   {{- include "agentarea.backend.configVars" . | nindent 2 }}
@@ -52,10 +49,5 @@ data:
 
   # MCP Manager-specific configuration
   {{- if .Values.mcpManager.enabled }}
-  {{- include "agentarea.mcpManagerOnly.configVars" . | nindent 2 }}
-  {{- end }}
-
-  # Additional config fragments loaded from files
-  {{- range $path, $bytes := .Files.Glob "configs/env.d/*.{yaml,yml}" }}
-  {{ $bytes | toString | nindent 2 }}
+  {{- include "agentarea.mcpManager.configVars" . | nindent 2 }}
   {{- end }}

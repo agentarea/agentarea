@@ -21,28 +21,33 @@ spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
       containers:
         - name: temporal
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporal.image.repository }}:{{ .Values.temporal.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporal.image.repository }}:{{ default .Chart.AppVersion .Values.temporal.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           ports:
             - name: temporal
               containerPort: 7233
               protocol: TCP
-          envFrom:
-            - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-env
           env:
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: username
-            - name: POSTGRES_PWD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: password
+            {{- include "agentarea.temporalServer.envs" . | nindent 12 }}
+            {{- include "agentarea.temporalServer.secrets.envs" . | nindent 12 }}
             - name: DYNAMIC_CONFIG_FILE_PATH
               value: "/etc/temporal/config/dynamicconfig/development-sql.yaml"
+            {{- if or .Values.temporal.envVars .Values.global.envVars }}
+            {{- range $k, $v := mergeOverwrite .Values.temporal.envVars .Values.global.envVars }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.temporal.secrets }}
+            {{- $secretName := ( .Values.temporal.secretsName | default (printf "%s-temporal-secrets" .Release.Name) ) }}
+            {{- range $k, $v := .Values.temporal.secrets }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $k }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.temporal.extraEnv }}
             {{- toYaml .Values.temporal.extraEnv | nindent 12 }}
             {{- end }}
@@ -95,19 +100,33 @@ spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
       containers:
         - name: temporal-ui
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporalUi.image.repository }}:{{ .Values.temporalUi.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporalUi.image.repository }}:{{ default .Chart.AppVersion .Values.temporalUi.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-          envFrom:
-            - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-env
-          {{- if .Values.temporalUi.extraEnv }}
           env:
+            {{- include "agentarea.temporalUi.envs" . | nindent 12 }}
+            {{- if or .Values.temporalUi.envVars .Values.global.envVars }}
+            {{- range $k, $v := mergeOverwrite .Values.temporalUi.envVars .Values.global.envVars }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.temporalUi.secrets }}
+            {{- $secretName := ( .Values.temporalUi.secretsName | default (printf "%s-temporal-ui-secrets" .Release.Name) ) }}
+            {{- range $k, $v := .Values.temporalUi.secrets }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $k }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.temporalUi.extraEnv }}
             {{- toYaml .Values.temporalUi.extraEnv | nindent 12 }}
-          {{- end }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /

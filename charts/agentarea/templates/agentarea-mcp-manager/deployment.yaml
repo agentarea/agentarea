@@ -21,7 +21,7 @@ spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
       containers:
         - name: mcp-manager
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.mcpManager.image.repository }}:{{ .Values.mcpManager.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.mcpManager.image.repository }}:{{ default .Chart.AppVersion .Values.mcpManager.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.mcpManager.securityContext }}
           securityContext:
@@ -31,37 +31,28 @@ spec:
             - name: http
               containerPort: 80
               protocol: TCP
-          envFrom:
-            # Import all configuration from centralized ConfigMap
-            - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-env
           env:
-            - name: POSTGRES_USER
+            {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.envs" . | nindent 12 }}
+            {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
+            {{- if or .Values.mcpManager.envVars .Values.global.envVars }}
+            {{- range $k, $v := mergeOverwrite .Values.mcpManager.envVars .Values.global.envVars }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.mcpManager.secrets }}
+            {{- $secretName := ( .Values.mcpManager.secretsName | default (printf "%s-mcp-manager-secrets" .Release.Name) ) }}
+            {{- range $k, $v := .Values.mcpManager.secrets }}
+            - name: {{ $k }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: password
-            # Redis password
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.redis }}
-                  key: redis-password
-            # Computed Redis URL (depends on other env vars)
-            - name: REDIS_URL
-              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
-            - name: SECRET_MANAGER_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.application }}
-                  key: encryption-key
+                  name: {{ $secretName }}
+                  key: {{ $k }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.mcpManager.extraEnv }}
-            # Extra environment variables from values
             {{- toYaml .Values.mcpManager.extraEnv | nindent 12 }}
             {{- end }}
           {{- with .Values.mcpManager.resources }}

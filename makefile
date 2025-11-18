@@ -1,6 +1,6 @@
 .PHONY: help dev build up down restart down-clean \
 	frontend-dev docs-dev agentarea-platform-api agentarea-platform-worker agentarea-platform-test agentarea-platform-lint \
-	k8s-setup k8s-test k8s-build-images helm-test \
+	k8s-setup k8s-test k8s-build-images helm-test helm-gen \
 	mcp-start mcp-stop mcp-test \
 	test-e2e test-mcp cleanup-validation \
 	lint-go build-go
@@ -96,6 +96,9 @@ k8s-test: helm-test ## Run Kubernetes tests (alias for helm-test)
 
 helm-test: ## Test Helm chart installation
 	@bash scripts/test-chart.sh
+
+helm-gen: ## Generate per-group env tpl files from config.yaml
+	python3 scripts/generate_env_tpls.py
 
 ##@ MCP Infrastructure
 

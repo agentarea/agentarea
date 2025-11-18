@@ -37,22 +37,25 @@ type EventPublisher struct {
 
 // NewEventPublisher creates a new event publisher
 func NewEventPublisher(redisURL string, logger *slog.Logger) *EventPublisher {
-	// Parse Redis URL to extract host:port
-	var addr string
-	if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
-		addr = cutAddr
-	} else {
-		addr = redisURL
-	}
+    var opts *redis.Options
+    if parsed, err := redis.ParseURL(redisURL); err == nil {
+        opts = parsed
+    } else {
+        var addr string
+        if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
+            addr = cutAddr
+        } else {
+            addr = redisURL
+        }
+        opts = &redis.Options{Addr: addr}
+    }
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr: addr,
-	})
+    rdb := redis.NewClient(opts)
 
-	return &EventPublisher{
-		redisClient: rdb,
-		logger:      logger,
-	}
+    return &EventPublisher{
+        redisClient: rdb,
+        logger:      logger,
+    }
 }
 
 // PublishStatusUpdate publishes a container status update event

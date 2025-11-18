@@ -205,7 +205,7 @@ global:
     # Health checks
     health:
       enabled: true
-      port: 8080
+      port: 8000
       path: "/health"
 
   # Security configuration

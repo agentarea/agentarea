@@ -56,6 +56,7 @@ spec:
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}agentarea/agentarea-bootstrap:latest"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           env:
+            {{- include "agentarea.databaseJobs.envs" . | nindent 12 }}
             # MinIO configuration
             - name: MINIO_ROOT_USER
               valueFrom:
@@ -69,24 +70,6 @@ spec:
                   key: root-password
             - name: MINIO_ENDPOINT
               value: "http://{{ .Release.Name }}-minio:9000"
-
-            # Database configuration
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.global.secrets.postgresql }}
-                  key: password
-            - name: POSTGRES_HOST
-              value: "{{ .Release.Name }}-postgresql"
-            - name: POSTGRES_PORT
-              value: "{{ .Values.global.database.port }}"
-            - name: DATABASE_URL
-              value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}"
 
             # Admin user configuration (can be overridden via extraEnv)
             - name: ADMIN_EMAIL

@@ -11,11 +11,6 @@ metadata:
     {{- end }}
 spec:
   replicas: {{ .Values.frontend.replicaCount }}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
@@ -60,7 +55,7 @@ spec:
       {{- end }}
       containers:
         - name: frontend
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.frontend.image.repository }}:{{ default .Chart.AppVersion .Values.frontend.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
@@ -70,24 +65,31 @@ spec:
             - name: http
               containerPort: {{ .Values.frontend.service.port }}
               protocol: TCP
-          envFrom:
-            # Import all configuration from centralized ConfigMap
-            - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-env
           env:
-            # Monitoring configuration
-            - name: METRICS_ENABLED
-              value: {{ .Values.global.monitoring.prometheus.enabled | quote }}
-            - name: HEALTH_CHECK_ENABLED
-              value: {{ .Values.global.monitoring.health.enabled | quote }}
+            {{- include "agentarea.frontend.envs" . | nindent 12 }}
+            {{- if or .Values.frontend.envVars .Values.global.envVars }}
+            {{- range $k, $v := mergeOverwrite .Values.frontend.envVars .Values.global.envVars }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.frontend.secrets }}
+            {{- $secretName := ( .Values.frontend.secretsName | default (printf "%s-frontend-secrets" .Release.Name) ) }}
+            {{- range $k, $v := .Values.frontend.secrets }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $k }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.frontend.extraEnv }}
-            # Extra environment variables from values
             {{- toYaml .Values.frontend.extraEnv | nindent 12 }}
             {{- end }}
           # Health checks
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: {{ .Values.frontend.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.frontend.livenessProbe.periodSeconds }}
@@ -96,7 +98,7 @@ spec:
             successThreshold: 1
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: {{ .Values.frontend.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.frontend.readinessProbe.periodSeconds }}
@@ -105,7 +107,7 @@ spec:
             successThreshold: 1
           startupProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: 10
             periodSeconds: 5

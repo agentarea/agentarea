@@ -1,14 +1,14 @@
 package events
 
 import (
-	"context"
-	"encoding/json"
-	"log/slog"
-	"strings"
+    "context"
+    "encoding/json"
+    "log/slog"
+    "strings"
 
-	"github.com/agentarea/mcp-manager/internal/models"
-	"github.com/agentarea/mcp-manager/internal/providers"
-	redis "github.com/go-redis/redis/v8"
+    "github.com/agentarea/mcp-manager/internal/models"
+    "github.com/agentarea/mcp-manager/internal/providers"
+    redis "github.com/go-redis/redis/v8"
 )
 
 // MCPServerInstanceCreated represents the event when an MCP instance is created
@@ -34,23 +34,26 @@ type EventSubscriber struct {
 
 // NewEventSubscriber creates a new event subscriber
 func NewEventSubscriber(redisURL string, providerManager *providers.ProviderManager, logger *slog.Logger) *EventSubscriber {
-	// Parse Redis URL to extract host:port
-	var addr string
-	if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
-		addr = cutAddr
-	} else {
-		addr = redisURL
-	}
+    var opts *redis.Options
+    if parsed, err := redis.ParseURL(redisURL); err == nil {
+        opts = parsed
+    } else {
+        var addr string
+        if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
+            addr = cutAddr
+        } else {
+            addr = redisURL
+        }
+        opts = &redis.Options{Addr: addr}
+    }
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr: addr,
-	})
+    rdb := redis.NewClient(opts)
 
-	return &EventSubscriber{
-		redisClient:     rdb,
-		providerManager: providerManager,
-		logger:          logger,
-	}
+    return &EventSubscriber{
+        redisClient:     rdb,
+        providerManager: providerManager,
+        logger:          logger,
+    }
 }
 
 // Start begins listening for events

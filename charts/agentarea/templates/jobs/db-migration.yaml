@@ -55,7 +55,7 @@ spec:
               memory: 64Mi
       containers:
         - name: migration
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:

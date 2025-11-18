@@ -1,0 +1,58 @@
+name: Release Helm Chart to GHCR
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.13.2
+
+      - name: Set chart version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "Using version: $VERSION"
+          sed -i -E "s/^version: .*/version: ${VERSION}/" charts/agentarea/Chart.yaml
+          sed -i -E "s/^appVersion: .*/appVersion: \"${VERSION}\"/" charts/agentarea/Chart.yaml
+          echo "Updated Chart.yaml:" && grep -E '^(version|appVersion):' charts/agentarea/Chart.yaml
+
+      - name: Lint chart
+        run: |
+          helm lint charts/agentarea
+
+      - name: Login to GHCR
+        run: |
+          helm registry login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Package chart
+        run: |
+          mkdir -p dist
+          helm package charts/agentarea --destination dist
+          ls -la dist
+
+      - name: Push chart to GHCR OCI
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          CHART_NAME=agentarea
+          CHART_TGZ=$(ls dist/${CHART_NAME}-*.tgz)
+          echo "Pushing $CHART_TGZ to ghcr.io/${OWNER}/${CHART_NAME}"
+          helm push "$CHART_TGZ" oci://ghcr.io/${OWNER}/${CHART_NAME}
