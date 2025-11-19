@@ -7,10 +7,8 @@ import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { env } from "@/env";
 import { useSSE } from "@/hooks/useSSE";
 import { cn } from "@/lib/utils";
-import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
 import { MessageComponentType, MessageRenderer } from "./MessageComponents";
@@ -39,6 +37,7 @@ interface FullChatProps {
     name: string;
     description?: string | null;
   };
+  startCentered?: boolean;
   taskId?: string;
   initialMessages?: ChatMessage[];
   onTaskCreated?: (taskId: string) => void;
@@ -51,6 +50,7 @@ interface FullChatProps {
 
 export default function FullChat({
   agent,
+  startCentered = false,
   placeholder,
   taskId,
   initialMessages = [],
@@ -71,7 +71,6 @@ export default function FullChat({
   const [hasUserMessages, setHasUserMessages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const currentAssistantMessageRef = useRef<MessageComponentType | null>(null);
   const onTaskCreatedRef = useRef(onTaskCreated);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -676,6 +675,8 @@ export default function FullChat({
         "mx-auto flex h-full w-full flex-col gap-0 overflow-hidden rounded-lg transition-all duration-700 ease-out",
         "transition-all duration-700 ease-out",
         "justify-between",
+        startCentered ? "justify-center" : "justify-between",
+        (startCentered && !hasUserMessages) ? "max-w-3xl mx-auto" : "",
         // hasUserMessages ? 'justify-between border bg-chatBackground' : 'justify-center')}>
         // className,
         // hasUserMessages
@@ -773,11 +774,10 @@ export default function FullChat({
         className={cn(
           "card mx-auto w-full cursor-auto bg-white hover:shadow-none dark:bg-zinc-900",
           "px-2 pb-2 pt-0",
-          // "transition-width transition-height duration-500 ease-out transition-border-none",
-          // hasUserMessages
-          //   ? "max-w-full rounded-t-none border-l-0 border-r-0"
-          //   : "w-full max-w-5xl"
+          "transition-[max-width] duration-700 ease-out",
+          (startCentered && !hasUserMessages) ? "max-w-3xl" : "",
         )}
+
       >
         <form
           onSubmit={sendMessage}
@@ -789,7 +789,7 @@ export default function FullChat({
             onChange={handleInputChange}
             placeholder={t("writeNewTaskFor", { agentName: agent.name })}
             disabled={isLoading}
-            className="min-h-auto h-auto resize-none border-none pb-0 pr-12 pt-3 duration-200"
+            className="min-h-auto h-auto resize-none border-none pb-0 pr-12 pt-3 transition-all duration-700 ease-out"
             rows={3}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
