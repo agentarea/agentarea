@@ -15,13 +15,14 @@ export interface Agent {
 
 interface UseMentionsOptions {
   textareaRef: React.RefObject<HTMLTextAreaElement | null> | React.RefObject<HTMLTextAreaElement>;
+  containerRef?: React.RefObject<HTMLDivElement | null> | React.RefObject<HTMLDivElement>;
   onMentionInsert?: (text: string, cursorPosition: number) => void;
 }
 
 interface UseMentionsReturn {
   showMentions: boolean;
   mentionQuery: string;
-  mentionPosition: { top: number; left: number };
+  mentionPosition: { top: number; left: number; width: number; side: 'top' | 'bottom' };
   filteredAgents: Agent[];
   selectedMentionIndex: number;
   mentionMenuRef: React.RefObject<HTMLDivElement>;
@@ -33,11 +34,12 @@ interface UseMentionsReturn {
 
 export function useMentions({
   textareaRef,
+  containerRef,
   onMentionInsert,
 }: UseMentionsOptions): UseMentionsReturn {
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
-  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0, width: 0, side: 'top' as const });
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const mentionMenuRef = useRef<HTMLDivElement>(null);
@@ -76,12 +78,30 @@ export function useMentions({
   // Filter agents based on query
   const filteredAgents = filterAgentsByQuery(agents, mentionQuery);
 
-  // Reset selected index when filtered agents change
+  // Reset selected index when filtered agents change - start with no selection
   useEffect(() => {
-    if (filteredAgents.length > 0) {
-      setSelectedMentionIndex(0);
-    }
+    setSelectedMentionIndex(-1);
   }, [filteredAgents.length, mentionQuery]);
+
+  // Recalculate position when menu content changes or menu is shown
+  useEffect(() => {
+    if (showMentions && filteredAgents.length > 0) {
+      const updatePosition = () => {
+        const container = containerRef?.current || textareaRef.current;
+        if (container) {
+          const position = calculateMentionPosition(container, mentionMenuRef.current);
+          setMentionPosition(position);
+        }
+      };
+      
+      // Use double requestAnimationFrame to ensure DOM is fully updated
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          updatePosition();
+        });
+      });
+    }
+  }, [showMentions, filteredAgents.length, mentionQuery, containerRef, textareaRef]);
 
   // Handle input change with mention detection
   const handleInputChange = useCallback(
@@ -94,8 +114,9 @@ export function useMentions({
         setMentionQuery(mentionPos.query);
         setShowMentions(true);
         setTimeout(() => {
-          if (textareaRef.current) {
-            const position = calculateMentionPosition(textareaRef.current);
+          const container = containerRef?.current || textareaRef.current;
+          if (container) {
+            const position = calculateMentionPosition(container, mentionMenuRef.current);
             setMentionPosition(position);
           }
         }, 0);
@@ -103,7 +124,7 @@ export function useMentions({
         setShowMentions(false);
       }
     },
-    [textareaRef]
+    [textareaRef, containerRef]
   );
 
   // Handle agent selection
@@ -150,23 +171,27 @@ export function useMentions({
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedMentionIndex((prev) =>
-          prev < filteredAgents.length - 1 ? prev + 1 : 0
-        );
+        setSelectedMentionIndex((prev) => {
+          if (prev === -1) return 0;
+          return prev < filteredAgents.length - 1 ? prev + 1 : 0;
+        });
         return true;
       }
 
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedMentionIndex((prev) =>
-          prev > 0 ? prev - 1 : filteredAgents.length - 1
-        );
+        setSelectedMentionIndex((prev) => {
+          if (prev === -1) return filteredAgents.length - 1;
+          return prev > 0 ? prev - 1 : filteredAgents.length - 1;
+        });
         return true;
       }
 
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        handleAgentSelect(filteredAgents[selectedMentionIndex]);
+        if (selectedMentionIndex >= 0 && selectedMentionIndex < filteredAgents.length) {
+          handleAgentSelect(filteredAgents[selectedMentionIndex]);
+        }
         return true;
       }
 

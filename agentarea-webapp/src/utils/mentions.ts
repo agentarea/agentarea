@@ -37,15 +37,40 @@ export function findMentionPosition(
 }
 
 /**
- * Calculate mention menu position relative to textarea
+ * Calculate mention menu position relative to container element
+ * Position menu above container (like Telegram), aligned to container width
  */
 export function calculateMentionPosition(
-  textarea: HTMLTextAreaElement
-): { top: number; left: number } {
-  const textareaRect = textarea.getBoundingClientRect();
-  const top = textareaRect.bottom + window.scrollY + 4;
-  const left = textareaRect.left + window.scrollX;
-  return { top, left };
+  container: HTMLElement,
+  menuElement?: HTMLElement | null
+): { top: number; left: number; width: number; side: 'top' | 'bottom' } {
+  const containerRect = container.getBoundingClientRect();
+  // Use actual menu height if available, otherwise use max height
+  const menuHeight = menuElement?.getBoundingClientRect().height || 192; // max-h-48 = 12rem = 192px
+  const spaceAbove = containerRect.top;
+  const spaceBelow = window.innerHeight - containerRect.bottom;
+  
+  // Prefer top, but use bottom if not enough space
+  const useTop = spaceAbove >= menuHeight || spaceAbove > spaceBelow;
+  
+  if (useTop) {
+    // Position menu directly above container - align exactly with container edges
+    // Menu should "grow" from container, so we align left and width exactly
+    // Bottom edge of menu should align with top edge of container (no gap)
+    // For fixed positioning, getBoundingClientRect() already returns viewport coordinates
+    const top = containerRect.top - menuHeight;
+    const left = containerRect.left;
+    const width = containerRect.width;
+    return { top, left, width, side: 'top' };
+  } else {
+    // Position menu below container if not enough space above
+    // Top edge of menu should align with bottom edge of container (no gap)
+    // For fixed positioning, getBoundingClientRect() already returns viewport coordinates
+    const top = containerRect.bottom;
+    const left = containerRect.left;
+    const width = containerRect.width;
+    return { top, left, width, side: 'bottom' };
+  }
 }
 
 /**

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
 import { MessageComponentType, MessageRenderer } from "./MessageComponents";
+import { MentionMenu } from "./MentionMenu";
 
 interface UserChatMessage {
   id: string;
@@ -72,6 +73,7 @@ export default function FullChat({
   const [hasUserMessages, setHasUserMessages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cardContainerRef = useRef<HTMLDivElement>(null);
 
   // Mention functionality
   const {
@@ -87,6 +89,7 @@ export default function FullChat({
     setShowMentions,
   } = useMentions({
     textareaRef,
+    containerRef: cardContainerRef,
     onMentionInsert: (newText, newCursorPosition) => {
       setInput(newText);
     },
@@ -812,9 +815,10 @@ export default function FullChat({
         </div>
       </div>
       <div
+        ref={cardContainerRef}
         className={cn(
           "card mx-auto w-full cursor-auto bg-white hover:shadow-none dark:bg-zinc-900",
-          "px-2 pb-2 pt-0",
+          "px-2 pb-2 pt-0 border-t",
           "transition-[max-width] duration-700 ease-out",
           (startCentered && !hasUserMessages) ? "max-w-3xl" : "",
         )}
@@ -886,46 +890,14 @@ export default function FullChat({
           </div>
         </form>
         {/* Mention menu */}
-        {showMentions && filteredAgents.length > 0 && (
-          <div
-            ref={mentionMenuRef}
-            className="fixed z-[100] mt-2 w-64 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
-            style={{
-              top: `${mentionPosition.top}px`,
-              left: `${mentionPosition.left}px`,
-            }}
-          >
-            <div className="max-h-64 overflow-y-auto p-1">
-              {filteredAgents.map((agent, index) => (
-                <button
-                  key={agent.id}
-                  type="button"
-                  onClick={() => handleAgentSelect(agent)}
-                  className={cn(
-                    "w-full flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors",
-                    "hover:bg-zinc-100 dark:hover:bg-zinc-700",
-                    index === selectedMentionIndex && "bg-zinc-100 dark:bg-zinc-700"
-                  )}
-                >
-                  {agent.avatar ? (
-                    <img
-                      src={agent.avatar}
-                      alt={agent.name}
-                      className="h-8 w-8 rounded-full"
-                    />
-                  ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-                      {agent.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <span className="text-sm text-zinc-900 dark:text-zinc-100">
-                    {agent.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <MentionMenu
+          show={showMentions}
+          agents={filteredAgents}
+          position={mentionPosition}
+          selectedIndex={selectedMentionIndex}
+          menuRef={mentionMenuRef}
+          onAgentSelect={handleAgentSelect}
+        />
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
