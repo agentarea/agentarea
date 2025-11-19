@@ -3,14 +3,9 @@
   "name": "AgentArea Platform",
   "theme": "maple",
   "colors": { 
-    "primary": "#3498db",
-    "primaryDark": "#2980b9"
+    "primary": "#3498db"
   },
-  "logo": {
-    "dark": "/logo-dark.png",
-    "light": "/logo-light.png"
-  },
-  "favicon": "/favicon.png",
+  
   "versions": ["v0.2"],
   "feedback": {
     "thumbsRating": true,
@@ -20,6 +15,7 @@
     "prompt": "Search AgentArea documentation..."
   },
   "navigation": {
+    "pages": [],
     "groups": [
       {
         "group": "Get Started",
@@ -110,6 +106,10 @@
           {
             "page": "security",
             "icon": "shield"
+          },
+          {
+            "page": "troubleshooting",
+            "icon": "help-circle"
           }
         ]
       },

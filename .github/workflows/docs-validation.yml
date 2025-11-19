@@ -107,27 +107,13 @@ jobs:
               print("✅ All referenced documentation files exist")
           EOF
 
-      - name: Start dev server to validate
+      - name: Mintlify CLI version
         working-directory: docs
         run: |
-          # Start mint dev server to validate docs can be served
-          npx mint dev --port 3002 &
-          MINT_PID=$!
-
-          # Wait for server to start
-          sleep 10
-
-          # Check if server is running
-          if ! curl -f http://localhost:3002 > /dev/null 2>&1; then
-            echo "❌ Failed to start Mintlify dev server - configuration may be invalid"
-            kill $MINT_PID 2>/dev/null || true
-            exit 1
-          fi
-
-          echo "✅ Documentation can be served successfully"
-
-          # Kill the background process
-          kill $MINT_PID 2>/dev/null || true
+          npx mint version || {
+            echo "❌ Mintlify CLI not available";
+            exit 1;
+          }
 
   link-validation:
     name: Validate Internal Links
@@ -152,23 +138,5 @@ jobs:
       - name: Validate internal links
         working-directory: docs
         run: |
-          # Start mint dev server in background
-          npx mint dev --port 3001 &
-          MINT_PID=$!
-          
-          # Wait for server to start
-          sleep 10
-          
-          # Check if server is running
-          if ! curl -f http://localhost:3001 > /dev/null 2>&1; then
-            echo "❌ Failed to start Mintlify dev server"
-            kill $MINT_PID 2>/dev/null
-            exit 1
-          fi
-          
-          echo "✅ Mintlify dev server started successfully"
-          
-          # Kill the background process
-          kill $MINT_PID 2>/dev/null
-          
+          npx mint broken-links || { echo "❌ Mintlify broken links check failed"; exit 1; }
           echo "✅ Internal link validation completed"

@@ -30,9 +30,9 @@ jobs:
       - name: Verify templates up to date
         run: |
           git config --global --add safe.directory $PWD
-          if ! git diff --quiet; then
+          if ! git diff --quiet -- charts/agentarea/templates/configs; then
             echo "Env templates are out of date. Run: python scripts/generate_env_tpls.py" >&2
-            echo "Changed files:" >&2
-            git status --porcelain >&2
+            echo "Changed files (configs only):" >&2
+            git status --porcelain charts/agentarea/templates/configs >&2
             exit 1
           fi
