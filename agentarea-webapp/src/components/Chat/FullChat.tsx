@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { useSSE } from "@/hooks/useSSE";
+import { useMentions } from "@/hooks/useMentions";
 import { cn } from "@/lib/utils";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
@@ -71,6 +72,25 @@ export default function FullChat({
   const [hasUserMessages, setHasUserMessages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Mention functionality
+  const {
+    showMentions,
+    mentionQuery,
+    mentionPosition,
+    filteredAgents,
+    selectedMentionIndex,
+    mentionMenuRef,
+    handleInputChange: handleMentionInputChange,
+    handleAgentSelect,
+    handleKeyDown: handleMentionKeyDown,
+    setShowMentions,
+  } = useMentions({
+    textareaRef,
+    onMentionInsert: (newText, newCursorPosition) => {
+      setInput(newText);
+    },
+  });
 
   // Badge suggestions
   const badgeSuggestions = [
@@ -519,9 +539,10 @@ export default function FullChat({
     fileInputRef.current?.click();
   };
 
-  // Handle input change with auto-resize
+  // Handle input change - combine mention detection with input update
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    handleMentionInputChange(e);
   };
 
   // Initialize SSE connection
@@ -801,7 +822,7 @@ export default function FullChat({
       >
         <form
           onSubmit={sendMessage}
-          className="flex flex-col gap-2 transition-all duration-700 ease-out"
+          className="relative flex flex-col gap-2 transition-all duration-700 ease-out"
         >
           <Textarea
             ref={textareaRef}
@@ -812,7 +833,13 @@ export default function FullChat({
             className="min-h-auto h-auto resize-none border-none pb-0 pr-12 pt-3 transition-all duration-700 ease-out"
             rows={3}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              // Handle mention menu navigation first
+              if (handleMentionKeyDown(e)) {
+                return;
+              }
+              
+              // Handle message sending
+              if (e.key === "Enter" && !e.shiftKey && !showMentions) {
                 e.preventDefault();
                 sendMessage(e);
               }
@@ -858,6 +885,47 @@ export default function FullChat({
             </div>
           </div>
         </form>
+        {/* Mention menu */}
+        {showMentions && filteredAgents.length > 0 && (
+          <div
+            ref={mentionMenuRef}
+            className="fixed z-[100] mt-2 w-64 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+            style={{
+              top: `${mentionPosition.top}px`,
+              left: `${mentionPosition.left}px`,
+            }}
+          >
+            <div className="max-h-64 overflow-y-auto p-1">
+              {filteredAgents.map((agent, index) => (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => handleAgentSelect(agent)}
+                  className={cn(
+                    "w-full flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors",
+                    "hover:bg-zinc-100 dark:hover:bg-zinc-700",
+                    index === selectedMentionIndex && "bg-zinc-100 dark:bg-zinc-700"
+                  )}
+                >
+                  {agent.avatar ? (
+                    <img
+                      src={agent.avatar}
+                      alt={agent.name}
+                      className="h-8 w-8 rounded-full"
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                      {agent.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="text-sm text-zinc-900 dark:text-zinc-100">
+                    {agent.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
