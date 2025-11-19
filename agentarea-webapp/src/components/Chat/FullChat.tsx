@@ -71,6 +71,26 @@ export default function FullChat({
   const [hasUserMessages, setHasUserMessages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Badge suggestions
+  const badgeSuggestions = [
+    { label: "Create agent", text: "Create agent" },
+    { label: "Create new task", text: "Create new task" },
+    { label: "Ask agent", text: "Ask agent" },
+    { label: "Something", text: "Something" },
+  ];
+
+  const handleBadgeClick = (text: string) => {
+    setInput(text);
+    // Focus textarea and set cursor to end after setting text
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const length = text.length;
+        textareaRef.current.setSelectionRange(length, length);
+      }
+    }, 0);
+  };
   const onTaskCreatedRef = useRef(onTaskCreated);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -848,6 +868,36 @@ export default function FullChat({
           accept="*/*"
         />
       </div>
+      {/* Badge suggestions - outside textarea container */}
+      {startCentered && (
+        <div
+          className={cn(
+            "flex flex-wrap gap-2 justify-center transition-all duration-700 ease-out",
+            "mx-auto w-full",
+            (startCentered && !hasUserMessages) ? "max-w-3xl" : "",
+            hasUserMessages 
+              ? "opacity-0 pointer-events-none max-h-0 overflow-hidden mt-0" 
+              : "opacity-100 max-h-32 mt-3"
+          )}
+        >
+          {badgeSuggestions.map((badge, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => handleBadgeClick(badge.text)}
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium rounded-full",
+                "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700",
+                "text-zinc-700 dark:text-zinc-300",
+                "transition-colors duration-200 ease-out",
+                "cursor-pointer border border-zinc-200 dark:border-zinc-700"
+              )}
+            >
+              {badge.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
