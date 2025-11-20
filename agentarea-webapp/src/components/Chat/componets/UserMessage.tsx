@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import { User } from "lucide-react";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -42,14 +43,18 @@ export const UserMessage: React.FC<UserMessageProps> = ({
           {content && (
             <div className="whitespace-pre-wrap break-words">
               {renderTextWithMentions(content).map((part, index) => {
-                if (part.isMention) {
+                if (part.isMention && part.agentId) {
                   return (
-                    <span
+                    <Link
                       key={index}
-                      className="inline-block bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium px-1.5 py-0.5 rounded"
+                      href={`/agents/${part.agentId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="leading-[17px] inline-block bg-primary/10 dark:bg-accent/30 text-primary dark:text-accent px-1 rounded hover:bg-primary/20 dark:hover:bg-accent/50 transition-colors cursor-pointer"
                     >
                       {part.text}
-                    </span>
+                    </Link>
                   );
                 }
                 return <span key={index}>{part.text}</span>;

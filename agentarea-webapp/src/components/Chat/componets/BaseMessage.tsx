@@ -32,7 +32,7 @@ const BaseMessage = ({
       <AccordionItem
         value="item-1"
         className={cn(
-          "w-full rounded-xl border data-[state=open]:shadow-sm dark:border-zinc-700",
+          "w-full rounded-lg border data-[state=open]:shadow-sm dark:border-zinc-700",
           isUser ? "bg-primary/10" : "bg-chatBackground"
         )}
       >
@@ -45,7 +45,7 @@ const BaseMessage = ({
           </div>
         </AccordionTrigger>
         <AccordionContent>
-          <div className="whitespace-pre-wrap rounded-xl border-t bg-white px-2 py-4 text-sm leading-relaxed text-text/70 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="whitespace-pre-wrap rounded-lg border-t bg-white px-2 py-4 text-sm leading-[20px] text-text/70 dark:border-zinc-700 dark:bg-zinc-900">
             {children}
           </div>
         </AccordionContent>
