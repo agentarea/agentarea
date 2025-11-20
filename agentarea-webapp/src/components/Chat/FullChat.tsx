@@ -34,6 +34,11 @@ interface WelcomeMessage {
 
 type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;
 
+interface BadgeSuggestion {
+  label: string;
+  text: string;
+}
+
 interface FullChatProps {
   agent: {
     id: string;
@@ -49,6 +54,7 @@ interface FullChatProps {
   className?: string;
   height?: string;
   placeholder?: string;
+  badgeSuggestions?: BadgeSuggestion[];
 }
 
 export default function FullChat({
@@ -61,6 +67,7 @@ export default function FullChat({
   onTaskStarted,
   onTaskFinished,
   className,
+  badgeSuggestions,
 }: FullChatProps) {
   const t = useTranslations("Chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -108,22 +115,30 @@ export default function FullChat({
     },
   });
 
-  // Badge suggestions
-  const badgeSuggestions = [
-    { label: "Create agent", text: "Create agent" },
-    { label: "Create new task", text: "Create new task" },
-    { label: "Ask agent", text: "Ask agent" },
-    { label: "Something", text: "Something" },
-  ];
 
   const handleBadgeClick = (text: string) => {
     setInput(text);
+    setInputDisplay(text);
+    
     // Focus textarea and set cursor to end after setting text
+    // Also trigger mention detection if text ends with @
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
         const length = text.length;
         textareaRef.current.setSelectionRange(length, length);
+        
+        // Trigger mention detection if text ends with @
+        if (text.endsWith('@')) {
+          // Create a synthetic event to trigger mention detection
+          const syntheticEvent = {
+            target: {
+              value: text,
+              selectionStart: length,
+            },
+          } as React.ChangeEvent<HTMLTextAreaElement>;
+          handleMentionInputChange(syntheticEvent);
+        }
       }
     }, 0);
   };
@@ -957,7 +972,7 @@ export default function FullChat({
         />
       </div>
       {/* Badge suggestions - outside textarea container */}
-      {startCentered && (
+      {startCentered && badgeSuggestions && badgeSuggestions.length > 0 && (
         <div
           className={cn(
             "flex flex-wrap gap-2 justify-center transition-all duration-700 ease-out",
@@ -974,9 +989,9 @@ export default function FullChat({
               type="button"
               onClick={() => handleBadgeClick(badge.text)}
               className={cn(
-                "px-3 py-1.5 text-sm font-medium rounded-full",
-                "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700",
-                "text-zinc-700 dark:text-zinc-300",
+                "px-5 py-1.5 text-xs md:text-sm font-medium rounded-full",
+                "bg-primary/10 hover:bg-primary/20 dark:bg-accent/30 dark:hover:bg-accent/50",
+                "text-primary dark:text-accent",
                 "transition-colors duration-200 ease-out",
                 "cursor-pointer border border-zinc-200 dark:border-zinc-700"
               )}
