@@ -21,6 +21,11 @@ Components deployed:
 {{- if .Values.minio.enabled }}
 ✓ MinIO ({{ .Release.Name }}-minio:9000)
 {{- end }}
+{{- if .Values.kratos.enabled }}
+✓ Kratos Public ({{ include "agentarea.fullname" . }}-kratos-public:4433)
+✓ Kratos Admin ({{ include "agentarea.fullname" . }}-kratos-admin:4434)
+   JWKS Secret: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName }} (auto-generated on install)
+{{- end }}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

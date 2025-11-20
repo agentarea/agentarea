@@ -53,84 +53,9 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.backend.waitForDependencies }}
+      {{- if .Values.backend.extraInitContainers }}
       initContainers:
-        # Wait for database to be ready
-        - name: wait-for-db
-          image: {{ .Values.global.jobs.kube.images.busybox }}
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z {{ include "agentarea.database.host" . }} {{ .Values.global.database.port }}; do
-                echo "Waiting for database..."
-                sleep 2
-              done
-              echo "Database is ready!"
-          resources:
-            limits:
-              cpu: 100m
-              memory: 128Mi
-            requests:
-              cpu: 50m
-              memory: 64Mi
-        # Wait for Redis to be ready
-        - name: wait-for-redis
-          image: {{ .Values.global.jobs.kube.images.busybox }}
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z {{ include "agentarea.redis.host" . }} {{ .Values.global.redis.port }}; do
-                echo "Waiting for Redis..."
-                sleep 2
-              done
-              echo "Redis is ready!"
-          resources:
-            limits:
-              cpu: 100m
-              memory: 128Mi
-            requests:
-              cpu: 50m
-              memory: 64Mi
-        # Wait for MinIO to be ready
-        - name: wait-for-minio
-          image: {{ .Values.global.jobs.kube.images.busybox }}
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z {{ include "agentarea.minio.host" . }} 9000; do
-                echo "Waiting for MinIO..."
-                sleep 2
-              done
-              echo "MinIO is ready!"
-          resources:
-            limits:
-              cpu: 100m
-              memory: 128Mi
-            requests:
-              cpu: 50m
-              memory: 64Mi
-        # Wait for Temporal to be ready
-        - name: wait-for-temporal
-          image: {{ .Values.global.jobs.kube.images.busybox }}
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z {{ include "agentarea.temporal.host" . }} {{ .Values.global.temporal.port }}; do
-                echo "Waiting for Temporal..."
-                sleep 2
-              done
-              echo "Temporal is ready!"
-          resources:
-            limits:
-              cpu: 100m
-              memory: 128Mi
-            requests:
-              cpu: 50m
-              memory: 64Mi
+        {{- toYaml .Values.backend.extraInitContainers | nindent 8 }}
       {{- end }}
       containers:
         - name: backend

@@ -1,0 +1,124 @@
+{{- if and .Values.kratos.enabled .Values.kratos.generateJwks }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "agentarea.fullname" . }}-jwks-writer
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get","create","patch","update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "agentarea.fullname" . }}-jwks-writer-binding
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "2"
+    "helm.sh/hook-delete-policy": before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "agentarea.fullname" . }}-jwks-writer
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agentarea.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-kratos-jwks-init
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos-jwks-init
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "3"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kratos-jwks-init
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      restartPolicy: Never
+      containers:
+        - name: jwks-generator
+          image: node:20-alpine
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          env:
+            - name: SECRET_NAME
+              value: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}
+            - name: KID
+              value: {{ default "agentarea-jwt-key-1" .Values.kratos.jwt.kid | quote }}
+          command: ["sh","-c"]
+          args:
+            - |
+              set -euo pipefail
+              apk add --no-cache curl jq nodejs npm
+              npm --silent add jose@4.15.5
+              JWKS_PRIVATE=$(node -e '
+              (async () => {
+                const jose = await import("jose");
+                const { privateKey, publicKey } = await jose.generateKeyPair("ES256");
+                const kid = process.env.KID || "agentarea-jwt-key-1";
+                const pub = await jose.exportJWK(publicKey);
+                const priv = await jose.exportJWK(privateKey);
+                pub.kid = kid; pub.use = "sig"; pub.alg = "ES256";
+                priv.kid = kid; priv.use = "sig"; priv.alg = "ES256";
+                const privJwks = { keys: [priv] };
+                const pubJwks = { keys: [pub] };
+                console.log(JSON.stringify({ privJwks, pubJwks }));
+              })();
+              ')
+              PRIV_JWKS=$(echo "$JWKS_PRIVATE" | jq -r '.privJwks')
+              PUB_JWKS=$(echo "$JWKS_PRIVATE" | jq -r '.pubJwks')
+              PRIV_B64=$(echo -n "$PRIV_JWKS" | base64 -w0)
+              PUB_B64=$(echo -n "$PUB_JWKS" | base64 -w0)
+
+              TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              CA=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              API="https://kubernetes.default.svc"
+              NAMESPACE="{{ .Release.Namespace }}"
+
+              # Check if secret exists
+              if curl --silent --fail --cacert "$CA" -H "Authorization: Bearer $TOKEN" "$API/api/v1/namespaces/$NAMESPACE/secrets/$SECRET_NAME" > /dev/null; then
+                echo "Secret $SECRET_NAME already exists. Skipping generation."
+                exit 0
+              fi
+
+              # Create secret with private JWKS for Kratos and public JWKS for backend
+              PAYLOAD=$(jq -n \
+                --arg name "$SECRET_NAME" \
+                --arg priv "$PRIV_B64" \
+                --arg pub "$PUB_B64" \
+                '{apiVersion:"v1",kind:"Secret",metadata:{name:$name,annotations:{"helm.sh/resource-policy":"keep"}},type:"Opaque",data:{"jwks.json":$priv,"jwks_public.json":$pub,"jwks_b64":$pub}}')
+
+              curl --silent --fail --cacert "$CA" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -X POST \
+                -d "$PAYLOAD" "$API/api/v1/namespaces/$NAMESPACE/secrets" && echo "Secret $SECRET_NAME created."
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

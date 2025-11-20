@@ -1,0 +1,293 @@
+{{- if .Values.kratos.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-kratos-config
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+data:
+  identity.schema.json: |
+    {
+      "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Person",
+      "type": "object",
+      "properties": {
+        "traits": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email",
+              "ory.sh/kratos": {
+                "credentials": {
+                  "password": {
+                    "identifier": true
+                  }
+                },
+                "recovery": {
+                  "via": "email"
+                }
+              }
+            },
+            "name": {
+              "type": "object",
+              "properties": {
+                "first": {
+                  "title": "First Name",
+                  "type": "string"
+                },
+                "last": {
+                  "title": "Last Name",
+                  "type": "string"
+                }
+              }
+            },
+            "username": {
+              "type": "string",
+              "title": "Username"
+            }
+          },
+          "required": [
+            "email"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  kratos.yml: |
+    version: v1.3.1
+    dsn: ${DSN}
+    serve:
+      public:
+        base_url: http://{{ include "agentarea.fullname" . }}-kratos-public:4433/
+        cors:
+          enabled: true
+          allowed_origins:
+            - http://{{ include "agentarea.fullname" . }}-frontend:3000
+      admin:
+        base_url: http://{{ include "agentarea.fullname" . }}-kratos-admin:4434/
+    selfservice:
+      default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/
+      allowed_return_urls:
+        - http://{{ include "agentarea.fullname" . }}-frontend:3000
+        - http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
+        - http://{{ include "agentarea.fullname" . }}-frontend:3000/dashboard
+      flows:
+        error:
+          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/error
+        settings:
+          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/settings
+          privileged_session_max_age: 15m
+          required_aal: highest_available
+        recovery:
+          enabled: true
+          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/recovery
+          use: code
+        verification:
+          enabled: true
+          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/verification
+          use: code
+          after:
+            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
+        logout:
+          after:
+            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/login
+        login:
+          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/login
+          lifespan: 10m
+          after:
+            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
+        registration:
+          lifespan: 10m
+          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/registration
+          after:
+            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
+    secrets:
+      cookie:
+        - PLEASE-CHANGE-ME-I-AM-VERY-INSECURE-dev-only
+      cipher:
+        - SECRET-KEY-FOR-DEV-32-CHARACTERS
+    ciphers:
+      algorithm: xchacha20-poly1305
+    hashers:
+      algorithm: bcrypt
+      bcrypt:
+        cost: 8
+    identity:
+      default_schema_id: default
+      schemas:
+        - id: default
+          url: file:///etc/config/kratos/identity.schema.json
+    courier:
+      smtp:
+        connection_uri: {{ default "" .Values.kratos.smtp.connection_uri | quote }}
+        from_address: {{ default "noreply@example.com" .Values.kratos.smtp.from_address | quote }}
+        from_name: {{ default "AgentArea" .Values.kratos.smtp.from_name | quote }}
+    session:
+      cookie:
+        same_site: Lax
+        domain: {{ default "localhost" .Values.kratos.session.cookieDomain | quote }}
+        path: /
+      whoami:
+        tokenizer:
+          templates:
+            agentarea_jwt:
+              jwks_url: file:///etc/config/kratos/keys/jwks.json
+              claims_mapper_url: base64://{{ default "bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICd1c2VybmFtZScpIHRoZW4gc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg==" .Values.kratos.jwt.claims_mapper_b64 }}
+              ttl: 30m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea.fullname" . }}-kratos
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+spec:
+  replicas: {{ default 1 .Values.kratos.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kratos
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kratos
+    spec:
+      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      containers:
+        - name: kratos
+          image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "oryd/kratos" .Values.kratos.image.repository }}:{{ default "v1.3.1" .Values.kratos.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: public
+              containerPort: 4433
+              protocol: TCP
+            - name: admin
+              containerPort: 4434
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+          command: ["sh","-c"]
+          args:
+            - >
+              export DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}?sslmode=disable&max_conns=20&max_idle_conns=4;
+              kratos serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+          volumeMounts:
+            - name: kratos-config
+              mountPath: /etc/config/kratos
+            - name: kratos-jwks
+              mountPath: /etc/config/kratos/keys
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: public
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health/alive
+              port: public
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: kratos-config
+          configMap:
+            name: {{ include "agentarea.fullname" . }}-kratos-config
+        - name: kratos-jwks
+          secret:
+            secretName: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentarea.fullname" . }}-kratos-public
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4433
+      targetPort: public
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentarea.fullname" . }}-kratos-admin
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4434
+      targetPort: admin
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "agentarea.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-kratos-migrate
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos-migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kratos-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: kratos-migrate
+          image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "oryd/kratos" .Values.kratos.image.repository }}:{{ default "v1.3.1" .Values.kratos.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["sh","-c"]
+          args:
+            - >
+              export DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}?sslmode=disable&max_conns=20&max_idle_conns=4;
+              kratos migrate sql -e --yes
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+{{- end }}

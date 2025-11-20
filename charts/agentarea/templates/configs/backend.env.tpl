@@ -17,6 +17,9 @@ METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 METRICS_PORT: "{{ .Values.global.monitoring.prometheus.port }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
 HEALTH_CHECK_PORT: "{{ .Values.global.monitoring.health.port }}"
+KRATOS_JWKS_B64: "{{ .Values.kratos.jwt.jwks_b64 }}"
+KRATOS_ISSUER: "{{ .Values.kratos.jwt.issuer }}"
+KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
 {{- end }}
 
 {{- define "agentarea.backend.envs" }}
@@ -85,6 +88,28 @@ HEALTH_CHECK_PORT: "{{ .Values.global.monitoring.health.port }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env
       key: HEALTH_CHECK_PORT
+- name: KRATOS_JWKS_B64
+  {{- if .Values.kratos.generateJwks }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName }}
+      key: jwks_b64
+  {{- else }}
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env
+      key: KRATOS_JWKS_B64
+  {{- end }}
+- name: KRATOS_ISSUER
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env
+      key: KRATOS_ISSUER
+- name: KRATOS_AUDIENCE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env
+      key: KRATOS_AUDIENCE
 - name: API_AUTH_HEADER_NAME
   value: {{ .Values.global.api.auth.headerName }}
 - name: API_AUTH_HEADER_VALUE

@@ -11,8 +11,44 @@ env:
   UV_CACHE_DIR: ~/.cache/uv
 
 jobs:
-  lint:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      platform: ${{ steps.filter.outputs.platform }}
+      platform_libs: ${{ steps.filter.outputs.platform_libs }}
+      api: ${{ steps.filter.outputs.api }}
+      worker: ${{ steps.filter.outputs.worker }}
+      webapp: ${{ steps.filter.outputs.webapp }}
+      cli: ${{ steps.filter.outputs.cli }}
+      mcp_manager: ${{ steps.filter.outputs.mcp_manager }}
+      bootstrap: ${{ steps.filter.outputs.bootstrap }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            platform:
+              - 'agentarea-platform/**'
+            platform_libs:
+              - 'agentarea-platform/libs/**'
+            api:
+              - 'agentarea-platform/apps/api/**'
+            worker:
+              - 'agentarea-platform/apps/worker/**'
+            webapp:
+              - 'agentarea-webapp/**'
+            cli:
+              - 'agentarea-cli/**'
+            mcp_manager:
+              - 'agentarea-mcp-manager/**'
+            bootstrap:
+              - 'agentarea-bootstrap/**'
+
+  platform-lint:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -37,10 +73,31 @@ jobs:
         working-directory: agentarea-platform
         run: uv run ruff format --check .
 
-      # TODO: Re-enable pyright after fixing type errors
-      # - name: Run pyright
-      #   working-directory: agentarea-platform
-      #   run: uv run pyright
+  platform-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        working-directory: agentarea-platform
+        run: |
+          uv sync --group dev
+
+      - name: Run tests
+        working-directory: agentarea-platform
+        run: |
+          uv run python -m pytest tests/unit tests/functional -m "not integration"
 
   # test:
   #   runs-on: ubuntu-latest
@@ -142,7 +199,8 @@ jobs:
   #         path: core/dist/
 
   docker-api:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')
+    needs: changes
     permissions:
       packages: write
       contents: read
@@ -162,10 +220,11 @@ jobs:
 
   performance:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.platform == 'true'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
@@ -187,7 +246,6 @@ jobs:
           echo "## Build Performance Report" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Build Time |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|------------|" >> $GITHUB_STEP_SUMMARY
-          
           for component in api worker; do
             start_time=$(date +%s.%N)
             uv build apps/$component
@@ -196,7 +254,8 @@ jobs:
             echo "| $component | ${build_time}s |" >> $GITHUB_STEP_SUMMARY
           done
   docker-worker:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')
+    needs: changes
     permissions:
       packages: write
       contents: read
@@ -214,7 +273,8 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true'
+    needs: changes
     permissions:
       packages: write
       contents: read
@@ -232,7 +292,8 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-bootstrap:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true'
+    needs: changes
     permissions:
       packages: write
       contents: read
@@ -250,7 +311,8 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-agentarea-mcp-manager:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true'
+    needs: changes
     permissions:
       packages: write
       contents: read
@@ -267,3 +329,79 @@ jobs:
       DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
+
+  webapp-lint:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.webapp == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: 'agentarea-webapp/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        working-directory: agentarea-webapp
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        working-directory: agentarea-webapp
+        run: pnpm run lint
+
+  cli-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'agentarea-cli/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: agentarea-cli
+        run: npm ci || npm install
+
+      - name: Run tests
+        working-directory: agentarea-cli
+        run: npm run test
+
+  mcp-manager-lint-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.mcp_manager == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run Go tests
+        working-directory: agentarea-mcp-manager/go-mcp-manager
+        run: go test ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: agentarea-mcp-manager/go-mcp-manager
