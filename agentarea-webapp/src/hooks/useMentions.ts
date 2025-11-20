@@ -14,7 +14,7 @@ export interface Agent {
 }
 
 interface UseMentionsOptions {
-  textareaRef: React.RefObject<HTMLTextAreaElement | null> | React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null> | React.RefObject<HTMLTextAreaElement> | React.RefObject<{ selectionStart: number; value?: string } | null>;
   containerRef?: React.RefObject<HTMLDivElement | null> | React.RefObject<HTMLDivElement>;
   onMentionInsert?: (text: string, cursorPosition: number) => void;
 }
@@ -25,7 +25,8 @@ interface UseMentionsReturn {
   mentionPosition: { top: number; left: number; width: number; side: 'top' | 'bottom' };
   filteredAgents: Agent[];
   selectedMentionIndex: number;
-  mentionMenuRef: React.RefObject<HTMLDivElement>;
+  mentionMenuRef: React.RefObject<HTMLDivElement | null>;
+  agents: Agent[];
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   handleAgentSelect: (agent: Agent) => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => boolean;
@@ -39,10 +40,10 @@ export function useMentions({
 }: UseMentionsOptions): UseMentionsReturn {
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
-  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0, width: 0, side: 'top' as const });
+  const [mentionPosition, setMentionPosition] = useState<{ top: number; left: number; width: number; side: 'top' | 'bottom' }>({ top: 0, left: 0, width: 0, side: 'top' });
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
-  const mentionMenuRef = useRef<HTMLDivElement>(null);
+  const mentionMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Fetch agents
   useEffect(() => {
@@ -88,8 +89,8 @@ export function useMentions({
     if (showMentions && filteredAgents.length > 0) {
       const updatePosition = () => {
         const container = containerRef?.current || textareaRef.current;
-        if (container) {
-          const position = calculateMentionPosition(container, mentionMenuRef.current);
+        if (container && 'getBoundingClientRect' in container) {
+          const position = calculateMentionPosition(container as HTMLElement, mentionMenuRef.current);
           setMentionPosition(position);
         }
       };
@@ -115,8 +116,8 @@ export function useMentions({
         setShowMentions(true);
         setTimeout(() => {
           const container = containerRef?.current || textareaRef.current;
-          if (container) {
-            const position = calculateMentionPosition(container, mentionMenuRef.current);
+          if (container && 'getBoundingClientRect' in container) {
+            const position = calculateMentionPosition(container as HTMLElement, mentionMenuRef.current);
             setMentionPosition(position);
           }
         }, 0);
@@ -133,7 +134,7 @@ export function useMentions({
       if (!textareaRef.current) return;
 
       const textarea = textareaRef.current;
-      const value = textarea.value;
+      const value = (textarea as HTMLTextAreaElement).value || '';
       const cursorPosition = textarea.selectionStart;
       const mentionPos = findMentionPosition(value, cursorPosition);
 
@@ -142,6 +143,7 @@ export function useMentions({
           value,
           cursorPosition,
           mentionPos.atIndex,
+          selectedAgent.id,
           selectedAgent.name
         );
 
@@ -150,11 +152,20 @@ export function useMentions({
 
         setTimeout(() => {
           if (textareaRef.current) {
-            textareaRef.current.setSelectionRange(
-              newCursorPosition,
-              newCursorPosition
-            );
-            textareaRef.current.focus();
+            // Handle both HTMLTextAreaElement and MentionTextareaHandle
+            if ('setSelectionRange' in textareaRef.current) {
+              (textareaRef.current as HTMLTextAreaElement).setSelectionRange(
+                newCursorPosition,
+                newCursorPosition
+              );
+              (textareaRef.current as HTMLTextAreaElement).focus();
+            } else if ('setSelectionRange' in textareaRef.current) {
+              (textareaRef.current as any).setSelectionRange(
+                newCursorPosition,
+                newCursorPosition
+              );
+              (textareaRef.current as any).focus();
+            }
           }
         }, 0);
       }
@@ -208,16 +219,19 @@ export function useMentions({
 
   // Close mention menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        mentionMenuRef.current &&
-        !mentionMenuRef.current.contains(event.target as Node) &&
-        textareaRef.current &&
-        !textareaRef.current.contains(event.target as Node)
-      ) {
-        setShowMentions(false);
-      }
-    };
+      const handleClickOutside = (event: MouseEvent) => {
+        const target = event.target as Node;
+        const textarea = textareaRef.current;
+        const isTextareaElement = textarea && 'contains' in textarea;
+        
+        if (
+          mentionMenuRef.current &&
+          !mentionMenuRef.current.contains(target) &&
+          (!isTextareaElement || !textarea.contains(target))
+        ) {
+          setShowMentions(false);
+        }
+      };
 
     if (showMentions) {
       document.addEventListener('mousedown', handleClickOutside);
@@ -234,6 +248,7 @@ export function useMentions({
     filteredAgents,
     selectedMentionIndex,
     mentionMenuRef,
+    agents, // Export agents list
     handleInputChange,
     handleAgentSelect,
     handleKeyDown,

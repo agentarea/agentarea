@@ -10,6 +10,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { useSSE } from "@/hooks/useSSE";
 import { useMentions } from "@/hooks/useMentions";
 import { cn } from "@/lib/utils";
+import { extractPlainText, formatTextForTextarea, restoreMentionIds } from "@/utils/mentions";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
 import { MessageComponentType, MessageRenderer } from "./MessageComponents";
@@ -63,7 +64,8 @@ export default function FullChat({
 }: FullChatProps) {
   const t = useTranslations("Chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(""); // Stores @[agentId:agentName] format
+  const [inputDisplay, setInputDisplay] = useState(""); // Stores @agentName for display
   const [isLoading, setIsLoading] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(
     taskId || null
@@ -83,6 +85,7 @@ export default function FullChat({
     filteredAgents,
     selectedMentionIndex,
     mentionMenuRef,
+    agents: mentionAgents, // Get agents list for ID restoration
     handleInputChange: handleMentionInputChange,
     handleAgentSelect,
     handleKeyDown: handleMentionKeyDown,
@@ -92,6 +95,16 @@ export default function FullChat({
     containerRef: cardContainerRef,
     onMentionInsert: (newText, newCursorPosition) => {
       setInput(newText);
+      const displayText = formatTextForTextarea(newText);
+      setInputDisplay(displayText);
+      
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const displayCursorPos = formatTextForTextarea(newText.substring(0, newCursorPosition)).length;
+          textareaRef.current.setSelectionRange(displayCursorPos, displayCursorPos);
+          textareaRef.current.focus();
+        }
+      }, 0);
     },
   });
 
@@ -560,9 +573,15 @@ export default function FullChat({
     e.preventDefault();
     if ((!input.trim() && selectedFiles.length === 0) || isLoading) return;
 
+    // Keep the format with ID for display, but extract plain text for API
+    const plainContent = extractPlainText(input);
+    
+    // Restore mention IDs for any mentions without ID format
+    const finalContent = restoreMentionIds(input, mentionAgents);
+    
     const userMessage: UserChatMessage = {
       id: Date.now().toString(),
-      content: input,
+      content: finalContent,
       role: "user",
       timestamp: new Date().toISOString(),
       files: selectedFiles.length > 0 ? selectedFiles : undefined,
@@ -575,6 +594,7 @@ export default function FullChat({
       return newMessages;
     });
     setInput("");
+    setInputDisplay("");
     setSelectedFiles([]);
     setIsLoading(true);
 
@@ -592,7 +612,7 @@ export default function FullChat({
           Accept: "text/event-stream",
         },
         body: JSON.stringify({
-          description: userMessage.content,
+          description: plainContent,
           parameters: {
             context: {},
             task_type: "chat",
@@ -830,8 +850,36 @@ export default function FullChat({
         >
           <Textarea
             ref={textareaRef}
-            value={input}
-            onChange={handleInputChange}
+            value={inputDisplay || formatTextForTextarea(input)}
+            onChange={(e) => {
+              const displayValue = e.target.value;
+              setInputDisplay(displayValue);
+              
+              // Convert display value back to storage format
+              const mentionsInInput = input.match(/@\[[^\]]+\]/g) || [];
+              
+              // Build replacement map: display format -> storage format
+              const replacementMap = new Map<string, string>();
+              mentionsInInput.forEach((mentionWithId) => {
+                const mentionDisplay = formatTextForTextarea(mentionWithId);
+                if (!replacementMap.has(mentionDisplay)) {
+                  replacementMap.set(mentionDisplay, mentionWithId);
+                }
+              });
+              
+              // Replace mentions in display value, going from longest to shortest
+              let newInput = displayValue;
+              const sortedReplacements = Array.from(replacementMap.entries())
+                .sort((a, b) => b[0].length - a[0].length);
+              
+              sortedReplacements.forEach(([display, storage]) => {
+                const escaped = display.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                newInput = newInput.replace(new RegExp(escaped, 'g'), storage);
+              });
+              
+              setInput(newInput);
+              handleMentionInputChange(e);
+            }}
             placeholder={t("writeNewTaskFor", { agentName: agent.name })}
             disabled={isLoading}
             className="min-h-auto h-auto resize-none border-none pb-0 pr-12 pt-3 transition-all duration-700 ease-out"

@@ -16,7 +16,7 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      router.push("/login");
+      router.push("/auth/login");
     }
   }, [isLoaded, isSignedIn, router]);
 

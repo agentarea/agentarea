@@ -21,7 +21,7 @@ interface MentionMenuProps {
   agents: Agent[];
   position: { top: number; left: number; width: number; side: 'top' | 'bottom' };
   selectedIndex: number;
-  menuRef: React.RefObject<HTMLDivElement>;
+  menuRef: React.RefObject<HTMLDivElement | null>;
   onAgentSelect: (agent: Agent) => void;
 }
 
