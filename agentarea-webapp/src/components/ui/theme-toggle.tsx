@@ -34,7 +34,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       )}
       onClick={() => setTheme(isDark ? "light" : "dark")}
       role="button"
-      tabIndex={0}
+      tabIndex={-1}
     >
       <div className="flex w-full items-center justify-between">
         <div

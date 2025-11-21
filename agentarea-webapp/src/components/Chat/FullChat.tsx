@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, Paperclip, ArrowUp } from "lucide-react";
+import { Paperclip, ArrowUp } from "lucide-react";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,8 @@ import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { parseEventToMessage, shouldDisplayEvent } from "./EventParser";
 import { MessageComponentType, MessageRenderer } from "./MessageComponents";
 import { MentionMenu } from "./MentionMenu";
+import { BadgeSuggestions } from "./componets/BadgeSuggestions";
+import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
 
 interface UserChatMessage {
   id: string;
@@ -34,10 +36,7 @@ interface WelcomeMessage {
 
 type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;
 
-interface BadgeSuggestion {
-  label: string;
-  text: string;
-}
+import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 
 interface FullChatProps {
   agent: {
@@ -530,7 +529,6 @@ export default function FullChat({
           break;
 
         case "error":
-          console.error("SSE error:", event.data);
           setIsLoading(false);
           break;
 
@@ -544,7 +542,6 @@ export default function FullChat({
 
   // SSE event handlers
   const handleSSEError = useCallback((error: Event) => {
-    console.error("SSE connection error:", error);
     setIsLoading(false);
   }, []);
 
@@ -734,7 +731,6 @@ export default function FullChat({
         reader.releaseLock();
       }
     } catch (error) {
-      console.error("Failed to send message:", error);
       const errorMessage: WelcomeMessage = {
         id: (Date.now() + 1).toString(),
         content: `Sorry, I couldn't process your message. Error: ${error}`,
@@ -808,46 +804,22 @@ export default function FullChat({
                 />
               );
             }
-            // else {
-            //   // Assistant welcome message
-            //   return (
-            //     <AssistantMessageComponent
-            //       key={message.id}
-            //       id={message.id}
-            //       content={message.content}
-            //       timestamp={message.timestamp}
-            //       agent_id={message.agent_id}
-            //       agent_name={agent.name}
-            //     />
-            //   );
-            // }
           })}
           <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
 
-        {/* Scroll to bottom button */}
-        <div
-          className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? "pointer-events-none opacity-0" : "opacity-100"}`}
-        >
-          <Button
-            onClick={() => {
-              // Принудительно скроллим к низу контейнера, а не всей страницы
-              if (messagesContainerRef.current) {
-                messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-              }
-
-              // Проверяем позицию после скролла
-              requestAnimationFrame(() => {
-                const atBottom = checkIfAtBottom();
-                setIsAtBottom(atBottom);
-              });
-            }}
-            size="sm"
-            className="h-8 w-8 rounded-full bg-white text-text shadow-lg hover:text-white dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        </div>
+        <ScrollToBottomButton
+          visible={!isAtBottom}
+          onScrollToBottom={() => {
+            if (messagesContainerRef.current) {
+              messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+            }
+            requestAnimationFrame(() => {
+              const atBottom = checkIfAtBottom();
+              setIsAtBottom(atBottom);
+            });
+          }}
+        />
       </div>
       <div
         ref={cardContainerRef}
@@ -971,35 +943,12 @@ export default function FullChat({
           accept="*/*"
         />
       </div>
-      {/* Badge suggestions - outside textarea container */}
-      {startCentered && badgeSuggestions && badgeSuggestions.length > 0 && (
-        <div
-          className={cn(
-            "flex flex-wrap gap-2 justify-center transition-all duration-700 ease-out",
-            "mx-auto w-full",
-            (startCentered && !hasUserMessages) ? "max-w-3xl" : "",
-            hasUserMessages 
-              ? "opacity-0 pointer-events-none max-h-0 overflow-hidden mt-0" 
-              : "opacity-100 max-h-32 mt-3"
-          )}
-        >
-          {badgeSuggestions.map((badge, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() => handleBadgeClick(badge.text)}
-              className={cn(
-                "px-5 py-1.5 text-xs md:text-sm font-medium rounded-full",
-                "bg-primary/10 hover:bg-primary/20 dark:bg-accent/30 dark:hover:bg-accent/50",
-                "text-primary dark:text-accent",
-                "transition-colors duration-200 ease-out",
-                "cursor-pointer border border-zinc-200 dark:border-zinc-700"
-              )}
-            >
-              {badge.label}
-            </button>
-          ))}
-        </div>
+      {startCentered && (
+        <BadgeSuggestions
+          suggestions={badgeSuggestions || []}
+          onBadgeClick={handleBadgeClick}
+          visible={!hasUserMessages}
+        />
       )}
     </div>
   );
