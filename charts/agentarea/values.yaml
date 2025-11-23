@@ -232,6 +232,41 @@ global:
   # Extra selector labels for pods
   extraSelectorLabels: {}
 
+# Ingress configuration
+ingress:
+  enabled: false
+  # Ingress class name (nginx, traefik, etc.)
+  className: ""
+  # Annotations for ingress controller
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  # Host configuration for each service
+  hosts:
+    frontend:
+      host: ""  # e.g., app.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+    backend:
+      host: ""  # e.g., api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+    kratos:
+      host: ""  # e.g., auth.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # TLS configuration
+  tls: []
+    # - secretName: agentarea-tls
+    #   hosts:
+    #     - app.example.com
+    #     - api.example.com
+    #     - auth.example.com
+
 # Backend API Service
 backend:
   enabled: true

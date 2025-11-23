@@ -1,0 +1,58 @@
+{{- if and .Values.ingress.enabled .Values.kratos.enabled }}
+{{- $fullName := include "agentarea.fullname" . -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}-kratos
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos
+    {{- with .Values.global.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- if .Values.ingress.hosts.kratos.host }}
+    - host: {{ .Values.ingress.hosts.kratos.host | quote }}
+      http:
+        paths:
+          {{- range .Values.ingress.hosts.kratos.paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ $fullName }}-kratos-public
+                port:
+                  number: 4433
+          {{- end }}
+    {{- else }}
+    - http:
+        paths:
+          {{- range .Values.ingress.hosts.kratos.paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ $fullName }}-kratos-public
+                port:
+                  number: 4433
+          {{- end }}
+    {{- end }}
+{{- end }}
