@@ -200,7 +200,7 @@ jobs:
 
   docker-api:
     if: github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')
-    needs: changes
+    needs: [changes, platform-lint, platform-test]
     permissions:
       packages: write
       contents: read
@@ -255,7 +255,7 @@ jobs:
           done
   docker-worker:
     if: github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')
-    needs: changes
+    needs: [changes, platform-lint, platform-test]
     permissions:
       packages: write
       contents: read
@@ -274,7 +274,7 @@ jobs:
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
     if: github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true'
-    needs: changes
+    needs: [changes, webapp-lint]
     permissions:
       packages: write
       contents: read
@@ -312,7 +312,7 @@ jobs:
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-agentarea-mcp-manager:
     if: github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true'
-    needs: changes
+    needs: [changes, mcp-manager-lint-test]
     permissions:
       packages: write
       contents: read
