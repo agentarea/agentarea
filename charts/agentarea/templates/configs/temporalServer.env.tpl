@@ -15,38 +15,28 @@ BIND_ON_IP: "0.0.0.0"
 - name: DB
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporalserver
       key: DB
 - name: DB_PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporalserver
       key: DB_PORT
 - name: POSTGRES_SEEDS
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporalserver
       key: POSTGRES_SEEDS
 - name: DBNAME
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporalserver
       key: DBNAME
 - name: BIND_ON_IP
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporalserver
       key: BIND_ON_IP
-- name: POSTGRES_USER
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.postgresql }}"
-      key: username
-- name: POSTGRES_PWD
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.postgresql }}"
-      key: password
 {{- end }}
 
 {{- define "agentarea.temporalServer.secrets.envs" }}

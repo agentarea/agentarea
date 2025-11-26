@@ -13,28 +13,18 @@ AWS_ENDPOINT_URL: "http://{{ .Release.Name }}-minio:9000"
 - name: AWS_REGION
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-storage
       key: AWS_REGION
 - name: S3_BUCKET_NAME
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-storage
       key: S3_BUCKET_NAME
 - name: AWS_ENDPOINT_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-storage
       key: AWS_ENDPOINT_URL
-- name: AWS_ACCESS_KEY_ID
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.minio }}"
-      key: root-user
-- name: AWS_SECRET_ACCESS_KEY
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.minio }}"
-      key: root-password
 {{- end }}
 
 {{- define "agentarea.storage.secrets.envs" }}

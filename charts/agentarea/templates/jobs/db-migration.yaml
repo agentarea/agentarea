@@ -69,7 +69,7 @@ spec:
             - migrate
           envFrom:
             - configMapRef:
-                name: {{ include "agentarea.fullname" . }}-env
+                name: {{ include "agentarea.fullname" . }}-env-databasejobs
           env:
             # Database credentials
             - name: POSTGRES_USER

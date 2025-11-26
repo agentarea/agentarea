@@ -12,18 +12,13 @@ REDIS_PORT: "{{ .Values.global.redis.port }}"
 - name: REDIS_HOST
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-redis
       key: REDIS_HOST
 - name: REDIS_PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-redis
       key: REDIS_PORT
-- name: REDIS_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.redis }}"
-      key: redis-password
 - name: REDIS_URL
   value: redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)
 {{- end }}

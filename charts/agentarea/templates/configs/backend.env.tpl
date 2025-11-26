@@ -26,90 +26,83 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
 - name: PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: PORT
 - name: LOG_LEVEL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: LOG_LEVEL
 - name: MCP_MANAGER_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: MCP_MANAGER_URL
 - name: MCP_CLIENT_TIMEOUT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: MCP_CLIENT_TIMEOUT
 - name: API_HOST
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_HOST
 - name: API_PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_PORT
 - name: API_AUTH_ENABLED
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_AUTH_ENABLED
 - name: API_RATE_LIMIT_ENABLED
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_RATE_LIMIT_ENABLED
 - name: API_RATE_LIMIT_REQUESTS_PER_MINUTE
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_RATE_LIMIT_REQUESTS_PER_MINUTE
 - name: METRICS_ENABLED
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: METRICS_ENABLED
 - name: METRICS_PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: METRICS_PORT
 - name: HEALTH_CHECK_ENABLED
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: HEALTH_CHECK_ENABLED
 - name: HEALTH_CHECK_PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: HEALTH_CHECK_PORT
 - name: KRATOS_JWKS_B64
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: KRATOS_JWKS_B64
 - name: KRATOS_ISSUER
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: KRATOS_ISSUER
 - name: KRATOS_AUDIENCE
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-backend
       key: KRATOS_AUDIENCE
-- name: API_AUTH_HEADER_NAME
-  value: {{ .Values.global.api.auth.headerName }}
-- name: API_AUTH_HEADER_VALUE
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.application }}"
-      key: api-auth-header-value
 {{- end }}
 
 {{- define "agentarea.backend.secrets.envs" }}

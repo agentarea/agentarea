@@ -12,11 +12,11 @@ TEMPORAL_CORS_ORIGINS: "http://localhost:3000"
 - name: TEMPORAL_ADDRESS
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporalui
       key: TEMPORAL_ADDRESS
 - name: TEMPORAL_CORS_ORIGINS
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporalui
       key: TEMPORAL_CORS_ORIGINS
 {{- end }}

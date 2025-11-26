@@ -18,41 +18,41 @@ HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
 - name: PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: PORT
 - name: NODE_ENV
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: NODE_ENV
 - name: API_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: API_URL
 - name: ORY_ADMIN_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: ORY_ADMIN_URL
 - name: ORY_SDK_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: ORY_SDK_URL
 - name: NEXT_PUBLIC_ORY_SDK_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: NEXT_PUBLIC_ORY_SDK_URL
 - name: METRICS_ENABLED
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: METRICS_ENABLED
 - name: HEALTH_CHECK_ENABLED
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-frontend
       key: HEALTH_CHECK_ENABLED
 {{- end }}

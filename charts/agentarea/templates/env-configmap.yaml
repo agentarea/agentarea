@@ -4,7 +4,7 @@ Centralized ConfigMap for all AgentArea services
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "agentarea.fullname" . }}-env
+  name: {{ include "agentarea.fullname" . }}-env-database
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
   annotations:
@@ -12,42 +12,144 @@ metadata:
     helm.sh/hook-weight: "-1"
     helm.sh/hook-delete-policy: before-hook-creation
 data:
-  # Database configuration (shared across all services)
   {{- include "agentarea.database.configVars" . | nindent 2 }}
-
-  # Redis configuration (shared across all services)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-databasejobs
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  {{- include "agentarea.databaseJobs.configVars" . | nindent 2 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-redis
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.redis.configVars" . | nindent 2 }}
-
-  # Storage configuration (shared across all services)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-storage
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.storage.configVars" . | nindent 2 }}
-
-  # Temporal configuration (shared across backend and worker)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-temporal
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.temporal.configVars" . | nindent 2 }}
-
-  # Temporal server runtime configuration
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-temporalserver
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.temporalServer.configVars" . | nindent 2 }}
-
-  # Backend-specific configuration
-  {{- if .Values.backend.enabled }}
+---
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-backend
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.backend.configVars" . | nindent 2 }}
-  {{- end }}
-
-  # Worker-specific configuration
-  {{- if .Values.worker.enabled }}
+{{- end }}
+---
+{{- if .Values.worker.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-worker
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.worker.configVars" . | nindent 2 }}
-  {{- end }}
-
-  # Frontend-specific configuration
-  {{- if .Values.frontend.enabled }}
+{{- end }}
+---
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-frontend
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.frontend.configVars" . | nindent 2 }}
-  {{- end }}
-
-  # Temporal UI configuration
-  {{- if .Values.temporalUi.enabled }}
+{{- end }}
+---
+{{- if .Values.temporalUi.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-temporalui
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.temporalUi.configVars" . | nindent 2 }}
-  {{- end }}
-
-  # MCP Manager-specific configuration
-  {{- if .Values.mcpManager.enabled }}
+{{- end }}
+---
+{{- if .Values.mcpManager.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
   {{- include "agentarea.mcpManager.configVars" . | nindent 2 }}
-  {{- end }}
+{{- end }}

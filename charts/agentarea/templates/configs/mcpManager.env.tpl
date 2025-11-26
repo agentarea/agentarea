@@ -16,31 +16,31 @@ MCP_PROXY_HOST: "http://{{ include "agentarea.fullname" . }}-mcp-manager"
 - name: LOG_LEVEL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: LOG_LEVEL
 - name: CORE_API_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: CORE_API_URL
 - name: TRAEFIK_NETWORK
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: TRAEFIK_NETWORK
 - name: SERVER_HOST
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: SERVER_HOST
 - name: SERVER_PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: SERVER_PORT
 - name: MCP_PROXY_HOST
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: MCP_PROXY_HOST
 {{- end }}

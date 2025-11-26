@@ -13,16 +13,16 @@ WORKFLOW__TEMPORAL_TASK_QUEUE: "{{ .Values.global.temporal.taskQueue }}"
 - name: WORKFLOW__TEMPORAL_SERVER_URL
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporal
       key: WORKFLOW__TEMPORAL_SERVER_URL
 - name: WORKFLOW__TEMPORAL_NAMESPACE
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporal
       key: WORKFLOW__TEMPORAL_NAMESPACE
 - name: WORKFLOW__TEMPORAL_TASK_QUEUE
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-temporal
       key: WORKFLOW__TEMPORAL_TASK_QUEUE
 {{- end }}

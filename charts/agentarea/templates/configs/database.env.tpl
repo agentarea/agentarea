@@ -13,28 +13,18 @@ POSTGRES_DB: "{{ .Values.global.database.name }}"
 - name: POSTGRES_HOST
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-database
       key: POSTGRES_HOST
 - name: POSTGRES_PORT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-database
       key: POSTGRES_PORT
 - name: POSTGRES_DB
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-database
       key: POSTGRES_DB
-- name: POSTGRES_USER
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.postgresql }}"
-      key: username
-- name: POSTGRES_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: "{{ .Values.global.secrets.postgresql }}"
-      key: password
 - name: DATABASE_URL
   value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)
 {{- end }}

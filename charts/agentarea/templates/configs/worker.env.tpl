@@ -17,36 +17,36 @@ ENVIRONMENT: "production"
 - name: WORKFLOW__USE_WORKFLOW_EXECUTION
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-worker
       key: WORKFLOW__USE_WORKFLOW_EXECUTION
 - name: WORKFLOW__WORKFLOW_ENGINE
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-worker
       key: WORKFLOW__WORKFLOW_ENGINE
 - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-worker
       key: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
 - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-worker
       key: WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS
 - name: TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-worker
       key: TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY
 - name: DEBUG
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-worker
       key: DEBUG
 - name: ENVIRONMENT
   valueFrom:
     configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env
+      name: {{ include "agentarea.fullname" . }}-env-worker
       key: ENVIRONMENT
 {{- end }}
