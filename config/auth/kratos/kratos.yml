@@ -13,8 +13,6 @@ serve:
       enabled: true
       allowed_origins:
         - http://localhost:3000
-        - http://localhost:3001
-        - http://frontend:3000
       allowed_methods:
         - POST
         - GET
@@ -35,12 +33,6 @@ selfservice:
   default_browser_return_url: http://localhost:3000/
   allowed_return_urls:
     - http://localhost:3000
-    - http://localhost:3001
-    - http://localhost:3000/workplace
-    - http://localhost:3000/dashboard
-    - http://frontend:3000
-    - http://frontend:3000/workplace
-    - http://frontend:3000/dashboard
 
   flows:
     error:

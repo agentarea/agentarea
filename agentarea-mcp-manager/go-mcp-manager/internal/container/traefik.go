@@ -60,8 +60,12 @@ type TraefikManager struct {
 
 // NewTraefikManager creates a new Traefik manager
 func NewTraefikManager(cfg *config.Config, logger *slog.Logger) *TraefikManager {
+	configPath := cfg.Traefik.ConfigPath
+	if configPath == "" {
+		configPath = "/etc/traefik/dynamic.yml"
+	}
 	return &TraefikManager{
-		configPath: "/etc/traefik/dynamic.yml",
+		configPath: configPath,
 		logger:     logger,
 		config:     cfg,
 	}

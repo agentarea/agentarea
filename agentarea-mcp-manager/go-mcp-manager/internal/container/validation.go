@@ -25,13 +25,18 @@ type ValidationResult struct {
 type ContainerValidator struct {
 	logger  *slog.Logger
 	manager *Manager
+	runtime string
 }
 
 // NewContainerValidator creates a new container validator
-func NewContainerValidator(logger *slog.Logger, manager *Manager) *ContainerValidator {
+func NewContainerValidator(logger *slog.Logger, manager *Manager, runtime string) *ContainerValidator {
+	if runtime == "" {
+		runtime = "podman"
+	}
 	return &ContainerValidator{
 		logger:  logger,
 		manager: manager,
+		runtime: runtime,
 	}
 }
 
@@ -97,15 +102,15 @@ func (v *ContainerValidator) ValidateContainerImage(ctx context.Context, imageNa
 
 // imageExistsLocally checks if an image exists in the local registry
 func (v *ContainerValidator) imageExistsLocally(ctx context.Context, imageName string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "podman", "image", "exists", imageName)
+	cmd := exec.CommandContext(ctx, v.runtime, "image", "exists", imageName)
 	err := cmd.Run()
 	return err == nil, nil
 }
 
 // canPullImage checks if an image can be pulled from a registry
 func (v *ContainerValidator) canPullImage(ctx context.Context, imageName string) (bool, error) {
-	// Use podman search to check if image is available in registries
-	cmd := exec.CommandContext(ctx, "podman", "search", "--limit", "1", imageName)
+	// Use runtime search to check if image is available in registries
+	cmd := exec.CommandContext(ctx, v.runtime, "search", "--limit", "1", imageName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false, nil // If search fails, assume image cannot be pulled
@@ -129,7 +134,7 @@ func (v *ContainerValidator) canPullImage(ctx context.Context, imageName string)
 
 // getImageSize gets the size of a local image
 func (v *ContainerValidator) getImageSize(ctx context.Context, imageName string) (string, error) {
-	cmd := exec.CommandContext(ctx, "podman", "image", "inspect", imageName, "--format", "{{.Size}}")
+	cmd := exec.CommandContext(ctx, v.runtime, "image", "inspect", imageName, "--format", "{{.Size}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
@@ -385,7 +390,7 @@ func (v *ContainerValidator) PullImageWithProgress(ctx context.Context, imageNam
 	v.logger.Info("Pulling image with progress tracking",
 		slog.String("image", imageName))
 
-	cmd := exec.CommandContext(ctx, "podman", "pull", imageName)
+	cmd := exec.CommandContext(ctx, v.runtime, "pull", imageName)
 
 	// Create a pipe to capture output
 	stdout, err := cmd.StdoutPipe()
@@ -423,7 +428,7 @@ func (v *ContainerValidator) PullImageWithProgress(ctx context.Context, imageNam
 
 // GetContainerStatus gets detailed container status
 func (v *ContainerValidator) GetContainerStatus(ctx context.Context, containerID string) (*models.DetailedContainerStatus, error) {
-	cmd := exec.CommandContext(ctx, "podman", "inspect", containerID, "--format", "json")
+	cmd := exec.CommandContext(ctx, v.runtime, "inspect", containerID)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect container: %w", err)

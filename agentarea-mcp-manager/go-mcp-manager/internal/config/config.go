@@ -73,6 +73,7 @@ type TraefikConfig struct {
 	DefaultDomain     string `json:"default_domain"`
 	ProxyHost         string `json:"proxy_host"`
 	ManagerServiceURL string `json:"manager_service_url"`
+	ConfigPath        string `json:"config_path"`
 }
 
 // LoggingConfig holds logging configuration
@@ -117,6 +118,7 @@ func Load() *Config {
 			DefaultDomain:     getEnv("DEFAULT_DOMAIN", "localhost"),
 			ProxyHost:         getEnv("MCP_PROXY_HOST", "http://localhost:7999"),
 			ManagerServiceURL: getEnv("MANAGER_SERVICE_URL", "http://localhost:8000"),
+			ConfigPath:        getEnv("TRAEFIK_CONFIG_PATH", "/etc/traefik/dynamic.yml"),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),
@@ -125,8 +127,8 @@ func Load() *Config {
 		Redis: RedisConfig{
 			URL: getEnv("REDIS_URL", "redis://localhost:6379"),
 		},
-		CoreAPIURL: getEnv("CORE_API_URL", "http://localhost:8000"),
-		Kubernetes: loadKubernetesConfig(),
+		CoreAPIURL:  getEnv("CORE_API_URL", "http://localhost:8000"),
+		Kubernetes:  loadKubernetesConfig(),
 		Environment: getEnv("BACKEND_ENVIRONMENT", ""),
 	}
 }
@@ -181,20 +183,20 @@ func getEnvStringSlice(key string, defaultValue []string) []string {
 // loadKubernetesConfig loads Kubernetes configuration from environment variables
 func loadKubernetesConfig() KubernetesConfig {
 	config := DefaultKubernetesConfig()
-	
+
 	// Override with environment variables
 	config.Enabled = getEnvBool("KUBERNETES_ENABLED", config.Enabled)
 	config.Namespace = getEnv("KUBERNETES_NAMESPACE", config.Namespace)
 	config.Domain = getEnv("KUBERNETES_DOMAIN", config.Domain)
 	config.IngressClass = getEnv("KUBERNETES_INGRESS_CLASS", config.IngressClass)
 	config.StorageClass = getEnv("KUBERNETES_STORAGE_CLASS", config.StorageClass)
-	
+
 	// Resource defaults
 	config.DefaultRequests.CPU = getEnv("KUBERNETES_DEFAULT_CPU_REQUEST", config.DefaultRequests.CPU)
 	config.DefaultRequests.Memory = getEnv("KUBERNETES_DEFAULT_MEMORY_REQUEST", config.DefaultRequests.Memory)
 	config.DefaultLimits.CPU = getEnv("KUBERNETES_DEFAULT_CPU_LIMIT", config.DefaultLimits.CPU)
 	config.DefaultLimits.Memory = getEnv("KUBERNETES_DEFAULT_MEMORY_LIMIT", config.DefaultLimits.Memory)
-	
+
 	// Security context
 	config.SecurityContext.RunAsNonRoot = getEnvBool("KUBERNETES_RUN_AS_NON_ROOT", config.SecurityContext.RunAsNonRoot)
 	if runAsUser := getEnv("KUBERNETES_RUN_AS_USER", ""); runAsUser != "" {
@@ -204,21 +206,21 @@ func loadKubernetesConfig() KubernetesConfig {
 	}
 	config.SecurityContext.ReadOnlyRootFilesystem = getEnvBool("KUBERNETES_READ_ONLY_ROOT_FS", config.SecurityContext.ReadOnlyRootFilesystem)
 	config.SecurityContext.AllowPrivilegeEscalation = getEnvBool("KUBERNETES_ALLOW_PRIVILEGE_ESCALATION", config.SecurityContext.AllowPrivilegeEscalation)
-	
+
 	// Network policy
 	config.NetworkPolicy.Enabled = getEnvBool("KUBERNETES_NETWORK_POLICY_ENABLED", config.NetworkPolicy.Enabled)
-	
+
 	// Monitoring
 	config.Monitoring.Enabled = getEnvBool("KUBERNETES_MONITORING_ENABLED", config.Monitoring.Enabled)
 	config.Monitoring.PrometheusEnabled = getEnvBool("KUBERNETES_PROMETHEUS_ENABLED", config.Monitoring.PrometheusEnabled)
 	config.Monitoring.ServiceMonitor.Enabled = getEnvBool("KUBERNETES_SERVICE_MONITOR_ENABLED", config.Monitoring.ServiceMonitor.Enabled)
-	
+
 	// TLS
 	config.TLS.Enabled = getEnvBool("KUBERNETES_TLS_ENABLED", config.TLS.Enabled)
 	config.TLS.SecretName = getEnv("KUBERNETES_TLS_SECRET_NAME", config.TLS.SecretName)
 	config.TLS.CertManager.Enabled = getEnvBool("KUBERNETES_CERT_MANAGER_ENABLED", config.TLS.CertManager.Enabled)
 	config.TLS.CertManager.ClusterIssuer = getEnv("KUBERNETES_CERT_MANAGER_CLUSTER_ISSUER", config.TLS.CertManager.ClusterIssuer)
-	
+
 	// Timeouts
 	if deploymentTimeout := getEnv("KUBERNETES_DEPLOYMENT_TIMEOUT", ""); deploymentTimeout != "" {
 		if timeout, err := time.ParseDuration(deploymentTimeout); err == nil {
@@ -230,7 +232,7 @@ func loadKubernetesConfig() KubernetesConfig {
 			config.ReadinessTimeout = timeout
 		}
 	}
-	
+
 	return config
 }
 

@@ -68,7 +68,9 @@ spec:
           env:
             {{- include "agentarea.frontend.envs" . | nindent 12 }}
             {{- if or .Values.frontend.envVars .Values.global.envVars }}
-            {{- range $k, $v := mergeOverwrite .Values.frontend.envVars .Values.global.envVars }}
+            {{- $frontendEnv := default dict .Values.frontend.envVars -}}
+            {{- $globalEnv := default dict .Values.global.envVars -}}
+            {{- range $k, $v := mergeOverwrite $frontendEnv $globalEnv }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}

@@ -1,4 +1,16 @@
 {{- if and .Values.kratos.enabled .Values.kratos.generateJwks }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "agentarea.fullname" . }}-jwks-sa
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kratos-jwks-init
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -32,7 +44,7 @@ roleRef:
   name: {{ include "agentarea.fullname" . }}-jwks-writer
 subjects:
   - kind: ServiceAccount
-    name: {{ include "agentarea.serviceAccountName" . }}
+    name: {{ include "agentarea.fullname" . }}-jwks-sa
     namespace: {{ .Release.Namespace }}
 ---
 apiVersion: batch/v1
@@ -53,62 +65,124 @@ spec:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: kratos-jwks-init
     spec:
-      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      serviceAccountName: {{ include "agentarea.fullname" . }}-jwks-sa
       restartPolicy: Never
       containers:
         - name: jwks-generator
-          image: node:20-alpine
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ default .Chart.AppVersion .Values.backend.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           env:
             - name: SECRET_NAME
               value: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}
             - name: KID
               value: {{ default "agentarea-jwt-key-1" .Values.kratos.jwt.kid | quote }}
-          command: ["sh","-c"]
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+          command: ["python3", "-c"]
           args:
             - |
-              set -euo pipefail
-              apk add --no-cache curl jq nodejs npm
-              npm --silent add jose@4.15.5
-              JWKS_PRIVATE=$(node -e '
-              (async () => {
-                const jose = await import("jose");
-                const { privateKey, publicKey } = await jose.generateKeyPair("ES256");
-                const kid = process.env.KID || "agentarea-jwt-key-1";
-                const pub = await jose.exportJWK(publicKey);
-                const priv = await jose.exportJWK(privateKey);
-                pub.kid = kid; pub.use = "sig"; pub.alg = "ES256";
-                priv.kid = kid; priv.use = "sig"; priv.alg = "ES256";
-                const privJwks = { keys: [priv] };
-                const pubJwks = { keys: [pub] };
-                console.log(JSON.stringify({ privJwks, pubJwks }));
-              })();
-              ')
-              PRIV_JWKS=$(echo "$JWKS_PRIVATE" | jq -r '.privJwks')
-              PUB_JWKS=$(echo "$JWKS_PRIVATE" | jq -r '.pubJwks')
-              PRIV_B64=$(echo -n "$PRIV_JWKS" | base64 -w0)
-              PUB_B64=$(echo -n "$PUB_JWKS" | base64 -w0)
+              import os
+              import json
+              import base64
+              import ssl
+              import urllib.request
+              try:
+                  from cryptography.hazmat.primitives.asymmetric import ec
+              except ImportError:
+                  print("cryptography module not found, cannot generate JWKS")
+                  exit(1)
 
-              TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-              CA=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-              API="https://kubernetes.default.svc"
-              NAMESPACE="{{ .Release.Namespace }}"
+              # Config
+              SECRET_NAME = os.environ['SECRET_NAME']
+              NAMESPACE = os.environ['NAMESPACE']
+              KID = os.environ.get('KID', 'agentarea-jwt-key-1')
+              SA_PATH = '/var/run/secrets/kubernetes.io/serviceaccount'
+              TOKEN_PATH = os.path.join(SA_PATH, 'token')
+              CA_PATH = os.path.join(SA_PATH, 'ca.crt')
+              API_SERVER = "https://kubernetes.default.svc"
 
-              # Check if secret exists
-              if curl --silent --fail --cacert "$CA" -H "Authorization: Bearer $TOKEN" "$API/api/v1/namespaces/$NAMESPACE/secrets/$SECRET_NAME" > /dev/null; then
-                echo "Secret $SECRET_NAME already exists. Skipping generation."
-                exit 0
-              fi
+              def int_to_base64(value):
+                  value_hex = format(value, 'x')
+                  if len(value_hex) % 2 == 1: value_hex = '0' + value_hex
+                  bytes_val = bytes.fromhex(value_hex)
+                  return base64.urlsafe_b64encode(bytes_val).decode('utf-8').rstrip('=')
 
-              # Create secret with private JWKS for Kratos and public JWKS for backend
-              PAYLOAD=$(jq -n \
-                --arg name "$SECRET_NAME" \
-                --arg priv "$PRIV_B64" \
-                --arg pub "$PUB_B64" \
-                '{apiVersion:"v1",kind:"Secret",metadata:{name:$name,annotations:{"helm.sh/resource-policy":"keep"}},type:"Opaque",data:{"jwks.json":$priv,"jwks_public.json":$pub,"jwks_b64":$pub}}')
+              def check_secret_exists():
+                  url = f"{API_SERVER}/api/v1/namespaces/{NAMESPACE}/secrets/{SECRET_NAME}"
+                  try:
+                      with open(TOKEN_PATH) as f: token = f.read().strip()
+                  except FileNotFoundError:
+                      print("Service account token not found")
+                      exit(1)
+                  
+                  headers = {"Authorization": f"Bearer {token}"}
+                  ctx = ssl.create_default_context(cafile=CA_PATH)
+                  try:
+                      req = urllib.request.Request(url, headers=headers)
+                      with urllib.request.urlopen(req, context=ctx) as response:
+                          return response.status == 200
+                  except urllib.error.HTTPError as e:
+                      if e.code == 404: return False
+                      print(f"Error checking secret: {e}")
+                      raise
 
-              curl --silent --fail --cacert "$CA" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -X POST \
-                -d "$PAYLOAD" "$API/api/v1/namespaces/$NAMESPACE/secrets" && echo "Secret $SECRET_NAME created."
+              def create_secret(payload):
+                  url = f"{API_SERVER}/api/v1/namespaces/{NAMESPACE}/secrets"
+                  with open(TOKEN_PATH) as f: token = f.read().strip()
+                  headers = {
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json"
+                  }
+                  ctx = ssl.create_default_context(cafile=CA_PATH)
+                  data = json.dumps(payload).encode('utf-8')
+                  try:
+                      req = urllib.request.Request(url, data=data, headers=headers, method='POST')
+                      with urllib.request.urlopen(req, context=ctx) as response:
+                          print(f"Secret {SECRET_NAME} created.")
+                  except urllib.error.HTTPError as e:
+                      print(f"Error creating secret: {e.read().decode()}")
+                      raise
+
+              if check_secret_exists():
+                  print(f"Secret {SECRET_NAME} already exists.")
+                  exit(0)
+
+              print("Generating new JWKS...")
+              private_key = ec.generate_private_key(ec.SECP256R1())
+              public_key = private_key.public_key()
+              priv_nums = private_key.private_numbers()
+              pub_nums = public_key.public_numbers()
+
+              x = int_to_base64(pub_nums.x)
+              y = int_to_base64(pub_nums.y)
+              d = int_to_base64(priv_nums.private_value)
+
+              jwk_base = {"kty": "EC", "crv": "P-256", "x": x, "y": y, "alg": "ES256", "kid": KID, "use": "sig"}
+              jwk_priv = {**jwk_base, "d": d}
+              jwk_pub = jwk_base
+
+              priv_jwks = {"keys": [jwk_priv]}
+              pub_jwks = {"keys": [jwk_pub]}
+
+              priv_json = json.dumps(priv_jwks)
+              pub_json = json.dumps(pub_jwks)
+
+              payload = {
+                  "apiVersion": "v1",
+                  "kind": "Secret",
+                  "metadata": {
+                      "name": SECRET_NAME,
+                      "annotations": {"helm.sh/resource-policy": "keep"}
+                  },
+                  "type": "Opaque",
+                  "data": {
+                      "jwks.json": base64.b64encode(priv_json.encode()).decode(),
+                      "jwks_public.json": base64.b64encode(pub_json.encode()).decode(),
+                      "jwks_b64": base64.b64encode(pub_json.encode()).decode()
+                  }
+              }
+
+              create_secret(payload)
       {{- with .Values.backend.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

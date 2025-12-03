@@ -136,14 +136,13 @@ services:
     restart: always
     pull_policy: always
     environment:
-      - NODE_ENV=production
+      # - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
       - API_URL=${API_URL:-http://app:8000}
       - ORY_ADMIN_URL=${ORY_ADMIN_URL:-http://kratos:4434}
+      # ORY_SDK_URL: internal Docker URL for server-side API calls to Kratos
       - ORY_SDK_URL=${ORY_SDK_URL:-http://kratos:4433}
-    depends_on:
-      - app
-      - kratos
+      - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:3000}
     networks:
       - default
       - auth-network
@@ -191,8 +190,6 @@ services:
     restart: always
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
-    ports:
-      - 6379:6379
     volumes:
       - redis_data:/data
     networks:
@@ -201,9 +198,12 @@ services:
 
   agentarea-mcp-manager:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
+    build:
+      context: agentarea-mcp-manager/go-mcp-manager
+      dockerfile: Dockerfile
     container_name: agentarea-mcp-manager
     restart: unless-stopped
-    pull_policy: always
+    command: ["sleep", "infinity"]
     privileged: true
     ports:
       - "7999:80" # Traefik proxy (unified entry point)
@@ -222,7 +222,7 @@ services:
       TRAEFIK_NETWORK: podman
       REDIS_URL: redis://redis:6379
       MCP_PROXY_HOST: http://localhost:7999
-      CORE_API_URL: http://agentarea-api:8000
+      CORE_API_URL: http://app:8000
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings

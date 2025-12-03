@@ -1,143 +1,114 @@
 {{- if .Values.kratos.enabled }}
+{{- $frontendUrl := .Values.global.webapp.url | default (printf "http://%s-frontend:3000" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
+{{- $kratosPublicUrl := .Values.kratos.urls.public | default (printf "http://%s-kratos-public:4433" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
+{{- $kratosAdminUrl := .Values.kratos.urls.admin | default (printf "http://%s-kratos-admin:4434" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
+{{- $kratosConfigMapName := default (printf "%s-kratos-config" (include "agentarea.fullname" .)) .Values.kratos.configMapOverrideName -}}
+{{- if not .Values.kratos.configMapOverrideName }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "agentarea.fullname" . }}-kratos-config
+  name: {{ $kratosConfigMapName }}
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: kratos
 data:
   identity.schema.json: |
-    {
-      "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Person",
-      "type": "object",
-      "properties": {
-        "traits": {
-          "type": "object",
-          "properties": {
-            "email": {
-              "type": "string",
-              "format": "email",
-              "title": "Email",
-              "ory.sh/kratos": {
-                "credentials": {
-                  "password": {
-                    "identifier": true
-                  }
-                },
-                "recovery": {
-                  "via": "email"
-                }
-              }
-            },
-            "name": {
-              "type": "object",
-              "properties": {
-                "first": {
-                  "title": "First Name",
-                  "type": "string"
-                },
-                "last": {
-                  "title": "Last Name",
-                  "type": "string"
-                }
-              }
-            },
-            "username": {
-              "type": "string",
-              "title": "Username"
-            }
-          },
-          "required": [
-            "email"
-          ],
-          "additionalProperties": false
-        }
-      }
-    }
+{{ .Values.kratos.identitySchema | indent 4 }}
   kratos.yml: |
-    version: v1.3.1
-    dsn: ${DSN}
-    serve:
-      public:
-        base_url: http://{{ include "agentarea.fullname" . }}-kratos-public:4433/
-        cors:
-          enabled: true
-          allowed_origins:
-            - http://{{ include "agentarea.fullname" . }}-frontend:3000
-      admin:
-        base_url: http://{{ include "agentarea.fullname" . }}-kratos-admin:4434/
-    selfservice:
-      default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/
-      allowed_return_urls:
-        - http://{{ include "agentarea.fullname" . }}-frontend:3000
-        - http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
-        - http://{{ include "agentarea.fullname" . }}-frontend:3000/dashboard
-      flows:
-        error:
-          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/error
-        settings:
-          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/settings
-          privileged_session_max_age: 15m
-          required_aal: highest_available
-        recovery:
-          enabled: true
-          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/recovery
-          use: code
-        verification:
-          enabled: true
-          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/verification
-          use: code
-          after:
-            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
-        logout:
-          after:
-            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/login
-        login:
-          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/login
-          lifespan: 10m
-          after:
-            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
-        registration:
-          lifespan: 10m
-          ui_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/auth/registration
-          after:
-            default_browser_return_url: http://{{ include "agentarea.fullname" . }}-frontend:3000/workplace
-    secrets:
-      cookie:
-        - PLEASE-CHANGE-ME-I-AM-VERY-INSECURE-dev-only
-      cipher:
-        - SECRET-KEY-FOR-DEV-32-CHARACTERS
-    ciphers:
-      algorithm: xchacha20-poly1305
-    hashers:
-      algorithm: bcrypt
-      bcrypt:
-        cost: 8
-    identity:
-      default_schema_id: default
-      schemas:
-        - id: default
-          url: file:///etc/config/kratos/identity.schema.json
-    courier:
-      smtp:
-        connection_uri: {{ default "" .Values.kratos.smtp.connection_uri | quote }}
-        from_address: {{ default "noreply@example.com" .Values.kratos.smtp.from_address | quote }}
-        from_name: {{ default "AgentArea" .Values.kratos.smtp.from_name | quote }}
-    session:
-      cookie:
-        same_site: Lax
-        domain: {{ default "localhost" .Values.kratos.session.cookieDomain | quote }}
-        path: /
-      whoami:
-        tokenizer:
-          templates:
-            agentarea_jwt:
-              jwks_url: file:///etc/config/kratos/keys/jwks.json
-              claims_mapper_url: base64://{{ default "bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICd1c2VybmFtZScpIHRoZW4gc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg==" .Values.kratos.jwt.claims_mapper_b64 }}
-              ttl: 30m
+{{- $cfg := deepCopy (default dict .Values.kratos.config) -}}
+{{- /* serve.public.base_url */ -}}
+{{- $serve := get $cfg "serve" | default dict -}}
+{{- $_ := set $cfg "serve" $serve -}}
+{{- $public := get $serve "public" | default dict -}}
+{{- if not (hasKey $public "base_url") -}}
+{{- $_ = set $public "base_url" (printf "%s/" $kratosPublicUrl) -}}
+{{- end -}}
+{{- $_ = set $serve "public" $public -}}
+{{- /* serve.admin.base_url */ -}}
+{{- $admin := get $serve "admin" | default dict -}}
+{{- if not (hasKey $admin "base_url") -}}
+{{- $_ = set $admin "base_url" (printf "%s/" $kratosAdminUrl) -}}
+{{- end -}}
+{{- $_ = set $serve "admin" $admin -}}
+{{- /* selfservice defaults */ -}}
+{{- $self := get $cfg "selfservice" | default dict -}}
+{{- if not (hasKey $self "default_browser_return_url") -}}
+{{- $_ = set $self "default_browser_return_url" (printf "%s/" $frontendUrl) -}}
+{{- end -}}
+{{- $allowed := get $self "allowed_return_urls" | default list -}}
+{{- if eq (len $allowed) 0 -}}
+{{- $_ = set $self "allowed_return_urls" (list $frontendUrl (printf "%s/workplace" $frontendUrl) (printf "%s/dashboard" $frontendUrl)) -}}
+{{- end -}}
+{{- $flows := get $self "flows" | default dict -}}
+{{- $flowError := get $flows "error" | default dict -}}
+{{- if not (hasKey $flowError "ui_url") -}}{{- $_ = set $flowError "ui_url" (printf "%s/auth/error" $frontendUrl) -}}{{- end -}}
+{{- $_ = set $flows "error" $flowError -}}
+{{- $flowSettings := get $flows "settings" | default dict -}}
+{{- if not (hasKey $flowSettings "ui_url") -}}{{- $_ = set $flowSettings "ui_url" (printf "%s/auth/settings" $frontendUrl) -}}{{- end -}}
+{{- $_ = set $flows "settings" $flowSettings -}}
+{{- $flowRecovery := get $flows "recovery" | default dict -}}
+{{- if not (hasKey $flowRecovery "ui_url") -}}{{- $_ = set $flowRecovery "ui_url" (printf "%s/auth/recovery" $frontendUrl) -}}{{- end -}}
+{{- $_ = set $flows "recovery" $flowRecovery -}}
+{{- $flowVerification := get $flows "verification" | default dict -}}
+{{- if not (hasKey $flowVerification "ui_url") -}}{{- $_ = set $flowVerification "ui_url" (printf "%s/auth/verification" $frontendUrl) -}}{{- end -}}
+{{- $verAfter := get $flowVerification "after" | default dict -}}
+{{- if not (hasKey $verAfter "default_browser_return_url") -}}{{- $_ = set $verAfter "default_browser_return_url" (printf "%s/workplace" $frontendUrl) -}}{{- end -}}
+{{- $_ = set $flowVerification "after" $verAfter -}}
+{{- $_ = set $flows "verification" $flowVerification -}}
+{{- $flowLogout := get $flows "logout" | default dict -}}
+{{- $logoutAfter := get $flowLogout "after" | default dict -}}
+{{- if not (hasKey $logoutAfter "default_browser_return_url") -}}{{- $_ = set $logoutAfter "default_browser_return_url" (printf "%s/auth/login" $frontendUrl) -}}{{- end -}}
+{{- $_ = set $flowLogout "after" $logoutAfter -}}
+{{- $_ = set $flows "logout" $flowLogout -}}
+{{- $flowLogin := get $flows "login" | default dict -}}
+{{- if not (hasKey $flowLogin "ui_url") -}}{{- $_ = set $flowLogin "ui_url" (printf "%s/auth/login" $frontendUrl) -}}{{- end -}}
+{{- $loginAfter := get $flowLogin "after" | default dict -}}
+{{- if not (hasKey $loginAfter "default_browser_return_url") -}}{{- $_ = set $loginAfter "default_browser_return_url" (printf "%s/workplace" $frontendUrl) -}}{{- end -}}
+{{- $_ = set $flowLogin "after" $loginAfter -}}
+{{- $_ = set $flows "login" $flowLogin -}}
+{{- $flowRegistration := get $flows "registration" | default dict -}}
+{{- if not (hasKey $flowRegistration "ui_url") -}}{{- $_ = set $flowRegistration "ui_url" (printf "%s/auth/registration" $frontendUrl) -}}{{- end -}}
+{{- $regAfter := get $flowRegistration "after" | default dict -}}
+{{- if not (hasKey $regAfter "default_browser_return_url") -}}{{- $_ = set $regAfter "default_browser_return_url" (printf "%s/workplace" $frontendUrl) -}}{{- end -}}
+{{- $_ = set $flowRegistration "after" $regAfter -}}
+{{- $_ = set $flows "registration" $flowRegistration -}}
+{{- $_ = set $self "flows" $flows -}}
+{{- $_ = set $cfg "selfservice" $self -}}
+{{- /* SMTP courier if connection_uri provided */ -}}
+{{- if .Values.kratos.smtp.connection_uri -}}
+{{- $courier := get $cfg "courier" | default dict -}}
+{{- $smtp := get $courier "smtp" | default dict -}}
+{{- $_ = set $smtp "connection_uri" (.Values.kratos.smtp.connection_uri | quote) -}}
+{{- $_ = set $smtp "from_address" (default "noreply@example.com" .Values.kratos.smtp.from_address) -}}
+{{- $_ = set $smtp "from_name" (default "AgentArea" .Values.kratos.smtp.from_name) -}}
+{{- $_ = set $courier "smtp" $smtp -}}
+{{- $_ = set $cfg "courier" $courier -}}
+{{- end -}}
+{{- /* session cookie and whoami tokenizer */ -}}
+{{- $session := get $cfg "session" | default dict -}}
+{{- $cookie := get $session "cookie" | default dict -}}
+{{- if not (hasKey $cookie "same_site") -}}{{- $_ = set $cookie "same_site" "Lax" -}}{{- end -}}
+{{- if not (hasKey $cookie "domain") -}}{{- $_ = set $cookie "domain" (default "localhost" .Values.kratos.session.cookieDomain) -}}{{- end -}}
+{{- if not (hasKey $cookie "path") -}}{{- $_ = set $cookie "path" "/" -}}{{- end -}}
+{{- $_ = set $session "cookie" $cookie -}}
+{{- $whoami := get $session "whoami" | default dict -}}
+{{- $tokenizer := get $whoami "tokenizer" | default dict -}}
+{{- $templates := get $tokenizer "templates" | default dict -}}
+{{- $agentJwt := get $templates "agentarea_jwt" | default dict -}}
+{{- $_ = set $agentJwt "jwks_url" "file:///etc/config/kratos/keys/jwks.json" -}}
+{{- $_ = set $agentJwt "claims_mapper_url" (printf "base64://%s" (default "bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg==" .Values.kratos.jwt.claims_mapper_b64)) -}}
+{{- $_ = set $agentJwt "ttl" "30m" -}}
+{{- $_ = set $templates "agentarea_jwt" $agentJwt -}}
+{{- $_ = set $tokenizer "templates" $templates -}}
+{{- $_ = set $whoami "tokenizer" $tokenizer -}}
+{{- $_ = set $session "whoami" $whoami -}}
+{{- $_ = set $cfg "session" $session -}}
+{{- toYaml $cfg | nindent 4 -}}
+{{- range $filename, $content := .Values.kratos.files }}
+  {{ $filename }}: |
+{{- tpl $content $ | nindent 4 }}
+{{- end }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -181,10 +152,14 @@ spec:
                 secretKeyRef:
                   name: "{{ .Values.global.secrets.postgresql }}"
                   key: password
+            - name: DSN
+              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}?sslmode=disable&max_conns=20&max_idle_conns=4"
           command: ["sh","-c"]
           args:
             - >
-              export DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}?sslmode=disable&max_conns=20&max_idle_conns=4;
+              echo "Checking Env...";
+              env | grep POSTGRES;
+              echo "DSN: $DSN";
               kratos serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
           volumeMounts:
             - name: kratos-config
@@ -210,7 +185,7 @@ spec:
       volumes:
         - name: kratos-config
           configMap:
-            name: {{ include "agentarea.fullname" . }}-kratos-config
+            name: {{ $kratosConfigMapName }}
         - name: kratos-jwks
           secret:
             secretName: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName }}
@@ -259,7 +234,7 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: kratos-migrate
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "4"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
@@ -276,9 +251,17 @@ spec:
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           command: ["sh","-c"]
           args:
-            - >
-              export DSN=postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}?sslmode=disable&max_conns=20&max_idle_conns=4;
-              kratos migrate sql -e --yes
+            - |
+              echo "Checking environment..."
+              env | grep POSTGRES
+              echo "Constructing DSN..."
+              export DSN="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.global.database.name }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+              if [ -z "$DSN" ]; then
+                echo "Error: DSN is empty"
+                exit 1
+              fi
+              echo "DSN is set"
+              kratos migrate sql "$DSN" -e --yes
           env:
             - name: POSTGRES_USER
               valueFrom:

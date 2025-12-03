@@ -1,5 +1,6 @@
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.models import MCPServer
@@ -18,25 +19,90 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         limit: int = 100,
         offset: int = 0,
         creator_scoped: bool = False,
+        include_system: bool = True,
     ) -> list[MCPServer]:
-        """List MCP servers with filtering."""
-        filters = {}
+        """List MCP servers with filtering.
+        
+        By default, includes public servers from the "system" workspace (built-in servers)
+        in addition to the user's workspace servers.
+        
+        Args:
+            status: Filter by status
+            is_public: Filter by public flag
+            tag: Filter by tag
+            limit: Maximum number of records
+            offset: Number of records to skip
+            creator_scoped: Only return servers created by current user
+            include_system: Include public servers from system workspace (default True)
+        """
+        # Build custom query to include system public servers
+        query = select(self.model_class)
+        
+        if creator_scoped:
+            # Only user's own servers in their workspace
+            query = query.where(self._get_creator_workspace_filter())
+        elif include_system:
+            # Include both workspace servers AND public system servers
+            query = query.where(
+                or_(
+                    self.model_class.workspace_id == self.user_context.workspace_id,
+                    (self.model_class.workspace_id == "system") & (self.model_class.is_public == True),
+                )
+            )
+        else:
+            # Only workspace servers
+            query = query.where(self._get_workspace_filter())
+        
+        # Apply additional filters
         if status is not None:
-            filters["status"] = status
+            query = query.where(self.model_class.status == status)
         if is_public is not None:
-            filters["is_public"] = is_public
-
-        # Note: tag filtering with JSON arrays is complex and may need custom implementation
-        # For now, we'll handle basic filters through the base class
-        servers = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
-        )
+            query = query.where(self.model_class.is_public == is_public)
+        
+        # Apply pagination
+        if offset > 0:
+            query = query.offset(offset)
+        if limit > 0:
+            query = query.limit(limit)
+        
+        result = await self.session.execute(query)
+        servers = list(result.scalars().all())
 
         # Apply tag filtering manually if needed
         if tag is not None:
             servers = [s for s in servers if tag in (s.tags or [])]
 
         return servers
+
+    async def get_server_by_id(
+        self,
+        server_id: str,
+        include_system: bool = True,
+    ) -> MCPServer | None:
+        """Get an MCP server by ID, including system servers if requested.
+        
+        Args:
+            server_id: The server ID to look up
+            include_system: If True, also search in system workspace for public servers
+            
+        Returns:
+            The MCPServer if found, None otherwise
+        """
+        # Build query to find server in user's workspace OR in system workspace (if public)
+        query = select(self.model_class).where(self.model_class.id == server_id)
+        
+        if include_system:
+            query = query.where(
+                or_(
+                    self.model_class.workspace_id == self.user_context.workspace_id,
+                    (self.model_class.workspace_id == "system") & (self.model_class.is_public == True),
+                )
+            )
+        else:
+            query = query.where(self.model_class.workspace_id == self.user_context.workspace_id)
+        
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
 
     async def get_by_workspace_id(
         self, workspace_id: str, limit: int = 100, offset: int = 0

@@ -71,3 +71,24 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Frontend URL
+*/}}
+{{- define "agentarea.frontendUrl" -}}
+{{- .Values.global.webapp.url | default (printf "http://%s-frontend:3000" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
+{{- end -}}
+
+{{/*
+Kratos Public URL
+*/}}
+{{- define "agentarea.kratosPublicUrl" -}}
+{{- .Values.kratos.urls.public | default (printf "http://%s-kratos-public:4433" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
+{{- end -}}
+
+{{/*
+Kratos Admin URL
+*/}}
+{{- define "agentarea.kratosAdminUrl" -}}
+{{- .Values.kratos.urls.admin | default (printf "http://%s-kratos-admin:4434" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
+{{- end -}}

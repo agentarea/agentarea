@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
-from fastapi_mcp import AuthConfig, FastApiMCP
+# from fastapi_mcp import AuthConfig, FastApiMCP
 
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
@@ -248,15 +248,15 @@ def create_app() -> FastAPI:
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(protected_v1_router, tags=["v1"])
 
-    mcp_server = FastApiMCP(
-        app,
-        auth_config=AuthConfig(
-            dependencies=[Depends(verify_mcp_auth)],
-        ),
-    )
-    # Mount HTTP MCP server at /mcp endpoint
-    # Accepts JSON-RPC 2.0 requests with streamable-http transport
-    mcp_server.mount_http()
+    # mcp_server = FastApiMCP(
+    #     app,
+    #     auth_config=AuthConfig(
+    #         dependencies=[Depends(verify_mcp_auth)],
+    #     ),
+    # )
+    # # Mount HTTP MCP server at /mcp endpoint
+    # # Accepts JSON-RPC 2.0 requests with streamable-http transport
+    # mcp_server.mount_http()
 
     logger.info("FastAPI-MCP server mounted at /mcp with authentication enabled")
 

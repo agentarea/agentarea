@@ -1,4 +1,4 @@
-{{- if and .Values.ingress.enabled .Values.kratos.enabled }}
+{{- if and .Values.ingress.enabled .Values.kratos.enabled .Values.ingress.hosts.kratos.host }}
 {{- $fullName := include "agentarea.fullname" . -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

@@ -133,7 +133,7 @@ global:
 
   # Web application configuration
   webapp:
-    url: ""  # Will be set from ingress or service
+    url: ""  # Public URL of the frontend (e.g. https://app.example.com). If empty, defaults to internal service URL.
     
   # Jobs configuration - Background task processing
   jobs:
@@ -177,17 +177,17 @@ global:
     resources:
       mainContainer:
         cpu:
-          request: 500m
+          request: 50m
           limit: 1000m
         memory:
-          request: 512Mi
+          request: 128Mi
           limit: 1Gi
       sidecarContainer:
         cpu:
-          request: 100m
+          request: 10m
           limit: 200m
         memory:
-          request: 128Mi
+          request: 64Mi
           limit: 256Mi
 
   # Service mesh configuration
@@ -205,7 +205,7 @@ global:
     # Health checks
     health:
       enabled: true
-      port: 8000
+      port: 8001
       path: "/health"
 
   # Security configuration
@@ -547,8 +547,18 @@ kratos:
   image:
     repository: oryd/kratos
     tag: "v1.3.1"
+  
+  # URL configuration
+  # If not set, these default to internal Kubernetes service DNS names
+  urls:
+    public: "" # e.g. https://auth.example.com
+    admin: ""  # e.g. http://kratos-admin.internal
+  
+  configMapOverrideName: ""
+  files: {}
+
   secretName: ""
-  generateJwks: true
+  generateJwks: false
   smtp:
     connection_uri: ""
     from_address: "noreply@example.com"
@@ -561,3 +571,99 @@ kratos:
     claims_mapper_b64: "bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICd1c2VybmFtZScpIHRoZW4gc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg=="
     issuer: "https://agentarea.dev"
     audience: "agentarea-api"
+
+  # Kratos Identity Schema
+  identitySchema: |
+    {
+      "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Person",
+      "type": "object",
+      "properties": {
+        "traits": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email",
+              "ory.sh/kratos": {
+                "credentials": {
+                  "password": {
+                    "identifier": true
+                  }
+                },
+                "recovery": {
+                  "via": "email"
+                }
+              }
+            },
+            "name": {
+              "type": "object",
+              "properties": {
+                "first": {
+                  "title": "First Name",
+                  "type": "string"
+                },
+                "last": {
+                  "title": "Last Name",
+                  "type": "string"
+                }
+              }
+            },
+            "username": {
+              "type": "string",
+              "title": "Username"
+            }
+          },
+          "required": [
+            "email"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+
+  # Kratos Configuration (kratos.yml)
+  # Provide a pure YAML map here (no Helm templating). Dynamic fields (URLs, SMTP, cookie domain,
+  # whoami tokenizer) are injected by the chart at render time.
+  config:
+    version: v1.3.1
+    serve:
+      public:
+        cors:
+          enabled: true
+          allowed_origins:
+            - https://staging-0.agentarea.ai
+            - https://*.staging-0.agentarea.ai
+          allowed_methods:
+            - POST
+            - GET
+            - PUT
+            - PATCH
+            - DELETE
+          allowed_headers:
+            - Authorization
+            - Cookie
+            - Content-Type
+            - X-Session-Token
+          exposed_headers:
+            - Content-Type
+            - Set-Cookie
+    dsn: ${DSN}
+    secrets:
+      cookie:
+        - PLEASE-CHANGE-ME-I-AM-VERY-INSECURE-dev-only
+      cipher:
+        - SECRET-KEY-FOR-DEV-32-CHARACTERS
+    ciphers:
+      algorithm: xchacha20-poly1305
+    hashers:
+      algorithm: bcrypt
+      bcrypt:
+        cost: 8
+    identity:
+      default_schema_id: default
+      schemas:
+        - id: default
+          url: file:///etc/config/kratos/identity.schema.json

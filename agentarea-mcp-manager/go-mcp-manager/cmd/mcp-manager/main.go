@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -40,11 +41,11 @@ func main() {
 	// Detect environment and initialize appropriate backend
 	var backend backends.Backend
 	var containerManager *container.Manager
-	
+
 	if cfg.Environment != "" {
 		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
 	}
-	
+
 	envType := environment.DetectEnvironment(cfg.Environment, logger)
 	logger.Info("Environment detected", slog.String("type", envType))
 
@@ -57,27 +58,27 @@ func main() {
 			os.Exit(1)
 		}
 		backend = k8sBackend
-		
+
 		// Initialize Kubernetes backend
 		if err := backend.Initialize(ctx); err != nil {
 			logger.Error("Failed to initialize Kubernetes backend", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		
+
 	case "docker":
 		logger.Info("Initializing Docker backend")
 		dockerBackend := backends.NewDockerBackend(cfg, logger)
 		backend = dockerBackend
-		
+
 		// Get the container manager from the docker backend for compatibility
 		containerManager = dockerBackend.GetManager()
-		
+
 		// Initialize Docker backend
 		if err := backend.Initialize(ctx); err != nil {
 			logger.Error("Failed to initialize Docker backend", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		
+
 	default:
 		logger.Error("Unsupported environment type", slog.String("type", envType))
 		os.Exit(1)
@@ -86,7 +87,7 @@ func main() {
 	// Start Traefik in background only for Docker environments
 	if envType == "docker" {
 		go func() {
-			if err := startTraefik(logger); err != nil {
+			if err := startTraefik(cfg, logger); err != nil {
 				logger.Error("Failed to start Traefik", slog.String("error", err.Error()))
 			}
 		}()
@@ -263,19 +264,29 @@ func getLogLevel(level string) slog.Level {
 }
 
 // startTraefik starts the Traefik reverse proxy
-func startTraefik(logger *slog.Logger) error {
+func startTraefik(cfg *config.Config, logger *slog.Logger) error {
 	logger.Info("Starting embedded Traefik reverse proxy")
 
+	// Determine config directory from dynamic config path
+	configPath := cfg.Traefik.ConfigPath
+	if configPath == "" {
+		configPath = "/etc/traefik/dynamic.yml"
+	}
+	configDir := filepath.Dir(configPath)
+
+	// Ensure config directory exists
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
 	// Create Traefik static configuration
-	if err := createTraefikStaticConfig(); err != nil {
+	staticConfigPath := filepath.Join(configDir, "traefik.yml")
+	if err := createTraefikStaticConfig(configDir, staticConfigPath); err != nil {
 		return fmt.Errorf("failed to create Traefik static config: %w", err)
 	}
 
-	// Ensure dynamic config directory exists
-	os.MkdirAll("/etc/traefik", 0755)
-
 	// Start Traefik process
-	cmd := exec.Command("traefik", "--configfile=/etc/traefik/traefik.yml")
+	cmd := exec.Command("traefik", fmt.Sprintf("--configfile=%s", staticConfigPath))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -295,8 +306,8 @@ func startTraefik(logger *slog.Logger) error {
 }
 
 // createTraefikStaticConfig creates the static Traefik configuration
-func createTraefikStaticConfig() error {
-	staticConfig := `
+func createTraefikStaticConfig(configDir, outputPath string) error {
+	staticConfig := fmt.Sprintf(`
 # Static Traefik configuration
 global:
   checkNewVersion: false
@@ -313,13 +324,13 @@ entryPoints:
 
 providers:
   file:
-    directory: /etc/traefik
+    directory: %s
     watch: true
 
 api:
   dashboard: true
   insecure: true
-`
+`, configDir)
 
-	return os.WriteFile("/etc/traefik/traefik.yml", []byte(staticConfig), 0644)
+	return os.WriteFile(outputPath, []byte(staticConfig), 0644)
 }

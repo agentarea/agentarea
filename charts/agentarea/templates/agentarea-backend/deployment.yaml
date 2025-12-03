@@ -76,7 +76,9 @@ spec:
               containerPort: {{ .Values.global.monitoring.health.port }}
               protocol: TCP
           env:
+            {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
@@ -85,7 +87,9 @@ spec:
             {{- include "agentarea.backend.envs" . | nindent 12 }}
             {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}
             {{- if or .Values.backend.envVars .Values.global.envVars }}
-            {{- range $k, $v := mergeOverwrite .Values.backend.envVars .Values.global.envVars }}
+            {{- $backendEnv := default dict .Values.backend.envVars -}}
+            {{- $globalEnv := default dict .Values.global.envVars -}}
+            {{- range $k, $v := mergeOverwrite $backendEnv $globalEnv }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}

@@ -33,7 +33,9 @@ spec:
             - name: DYNAMIC_CONFIG_FILE_PATH
               value: "/etc/temporal/config/dynamicconfig/development-sql.yaml"
             {{- if or .Values.temporal.envVars .Values.global.envVars }}
-            {{- range $k, $v := mergeOverwrite .Values.temporal.envVars .Values.global.envVars }}
+            {{- $temporalEnv := default dict .Values.temporal.envVars -}}
+            {{- $globalEnv := default dict .Values.global.envVars -}}
+            {{- range $k, $v := mergeOverwrite $temporalEnv $globalEnv }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
@@ -109,7 +111,9 @@ spec:
           env:
             {{- include "agentarea.temporalUi.envs" . | nindent 12 }}
             {{- if or .Values.temporalUi.envVars .Values.global.envVars }}
-            {{- range $k, $v := mergeOverwrite .Values.temporalUi.envVars .Values.global.envVars }}
+            {{- $temporalUiEnv := default dict .Values.temporalUi.envVars -}}
+            {{- $globalEnv := default dict .Values.global.envVars -}}
+            {{- range $k, $v := mergeOverwrite $temporalUiEnv $globalEnv }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}

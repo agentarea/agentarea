@@ -1,4 +1,4 @@
-{{- if and .Values.ingress.enabled .Values.frontend.enabled }}
+{{- if and .Values.ingress.enabled .Values.frontend.enabled .Values.ingress.hosts.frontend.host }}
 {{- $fullName := include "agentarea.fullname" . -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

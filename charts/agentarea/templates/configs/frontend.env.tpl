@@ -8,8 +8,8 @@ PORT: "3000"
 NODE_ENV: "production"
 API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
 ORY_ADMIN_URL: "http://{{ include "agentarea.fullname" . }}-kratos-admin:4434"
-ORY_SDK_URL: "http://{{ include "agentarea.fullname" . }}-kratos-public:4433"
-NEXT_PUBLIC_ORY_SDK_URL: "http://{{ include "agentarea.fullname" . }}-kratos-public:4433"
+ORY_SDK_URL: {{ .Values.kratos.urls.public | default (printf "http://%s-kratos-public:4433" (include "agentarea.fullname" .)) | quote }}
+NEXT_PUBLIC_ORY_SDK_URL: {{ .Values.kratos.urls.public | default (printf "http://%s-kratos-public:4433" (include "agentarea.fullname" .)) | quote }}
 METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
 {{- end }}

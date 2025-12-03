@@ -35,13 +35,27 @@ RUN apk add --no-cache \
     shadow \
     dumb-init \
     iptables \
+    wget \
+    tar \
     && rm -rf /var/cache/apk/*
+
+# Install Traefik with architecture detection
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+        "amd64") TRAEFIK_ARCH="amd64" ;; \
+        "arm64") TRAEFIK_ARCH="arm64" ;; \
+        *) TRAEFIK_ARCH="amd64" ;; \
+    esac \
+    && wget -O /tmp/traefik.tar.gz "https://github.com/traefik/traefik/releases/download/v3.0.4/traefik_v3.0.4_linux_${TRAEFIK_ARCH}.tar.gz" \
+    && tar -xzf /tmp/traefik.tar.gz -C /usr/local/bin/ \
+    && chmod +x /usr/local/bin/traefik \
+    && rm /tmp/traefik.tar.gz
 
 # Configure Podman
 RUN mkdir -p /etc/containers \
     && printf '[registries.search]\nregistries = ["docker.io", "quay.io"]\n' > /etc/containers/registries.conf \
     && printf '[storage]\ndriver = "overlay"\nrunroot = "/tmp/containers"\ngraphroot = "/var/lib/containers/storage"\n\n[storage.options]\nmount_program = "/usr/bin/fuse-overlayfs"\n' > /etc/containers/storage.conf \
-    && printf '[containers]\n' > /etc/containers/containers.conf
+    && printf '[engine]\nlock_type="file"\n\n[containers]\n' > /etc/containers/containers.conf
 
 # Create non-root user for Podman
 RUN adduser -D -u 1000 -g users -s /bin/sh podman-user \
@@ -82,5 +96,5 @@ USER root
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 
-# Run the application
-CMD ["/app/mcp-manager"] 
+# Run the application via startup script (initializes Podman first)
+CMD ["/bin/sh", "/app/start.sh"]

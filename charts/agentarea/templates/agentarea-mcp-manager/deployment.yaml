@@ -32,12 +32,16 @@ spec:
               containerPort: 80
               protocol: TCP
           env:
+            {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
             {{- if or .Values.mcpManager.envVars .Values.global.envVars }}
-            {{- range $k, $v := mergeOverwrite .Values.mcpManager.envVars .Values.global.envVars }}
+            {{- $mcpEnv := default dict .Values.mcpManager.envVars -}}
+            {{- $globalEnv := default dict .Values.global.envVars -}}
+            {{- range $k, $v := mergeOverwrite $mcpEnv $globalEnv }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}

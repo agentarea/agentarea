@@ -38,7 +38,7 @@ type Manager struct {
 // NewManager creates a new container manager with Traefik integration
 func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	traefikManager := NewTraefikManager(cfg, logger)
-	healthChecker := NewHealthChecker(logger)
+	healthChecker := NewHealthChecker(cfg, logger)
 	eventPublisher := events.NewEventPublisher(cfg.Redis.URL, logger)
 
 	// Create context for health monitoring
@@ -57,7 +57,7 @@ func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	}
 
 	// Create validator with manager reference (after manager is created)
-	manager.validator = NewContainerValidator(logger, manager)
+	manager.validator = NewContainerValidator(logger, manager, cfg.Container.Runtime)
 
 	return manager
 }
@@ -137,11 +137,11 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		Environment: req.Environment,
 	}
 
-	// Build podman run command
+	// Build runtime run command
 	args := m.buildPodmanRunArgs(container)
 
-	// Execute podman run
-	cmd := exec.CommandContext(ctx, "podman", args...)
+	// Execute runtime run
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		container.Status = models.StatusError
@@ -230,8 +230,8 @@ func (m *Manager) GetContainerStatus(ctx context.Context, serviceName string) (m
 		return models.StatusError, fmt.Errorf("container %s not found", serviceName)
 	}
 
-	// Get real-time status from podman
-	cmd := exec.CommandContext(ctx, "podman", "inspect", container.ID, "--format", "{{.State.Status}}")
+	// Get real-time status from runtime
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", container.ID, "--format", "{{.State.Status}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return models.StatusError, fmt.Errorf("failed to get container status: %w", err)
@@ -303,7 +303,7 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 	container.Status = models.StatusStopping
 
 	// Stop container
-	stopCmd := exec.CommandContext(ctx, "podman", "stop", container.ID)
+	stopCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "stop", container.ID)
 	if output, err := stopCmd.CombinedOutput(); err != nil {
 		m.logger.Error("Failed to stop container",
 			slog.String("container", container.Name),
@@ -312,7 +312,7 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 	}
 
 	// Remove container
-	rmCmd := exec.CommandContext(ctx, "podman", "rm", container.ID)
+	rmCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", container.ID)
 	if output, err := rmCmd.CombinedOutput(); err != nil {
 		m.logger.Error("Failed to remove container",
 			slog.String("container", container.Name),
@@ -372,7 +372,8 @@ func (m *Manager) getRunningCountUnsafe() int {
 // discoverContainers discovers existing containers managed by this service
 func (m *Manager) discoverContainers(ctx context.Context) error {
 	// List all containers with our prefix
-	cmd := exec.CommandContext(ctx, "podman", "ps", "-a", "--format", "json")
+	// Use {{json .}} to get JSON lines output which is compatible across more versions
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "ps", "-a", "--format", "{{json .}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -383,8 +384,19 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 	}
 
 	var podmanContainers []map[string]interface{}
-	if err := json.Unmarshal(output, &podmanContainers); err != nil {
-		return fmt.Errorf("failed to parse container list: %w", err)
+
+	// Parse NDJSON (newline delimited JSON)
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var container map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &container); err != nil {
+			m.logger.Warn("Failed to parse container line", slog.String("line", line), slog.String("error", err.Error()))
+			continue
+		}
+		podmanContainers = append(podmanContainers, container)
 	}
 
 	// Load Traefik configuration to find existing slugs
@@ -410,7 +422,7 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 		// Extract service name from container environment (original name)
 		// First try to get original service name from environment variable
 		originalServiceName := ""
-		if inspectCmd := exec.CommandContext(ctx, "podman", "inspect", pc["Id"].(string), "--format", "{{.Config.Env}}"); inspectCmd != nil {
+		if inspectCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", pc["Id"].(string), "--format", "{{.Config.Env}}"); inspectCmd != nil {
 			if inspectOutput, err := inspectCmd.CombinedOutput(); err == nil {
 				envStr := string(inspectOutput)
 				if strings.Contains(envStr, "MCP_SERVICE_NAME=") {
@@ -440,7 +452,7 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 
 		// Get container port from inspect
 		port := 8000 // Default port
-		if inspectCmd := exec.CommandContext(ctx, "podman", "inspect", containerID, "--format", "{{.Config.Env}}"); inspectCmd != nil {
+		if inspectCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID, "--format", "{{.Config.Env}}"); inspectCmd != nil {
 			if inspectOutput, err := inspectCmd.CombinedOutput(); err == nil {
 				envStr := string(inspectOutput)
 				if strings.Contains(envStr, "MCP_CONTAINER_PORT=") {
@@ -580,7 +592,7 @@ func (m *Manager) waitForContainer(ctx context.Context, containerID string) erro
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for container to start")
 		case <-ticker.C:
-			cmd := exec.CommandContext(ctx, "podman", "inspect", containerID, "--format", "{{.State.Status}}")
+			cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID, "--format", "{{.State.Status}}")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				continue
@@ -641,7 +653,7 @@ func mergeEnvironment(template, request map[string]string) map[string]string {
 // getContainerIP retrieves the IP address of a container in the mcp-network
 func (m *Manager) getContainerIP(ctx context.Context, containerID string) (string, error) {
 	// Use a simpler approach to get container IP
-	cmd := exec.CommandContext(ctx, "podman", "inspect", containerID)
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to inspect container: %w", err)
@@ -834,8 +846,8 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	// Build podman run command
 	args := m.buildPodmanRunArgs(container)
 
-	// Execute podman run
-	cmd := exec.CommandContext(ctx, "podman", args...)
+	// Execute container runtime run command
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		container.Status = models.StatusError
@@ -1340,7 +1352,7 @@ func (m *Manager) restartContainer(ctx context.Context, container *models.Contai
 	container.UpdatedAt = time.Now()
 
 	// Start the container
-	cmd := exec.CommandContext(ctx, "podman", "start", container.ID)
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "start", container.ID)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		container.Status = models.StatusError

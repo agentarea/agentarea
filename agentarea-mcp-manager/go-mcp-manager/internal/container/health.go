@@ -10,19 +10,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/models"
 )
 
 // HealthChecker handles health checks for MCP containers
 type HealthChecker struct {
 	logger     *slog.Logger
+	config     *config.Config
 	httpClient *http.Client
 }
 
 // NewHealthChecker creates a new health checker
-func NewHealthChecker(logger *slog.Logger) *HealthChecker {
+func NewHealthChecker(cfg *config.Config, logger *slog.Logger) *HealthChecker {
 	return &HealthChecker{
 		logger: logger,
+		config: cfg,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -132,13 +135,13 @@ func (h *HealthChecker) PerformHealthCheck(ctx context.Context, container *model
 	return result, nil
 }
 
-// getRealTimeContainerStatus gets the real-time status from Podman
+// getRealTimeContainerStatus gets the real-time status from Runtime
 func (h *HealthChecker) getRealTimeContainerStatus(ctx context.Context, container *models.Container) models.ContainerStatus {
 	if container.ID == "" {
 		return models.StatusError
 	}
 
-	cmd := exec.CommandContext(ctx, "podman", "inspect", container.ID, "--format", "{{.State.Status}}")
+	cmd := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", container.ID, "--format", "{{.State.Status}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		h.logger.Error("Failed to get real-time container status",
@@ -316,7 +319,7 @@ func (h *HealthChecker) GetHealthSummary(ctx context.Context, containers []*mode
 
 // getContainerIP retrieves the IP address of a container
 func (h *HealthChecker) getContainerIP(ctx context.Context, containerID string) (string, error) {
-	cmd := exec.CommandContext(ctx, "podman", "inspect", containerID, "--format", "{{.NetworkSettings.IPAddress}}")
+	cmd := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{.NetworkSettings.IPAddress}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get container IP: %w", err)
@@ -325,7 +328,7 @@ func (h *HealthChecker) getContainerIP(ctx context.Context, containerID string) 
 	ip := strings.TrimSpace(string(output))
 	if ip == "" {
 		// Try alternative format for newer podman versions
-		cmd = exec.CommandContext(ctx, "podman", "inspect", containerID, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
+		cmd = exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
 		output, err = cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("failed to get container IP (alternative): %w", err)
@@ -342,7 +345,7 @@ func (h *HealthChecker) getContainerIP(ctx context.Context, containerID string) 
 
 // getContainerExposedPort retrieves the first exposed HTTP port from a container
 func (h *HealthChecker) getContainerExposedPort(ctx context.Context, containerID string) (int, error) {
-	cmd := exec.CommandContext(ctx, "podman", "inspect", containerID, "--format", "{{range $port, $config := .Config.ExposedPorts}}{{$port}} {{end}}")
+	cmd := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{range $port, $config := .Config.ExposedPorts}}{{$port}} {{end}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get container exposed ports: %w", err)
@@ -373,7 +376,7 @@ func (h *HealthChecker) getContainerExposedPort(ctx context.Context, containerID
 // guessHTTPPort tries to guess the HTTP port based on common patterns
 func (h *HealthChecker) guessHTTPPort(ctx context.Context, containerID string) (int, error) {
 	// Get container image to make educated guesses
-	cmd := exec.CommandContext(ctx, "podman", "inspect", containerID, "--format", "{{.Config.Image}}")
+	cmd := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{.Config.Image}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return 80, nil // Default to port 80

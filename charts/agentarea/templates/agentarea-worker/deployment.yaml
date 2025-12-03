@@ -66,13 +66,17 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           env:
+            {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.database.envs" . | nindent 12 }}
+            {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.worker.envs" . | nindent 12 }}
             {{- if or .Values.worker.envVars .Values.global.envVars }}
-            {{- range $k, $v := mergeOverwrite .Values.worker.envVars .Values.global.envVars }}
+            {{- $workerEnv := default dict .Values.worker.envVars -}}
+            {{- $globalEnv := default dict .Values.global.envVars -}}
+            {{- range $k, $v := mergeOverwrite $workerEnv $globalEnv }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
