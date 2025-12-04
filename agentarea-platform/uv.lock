@@ -203,7 +203,7 @@ requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-llm", editable = "libs/llm" },
     { name = "faiss-cpu", marker = "extra == 'faiss'", specifier = ">=1.7.4" },
-    { name = "numpy", marker = "extra == 'faiss'", specifier = ">=1.24.0" },
+    { name = "numpy", marker = "extra == 'faiss'", specifier = ">=2.3.4" },
     { name = "pydantic", specifier = ">=2.4.2" },
 ]
 provides-extras = ["faiss"]
