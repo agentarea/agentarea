@@ -22,8 +22,23 @@ def quote_if_needed(val: str) -> str:
     if val is None:
         return '""'
     s = str(val)
+    
+    # If the value is a Helm template expression starting with {{ and ending with }},
+    # we want to preserve it exactly as is, but ensure the result is quoted for YAML safety if needed.
+    # However, the user specifically wants `DBNAME: {{ .Values... | quote }}` structure for some fields.
+    # The previous manual fix used `quote` pipeline within the template.
+    
     if s.startswith('"') and s.endswith('"'):
         return s
+    
+    # Check if it looks like a Helm template
+    if "{{" in s and "}}" in s:
+        # If it's a simple template substitution, wrap in quotes to be safe string
+        # unless it already has the quote pipeline
+        if "| quote" in s:
+             return s
+        return f'"{s}"'
+        
     return f'"{s}"'
 
 

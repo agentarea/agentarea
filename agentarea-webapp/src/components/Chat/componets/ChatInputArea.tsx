@@ -11,6 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { cn } from "@/lib/utils";
 import { MentionMenu } from "../MentionMenu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export interface MentionMenuProps {
   show: boolean;
@@ -121,6 +128,33 @@ export interface ChatInputAreaProps {
    * Additional className for container
    */
   containerClassName?: string;
+
+  /**
+   * Current agent (for agent selector)
+   */
+  currentAgent?: {
+    id: string;
+    name: string;
+    description?: string | null;
+  };
+
+  /**
+   * Available agents (for agent selector)
+   */
+  availableAgents?: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+  }>;
+
+  /**
+   * Agent change handler
+   */
+  onAgentChange?: (agent: {
+    id: string;
+    name: string;
+    description?: string | null;
+  }) => void;
 }
 
 /**
@@ -172,6 +206,9 @@ export function ChatInputArea({
   rows = 3,
   className,
   containerClassName,
+  currentAgent,
+  availableAgents,
+  onAgentChange,
 }: ChatInputAreaProps) {
   const SendIcon = sendButtonIcon === "arrow" ? ArrowUp : Send;
 
@@ -206,6 +243,33 @@ export function ChatInputArea({
           rows={rows}
           onKeyDown={onKeyDown}
         />
+
+        {/* Agent Selector */}
+        {availableAgents && availableAgents.length > 1 && currentAgent && onAgentChange && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Agent:</span>
+            <Select
+              value={currentAgent.id}
+              onValueChange={(agentId) => {
+                const agent = availableAgents.find((a) => a.id === agentId);
+                if (agent) {
+                  onAgentChange(agent);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 w-48 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAgents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2">
           {/* Selected Files Display */}

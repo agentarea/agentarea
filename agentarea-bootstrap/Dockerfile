@@ -38,6 +38,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy project files
 COPY . .
 
+# Copy provider configurations
+COPY data/ /app/llm/
+
 # Set proper permissions
 RUN chown -R appuser:appuser /app
 

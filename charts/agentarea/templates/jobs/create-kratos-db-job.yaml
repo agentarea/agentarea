@@ -1,0 +1,43 @@
+{{- if .Values.kratos.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-create-kratos-db
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: create-kratos-db
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: create-kratos-db
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: create-db
+          image: "postgres:alpine"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "Checking/Creating kratos database..."
+              export PGPASSWORD=$POSTGRES_PASSWORD
+              psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.kratos.database.name | default "kratos" }}'" | grep -q 1 || \
+              psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -c "CREATE DATABASE {{ .Values.kratos.database.name | default "kratos" }};"
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: password
+{{- end }}

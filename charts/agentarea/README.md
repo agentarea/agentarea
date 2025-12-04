@@ -151,7 +151,7 @@ Build images for local testing:
 docker build -t agentarea/agentarea-backend:latest -f core/apps/api/Dockerfile core/
 docker build -t agentarea/agentarea-worker:latest -f core/apps/worker/Dockerfile core/
 docker build -t agentarea/agentarea-frontend:latest -f frontend/Dockerfile frontend/
-docker build -t agentarea/mcp-manager:latest -f agentarea-mcp-manager/go-mcp-manager/Dockerfile agentarea-mcp-manager/go-mcp-manager/
+docker build -t agentarea/mcp-manager:latest -f agentarea-mcp-manager/Dockerfile agentarea-mcp-manager/
 docker build -t agentarea/agentarea-bootstrap:latest -f agentarea-bootstrap/Dockerfile agentarea-bootstrap/
 
 # For Minikube

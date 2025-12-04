@@ -319,8 +319,8 @@ jobs:
     uses: ./.github/workflows/docker-build-push.yml
     with:
       component: mcp-manager
-      context: agentarea-mcp-manager/go-mcp-manager
-      dockerfile: agentarea-mcp-manager/go-mcp-manager/Dockerfile
+      context: agentarea-mcp-manager
+      dockerfile: agentarea-mcp-manager/Dockerfile
       use-private-registry: true
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -397,11 +397,11 @@ jobs:
           go-version: '1.25'
 
       - name: Run Go tests
-        working-directory: agentarea-mcp-manager/go-mcp-manager
+        working-directory: agentarea-mcp-manager
         run: go test ./...
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          working-directory: agentarea-mcp-manager/go-mcp-manager
+          working-directory: agentarea-mcp-manager

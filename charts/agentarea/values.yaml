@@ -451,6 +451,11 @@ temporal:
   image:
     repository: temporalio/auto-setup
     tag: "1.29.1"
+  
+  # Database configuration
+  database:
+    name: "temporal"
+  
   service:
     type: ClusterIP
     port: 7233
@@ -554,6 +559,9 @@ kratos:
     public: "" # e.g. https://auth.example.com
     admin: ""  # e.g. http://kratos-admin.internal
   
+  database:
+    name: "kratos"
+
   configMapOverrideName: ""
   files: {}
 

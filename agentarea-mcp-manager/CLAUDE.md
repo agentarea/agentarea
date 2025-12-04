@@ -4,7 +4,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Go MCP Manager (from go-mcp-manager/ directory)
 
 **Build and run:**
 - `go build -o bin/mcp-manager ./cmd/mcp-manager` - Build the Go binary
@@ -45,7 +44,6 @@ The MCP Infrastructure is a Go-based container orchestration system designed for
 
 ### Core Components
 
-**go-mcp-manager/** - Main Go application:
 - `cmd/mcp-manager/main.go` - Application entry point with graceful shutdown
 - `internal/api/` - HTTP API handlers for container management
 - `internal/container/` - Container lifecycle management with Podman

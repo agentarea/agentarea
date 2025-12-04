@@ -83,8 +83,8 @@ jobs:
             context: agentarea-bootstrap
             file: agentarea-bootstrap/Dockerfile
           - name: mcp-manager
-            context: agentarea-mcp-manager/go-mcp-manager
-            file: agentarea-mcp-manager/go-mcp-manager/Dockerfile
+            context: agentarea-mcp-manager
+            file: agentarea-mcp-manager/Dockerfile
 
     steps:
       - uses: actions/checkout@v4

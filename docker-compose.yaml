@@ -198,21 +198,17 @@ services:
 
   agentarea-mcp-manager:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
-    build:
-      context: agentarea-mcp-manager/go-mcp-manager
-      dockerfile: Dockerfile
     container_name: agentarea-mcp-manager
     restart: unless-stopped
     command: ["sleep", "infinity"]
     privileged: true
     ports:
-      - "7999:80" # Traefik proxy (unified entry point)
+      - "7999:80" # Internal proxy (unified entry point)
     tmpfs:
       - /tmp
       - /run
     volumes:
       - mcp_containers:/var/lib/containers/storage
-      - ./agentarea-mcp-manager/traefik:/etc/traefik:rw # Traefik configuration
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     networks:
       - mcp-network

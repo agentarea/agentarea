@@ -74,14 +74,15 @@ def migrate():
                 existing_tables = set(inspector.get_table_names())
 
                 # If schema already exists (e.g., tables created by bootstrap), stamp head
-                if existing_tables:
+                # Only stamp if provider_specs exists, otherwise it might be a dirty DB (e.g. Kratos tables)
+                if existing_tables and "provider_specs" in existing_tables:
                     click.echo(
                         "⚠️  No Alembic revision found but tables exist. Stamping head without applying migrations."
                     )
                     command.stamp(alembic_cfg, head_rev)
                     click.echo("✅ Stamped database to head revision")
                 else:
-                    click.echo("Empty database detected. Applying migrations to head...")
+                    click.echo("Empty or dirty database detected. Applying migrations to head...")
                     command.upgrade(alembic_cfg, "head")
                     click.echo("✅ Migrations applied to head")
             else:

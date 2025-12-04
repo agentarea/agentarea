@@ -1,0 +1,954 @@
+openapi: 3.0.3
+info:
+  title: MCP Manager API
+  description: |
+    **Model Context Protocol (MCP) Manager Service**
+    
+    This service provides infrastructure for hosting and managing MCP server instances.
+    It supports both Docker (using Podman) and Kubernetes backends for container orchestration.
+    
+    ## Features
+    - **Instance Management**: Create, monitor, and delete MCP server instances
+    - **Health Monitoring**: Real-time health checks and status monitoring
+    - **Multi-Backend**: Supports both Docker and Kubernetes environments
+    - **Resource Management**: Configure CPU and memory limits for instances
+    - **Network Routing**: HTTP proxy routing to MCP instances
+    - **Legacy Compatibility**: Backward compatibility with existing container APIs
+    
+    ## Backends
+    - **Docker Backend**: Uses Podman for rootless container management
+    - **Kubernetes Backend**: Uses native K8s resources (Deployments, Services, Ingress)
+    
+    ## Usage Examples
+    
+    ### Create an MCP Instance
+    ```bash
+    curl -X POST http://localhost:8000/instances \
+      -H "Content-Type: application/json" \
+      -d '{
+        "instance_id": "my-mcp-server",
+        "name": "My MCP Server", 
+        "service_name": "my-service",
+        "image": "my-mcp-image:latest",
+        "port": 3000,
+        "workspace_id": "workspace-123"
+      }'
+    ```
+    
+    ### Check Instance Health
+    ```bash
+    curl http://localhost:8000/instances/my-mcp-server/health
+    ```
+    
+    ### Access Instance via Proxy
+    ```bash
+    curl http://localhost:8000/mcp/my-service-abc123/some-endpoint
+    ```
+    
+  version: 0.1.0
+  contact:
+    name: MCP Manager Support
+    url: https://github.com/your-org/mcp-manager
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: http://localhost:7999
+    description: Container environment server
+  - url: https://mcp.your-domain.com
+    description: Production server
+
+paths:
+  /health:
+    get:
+      tags: [Service]
+      summary: Check service health
+      description: Returns the health status and version information of the MCP Manager service
+      operationId: getServiceHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceHealth'
+              example:
+                status: healthy
+                version: 0.1.0
+                timestamp: "2025-07-29T10:00:00Z"
+                uptime: "1h30m45s"
+                backend_type: docker
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /instances:
+    get:
+      tags: [Instances]
+      summary: List all MCP instances
+      description: Retrieve a list of all MCP server instances with their current status
+      operationId: listInstances
+      parameters:
+        - name: status
+          in: query
+          description: Filter instances by status
+          required: false
+          schema:
+            type: string
+            enum: [running, stopped, starting, error]
+        - name: workspace_id
+          in: query
+          description: Filter instances by workspace ID
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of MCP instances
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceList'
+              example:
+                instances:
+                  - id: "abc123"
+                    name: "test-mcp-server"
+                    service_name: "test-service"
+                    status: "running"
+                    url: "http://localhost:8000/mcp/test-service-xyz789"
+                    image: "nginx:alpine"
+                    port: 80
+                    created_at: "2025-07-29T09:00:00Z"
+                    updated_at: "2025-07-29T09:00:05Z"
+                total: 1
+
+    post:
+      tags: [Instances]
+      summary: Create a new MCP instance
+      description: |
+        Create and start a new MCP server instance. The instance will be created using the specified image and configuration.
+        
+        **Environment Variables**: The service automatically injects environment variables:
+        - `MCP_INSTANCE_ID`: The instance ID
+        - `MCP_SERVICE_NAME`: The service name
+        - `MCP_CONTAINER_PORT`: The exposed port
+        
+        **Networking**: Instances are accessible via:
+        - Proxy URL: `http://host:port/mcp/{service_name}-{hash}/`
+        - Direct access (Docker): `http://{container_ip}:{port}/`
+        
+      operationId: createInstance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInstanceRequest'
+            example:
+              instance_id: "my-mcp-server"
+              name: "My MCP Server"
+              service_name: "my-service"
+              image: "my-mcp-image:latest"
+              port: 3000
+              environment:
+                API_KEY: "secret-key"
+                DEBUG: "true"
+              workspace_id: "workspace-123"
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+      responses:
+        '201':
+          description: Instance created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instance'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Instance already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Failed to create instance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /instances/validate:
+    post:
+      tags: [Instances]
+      summary: Validate instance specification
+      description: |
+        Validate an instance specification without actually creating the instance.
+        Useful for checking configuration before deployment.
+      operationId: validateInstance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/CreateInstanceRequest'
+                - type: object
+                  properties:
+                    dry_run:
+                      type: boolean
+                      description: Set to true for validation only
+                      example: true
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+              example:
+                valid: true
+                errors: []
+                warnings: 
+                  - "Image tag 'latest' is not recommended for production"
+
+  /instances/{instance_id}:
+    get:
+      tags: [Instances]
+      summary: Get instance details
+      description: Retrieve detailed information about a specific MCP instance
+      operationId: getInstance
+      parameters:
+        - $ref: '#/components/parameters/InstanceId'
+      responses:
+        '200':
+          description: Instance details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instance'
+        '404':
+          description: Instance not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [Instances]
+      summary: Update instance configuration
+      description: |
+        Update an existing MCP instance. Some fields like image require instance restart.
+        
+        **Note**: Updating certain fields (image, port, resources) may require restarting the instance.
+      operationId: updateInstance
+      parameters:
+        - $ref: '#/components/parameters/InstanceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInstanceRequest'
+      responses:
+        '200':
+          description: Instance updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instance'
+        '404':
+          description: Instance not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid update request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [Instances]
+      summary: Delete an MCP instance
+      description: |
+        Stop and remove an MCP instance. This action is irreversible.
+        
+        **Warning**: All data in the instance will be lost unless persisted externally.
+      operationId: deleteInstance
+      parameters:
+        - $ref: '#/components/parameters/InstanceId'
+        - name: force
+          in: query
+          description: Force delete even if instance is not responding
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Instance deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Instance deleted successfully"
+                  instance_id:
+                    type: string
+                    example: "abc123"
+        '404':
+          description: Instance not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Failed to delete instance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /instances/{instance_id}/health:
+    get:
+      tags: [Instances]
+      summary: Check instance health
+      description: |
+        Perform a health check on a specific MCP instance.
+        
+        **Health Check Types**:
+        - Container status check
+        - HTTP endpoint reachability (if applicable)
+        - Resource usage monitoring
+      operationId: getInstanceHealth
+      parameters:
+        - $ref: '#/components/parameters/InstanceId'
+      responses:
+        '200':
+          description: Instance is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceHealth'
+              example:
+                healthy: true
+                status: "running"
+                http_reachable: true
+                response_time: 1250000
+                container_id: "abc123"
+                service_name: "test-service"
+                timestamp: "2025-07-29T10:00:00Z"
+        '503':
+          description: Instance is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceHealth'
+              example:
+                healthy: false
+                status: "stopped"
+                http_reachable: false
+                response_time: 0
+                container_id: "abc123"
+                service_name: "test-service"
+                timestamp: "2025-07-29T10:00:00Z"
+        '404':
+          description: Instance not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+  /monitoring/status:
+    get:
+      tags: [Monitoring]
+      summary: Get overall monitoring status
+      description: |
+        Retrieve comprehensive monitoring information about all instances and system health.
+        
+        **Metrics Include**:
+        - Total instance counts
+        - Health status breakdown
+        - System uptime
+        - Resource usage (if available)
+      operationId: getMonitoringStatus
+      responses:
+        '200':
+          description: Monitoring status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitoringStatus'
+              example:
+                total_instances: 5
+                healthy_instances: 4
+                unhealthy_instances: 1
+                stopped_instances: 0
+                total_containers: 5
+                healthy_containers: 4
+                unhealthy_containers: 1
+                stopped_containers: 0
+                uptime: "2h30m45s"
+                timestamp: "2025-07-29T10:00:00Z"
+
+  /containers:
+    get:
+      tags: [Legacy]
+      summary: List containers (legacy)
+      description: |
+        **Legacy endpoint for backward compatibility**
+        
+        Lists all containers managed by the Docker backend. This endpoint is only available
+        when using the Docker backend and is maintained for compatibility with existing clients.
+        
+        **Note**: New applications should use `/instances` instead.
+      operationId: listContainers
+      deprecated: true
+      responses:
+        '200':
+          description: List of containers (Docker backend only)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  containers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Container'
+                  total:
+                    type: integer
+        '404':
+          description: Endpoint not available (Kubernetes backend)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /mcp/{service_path}:
+    get:
+      tags: [Proxy]
+      summary: Proxy requests to MCP instances
+      description: |
+        **HTTP Proxy to MCP Instances**
+        
+        Routes HTTP requests to running MCP instances. The service path format is:
+        `{service_name}-{hash}` where hash is generated during instance creation.
+        
+        **Examples**:
+        - `/mcp/my-service-abc123/` → Routes to instance with service_name="my-service"
+        - `/mcp/my-service-abc123/api/data` → Routes to `/api/data` on the instance
+        
+        **Headers**: All request headers are forwarded to the target instance.
+      operationId: proxyToInstance
+      parameters:
+        - name: service_path
+          in: path
+          required: true
+          description: Service path including hash (e.g., "my-service-abc123/endpoint")
+          schema:
+            type: string
+            pattern: '^[a-zA-Z0-9\-]+(/.*)?$'
+      responses:
+        '200':
+          description: Response from MCP instance
+          content:
+            '*/*':
+              schema:
+                type: string
+                description: Raw response from the target MCP instance
+        '404':
+          description: Instance not found or not accessible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Instance is not responding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Instance is not healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags: [Proxy]
+      summary: Proxy POST requests to MCP instances
+      description: Proxy POST requests to MCP instances with request body forwarding
+      operationId: proxyPostToInstance
+      parameters:
+        - name: service_path
+          in: path
+          required: true
+          description: Service path including hash
+          schema:
+            type: string
+      requestBody:
+        description: Request body to forward to the instance
+        content:
+          '*/*':
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Response from MCP instance
+          content:
+            '*/*':
+              schema:
+                type: string
+
+    put:
+      tags: [Proxy]
+      summary: Proxy PUT requests to MCP instances
+      description: Proxy PUT requests to MCP instances
+      operationId: proxyPutToInstance
+      parameters:
+        - name: service_path
+          in: path
+          required: true
+          description: Service path including hash
+          schema:
+            type: string
+      requestBody:
+        description: Request body to forward to the instance
+        content:
+          '*/*':
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Response from MCP instance
+
+    delete:
+      tags: [Proxy]
+      summary: Proxy DELETE requests to MCP instances
+      description: Proxy DELETE requests to MCP instances
+      operationId: proxyDeleteToInstance
+      parameters:
+        - name: service_path
+          in: path
+          required: true
+          description: Service path including hash
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Response from MCP instance
+
+components:
+  parameters:
+    InstanceId:
+      name: instance_id
+      in: path
+      required: true
+      description: Unique identifier of the MCP instance
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9\-_]+$'
+        example: "my-mcp-server"
+
+  schemas:
+    ServiceHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, starting]
+          example: healthy
+        version:
+          type: string
+          example: "0.1.0"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-07-29T10:00:00Z"
+        uptime:
+          type: string
+          example: "2h30m45s"
+        backend_type:
+          type: string
+          enum: [docker, kubernetes]
+          example: docker
+      required: [status, version, timestamp]
+
+    CreateInstanceRequest:
+      type: object
+      properties:
+        instance_id:
+          type: string
+          description: Unique identifier for the instance
+          pattern: '^[a-zA-Z0-9\-_]+$'
+          example: "my-mcp-server"
+        name:
+          type: string
+          description: Human-readable name for the instance
+          example: "My MCP Server"
+        service_name:
+          type: string
+          description: Service name used for routing and discovery
+          pattern: '^[a-zA-Z0-9\-_]+$'
+          example: "my-service"
+        image:
+          type: string
+          description: Container image to run
+          example: "my-mcp-image:latest"
+        port:
+          type: integer
+          description: Port that the MCP server listens on inside the container
+          minimum: 1
+          maximum: 65535
+          example: 3000
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables to set in the container
+          example:
+            API_KEY: "secret-key"
+            DEBUG: "true"
+        workspace_id:
+          type: string
+          description: Workspace identifier for multi-tenancy
+          example: "workspace-123"
+        resources:
+          $ref: '#/components/schemas/ResourceRequirements'
+        dry_run:
+          type: boolean
+          description: If true, validate only without creating
+          default: false
+      required: [instance_id, name, service_name, image, port, workspace_id]
+
+    UpdateInstanceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Human-readable name for the instance
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables to set in the container
+        resources:
+          $ref: '#/components/schemas/ResourceRequirements'
+
+    ResourceRequirements:
+      type: object
+      description: CPU and memory resource requirements
+      properties:
+        requests:
+          $ref: '#/components/schemas/ResourceList'
+        limits:
+          $ref: '#/components/schemas/ResourceList'
+      example:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+
+    ResourceList:
+      type: object
+      properties:
+        cpu:
+          type: string
+          description: CPU requirement (e.g., "100m", "0.5", "2")
+          pattern: '^(\d+(\.\d+)?|\d+m)$'
+          example: "100m"
+        memory:
+          type: string
+          description: Memory requirement (e.g., "128Mi", "1Gi")
+          pattern: '^(\d+(\.\d+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?)$'
+          example: "128Mi"
+
+    Instance:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique container/pod identifier
+          example: "abc123def456"
+        instance_id:
+          type: string
+          description: User-provided instance identifier
+          example: "my-mcp-server"
+        name:
+          type: string
+          description: Human-readable instance name
+          example: "My MCP Server"
+        service_name:
+          type: string
+          description: Service name for routing
+          example: "my-service"
+        status:
+          type: string
+          enum: [starting, running, stopped, error, unknown]
+          example: "running"
+        url:
+          type: string
+          description: Proxy URL for accessing the instance
+          example: "http://localhost:8000/mcp/my-service-abc123"
+        image:
+          type: string
+          description: Container image being used
+          example: "my-mcp-image:latest"
+        port:
+          type: integer
+          description: Port the service listens on
+          example: 3000
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables set in the container
+        workspace_id:
+          type: string
+          description: Workspace identifier
+          example: "workspace-123"
+        resources:
+          $ref: '#/components/schemas/ResourceRequirements'
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-07-29T09:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-07-29T09:00:05Z"
+        health_status:
+          $ref: '#/components/schemas/InstanceHealth'
+      required: [id, instance_id, name, service_name, status, image, port, workspace_id, created_at]
+
+    InstanceList:
+      type: object
+      properties:
+        instances:
+          type: array
+          items:
+            $ref: '#/components/schemas/Instance'
+        total:
+          type: integer
+          description: Total number of instances
+          example: 5
+      required: [instances, total]
+
+    InstanceHealth:
+      type: object
+      properties:
+        healthy:
+          type: boolean
+          description: Overall health status
+          example: true
+        status:
+          type: string
+          description: Container/pod status
+          enum: [running, stopped, starting, error, unknown]
+          example: "running"
+        http_reachable:
+          type: boolean
+          description: Whether HTTP endpoint is reachable
+          example: true
+        response_time:
+          type: integer
+          description: HTTP response time in nanoseconds
+          example: 1250000
+        container_id:
+          type: string
+          description: Container/pod identifier
+          example: "abc123def456"
+        service_name:
+          type: string
+          description: Service name
+          example: "my-service"
+        timestamp:
+          type: string
+          format: date-time
+          description: When this health check was performed
+          example: "2025-07-29T10:00:00Z"
+        details:
+          type: object
+          description: Additional health check details
+          properties:
+            container_image:
+              type: string
+            container_port:
+              type: integer
+            direct_http_endpoint:
+              type: string
+            internal_port:
+              type: integer
+            proxy_url:
+              type: string
+            response_time_ms:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+      required: [healthy, status, timestamp]
+
+    MonitoringStatus:
+      type: object
+      properties:
+        total_instances:
+          type: integer
+          description: Total number of instances
+          example: 5
+        healthy_instances:
+          type: integer
+          description: Number of healthy instances
+          example: 4
+        unhealthy_instances:
+          type: integer
+          description: Number of unhealthy instances
+          example: 1
+        stopped_instances:
+          type: integer
+          description: Number of stopped instances
+          example: 0
+        total_containers:
+          type: integer
+          description: Total number of containers
+          example: 5
+        healthy_containers:
+          type: integer
+          description: Number of healthy containers
+          example: 4
+        unhealthy_containers:
+          type: integer
+          description: Number of unhealthy containers
+          example: 1
+        stopped_containers:
+          type: integer
+          description: Number of stopped containers
+          example: 0
+        uptime:
+          type: string
+          description: Service uptime
+          example: "2h30m45s"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of this status report
+          example: "2025-07-29T10:00:00Z"
+      required: [total_instances, healthy_instances, unhealthy_instances, uptime, timestamp]
+
+    ValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Whether the instance specification is valid
+          example: true
+        errors:
+          type: array
+          items:
+            type: string
+          description: List of validation errors
+          example: []
+        warnings:
+          type: array
+          items:
+            type: string
+          description: List of validation warnings
+          example: ["Image tag 'latest' is not recommended for production"]
+      required: [valid, errors, warnings]
+
+    Container:
+      type: object
+      description: Legacy container object for backward compatibility
+      properties:
+        id:
+          type: string
+          description: Container identifier
+          example: "abc123def456"
+        name:
+          type: string
+          description: Container name
+          example: "mcp-my-service-xyz789"
+        image:
+          type: string
+          description: Container image
+          example: "nginx:alpine"
+        status:
+          type: string
+          description: Container status
+          example: "running"
+        created:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2025-07-29T09:00:00Z"
+        ports:
+          type: array
+          items:
+            type: string
+          description: Port mappings
+          example: ["80:8080"]
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error type or code
+          example: "INSTANCE_NOT_FOUND"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Instance with ID 'my-instance' not found"
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error occurred
+          example: "2025-07-29T10:00:00Z"
+      required: [error, message]
+
+tags:
+  - name: Service
+    description: Service health and information endpoints
+  - name: Instances
+    description: MCP instance management operations
+  - name: Monitoring
+    description: System monitoring and metrics
+  - name: Proxy
+    description: HTTP proxy to MCP instances
+  - name: Legacy
+    description: Legacy endpoints for backward compatibility
+
+externalDocs:
+  description: Find more info about MCP Manager
+  url: https://github.com/your-org/mcp-manager/wiki

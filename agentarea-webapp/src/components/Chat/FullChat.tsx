@@ -21,12 +21,16 @@ import { useChatMessages, type ChatMessage, type UserChatMessage } from "./hooks
 
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 
+export interface Agent {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
 interface FullChatProps {
-  agent: {
-    id: string;
-    name: string;
-    description?: string | null;
-  };
+  agent: Agent;
+  availableAgents?: Agent[];
+  onAgentChange?: (agent: Agent) => void;
   startCentered?: boolean;
   taskId?: string;
   initialMessages?: ChatMessage[];
@@ -41,6 +45,8 @@ interface FullChatProps {
 
 export default function FullChat({
   agent,
+  availableAgents,
+  onAgentChange,
   startCentered = false,
   placeholder,
   taskId,
@@ -59,6 +65,14 @@ export default function FullChat({
     agentId: agent.id,
     initialMessages,
   });
+
+  // Clear messages when agent changes
+  React.useEffect(() => {
+    setMessages([]);
+    setInput("");
+    setInputDisplay("");
+    clearFiles();
+  }, [agent.id]);
 
   const {
     currentTaskId,
@@ -385,6 +399,9 @@ export default function FullChat({
           containerRef={cardContainerRef}
           variant="centered"
           rows={3}
+          currentAgent={agent}
+          availableAgents={availableAgents}
+          onAgentChange={onAgentChange}
         />
       </div>
 

@@ -1,0 +1,57 @@
+run:
+  timeout: 5m
+
+issues:
+  exclude-dirs:
+    - vendor
+  exclude-rules:
+    - linters:
+        - typecheck
+      text: "could not import k8s.io/apimachinery/pkg/types"
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosimple
+    - goconst
+    - gocyclo
+    - funlen
+    - nestif
+    - prealloc
+    - exportloopref
+    - revive
+    - misspell
+    - errcheck
+    - unconvert
+    - unparam
+
+linters-settings:
+  govet:
+    disable:
+      - shadow
+    settings:
+      printf:
+        funcs:
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
+  errcheck:
+    exclude-functions:
+      - (*log.Logger).Print*
+      - (*log.Logger).Printf
+      - (*log.Logger).Println
+    # Remove the deprecated ignore option
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+      - name: var-naming
+        severity: warning
+        disabled: false

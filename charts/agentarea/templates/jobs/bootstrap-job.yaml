@@ -55,9 +55,10 @@ spec:
               echo "MinIO is ready!"
       containers:
         - name: bootstrap
-          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}agentarea/agentarea-bootstrap:latest"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.jobs.bootstrap.image.repository | default "agentarea/agentarea-bootstrap" }}:{{ .Values.jobs.bootstrap.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           env:
+            {{- include "agentarea.databaseJobs.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.databaseJobs.envs" . | nindent 12 }}
             # MinIO configuration
             - name: MINIO_ROOT_USER

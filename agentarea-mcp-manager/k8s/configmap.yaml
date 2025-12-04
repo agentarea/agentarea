@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-manager-config
+  namespace: default
+  labels:
+    app: mcp-manager
+    component: config
+data:
+  # Server configuration
+  SERVER_HOST: "0.0.0.0"
+  SERVER_PORT: "8000"
+  
+  # Backend configuration - force Kubernetes mode
+  BACKEND_ENVIRONMENT: "kubernetes"
+  
+  # Kubernetes configuration
+  KUBERNETES_ENABLED: "true"
+  KUBERNETES_NAMESPACE: "default"
+  KUBERNETES_DOMAIN: "mcp.local"
+  KUBERNETES_INGRESS_CLASS: "nginx"
+  
+  # Logging
+  LOG_LEVEL: "DEBUG"
+  LOG_FORMAT: "json"
+  
+  # CORS for testing
+  CORS_ENABLED: "true"
+  
+  # Resource defaults
+  DEFAULT_MEMORY_LIMIT: "512Mi"
+  DEFAULT_CPU_LIMIT: "500m"
