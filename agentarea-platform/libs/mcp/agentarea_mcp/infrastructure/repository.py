@@ -22,10 +22,10 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         include_system: bool = True,
     ) -> list[MCPServer]:
         """List MCP servers with filtering.
-        
+
         By default, includes public servers from the "system" workspace (built-in servers)
         in addition to the user's workspace servers.
-        
+
         Args:
             status: Filter by status
             is_public: Filter by public flag
