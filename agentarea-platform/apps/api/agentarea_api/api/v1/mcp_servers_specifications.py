@@ -101,9 +101,7 @@ async def list_mcp_servers(
     tag: str | None = None,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
-    servers = await mcp_server_service.list_servers(
-        status=status, is_public=is_public, tag=tag
-    )
+    servers = await mcp_server_service.list_servers(status=status, is_public=is_public, tag=tag)
     return [MCPServerResponse.from_domain(server) for server in servers]
 
 
