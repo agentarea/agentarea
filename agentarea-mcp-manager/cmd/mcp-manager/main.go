@@ -298,4 +298,3 @@ func getLogLevel(level string) slog.Level {
 		return slog.LevelInfo
 	}
 }
-

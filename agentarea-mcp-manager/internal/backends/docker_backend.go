@@ -21,7 +21,7 @@ type DockerBackend struct {
 // NewDockerBackend creates a new Docker/Podman backend
 func NewDockerBackend(cfg *config.Config, logger *slog.Logger) *DockerBackend {
 	manager := container.NewManager(cfg, logger)
-	
+
 	return &DockerBackend{
 		manager: manager,
 		config:  cfg,
@@ -310,25 +310,25 @@ func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) models.CreateCon
 // findServiceNameByID finds the service name by container ID or instance ID
 func (d *DockerBackend) findServiceNameByID(instanceID string) string {
 	containers := d.manager.ListContainers()
-	
+
 	for _, container := range containers {
 		// Check if ID matches
 		if container.ID == instanceID {
 			return container.ServiceName
 		}
-		
+
 		// Check if instance ID matches from environment
 		if mcpInstanceID, exists := container.Environment["MCP_INSTANCE_ID"]; exists {
 			if mcpInstanceID == instanceID {
 				return container.ServiceName
 			}
 		}
-		
+
 		// Check if service name matches directly
 		if container.ServiceName == instanceID {
 			return container.ServiceName
 		}
 	}
-	
+
 	return ""
 }

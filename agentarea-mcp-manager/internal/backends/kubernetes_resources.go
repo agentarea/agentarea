@@ -32,10 +32,10 @@ func (k *KubernetesBackend) createConfigMap(ctx context.Context, instanceName st
 			Labels:    k.getCommonLabels(instanceName),
 		},
 		Data: map[string]string{
-			"instance-id":   spec.InstanceID,
-			"service-name":  spec.ServiceName,
-			"port":          strconv.Itoa(spec.Port),
-			"workspace-id":  spec.WorkspaceID,
+			"instance-id":  spec.InstanceID,
+			"service-name": spec.ServiceName,
+			"port":         strconv.Itoa(spec.Port),
+			"workspace-id": spec.WorkspaceID,
 		},
 	}
 
@@ -49,12 +49,12 @@ func (k *KubernetesBackend) createConfigMap(ctx context.Context, instanceName st
 // createSecret creates a Secret for environment variables
 func (k *KubernetesBackend) createSecret(ctx context.Context, instanceName string, spec *InstanceSpec) error {
 	secretData := make(map[string][]byte)
-	
+
 	// Add environment variables
 	for key, value := range spec.Environment {
 		secretData[key] = []byte(value)
 	}
-	
+
 	// Add MCP-specific environment variables
 	secretData["MCP_INSTANCE_ID"] = []byte(spec.InstanceID)
 	secretData["MCP_SERVICE_NAME"] = []byte(spec.ServiceName)
@@ -80,7 +80,7 @@ func (k *KubernetesBackend) createSecret(ctx context.Context, instanceName strin
 // createDeployment creates a Deployment for the MCP server
 func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName string, spec *InstanceSpec) error {
 	labels := k.getCommonLabels(instanceName)
-	
+
 	// Convert ResourceList to config.ResourceRequirements
 	var configRequests, configLimits *config.ResourceRequirements
 	if spec.Resources.Requests.CPU != "" || spec.Resources.Requests.Memory != "" {
@@ -99,12 +99,12 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	// Resource requirements
 	requests := k.k8sConfig.GetResourceRequirements(configRequests, nil)
 	limits := k.k8sConfig.GetResourceLimits(configLimits)
-	
+
 	resourceRequirements := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{},
 		Limits:   corev1.ResourceList{},
 	}
-	
+
 	if requests.CPU != "" {
 		resourceRequirements.Requests[corev1.ResourceCPU] = resource.MustParse(requests.CPU)
 	}
@@ -128,7 +128,7 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 			Drop: []corev1.Capability{},
 		},
 	}
-	
+
 	for _, cap := range k.k8sConfig.SecurityContext.DropCapabilities {
 		securityContext.Capabilities.Drop = append(securityContext.Capabilities.Drop, corev1.Capability(cap))
 	}
@@ -337,7 +337,7 @@ func (k *KubernetesBackend) createService(ctx context.Context, instanceName stri
 // createIngress creates an Ingress for external access
 func (k *KubernetesBackend) createIngress(ctx context.Context, instanceName string, spec *InstanceSpec) error {
 	pathType := networkingv1.PathTypePrefix
-	
+
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        fmt.Sprintf("mcp-%s", instanceName),
@@ -393,7 +393,7 @@ func (k *KubernetesBackend) createIngress(ctx context.Context, instanceName stri
 // waitForDeploymentReady waits for the deployment to be ready
 func (k *KubernetesBackend) waitForDeploymentReady(ctx context.Context, instanceName string) error {
 	deploymentName := fmt.Sprintf("mcp-%s", instanceName)
-	
+
 	return wait.PollUntilContextTimeout(ctx, 5*time.Second, k.k8sConfig.DeploymentTimeout, true, func(ctx context.Context) (bool, error) {
 		deployment := &appsv1.Deployment{}
 		if err := k.client.Get(ctx, types.NamespacedName{
@@ -404,15 +404,15 @@ func (k *KubernetesBackend) waitForDeploymentReady(ctx context.Context, instance
 		}
 
 		// Check if deployment is ready
-		return deployment.Status.ReadyReplicas > 0 && 
-			   deployment.Status.ReadyReplicas == deployment.Status.Replicas, nil
+		return deployment.Status.ReadyReplicas > 0 &&
+			deployment.Status.ReadyReplicas == deployment.Status.Replicas, nil
 	})
 }
 
 // cleanupResources removes all resources for an instance
 func (k *KubernetesBackend) cleanupResources(ctx context.Context, instanceName string) error {
 	resourceName := fmt.Sprintf("mcp-%s", instanceName)
-	
+
 	// Delete resources in reverse order
 	resources := []client.Object{
 		&networkingv1.Ingress{
@@ -526,7 +526,7 @@ func (k *KubernetesBackend) updateDeployment(ctx context.Context, instanceName s
 	if len(deployment.Spec.Template.Spec.Containers) > 0 {
 		container := &deployment.Spec.Template.Spec.Containers[0]
 		container.Image = spec.Image
-		
+
 		if len(spec.Command) > 0 {
 			container.Command = spec.Command
 		}
@@ -549,7 +549,7 @@ func (k *KubernetesBackend) updateDeployment(ctx context.Context, instanceName s
 		// Update resource requirements
 		requests := k.k8sConfig.GetResourceRequirements(configRequests, nil)
 		limits := k.k8sConfig.GetResourceLimits(configLimits)
-		
+
 		if requests.CPU != "" {
 			container.Resources.Requests[corev1.ResourceCPU] = resource.MustParse(requests.CPU)
 		}
@@ -593,7 +593,7 @@ func (k *KubernetesBackend) findInstanceNameByID(ctx context.Context, instanceID
 		if string(deployment.UID) == instanceID {
 			return strings.TrimPrefix(deployment.Name, "mcp-"), nil
 		}
-		
+
 		// Check if instance ID matches from annotations
 		if annotations := deployment.Spec.Template.ObjectMeta.Annotations; annotations != nil {
 			if mcpInstanceID, exists := annotations["agentarea.io/instance-id"]; exists {
@@ -612,15 +612,15 @@ func (k *KubernetesBackend) getDeploymentStatus(deployment *appsv1.Deployment) s
 	if deployment.Status.ReadyReplicas == 0 {
 		return "starting"
 	}
-	
+
 	if deployment.Status.ReadyReplicas < deployment.Status.Replicas {
 		return "partial"
 	}
-	
+
 	if deployment.Status.ReadyReplicas == deployment.Status.Replicas {
 		return "running"
 	}
-	
+
 	// Check conditions for more specific status
 	for _, condition := range deployment.Status.Conditions {
 		if condition.Type == appsv1.DeploymentProgressing {
@@ -629,7 +629,7 @@ func (k *KubernetesBackend) getDeploymentStatus(deployment *appsv1.Deployment) s
 			}
 		}
 	}
-	
+
 	return "unknown"
 }
 
@@ -637,18 +637,18 @@ func (k *KubernetesBackend) getDeploymentStatus(deployment *appsv1.Deployment) s
 func (k *KubernetesBackend) performHTTPHealthCheck(ctx context.Context, instanceName string) (bool, time.Duration) {
 	// Use internal service URL for health check
 	url := fmt.Sprintf("http://mcp-%s.%s.svc.cluster.local/health", instanceName, k.k8sConfig.Namespace)
-	
+
 	start := time.Now()
 	client := &http.Client{Timeout: 10 * time.Second}
-	
+
 	resp, err := client.Get(url)
 	responseTime := time.Since(start)
-	
+
 	if err != nil {
 		return false, responseTime
 	}
 	defer resp.Body.Close()
-	
+
 	return resp.StatusCode >= 200 && resp.StatusCode < 300, responseTime
 }
 

@@ -11,11 +11,11 @@ func (h *Handler) SetupOpenAPIRoutes(router *gin.Engine) {
 	// Serve OpenAPI specification
 	router.GET("/openapi.yaml", h.getOpenAPISpec)
 	router.GET("/openapi.json", h.getOpenAPISpecJSON)
-	
+
 	// Serve Swagger UI
 	router.GET("/docs", h.getSwaggerUI)
 	router.GET("/docs/*filepath", h.getSwaggerUIAssets)
-	
+
 	// API documentation redirect
 	router.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/docs")

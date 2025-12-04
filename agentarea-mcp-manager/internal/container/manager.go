@@ -1268,12 +1268,12 @@ func (m *Manager) addRoute(ctx context.Context, slug, containerIP string, contai
 			return rm.AddMCPService(ctx, slug, containerIP, containerPort)
 		}
 	}
-	
+
 	// Fall back to Traefik manager
 	if m.traefikManager != nil {
 		return m.traefikManager.AddMCPService(ctx, slug, containerIP, containerPort)
 	}
-	
+
 	return fmt.Errorf("no route manager configured")
 }
 
@@ -1287,12 +1287,12 @@ func (m *Manager) removeRoute(ctx context.Context, slug string) error {
 			return rm.RemoveMCPService(ctx, slug)
 		}
 	}
-	
+
 	// Fall back to Traefik manager
 	if m.traefikManager != nil {
 		return m.traefikManager.RemoveMCPService(ctx, slug)
 	}
-	
+
 	return fmt.Errorf("no route manager configured")
 }
 

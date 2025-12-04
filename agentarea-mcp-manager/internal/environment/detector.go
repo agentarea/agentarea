@@ -56,7 +56,7 @@ func (d *Detector) DetectBackendType() backends.BackendType {
 // isKubernetesEnvironment checks multiple indicators to determine if running in Kubernetes
 func (d *Detector) isKubernetesEnvironment() bool {
 	checks := []struct {
-		name string
+		name  string
 		check func() bool
 	}{
 		{"service account token", d.checkServiceAccountToken},
@@ -156,8 +156,8 @@ func (d *Detector) GetEnvironmentInfo() map[string]interface{} {
 	info := map[string]interface{}{
 		"detected_environment": string(d.DetectEnvironment()),
 		"checks": map[string]bool{
-			"service_account_token":    d.checkServiceAccountToken(),
-			"kubernetes_service_host":  d.checkKubernetesServiceHost(),
+			"service_account_token":   d.checkServiceAccountToken(),
+			"kubernetes_service_host": d.checkKubernetesServiceHost(),
 			"kubeconfig":              d.checkKubeconfig(),
 			"container_environment":   d.checkContainerEnvironment(),
 		},
@@ -174,7 +174,7 @@ func (d *Detector) GetEnvironmentInfo() map[string]interface{} {
 // DetectEnvironment is a simple function that matches the main.go interface
 func DetectEnvironment(forceEnv string, logger *slog.Logger) string {
 	detector := NewDetector(logger)
-	
+
 	// Check for forced environment override
 	if forceEnv != "" {
 		env := detector.ForceEnvironment(forceEnv)

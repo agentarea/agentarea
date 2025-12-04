@@ -53,13 +53,6 @@
         ]
       },
       {
-        "group": "API Reference",
-        "icon": "code",
-        "pages": [
-          "api-reference"
-        ]
-      },
-      {
         "group": "Resources",
         "icon": "book",
         "pages": [
