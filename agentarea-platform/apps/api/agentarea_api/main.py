@@ -10,13 +10,13 @@ from pathlib import Path
 from agentarea_common.di.container import get_container, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
-# from fastapi_mcp import AuthConfig, FastApiMCP
 
+# from fastapi_mcp import AuthConfig, FastApiMCP
 from agentarea_api.api.events import events_router
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
 

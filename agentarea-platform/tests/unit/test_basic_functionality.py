@@ -130,7 +130,7 @@ class TestBasicFunctionality:
 
         # Test that required fields are enforced by Pydantic
         from pydantic import ValidationError
-        
+
         # Missing required field should raise ValidationError (Pydantic v2)
         with pytest.raises(ValidationError):
             TaskEvent(

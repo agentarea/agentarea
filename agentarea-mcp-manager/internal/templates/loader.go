@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/agentarea/mcp-manager/internal/models"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // Loader loads MCP templates from a YAML file
