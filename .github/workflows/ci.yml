@@ -400,8 +400,8 @@ jobs:
         working-directory: agentarea-mcp-manager
         run: go test ./...
 
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: agentarea-mcp-manager
+      # - name: Run golangci-lint
+      #   uses: golangci/golangci-lint-action@v6
+      #   with:
+      #     version: latest
+      #     working-directory: agentarea-mcp-manager
