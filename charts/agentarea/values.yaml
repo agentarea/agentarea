@@ -541,9 +541,7 @@ jobs:
   bootstrap:
     enabled: false
   dbMigration:
-    enabled: false
-  appMigration:
-    enabled: false
+    enabled: true
 
 # Ory Kratos Identity Server
 kratos:
