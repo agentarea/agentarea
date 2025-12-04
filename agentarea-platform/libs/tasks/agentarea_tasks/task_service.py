@@ -401,7 +401,7 @@ class TaskService(BaseTaskService):
             description: Task description
             workspace_id: Workspace ID (required for proper multi-tenancy isolation)
             parameters: Task parameters
-            user_id: User ID (defaults to "api_user")
+            user_id: User ID
             enable_agent_communication: Whether to enable agent communication
             requires_human_approval: Whether this task requires human approval before running
 

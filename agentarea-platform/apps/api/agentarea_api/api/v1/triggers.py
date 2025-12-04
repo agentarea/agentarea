@@ -426,7 +426,9 @@ async def create_trigger(
 
     try:
         # Convert API request to domain model
-        created_by = auth_context.user_id or "api_user"
+        if not auth_context.user_id:
+             raise HTTPException(status_code=400, detail="User ID is required to create a trigger")
+        created_by = auth_context.user_id
         trigger_data = _convert_to_domain_create(request, created_by)
 
         # Create trigger

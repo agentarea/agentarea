@@ -17,7 +17,7 @@ class TemporalWorkflowService:
         self,
         agent_id: UUID,
         task_query: str,
-        user_id: str = "anonymous",
+        user_id: str,
         session_id: str | None = None,
         task_parameters: dict[str, Any] | None = None,
         timeout_seconds: int = 300,

@@ -2389,11 +2389,6 @@ export interface components {
         [key: string]: unknown;
       };
       /**
-       * User Id
-       * @default api_user
-       */
-      user_id: string | null;
-      /**
        * Enable Agent Communication
        * @default true
        */

@@ -813,7 +813,11 @@ class AgentExecutionWorkflow:
         workflow.logger.debug(f"Publishing {len(events_json)} events immediately")
 
         # Create Pydantic request model for event publishing
-        events_request = WorkflowEventsRequest(events_json=events_json)
+        events_request = WorkflowEventsRequest(
+            events_json=events_json,
+            workspace_id=self.state.workspace_id,
+            user_id=self.state.user_id,
+        )
 
         # Start the activity but don't await it (fire and forget)
         await workflow.execute_activity(

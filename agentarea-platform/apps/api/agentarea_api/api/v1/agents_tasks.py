@@ -31,7 +31,6 @@ global_tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 class TaskCreate(BaseModel):
     description: str
     parameters: dict[str, Any] = {}
-    user_id: str | None = "api_user"
     enable_agent_communication: bool | None = True
     requires_human_approval: bool | None = False
 
@@ -235,7 +234,7 @@ async def create_task_for_agent_with_stream(
                 description=data.description,
                 workspace_id=user_context.workspace_id,
                 parameters=data.parameters,
-                user_id=data.user_id,
+                user_id=user_context.user_id,
                 enable_agent_communication=data.enable_agent_communication or True,
                 requires_human_approval=data.requires_human_approval or False,
             )
@@ -353,7 +352,7 @@ async def create_task_for_agent_sync(
             description=data.description,
             workspace_id=user_context.workspace_id,
             parameters=data.parameters,
-            user_id=data.user_id,
+            user_id=user_context.user_id,
             enable_agent_communication=data.enable_agent_communication or True,
             requires_human_approval=data.requires_human_approval or False,
         )

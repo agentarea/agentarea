@@ -89,7 +89,6 @@ export default function TaskCreator() {
           created_via: "task_creator_ui",
           timestamp: new Date().toISOString(),
         },
-        user_id: "ui_test_user",
         enable_agent_communication: true,
       };
 

@@ -32,10 +32,11 @@ class WorkflowEventHandler:
             # Extract task information from event
             task_id = UUID(event.aggregate_id)
             workspace_id = self._extract_workspace_id(event)
+            user_id = self._extract_user_id(event)
 
             async with self.database.async_session_factory() as session:
                 # Create proper user context
-                user_context = UserContext(user_id="event_handler", workspace_id=workspace_id)
+                user_context = UserContext(user_id=user_id, workspace_id=workspace_id)
 
                 # Create service with dependencies
                 repository_factory = RepositoryFactory(session, user_context)
@@ -49,7 +50,7 @@ class WorkflowEventHandler:
                     event_type=event.original_event_type or event.event_type,
                     data=event.original_data or {},
                     workspace_id=workspace_id,
-                    created_by="event_handler",
+                    created_by=user_id,
                 )
 
                 await session.commit()
@@ -66,6 +67,12 @@ class WorkflowEventHandler:
         if event.original_data and isinstance(event.original_data, dict):
             return event.original_data.get("workspace_id", "default")
         return "default"
+
+    def _extract_user_id(self, event: DomainEvent) -> str:
+        """Extract user ID from event data."""
+        if event.original_data and isinstance(event.original_data, dict):
+            return event.original_data.get("user_id", "event_handler")
+        return "event_handler"
 
 
 class LLMErrorEventHandler:
