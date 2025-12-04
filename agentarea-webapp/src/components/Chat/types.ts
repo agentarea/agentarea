@@ -91,3 +91,23 @@ export type MessageComponentType =
   | { type: "error"; data: ErrorData }
   | { type: "workflow_result"; data: WorkflowResultData }
   | { type: "system"; data: SystemData };
+
+// Chat Message Types
+export interface UserChatMessage {
+  id: string;
+  content: string;
+  role: "user";
+  timestamp: string;
+  files?: File[];
+}
+
+export interface WelcomeMessage {
+  id: string;
+  content: string;
+  role: "assistant";
+  timestamp: string;
+  agent_id: string;
+}
+
+// Unified Chat Message Type
+export type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;

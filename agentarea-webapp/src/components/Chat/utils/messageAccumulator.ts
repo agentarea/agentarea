@@ -3,18 +3,9 @@
  * Pure functions for managing message arrays (LLM chunks, tool calls, etc.)
  */
 
-import { MessageComponentType } from "../MessageComponents";
+import { ChatMessage, MessageComponentType } from "../types";
 
-export interface ChatMessage {
-  id: string;
-  content: string;
-  role: "user" | "assistant";
-  timestamp: string;
-  files?: File[];
-  agent_id?: string;
-}
-
-export type AnyMessage = ChatMessage | MessageComponentType;
+export type AnyMessage = ChatMessage;
 
 /**
  * Accumulates an LLM chunk into the messages array

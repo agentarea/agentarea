@@ -21,12 +21,12 @@ export interface UseScrollManagementReturn {
   /**
    * Ref for the scrollable messages container
    */
-  messagesContainerRef: React.RefObject<HTMLDivElement>;
+  messagesContainerRef: React.RefObject<HTMLDivElement | null>;
 
   /**
    * Ref for the element at the bottom of messages (for scrollIntoView)
    */
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
 
   /**
    * Whether the user is currently scrolled to the bottom

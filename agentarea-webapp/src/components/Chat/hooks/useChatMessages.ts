@@ -4,25 +4,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageComponentType } from "../MessageComponents";
+import {
+  ChatMessage,
+  UserChatMessage,
+  WelcomeMessage,
+} from "../types";
 
-export interface UserChatMessage {
-  id: string;
-  content: string;
-  role: "user";
-  timestamp: string;
-  files?: File[];
-}
-
-export interface WelcomeMessage {
-  id: string;
-  content: string;
-  role: "assistant";
-  timestamp: string;
-  agent_id: string;
-}
-
-export type ChatMessage = UserChatMessage | WelcomeMessage | MessageComponentType;
+export type { ChatMessage, UserChatMessage, WelcomeMessage };
 
 export interface UseChatMessagesOptions {
   /**

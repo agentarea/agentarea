@@ -14,7 +14,7 @@ export interface UseFileUploadReturn {
   /**
    * Ref for the hidden file input element
    */
-  fileInputRef: React.RefObject<HTMLInputElement>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
 
   /**
    * Handle file selection from input

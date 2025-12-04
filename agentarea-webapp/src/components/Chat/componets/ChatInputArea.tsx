@@ -22,9 +22,9 @@ import {
 export interface MentionMenuProps {
   show: boolean;
   agents: Array<{ id: string; name: string; description?: string | null }>;
-  position: { top: number; left: number };
+  position: { top: number; left: number; width: number; side: "top" | "bottom" };
   selectedIndex: number;
-  menuRef: React.RefObject<HTMLDivElement>;
+  menuRef: React.RefObject<HTMLDivElement> | React.RefObject<HTMLDivElement | null>;
   onAgentSelect: (agent: { id: string; name: string }) => void;
 }
 
@@ -77,12 +77,12 @@ export interface ChatInputAreaProps {
   /**
    * File input ref
    */
-  fileInputRef: React.RefObject<HTMLInputElement>;
+  fileInputRef: React.RefObject<HTMLInputElement> | React.RefObject<HTMLInputElement | null>;
 
   /**
    * Textarea ref
    */
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement> | React.RefObject<HTMLTextAreaElement | null>;
 
   /**
    * Keydown handler (for mentions, submit)
@@ -97,7 +97,7 @@ export interface ChatInputAreaProps {
   /**
    * Container ref (for mention menu positioning)
    */
-  containerRef?: React.RefObject<HTMLDivElement>;
+  containerRef?: React.RefObject<HTMLDivElement> | React.RefObject<HTMLDivElement | null>;
 
   /**
    * Variant style
