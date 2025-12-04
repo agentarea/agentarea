@@ -4,13 +4,11 @@ import "@ory/elements-react/theme/styles.css";
 import config from "@/ory.config";
 import { env } from "@/env";
 
-export type QueryParams = { [key: string]: string | string[] | undefined }
-
 import { FlowType, LoginFlow } from "@ory/client-fetch"
 import { serverSideFrontendClient, initOverrides, getPublicUrl } from "@/lib/auth/client";
-import { toGetFlowParameter } from "@/lib/auth/utils";
+import { toGetFlowParameter, QueryParams } from "@/lib/auth/utils";
 
-export async function getLoginFlow(
+async function getLoginFlow(
   config: { project: { login_ui_url: string } },
   params: QueryParams | Promise<QueryParams>,
 ): Promise<LoginFlow | null | void> {
@@ -48,7 +46,7 @@ export default async function LoginPage(props: OryPageParams) {
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <Login flow={flow} config={config} />
+      <Login flow={modifiedFlow} config={config} />
     </div>
   );
 }

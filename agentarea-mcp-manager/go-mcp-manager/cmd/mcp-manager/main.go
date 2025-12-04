@@ -23,6 +23,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/secrets"
+	"github.com/agentarea/mcp-manager/internal/templates"
 )
 
 const version = "0.1.0"
@@ -33,6 +34,17 @@ func main() {
 
 	// Setup logging
 	logger := setupLogging(cfg)
+
+	// Initialize template loader
+	templateLoader := templates.NewLoader(cfg.MCPProvidersPath)
+	if err := templateLoader.Load(); err != nil {
+		logger.Warn("Failed to load MCP templates",
+			slog.String("path", cfg.MCPProvidersPath),
+			slog.String("error", err.Error()))
+	} else {
+		logger.Info("Loaded MCP templates",
+			slog.Int("count", len(templateLoader.List())))
+	}
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -125,7 +137,7 @@ func main() {
 
 	// Setup HTTP router
 	router := setupRouter(cfg, logger)
-	handler := api.NewHandler(backend, containerManager, logger, version)
+	handler := api.NewHandler(backend, containerManager, templateLoader, logger, version)
 	handler.SetupRoutes(router)
 
 	// Start HTTP server

@@ -34,6 +34,9 @@ type Config struct {
 
 	// Environment override (for forcing backend selection)
 	Environment string `json:"environment"`
+
+	// Path to MCP providers YAML file
+	MCPProvidersPath string `json:"mcp_providers_path"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -127,9 +130,10 @@ func Load() *Config {
 		Redis: RedisConfig{
 			URL: getEnv("REDIS_URL", "redis://localhost:6379"),
 		},
-		CoreAPIURL:  getEnv("CORE_API_URL", "http://localhost:8000"),
-		Kubernetes:  loadKubernetesConfig(),
-		Environment: getEnv("BACKEND_ENVIRONMENT", ""),
+		CoreAPIURL:       getEnv("CORE_API_URL", "http://localhost:8000"),
+		Kubernetes:       loadKubernetesConfig(),
+		Environment:      getEnv("BACKEND_ENVIRONMENT", ""),
+		MCPProvidersPath: getEnv("MCP_PROVIDERS_YAML", "/app/data/mcp_providers.yaml"),
 	}
 }
 

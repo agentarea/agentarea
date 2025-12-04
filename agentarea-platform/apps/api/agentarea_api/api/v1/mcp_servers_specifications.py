@@ -101,24 +101,10 @@ async def list_mcp_servers(
     tag: str | None = None,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
-    # Get all servers first, then filter manually since base service doesn't support filtering
-    all_servers = await mcp_server_service.list()
-
-    # Apply filters manually
-    filtered_servers = []
-    for server in all_servers:
-        # Filter by status
-        if status is not None and server.status != status:
-            continue
-        # Filter by is_public
-        if is_public is not None and server.is_public != is_public:
-            continue
-        # Filter by tag (check if tag is in the server's tags list)
-        if tag is not None and (not server.tags or tag not in server.tags):
-            continue
-        filtered_servers.append(server)
-
-    return [MCPServerResponse.from_domain(server) for server in filtered_servers]
+    servers = await mcp_server_service.list_servers(
+        status=status, is_public=is_public, tag=tag
+    )
+    return [MCPServerResponse.from_domain(server) for server in servers]
 
 
 def load_mcp_provider_templates() -> dict[str, Any]:

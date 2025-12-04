@@ -79,6 +79,9 @@ down-clean: ## Stop and clean development environment (removes volumes)
 	docker compose -f docker-compose.dev.yaml down -v
 
 restart: ## Restart development environment
+	docker compose restart
+
+restart-dev: ## Restart development environment
 	docker compose -f docker-compose.dev.yaml restart
 
 logs: ## Follow logs from all services

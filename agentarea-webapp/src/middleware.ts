@@ -1,5 +1,6 @@
 import { createOryMiddleware } from "@ory/nextjs/middleware";
 import oryConfig from "@/ory.config";
+import { NextRequest } from "next/server";
 
 // This function can be marked `async` if using `await` inside
 // The middleware automatically reads ORY_SDK_URL from environment variables
@@ -22,7 +23,7 @@ export const middleware = (request: Request) => {
     redirectUrl.hash = originalUrl.hash;
     return Response.redirect(redirectUrl.toString(), 307);
   }
-  return createOryMiddleware(oryConfig)(request);
+  return createOryMiddleware(oryConfig)(request as NextRequest);
 };
 
 

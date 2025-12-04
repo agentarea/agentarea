@@ -10,22 +10,25 @@ import (
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/templates"
 )
 
 // Handler holds the HTTP handlers and dependencies
 type Handler struct {
 	backend          backends.Backend
 	containerManager *container.Manager // Keep for backward compatibility
+	templateLoader   *templates.Loader
 	logger           *slog.Logger
 	startTime        time.Time
 	version          string
 }
 
 // NewHandler creates a new API handler
-func NewHandler(backend backends.Backend, containerManager *container.Manager, logger *slog.Logger, version string) *Handler {
+func NewHandler(backend backends.Backend, containerManager *container.Manager, templateLoader *templates.Loader, logger *slog.Logger, version string) *Handler {
 	return &Handler{
 		backend:          backend,
 		containerManager: containerManager,
+		templateLoader:   templateLoader,
 		logger:           logger,
 		startTime:        time.Now(),
 		version:          version,
@@ -39,6 +42,9 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 
 	// Health check
 	router.GET("/health", h.healthCheck)
+
+	// Templates
+	router.GET("/templates", h.listTemplates)
 
 	// Instance management (backend-agnostic)
 	router.GET("/instances", h.listInstances)
@@ -97,6 +103,25 @@ func (h *Handler) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// listTemplates returns a list of available MCP templates
+func (h *Handler) listTemplates(c *gin.Context) {
+	if h.templateLoader == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"templates": []models.MCPProviderTemplate{},
+			"total":     0,
+		})
+		return
+	}
+
+	templates := h.templateLoader.List()
+	response := gin.H{
+		"templates": templates,
+		"total":     len(templates),
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // Backend-agnostic instance management methods
 
 // listInstances returns a list of all managed instances
@@ -123,15 +148,15 @@ func (h *Handler) listInstances(c *gin.Context) {
 // createInstance creates a new MCP server instance
 func (h *Handler) createInstance(c *gin.Context) {
 	var req struct {
-		InstanceID   string            `json:"instance_id" binding:"required"`
-		Name         string            `json:"name" binding:"required"`
-		ServiceName  string            `json:"service_name" binding:"required"`
-		Image        string            `json:"image" binding:"required"`
-		Port         int               `json:"port"`
-		Command      []string          `json:"command,omitempty"`
-		Environment  map[string]string `json:"environment,omitempty"`
-		WorkspaceID  string            `json:"workspace_id" binding:"required"`
-		Resources    struct {
+		InstanceID  string            `json:"instance_id" binding:"required"`
+		Name        string            `json:"name" binding:"required"`
+		ServiceName string            `json:"service_name" binding:"required"`
+		Image       string            `json:"image" binding:"required"`
+		Port        int               `json:"port"`
+		Command     []string          `json:"command,omitempty"`
+		Environment map[string]string `json:"environment,omitempty"`
+		WorkspaceID string            `json:"workspace_id" binding:"required"`
+		Resources   struct {
 			Requests backends.ResourceList `json:"requests,omitempty"`
 			Limits   backends.ResourceList `json:"limits,omitempty"`
 		} `json:"resources,omitempty"`
@@ -799,10 +824,10 @@ func (h *Handler) getMonitoringStatus(c *gin.Context) {
 	}
 
 	response := gin.H{
-		"total_containers":     totalInstances,    // Keep field name for backward compatibility
-		"healthy_containers":   healthyInstances,  // Keep field name for backward compatibility
+		"total_containers":     totalInstances,     // Keep field name for backward compatibility
+		"healthy_containers":   healthyInstances,   // Keep field name for backward compatibility
 		"unhealthy_containers": unhealthyInstances, // Keep field name for backward compatibility
-		"stopped_containers":   stoppedInstances,  // Keep field name for backward compatibility
+		"stopped_containers":   stoppedInstances,   // Keep field name for backward compatibility
 		"total_instances":      totalInstances,
 		"healthy_instances":    healthyInstances,
 		"unhealthy_instances":  unhealthyInstances,
@@ -881,12 +906,12 @@ func (h *Handler) getHealthSummary(c *gin.Context) {
 	}
 
 	response := gin.H{
-		"total_containers":     totalInstances,                    // Keep field name for backward compatibility
-		"healthy_containers":   runningCount,                      // Simplified: consider running = healthy
-		"unhealthy_containers": totalInstances - runningCount,     // Keep field name for backward compatibility
-		"running_containers":   runningCount,                      // Keep field name for backward compatibility
-		"stopped_containers":   stoppedCount,                      // Keep field name for backward compatibility
-		"error_containers":     errorCount,                        // Keep field name for backward compatibility
+		"total_containers":     totalInstances,                // Keep field name for backward compatibility
+		"healthy_containers":   runningCount,                  // Simplified: consider running = healthy
+		"unhealthy_containers": totalInstances - runningCount, // Keep field name for backward compatibility
+		"running_containers":   runningCount,                  // Keep field name for backward compatibility
+		"stopped_containers":   stoppedCount,                  // Keep field name for backward compatibility
+		"error_containers":     errorCount,                    // Keep field name for backward compatibility
 		"total_instances":      totalInstances,
 		"healthy_instances":    runningCount,
 		"unhealthy_instances":  totalInstances - runningCount,

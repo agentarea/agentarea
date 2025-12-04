@@ -142,7 +142,7 @@ services:
       - ORY_ADMIN_URL=${ORY_ADMIN_URL:-http://kratos:4434}
       # ORY_SDK_URL: internal Docker URL for server-side API calls to Kratos
       - ORY_SDK_URL=${ORY_SDK_URL:-http://kratos:4433}
-      - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:4433}
     networks:
       - default
       - auth-network
@@ -165,7 +165,7 @@ services:
       retries: 5
 
   db:
-    image: postgres:15
+    image: postgres:18
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
