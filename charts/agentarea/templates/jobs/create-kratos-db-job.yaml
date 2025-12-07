@@ -7,8 +7,10 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: create-kratos-db
   annotations:
-    # This job is a standard resource that waits for the database to be ready.
-    # We use internal retry logic instead of Helm hooks to avoid dependency deadlocks.
+    # Use ArgoCD Sync Wave 0 (same as other resources) or -1 to run before deployments?
+    # But deployments wait for DB, so it doesn't matter much if deployments crashloop.
+    # We remove Helm hooks to avoid deadlock with --wait
+    "argocd.argoproj.io/sync-wave": "0"
 spec:
   ttlSecondsAfterFinished: 300
   template:
