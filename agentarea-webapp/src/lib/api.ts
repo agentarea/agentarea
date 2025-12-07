@@ -149,7 +149,7 @@ export const listProviderConfigsWithModelInstances = async (params?: {
     listProviderConfigs(params),
   ]);
   if (configsResponse.error || !configsResponse.data) {
-    return configsResponse;
+    return { configs: configsResponse, specs: providersResponse };
   }
   const configs = configsResponse.data || [];
   const specsWithModels = providersResponse.data || [];
@@ -169,7 +169,10 @@ export const listProviderConfigsWithModelInstances = async (params?: {
       .filter(Boolean),
   }));
 
-  return { data: configsWithModels, error: null };
+  return {
+    configs: { data: configsWithModels, error: null },
+    specs: providersResponse
+  };
 };
 
 export const getProvidersAndConfigs = async () => {

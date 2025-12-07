@@ -1,9 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
-import {
-  listProviderConfigsWithModelInstances,
-  listProviderSpecsWithModels,
-} from "@/lib/api";
+import { listProviderConfigsWithModelInstances } from "@/lib/api";
 import ProviderConfigsView from "./ProviderConfigsView";
 import ProviderSpecView from "./ProviderSpecView";
 import { ProviderConfig, ProviderSpec } from "./types";
@@ -20,10 +17,8 @@ export default async function ProvidersData({
   const t = await getTranslations("Models");
 
   // Fetch provider specs and configs with model instances
-  const [specsResponse, configsResponse] = await Promise.all([
-    listProviderSpecsWithModels(),
-    listProviderConfigsWithModelInstances(),
-  ]);
+  const { specs: specsResponse, configs: configsResponse } =
+    await listProviderConfigsWithModelInstances();
 
   // Handle API errors
   if (specsResponse.error || configsResponse.error) {

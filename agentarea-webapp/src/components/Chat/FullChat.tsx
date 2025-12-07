@@ -2,8 +2,10 @@
 
 import React, { useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useMentions } from "@/hooks/useMentions";
+import { pauseAgentTask } from "@/lib/browser-api";
 import { extractPlainText, formatTextForTextarea, restoreMentionIds } from "@/utils/mentions";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { MessageRenderer } from "./MessageComponents";
@@ -108,6 +110,7 @@ export default function FullChat({
 
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isPausing, setIsPausing] = React.useState(false);
   const [input, setInput] = React.useState(""); // Stores @[agentId:agentName] format
   const [inputDisplay, setInputDisplay] = React.useState(""); // Stores @agentName for display
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -283,6 +286,36 @@ export default function FullChat({
     }
   };
 
+  // Handle pause task
+  const handlePause = async () => {
+    if (!currentTaskId || isPausing) return;
+
+    try {
+      setIsPausing(true);
+      const { error } = await pauseAgentTask(agent.id, currentTaskId);
+
+      if (error) {
+        const errorMessage =
+          error.detail?.[0]?.msg || "An error occurred while pausing the task";
+        toast.error("Failed to pause task", {
+          description: errorMessage,
+        });
+      } else {
+        toast.success("Task paused successfully");
+        // We keep isLoading true until we get a confirmation or the stream ends?
+        // If we pause, the stream might stop sending events.
+        // Let's allow the user to interact again by stopping the loading state.
+        setIsLoading(false);
+      }
+    } catch (err) {
+      toast.error("Failed to pause task", {
+        description: "An unexpected error occurred",
+      });
+    } finally {
+      setIsPausing(false);
+    }
+  };
+
   // Keydown handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (handleMentionKeyDown(e)) {
@@ -402,6 +435,8 @@ export default function FullChat({
           currentAgent={agent}
           availableAgents={availableAgents}
           onAgentChange={onAgentChange}
+          onStop={isLoading && currentTaskId ? handlePause : undefined}
+          isStopping={isPausing}
         />
       </div>
 

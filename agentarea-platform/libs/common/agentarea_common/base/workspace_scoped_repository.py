@@ -1,6 +1,6 @@
 """Workspace-scoped repository base class."""
 
-from typing import Any, TypeVar
+from typing import Any, TypeVar, Generic
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -14,7 +14,7 @@ from .models import WorkspaceScopedMixin
 T = TypeVar("T", bound=WorkspaceScopedMixin)
 
 
-class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
+class WorkspaceScopedRepository(Generic[T]):
     """Base repository class that provides workspace-scoped CRUD operations.
 
     This repository focuses on workspace-level data isolation rather than user-level.

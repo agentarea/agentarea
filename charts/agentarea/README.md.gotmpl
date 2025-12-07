@@ -1,0 +1,75 @@
+{{ template "chart.header" . }}
+
+> AgentArea is an AI agent platform. This chart deploys the API, frontend, worker, MCP Manager, and optional dependencies.
+
+## Usage
+
+```bash
+helm repo add agentarea https://agentarea.github.io/helm-charts
+helm repo update
+helm install agentarea agentarea/agentarea \
+  --namespace agentarea --create-namespace
+```
+
+## Prerequisites
+
+- Kubernetes 1.20+
+- Helm 3.8+
+- PV provisioner for PostgreSQL/MinIO persistence (if enabled)
+
+## Installing with external services
+
+If you have existing PostgreSQL, Redis or S3-compatible storage, disable bundled dependencies and set endpoints:
+
+```yaml
+postgresql:
+  enabled: false
+redis:
+  enabled: false
+minio:
+  enabled: false
+
+global:
+  database:
+    host: "db.example.com"
+    port: 5432
+    name: "agentarea"
+  redis:
+    host: "redis.example.com"
+    port: 6379
+  storage:
+    type: "s3"
+    endpoint: "https://s3.amazonaws.com"
+    bucket: "agentarea-docs"
+    region: "us-east-1"
+```
+
+## Parameters
+
+The following table lists configurable parameters of the chart and their default values.
+
+{{ template "chart.valuesTable" . }}
+
+## Secrets
+
+For production, create required secrets ahead of time and reference them via `global.secrets.*`:
+
+```bash
+kubectl create secret generic agentarea-postgresql-secret \
+  --from-literal=username=postgres \
+  --from-literal=password=<password> \
+  --from-literal=postgres-password=<password>
+
+kubectl create secret generic agentarea-redis-secret \
+  --from-literal=redis-password=<password>
+
+kubectl create secret generic agentarea-minio-secret \
+  --from-literal=root-user=<access-key> \
+  --from-literal=root-password=<secret-key>
+```
+
+## Upgrade
+
+```bash
+helm upgrade agentarea agentarea/agentarea -f values.yaml
+```

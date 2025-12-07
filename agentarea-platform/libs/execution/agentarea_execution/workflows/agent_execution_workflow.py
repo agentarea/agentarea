@@ -59,6 +59,44 @@ class AgentExecutionWorkflow:
         self._paused = False
         self._pause_reason = ""
 
+    @workflow.signal
+    async def pause_execution(self, reason: str = "Paused by user") -> None:
+        """Signal to pause execution."""
+        self._paused = True
+        self._pause_reason = reason
+        workflow.logger.info(f"Workflow paused: {reason}")
+
+        # Add event for pause
+        if self.event_manager:
+            self.event_manager.add_event(
+                "execution_paused",
+                {
+                    "reason": reason,
+                    "iteration": self.state.current_iteration,
+                },
+            )
+            # We can't await async functions in signal handlers usually,
+            # but we can modify state that the workflow loop will see.
+            # However, we should try to publish this event if possible or just let the loop handle it.
+            # Since we are in a signal handler, we should keep it simple.
+
+    @workflow.signal
+    async def resume_execution(self, reason: str = "Resumed by user") -> None:
+        """Signal to resume execution."""
+        self._paused = False
+        self._pause_reason = ""
+        workflow.logger.info(f"Workflow resumed: {reason}")
+
+        # Add event for resume
+        if self.event_manager:
+            self.event_manager.add_event(
+                "execution_resumed",
+                {
+                    "reason": reason,
+                    "iteration": self.state.current_iteration,
+                },
+            )
+
     @workflow.run
     async def run(self, request: AgentExecutionRequest) -> AgentExecutionResult:
         """Main workflow execution method."""
@@ -900,21 +938,6 @@ class AgentExecutionWorkflow:
             requires_human_approval=request.requires_human_approval,
             context=request.task_parameters,
         )
-
-    # Signal handlers for human interaction
-    @workflow.signal
-    async def pause(self, reason: str = "Manual pause") -> None:
-        """Pause workflow execution."""
-        self._paused = True
-        self._pause_reason = reason
-        workflow.logger.info(f"Workflow paused: {reason}")
-
-    @workflow.signal
-    async def resume(self, reason: str = "Manual resume") -> None:
-        """Resume workflow execution."""
-        self._paused = False
-        self._pause_reason = ""
-        workflow.logger.info(f"Workflow resumed: {reason}")
 
     # Query methods for external inspection
     @workflow.query

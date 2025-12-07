@@ -108,7 +108,7 @@ class WebhookTrigger(Trigger):
     trigger_type: TriggerType = Field(default=TriggerType.WEBHOOK, frozen=True)
     webhook_id: str = Field(..., min_length=1)
     allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
-    webhook_type: WebhookType = Field(default=WebhookType.GENERIC)
+    webhook_type: str = Field(default="generic")
     validation_rules: dict[str, Any] = Field(default_factory=dict)
 
     # Generic webhook configuration - supports any webhook type
@@ -195,7 +195,7 @@ class TriggerCreate(BaseModel):
     # Webhook-specific fields
     webhook_id: str | None = None
     allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
-    webhook_type: WebhookType = Field(default=WebhookType.GENERIC)
+    webhook_type: str = Field(default="generic")
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: dict[str, Any] | None = None
 

@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Paperclip, ArrowUp, Send } from "lucide-react";
+import { Paperclip, ArrowUp, Send, Pause, Square } from "lucide-react";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -155,6 +155,16 @@ export interface ChatInputAreaProps {
     name: string;
     description?: string | null;
   }) => void;
+
+  /**
+   * Stop/Pause handler
+   */
+  onStop?: () => void;
+
+  /**
+   * Is stopping state
+   */
+  isStopping?: boolean;
 }
 
 /**
@@ -209,6 +219,8 @@ export function ChatInputArea({
   currentAgent,
   availableAgents,
   onAgentChange,
+  onStop,
+  isStopping = false,
 }: ChatInputAreaProps) {
   const SendIcon = sendButtonIcon === "arrow" ? ArrowUp : Send;
 
@@ -299,20 +311,39 @@ export function ChatInputArea({
             </Button>
 
             {showSendButton && (
-              <Button
-                type="submit"
-                size="icon"
-                disabled={
-                  isLoading || (!input.trim() && selectedFiles.length === 0)
-                }
-                className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
-              >
-                {isLoading ? (
-                  <LoadingSpinner variant="light" size="sm" />
+              <>
+                {isLoading && onStop ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="destructive"
+                    onClick={onStop}
+                    disabled={isStopping}
+                    className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                  >
+                    {isStopping ? (
+                      <LoadingSpinner variant="light" size="sm" />
+                    ) : (
+                      <Pause className="h-4 w-4" />
+                    )}
+                  </Button>
                 ) : (
-                  <SendIcon className="h-4 w-4" />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={
+                      isLoading || (!input.trim() && selectedFiles.length === 0)
+                    }
+                    className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                  >
+                    {isLoading ? (
+                      <LoadingSpinner variant="light" size="sm" />
+                    ) : (
+                      <SendIcon className="h-4 w-4" />
+                    )}
+                  </Button>
                 )}
-              </Button>
+              </>
             )}
           </div>
         </div>

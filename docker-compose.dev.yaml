@@ -118,7 +118,7 @@ services:
       context: agentarea-bootstrap
       dockerfile: Dockerfile
     volumes:
-      - ./data:/app/llm
+      - ./agentarea-bootstrap/data:/app/llm
     environment:
       - SECRET_MANAGER_TYPE=${SECRET_MANAGER_TYPE:-database}
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
@@ -249,7 +249,6 @@ services:
       - mcp_containers:/var/lib/containers/storage
       - ./agentarea-mcp-manager:/app:rw # Mount source code for live reload
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./data/mcp_providers.yaml:/app/data/mcp_providers.yaml
     networks:
       - mcp-network
       - default

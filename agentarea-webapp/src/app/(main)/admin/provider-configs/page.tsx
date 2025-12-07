@@ -61,7 +61,7 @@ export default async function ProviderConfigsPage({
       }
     >
       <Suspense
-        key={`${searchQuery}-${tab}`}
+        key={searchQuery}
         fallback={
           <div className="flex h-32 items-center justify-center">
             <LoadingSpinner />
