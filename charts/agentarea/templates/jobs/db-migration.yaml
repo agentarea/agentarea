@@ -10,12 +10,10 @@ metadata:
     {{- toYaml . | nindent 4 }}
     {{- end }}
   annotations:
-    "helm.sh/hook": post-install,pre-upgrade
-    "helm.sh/hook-weight": "-5"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    # This job is a standard resource that waits for the database to be ready.
+    # We use internal retry logic instead of Helm hooks to avoid dependency deadlocks.
 spec:
+  ttlSecondsAfterFinished: 300
   template:
     metadata:
       labels:
