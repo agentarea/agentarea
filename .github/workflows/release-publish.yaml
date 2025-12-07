@@ -21,13 +21,22 @@ jobs:
         id: check
         run: echo "is_release=true" >> $GITHUB_OUTPUT
 
-      - name: Extract version from branch name
+      - uses: actions/checkout@v4
+        with:
+          ref: main  # Ensure we're on merged main
+
+      - name: Read version from VERSION file
         id: extract-version
         run: |
-          VERSION="${{ github.event.pull_request.head.ref }}"
-          VERSION="${VERSION#release/}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Releasing version: ${VERSION}"
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          VERSION_TAG="v${VERSION}"
+          echo "version=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "app_version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Releasing version: ${VERSION_TAG}"
+
+      - name: Verify version synchronization
+        run: |
+          bash scripts/verify-version-sync.sh
 
   create-tag:
     runs-on: ubuntu-latest

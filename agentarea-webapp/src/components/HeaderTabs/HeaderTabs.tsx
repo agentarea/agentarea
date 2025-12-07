@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { getCookie, setCookie } from "@/utils/cookies";
+import { setCookie } from "@/utils/cookies";
 import Tab from "./components/Tab";
 
 export interface TabItem {
@@ -34,45 +34,8 @@ export default function HeaderTabs({
 
   const urlTab = searchParams.get(paramName);
 
-  // Use state to avoid hydration mismatch - start with URL or default
-  const [activeTab, setActiveTab] = useState<string>(
-    urlTab || defaultTab || tabs[0]?.value
-  );
-
-  // Track if we've synced URL with cookie
-  const [hasUrlSynced, setHasUrlSynced] = useState(false);
-
-  // Sync with cookie after hydration (client-only)
-  useEffect(() => {
-    const cookieTab = getCookie(cookieKey);
-
-    if (!hasUrlSynced && !urlTab && cookieTab) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set(paramName, cookieTab);
-      const newUrl = `${pathname}?${params.toString()}`;
-      // Use replace to avoid adding to history
-      router.replace(newUrl, { scroll: false });
-      setActiveTab(cookieTab);
-      setHasUrlSynced(true);
-    } else if (!hasUrlSynced) {
-      setHasUrlSynced(true);
-    }
-  }, [
-    hasUrlSynced,
-    urlTab,
-    cookieKey,
-    searchParams,
-    paramName,
-    pathname,
-    router,
-  ]);
-
-  // Update active tab when URL changes
-  useEffect(() => {
-    if (urlTab) {
-      setActiveTab(urlTab);
-    }
-  }, [urlTab]);
+  // Active tab is purely derived from URL or default - no cookie sync on mount
+  const activeTab = urlTab || defaultTab || tabs[0]?.value;
 
   const handleTabChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());

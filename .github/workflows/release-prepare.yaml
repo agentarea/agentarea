@@ -31,6 +31,11 @@ jobs:
       - name: Install bumpversion
         run: pip install bumpversion
 
+      - name: Verify version sync before bump
+        shell: bash
+        run: |
+          bash scripts/verify-version-sync.sh
+
       - name: Bump version
         id: get-version
         shell: bash
@@ -48,6 +53,11 @@ jobs:
           set -euo pipefail
           python3 scripts/update-appversion.py
 
+      - name: Verify version sync after bump
+        shell: bash
+        run: |
+          bash scripts/verify-version-sync.sh
+
       - name: Create release branch and PR
         uses: peter-evans/create-pull-request@v6
         with:
@@ -60,13 +70,26 @@ jobs:
             This PR contains version bumps for release ${{ steps.get-version.outputs.VERSION }}.
 
             ### Changes
-            - Bumped version across all packages to ${{ steps.get-version.outputs.VERSION }}
-            - Updated Helm chart appVersion
+            - Bumped application version across all packages to ${{ steps.get-version.outputs.VERSION }}
+            - Updated Helm chart `appVersion` to ${{ steps.get-version.outputs.VERSION }}
+            - Chart `version` remains independent (managed separately in Chart.yaml)
+
+            ### Version Synchronization
+            All versions verified and synchronized:
+            - ✅ VERSION file: ${{ steps.get-version.outputs.VERSION }}
+            - ✅ All pyproject.toml files
+            - ✅ package.json
+            - ✅ Chart.yaml appVersion
+            - ✅ .bumpversion.cfg
+
+            **Note:** Helm chart version is managed independently. If chart configuration
+            changes were made, bump the chart version in `charts/agentarea/Chart.yaml` separately.
 
             ### Checklist
             - [ ] Review version changes
             - [ ] Verify all package versions are updated correctly
             - [ ] Add release notes to CHANGELOG (if applicable)
+            - [ ] If chart configs changed, bump chart version independently
             - [ ] Merge this PR to trigger automated build and publish
 
             **Note:** Merging this PR will automatically trigger the release pipeline to build Docker images, publish Helm charts, and create a Git tag.

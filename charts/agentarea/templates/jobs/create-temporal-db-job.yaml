@@ -7,8 +7,8 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: create-temporal-db
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade
-    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   template:
@@ -25,8 +25,13 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
-              echo "Checking/Creating temporal database..."
+              echo "Waiting for PostgreSQL to be ready..."
               export PGPASSWORD=$POSTGRES_PASSWORD
+              until psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -c "SELECT 1" >/dev/null 2>&1; do
+                echo "PostgreSQL not ready yet, retrying in 5s..."
+                sleep 5
+              done
+              echo "Checking/Creating temporal database..."
               psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.temporal.database.name | default "temporal" }}'" | grep -q 1 || \
               psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -c "CREATE DATABASE {{ .Values.temporal.database.name | default "temporal" }};"
           env:

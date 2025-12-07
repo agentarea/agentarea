@@ -1,0 +1,36 @@
+providers:
+  - type: github
+    description: "GitHub Webhook"
+    parser:
+      strategy: code
+  
+  - type: slack
+    description: "Slack Webhook"
+    parser:
+      strategy: code
+      
+  - type: telegram
+    description: "Telegram Webhook"
+    parser:
+      strategy: code
+
+  - type: linear
+    description: "Linear Webhook"
+    parser:
+      strategy: mapping
+      mapping:
+        linear_action: "action"
+        linear_type: "type"
+        linear_created_at: "createdAt"
+        linear_data: "data"
+        linear_url: "url"
+
+  - type: discord
+    description: "Discord Webhook"
+    parser:
+      strategy: mapping
+      mapping:
+        discord_channel_id: "channel_id"
+        discord_guild_id: "guild_id"
+        discord_author: "author.username"
+        discord_content: "content"

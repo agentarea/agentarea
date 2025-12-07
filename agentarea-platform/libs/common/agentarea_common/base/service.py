@@ -1,4 +1,4 @@
-from typing import TypeVar
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from ..base.repository import BaseRepository
@@ -6,7 +6,7 @@ from ..base.repository import BaseRepository
 T = TypeVar("T")
 
 
-class BaseCrudService[T]:
+class BaseCrudService(Generic[T]):
     def __init__(self, repository: BaseRepository[T]):
         self.repository = repository
 

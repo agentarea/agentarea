@@ -1,6 +1,6 @@
 [project]
 name = "agentarea-bootstrap"
-version = "0.0.1"
+version = "0.0.3"
 description = "Bootstrap module for AgentArea - sets up initial configuration, LLM providers, MinIO, and Infisical"
 readme = "README.md"
 requires-python = ">=3.12"

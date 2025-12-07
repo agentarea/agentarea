@@ -2,6 +2,8 @@
 
 import json
 import time
+import yaml
+from pathlib import Path
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
@@ -141,6 +143,52 @@ class DefaultWebhookManager(WebhookManager):
         self.event_broker = event_broker
         self.base_url = base_url.rstrip("/")
         self._registered_webhooks: dict[str, WebhookTrigger] = {}
+        self._load_provider_config()
+
+    def _load_provider_config(self):
+        """Load webhook provider configuration."""
+        try:
+            config_path = Path(__file__).parent / "config" / "webhook_providers.yaml"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    config = yaml.safe_load(f)
+                    self.providers = {p["type"]: p for p in config.get("providers", [])}
+                    logger.info(f"Loaded {len(self.providers)} webhook providers from config")
+            else:
+                logger.warning(f"Webhook provider config not found at {config_path}")
+                self.providers = {}
+        except Exception as e:
+            logger.error(f"Failed to load webhook provider config: {e}")
+            self.providers = {}
+
+    def _extract_value_by_path(self, data: Any, path: str) -> Any:
+        """Extract value from nested dict using dot notation."""
+        if not path:
+            return None
+            
+        parts = path.split(".")
+        current = data
+        
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            elif isinstance(current, list):
+                # Simple list index support e.g. items.0.id
+                try:
+                    idx = int(part)
+                    if 0 <= idx < len(current):
+                        current = current[idx]
+                    else:
+                        return None
+                except ValueError:
+                    return None
+            else:
+                return None
+            
+            if current is None:
+                return None
+                
+        return current
 
     def generate_webhook_url(self, trigger_id: UUID) -> str:
         """Generate unique webhook URL for trigger."""
@@ -427,19 +475,80 @@ class DefaultWebhookManager(WebhookManager):
             "headers": request_data.headers,
             "query_params": request_data.query_params,
             "received_at": request_data.received_at.isoformat(),
-            "webhook_type": trigger.webhook_type.value,
+            "webhook_type": trigger.webhook_type,
         }
 
-        # Parse body based on webhook type
-        if trigger.webhook_type == WebhookType.TELEGRAM:
+        webhook_type = trigger.webhook_type
+        # Handle enum value if needed (though model is str now)
+        if hasattr(webhook_type, "value"):
+            webhook_type = webhook_type.value
+
+        # Check provider config first
+        provider = self.providers.get(webhook_type)
+        if provider:
+            parser_config = provider.get("parser", {})
+            strategy = parser_config.get("strategy")
+            
+            if strategy == "code":
+                # Fallback to specific methods
+                # We map known types to their legacy method names
+                method_map = {
+                    "telegram": "_parse_telegram_webhook",
+                    "slack": "_parse_slack_webhook",
+                    "github": "_parse_github_webhook",
+                    "discord": "_parse_discord_webhook",
+                    "linear": "_parse_linear_webhook"
+                }
+                method_name = method_map.get(webhook_type)
+                if method_name and hasattr(self, method_name):
+                    return await getattr(self, method_name)(request_data, base_data)
+            
+            elif strategy == "mapping":
+                mapping = parser_config.get("mapping", {})
+                return await self._parse_generic_mapping_webhook(request_data, base_data, mapping)
+
+        # Fallback for backward compatibility or hardcoded types not in config
+        if webhook_type == WebhookType.TELEGRAM:
             return await self._parse_telegram_webhook(request_data, base_data)
-        elif trigger.webhook_type == WebhookType.SLACK:
+        elif webhook_type == WebhookType.SLACK:
             return await self._parse_slack_webhook(request_data, base_data)
-        elif trigger.webhook_type == WebhookType.GITHUB:
+        elif webhook_type == WebhookType.GITHUB:
             return await self._parse_github_webhook(request_data, base_data)
+        elif webhook_type == WebhookType.DISCORD:
+            return await self._parse_discord_webhook(request_data, base_data)
+        elif webhook_type == WebhookType.LINEAR:
+            return await self._parse_linear_webhook(request_data, base_data)
         else:
             # Generic webhook - just include raw body
             return {**base_data, "body": request_data.body, "raw_data": request_data.body}
+
+    async def _parse_generic_mapping_webhook(
+        self, request_data: WebhookRequestData, base_data: dict[str, Any], mapping: dict[str, str]
+    ) -> dict[str, Any]:
+        """Parse webhook data using generic mapping."""
+        try:
+            # Parse body if it's a string
+            if isinstance(request_data.body, dict):
+                body_data = request_data.body
+            elif isinstance(request_data.body, str):
+                try:
+                    body_data = json.loads(request_data.body)
+                except json.JSONDecodeError:
+                    body_data = {}
+            else:
+                body_data = {}
+
+            parsed_data = base_data.copy()
+            
+            for target_field, source_path in mapping.items():
+                parsed_data[target_field] = self._extract_value_by_path(body_data, source_path)
+                
+            parsed_data["raw_data"] = body_data
+            return parsed_data
+            
+        except Exception as e:
+            logger.error(f"Error parsing mapped webhook: {e}")
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}
 
     async def _parse_telegram_webhook(
         self, request_data: WebhookRequestData, base_data: dict[str, Any]
@@ -548,4 +657,51 @@ class DefaultWebhookManager(WebhookManager):
 
         except Exception as e:
             logger.error(f"Error parsing GitHub webhook: {e}")
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}
+
+    async def _parse_discord_webhook(
+        self, request_data: WebhookRequestData, base_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Parse Discord webhook data."""
+        try:
+            if isinstance(request_data.body, dict):
+                discord_data = request_data.body
+            else:
+                discord_data = json.loads(request_data.body)
+
+            parsed_data = {
+                **base_data,
+                "discord_channel_id": discord_data.get("channel_id"),
+                "discord_guild_id": discord_data.get("guild_id"),
+                "discord_author": discord_data.get("author", {}).get("username"),
+                "discord_content": discord_data.get("content"),
+                "raw_data": discord_data,
+            }
+            return parsed_data
+        except Exception as e:
+            logger.error(f"Error parsing Discord webhook: {e}")
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}
+
+    async def _parse_linear_webhook(
+        self, request_data: WebhookRequestData, base_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Parse Linear webhook data."""
+        try:
+            if isinstance(request_data.body, dict):
+                linear_data = request_data.body
+            else:
+                linear_data = json.loads(request_data.body)
+
+            parsed_data = {
+                **base_data,
+                "linear_action": linear_data.get("action"),
+                "linear_type": linear_data.get("type"),
+                "linear_created_at": linear_data.get("createdAt"),
+                "linear_data": linear_data.get("data"),
+                "linear_url": linear_data.get("url"),
+                "raw_data": linear_data,
+            }
+            return parsed_data
+        except Exception as e:
+            logger.error(f"Error parsing Linear webhook: {e}")
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
