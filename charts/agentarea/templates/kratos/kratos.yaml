@@ -153,7 +153,7 @@ spec:
                   name: "{{ .Values.global.secrets.postgresql }}"
                   key: password
             - name: DSN
-              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
           command: ["sh","-c"]
           args:
             - >
@@ -255,7 +255,7 @@ spec:
               echo "Checking environment..."
               env | grep POSTGRES
               echo "Constructing DSN..."
-              export DSN="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{{ .Release.Name }}-postgresql:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+              export DSN="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
               if [ -z "$DSN" ]; then
                 echo "Error: DSN is empty"
                 exit 1

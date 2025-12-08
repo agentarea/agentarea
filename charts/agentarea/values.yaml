@@ -540,6 +540,9 @@ minio:
 jobs:
   bootstrap:
     enabled: false
+    image:
+      repository: "agentarea/agentarea-bootstrap"
+      tag: "latest"
   dbMigration:
     enabled: true
 

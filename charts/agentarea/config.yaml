@@ -1,7 +1,7 @@
 groups:
   database:
     configVars:
-      POSTGRES_HOST: '{{ .Release.Name }}-postgresql'
+      POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
     secrets:
@@ -50,7 +50,7 @@ groups:
     configVars:
       DB: 'postgres12'
       DB_PORT: '5432'
-      POSTGRES_SEEDS: '{{ .Release.Name }}-postgresql'
+      POSTGRES_SEEDS: '{{ include "agentarea.database.host" . }}'
       DBNAME: '{{ .Values.temporal.database.name | default "temporal" | quote }}'
       BIND_ON_IP: '0.0.0.0'
     secrets:
@@ -129,7 +129,7 @@ groups:
 
   databaseJobs:
     configVars:
-      POSTGRES_HOST: '{{ .Release.Name }}-postgresql'
+      POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
     secrets:

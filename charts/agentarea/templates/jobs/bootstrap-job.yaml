@@ -7,10 +7,10 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: bootstrap
   annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "10"
-    "helm.sh/hook-delete-policy": before-hook-creation
+    # This job is a standard resource that runs after installation/upgrade.
+    # We remove Helm hooks to avoid dependency deadlocks and allow ArgoCD to manage it.
 spec:
+  ttlSecondsAfterFinished: 300
   template:
     metadata:
       name: {{ include "agentarea.fullname" . }}-bootstrap
@@ -28,7 +28,7 @@ spec:
             - sh
             - -c
             - |
-              until pg_isready -h {{ .Release.Name }}-postgresql -p {{ .Values.global.database.port }} -U postgres; do
+              until pg_isready -h {{ include "agentarea.database.host" . }} -p {{ .Values.global.database.port }} -U postgres; do
                 echo "Waiting for PostgreSQL to be ready..."
                 sleep 2
               done
@@ -40,17 +40,19 @@ spec:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
         # Wait for MinIO to be ready
+        {{- if .Values.minio.enabled }}
         - name: wait-for-minio
           image: curlimages/curl:latest
           command:
             - sh
             - -c
             - |
-              until curl -f http://{{ .Release.Name }}-minio:9000/minio/health/live; do
+              until curl -f http://{{ include "agentarea.minio.host" . }}:9000/minio/health/live; do
                 echo "Waiting for MinIO to be ready..."
                 sleep 2
               done
               echo "MinIO is ready!"
+        {{- end }}
       containers:
         - name: bootstrap
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.jobs.bootstrap.image.repository | default "agentarea/agentarea-bootstrap" }}:{{ .Values.jobs.bootstrap.image.tag | default "latest" }}"
@@ -70,7 +72,7 @@ spec:
                   name: {{ .Values.global.secrets.minio }}
                   key: root-password
             - name: MINIO_ENDPOINT
-              value: "http://{{ .Release.Name }}-minio:9000"
+              value: "http://{{ include "agentarea.minio.host" . }}:9000"
 
             # Admin user configuration (can be overridden via extraEnv)
             - name: ADMIN_EMAIL

@@ -1,4 +1,4 @@
-{{- if .Values.temporal.enabled }}
+{{- if and .Values.temporal.enabled .Values.postgresql.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -7,10 +7,8 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: create-temporal-db
   annotations:
-    # Use ArgoCD Sync Wave 0 (same as other resources) or -1 to run before deployments?
-    # But deployments wait for DB, so it doesn't matter much if deployments crashloop.
-    # We remove Helm hooks to avoid deadlock with --wait
-    "argocd.argoproj.io/sync-wave": "0"
+    # This job is a standard resource that waits for the database to be ready.
+    # We use internal retry logic instead of Helm hooks to avoid dependency deadlocks.
 spec:
   ttlSecondsAfterFinished: 300
   template:
@@ -20,6 +18,17 @@ spec:
         app.kubernetes.io/component: create-temporal-db
     spec:
       restartPolicy: Never
+      initContainers:
+        - name: wait-for-db
+          image: "postgres:alpine"
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'until pg_isready -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER; do echo waiting for database; sleep 2; done;']
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.global.secrets.postgresql }}"
+                  key: username
       containers:
         - name: create-db
           image: "postgres:alpine"
@@ -27,15 +36,10 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
-              echo "Waiting for PostgreSQL to be ready..."
-              export PGPASSWORD=$POSTGRES_PASSWORD
-              until psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -c "SELECT 1" >/dev/null 2>&1; do
-                echo "PostgreSQL not ready yet, retrying in 5s..."
-                sleep 5
-              done
               echo "Checking/Creating temporal database..."
-              psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.temporal.database.name | default "temporal" }}'" | grep -q 1 || \
-              psql -h {{ .Release.Name }}-postgresql -U $POSTGRES_USER -d postgres -c "CREATE DATABASE {{ .Values.temporal.database.name | default "temporal" }};"
+              export PGPASSWORD=$POSTGRES_PASSWORD
+              psql -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.temporal.database.name | default "temporal" }}'" | grep -q 1 || \
+              psql -h {{ include "agentarea.database.host" . }} -U $POSTGRES_USER -d postgres -c "CREATE DATABASE {{ .Values.temporal.database.name | default "temporal" }};"
           env:
             - name: POSTGRES_USER
               valueFrom:
