@@ -65,10 +65,10 @@ groups:
     configVars:
       PORT: '3000'
       NODE_ENV: 'production'
-      API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
-      ORY_ADMIN_URL: 'http://{{ include "agentarea.fullname" . }}-kratos-admin:4434'
-      ORY_SDK_URL: 'http://{{ include "agentarea.fullname" . }}-kratos-public:4433'
-      NEXT_PUBLIC_ORY_SDK_URL: 'http://{{ include "agentarea.fullname" . }}-kratos-public:4433'
+      API_URL: '{{ include "agentarea.backend.url" . }}'
+      ORY_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
+      ORY_SDK_URL: '{{ include "agentarea.kratosPublicUrl" . }}'
+      NEXT_PUBLIC_ORY_SDK_URL: '{{ include "agentarea.kratosPublicUrl" . }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
 
