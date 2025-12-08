@@ -30,33 +30,15 @@ jobs:
           # Read app version from VERSION file (single source of truth)
           APP_VERSION=$(cat VERSION | tr -d '[:space:]')
 
-          if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref_type }}" == "tag" ]; then
-            # Official release triggered by tag
-            echo "source=tag" >> $GITHUB_OUTPUT
-            echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
-            echo "app_version=${APP_VERSION}" >> $GITHUB_OUTPUT
-            
-            # Verify appVersion in Chart.yaml matches VERSION file
-            CHART_APP_VERSION=$(grep "^appVersion:" charts/agentarea/Chart.yaml | awk '{print $2}' | tr -d '"')
-            if [ "$CHART_APP_VERSION" != "$APP_VERSION" ]; then
-              echo "ERROR: Chart appVersion ($CHART_APP_VERSION) does not match VERSION file ($APP_VERSION)"
-              echo "Please run 'python3 scripts/update-appversion.py' to sync"
-              exit 1
-            fi
-            
-            echo "✅ Official release: chart v${CHART_VERSION}, app v${APP_VERSION}"
-          else
-            # Dev release triggered manually
-            SHORT_SHA="${GITHUB_SHA::7}"
-            DEV_CHART_VERSION="${CHART_VERSION}-dev.${SHORT_SHA}"
-            DEV_APP_VERSION="${APP_VERSION}-dev.${SHORT_SHA}"
-
-            echo "source=manual" >> $GITHUB_OUTPUT
-            echo "chart_version=${DEV_CHART_VERSION}" >> $GITHUB_OUTPUT
-            echo "app_version=${DEV_APP_VERSION}" >> $GITHUB_OUTPUT
-            
-            echo "✅ Dev release: chart v${DEV_CHART_VERSION}, app v${DEV_APP_VERSION}"
+          # Verify appVersion in Chart.yaml matches VERSION file
+          CHART_APP_VERSION=$(grep "^appVersion:" charts/agentarea/Chart.yaml | awk '{print $2}' | tr -d '"')
+          if [ "$CHART_APP_VERSION" != "$APP_VERSION" ]; then
+            echo "ERROR: Chart appVersion ($CHART_APP_VERSION) does not match VERSION file ($APP_VERSION)"
+            echo "Please run 'python3 scripts/update-appversion.py' to sync"
+            exit 1
           fi
+          
+          echo "✅ Release: chart v${CHART_VERSION}, app v${APP_VERSION}"
 
       - name: Add repositories
         run: |
@@ -88,17 +70,7 @@ jobs:
       - name: Package chart
         run: |
           mkdir -p dist
-          
-          if [ "${{ steps.version.outputs.source }}" == "tag" ]; then
-            # Official release: use Chart.yaml as-is
-            helm package charts/agentarea --destination dist
-          else
-            # Dev release: override version and appVersion
-            helm package charts/agentarea \
-              --destination dist \
-              --version "${{ steps.version.outputs.chart_version }}" \
-              --app-version "${{ steps.version.outputs.app_version }}"
-          fi
+          helm package charts/agentarea --destination dist
           
           ls -la dist
 

@@ -56,7 +56,7 @@ The following table lists configurable parameters of the chart and their default
 | nameOverride | string | `""` |  |
 | fullnameOverride | string | `""` |  |
 | global.edition | string | `"community"` |  |
-| global.version | string | `"0.0.1"` |  |
+| global.version | string | `"0.0.3"` |  |
 | global.cluster.type | string | `"kubernetes"` |  |
 | global.cluster.name | string | `"agentarea"` |  |
 | global.deploymentEnv | string | `"production"` |  |

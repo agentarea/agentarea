@@ -16,7 +16,7 @@ fullnameOverride: ""
 global:
   # Edition and deployment info
   edition: "community"
-  version: "0.0.1"
+  version: "0.0.3"
   
   # Cluster configuration
   cluster:
