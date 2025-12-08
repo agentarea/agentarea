@@ -17,7 +17,7 @@ groups:
 
   redis:
     configVars:
-      REDIS_HOST: '{{ .Release.Name }}-redis-master'
+      REDIS_HOST: '{{ include "agentarea.redis.host" . }}'
       REDIS_PORT: '{{ .Values.global.redis.port }}'
     secrets:
       - name: REDIS_PASSWORD
@@ -31,7 +31,7 @@ groups:
     configVars:
       AWS_REGION: '{{ .Values.global.storage.region }}'
       S3_BUCKET_NAME: '{{ .Values.global.storage.bucket }}'
-      AWS_ENDPOINT_URL: 'http://{{ .Release.Name }}-minio:9000'
+      AWS_ENDPOINT_URL: 'http://{{ include "agentarea.minio.host" . }}:9000'
     secrets:
       - name: AWS_ACCESS_KEY_ID
         secretName: "{{ .Values.global.secrets.minio }}"
@@ -42,7 +42,7 @@ groups:
 
   temporal:
     configVars:
-      WORKFLOW__TEMPORAL_SERVER_URL: '{{ include "agentarea.fullname" . }}-temporal:{{ .Values.global.temporal.port }}'
+      WORKFLOW__TEMPORAL_SERVER_URL: '{{ include "agentarea.temporal.host" . }}:{{ .Values.global.temporal.port }}'
       WORKFLOW__TEMPORAL_NAMESPACE: '{{ .Values.global.temporal.namespace }}'
       WORKFLOW__TEMPORAL_TASK_QUEUE: '{{ .Values.global.temporal.taskQueue }}'
 
