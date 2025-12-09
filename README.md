@@ -133,17 +133,6 @@ AgentArea is built for production agentic workloads with:
 
 For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
 
-## 📈 Roadmap
-
-- [x] Basic agent creation and management
-- [x] Multi-agent communication
-- [x] MCP protocol integration
-- [x] Docker deployment
-- [ ] Kubernetes operator
-- [ ] Visual agent workflow designer
-- [ ] Enterprise SSO integration
-- [ ] Advanced analytics dashboard
-
 See our [full roadmap](docs/roadmap.md) for more details.
 
 ## 🌟 Community
@@ -153,7 +142,7 @@ Join our community of AI developers:
 - **💬 Discord**: [Get help and share ideas](https://discord.gg/93jVZ4Kx)
 - **💭 GitHub Discussions**: [Q&A and feature requests](https://github.com/agentarea/agentarea/discussions)
 - **🐛 Issues**: [Bug reports and feature requests](https://github.com/agentarea/agentarea/issues)
-- **🐦 Twitter/X**: [Follow for updates](https://twitter.com/agentarea)
+- **🐦 Twitter/X**: [Follow for updates](https://twitter.com/agentarea_hq)
 
 ## 📄 License
 

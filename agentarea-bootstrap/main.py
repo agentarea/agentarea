@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # from code.populate_llm_providers import main as populate_llm_providers_main
 from code.populate_providers_new_arch import main as populate_providers_new_arch_main
 from code.populate_mcp_providers import main as populate_mcp_providers_main
+from code.populate_default_agent import main as populate_default_agent_main
 from code.minio_setup import minio_setup
 from code.infisical_setup import infisical_setup
 
@@ -42,6 +43,10 @@ def main():
         print("\n4. Populating MCP server specifications...")
         populate_mcp_providers_main()
         print("✓ MCP server specifications populated")
+
+        print("\n5. Populating default system agent...")
+        populate_default_agent_main()
+        print("✓ Default agent populated")
 
         print("\n" + "=" * 50)
         print("Bootstrap process completed successfully!")

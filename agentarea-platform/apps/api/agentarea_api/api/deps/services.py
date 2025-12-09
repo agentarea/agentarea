@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Annotated
 
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.import_export_service import WorkspaceImportExportService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
 from agentarea_common.auth import UserContextDep
@@ -110,6 +111,18 @@ async def get_agent_service(
 ) -> AgentService:
     """Get an AgentService instance for the current request."""
     return AgentService(repository_factory, event_broker)
+
+
+async def get_workspace_import_export_service(
+    repository_factory: RepositoryFactoryDep,
+    event_broker: EventBrokerDep,
+) -> WorkspaceImportExportService:
+    """Get a WorkspaceImportExportService instance for the current request."""
+    agent_service = AgentService(repository_factory, event_broker)
+    return WorkspaceImportExportService(
+        agent_service=agent_service,
+        repository_factory=repository_factory,
+    )
 
 
 # LLM Service dependencies
@@ -234,6 +247,9 @@ async def get_mcp_server_instance_service(
 
 # Common service type hints for easier use
 AgentServiceDep = Annotated[AgentService, Depends(get_agent_service)]
+WorkspaceImportExportServiceDep = Annotated[
+    WorkspaceImportExportService, Depends(get_workspace_import_export_service)
+]
 ProviderServiceDep = Annotated[ProviderService, Depends(get_provider_service)]
 ModelInstanceServiceDep = Annotated[ModelInstanceService, Depends(get_model_instance_service)]
 TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
