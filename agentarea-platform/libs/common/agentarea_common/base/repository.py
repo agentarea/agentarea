@@ -1,14 +1,11 @@
 """Simple base repository for CRUD operations."""
 
-from typing import TypeVar, Generic
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-T = TypeVar("T")
 
-
-class BaseRepository(Generic[T]):
+class BaseRepository[T]:
     """Base repository providing basic CRUD operations."""
 
     def __init__(self, session: AsyncSession):

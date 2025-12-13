@@ -30,7 +30,7 @@ class ExecutionStatus(str, Enum):
 
 class WebhookType(str, Enum):
     """Types of webhook integrations supported.
-    
+
     This Enum provides constants for known types but the system supports
     dynamic types defined in configuration.
     """
@@ -42,7 +42,7 @@ class WebhookType(str, Enum):
     DISCORD = "discord"
     LINEAR = "linear"
     STRIPE = "stripe"
-    
+
     @classmethod
     def _missing_(cls, value):
         """Allow any string value for WebhookType to support dynamic configuration."""
@@ -51,4 +51,3 @@ class WebhookType(str, Enum):
         # Ideally we should switch models to use str instead of WebhookType,
         # but this maintains backward compatibility for now.
         return value
-

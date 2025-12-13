@@ -138,7 +138,26 @@ line-ending = "auto"
 skip-magic-trailing-comma = false
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends", "fastapi.Query", "fastapi.params.Query"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.params.Depends",
+    "fastapi.Query",
+    "fastapi.params.Query",
+    "fastapi.File",
+    "fastapi.params.File",
+    "fastapi.Body",
+    "fastapi.params.Body",
+    "fastapi.Form",
+    "fastapi.params.Form",
+    "fastapi.Header",
+    "fastapi.params.Header",
+    "fastapi.Path",
+    "fastapi.params.Path",
+    "fastapi.Cookie",
+    "fastapi.params.Cookie",
+    "fastapi.Security",
+    "fastapi.params.Security"
+]
 
 
 

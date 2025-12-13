@@ -21,6 +21,7 @@ from . import (
     provider_specs,
     triggers,
     webhooks,
+    workspace_config,
 )
 
 # ============================================================================
@@ -64,6 +65,9 @@ protected_v1_router.include_router(webhooks.router)
 
 # Triggers management - PROTECTED
 protected_v1_router.include_router(triggers.router)
+
+# Workspace configuration import/export - PROTECTED
+protected_v1_router.include_router(workspace_config.router)
 
 # ============================================================================
 # LEGACY: Keep old v1_router for backward compatibility during migration
