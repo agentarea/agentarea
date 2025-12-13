@@ -2,13 +2,13 @@
 
 import json
 import time
-import yaml
-from pathlib import Path
 from abc import ABC, abstractmethod
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import yaml
 from agentarea_common.events.broker import EventBroker
 
 from .domain.enums import WebhookType
@@ -150,7 +150,7 @@ class DefaultWebhookManager(WebhookManager):
         try:
             config_path = Path(__file__).parent / "config" / "webhook_providers.yaml"
             if config_path.exists():
-                with open(config_path, "r") as f:
+                with open(config_path) as f:
                     config = yaml.safe_load(f)
                     self.providers = {p["type"]: p for p in config.get("providers", [])}
                     logger.info(f"Loaded {len(self.providers)} webhook providers from config")
@@ -165,10 +165,10 @@ class DefaultWebhookManager(WebhookManager):
         """Extract value from nested dict using dot notation."""
         if not path:
             return None
-            
+
         parts = path.split(".")
         current = data
-        
+
         for part in parts:
             if isinstance(current, dict):
                 current = current.get(part)
@@ -184,10 +184,10 @@ class DefaultWebhookManager(WebhookManager):
                     return None
             else:
                 return None
-            
+
             if current is None:
                 return None
-                
+
         return current
 
     def generate_webhook_url(self, trigger_id: UUID) -> str:
@@ -488,7 +488,7 @@ class DefaultWebhookManager(WebhookManager):
         if provider:
             parser_config = provider.get("parser", {})
             strategy = parser_config.get("strategy")
-            
+
             if strategy == "code":
                 # Fallback to specific methods
                 # We map known types to their legacy method names
@@ -497,12 +497,12 @@ class DefaultWebhookManager(WebhookManager):
                     "slack": "_parse_slack_webhook",
                     "github": "_parse_github_webhook",
                     "discord": "_parse_discord_webhook",
-                    "linear": "_parse_linear_webhook"
+                    "linear": "_parse_linear_webhook",
                 }
                 method_name = method_map.get(webhook_type)
                 if method_name and hasattr(self, method_name):
                     return await getattr(self, method_name)(request_data, base_data)
-            
+
             elif strategy == "mapping":
                 mapping = parser_config.get("mapping", {})
                 return await self._parse_generic_mapping_webhook(request_data, base_data, mapping)
@@ -539,13 +539,13 @@ class DefaultWebhookManager(WebhookManager):
                 body_data = {}
 
             parsed_data = base_data.copy()
-            
+
             for target_field, source_path in mapping.items():
                 parsed_data[target_field] = self._extract_value_by_path(body_data, source_path)
-                
+
             parsed_data["raw_data"] = body_data
             return parsed_data
-            
+
         except Exception as e:
             logger.error(f"Error parsing mapped webhook: {e}")
             return {**base_data, "body": request_data.body, "parse_error": str(e)}

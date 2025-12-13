@@ -4,7 +4,7 @@ import sys
 
 try:
     import yaml
-except Exception as e:
+except Exception:
     print("Missing dependency: pyyaml", file=sys.stderr)
     raise
 

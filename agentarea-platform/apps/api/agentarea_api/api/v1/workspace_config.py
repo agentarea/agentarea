@@ -1,19 +1,16 @@
 """API endpoints for workspace configuration import/export."""
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
-from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
-
-from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_agents.application.import_export_service import (
     WorkspaceImportExportService,
 )
 from agentarea_agents.schemas.import_export import ImportOptions, ImportResult
 from agentarea_api.api.deps.services import get_workspace_import_export_service
-
+from agentarea_common.auth.dependencies import UserContextDep
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +33,7 @@ class ImportRequest(BaseModel):
 async def import_workspace_config(
     request: ImportRequest,
     user_context: UserContextDep,
-    service: WorkspaceImportExportService = Depends(
-        get_workspace_import_export_service
-    ),
+    service: WorkspaceImportExportService = Depends(get_workspace_import_export_service),
 ):
     """Import workspace configuration from YAML.
 
@@ -102,9 +97,7 @@ async def import_workspace_config(
         raise
     except Exception as e:
         logger.exception("Failed to import workspace configuration")
-        raise HTTPException(
-            status_code=500, detail=f"Import failed: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Import failed: {e!s}") from e
 
 
 @router.post("/import/file", response_model=ImportResult)
@@ -117,9 +110,7 @@ async def import_workspace_config_file(
         default=False, description="Override existing resources with same name"
     ),
     user_context: UserContextDep = Depends(),
-    service: WorkspaceImportExportService = Depends(
-        get_workspace_import_export_service
-    ),
+    service: WorkspaceImportExportService = Depends(get_workspace_import_export_service),
 ):
     """Import workspace configuration from uploaded YAML file.
 
@@ -156,17 +147,13 @@ async def import_workspace_config_file(
         raise
     except Exception as e:
         logger.exception("Failed to import workspace configuration from file")
-        raise HTTPException(
-            status_code=500, detail=f"Import failed: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Import failed: {e!s}") from e
 
 
 @router.get("/export", response_class=PlainTextResponse)
 async def export_workspace_config(
     user_context: UserContextDep,
-    service: WorkspaceImportExportService = Depends(
-        get_workspace_import_export_service
-    ),
+    service: WorkspaceImportExportService = Depends(get_workspace_import_export_service),
 ):
     """Export current workspace configuration as YAML.
 
@@ -189,13 +176,9 @@ async def export_workspace_config(
         return PlainTextResponse(
             content=yaml_content,
             media_type="application/x-yaml",
-            headers={
-                "Content-Disposition": "attachment; filename=workspace_config.yaml"
-            },
+            headers={"Content-Disposition": "attachment; filename=workspace_config.yaml"},
         )
 
     except Exception as e:
         logger.exception("Failed to export workspace configuration")
-        raise HTTPException(
-            status_code=500, detail=f"Export failed: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Export failed: {e!s}") from e

@@ -1,6 +1,7 @@
 """Pydantic schemas for agent import/export YAML configuration."""
 
-from typing import Any, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -31,15 +32,15 @@ class MCPServerConfigYAML(BaseModel):
     """MCP server configuration in YAML format."""
 
     mcp_server_id: str  # Reference to server spec ID
-    allowed_tools: Optional[list[MCPToolConfigYAML]] = None
+    allowed_tools: list[MCPToolConfigYAML] | None = None
 
 
 class ToolsConfigYAML(BaseModel):
     """Complete tools configuration in YAML format."""
 
-    builtin_tools: Optional[list[BuiltinToolConfigYAML]] = None
-    mcp_server_configs: Optional[list[MCPServerConfigYAML]] = None
-    planning: Optional[bool] = False
+    builtin_tools: list[BuiltinToolConfigYAML] | None = None
+    mcp_server_configs: list[MCPServerConfigYAML] | None = None
+    planning: bool | None = False
 
 
 class AgentYAML(BaseModel):
@@ -48,7 +49,7 @@ class AgentYAML(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="", max_length=1000)
     instruction: str = Field(default="", max_length=5000)
-    tools_config: Optional[ToolsConfigYAML] = None
+    tools_config: ToolsConfigYAML | None = None
 
     @field_validator("name")
     @classmethod
@@ -63,7 +64,7 @@ class MCPInstanceYAML(BaseModel):
     """MCP server instance configuration in YAML format."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
+    description: str | None = Field(None, max_length=1000)
     server_spec_id: str  # Reference to MCP server spec
     env_vars: dict[str, str] = Field(default_factory=dict)  # Secrets as placeholders
 
@@ -83,9 +84,9 @@ class ProviderConfigYAML(BaseModel):
     """Provider configuration in YAML format (without secrets)."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
+    description: str | None = Field(None, max_length=1000)
     provider_spec_id: str  # Reference to provider spec
-    endpoint_url: Optional[str] = None
+    endpoint_url: str | None = None
     api_key_placeholder: str = Field(
         default="<REQUIRED>",
         description="Placeholder for API key - must be replaced on import",

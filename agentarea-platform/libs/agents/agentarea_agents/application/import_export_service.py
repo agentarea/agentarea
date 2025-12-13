@@ -1,21 +1,19 @@
 """Service for importing and exporting workspace configurations."""
 
-import yaml
-from typing import Dict, List, Any, Optional
-from uuid import UUID
+from typing import Any
 
+import yaml
 from agentarea_common.base import RepositoryFactory
-from agentarea_agents.domain.models import Agent
+from pydantic import ValidationError
+
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.domain.models import Agent
 from agentarea_agents.schemas.import_export import (
-    WorkspaceConfigYAML,
     AgentYAML,
-    MCPInstanceYAML,
-    ProviderConfigYAML,
     ImportOptions,
     ImportResult,
+    WorkspaceConfigYAML,
 )
-from pydantic import ValidationError
 
 
 class WorkspaceImportExportService:
@@ -52,9 +50,7 @@ class WorkspaceImportExportService:
 
             # Add tools_config if present
             if agent.tools_config:
-                agent_dict["tools_config"] = self._sanitize_tools_config(
-                    agent.tools_config
-                )
+                agent_dict["tools_config"] = self._sanitize_tools_config(agent.tools_config)
 
             agents_yaml.append(agent_dict)
 
@@ -84,7 +80,7 @@ class WorkspaceImportExportService:
     async def import_workspace(
         self,
         yaml_content: str,
-        options: Optional[ImportOptions] = None,
+        options: ImportOptions | None = None,
     ) -> ImportResult:
         """Import workspace configuration from YAML.
 
@@ -128,9 +124,7 @@ class WorkspaceImportExportService:
                 except Exception as e:
                     if not options.skip_missing_dependencies:
                         raise
-                    result.warnings.append(
-                        f"Failed to import agent '{agent_yaml.name}': {e}"
-                    )
+                    result.warnings.append(f"Failed to import agent '{agent_yaml.name}': {e}")
 
             # TODO: Import MCP instances
             # TODO: Import provider configs
@@ -139,12 +133,10 @@ class WorkspaceImportExportService:
             return result
 
         except Exception as e:
-            result.errors.append(f"Import failed: {str(e)}")
+            result.errors.append(f"Import failed: {e!s}")
             return result
 
-    async def _validate_dependencies(
-        self, config: WorkspaceConfigYAML
-    ) -> List[str]:
+    async def _validate_dependencies(self, config: WorkspaceConfigYAML) -> list[str]:
         """Validate that all referenced resources exist.
 
         Returns:
@@ -174,11 +166,8 @@ class WorkspaceImportExportService:
 
         return errors
 
-    async def _import_agent(
-        self, agent_yaml: AgentYAML, options: ImportOptions
-    ) -> Agent:
+    async def _import_agent(self, agent_yaml: AgentYAML, options: ImportOptions) -> Agent:
         """Import a single agent from YAML."""
-
         # Check if agent with same name exists
         existing_agents = await self.agent_service.list()
         existing_agent = next(
@@ -188,8 +177,7 @@ class WorkspaceImportExportService:
 
         if existing_agent and not options.override_existing:
             raise ValueError(
-                f"Agent '{agent_yaml.name}' already exists. "
-                "Use override_existing=true to replace."
+                f"Agent '{agent_yaml.name}' already exists. Use override_existing=true to replace."
             )
 
         # Convert tools_config to dict
@@ -216,13 +204,11 @@ class WorkspaceImportExportService:
                 model_id=None,  # Explicitly None as per requirements
                 tools_config=tools_config_dict,
                 events_config=None,  # No events for imported agents
-                planning=(
-                    agent_yaml.tools_config.planning if agent_yaml.tools_config else False
-                ),
+                planning=(agent_yaml.tools_config.planning if agent_yaml.tools_config else False),
             )
             return new_agent
 
-    def _sanitize_tools_config(self, tools_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _sanitize_tools_config(self, tools_config: dict[str, Any]) -> dict[str, Any]:
         """Remove sensitive data from tools_config for export."""
         # Create a deep copy to avoid modifying original
         import copy
@@ -234,9 +220,8 @@ class WorkspaceImportExportService:
             for mcp_config in sanitized["mcp_server_configs"]:
                 # Keep structure but mark secrets as placeholders
                 if "env_vars" in mcp_config:
-                    mcp_config["env_vars"] = {
-                        key: "<SECRET_PLACEHOLDER>"
-                        for key in mcp_config["env_vars"].keys()
-                    }
+                    mcp_config["env_vars"] = dict.fromkeys(
+                        mcp_config["env_vars"].keys(), "<SECRET_PLACEHOLDER>"
+                    )
 
         return sanitized
