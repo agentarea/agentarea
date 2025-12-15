@@ -4,13 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-interface Props {
+interface ActiveLinkProps {
   href: string;
   children: React.ReactNode;
   className?: string;
 }
 
-export default function ActiveLink({ href, children, className }: Props) {
+export function ActiveLink({ href, children, className }: ActiveLinkProps) {
   const pathname = usePathname();
   const isActive = pathname === href;
 
@@ -31,3 +31,5 @@ export default function ActiveLink({ href, children, className }: Props) {
     </Link>
   );
 }
+
+

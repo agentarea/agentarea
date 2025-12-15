@@ -1,13 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeft,
-  BarChart,
   Bot,
-  Brain,
   CheckCircle2,
   Clock,
   Database,
@@ -23,10 +20,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
-import EventsDisplay from "@/components/TaskEvents/EventsDisplay";
 import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,7 +40,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTaskEvents } from "@/hooks/useTaskEvents";
 import {
   cancelAgentTask,
@@ -85,9 +79,7 @@ interface TaskStatus {
 
 export default function TaskDetailsPage() {
   const params = useParams();
-  const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : (params.id as string);
-  const [activeTab, setActiveTab] = useState("overview");
 
   // State for real data
   const [task, setTask] = useState<TaskDetail | null>(null);
@@ -325,22 +317,6 @@ export default function TaskDetailsPage() {
     return buttons;
   };
 
-  // Status badge color
-  const getStatusColor = (status: string) => {
-    if (status === "running" || status === "completed")
-      return "bg-green-100 text-green-700";
-    if (status === "paused") return "bg-yellow-100 text-yellow-700";
-    return "bg-red-100 text-red-700";
-  };
-
-  // Log level color
-  const getLogLevelColor = (level: string) => {
-    if (level === "success") return "text-green-600";
-    if (level === "error") return "text-red-600";
-    if (level === "warning") return "text-yellow-600";
-    return "text-blue-600";
-  };
-
   // Show loading state
   if (loading) {
     return (
@@ -350,29 +326,16 @@ export default function TaskDetailsPage() {
     );
   }
 
-  // Show error state inside ContentBlock
+  // Show error state
   if (error || !task) {
     return (
-      <ContentBlock
-        header={{
-          breadcrumb: [
-            { label: "Tasks", href: "/tasks" },
-            {
-              label: task?.agent_name || `Agent ${task?.agent_id || "Unknown"}`,
-              href: task?.agent_id ? `/agents/${task.agent_id}/tasks` : undefined,
-            },
-            { label: task?.description || "Task Details" },
-          ],
-        }}
-      >
-        <EmptyState
-          title="Task Not Found"
-          description={"The requested task could not be found."}
-          iconsType="tasks"
-          action={{ label: "Back to Tasks", href: "/tasks" }}
-          additionAction={{ label: "Try Again", onClick: handleRefresh }}
-        />
-      </ContentBlock>
+      <EmptyState
+        title="Task Not Found"
+        description={"The requested task could not be found."}
+        iconsType="tasks"
+        action={{ label: "Back to Tasks", href: "/tasks" }}
+        additionAction={{ label: "Try Again", onClick: handleRefresh }}
+      />
     );
   }
 
@@ -387,18 +350,7 @@ export default function TaskDetailsPage() {
   const errorMessage = taskStatus?.error;
 
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [
-          { label: "Tasks", href: "/tasks" },
-          {
-            label: task?.agent_name || `Agent ${task?.agent_id || "Unknown"}`,
-            href: task?.agent_id ? `/agents/${task.agent_id}/tasks` : undefined,
-          },
-          { label: task?.description || "Task Details" },
-        ],
-      }}
-    >
+    <>
       {/* Compact Header */}
       <div className="mb-4 rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -617,42 +569,7 @@ export default function TaskDetailsPage() {
         </div>
       )}
 
-      <Tabs
-        defaultValue="overview"
-        value={activeTab}
-        className="w-full"
-        onValueChange={setActiveTab}
-      >
-        <TabsList className="mb-4">
-          <TabsTrigger value="overview" className="text-xs">
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="events" className="text-xs">
-            Events
-            {eventsConnected && (
-              <div className="ml-1 h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="logs" className="text-xs">
-            Logs
-          </TabsTrigger>
-          <TabsTrigger value="artifacts" className="text-xs">
-            Artifacts
-          </TabsTrigger>
-          <TabsTrigger value="memory" className="text-xs">
-            Memory
-          </TabsTrigger>
-          <TabsTrigger value="metrics" className="text-xs">
-            Metrics
-          </TabsTrigger>
-          {isActive && (
-            <TabsTrigger value="configuration" className="text-xs">
-              Config
-            </TabsTrigger>
-          )}
-        </TabsList>
-        <TabsContent value="overview">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Compact Task Details Card */}
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
@@ -857,276 +774,6 @@ export default function TaskDetailsPage() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
-        <TabsContent value="events">
-          <EventsDisplay
-            events={events}
-            loading={eventsLoading}
-            error={eventsError}
-            connected={eventsConnected}
-            onRefresh={refreshEvents}
-            showFilters={true}
-            showStats={true}
-            maxHeight="500px"
-          />
-        </TabsContent>
-        <TabsContent value="logs">
-          <Card>
-            <CardHeader>
-              <CardTitle>Execution Logs</CardTitle>
-              <CardDescription>
-                Detailed logs of the task execution
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[400px] overflow-y-auto rounded-lg bg-muted p-4 font-mono text-sm">
-                {/* Basic log entries based on task status */}
-                <div className="mb-2">
-                  <span className="text-muted-foreground">
-                    [{new Date(task.created_at).toLocaleString()}]
-                  </span>{" "}
-                  <span className="text-blue-600">INFO:</span> Task created:{" "}
-                  {task.description}
-                </div>
-                {taskStatus?.start_time && (
-                  <div className="mb-2">
-                    <span className="text-muted-foreground">
-                      [{new Date(taskStatus.start_time).toLocaleString()}]
-                    </span>{" "}
-                    <span className="text-blue-600">INFO:</span> Task execution
-                    started
-                  </div>
-                )}
-                {taskStatus?.message && (
-                  <div className="mb-2">
-                    <span className="text-muted-foreground">
-                      [{new Date().toLocaleString()}]
-                    </span>{" "}
-                    <span className="text-blue-600">INFO:</span>{" "}
-                    {taskStatus.message}
-                  </div>
-                )}
-                {taskStatus?.error && (
-                  <div className="mb-2">
-                    <span className="text-muted-foreground">
-                      [{new Date().toLocaleString()}]
-                    </span>{" "}
-                    <span className="text-red-600">ERROR:</span>{" "}
-                    {taskStatus.error}
-                  </div>
-                )}
-                {taskStatus?.end_time && (
-                  <div className="mb-2">
-                    <span className="text-muted-foreground">
-                      [{new Date(taskStatus.end_time).toLocaleString()}]
-                    </span>{" "}
-                    <span
-                      className={getLogLevelColor(
-                        currentStatus === "completed" ? "success" : "error"
-                      )}
-                    >
-                      {currentStatus === "completed" ? "SUCCESS" : "ERROR"}:
-                    </span>{" "}
-                    Task{" "}
-                    {currentStatus === "completed"
-                      ? "completed successfully"
-                      : "execution ended"}
-                  </div>
-                )}
-                {isActive && currentStatus === "running" && (
-                  <div className="animate-pulse">
-                    <span className="text-muted-foreground">
-                      [{new Date().toLocaleString()}]
-                    </span>{" "}
-                    <span className="text-blue-600">INFO:</span> Task is
-                    currently running...
-                  </div>
-                )}
-                {!isActive && !taskStatus?.end_time && (
-                  <div className="py-8 text-center text-muted-foreground">
-                    <FileText className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                    <p>No detailed execution logs available</p>
-                    <p className="mt-1 text-xs">
-                      Logs will be available in future versions
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="metrics">
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Metrics</CardTitle>
-              <CardDescription>
-                Key metrics for this task execution
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-lg bg-muted p-4">
-                  <div className="mb-1 text-sm text-muted-foreground">
-                    Execution Time
-                  </div>
-                  <div className="text-2xl font-bold">{executionTime}</div>
-                </div>
-                <div className="rounded-lg bg-muted p-4">
-                  <div className="mb-1 text-sm text-muted-foreground">
-                    Status
-                  </div>
-                  <div className="text-2xl font-bold">{currentStatus}</div>
-                </div>
-                <div className="rounded-lg bg-muted p-4">
-                  <div className="mb-1 text-sm text-muted-foreground">
-                    Execution ID
-                  </div>
-                  <div className="truncate text-lg font-bold">
-                    {task.execution_id || "N/A"}
-                  </div>
-                </div>
-                <div className="rounded-lg bg-muted p-4">
-                  <div className="mb-1 text-sm text-muted-foreground">
-                    Usage Data
-                  </div>
-                  <div className="text-2xl font-bold">
-                    {taskStatus?.usage_metadata ? "Available" : "N/A"}
-                  </div>
-                </div>
-              </div>
-              {taskStatus?.usage_metadata && (
-                <div className="mt-6">
-                  <h4 className="mb-2 text-sm font-medium">Usage Metadata</h4>
-                  <div className="max-h-40 overflow-y-auto rounded-lg bg-muted p-3 font-mono text-sm">
-                    <pre>
-                      {JSON.stringify(taskStatus.usage_metadata, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              )}
-              <div className="mt-8 flex justify-center">
-                <div className="text-center text-muted-foreground">
-                  <BarChart className="mx-auto mb-4 h-32 w-32 opacity-50" />
-                  <p>
-                    Detailed performance charts will be available in future
-                    versions
-                  </p>
-                  <p className="mt-1 text-xs">
-                    Metrics are collected from Temporal workflow execution
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="artifacts">
-          <Card>
-            <CardHeader>
-              <CardTitle>Artifacts</CardTitle>
-              <CardDescription>
-                Files and outputs generated by this task
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {taskStatus?.artifacts && taskStatus.artifacts.length > 0 ? (
-                <div className="space-y-4">
-                  {taskStatus.artifacts.map((artifact, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between rounded-lg border p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-8 w-8 text-primary" />
-                        <div>
-                          <p className="font-medium">
-                            {typeof artifact === "string"
-                              ? artifact
-                              : `Artifact ${index + 1}`}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Generated by task execution
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1"
-                        disabled
-                      >
-                        <Download className="h-4 w-4" />
-                        Download
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 text-center">
-                  <FileText className="mx-auto mb-4 h-16 w-16 text-muted-foreground opacity-50" />
-                  <h3 className="mb-2 text-lg font-semibold">No Artifacts</h3>
-                  <p className="text-muted-foreground">
-                    {isActive
-                      ? "Artifacts will appear here as the task generates outputs."
-                      : "This task did not generate any artifacts."}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="memory">
-          <Card>
-            <CardHeader>
-              <CardTitle>Memory Context</CardTitle>
-              <CardDescription>
-                Current memory state and context information
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="py-12 text-center">
-                <Brain className="mx-auto mb-4 h-16 w-16 text-muted-foreground opacity-50" />
-                <h3 className="mb-2 text-lg font-semibold">Memory Context</h3>
-                <p className="mb-4 text-muted-foreground">
-                  Memory context information is not yet available through the
-                  current API.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  This feature will be implemented in future versions to show
-                  task memory state and context.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        {isActive && (
-          <TabsContent value="configuration">
-            <Card>
-              <CardHeader>
-                <CardTitle>Task Configuration</CardTitle>
-                <CardDescription>
-                  Settings and parameters for this task execution
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="py-12 text-center">
-                  <Database className="mx-auto mb-4 h-16 w-16 text-muted-foreground opacity-50" />
-                  <h3 className="mb-2 text-lg font-semibold">
-                    Task Configuration
-                  </h3>
-                  <p className="mb-4 text-muted-foreground">
-                    Task configuration details are not yet available through the
-                    current API.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Configuration settings will be displayed here in future
-                    versions.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-      </Tabs>
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
@@ -1166,6 +813,6 @@ export default function TaskDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </ContentBlock>
+    </>
   );
 }
