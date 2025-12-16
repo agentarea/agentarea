@@ -11,7 +11,7 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   {
-    ignores: [".next/**", "node_modules/**", ".next/**/*", "dist/**"],
+    ignores: [".next/**", "out/**", "build/**", "node_modules/**", "dist/**", "next-env.d.ts"],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   // Global: downgrade exhaustive-deps to warnings to avoid CI failures
