@@ -30,6 +30,11 @@ def register_task_event_handlers(router: RedisRouter) -> None:
             description = event_data.get("description") or message.get("description", "")
             parameters = event_data.get("parameters") or message.get("parameters", {})
             metadata = event_data.get("metadata") or message.get("metadata", {})
+            workspace_id = (
+                event_data.get("workspace_id")
+                or message.get("workspace_id")
+                or metadata.get("workspace_id")
+            )
 
             # Additional fallback: check if we have a TaskCreated event object structure
             if not task_id and hasattr(message, "task_id"):
@@ -66,6 +71,7 @@ def register_task_event_handlers(router: RedisRouter) -> None:
                 description=description,
                 parameters=parameters,
                 metadata=metadata,
+                workspace_id=workspace_id,
             )
 
             logger.info(f"Temporal workflow started for task {task_id}")
@@ -80,6 +86,7 @@ async def _start_temporal_workflow_for_task(
     description: str,
     parameters: dict[str, Any],
     metadata: dict[str, Any],
+    workspace_id: str | None = None,
 ):
     """Start a Temporal workflow for the agent task."""
     try:
@@ -105,6 +112,7 @@ async def _start_temporal_workflow_for_task(
             task_query=description,
             user_id=user_id,
             task_parameters=parameters,
+            workspace_id=workspace_id,
         )
         execution_id = result.get("execution_id")
 

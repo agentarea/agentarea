@@ -73,8 +73,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             # Try to import from execution library - fallback if not available
             try:
-                from agentarea_execution.adk_temporal.workflows.adk_agent_workflow import (
-                    ADKAgentWorkflow as AgentExecutionWorkflow,
+                from agentarea_execution.workflows.agent_execution_workflow import (
+                    AgentExecutionWorkflow,
                 )
                 from agentarea_execution.models import AgentExecutionRequest
 
@@ -107,11 +107,16 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                             f"pattern, using new UUID: {task_id_uuid}"
                         )
 
+                # Ensure workspace_id is provided
+                if not request.workspace_id:
+                    raise ValueError("workspace_id must be provided for agent execution")
+
                 # Convert to execution request format with proper UUID
                 exec_request = AgentExecutionRequest(
                     task_id=task_id_uuid,  # Now using proper UUID instead of string
                     agent_id=request.agent_id,
                     user_id=request.user_id,
+                    workspace_id=request.workspace_id,
                     task_query=request.task_query,
                     task_parameters=request.task_parameters,
                     timeout_seconds=request.timeout_seconds,
