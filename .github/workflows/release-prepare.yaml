@@ -11,6 +11,9 @@ on:
           - patch
           - minor
           - major
+          - alpha
+          - beta
+          - rc
 
 jobs:
   prepare-release:
@@ -42,8 +45,36 @@ jobs:
         run: |
           set -euo pipefail
           type="${{ github.event.inputs.release_type }}"
-          bumpversion $type --allow-dirty
-          new_version=$(cat VERSION)
+
+          # Handle pre-release types (alpha, beta, rc)
+          if [[ "$type" == "alpha" || "$type" == "beta" || "$type" == "rc" ]]; then
+            current_version=$(cat VERSION | tr -d '\n')
+
+            # Check if already a pre-release
+            if [[ "$current_version" =~ -([a-z]+)\.([0-9]+)$ ]]; then
+              current_release="${BASH_REMATCH[1]}"
+              current_build="${BASH_REMATCH[2]}"
+              base_version="${current_version%-*}"
+
+              # If same release type, bump build number
+              if [[ "$current_release" == "$type" ]]; then
+                bumpversion build --allow-dirty
+              else
+                # Different release type, bump to new release type
+                bumpversion release --allow-dirty --new-version="${base_version}-${type}.1"
+              fi
+            else
+              # Not a pre-release, bump patch and add pre-release suffix
+              bumpversion patch --allow-dirty
+              new_base=$(cat VERSION | tr -d '\n')
+              bumpversion --new-version="${new_base}-${type}.1" --allow-dirty patch
+            fi
+          else
+            # Standard release (patch, minor, major)
+            bumpversion $type --allow-dirty
+          fi
+
+          new_version=$(cat VERSION | tr -d '\n')
           echo "VERSION=v${new_version}" >> $GITHUB_OUTPUT
           echo "Bumped version to v${new_version}"
 

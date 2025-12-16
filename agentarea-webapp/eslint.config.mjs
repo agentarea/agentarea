@@ -10,6 +10,9 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  {
+    ignores: [".next/**", "node_modules/**", ".next/**/*", "dist/**"],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   // Global: downgrade exhaustive-deps to warnings to avoid CI failures
   {
@@ -92,6 +95,13 @@ const eslintConfig = [
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "react-hooks/exhaustive-deps": "warn",
+    },
+  },
+  // Allow require in config files
+  {
+    files: ["*.config.{ts,js,mjs}", "tailwind.config.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 ];

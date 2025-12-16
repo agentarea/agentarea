@@ -73,10 +73,10 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             # Try to import from execution library - fallback if not available
             try:
+                from agentarea_execution.models import AgentExecutionRequest
                 from agentarea_execution.workflows.agent_execution_workflow import (
                     AgentExecutionWorkflow,
                 )
-                from agentarea_execution.models import AgentExecutionRequest
 
                 # Extract task_id UUID from execution_id pattern
                 # execution_id format: "agent-task-{uuid}"

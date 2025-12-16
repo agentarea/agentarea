@@ -50,7 +50,7 @@ wheels = [
 
 [[package]]
 name = "agentarea-agents"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/agents" }
 dependencies = [
     { name = "a2a-sdk" },
@@ -69,7 +69,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-agents-sdk"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/agentarea-agents-sdk" }
 dependencies = [
     { name = "httpx" },
@@ -99,7 +99,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agentarea-api"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "agentarea-agents" },
@@ -144,7 +144,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-common"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/common" }
 dependencies = [
     { name = "asyncpg" },
@@ -179,7 +179,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-context"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/context" }
 dependencies = [
     { name = "agentarea-common" },
@@ -213,7 +213,7 @@ dev = [{ name = "sentence-transformers", specifier = ">=2.2.2" }]
 
 [[package]]
 name = "agentarea-execution"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/execution" }
 dependencies = [
     { name = "agentarea-agents-sdk" },
@@ -241,7 +241,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agentarea-llm"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/llm" }
 dependencies = [
     { name = "agentarea-common" },
@@ -258,7 +258,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-mcp"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/mcp" }
 dependencies = [
     { name = "agentarea-common" },
@@ -275,7 +275,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-secrets"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/secrets" }
 dependencies = [
     { name = "agentarea-common" },
@@ -292,7 +292,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-tasks"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/tasks" }
 dependencies = [
     { name = "a2a-sdk" },
@@ -311,7 +311,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-triggers"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "libs/triggers" }
 dependencies = [
     { name = "agentarea-common" },
@@ -328,7 +328,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-worker"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "apps/worker" }
 dependencies = [
     { name = "agentarea-agents" },
@@ -357,7 +357,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-workspace"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "a2a-sdk" },
