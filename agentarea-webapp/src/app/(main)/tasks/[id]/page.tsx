@@ -10,6 +10,7 @@ import {
   Database,
   Download,
   FileText,
+  Info,
   Layers,
   Loader2,
   Pause,
@@ -40,6 +41,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useTaskEvents } from "@/hooks/useTaskEvents";
 import {
   cancelAgentTask,
@@ -47,6 +54,14 @@ import {
   pauseAgentTask,
   resumeAgentTask,
 } from "@/lib/browser-api";
+import FullChat from "@/components/Chat/FullChat";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 // Types for task data
 interface TaskDetail {
@@ -80,6 +95,7 @@ interface TaskStatus {
 export default function TaskDetailsPage() {
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : (params.id as string);
+  const isMobile = useIsMobile();
 
   // State for real data
   const [task, setTask] = useState<TaskDetail | null>(null);
@@ -89,6 +105,7 @@ export default function TaskDetailsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isTaskInfoSheetOpen, setIsTaskInfoSheetOpen] = useState(false);
 
   // Events hook for real-time events
   const {
@@ -349,11 +366,12 @@ export default function TaskDetailsPage() {
   const endTime = taskStatus?.end_time;
   const errorMessage = taskStatus?.error;
 
-  return (
-    <>
-      {/* Compact Header */}
-      <div className="mb-4 rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+  // Task information content component (reusable for desktop panel and mobile sheet)
+  const taskInfoContent = (
+    <div className="h-full overflow-auto">
+      <div className="space-y-4 py-4">
+        {/* Compact Header */}
+        <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
           <div className="flex items-start gap-4">
             {/* Smaller Status Indicator */}
             <div className="flex-shrink-0">
@@ -415,7 +433,7 @@ export default function TaskDetailsPage() {
               </p>
 
               {/* Compact Meta Information */}
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                   <Bot className="h-3 w-3 text-blue-600" />
                   <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -456,7 +474,7 @@ export default function TaskDetailsPage() {
           </div>
 
           {/* Compact Action Buttons */}
-          <div className="flex flex-wrap gap-1">
+          <div className="mt-4 flex flex-wrap gap-1">
             {/* Task Control Buttons */}
             {getControlButtons()}
 
@@ -482,298 +500,769 @@ export default function TaskDetailsPage() {
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* Compact error message */}
-      {errorMessage && (
-        <Card className="mb-4 border-destructive">
-          <CardContent className="pb-3 pt-3">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="text-sm font-medium">Error</span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">{errorMessage}</p>
-          </CardContent>
-        </Card>
-      )}
+        {/* Compact error message */}
+        {errorMessage && (
+          <Card className="border-destructive">
+            <CardContent className="pb-3 pt-3">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="text-sm font-medium">Error</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{errorMessage}</p>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Compact Progress Section for Active Tasks */}
-      {isActive && (
-        <div className="mb-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:border-blue-800 dark:from-blue-900/20 dark:to-indigo-900/20">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+        {/* Compact Progress Section for Active Tasks */}
+        {isActive && (
+          <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:border-blue-800 dark:from-blue-900/20 dark:to-indigo-900/20">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {currentStatus === "running"
+                      ? "Running..."
+                      : currentStatus === "paused"
+                        ? "Paused"
+                        : currentStatus}
+                  </h3>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {taskStatus?.message || "In progress"}
+                  </span>
+                </div>
+
+                {/* Compact Progress Bar */}
+                <div className="mb-2">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white dark:bg-gray-800">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        currentStatus === "running"
+                          ? "animate-pulse bg-gradient-to-r from-blue-500 to-blue-600"
+                          : currentStatus === "paused"
+                            ? "bg-gradient-to-r from-yellow-400 to-yellow-500"
+                            : "bg-gradient-to-r from-red-400 to-red-500"
+                      }`}
+                      style={{
+                        width: currentStatus === "running" ? "65%" : "35%",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Compact Artifacts Preview */}
+                {taskStatus?.artifacts && taskStatus.artifacts.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    <span className="mr-1 text-xs text-gray-700 dark:text-gray-300">
+                      Generated:
+                    </span>
+                    {taskStatus.artifacts.slice(0, 2).map((artifact, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-1 rounded bg-white px-2 py-0.5 text-xs dark:bg-gray-800"
+                      >
+                        <FileText className="h-2.5 w-2.5 text-blue-600" />
+                        <span>
+                          {typeof artifact === "string"
+                            ? artifact
+                            : `Artifact ${index + 1}`}
+                        </span>
+                      </div>
+                    ))}
+                    {taskStatus.artifacts.length > 2 && (
+                      <span className="text-xs text-gray-500">
+                        +{taskStatus.artifacts.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {currentStatus === "running"
-                    ? "Running..."
-                    : currentStatus === "paused"
-                      ? "Paused"
-                      : currentStatus}
-                </h3>
-                <span className="text-xs text-gray-600 dark:text-gray-400">
-                  {taskStatus?.message || "In progress"}
+          </div>
+        )}
+
+        {/* Compact Task Details Card */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Layers className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Task Details</CardTitle>
+                <CardDescription className="text-xs">
+                  Core information
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Compact Status */}
+            <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`flex h-6 w-6 items-center justify-center rounded ${
+                    currentStatus === "running"
+                      ? "bg-blue-50 dark:bg-blue-900/30"
+                      : currentStatus === "completed" ||
+                          currentStatus === "success"
+                        ? "bg-green-50 dark:bg-green-900/30"
+                        : currentStatus === "paused"
+                          ? "bg-yellow-50 dark:bg-yellow-900/30"
+                          : "bg-red-50 dark:bg-red-900/30"
+                  }`}
+                >
+                  {currentStatus === "running" ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                  ) : currentStatus === "completed" ||
+                    currentStatus === "success" ? (
+                    <CheckCircle2 className="h-3 w-3 text-green-600" />
+                  ) : currentStatus === "paused" ? (
+                    <Pause className="h-3 w-3 text-yellow-600" />
+                  ) : (
+                    <XCircle className="h-3 w-3 text-red-600" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    Status
+                  </p>
+                </div>
+              </div>
+              <Badge
+                className={`px-2 py-0.5 text-xs ${
+                  currentStatus === "running"
+                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                    : currentStatus === "completed" ||
+                        currentStatus === "success"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                      : currentStatus === "paused"
+                        ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                        : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                }`}
+              >
+                {currentStatus.charAt(0).toUpperCase() +
+                  currentStatus.slice(1)}
+              </Badge>
+            </div>
+
+            {/* Compact Agent Info */}
+            <div className="rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded bg-blue-50 dark:bg-blue-900/30">
+                  <Bot className="h-3 w-3 text-blue-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {task.agent_name || `Agent ${task.agent_id}`}
+                  </p>
+                  <p className="truncate text-xs text-gray-600 dark:text-gray-400">
+                    {task.agent_description || "No description available"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Compact Timing Information */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600 dark:text-gray-400">
+                  Created
+                </span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  {new Date(task.created_at).toLocaleDateString()}
                 </span>
               </div>
-
-              {/* Compact Progress Bar */}
-              <div className="mb-2">
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white dark:bg-gray-800">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                      currentStatus === "running"
-                        ? "animate-pulse bg-gradient-to-r from-blue-500 to-blue-600"
-                        : currentStatus === "paused"
-                          ? "bg-gradient-to-r from-yellow-400 to-yellow-500"
-                          : "bg-gradient-to-r from-red-400 to-red-500"
-                    }`}
-                    style={{
-                      width: currentStatus === "running" ? "65%" : "35%",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Compact Artifacts Preview */}
-              {taskStatus?.artifacts && taskStatus.artifacts.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  <span className="mr-1 text-xs text-gray-700 dark:text-gray-300">
-                    Generated:
+              {startTime && startTime !== task.created_at && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Started
                   </span>
-                  {taskStatus.artifacts.slice(0, 2).map((artifact, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-1 rounded bg-white px-2 py-0.5 text-xs dark:bg-gray-800"
-                    >
-                      <FileText className="h-2.5 w-2.5 text-blue-600" />
-                      <span>
-                        {typeof artifact === "string"
-                          ? artifact
-                          : `Artifact ${index + 1}`}
-                      </span>
-                    </div>
-                  ))}
-                  {taskStatus.artifacts.length > 2 && (
-                    <span className="text-xs text-gray-500">
-                      +{taskStatus.artifacts.length - 2} more
-                    </span>
-                  )}
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
+                    {new Date(startTime).toLocaleDateString()}
+                  </span>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {/* Compact Task Details Card */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                    <Layers className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">Task Details</CardTitle>
-                    <CardDescription className="text-xs">
-                      Core information
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Compact Status */}
-                <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`flex h-6 w-6 items-center justify-center rounded ${
-                        currentStatus === "running"
-                          ? "bg-blue-50 dark:bg-blue-900/30"
-                          : currentStatus === "completed" ||
-                              currentStatus === "success"
-                            ? "bg-green-50 dark:bg-green-900/30"
-                            : currentStatus === "paused"
-                              ? "bg-yellow-50 dark:bg-yellow-900/30"
-                              : "bg-red-50 dark:bg-red-900/30"
-                      }`}
-                    >
-                      {currentStatus === "running" ? (
-                        <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
-                      ) : currentStatus === "completed" ||
-                        currentStatus === "success" ? (
-                        <CheckCircle2 className="h-3 w-3 text-green-600" />
-                      ) : currentStatus === "paused" ? (
-                        <Pause className="h-3 w-3 text-yellow-600" />
-                      ) : (
-                        <XCircle className="h-3 w-3 text-red-600" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        Status
-                      </p>
-                    </div>
-                  </div>
-                  <Badge
-                    className={`px-2 py-0.5 text-xs ${
-                      currentStatus === "running"
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                        : currentStatus === "completed" ||
-                            currentStatus === "success"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                          : currentStatus === "paused"
-                            ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
-                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                    }`}
-                  >
-                    {currentStatus.charAt(0).toUpperCase() +
-                      currentStatus.slice(1)}
-                  </Badge>
-                </div>
-
-                {/* Compact Agent Info */}
-                <div className="rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded bg-blue-50 dark:bg-blue-900/30">
-                      <Bot className="h-3 w-3 text-blue-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {task.agent_name || `Agent ${task.agent_id}`}
-                      </p>
-                      <p className="truncate text-xs text-gray-600 dark:text-gray-400">
-                        {task.agent_description || "No description available"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Compact Timing Information */}
-                <div className="space-y-1">
+              {endTime && (
+                <>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-600 dark:text-gray-400">
-                      Created
+                      Completed
                     </span>
                     <span className="font-medium text-gray-900 dark:text-gray-100">
-                      {new Date(task.created_at).toLocaleDateString()}
+                      {new Date(endTime).toLocaleDateString()}
                     </span>
                   </div>
-                  {startTime && startTime !== task.created_at && (
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Started
-                      </span>
-                      <span className="font-medium text-gray-900 dark:text-gray-100">
-                        {new Date(startTime).toLocaleDateString()}
-                      </span>
-                    </div>
-                  )}
-                  {endTime && (
-                    <>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Completed
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {new Date(endTime).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Duration
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {executionTime}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Compact Execution ID */}
-                {task.execution_id && (
-                  <div className="rounded bg-gray-50 p-2 dark:bg-gray-700">
-                    <p className="mb-0.5 text-xs text-gray-600 dark:text-gray-400">
-                      Execution ID
-                    </p>
-                    <code className="break-all font-mono text-xs text-gray-900 dark:text-gray-100">
-                      {task.execution_id}
-                    </code>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Duration
+                    </span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {executionTime}
+                    </span>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </>
+              )}
+            </div>
 
-            {/* Compact Task Results Card */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
-                    <FileText className="h-4 w-4 text-green-600" />
+            {/* Compact Execution ID */}
+            {task.execution_id && (
+              <div className="rounded bg-gray-50 p-2 dark:bg-gray-700">
+                <p className="mb-0.5 text-xs text-gray-600 dark:text-gray-400">
+                  Execution ID
+                </p>
+                <code className="break-all font-mono text-xs text-gray-900 dark:text-gray-100">
+                  {task.execution_id}
+                </code>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Compact Task Results Card */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+                <FileText className="h-4 w-4 text-green-600" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Task Results</CardTitle>
+                <CardDescription className="text-xs">
+                  Output data
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {task.result ? (
+              <div className="space-y-2">
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+                  <div className="mb-2 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
+                      Result
+                    </h4>
                   </div>
-                  <div>
-                    <CardTitle className="text-base">Task Results</CardTitle>
-                    <CardDescription className="text-xs">
-                      Output data
-                    </CardDescription>
+                  <div className="max-h-32 overflow-y-auto rounded bg-white p-2 dark:bg-gray-800">
+                    <pre className="whitespace-pre-wrap text-xs text-gray-900 dark:text-gray-100">
+                      {JSON.stringify(task.result, null, 2)}
+                    </pre>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {task.result ? (
-                  <div className="space-y-2">
-                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
-                      <div className="mb-2 flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
-                          Result
-                        </h4>
-                      </div>
-                      <div className="max-h-32 overflow-y-auto rounded bg-white p-2 dark:bg-gray-800">
-                        <pre className="whitespace-pre-wrap text-xs text-gray-900 dark:text-gray-100">
-                          {JSON.stringify(task.result, null, 2)}
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-6 text-center">
-                    <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-                      {isActive ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                      ) : (
-                        <FileText className="h-6 w-6 text-gray-400" />
-                      )}
-                    </div>
-                    <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {isActive ? "Task Running" : "No Results"}
-                    </h3>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      {isActive
-                        ? "Results will appear when complete"
-                        : "No results produced"}
-                    </p>
-                  </div>
-                )}
+              </div>
+            ) : (
+              <div className="py-6 text-center">
+                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+                  {isActive ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                  ) : (
+                    <FileText className="h-6 w-6 text-gray-400" />
+                  )}
+                </div>
+                <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {isActive ? "Task Running" : "No Results"}
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {isActive
+                    ? "Results will appear when complete"
+                    : "No results produced"}
+                </p>
+              </div>
+            )}
 
-                {/* Compact Session Information */}
-                {taskStatus?.session_id && (
-                  <div className="mt-3 rounded border border-purple-200 bg-purple-50 p-2 dark:border-purple-800 dark:bg-purple-900/20">
-                    <p className="mb-0.5 text-xs text-purple-600 dark:text-purple-400">
-                      Session ID
-                    </p>
-                    <code className="break-all font-mono text-xs text-purple-900 dark:text-purple-100">
-                      {taskStatus.session_id}
-                    </code>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Compact Session Information */}
+            {taskStatus?.session_id && (
+              <div className="mt-3 rounded border border-purple-200 bg-purple-50 p-2 dark:border-purple-800 dark:bg-purple-900/20">
+                <p className="mb-0.5 text-xs text-purple-600 dark:text-purple-400">
+                  Session ID
+                </p>
+                <code className="break-all font-mono text-xs text-purple-900 dark:text-purple-100">
+                  {taskStatus.session_id}
+                </code>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <ResizablePanelGroup
+        direction="horizontal"
+        className={cn("h-full w-full")}
+      >
+        {/* Left Panel - Chat */}
+        <ResizablePanel defaultSize={isMobile ? 100 : 60} minSize={isMobile ? 100 : 30}>
+          <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
+            <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
+            <div className="relative z-1 h-full">
+              {/* Mobile button to open task info */}
+              {isMobile && (
+                <div className="absolute top-4 right-4 z-10">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsTaskInfoSheetOpen(true)}
+                    className="gap-2"
+                  >
+                    <Info className="h-4 w-4" />
+                    Task Info
+                  </Button>
+                </div>
+              )}
+              <FullChat
+                agent={{
+                  id: task.agent_id,
+                  name: task.agent_name || `Agent ${task.agent_id}`,
+                  description: task.agent_description || undefined,
+                }}
+                taskId={task.id}
+                placeholder={`Chat with ${task.agent_name || `Agent ${task.agent_id}`}`}
+              />
+            </div>
           </div>
+        </ResizablePanel>
+
+        {/* Right Panel - Task Information */}
+        {!isMobile && (
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={40} minSize={20}>
+              <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700 pl-4">
+                <div className="space-y-4 py-4">
+                  {/* Compact Header */}
+                  <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
+                    <div className="flex items-start gap-4">
+                      {/* Smaller Status Indicator */}
+                      <div className="flex-shrink-0">
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                            currentStatus === "running"
+                              ? "bg-blue-50 dark:bg-blue-900/30"
+                              : currentStatus === "completed" ||
+                                  currentStatus === "success"
+                                ? "bg-green-50 dark:bg-green-900/30"
+                                : currentStatus === "paused"
+                                  ? "bg-yellow-50 dark:bg-yellow-900/30"
+                                  : "bg-red-50 dark:bg-red-900/30"
+                          }`}
+                        >
+                          <div
+                            className={`h-4 w-4 rounded-full ${
+                              currentStatus === "running"
+                                ? "animate-pulse bg-blue-500"
+                                : currentStatus === "completed" ||
+                                    currentStatus === "success"
+                                  ? "bg-green-500"
+                                  : currentStatus === "paused"
+                                    ? "bg-yellow-500"
+                                    : "bg-red-500"
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Compact Main Content */}
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center gap-2">
+                          <h1 className="truncate text-xl font-bold text-gray-900 dark:text-gray-100">
+                            {task.description}
+                          </h1>
+                          <Badge
+                            className={`px-2 py-0.5 text-xs ${
+                              currentStatus === "running"
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                : currentStatus === "completed" ||
+                                    currentStatus === "success"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                  : currentStatus === "paused"
+                                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                                    : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                            }`}
+                          >
+                            {currentStatus.charAt(0).toUpperCase() +
+                              currentStatus.slice(1)}
+                          </Badge>
+                        </div>
+
+                        <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                          ID:{" "}
+                          <span className="rounded bg-gray-100 px-1 py-0.5 font-mono text-xs dark:bg-gray-800">
+                            {task.id}
+                          </span>
+                        </p>
+
+                        {/* Compact Meta Information */}
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <Bot className="h-3 w-3 text-blue-600" />
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                              {task.agent_name || `Agent ${task.agent_id}`}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <Clock className="h-3 w-3 text-green-600" />
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                              {isActive
+                                ? `Started ${new Date(startTime).toLocaleDateString()}`
+                                : endTime
+                                  ? `${executionTime}`
+                                  : `${new Date(task.created_at).toLocaleDateString()}`}
+                            </span>
+                          </div>
+
+                          {task.execution_id && (
+                            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                              <Database className="h-3 w-3 text-purple-600" />
+                              <span className="font-mono font-medium text-gray-900 dark:text-gray-100">
+                                {task.execution_id.slice(-8)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Live Event Indicator */}
+                          <div className="flex items-center gap-2 text-xs">
+                            <LiveEventIndicator
+                              connected={eventsConnected}
+                              latestEvent={events[events.length - 1]}
+                              eventCount={events.length}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Compact Action Buttons */}
+                    <div className="mt-4 flex flex-wrap gap-1">
+                      {/* Task Control Buttons */}
+                      {getControlButtons()}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                      >
+                        <RefreshCw
+                          className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`}
+                        />
+                        Refresh
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-1">
+                        <Download className="h-3 w-3" />
+                        Export
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-1">
+                        <Share2 className="h-3 w-3" />
+                        Share
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Compact error message */}
+                  {errorMessage && (
+                    <Card className="border-destructive">
+                      <CardContent className="pb-3 pt-3">
+                        <div className="flex items-center gap-2 text-destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span className="text-sm font-medium">Error</span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{errorMessage}</p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Compact Progress Section for Active Tasks */}
+                  {isActive && (
+                    <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:border-blue-800 dark:from-blue-900/20 dark:to-indigo-900/20">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex items-center justify-between">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {currentStatus === "running"
+                                ? "Running..."
+                                : currentStatus === "paused"
+                                  ? "Paused"
+                                  : currentStatus}
+                            </h3>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                              {taskStatus?.message || "In progress"}
+                            </span>
+                          </div>
+
+                          {/* Compact Progress Bar */}
+                          <div className="mb-2">
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white dark:bg-gray-800">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  currentStatus === "running"
+                                    ? "animate-pulse bg-gradient-to-r from-blue-500 to-blue-600"
+                                    : currentStatus === "paused"
+                                      ? "bg-gradient-to-r from-yellow-400 to-yellow-500"
+                                      : "bg-gradient-to-r from-red-400 to-red-500"
+                                }`}
+                                style={{
+                                  width: currentStatus === "running" ? "65%" : "35%",
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Compact Artifacts Preview */}
+                          {taskStatus?.artifacts && taskStatus.artifacts.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              <span className="mr-1 text-xs text-gray-700 dark:text-gray-300">
+                                Generated:
+                              </span>
+                              {taskStatus.artifacts.slice(0, 2).map((artifact, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center gap-1 rounded bg-white px-2 py-0.5 text-xs dark:bg-gray-800"
+                                >
+                                  <FileText className="h-2.5 w-2.5 text-blue-600" />
+                                  <span>
+                                    {typeof artifact === "string"
+                                      ? artifact
+                                      : `Artifact ${index + 1}`}
+                                  </span>
+                                </div>
+                              ))}
+                              {taskStatus.artifacts.length > 2 && (
+                                <span className="text-xs text-gray-500">
+                                  +{taskStatus.artifacts.length - 2} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Compact Task Details Card */}
+                  <Card className="shadow-sm">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                          <Layers className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">Task Details</CardTitle>
+                          <CardDescription className="text-xs">
+                            Core information
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {/* Compact Status */}
+                      <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`flex h-6 w-6 items-center justify-center rounded ${
+                              currentStatus === "running"
+                                ? "bg-blue-50 dark:bg-blue-900/30"
+                                : currentStatus === "completed" ||
+                                    currentStatus === "success"
+                                  ? "bg-green-50 dark:bg-green-900/30"
+                                  : currentStatus === "paused"
+                                    ? "bg-yellow-50 dark:bg-yellow-900/30"
+                                    : "bg-red-50 dark:bg-red-900/30"
+                            }`}
+                          >
+                            {currentStatus === "running" ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                            ) : currentStatus === "completed" ||
+                              currentStatus === "success" ? (
+                              <CheckCircle2 className="h-3 w-3 text-green-600" />
+                            ) : currentStatus === "paused" ? (
+                              <Pause className="h-3 w-3 text-yellow-600" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-red-600" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Status
+                            </p>
+                          </div>
+                        </div>
+                        <Badge
+                          className={`px-2 py-0.5 text-xs ${
+                            currentStatus === "running"
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                              : currentStatus === "completed" ||
+                                  currentStatus === "success"
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                : currentStatus === "paused"
+                                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                          }`}
+                        >
+                          {currentStatus.charAt(0).toUpperCase() +
+                            currentStatus.slice(1)}
+                        </Badge>
+                      </div>
+
+                      {/* Compact Agent Info */}
+                      <div className="rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded bg-blue-50 dark:bg-blue-900/30">
+                            <Bot className="h-3 w-3 text-blue-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {task.agent_name || `Agent ${task.agent_id}`}
+                            </p>
+                            <p className="truncate text-xs text-gray-600 dark:text-gray-400">
+                              {task.agent_description || "No description available"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Compact Timing Information */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Created
+                          </span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {new Date(task.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {startTime && startTime !== task.created_at && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600 dark:text-gray-400">
+                              Started
+                            </span>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                              {new Date(startTime).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                        {endTime && (
+                          <>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">
+                                Completed
+                              </span>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {new Date(endTime).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">
+                                Duration
+                              </span>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {executionTime}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Compact Execution ID */}
+                      {task.execution_id && (
+                        <div className="rounded bg-gray-50 p-2 dark:bg-gray-700">
+                          <p className="mb-0.5 text-xs text-gray-600 dark:text-gray-400">
+                            Execution ID
+                          </p>
+                          <code className="break-all font-mono text-xs text-gray-900 dark:text-gray-100">
+                            {task.execution_id}
+                          </code>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Compact Task Results Card */}
+                  <Card className="shadow-sm">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+                          <FileText className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">Task Results</CardTitle>
+                          <CardDescription className="text-xs">
+                            Output data
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {task.result ? (
+                        <div className="space-y-2">
+                          <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+                            <div className="mb-2 flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                              <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
+                                Result
+                              </h4>
+                            </div>
+                            <div className="max-h-32 overflow-y-auto rounded bg-white p-2 dark:bg-gray-800">
+                              <pre className="whitespace-pre-wrap text-xs text-gray-900 dark:text-gray-100">
+                                {JSON.stringify(task.result, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center">
+                          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+                            {isActive ? (
+                              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                            ) : (
+                              <FileText className="h-6 w-6 text-gray-400" />
+                            )}
+                          </div>
+                          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            {isActive ? "Task Running" : "No Results"}
+                          </h3>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            {isActive
+                              ? "Results will appear when complete"
+                              : "No results produced"}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Compact Session Information */}
+                      {taskStatus?.session_id && (
+                        <div className="mt-3 rounded border border-purple-200 bg-purple-50 p-2 dark:border-purple-800 dark:bg-purple-900/20">
+                          <p className="mb-0.5 text-xs text-purple-600 dark:text-purple-400">
+                            Session ID
+                          </p>
+                          <code className="break-all font-mono text-xs text-purple-900 dark:text-purple-100">
+                            {taskStatus.session_id}
+                          </code>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </ResizablePanel>
+          </>
+        )}
+      </ResizablePanelGroup>
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
@@ -815,4 +1304,471 @@ export default function TaskDetailsPage() {
       </Dialog>
     </>
   );
+
+  // return (
+  //   <>
+  //     {/* Compact Header */}
+  //     <div className="mb-4 rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
+  //       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+  //         <div className="flex items-start gap-4">
+  //           {/* Smaller Status Indicator */}
+  //           <div className="flex-shrink-0">
+  //             <div
+  //               className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+  //                 currentStatus === "running"
+  //                   ? "bg-blue-50 dark:bg-blue-900/30"
+  //                   : currentStatus === "completed" ||
+  //                       currentStatus === "success"
+  //                     ? "bg-green-50 dark:bg-green-900/30"
+  //                     : currentStatus === "paused"
+  //                       ? "bg-yellow-50 dark:bg-yellow-900/30"
+  //                       : "bg-red-50 dark:bg-red-900/30"
+  //               }`}
+  //             >
+  //               <div
+  //                 className={`h-4 w-4 rounded-full ${
+  //                   currentStatus === "running"
+  //                     ? "animate-pulse bg-blue-500"
+  //                     : currentStatus === "completed" ||
+  //                         currentStatus === "success"
+  //                       ? "bg-green-500"
+  //                       : currentStatus === "paused"
+  //                         ? "bg-yellow-500"
+  //                         : "bg-red-500"
+  //                 }`}
+  //               />
+  //             </div>
+  //           </div>
+
+  //           {/* Compact Main Content */}
+  //           <div className="min-w-0 flex-1">
+  //             <div className="mb-1 flex items-center gap-2">
+  //               <h1 className="truncate text-xl font-bold text-gray-900 dark:text-gray-100">
+  //                 {task.description}
+  //               </h1>
+  //               <Badge
+  //                 className={`px-2 py-0.5 text-xs ${
+  //                   currentStatus === "running"
+  //                     ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+  //                     : currentStatus === "completed" ||
+  //                         currentStatus === "success"
+  //                       ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+  //                       : currentStatus === "paused"
+  //                         ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+  //                         : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+  //                 }`}
+  //               >
+  //                 {currentStatus.charAt(0).toUpperCase() +
+  //                   currentStatus.slice(1)}
+  //               </Badge>
+  //             </div>
+
+  //             <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+  //               ID:{" "}
+  //               <span className="rounded bg-gray-100 px-1 py-0.5 font-mono text-xs dark:bg-gray-800">
+  //                 {task.id}
+  //               </span>
+  //             </p>
+
+  //             {/* Compact Meta Information */}
+  //             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+  //               <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+  //                 <Bot className="h-3 w-3 text-blue-600" />
+  //                 <span className="font-medium text-gray-900 dark:text-gray-100">
+  //                   {task.agent_name || `Agent ${task.agent_id}`}
+  //                 </span>
+  //               </div>
+
+  //               <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+  //                 <Clock className="h-3 w-3 text-green-600" />
+  //                 <span className="font-medium text-gray-900 dark:text-gray-100">
+  //                   {isActive
+  //                     ? `Started ${new Date(startTime).toLocaleDateString()}`
+  //                     : endTime
+  //                       ? `${executionTime}`
+  //                       : `${new Date(task.created_at).toLocaleDateString()}`}
+  //                 </span>
+  //               </div>
+
+  //               {task.execution_id && (
+  //                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+  //                   <Database className="h-3 w-3 text-purple-600" />
+  //                   <span className="font-mono font-medium text-gray-900 dark:text-gray-100">
+  //                     {task.execution_id.slice(-8)}
+  //                   </span>
+  //                 </div>
+  //               )}
+
+  //               {/* Live Event Indicator */}
+  //               <div className="flex items-center gap-2 text-xs">
+  //                 <LiveEventIndicator
+  //                   connected={eventsConnected}
+  //                   latestEvent={events[events.length - 1]}
+  //                   eventCount={events.length}
+  //                 />
+  //               </div>
+  //             </div>
+  //           </div>
+  //         </div>
+
+  //         {/* Compact Action Buttons */}
+  //         <div className="flex flex-wrap gap-1">
+  //           {/* Task Control Buttons */}
+  //           {getControlButtons()}
+
+  //           <Button
+  //             variant="outline"
+  //             size="sm"
+  //             className="gap-1"
+  //             onClick={handleRefresh}
+  //             disabled={refreshing}
+  //           >
+  //             <RefreshCw
+  //               className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`}
+  //             />
+  //             Refresh
+  //           </Button>
+  //           <Button variant="outline" size="sm" className="gap-1">
+  //             <Download className="h-3 w-3" />
+  //             Export
+  //           </Button>
+  //           <Button variant="outline" size="sm" className="gap-1">
+  //             <Share2 className="h-3 w-3" />
+  //             Share
+  //           </Button>
+  //         </div>
+  //       </div>
+  //     </div>
+
+  //     {/* Compact error message */}
+  //     {errorMessage && (
+  //       <Card className="mb-4 border-destructive">
+  //         <CardContent className="pb-3 pt-3">
+  //           <div className="flex items-center gap-2 text-destructive">
+  //             <AlertTriangle className="h-4 w-4" />
+  //             <span className="text-sm font-medium">Error</span>
+  //           </div>
+  //           <p className="mt-1 text-xs text-muted-foreground">{errorMessage}</p>
+  //         </CardContent>
+  //       </Card>
+  //     )}
+
+  //     {/* Compact Progress Section for Active Tasks */}
+  //     {isActive && (
+  //       <div className="mb-4 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:border-blue-800 dark:from-blue-900/20 dark:to-indigo-900/20">
+  //         <div className="flex items-center gap-3">
+  //           <div className="flex-shrink-0">
+  //             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
+  //               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+  //             </div>
+  //           </div>
+  //           <div className="min-w-0 flex-1">
+  //             <div className="mb-2 flex items-center justify-between">
+  //               <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+  //                 {currentStatus === "running"
+  //                   ? "Running..."
+  //                   : currentStatus === "paused"
+  //                     ? "Paused"
+  //                     : currentStatus}
+  //               </h3>
+  //               <span className="text-xs text-gray-600 dark:text-gray-400">
+  //                 {taskStatus?.message || "In progress"}
+  //               </span>
+  //             </div>
+
+  //             {/* Compact Progress Bar */}
+  //             <div className="mb-2">
+  //               <div className="h-1.5 w-full overflow-hidden rounded-full bg-white dark:bg-gray-800">
+  //                 <div
+  //                   className={`h-full rounded-full transition-all duration-300 ${
+  //                     currentStatus === "running"
+  //                       ? "animate-pulse bg-gradient-to-r from-blue-500 to-blue-600"
+  //                       : currentStatus === "paused"
+  //                         ? "bg-gradient-to-r from-yellow-400 to-yellow-500"
+  //                         : "bg-gradient-to-r from-red-400 to-red-500"
+  //                   }`}
+  //                   style={{
+  //                     width: currentStatus === "running" ? "65%" : "35%",
+  //                   }}
+  //                 />
+  //               </div>
+  //             </div>
+
+  //             {/* Compact Artifacts Preview */}
+  //             {taskStatus?.artifacts && taskStatus.artifacts.length > 0 && (
+  //               <div className="flex flex-wrap gap-1">
+  //                 <span className="mr-1 text-xs text-gray-700 dark:text-gray-300">
+  //                   Generated:
+  //                 </span>
+  //                 {taskStatus.artifacts.slice(0, 2).map((artifact, index) => (
+  //                   <div
+  //                     key={index}
+  //                     className="flex items-center gap-1 rounded bg-white px-2 py-0.5 text-xs dark:bg-gray-800"
+  //                   >
+  //                     <FileText className="h-2.5 w-2.5 text-blue-600" />
+  //                     <span>
+  //                       {typeof artifact === "string"
+  //                         ? artifact
+  //                         : `Artifact ${index + 1}`}
+  //                     </span>
+  //                   </div>
+  //                 ))}
+  //                 {taskStatus.artifacts.length > 2 && (
+  //                   <span className="text-xs text-gray-500">
+  //                     +{taskStatus.artifacts.length - 2} more
+  //                   </span>
+  //                 )}
+  //               </div>
+  //             )}
+  //           </div>
+  //         </div>
+  //       </div>
+  //     )}
+
+  //     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+  //           {/* Compact Task Details Card */}
+  //           <Card className="shadow-sm">
+  //             <CardHeader className="pb-3">
+  //               <div className="flex items-center gap-2">
+  //                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+  //                   <Layers className="h-4 w-4 text-primary" />
+  //                 </div>
+  //                 <div>
+  //                   <CardTitle className="text-base">Task Details</CardTitle>
+  //                   <CardDescription className="text-xs">
+  //                     Core information
+  //                   </CardDescription>
+  //                 </div>
+  //               </div>
+  //             </CardHeader>
+  //             <CardContent className="space-y-3">
+  //               {/* Compact Status */}
+  //               <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
+  //                 <div className="flex items-center gap-2">
+  //                   <div
+  //                     className={`flex h-6 w-6 items-center justify-center rounded ${
+  //                       currentStatus === "running"
+  //                         ? "bg-blue-50 dark:bg-blue-900/30"
+  //                         : currentStatus === "completed" ||
+  //                             currentStatus === "success"
+  //                           ? "bg-green-50 dark:bg-green-900/30"
+  //                           : currentStatus === "paused"
+  //                             ? "bg-yellow-50 dark:bg-yellow-900/30"
+  //                             : "bg-red-50 dark:bg-red-900/30"
+  //                     }`}
+  //                   >
+  //                     {currentStatus === "running" ? (
+  //                       <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+  //                     ) : currentStatus === "completed" ||
+  //                       currentStatus === "success" ? (
+  //                       <CheckCircle2 className="h-3 w-3 text-green-600" />
+  //                     ) : currentStatus === "paused" ? (
+  //                       <Pause className="h-3 w-3 text-yellow-600" />
+  //                     ) : (
+  //                       <XCircle className="h-3 w-3 text-red-600" />
+  //                     )}
+  //                   </div>
+  //                   <div>
+  //                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+  //                       Status
+  //                     </p>
+  //                   </div>
+  //                 </div>
+  //                 <Badge
+  //                   className={`px-2 py-0.5 text-xs ${
+  //                     currentStatus === "running"
+  //                       ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+  //                       : currentStatus === "completed" ||
+  //                           currentStatus === "success"
+  //                         ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+  //                         : currentStatus === "paused"
+  //                           ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+  //                           : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+  //                   }`}
+  //                 >
+  //                   {currentStatus.charAt(0).toUpperCase() +
+  //                     currentStatus.slice(1)}
+  //                 </Badge>
+  //               </div>
+
+  //               {/* Compact Agent Info */}
+  //               <div className="rounded-lg border bg-gray-50 p-2 dark:bg-gray-800">
+  //                 <div className="flex items-center gap-2">
+  //                   <div className="flex h-6 w-6 items-center justify-center rounded bg-blue-50 dark:bg-blue-900/30">
+  //                     <Bot className="h-3 w-3 text-blue-600" />
+  //                   </div>
+  //                   <div className="min-w-0 flex-1">
+  //                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+  //                       {task.agent_name || `Agent ${task.agent_id}`}
+  //                     </p>
+  //                     <p className="truncate text-xs text-gray-600 dark:text-gray-400">
+  //                       {task.agent_description || "No description available"}
+  //                     </p>
+  //                   </div>
+  //                 </div>
+  //               </div>
+
+  //               {/* Compact Timing Information */}
+  //               <div className="space-y-1">
+  //                 <div className="flex items-center justify-between text-xs">
+  //                   <span className="text-gray-600 dark:text-gray-400">
+  //                     Created
+  //                   </span>
+  //                   <span className="font-medium text-gray-900 dark:text-gray-100">
+  //                     {new Date(task.created_at).toLocaleDateString()}
+  //                   </span>
+  //                 </div>
+  //                 {startTime && startTime !== task.created_at && (
+  //                   <div className="flex items-center justify-between text-xs">
+  //                     <span className="text-gray-600 dark:text-gray-400">
+  //                       Started
+  //                     </span>
+  //                     <span className="font-medium text-gray-900 dark:text-gray-100">
+  //                       {new Date(startTime).toLocaleDateString()}
+  //                     </span>
+  //                   </div>
+  //                 )}
+  //                 {endTime && (
+  //                   <>
+  //                     <div className="flex items-center justify-between text-xs">
+  //                       <span className="text-gray-600 dark:text-gray-400">
+  //                         Completed
+  //                       </span>
+  //                       <span className="font-medium text-gray-900 dark:text-gray-100">
+  //                         {new Date(endTime).toLocaleDateString()}
+  //                       </span>
+  //                     </div>
+  //                     <div className="flex items-center justify-between text-xs">
+  //                       <span className="text-gray-600 dark:text-gray-400">
+  //                         Duration
+  //                       </span>
+  //                       <span className="font-medium text-gray-900 dark:text-gray-100">
+  //                         {executionTime}
+  //                       </span>
+  //                     </div>
+  //                   </>
+  //                 )}
+  //               </div>
+
+  //               {/* Compact Execution ID */}
+  //               {task.execution_id && (
+  //                 <div className="rounded bg-gray-50 p-2 dark:bg-gray-700">
+  //                   <p className="mb-0.5 text-xs text-gray-600 dark:text-gray-400">
+  //                     Execution ID
+  //                   </p>
+  //                   <code className="break-all font-mono text-xs text-gray-900 dark:text-gray-100">
+  //                     {task.execution_id}
+  //                   </code>
+  //                 </div>
+  //               )}
+  //             </CardContent>
+  //           </Card>
+
+  //           {/* Compact Task Results Card */}
+  //           <Card className="shadow-sm">
+  //             <CardHeader className="pb-3">
+  //               <div className="flex items-center gap-2">
+  //                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+  //                   <FileText className="h-4 w-4 text-green-600" />
+  //                 </div>
+  //                 <div>
+  //                   <CardTitle className="text-base">Task Results</CardTitle>
+  //                   <CardDescription className="text-xs">
+  //                     Output data
+  //                   </CardDescription>
+  //                 </div>
+  //               </div>
+  //             </CardHeader>
+  //             <CardContent>
+  //               {task.result ? (
+  //                 <div className="space-y-2">
+  //                   <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+  //                     <div className="mb-2 flex items-center gap-2">
+  //                       <CheckCircle2 className="h-4 w-4 text-green-600" />
+  //                       <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
+  //                         Result
+  //                       </h4>
+  //                     </div>
+  //                     <div className="max-h-32 overflow-y-auto rounded bg-white p-2 dark:bg-gray-800">
+  //                       <pre className="whitespace-pre-wrap text-xs text-gray-900 dark:text-gray-100">
+  //                         {JSON.stringify(task.result, null, 2)}
+  //                       </pre>
+  //                     </div>
+  //                   </div>
+  //                 </div>
+  //               ) : (
+  //                 <div className="py-6 text-center">
+  //                   <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+  //                     {isActive ? (
+  //                       <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+  //                     ) : (
+  //                       <FileText className="h-6 w-6 text-gray-400" />
+  //                     )}
+  //                   </div>
+  //                   <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+  //                     {isActive ? "Task Running" : "No Results"}
+  //                   </h3>
+  //                   <p className="text-xs text-gray-600 dark:text-gray-400">
+  //                     {isActive
+  //                       ? "Results will appear when complete"
+  //                       : "No results produced"}
+  //                   </p>
+  //                 </div>
+  //               )}
+
+  //               {/* Compact Session Information */}
+  //               {taskStatus?.session_id && (
+  //                 <div className="mt-3 rounded border border-purple-200 bg-purple-50 p-2 dark:border-purple-800 dark:bg-purple-900/20">
+  //                   <p className="mb-0.5 text-xs text-purple-600 dark:text-purple-400">
+  //                     Session ID
+  //                   </p>
+  //                   <code className="break-all font-mono text-xs text-purple-900 dark:text-purple-100">
+  //                     {taskStatus.session_id}
+  //                   </code>
+  //                 </div>
+  //               )}
+  //             </CardContent>
+  //           </Card>
+  //         </div>
+
+  //     {/* Cancel Confirmation Dialog */}
+  //     <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+  //       <DialogContent>
+  //         <DialogHeader>
+  //           <DialogTitle>Cancel Task</DialogTitle>
+  //           <DialogDescription>
+  //             Are you sure you want to cancel this task? This action cannot be
+  //             undone and will terminate the task execution immediately.
+  //           </DialogDescription>
+  //         </DialogHeader>
+  //         <DialogFooter>
+  //           <Button
+  //             variant="outline"
+  //             onClick={() => setShowCancelDialog(false)}
+  //             disabled={controlling}
+  //           >
+  //             Keep Running
+  //           </Button>
+  //           <Button
+  //             variant="destructive"
+  //             onClick={handleCancelTask}
+  //             disabled={controlling}
+  //           >
+  //             {controlling ? (
+  //               <>
+  //                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+  //                 Cancelling...
+  //               </>
+  //             ) : (
+  //               <>
+  //                 <X className="mr-2 h-4 w-4" />
+  //                 Cancel Task
+  //               </>
+  //             )}
+  //           </Button>
+  //         </DialogFooter>
+  //       </DialogContent>
+  //     </Dialog>
+  //   </>
+  // );
 }

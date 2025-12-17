@@ -34,7 +34,7 @@ export default async function TaskLayout({ params, children }: Props) {
       subheader={<TaskSubheader taskId={id} />}
       className="p-0"
     >
-      <div className="px-4 py-5">{children}</div>
+      <div className="h-full">{children}</div>
     </ContentBlock>
   );
 }
