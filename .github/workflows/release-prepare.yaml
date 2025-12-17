@@ -13,7 +13,13 @@ on:
           - major
 
 jobs:
+  # Step 1: Validate current state BEFORE making any changes
+  validate-current-state:
+    uses: ./.github/workflows/ci.yml
+
+  # Step 2: Bump version and create release branch (only after validation passes)
   prepare-and-bump:
+    needs: validate-current-state
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -64,12 +70,9 @@ jobs:
           git commit -m "chore(release): bump versions to ${{ steps.get-version.outputs.VERSION }}"
           git push origin "${{ steps.get-version.outputs.BRANCH }}"
 
-  validate-release:
-    needs: prepare-and-bump
-    uses: ./.github/workflows/ci.yml
-
+  # Step 3: Create PR (only after validation passes and branch is created)
   create-pr:
-    needs: [prepare-and-bump, validate-release]
+    needs: prepare-and-bump
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -90,7 +93,8 @@ jobs:
 
             This PR contains version bumps for release ${{ needs.prepare-and-bump.outputs.version }}.
 
-            **✅ All CI checks passed before PR creation**
+            **✅ All CI checks passed before release branch creation**
+            - Current state validated before version bump
             - Linting: Platform, Webapp, MCP Manager
             - Tests: Platform, MCP Manager
             - Builds: API, Worker, Webapp
