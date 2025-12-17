@@ -246,8 +246,9 @@ jobs:
   #         path: core/dist/
 
   docker-api:
-    # Build and push on main (for changed components), build-only on release PRs (all components)
+    # Build and push on main (for changed components), build-only on release PRs and workflow_call
     if: |
+      github.event_name == 'workflow_call' ||
       (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, platform-lint, platform-test, platform-build]
@@ -260,7 +261,7 @@ jobs:
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/api/Dockerfile
       use-private-registry: true
-      push: ${{ github.ref == 'refs/heads/main' }}
+      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -305,8 +306,9 @@ jobs:
             echo "| $component | ${build_time}s |" >> $GITHUB_STEP_SUMMARY
           done
   docker-worker:
-    # Build and push on main (for changed components), build-only on release PRs (all components)
+    # Build and push on main (for changed components), build-only on release PRs and workflow_call
     if: |
+      github.event_name == 'workflow_call' ||
       (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, platform-lint, platform-test, platform-build]
@@ -319,7 +321,7 @@ jobs:
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/worker/Dockerfile
       use-private-registry: true
-      push: ${{ github.ref == 'refs/heads/main' }}
+      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -328,8 +330,9 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
-    # Build and push on main (for changed components), build-only on release PRs (all components)
+    # Build and push on main (for changed components), build-only on release PRs and workflow_call
     if: |
+      github.event_name == 'workflow_call' ||
       (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, webapp-lint, webapp-build]
@@ -342,7 +345,7 @@ jobs:
       context: agentarea-webapp
       dockerfile: agentarea-webapp/Dockerfile
       use-private-registry: true
-      push: ${{ github.ref == 'refs/heads/main' }}
+      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -351,8 +354,9 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-bootstrap:
-    # Build and push on main (for changed components), build-only on release PRs (all components)
+    # Build and push on main (for changed components), build-only on release PRs and workflow_call
     if: |
+      github.event_name == 'workflow_call' ||
       (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: changes
@@ -365,7 +369,7 @@ jobs:
       context: agentarea-bootstrap
       dockerfile: agentarea-bootstrap/Dockerfile
       use-private-registry: true
-      push: ${{ github.ref == 'refs/heads/main' }}
+      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -374,8 +378,9 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-agentarea-mcp-manager:
-    # Build and push on main (for changed components), build-only on release PRs (all components)
+    # Build and push on main (for changed components), build-only on release PRs and workflow_call
     if: |
+      github.event_name == 'workflow_call' ||
       (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, mcp-manager-lint-test]
@@ -388,7 +393,7 @@ jobs:
       context: agentarea-mcp-manager
       dockerfile: agentarea-mcp-manager/Dockerfile
       use-private-registry: true
-      push: ${{ github.ref == 'refs/heads/main' }}
+      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
