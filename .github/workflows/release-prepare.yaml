@@ -86,44 +86,48 @@ jobs:
           ref: ${{ needs.prepare-and-bump.outputs.branch }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: "Release ${{ needs.prepare-and-bump.outputs.version }}"
-          branch: ${{ needs.prepare-and-bump.outputs.branch }}
-          body: |
-            ## Release ${{ needs.prepare-and-bump.outputs.version }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "Release ${{ needs.prepare-and-bump.outputs.version }}" \
+            --base main \
+            --head "${{ needs.prepare-and-bump.outputs.branch }}" \
+            --label release \
+            --body "$(cat <<'EOF'
+          ## Release ${{ needs.prepare-and-bump.outputs.version }}
 
-            This PR contains version bumps for release ${{ needs.prepare-and-bump.outputs.version }}.
+          This PR contains version bumps for release ${{ needs.prepare-and-bump.outputs.version }}.
 
-            **✅ All CI checks passed before release branch creation**
-            - Current state validated before version bump
-            - Linting: Platform, Webapp, MCP Manager
-            - Tests: Platform, MCP Manager
-            - Builds: API, Worker, Webapp
+          **✅ All CI checks passed before release branch creation**
+          - Current state validated before version bump
+          - Linting: Platform, Webapp, MCP Manager
+          - Tests: Platform, MCP Manager
+          - Builds: API, Worker, Webapp
 
-            ### Changes
-            - Bumped application version across all packages to ${{ needs.prepare-and-bump.outputs.version }}
-            - Updated Helm chart `appVersion` to ${{ needs.prepare-and-bump.outputs.version }}
-            - Chart `version` remains independent (managed separately in Chart.yaml)
+          ### Changes
+          - Bumped application version across all packages to ${{ needs.prepare-and-bump.outputs.version }}
+          - Updated Helm chart \`appVersion\` to ${{ needs.prepare-and-bump.outputs.version }}
+          - Chart \`version\` remains independent (managed separately in Chart.yaml)
 
-            ### Version Synchronization
-            All versions verified and synchronized:
-            - ✅ VERSION file: ${{ needs.prepare-and-bump.outputs.version }}
-            - ✅ All pyproject.toml files
-            - ✅ package.json
-            - ✅ Chart.yaml appVersion
-            - ✅ .bumpversion.cfg
+          ### Version Synchronization
+          All versions verified and synchronized:
+          - ✅ VERSION file: ${{ needs.prepare-and-bump.outputs.version }}
+          - ✅ All pyproject.toml files
+          - ✅ package.json
+          - ✅ Chart.yaml appVersion
+          - ✅ .bumpversion.cfg
 
-            **Note:** Helm chart version is managed independently. If chart configuration
-            changes were made, bump the chart version in `charts/agentarea/Chart.yaml` separately.
+          **Note:** Helm chart version is managed independently. If chart configuration
+          changes were made, bump the chart version in \`charts/agentarea/Chart.yaml\` separately.
 
-            ### Checklist
-            - [ ] Review version changes
-            - [ ] Verify all package versions are updated correctly
-            - [ ] Add release notes to CHANGELOG (if applicable)
-            - [ ] If chart configs changed, bump chart version independently
-            - [ ] Merge this PR to trigger automated build and publish
+          ### Checklist
+          - [ ] Review version changes
+          - [ ] Verify all package versions are updated correctly
+          - [ ] Add release notes to CHANGELOG (if applicable)
+          - [ ] If chart configs changed, bump chart version independently
+          - [ ] Merge this PR to trigger automated build and publish
 
-            **Note:** Merging this PR will automatically trigger the release pipeline to build Docker images, publish Helm charts, and create a Git tag.
-          labels: release
+          **Note:** Merging this PR will automatically trigger the release pipeline to build Docker images, publish Helm charts, and create a Git tag.
+          EOF
+          )"
