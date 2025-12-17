@@ -78,75 +78,50 @@ jobs:
           username: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
 
-      - name: Extract Docker metadata (Public Registry)
-        if: ${{ ! inputs.use-private-registry }}
-        id: meta-public
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            agentarea/${{ inputs.image-name || format('agentarea-{0}', inputs.component) }}
-          tags: |
-            type=raw,value=${{ steps.version.outputs.version }}-{{sha}}
-            type=raw,value=${{ steps.version.outputs.version }}
-          flavor: |
-            latest=false
-
-      - name: Build private registry image path
-        if: ${{ inputs.use-private-registry }}
-        id: private-image
+      - name: Compute image paths
+        id: image
         run: |
-          REGISTRY="${{ secrets.DOCKER_REGISTRY_MIRROR }}"
-          PATH="${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}"
-          IMAGE="${{ inputs.image-name || format('agentarea-{0}', inputs.component) }}"
-
-          # Remove trailing slash from registry
-          REGISTRY="${REGISTRY%/}"
-
-          # Remove leading and trailing slashes from path
-          PATH="${PATH#/}"
-          PATH="${PATH%/}"
-
-          # Construct full image path
-          if [ -n "$PATH" ]; then
-            FULL_IMAGE="${REGISTRY}/${PATH}/${IMAGE}"
-          else
-            FULL_IMAGE="${REGISTRY}/${IMAGE}"
+          IMAGE="${{ inputs.image-name }}"
+          if [ -z "$IMAGE" ]; then
+            IMAGE="agentarea-${{ inputs.component }}"
           fi
 
-          echo "path=$FULL_IMAGE" >> $GITHUB_OUTPUT
+          if [[ "$IMAGE" == *:* ]]; then
+            echo "Error: image-name must not include a tag"
+            exit 1
+          fi
 
-      - name: Extract Docker metadata (Public + Private Registry)
-        if: ${{ inputs.use-private-registry }}
-        id: meta-both
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            agentarea/${{ inputs.image-name || format('agentarea-{0}', inputs.component) }}
-            ${{ steps.private-image.outputs.path }}
-          tags: |
-            type=raw,value=${{ steps.version.outputs.version }}-{{sha}}
-            type=raw,value=${{ steps.version.outputs.version }}
-          flavor: |
-            latest=false
+          PUBLIC_IMAGE="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE"
 
-      - name: Set metadata output
+          if [ "${{ inputs.use-private-registry }}" = "true" ]; then
+            REGISTRY="${{ secrets.DOCKER_REGISTRY_MIRROR }}"
+            REGISTRY="${REGISTRY%/}"
+
+            PATH="${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}"
+            PATH="${PATH#/}"
+            PATH="${PATH%/}"
+
+            if [ -n "$PATH" ]; then
+              PRIVATE_IMAGE="$REGISTRY/$PATH/$IMAGE"
+            else
+              PRIVATE_IMAGE="$REGISTRY/$IMAGE"
+            fi
+
+            echo "images=$PUBLIC_IMAGE,$PRIVATE_IMAGE" >> $GITHUB_OUTPUT
+          else
+            echo "images=$PUBLIC_IMAGE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract Docker metadata
         id: meta
-        run: |
-          if [ "${{ inputs.use-private-registry }}" == "true" ]; then
-            TAGS='${{ steps.meta-both.outputs.tags }}'
-            LABELS='${{ steps.meta-both.outputs.labels }}'
-            ANNOTATIONS='${{ steps.meta-both.outputs.annotations }}'
-          else
-            TAGS='${{ steps.meta-public.outputs.tags }}'
-            LABELS='${{ steps.meta-public.outputs.labels }}'
-            ANNOTATIONS='${{ steps.meta-public.outputs.annotations }}'
-          fi
-
-          {
-            printf 'tags<<EOF\n%s\nEOF\n' "$TAGS"
-            printf 'labels<<EOF\n%s\nEOF\n' "$LABELS"
-            printf 'annotations<<EOF\n%s\nEOF\n' "$ANNOTATIONS"
-          } >> "$GITHUB_OUTPUT"
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.images }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=${{ steps.version.outputs.version }}-{{sha}}
+          flavor: |
+            latest=false
 
       - name: Build and push Docker image
         id: build
@@ -157,7 +132,6 @@ jobs:
           push: ${{ inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=${{ inputs.component }}
           cache-to: type=gha,mode=max,scope=${{ inputs.component }}
           provenance: false
