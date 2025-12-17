@@ -261,7 +261,7 @@ jobs:
       component: api
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/api/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
       push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -322,7 +322,7 @@ jobs:
       component: worker
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/worker/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
       push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -347,7 +347,7 @@ jobs:
       component: frontend
       context: agentarea-webapp
       dockerfile: agentarea-webapp/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
       push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -372,7 +372,7 @@ jobs:
       component: bootstrap
       context: agentarea-bootstrap
       dockerfile: agentarea-bootstrap/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
       push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -397,7 +397,7 @@ jobs:
       component: mcp-manager
       context: agentarea-mcp-manager
       dockerfile: agentarea-mcp-manager/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
       push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
