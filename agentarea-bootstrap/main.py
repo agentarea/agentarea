@@ -3,9 +3,6 @@
 import sys
 import os
 
-# Add the current directory to Python path so we can import from code/
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 # from code.populate_llm_providers import main as populate_llm_providers_main
 from code.populate_providers_new_arch import main as populate_providers_new_arch_main
 from code.populate_mcp_providers import main as populate_mcp_providers_main
