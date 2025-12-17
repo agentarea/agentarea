@@ -11,9 +11,10 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && ln -sf /root/.local/bin/u
 COPY pyproject.toml uv.lock ./
 COPY code/ ./code/
 COPY main.py ./
+COPY README.md ./
 
 # Use uv to install dependencies (exclude dev dependencies)
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev 
 
 # Runtime stage
 FROM python:3.12-slim
