@@ -44,9 +44,5 @@ export default async function LoginPage(props: OryPageParams) {
     };
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Login flow={modifiedFlow} config={config} />
-    </div>
-  );
+  return <Login flow={modifiedFlow} config={config} />;
 }

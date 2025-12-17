@@ -246,11 +246,12 @@ jobs:
   #         path: core/dist/
 
   docker-api:
-    # Build and push on main (for changed components), build-only on release PRs and workflow_call
+    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
     if: |
-      github.event_name == 'workflow_call' ||
-      (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      github.event_name != 'workflow_call' && (
+        (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      )
     needs: [changes, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
@@ -306,11 +307,12 @@ jobs:
             echo "| $component | ${build_time}s |" >> $GITHUB_STEP_SUMMARY
           done
   docker-worker:
-    # Build and push on main (for changed components), build-only on release PRs and workflow_call
+    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
     if: |
-      github.event_name == 'workflow_call' ||
-      (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      github.event_name != 'workflow_call' && (
+        (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      )
     needs: [changes, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
@@ -330,11 +332,12 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
-    # Build and push on main (for changed components), build-only on release PRs and workflow_call
+    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
     if: |
-      github.event_name == 'workflow_call' ||
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      github.event_name != 'workflow_call' && (
+        (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      )
     needs: [changes, webapp-lint, webapp-build]
     permissions:
       packages: write
@@ -354,11 +357,12 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-bootstrap:
-    # Build and push on main (for changed components), build-only on release PRs and workflow_call
+    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
     if: |
-      github.event_name == 'workflow_call' ||
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      github.event_name != 'workflow_call' && (
+        (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      )
     needs: changes
     permissions:
       packages: write
@@ -378,11 +382,12 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-agentarea-mcp-manager:
-    # Build and push on main (for changed components), build-only on release PRs and workflow_call
+    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
     if: |
-      github.event_name == 'workflow_call' ||
-      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      github.event_name != 'workflow_call' && (
+        (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
+      )
     needs: [changes, mcp-manager-lint-test]
     permissions:
       packages: write

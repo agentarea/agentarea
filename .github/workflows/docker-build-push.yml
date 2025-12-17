@@ -58,7 +58,7 @@ jobs:
         id: version
         run: |
           VERSION=$(cat VERSION | tr -d '\n')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -80,10 +80,16 @@ jobs:
 
       - name: Compute image paths
         id: image
+        env:
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+          INPUT_COMPONENT: ${{ inputs.component }}
+          INPUT_USE_PRIVATE_REGISTRY: ${{ inputs.use-private-registry }}
+          SECRET_REGISTRY_MIRROR: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
+          SECRET_REGISTRY_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
         run: |
-          IMAGE="${{ inputs.image-name }}"
+          IMAGE="$INPUT_IMAGE_NAME"
           if [ -z "$IMAGE" ]; then
-            IMAGE="agentarea-${{ inputs.component }}"
+            IMAGE="agentarea-$INPUT_COMPONENT"
           fi
 
           if [[ "$IMAGE" == *:* ]]; then
@@ -91,25 +97,38 @@ jobs:
             exit 1
           fi
 
-          PUBLIC_IMAGE="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE"
+          if [[ "$IMAGE" == */* ]]; then
+            PUBLIC_IMAGE="$IMAGE"
+          else
+            PUBLIC_IMAGE="agentarea/$IMAGE"
+          fi
 
-          if [ "${{ inputs.use-private-registry }}" = "true" ]; then
-            REGISTRY="${{ secrets.DOCKER_REGISTRY_MIRROR }}"
+          if [ "$INPUT_USE_PRIVATE_REGISTRY" = "true" ]; then
+            REGISTRY="$SECRET_REGISTRY_MIRROR"
             REGISTRY="${REGISTRY%/}"
 
-            PATH="${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}"
-            PATH="${PATH#/}"
-            PATH="${PATH%/}"
+            REGISTRY_PATH="$SECRET_REGISTRY_PATH"
+            REGISTRY_PATH="${REGISTRY_PATH#/}"
+            REGISTRY_PATH="${REGISTRY_PATH%/}"
 
-            if [ -n "$PATH" ]; then
-              PRIVATE_IMAGE="$REGISTRY/$PATH/$IMAGE"
+            if [ -n "$REGISTRY_PATH" ]; then
+              PRIVATE_IMAGE="$REGISTRY/$REGISTRY_PATH/$IMAGE"
             else
               PRIVATE_IMAGE="$REGISTRY/$IMAGE"
             fi
 
-            echo "images=$PUBLIC_IMAGE,$PRIVATE_IMAGE" >> $GITHUB_OUTPUT
+            {
+              echo "images<<EOF"
+              echo "$PUBLIC_IMAGE"
+              echo "$PRIVATE_IMAGE"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "images=$PUBLIC_IMAGE" >> $GITHUB_OUTPUT
+            {
+              echo "images<<EOF"
+              echo "$PUBLIC_IMAGE"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Extract Docker metadata
