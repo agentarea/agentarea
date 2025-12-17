@@ -16,6 +16,9 @@ jobs:
   # Step 1: Validate current state BEFORE making any changes
   validate-current-state:
     uses: ./.github/workflows/ci.yml
+    with:
+      skip-docker: true
+    secrets: inherit
 
   # Step 2: Bump version and create release branch (only after validation passes)
   prepare-and-bump:
