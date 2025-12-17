@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_call:
+    inputs:
+      skip-docker:
+        description: 'Skip Docker build jobs (for validation-only runs)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   PYTHON_VERSION: "3.12"
@@ -246,12 +252,11 @@ jobs:
   #         path: core/dist/
 
   docker-api:
-    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
+    # Always build to validate, but only push on main when not skipped
     if: |
-      github.event_name != 'workflow_call' && (
-        (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
-      )
+      (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
     needs: [changes, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
@@ -262,7 +267,7 @@ jobs:
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/api/Dockerfile
       use-private-registry: false
-      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -307,12 +312,11 @@ jobs:
             echo "| $component | ${build_time}s |" >> $GITHUB_STEP_SUMMARY
           done
   docker-worker:
-    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
+    # Always build to validate, but only push on main when not skipped
     if: |
-      github.event_name != 'workflow_call' && (
-        (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
-      )
+      (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
     needs: [changes, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
@@ -323,7 +327,7 @@ jobs:
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/worker/Dockerfile
       use-private-registry: false
-      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -332,12 +336,11 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
-    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
+    # Always build to validate, but only push on main when not skipped
     if: |
-      github.event_name != 'workflow_call' && (
-        (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
-      )
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
     needs: [changes, webapp-lint, webapp-build]
     permissions:
       packages: write
@@ -348,7 +351,7 @@ jobs:
       context: agentarea-webapp
       dockerfile: agentarea-webapp/Dockerfile
       use-private-registry: false
-      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -357,12 +360,11 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-bootstrap:
-    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
+    # Always build to validate, but only push on main when not skipped
     if: |
-      github.event_name != 'workflow_call' && (
-        (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
-      )
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
     needs: changes
     permissions:
       packages: write
@@ -373,7 +375,7 @@ jobs:
       context: agentarea-bootstrap
       dockerfile: agentarea-bootstrap/Dockerfile
       use-private-registry: false
-      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -382,12 +384,11 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-agentarea-mcp-manager:
-    # Build and push on main (for changed components), build-only on release PRs (skip on workflow_call)
+    # Always build to validate, but only push on main when not skipped
     if: |
-      github.event_name != 'workflow_call' && (
-        (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
-        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
-      )
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
     needs: [changes, mcp-manager-lint-test]
     permissions:
       packages: write
@@ -398,7 +399,7 @@ jobs:
       context: agentarea-mcp-manager
       dockerfile: agentarea-mcp-manager/Dockerfile
       use-private-registry: false
-      push: ${{ github.event_name != 'workflow_call' && github.ref == 'refs/heads/main' }}
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
