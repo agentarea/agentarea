@@ -109,14 +109,23 @@ jobs:
         id: meta
         run: |
           if [ "${{ inputs.use-private-registry }}" == "true" ]; then
-            echo "tags=${{ steps.meta-both.outputs.tags }}" >> $GITHUB_OUTPUT
-            echo "labels=${{ steps.meta-both.outputs.labels }}" >> $GITHUB_OUTPUT
+            TAGS='${{ steps.meta-both.outputs.tags }}'
+            LABELS='${{ steps.meta-both.outputs.labels }}'
+            ANNOTATIONS='${{ steps.meta-both.outputs.annotations }}'
           else
-            echo "tags=${{ steps.meta-public.outputs.tags }}" >> $GITHUB_OUTPUT
-            echo "labels=${{ steps.meta-public.outputs.labels }}" >> $GITHUB_OUTPUT
+            TAGS='${{ steps.meta-public.outputs.tags }}'
+            LABELS='${{ steps.meta-public.outputs.labels }}'
+            ANNOTATIONS='${{ steps.meta-public.outputs.annotations }}'
           fi
 
+          {
+            printf 'tags<<EOF\n%s\nEOF\n' "$TAGS"
+            printf 'labels<<EOF\n%s\nEOF\n' "$LABELS"
+            printf 'annotations<<EOF\n%s\nEOF\n' "$ANNOTATIONS"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.context }}
@@ -124,6 +133,7 @@ jobs:
           push: ${{ inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=${{ inputs.component }}
           cache-to: type=gha,mode=max,scope=${{ inputs.component }}
           provenance: false
@@ -131,7 +141,7 @@ jobs:
       - name: Image digest
         run: |
           if [ "${{ inputs.push }}" == "true" ]; then
-            echo "Built and pushed ${{ inputs.component }} image with digest ${{ steps.meta.outputs.digest }}"
+            echo "Built and pushed ${{ inputs.component }} image with digest ${{ steps.build.outputs.digest }}"
           else
             echo "Built ${{ inputs.component }} image (build-only, no push)"
           fi

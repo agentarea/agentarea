@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 env:
   PYTHON_VERSION: "3.12"
@@ -13,6 +14,8 @@ env:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    # Skip path filtering when called as reusable workflow (run everything)
+    if: github.event_name != 'workflow_call'
     outputs:
       platform: ${{ steps.filter.outputs.platform }}
       platform_libs: ${{ steps.filter.outputs.platform_libs }}
@@ -48,11 +51,14 @@ jobs:
   platform-lint:
     runs-on: ubuntu-latest
     needs: changes
-    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
     if: |
-      github.ref == 'refs/heads/main' ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      needs.changes.outputs.platform == 'true'
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.platform == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -79,12 +85,15 @@ jobs:
 
   platform-test:
     runs-on: ubuntu-latest
-    needs: changes
-    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    needs: [changes, platform-lint]
+    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
     if: |
-      github.ref == 'refs/heads/main' ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      needs.changes.outputs.platform == 'true'
+      always() && !cancelled() && needs.platform-lint.result == 'success' && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.platform == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -109,12 +118,15 @@ jobs:
 
   platform-build:
     runs-on: ubuntu-latest
-    needs: changes
-    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    needs: [changes, platform-test]
+    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
     if: |
-      github.ref == 'refs/heads/main' ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      needs.changes.outputs.platform == 'true'
+      always() && !cancelled() && needs.platform-test.result == 'success' && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.platform == 'true'
+      )
     strategy:
       matrix:
         component: [api, worker]
@@ -388,11 +400,14 @@ jobs:
   webapp-lint:
     runs-on: ubuntu-latest
     needs: changes
-    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    # Always run when: called as reusable workflow, on main, on release PRs, or if webapp changes detected
     if: |
-      github.ref == 'refs/heads/main' ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      needs.changes.outputs.webapp == 'true'
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.webapp == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -423,12 +438,15 @@ jobs:
 
   webapp-build:
     runs-on: ubuntu-latest
-    needs: changes
-    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    needs: [changes, webapp-lint]
+    # Always run when: called as reusable workflow, on main, on release PRs, or if webapp changes detected
     if: |
-      github.ref == 'refs/heads/main' ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      needs.changes.outputs.webapp == 'true'
+      always() && !cancelled() && needs.webapp-lint.result == 'success' && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.webapp == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -487,11 +505,14 @@ jobs:
   mcp-manager-lint-test:
     runs-on: ubuntu-latest
     needs: changes
-    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    # Always run when: called as reusable workflow, on main, on release PRs, or if mcp_manager changes detected
     if: |
-      github.ref == 'refs/heads/main' ||
-      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      needs.changes.outputs.mcp_manager == 'true'
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.mcp_manager == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
