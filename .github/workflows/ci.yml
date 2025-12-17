@@ -48,7 +48,11 @@ jobs:
   platform-lint:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.platform == 'true'
+    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    if: |
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      needs.changes.outputs.platform == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -76,7 +80,11 @@ jobs:
   platform-test:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.platform == 'true'
+    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    if: |
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      needs.changes.outputs.platform == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -199,7 +207,10 @@ jobs:
   #         path: core/dist/
 
   docker-api:
-    if: github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')
+    # Build and push on main (for changed components), build-only on release PRs (all components)
+    if: |
+      (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, platform-lint, platform-test]
     permissions:
       packages: write
@@ -210,6 +221,7 @@ jobs:
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/api/Dockerfile
       use-private-registry: true
+      push: ${{ github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -254,7 +266,10 @@ jobs:
             echo "| $component | ${build_time}s |" >> $GITHUB_STEP_SUMMARY
           done
   docker-worker:
-    if: github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')
+    # Build and push on main (for changed components), build-only on release PRs (all components)
+    if: |
+      (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, platform-lint, platform-test]
     permissions:
       packages: write
@@ -265,6 +280,7 @@ jobs:
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/worker/Dockerfile
       use-private-registry: true
+      push: ${{ github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -273,7 +289,10 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true'
+    # Build and push on main (for changed components), build-only on release PRs (all components)
+    if: |
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, webapp-lint]
     permissions:
       packages: write
@@ -284,6 +303,7 @@ jobs:
       context: agentarea-webapp
       dockerfile: agentarea-webapp/Dockerfile
       use-private-registry: true
+      push: ${{ github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -292,7 +312,10 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-bootstrap:
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true'
+    # Build and push on main (for changed components), build-only on release PRs (all components)
+    if: |
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: changes
     permissions:
       packages: write
@@ -303,6 +326,7 @@ jobs:
       context: agentarea-bootstrap
       dockerfile: agentarea-bootstrap/Dockerfile
       use-private-registry: true
+      push: ${{ github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -311,7 +335,10 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-agentarea-mcp-manager:
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true'
+    # Build and push on main (for changed components), build-only on release PRs (all components)
+    if: |
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/'))
     needs: [changes, mcp-manager-lint-test]
     permissions:
       packages: write
@@ -322,6 +349,7 @@ jobs:
       context: agentarea-mcp-manager
       dockerfile: agentarea-mcp-manager/Dockerfile
       use-private-registry: true
+      push: ${{ github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -333,7 +361,11 @@ jobs:
   webapp-lint:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.webapp == 'true'
+    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    if: |
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      needs.changes.outputs.webapp == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -365,7 +397,11 @@ jobs:
   cli-test:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.cli == 'true'
+    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    if: |
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      needs.changes.outputs.cli == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -387,7 +423,11 @@ jobs:
   mcp-manager-lint-test:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.mcp_manager == 'true'
+    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    if: |
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      needs.changes.outputs.mcp_manager == 'true'
     steps:
       - uses: actions/checkout@v4
 
