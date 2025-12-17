@@ -11,9 +11,6 @@ on:
           - patch
           - minor
           - major
-          - alpha
-          - beta
-          - rc
 
 jobs:
   prepare-release:
@@ -31,9 +28,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install bumpversion
-        run: pip install bumpversion
-
       - name: Verify version sync before bump
         shell: bash
         run: |
@@ -46,43 +40,12 @@ jobs:
           set -euo pipefail
           type="${{ github.event.inputs.release_type }}"
 
-          # Handle pre-release types (alpha, beta, rc)
-          if [[ "$type" == "alpha" || "$type" == "beta" || "$type" == "rc" ]]; then
-            current_version=$(cat VERSION | tr -d '\n')
+          # Use our custom bump script
+          python3 scripts/bump-version.py "$type"
 
-            # Check if already a pre-release
-            if [[ "$current_version" =~ -([a-z]+)\.([0-9]+)$ ]]; then
-              current_release="${BASH_REMATCH[1]}"
-              current_build="${BASH_REMATCH[2]}"
-              base_version="${current_version%-*}"
-
-              # If same release type, bump build number
-              if [[ "$current_release" == "$type" ]]; then
-                bumpversion build --allow-dirty
-              else
-                # Different release type, bump to new release type
-                bumpversion release --allow-dirty --new-version="${base_version}-${type}.1"
-              fi
-            else
-              # Not a pre-release, bump patch and add pre-release suffix
-              bumpversion patch --allow-dirty
-              new_base=$(cat VERSION | tr -d '\n')
-              bumpversion --new-version="${new_base}-${type}.1" --allow-dirty patch
-            fi
-          else
-            # Standard release (patch, minor, major)
-            bumpversion $type --allow-dirty
-          fi
-
+          # Read the new version
           new_version=$(cat VERSION | tr -d '\n')
           echo "VERSION=v${new_version}" >> $GITHUB_OUTPUT
-          echo "Bumped version to v${new_version}"
-
-      - name: Update Helm chart appVersion
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/update-appversion.py
 
       - name: Verify version sync after bump
         shell: bash

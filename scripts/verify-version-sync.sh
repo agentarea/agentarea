@@ -15,12 +15,12 @@ echo "Verifying all versions match VERSION file: $EXPECTED_VERSION"
 echo "=================================================="
 
 # Check bumpversion config
-BUMPVERSION_VERSION=$(grep "^current_version" "$PROJECT_ROOT/.bumpversion.cfg" | sed 's/current_version = //' | tr -d '[:space:]')
+BUMPVERSION_VERSION=$(grep "^current_version:" "$PROJECT_ROOT/.bumpversion.yaml" | sed 's/current_version: //' | tr -d '[:space:]')
 if [ "$BUMPVERSION_VERSION" != "$EXPECTED_VERSION" ]; then
-  echo "❌ .bumpversion.cfg current_version: $BUMPVERSION_VERSION (expected: $EXPECTED_VERSION)"
+  echo "❌ .bumpversion.yaml current_version: $BUMPVERSION_VERSION (expected: $EXPECTED_VERSION)"
   ERRORS=$((ERRORS + 1))
 else
-  echo "✅ .bumpversion.cfg: $BUMPVERSION_VERSION"
+  echo "✅ .bumpversion.yaml: $BUMPVERSION_VERSION"
 fi
 
 # Check Chart.yaml appVersion (NOT version - that's independent)

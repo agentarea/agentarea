@@ -61,21 +61,21 @@ def main():
                 f.write(updated)
             print(f"✅ Updated {package_json.relative_to(Path.cwd())}")
 
-    # Update .bumpversion.cfg current_version
-    bumpversion_cfg = Path(__file__).parent.parent / '.bumpversion.cfg'
-    with open(bumpversion_cfg, 'r') as f:
+    # Update .bumpversion.yaml current_version
+    bumpversion_yaml = Path(__file__).parent.parent / '.bumpversion.yaml'
+    with open(bumpversion_yaml, 'r') as f:
         content = f.read()
 
     updated = re.sub(
-        r'current_version = .*',
-        f'current_version = {target_version}',
+        r'current_version:\s*.*',
+        f'current_version: {target_version}',
         content
     )
 
     if updated != content:
-        with open(bumpversion_cfg, 'w') as f:
+        with open(bumpversion_yaml, 'w') as f:
             f.write(updated)
-        print(f"✅ Updated {bumpversion_cfg.relative_to(Path.cwd())}")
+        print(f"✅ Updated {bumpversion_yaml.relative_to(Path.cwd())}")
 
     print(f"\n✅ All versions synchronized to {target_version}")
 
