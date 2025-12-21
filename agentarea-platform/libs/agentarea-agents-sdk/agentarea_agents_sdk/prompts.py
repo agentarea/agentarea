@@ -97,6 +97,99 @@ with comprehensive details.
 Remember: ALWAYS show your reasoning before taking actions. Users want to see
 your thought process."""
 
+    # Planning instructions for write_todos tool
+    # Inspired by LangChain Deep Agents (https://github.com/langchain-ai/langchain)
+    # Original work Copyright (c) LangChain, Inc. under MIT License
+    PLANNING_INSTRUCTIONS: Final[str] = """## `write_todos`
+
+You have access to the `write_todos` tool to RECORD your plan for complex objectives.
+
+IMPORTANT: YOU must create the plan yourself by analyzing the task and breaking it down into specific steps. The write_todos tool only RECORDS what YOU decided - it does NOT create the plan for you.
+
+Your planning process:
+1. YOU analyze the task and identify all distinct steps needed
+2. YOU break down each step into a clear, actionable item
+3. YOU decide which step to start first (mark as "in_progress")
+4. YOU call write_todos() with YOUR plan (the complete list of todos)
+5. The tool records your plan so you can track progress
+
+Use this tool for complex objectives to ensure that you are tracking each necessary step and giving the user visibility into your progress.
+
+## Workflow: Plan → Execute → Update
+
+After creating your plan, you MUST work through it:
+
+1. Create plan with first task marked as "in_progress"
+2. WORK on that in_progress task (use tools, analyze, gather info, etc.)
+3. When task is done → call write_todos() to mark it "completed" and mark next as "in_progress"
+4. WORK on the new in_progress task
+5. Repeat until all tasks completed
+
+CRITICAL: Don't just create a plan and stop! You must EXECUTE the plan step-by-step, updating status after each task.
+
+It is critical that you mark todos as completed as soon as you are done with a step. Do not batch up multiple steps before marking them as completed.
+For simple objectives that only require a few steps, it is better to just complete the objective directly and NOT use this tool.
+Writing todos takes time and tokens, use it when it is helpful for managing complex many-step problems! But not for simple few-step requests.
+
+## Example Usage
+
+For a task like "Create config.py, verify it, update API key, search for production":
+
+write_todos(todos=[
+    {
+        "content": "Create config.py file with DATABASE_URL, API_KEY, and DEBUG variables",
+        "activeForm": "Creating config.py file",
+        "status": "in_progress"
+    },
+    {
+        "content": "Read config.py to verify contents",
+        "activeForm": "Verifying config.py contents",
+        "status": "pending"
+    },
+    {
+        "content": "Replace API_KEY value with production key",
+        "activeForm": "Updating API_KEY value",
+        "status": "pending"
+    },
+    {
+        "content": "Search for 'production' in all .py files",
+        "activeForm": "Searching for production references",
+        "status": "pending"
+    }
+])
+
+After completing the first task, update the list:
+
+write_todos(todos=[
+    {
+        "content": "Create config.py file with DATABASE_URL, API_KEY, and DEBUG variables",
+        "activeForm": "Creating config.py file",
+        "status": "completed"
+    },
+    {
+        "content": "Read config.py to verify contents",
+        "activeForm": "Verifying config.py contents",
+        "status": "in_progress"
+    },
+    {
+        "content": "Replace API_KEY value with production key",
+        "activeForm": "Updating API_KEY value",
+        "status": "pending"
+    },
+    {
+        "content": "Search for 'production' in all .py files",
+        "activeForm": "Searching for production references",
+        "status": "pending"
+    }
+])
+
+## Important To-Do List Usage Notes to Remember
+- The `write_todos` tool should never be called multiple times in parallel.
+- Don't be afraid to revise the To-Do list as you go. New information may reveal new tasks that need to be done, or old tasks that are irrelevant.
+
+Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.
+"""
+
     # Status and feedback messages (not part of system prompt)
     ITERATION_STATUS: Final[str] = "Iteration {current_iteration}/{max_iterations}"
     BUDGET_STATUS: Final[str] = "Budget remaining: ${budget_remaining:.2f}"
@@ -161,13 +254,20 @@ class PromptBuilder:
             else MessageTemplates.SYSTEM_PROMPT
         )
 
-        return template.format(
+        prompt = template.format(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=criteria_text,
             available_tools=tools_text,
         )
+
+        # Add planning instructions if write_todos tool is available
+        tool_names = {get_tool_info(tool)[0] for tool in available_tools}
+        if "write_todos" in tool_names:
+            prompt += "\n\n" + MessageTemplates.PLANNING_INSTRUCTIONS
+
+        return prompt
 
     @staticmethod
     def build_react_system_prompt(

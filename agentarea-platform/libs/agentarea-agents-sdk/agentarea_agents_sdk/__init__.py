@@ -2,16 +2,20 @@
 
 This module contains all AI-specific components:
 - High-level Agent class for simplified usage
+- StatefulAgent with middleware support for complex tasks
 - LLM clients and interactions
 - Agent tools and completion detection
 - Goal progress evaluation
 - Tool management and execution
+- Middleware components (TodoList, Filesystem, Summarization, SubAgents)
 
 This follows patterns from leading agentic frameworks like AutoGen, CrewAI, and LangGraph.
+Middleware architecture inspired by LangChain Deep Agents.
 """
 
 # High-level Agent class (recommended for most users)
 from .agents.agent import Agent
+from .agents.stateful_agent import StatefulAgent
 from .agents.basic_agent import run_agent  # noqa: F401
 from .context.context_service import (
     ContextEvent,
@@ -45,10 +49,25 @@ from .tools.mcp_tool import MCPTool, MCPToolFactory
 from .tools.tasks_toolset import TasksToolset
 from .tools.tool_executor import ToolExecutor
 from .tools.tool_manager import ToolManager
+from .tools.write_todos_tool import WriteTodosTool
+
+# Middleware
+from .middleware import (
+    Middleware,
+    MiddlewareStack,
+    StateBackend,
+    InMemoryState,
+    TodoListMiddleware,
+    FilesystemMiddleware,
+    SummarizationMiddleware,
+    SubAgentMiddleware,
+    TaskTool,
+)
 
 __all__ = [
-    # High-level Agent (recommended)
+    # High-level Agents (recommended)
     "Agent",
+    "StatefulAgent",
     # LLM Components
     "LLMModel",
     "LLMRequest",
@@ -64,6 +83,17 @@ __all__ = [
     "ToolExecutor",
     "ToolManager",
     "TasksToolset",
+    "WriteTodosTool",
+    # Middleware
+    "Middleware",
+    "MiddlewareStack",
+    "StateBackend",
+    "InMemoryState",
+    "TodoListMiddleware",
+    "FilesystemMiddleware",
+    "SummarizationMiddleware",
+    "SubAgentMiddleware",
+    "TaskTool",
     # Services
     "GoalProgressEvaluator",
     "InMemoryTaskService",
@@ -78,5 +108,4 @@ __all__ = [
     "BaseAgentRunner",
     "ExecutionResult",
     "RunnerConfig",
-    "SyncAgentRunner",
 ]
