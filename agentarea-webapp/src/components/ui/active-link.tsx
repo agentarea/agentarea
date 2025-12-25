@@ -19,11 +19,11 @@ export function ActiveLink({ href, children, className }: ActiveLinkProps) {
       href={href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex items-center gap-1 p-1 text-xs",
+        "flex items-center gap-1 p-1 text-xs border-b border-transparent border-b-[1.5px]",
         "transition-all duration-300",
         className,
         isActive
-          ? "rounded-sm bg-background bg-sidebar-accent text-primary"
+          ? "border-foreground text-foreground"
           : "text-muted-foreground hover:text-foreground"
       )}
     >

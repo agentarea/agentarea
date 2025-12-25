@@ -282,7 +282,14 @@ export function useTaskEvents(
 
   const handleSSEError = useCallback((error: Event) => {
     setState((prev) => ({ ...prev, connected: false }));
-    console.error("SSE connection error:", error);
+    const errorMessage = "SSE connection error";
+    setState((prev) => ({ ...prev, error: errorMessage }));
+    if (onErrorRef.current) {
+      onErrorRef.current(errorMessage);
+    }
+    if (process.env.NODE_ENV === "development") {
+      console.error("SSE connection error:", error);
+    }
   }, []);
 
   const handleSSEClose = useCallback(() => {
