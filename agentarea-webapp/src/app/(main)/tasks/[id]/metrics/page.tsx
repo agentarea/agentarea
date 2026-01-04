@@ -39,7 +39,7 @@ export default function TaskMetricsPage() {
           id: foundTask.id.toString(),
           agent_id: foundTask.agent_id.toString(),
           status: foundTask.status,
-          execution_id: foundTask.execution_id,
+          execution_id: foundTask.execution_id ?? undefined,
         });
 
         const statusResponse = await getAgentTaskStatus(
