@@ -4,13 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { BarChart } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 interface TaskData {
   id: string;
@@ -78,12 +71,9 @@ export default function TaskMetricsPage() {
   const executionTime = taskStatus?.execution_time || "N/A";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Performance Metrics</CardTitle>
-        <CardDescription>Key metrics for this task execution</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="main-content">
+        <h3>Performance Metrics</h3>
+        <p className="note">Key metrics for this task execution</p>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg bg-muted p-4">
             <div className="mb-1 text-sm text-muted-foreground">
@@ -129,8 +119,7 @@ export default function TaskMetricsPage() {
             </p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 

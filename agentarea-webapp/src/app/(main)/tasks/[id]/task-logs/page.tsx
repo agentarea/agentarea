@@ -4,13 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { FileText } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 interface TaskData {
   id: string;
@@ -98,12 +91,9 @@ export default function TaskLogsPage() {
   const currentStatus = taskStatus ? task.status : task.status;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Execution Logs</CardTitle>
-        <CardDescription>Detailed logs of the task execution</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="main-content">
+        <h3>Execution Logs</h3>
+        <p className="note">Detailed logs of the task execution</p>
         <div className="h-[500px] overflow-y-auto rounded-lg bg-muted p-4 font-mono text-sm">
           <div className="mb-2">
             <span className="text-muted-foreground">
@@ -174,8 +164,7 @@ export default function TaskLogsPage() {
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 

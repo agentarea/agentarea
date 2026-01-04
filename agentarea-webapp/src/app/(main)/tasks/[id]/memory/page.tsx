@@ -1,22 +1,12 @@
 import { Brain } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 export default function TaskMemoryPage() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Memory Context</CardTitle>
-        <CardDescription>
+    <div className="main-content">
+        <h3>Memory Context</h3>
+        <p className="note">
           Current memory state and context information
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </p>
         <div className="py-12 text-center">
           <Brain className="mx-auto mb-4 h-16 w-16 text-muted-foreground opacity-50" />
           <h3 className="mb-2 text-lg font-semibold">Memory Context</h3>
@@ -29,8 +19,7 @@ export default function TaskMemoryPage() {
             memory state and context.
           </p>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 

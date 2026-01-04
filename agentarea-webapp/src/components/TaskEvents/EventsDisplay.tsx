@@ -217,8 +217,7 @@ export function EventsDisplay({
 
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
-        <CardContent className="pt-6">
+      <div className="main-content">
           <div className="flex items-center gap-2 text-red-600">
             <AlertCircle className="h-4 w-4" />
             <span className="font-medium">Failed to load events</span>
@@ -234,13 +233,12 @@ export function EventsDisplay({
               Try Again
             </Button>
           )}
-        </CardContent>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 main-content">
       {/* Connection Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -269,8 +267,7 @@ export function EventsDisplay({
 
       {/* Filters */}
       {showFilters && (
-        <Card>
-          <CardContent className="pt-4">
+        <div className="main-content">
             <div className="flex flex-wrap gap-3">
               {/* Search */}
               <div className="min-w-[200px] flex-1">
@@ -337,18 +334,14 @@ export function EventsDisplay({
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
+        </div>
       )}
 
       {/* Events List */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
+      <div className="main-content">
+          <h3 className="text-base">
             Events ({filteredEvents.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h3>
           <ScrollArea style={{ height: maxHeight }}>
             {loading && filteredEvents.length === 0 ? (
               <div className="flex items-center justify-center py-8">
@@ -416,8 +409,7 @@ export function EventsDisplay({
               </div>
             )}
           </ScrollArea>
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

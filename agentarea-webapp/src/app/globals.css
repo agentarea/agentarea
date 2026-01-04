@@ -154,6 +154,10 @@
     @apply space-y-4 pb-[20px] md:pb-[20px] lg:pb-[25px];
   }
 
+  .main-content {
+    @apply h-full space-y-2 overflow-auto px-4 py-5;
+  }
+
   .card {
     @apply rounded-md bg-white dark:bg-zinc-800;
     @apply cursor-pointer p-[16px] md:p-[20px] lg:p-[24px];
