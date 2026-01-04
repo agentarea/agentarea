@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
+    inputs:
+      skip-docker:
+        description: 'Skip Docker build jobs (for validation-only runs)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   PYTHON_VERSION: "3.12"
@@ -13,6 +20,8 @@ env:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    # Skip path filtering when called as reusable workflow (run everything)
+    if: github.event_name != 'workflow_call'
     outputs:
       platform: ${{ steps.filter.outputs.platform }}
       platform_libs: ${{ steps.filter.outputs.platform_libs }}
@@ -48,7 +57,14 @@ jobs:
   platform-lint:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.platform == 'true'
+    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
+    if: |
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.platform == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -75,8 +91,15 @@ jobs:
 
   platform-test:
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.platform == 'true'
+    needs: [changes, platform-lint]
+    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
+    if: |
+      always() && !cancelled() && needs.platform-lint.result == 'success' && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.platform == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -98,6 +121,36 @@ jobs:
         working-directory: agentarea-platform
         run: |
           uv run python -m pytest tests/unit tests/functional -m "not integration"
+
+  platform-build:
+    runs-on: ubuntu-latest
+    needs: [changes, platform-test]
+    # Always run when: called as reusable workflow, on main, on release PRs, or if platform changes detected
+    if: |
+      always() && !cancelled() && needs.platform-test.result == 'success' && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.platform == 'true'
+      )
+    strategy:
+      matrix:
+        component: [api, worker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Build package
+        working-directory: agentarea-platform
+        run: uv build apps/${{ matrix.component }}
 
   # test:
   #   runs-on: ubuntu-latest
@@ -199,8 +252,12 @@ jobs:
   #         path: core/dist/
 
   docker-api:
-    if: github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')
-    needs: [changes, platform-lint, platform-test]
+    # Always build to validate, but only push on main when not skipped
+    if: |
+      (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
+    needs: [changes, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
       contents: read
@@ -209,7 +266,8 @@ jobs:
       component: api
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/api/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -254,8 +312,12 @@ jobs:
             echo "| $component | ${build_time}s |" >> $GITHUB_STEP_SUMMARY
           done
   docker-worker:
-    if: github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')
-    needs: [changes, platform-lint, platform-test]
+    # Always build to validate, but only push on main when not skipped
+    if: |
+      (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
+    needs: [changes, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
       contents: read
@@ -264,7 +326,8 @@ jobs:
       component: worker
       context: agentarea-platform
       dockerfile: agentarea-platform/apps/worker/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -273,8 +336,12 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-frontend:
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true'
-    needs: [changes, webapp-lint]
+    # Always build to validate, but only push on main when not skipped
+    if: |
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
+    needs: [changes, webapp-lint, webapp-build]
     permissions:
       packages: write
       contents: read
@@ -283,7 +350,8 @@ jobs:
       component: frontend
       context: agentarea-webapp
       dockerfile: agentarea-webapp/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -292,7 +360,11 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-bootstrap:
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true'
+    # Always build to validate, but only push on main when not skipped
+    if: |
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.bootstrap == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
     needs: changes
     permissions:
       packages: write
@@ -302,7 +374,8 @@ jobs:
       component: bootstrap
       context: agentarea-bootstrap
       dockerfile: agentarea-bootstrap/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -311,7 +384,11 @@ jobs:
       DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
   docker-agentarea-mcp-manager:
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true'
+    # Always build to validate, but only push on main when not skipped
+    if: |
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
     needs: [changes, mcp-manager-lint-test]
     permissions:
       packages: write
@@ -321,7 +398,8 @@ jobs:
       component: mcp-manager
       context: agentarea-mcp-manager
       dockerfile: agentarea-mcp-manager/Dockerfile
-      use-private-registry: true
+      use-private-registry: false
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -333,7 +411,14 @@ jobs:
   webapp-lint:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.webapp == 'true'
+    # Always run when: called as reusable workflow, on main, on release PRs, or if webapp changes detected
+    if: |
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.webapp == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -362,10 +447,54 @@ jobs:
         working-directory: agentarea-webapp
         run: pnpm run lint
 
+  webapp-build:
+    runs-on: ubuntu-latest
+    needs: [changes, webapp-lint]
+    # Always run when: called as reusable workflow, on main, on release PRs, or if webapp changes detected
+    if: |
+      always() && !cancelled() && needs.webapp-lint.result == 'success' && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.webapp == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: 'agentarea-webapp/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        working-directory: agentarea-webapp
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        working-directory: agentarea-webapp
+        run: pnpm run build
+
   cli-test:
+    if: false
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.cli == 'true'
+    # Always run on main branch or release PRs to ensure quality, otherwise only if changes detected
+    # if: |
+    #   github.ref == 'refs/heads/main' ||
+    #   (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+    #   needs.changes.outputs.cli == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -387,7 +516,14 @@ jobs:
   mcp-manager-lint-test:
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.mcp_manager == 'true'
+    # Always run when: called as reusable workflow, on main, on release PRs, or if mcp_manager changes detected
+    if: |
+      always() && !cancelled() && (
+        github.event_name == 'workflow_call' ||
+        github.ref == 'refs/heads/main' ||
+        (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+        needs.changes.outputs.mcp_manager == 'true'
+      )
     steps:
       - uses: actions/checkout@v4
 

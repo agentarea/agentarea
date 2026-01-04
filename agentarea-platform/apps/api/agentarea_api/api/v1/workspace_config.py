@@ -102,6 +102,7 @@ async def import_workspace_config(
 
 @router.post("/import/file", response_model=ImportResult)
 async def import_workspace_config_file(
+    user_context: UserContextDep,
     file: UploadFile = File(..., description="YAML configuration file"),
     skip_missing_dependencies: bool = Query(
         default=False, description="Skip resources with missing dependencies"
@@ -109,7 +110,6 @@ async def import_workspace_config_file(
     override_existing: bool = Query(
         default=False, description="Override existing resources with same name"
     ),
-    user_context: UserContextDep = Depends(),
     service: WorkspaceImportExportService = Depends(get_workspace_import_export_service),
 ):
     """Import workspace configuration from uploaded YAML file.

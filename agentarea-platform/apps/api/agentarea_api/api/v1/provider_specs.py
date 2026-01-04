@@ -120,7 +120,8 @@ async def list_provider_specs(
 ):
     """List all provider specifications."""
     provider_specs = await provider_service.list_provider_specs(is_builtin=is_builtin)
-    return [ProviderSpecResponse.from_domain(spec, request) for spec in provider_specs]
+    sorted_specs = sorted(provider_specs, key=lambda spec: spec.name.lower())
+    return [ProviderSpecResponse.from_domain(spec, request) for spec in sorted_specs]
 
 
 @router.get("/with-models", response_model=list[ProviderSpecWithModelsResponse])
@@ -132,7 +133,8 @@ async def list_provider_specs_with_models(
 ):
     """List all provider specifications with their available models."""
     provider_specs = await provider_service.list_provider_specs(is_builtin=is_builtin)
-    return [ProviderSpecWithModelsResponse.from_domain(spec, request) for spec in provider_specs]
+    sorted_specs = sorted(provider_specs, key=lambda spec: spec.name.lower())
+    return [ProviderSpecWithModelsResponse.from_domain(spec, request) for spec in sorted_specs]
 
 
 @router.get("/{provider_spec_id}", response_model=ProviderSpecWithModelsResponse)

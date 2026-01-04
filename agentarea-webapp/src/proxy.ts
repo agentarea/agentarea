@@ -1,13 +1,14 @@
 import { createOryMiddleware } from "@ory/nextjs/middleware";
 import oryConfig from "@/ory.config";
 import { NextRequest } from "next/server";
+import { env } from "@/env";
 
 // This function can be marked `async` if using `await` inside
 // The middleware automatically reads ORY_SDK_URL from environment variables
-export const middleware = (request: Request) => {
+export const proxy = (request: Request) => {
   // Redirect /self-service requests from the current host to NEXT_PUBLIC_ORY_SDK_URL if necessary
   const currentHost = request.headers.get("host");
-  const publicOryUrl = process.env.NEXT_PUBLIC_ORY_SDK_URL;
+  const publicOryUrl = env.NEXT_PUBLIC_ORY_SDK_URL;
   if (
     currentHost &&
     publicOryUrl &&
@@ -23,7 +24,9 @@ export const middleware = (request: Request) => {
     redirectUrl.hash = originalUrl.hash;
     return Response.redirect(redirectUrl.toString(), 307);
   }
-  return createOryMiddleware(oryConfig)(request as NextRequest);
+  const response = createOryMiddleware(oryConfig)(request as NextRequest);
+
+  return response;
 };
 
 

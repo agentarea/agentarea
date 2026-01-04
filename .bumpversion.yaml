@@ -1,0 +1,75 @@
+# Modern YAML format for bumpversion configuration
+# Managed by scripts/bump-version.py (custom Python script)
+# See docs/VERSIONING.md for details
+
+current_version: 0.0.6
+commit: false
+tag: false
+parse: (?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)
+serialize:
+  - "{major}.{minor}.{patch}"
+
+files:
+  - filename: agentarea-platform/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/apps/api/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/apps/worker/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/agentarea-agents-sdk/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/agents/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/common/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/context/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/execution/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/llm/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/mcp/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/secrets/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/tasks/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-platform/libs/triggers/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-bootstrap/pyproject.toml
+    search: version = "{current_version}"
+    replace: version = "{new_version}"
+
+  - filename: agentarea-webapp/package.json
+    search: '"version": "{current_version}"'
+    replace: '"version": "{new_version}"'
+
+  - filename: VERSION
+    search: "{current_version}"
+    replace: "{new_version}"

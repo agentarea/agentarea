@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+import React from 'react';
+import {render} from 'ink';
+import meow from 'meow';
+import {handleCliCommand} from './cli-commands.js';
+import App from './app.js';
+
+const cli = meow(
+	`
+	Usage
+	  $ agentarea-cli [command]
+
+	Commands
+	  (no command)    Interactive TUI mode
+	  agents list     List all agents
+
+	Options
+	  --token         JWT authentication token (or use AGENTAREA_TOKEN env var)
+	  --api-url       API server URL (default: http://localhost:8000)
+
+	Examples
+	  $ agentarea-cli --token=eyJ...
+	  $ AGENTAREA_TOKEN=eyJ... agentarea-cli
+	  $ agentarea-cli agents list --token=eyJ...
+`,
+	{
+		importMeta: import.meta,
+		flags: {
+			token: {
+				type: 'string',
+			},
+			apiUrl: {
+				type: 'string',
+				default: 'http://localhost:8000',
+			},
+		},
+	},
+);
+
+const token = cli.flags.token || process.env['AGENTAREA_TOKEN'];
+const command = cli.input[0];
+const subcommand = cli.input[1];
+
+// If a command is provided, handle it directly
+if (command) {
+	handleCliCommand(command, subcommand, {
+		token,
+		apiUrl: cli.flags.apiUrl,
+	}).catch((error) => {
+		console.error('CLI command failed:', error);
+		process.exit(1);
+	});
+} else {
+	// No command provided - launch TUI mode
+	render(
+		<App
+			token={token}
+			apiUrl={cli.flags.apiUrl}
+		/>,
+	);
+}

@@ -116,6 +116,30 @@ jobs:
           username: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
 
+      - name: Get commit SHA
+        id: sha
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Extract version components
+        id: version-parts
+        run: |
+          VERSION="${{ needs.check-release.outputs.version }}"
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+
+          # Extract major, minor, patch
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3 | cut -d- -f1)
+
+          echo "major=${MAJOR}" >> $GITHUB_OUTPUT
+          echo "minor=${MINOR}" >> $GITHUB_OUTPUT
+          echo "patch=${PATCH}" >> $GITHUB_OUTPUT
+          echo "version_clean=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+          echo "major_minor=${MAJOR}.${MINOR}" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -124,7 +148,12 @@ jobs:
             agentarea/agentarea-${{ matrix.name }}
             ${{ secrets.DOCKER_REGISTRY_MIRROR }}/agentarea/agentarea-${{ matrix.name }}
           tags: |
-            type=raw,value=${{ needs.check-release.outputs.version }}
+            type=raw,value=${{ steps.version-parts.outputs.version_clean }}-${{ steps.sha.outputs.short_sha }}
+            type=raw,value=${{ steps.version-parts.outputs.version_clean }}
+            type=raw,value=${{ steps.version-parts.outputs.major_minor }}-${{ steps.sha.outputs.short_sha }}
+            type=raw,value=${{ steps.version-parts.outputs.major_minor }}
+            type=raw,value=${{ steps.version-parts.outputs.major }}-${{ steps.sha.outputs.short_sha }}
+            type=raw,value=${{ steps.version-parts.outputs.major }}
             type=raw,value=latest
 
       - name: Build and push Docker image

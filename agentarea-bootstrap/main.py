@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 
 import sys
-import os
-
-# Add the current directory to Python path so we can import from code/
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # from code.populate_llm_providers import main as populate_llm_providers_main
 from code.populate_providers_new_arch import main as populate_providers_new_arch_main
 from code.populate_mcp_providers import main as populate_mcp_providers_main
 from code.populate_default_agent import main as populate_default_agent_main
 from code.minio_setup import minio_setup
-from code.infisical_setup import infisical_setup
 
 
 def main():
@@ -25,16 +20,16 @@ def main():
         print("✓ MinIO setup completed")
 
         # Check if Infisical is enabled
-        secret_manager_type = os.getenv("SECRET_MANAGER_TYPE", "database").lower()
-        if secret_manager_type == "infisical":
-            print("\n2. Setting up Infisical...")
-            infisical_setup()
-            print("✓ Infisical setup completed")
-        else:
-            print(
-                f"\n2. Skipping Infisical setup "
-                f"(SECRET_MANAGER_TYPE={secret_manager_type})"
-            )
+        # secret_manager_type = os.getenv("SECRET_MANAGER_TYPE", "database").lower()
+        # if secret_manager_type == "infisical":
+        #     print("\n2. Setting up Infisical...")
+        #     infisical_setup()
+        #     print("✓ Infisical setup completed")
+        # else:
+        #     print(
+        #         f"\n2. Skipping Infisical setup "
+        #         f"(SECRET_MANAGER_TYPE={secret_manager_type})"
+        #     )
 
         print("\n3. Populating provider specs and model specs (new architecture)...")
         populate_providers_new_arch_main()

@@ -184,6 +184,7 @@ async def test_sdk_temporal_integration_single_tool_call():
         agent_id="12345678-1234-5678-1234-567812345678",
         task_id=str(uuid4()),
         user_id="test-user-id",
+        workspace_id="test-workspace",
         task_query="What is 25 + 17?",  # Simple math problem
         task_parameters={"success_criteria": ["Calculate the sum correctly"], "max_iterations": 2},
         budget_usd=1.0,

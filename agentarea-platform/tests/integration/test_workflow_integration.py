@@ -280,6 +280,7 @@ class TestAgentExecutionWorkflow:
             agent_id=uuid4(),
             task_id=uuid4(),
             user_id="test-user",
+            workspace_id="test-workspace",
             task_query=task_query,
             task_parameters={
                 "success_criteria": ["Task should be completed successfully"],

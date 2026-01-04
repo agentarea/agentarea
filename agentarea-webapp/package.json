@@ -1,12 +1,12 @@
 {
   "name": "app",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "license": "EPL-2.0",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --experimental-https",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx,.mjs",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\""
   },
@@ -42,7 +42,7 @@
     "framer-motion": "^12.4.1",
     "lucide-react": "^0.475.0",
     "marked": "^17.0.0",
-    "next": "15.4.7",
+    "next": "16.0.10",
     "next-intl": "^4.1.0",
     "next-themes": "^0.4.4",
     "openapi-fetch": "^0.13.5",

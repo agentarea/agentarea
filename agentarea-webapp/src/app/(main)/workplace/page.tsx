@@ -4,6 +4,8 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { getAgents } from "@/components/actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkplacePage() {
   const badgeSuggestions = [
     { label: "Create new agent for my project", text: "Create new agent for my project" },

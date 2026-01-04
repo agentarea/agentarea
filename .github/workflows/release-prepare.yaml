@@ -13,11 +13,22 @@ on:
           - major
 
 jobs:
-  prepare-release:
+  # Step 1: Validate current state BEFORE making any changes
+  validate-current-state:
+    uses: ./.github/workflows/ci.yml
+    with:
+      skip-docker: true
+    secrets: inherit
+
+  # Step 2: Bump version and create release branch (only after validation passes)
+  prepare-and-bump:
+    needs: validate-current-state
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
+    outputs:
+      version: ${{ steps.get-version.outputs.VERSION }}
+      branch: ${{ steps.get-version.outputs.BRANCH }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,9 +38,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.12"
-
-      - name: Install bumpversion
-        run: pip install bumpversion
 
       - name: Verify version sync before bump
         shell: bash
@@ -42,56 +50,84 @@ jobs:
         run: |
           set -euo pipefail
           type="${{ github.event.inputs.release_type }}"
-          bumpversion $type --allow-dirty
-          new_version=$(cat VERSION)
-          echo "VERSION=v${new_version}" >> $GITHUB_OUTPUT
-          echo "Bumped version to v${new_version}"
 
-      - name: Update Helm chart appVersion
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/update-appversion.py
+          # Use our custom bump script
+          python3 scripts/bump-version.py "$type"
+
+          # Read the new version
+          new_version=$(cat VERSION | tr -d '\n')
+          echo "VERSION=v${new_version}" >> $GITHUB_OUTPUT
+          echo "BRANCH=release/v${new_version}" >> $GITHUB_OUTPUT
 
       - name: Verify version sync after bump
         shell: bash
         run: |
           bash scripts/verify-version-sync.sh
 
-      - name: Create release branch and PR
-        uses: peter-evans/create-pull-request@v6
+      - name: Commit and push release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${{ steps.get-version.outputs.BRANCH }}"
+          git add -A
+          git commit -m "chore(release): bump versions to ${{ steps.get-version.outputs.VERSION }}"
+          git push origin "${{ steps.get-version.outputs.BRANCH }}"
+
+  # Step 3: Create PR (only after validation passes and branch is created)
+  create-pr:
+    needs: prepare-and-bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          title: "Release ${{ steps.get-version.outputs.VERSION }}"
-          branch: "release/${{ steps.get-version.outputs.VERSION }}"
-          body: |
-            ## Release ${{ steps.get-version.outputs.VERSION }}
+          ref: ${{ needs.prepare-and-bump.outputs.branch }}
 
-            This PR contains version bumps for release ${{ steps.get-version.outputs.VERSION }}.
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "Release ${{ needs.prepare-and-bump.outputs.version }}" \
+            --base main \
+            --head "${{ needs.prepare-and-bump.outputs.branch }}" \
+            --label release \
+            --body "$(cat <<'EOF'
+          ## Release ${{ needs.prepare-and-bump.outputs.version }}
 
-            ### Changes
-            - Bumped application version across all packages to ${{ steps.get-version.outputs.VERSION }}
-            - Updated Helm chart `appVersion` to ${{ steps.get-version.outputs.VERSION }}
-            - Chart `version` remains independent (managed separately in Chart.yaml)
+          This PR contains version bumps for release ${{ needs.prepare-and-bump.outputs.version }}.
 
-            ### Version Synchronization
-            All versions verified and synchronized:
-            - ✅ VERSION file: ${{ steps.get-version.outputs.VERSION }}
-            - ✅ All pyproject.toml files
-            - ✅ package.json
-            - ✅ Chart.yaml appVersion
-            - ✅ .bumpversion.cfg
+          **✅ All CI checks passed before release branch creation**
+          - Current state validated before version bump
+          - Linting: Platform, Webapp, MCP Manager
+          - Tests: Platform, MCP Manager
+          - Builds: API, Worker, Webapp
 
-            **Note:** Helm chart version is managed independently. If chart configuration
-            changes were made, bump the chart version in `charts/agentarea/Chart.yaml` separately.
+          ### Changes
+          - Bumped application version across all packages to ${{ needs.prepare-and-bump.outputs.version }}
+          - Updated Helm chart \`appVersion\` to ${{ needs.prepare-and-bump.outputs.version }}
+          - Chart \`version\` remains independent (managed separately in Chart.yaml)
 
-            ### Checklist
-            - [ ] Review version changes
-            - [ ] Verify all package versions are updated correctly
-            - [ ] Add release notes to CHANGELOG (if applicable)
-            - [ ] If chart configs changed, bump chart version independently
-            - [ ] Merge this PR to trigger automated build and publish
+          ### Version Synchronization
+          All versions verified and synchronized:
+          - ✅ VERSION file: ${{ needs.prepare-and-bump.outputs.version }}
+          - ✅ All pyproject.toml files
+          - ✅ package.json
+          - ✅ Chart.yaml appVersion
+          - ✅ .bumpversion.cfg
 
-            **Note:** Merging this PR will automatically trigger the release pipeline to build Docker images, publish Helm charts, and create a Git tag.
-          labels: release
-          commit-message: "chore(release): bump versions to ${{ steps.get-version.outputs.VERSION }}"
+          **Note:** Helm chart version is managed independently. If chart configuration
+          changes were made, bump the chart version in \`charts/agentarea/Chart.yaml\` separately.
+
+          ### Checklist
+          - [ ] Review version changes
+          - [ ] Verify all package versions are updated correctly
+          - [ ] Add release notes to CHANGELOG (if applicable)
+          - [ ] If chart configs changed, bump chart version independently
+          - [ ] Merge this PR to trigger automated build and publish
+
+          **Note:** Merging this PR will automatically trigger the release pipeline to build Docker images, publish Helm charts, and create a Git tag.
+          EOF
+          )"

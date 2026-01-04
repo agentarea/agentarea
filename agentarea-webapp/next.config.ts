@@ -4,10 +4,10 @@ import "./src/env";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  eslint: {
-    // Do not fail the build on ESLint warnings; errors are handled via lint script
-    ignoreDuringBuilds: true,
-  },
+  // eslint: {
+  //   // Do not fail the build on ESLint warnings; errors are handled via lint script
+  //   ignoreDuringBuilds: true,
+  // },
   output: "standalone",
   async rewrites() {
     const backendUrl = process.env.API_URL || "http://localhost:8000";

@@ -13,6 +13,7 @@ class ExecutionRequest:
         agent_id: UUID,
         task_query: str,
         user_id: str = "anonymous",
+        workspace_id: str | None = None,
         session_id: str | None = None,
         task_parameters: dict[str, Any] | None = None,
         timeout_seconds: int = 300,
@@ -20,6 +21,7 @@ class ExecutionRequest:
         self.agent_id = agent_id
         self.task_query = task_query
         self.user_id = user_id
+        self.workspace_id = workspace_id
         self.session_id = session_id
         self.task_parameters = task_parameters or {}
         self.timeout_seconds = timeout_seconds

@@ -23,6 +23,7 @@ async def test_workflow_completes_with_task_complete():
         agent_id=uuid4(),
         task_id=uuid4(),
         user_id="test-user",
+        workspace_id="test-workspace",
         task_query="Complete a simple test task",
         task_parameters={"success_criteria": ["Task completed successfully"], "max_iterations": 3},
         budget_usd=1.0,
