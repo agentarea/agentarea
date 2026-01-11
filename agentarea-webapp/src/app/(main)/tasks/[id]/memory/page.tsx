@@ -3,10 +3,10 @@ import { Brain } from "lucide-react";
 export default function TaskMemoryPage() {
   return (
     <div className="main-content">
-        <h3>Memory Context</h3>
-        <p className="note">
-          Current memory state and context information
-        </p>
+      <h3 className="text-lg font-semibold">Memory Context</h3>
+      <p className="note">
+        Current memory state and context information
+      </p>
         <div className="py-12 text-center">
           <Brain className="mx-auto mb-4 h-16 w-16 text-muted-foreground opacity-50" />
           <h3 className="mb-2 text-lg font-semibold">Memory Context</h3>

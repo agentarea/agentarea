@@ -88,12 +88,12 @@ export default function TaskLogsPage() {
   }
 
   const isActive = ["running", "paused"].includes(task.status);
-  const currentStatus = taskStatus ? task.status : task.status;
+  const currentStatus = task.status;
 
   return (
     <div className="main-content">
-        <h3>Execution Logs</h3>
-        <p className="note">Detailed logs of the task execution</p>
+      <h3 className="text-lg font-semibold">Execution Logs</h3>
+      <p className="note">Detailed logs of the task execution</p>
         <div className="h-[500px] overflow-y-auto rounded-lg bg-muted p-4 font-mono text-sm">
           <div className="mb-2">
             <span className="text-muted-foreground">

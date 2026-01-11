@@ -39,7 +39,7 @@ export default function TaskMetricsPage() {
           id: foundTask.id.toString(),
           agent_id: foundTask.agent_id.toString(),
           status: foundTask.status,
-          execution_id: foundTask.execution_id ?? undefined,
+          execution_id: foundTask.execution_id || undefined,
         });
 
         const statusResponse = await getAgentTaskStatus(
@@ -72,8 +72,8 @@ export default function TaskMetricsPage() {
 
   return (
     <div className="main-content">
-        <h3>Performance Metrics</h3>
-        <p className="note">Key metrics for this task execution</p>
+      <h3 className="text-lg font-semibold">Performance Metrics</h3>
+      <p className="note">Key metrics for this task execution</p>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg bg-muted p-4">
             <div className="mb-1 text-sm text-muted-foreground">

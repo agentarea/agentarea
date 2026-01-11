@@ -218,131 +218,130 @@ export function EventsDisplay({
   if (error) {
     return (
       <div className="main-content">
-          <div className="flex items-center gap-2 text-red-600">
-            <AlertCircle className="h-4 w-4" />
-            <span className="font-medium">Failed to load events</span>
-          </div>
-          <p className="mt-1 text-sm text-red-600/80">{error}</p>
-          {onRefresh && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onRefresh}
-              className="mt-3"
-            >
-              Try Again
-            </Button>
-          )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 main-content">
-      {/* Connection Status */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className={`h-2 w-2 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`}
-          />
-          <span className="text-sm text-muted-foreground">
-            {connected ? "Live updates connected" : "Not connected"}
-          </span>
+        <div className="flex items-center gap-2 text-red-600">
+          <AlertCircle className="h-4 w-4" />
+          <span className="font-medium">Failed to load events</span>
         </div>
+        <p className="mt-1 text-sm text-red-600/80">{error}</p>
         {onRefresh && (
           <Button
             variant="outline"
             size="sm"
             onClick={onRefresh}
-            disabled={loading}
+            className="mt-3"
           >
-            <Activity className="mr-1 h-3 w-3" />
-            Refresh
+            Try Again
           </Button>
         )}
       </div>
+    );
+  }
 
-      {/* Stats Card */}
-      {showStats && <EventStatsCard stats={stats} />}
-
-      {/* Filters */}
-      {showFilters && (
-        <div className="main-content">
-            <div className="flex flex-wrap gap-3">
-              {/* Search */}
-              <div className="min-w-[200px] flex-1">
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
-                  <Input
-                    placeholder="Search events..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
-
-              {/* Level Filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1">
-                    <Filter className="h-3 w-3" />
-                    Level{" "}
-                    {selectedLevels.length > 0 && `(${selectedLevels.length})`}
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuLabel>Filter by Level</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {(
-                    ["info", "success", "warning", "error"] as EventLevel[]
-                  ).map((level) => (
-                    <DropdownMenuCheckboxItem
-                      key={level}
-                      checked={selectedLevels.includes(level)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedLevels([...selectedLevels, level]);
-                        } else {
-                          setSelectedLevels(
-                            selectedLevels.filter((l) => l !== level)
-                          );
-                        }
-                      }}
-                    >
-                      {level.charAt(0).toUpperCase() + level.slice(1)}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Clear Filters */}
-              {(searchQuery ||
-                selectedLevels.length > 0 ||
-                selectedTypes.length > 0) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedLevels([]);
-                    setSelectedTypes([]);
-                  }}
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
+  return (
+    <div className="main-content">
+      <div className="space-y-4">
+        {/* Connection Status */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div
+              className={`h-2 w-2 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`}
+            />
+            <span className="text-sm text-muted-foreground">
+              {connected ? "Live updates connected" : "Not connected"}
+            </span>
+          </div>
+          {onRefresh && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRefresh}
+              disabled={loading}
+            >
+              <Activity className="mr-1 h-3 w-3" />
+              Refresh
+            </Button>
+          )}
         </div>
-      )}
 
-      {/* Events List */}
-      <div className="main-content">
-          <h3 className="text-base">
+        {/* Stats Card */}
+        {showStats && <EventStatsCard stats={stats} />}
+
+        {/* Filters */}
+        {showFilters && (
+          <div className="flex flex-wrap gap-3">
+            {/* Search */}
+            <div className="min-w-[200px] flex-1">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
+                <Input
+                  placeholder="Search events..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+
+            {/* Level Filter */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Filter className="h-3 w-3" />
+                  Level{" "}
+                  {selectedLevels.length > 0 && `(${selectedLevels.length})`}
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>Filter by Level</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {(
+                  ["info", "success", "warning", "error"] as EventLevel[]
+                ).map((level) => (
+                  <DropdownMenuCheckboxItem
+                    key={level}
+                    checked={selectedLevels.includes(level)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedLevels([...selectedLevels, level]);
+                      } else {
+                        setSelectedLevels(
+                          selectedLevels.filter((l) => l !== level)
+                        );
+                      }
+                    }}
+                  >
+                    {level.charAt(0).toUpperCase() + level.slice(1)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Clear Filters */}
+            {(searchQuery ||
+              selectedLevels.length > 0 ||
+              selectedTypes.length > 0) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedLevels([]);
+                  setSelectedTypes([]);
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Events List */}
+        <div>
+          <h3 className="text-base font-semibold">
             Events ({filteredEvents.length})
           </h3>
-          <ScrollArea style={{ height: maxHeight }}>
+          <ScrollArea style={{ height: maxHeight }} className="mt-2">
             {loading && filteredEvents.length === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <div className="text-center">
@@ -409,6 +408,7 @@ export function EventsDisplay({
               </div>
             )}
           </ScrollArea>
+        </div>
       </div>
     </div>
   );
