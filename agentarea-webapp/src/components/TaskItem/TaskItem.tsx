@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   AlertCircle,
+  ArrowUpRight,
   Bot,
   Calendar,
   CheckCircle2,
@@ -76,12 +77,12 @@ export default function TaskItem({
 
   return (
     <Link href={`/tasks/${task.id}`}>
-      <Card className="group cursor-pointer overflow-hidden border-zinc-200 transition-all duration-300 dark:border-zinc-800">
+      <Card className="group relative flex cursor-pointer flex-col justify-between gap-4 overflow-hidden border-zinc-200 transition-all duration-300 dark:border-zinc-800">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             {/* Title */}
             <div className="min-w-0 flex-1 space-y-2">
-              <h3 className="font-medium text-gray-900 dark:text-gray-100">
+              <h3 className="truncate font-medium text-gray-900 dark:text-gray-100">
                 {task.description}
               </h3>
 
@@ -121,6 +122,13 @@ export default function TaskItem({
           <Badge variant={status.badgeVariant} className="whitespace-nowrap">
             {status.label}
           </Badge>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs text-muted-foreground/70 transition-colors duration-500 group-hover:text-primary absolute right-3 bottom-3">
+          <ArrowUpRight
+            className="h-[18px] w-[18px] transition-transform duration-500 group-hover:scale-110"
+            strokeWidth={1.5}
+          />
         </div>
       </Card>
     </Link>
