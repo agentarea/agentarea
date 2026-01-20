@@ -1,73 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import { BarChart } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-
-interface TaskData {
-  id: string;
-  agent_id: string;
-  status: string;
-  execution_id?: string;
-}
-
-interface TaskStatus {
-  execution_time?: string;
-  usage_metadata?: Record<string, unknown>;
-}
+import { useTaskContext } from "../TaskContext";
 
 export default function TaskMetricsPage() {
-  const params = useParams();
-  const id = Array.isArray(params.id) ? params.id[0] : (params.id as string);
-
-  const [task, setTask] = useState<TaskData | null>(null);
-  const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadTask = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { getAllTasks, getAgentTaskStatus } = await import(
-        "@/lib/browser-api"
-      );
-      const { data: allTasks } = await getAllTasks();
-      const foundTask = allTasks?.find((t: any) => t.id?.toString() === id);
-
-      if (foundTask) {
-        setTask({
-          id: foundTask.id.toString(),
-          agent_id: foundTask.agent_id.toString(),
-          status: foundTask.status,
-          execution_id: foundTask.execution_id || undefined,
-        });
-
-        const statusResponse = await getAgentTaskStatus(
-          foundTask.agent_id.toString(),
-          foundTask.id.toString()
-        );
-        if (!statusResponse.error && statusResponse.data) {
-          setTaskStatus(statusResponse.data as TaskStatus);
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    loadTask();
-  }, [loadTask]);
+  const { task, taskStatus, loading, error } = useTaskContext();
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="flex h-full items-center justify-center">
         <LoadingSpinner />
       </div>
     );
   }
 
-  const currentStatus = task?.status || "unknown";
+  if (error || !task) {
+    return (
+      <div className="py-12 text-center text-muted-foreground">
+        <BarChart className="mx-auto mb-4 h-16 w-16 opacity-50" />
+        <p>{error || "Task not found"}</p>
+      </div>
+    );
+  }
+
+  const currentStatus = task.status;
   const executionTime = taskStatus?.execution_time || "N/A";
 
   return (

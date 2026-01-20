@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useState } from "react";
 import {
   Info,
   Loader2,
@@ -32,7 +31,6 @@ import {
 import { useTaskEvents } from "@/hooks/useTaskEvents";
 import {
   cancelAgentTask,
-  getAgentTaskStatus,
   pauseAgentTask,
   resumeAgentTask,
 } from "@/lib/browser-api";
@@ -43,46 +41,12 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { useIsMobile } from "@/hooks/use-mobile";
-
-// Types for task data
-interface TaskDetail {
-  id: string;
-  agent_id: string;
-  description: string;
-  status: string;
-  result?: Record<string, unknown>;
-  created_at: string;
-  execution_id?: string | null;
-  agent_name?: string;
-  agent_description?: string;
-}
-
-interface TaskStatus {
-  task_id: string;
-  agent_id: string;
-  execution_id: string;
-  status: string;
-  start_time?: string;
-  end_time?: string;
-  execution_time?: string;
-  error?: string;
-  result?: Record<string, unknown>;
-  message?: string;
-  artifacts?: unknown[];
-  session_id?: string;
-  usage_metadata?: Record<string, unknown>;
-}
+import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
-  const params = useParams();
-  const id = Array.isArray(params.id) ? params.id[0] : (params.id as string);
   const isMobile = useIsMobile();
+  const { task, taskStatus, loading, error, refresh } = useTaskContext();
 
-  // State for real data
-  const [task, setTask] = useState<TaskDetail | null>(null);
-  const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -98,68 +62,9 @@ export default function TaskDetailsPage() {
     }
   );
 
-  const loadTaskData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Get all tasks to find the one with matching ID
-      const { getAllTasks } = await import("@/lib/browser-api");
-      const { data: allTasks, error: tasksError } = await getAllTasks();
-
-      if (tasksError || !allTasks) {
-        throw new Error("Failed to load tasks");
-      }
-
-      // Find the task with matching ID
-      const foundTask = allTasks.find((task) => task.id.toString() === id);
-
-      if (!foundTask) {
-        setError("Task not found");
-        setTask(null);
-        return;
-      }
-
-      // Set basic task data
-      setTask({
-        id: foundTask.id.toString(),
-        agent_id: foundTask.agent_id.toString(),
-        description: foundTask.description,
-        status: foundTask.status,
-        result: foundTask.result || undefined,
-        created_at: foundTask.created_at,
-        execution_id: foundTask.execution_id || undefined,
-        agent_name: foundTask.agent_name,
-        agent_description: foundTask.agent_description || undefined,
-      });
-
-      // Get detailed status information
-      const statusResponse = await getAgentTaskStatus(
-        foundTask.agent_id.toString(),
-        foundTask.id.toString()
-      );
-
-      if (!statusResponse.error && statusResponse.data) {
-        setTaskStatus(statusResponse.data as TaskStatus);
-      }
-    } catch (err) {
-      console.error("Failed to load task data:", err);
-      setError(
-        "Failed to load task details. The task may not exist or you may not have permission to view it."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  // Load task data on mount and when ID changes
-  useEffect(() => {
-    loadTaskData();
-  }, [loadTaskData]);
-
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadTaskData();
+    await refresh();
     await refreshEvents();
     setRefreshing(false);
   };
@@ -181,7 +86,7 @@ export default function TaskDetailsPage() {
       } else {
         toast.success("Task paused successfully");
         // Refresh task data to get updated status
-        await loadTaskData();
+        await refresh();
       }
     } catch (err) {
       toast.error("Failed to pause task", {
@@ -208,7 +113,7 @@ export default function TaskDetailsPage() {
       } else {
         toast.success("Task resumed successfully");
         // Refresh task data to get updated status
-        await loadTaskData();
+        await refresh();
       }
     } catch (err) {
       toast.error("Failed to resume task", {
@@ -237,7 +142,7 @@ export default function TaskDetailsPage() {
       } else {
         toast.success("Task cancelled successfully");
         // Refresh task data to get updated status
-        await loadTaskData();
+        await refresh();
       }
     } catch (err) {
       toast.error("Failed to cancel task", {
@@ -249,64 +154,10 @@ export default function TaskDetailsPage() {
     }
   };
 
-  // Determine which control buttons to show based on task status
-  const getControlButtons = () => {
-    if (!isActive) return null;
-
-    const buttons = [];
-
-    if (currentStatus === "running") {
-      buttons.push(
-        <Button
-          key="pause"
-          variant="outline"
-          className="gap-1"
-          onClick={handlePauseTask}
-          disabled={controlling}
-        >
-          <Pause className="h-4 w-4" />
-          Pause
-        </Button>
-      );
-    }
-
-    if (currentStatus === "paused") {
-      buttons.push(
-        <Button
-          key="resume"
-          variant="outline"
-          className="gap-1"
-          onClick={handleResumeTask}
-          disabled={controlling}
-        >
-          <Play className="h-4 w-4" />
-          Resume
-        </Button>
-      );
-    }
-
-    if (["running", "paused"].includes(currentStatus)) {
-      buttons.push(
-        <Button
-          key="cancel"
-          variant="destructive"
-          className="gap-1"
-          onClick={() => setShowCancelDialog(true)}
-          disabled={controlling}
-        >
-          <X className="h-4 w-4" />
-          Cancel
-        </Button>
-      );
-    }
-
-    return buttons;
-  };
-
   // Show loading state
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="flex h-full items-center justify-center">
         <LoadingSpinner />
       </div>
     );
@@ -331,7 +182,7 @@ export default function TaskDetailsPage() {
   // Get current status from taskStatus or fallback to task.status
   const currentStatus = taskStatus?.status || task.status;
   const executionTime = taskStatus?.execution_time || "N/A";
-  const startTime = taskStatus?.start_time || task.created_at;
+  const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
 
   return (
@@ -376,7 +227,16 @@ export default function TaskDetailsPage() {
             <ResizablePanel defaultSize={40} minSize={20}>
               <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700 px-4">
                 <TaskInfoPanel
-                  task={task}
+                  task={{
+                    id: task.id,
+                    description: task.description || "",
+                    agent_id: task.agent_id,
+                    agent_name: task.agent_name,
+                    agent_description: task.agent_description,
+                    created_at: task.created_at || "",
+                    execution_id: task.execution_id || null,
+                    result: task.result,
+                  }}
                   currentStatus={currentStatus}
                   isActive={isActive}
                   startTime={startTime}
@@ -433,7 +293,16 @@ export default function TaskDetailsPage() {
             <SheetTitle>Task Information</SheetTitle>
           </SheetHeader>
           <TaskInfoPanel
-            task={task}
+            task={{
+              id: task.id,
+              description: task.description || "",
+              agent_id: task.agent_id,
+              agent_name: task.agent_name,
+              agent_description: task.agent_description,
+              created_at: task.created_at || "",
+              execution_id: task.execution_id || null,
+              result: task.result,
+            }}
             currentStatus={currentStatus}
             isActive={isActive}
             startTime={startTime}

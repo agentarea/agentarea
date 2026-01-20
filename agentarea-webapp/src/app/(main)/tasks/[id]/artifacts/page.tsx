@@ -1,71 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import { Download, FileText } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
-
-interface TaskData {
-  id: string;
-  agent_id: string;
-  status: string;
-}
-
-interface TaskStatus {
-  artifacts?: unknown[];
-}
+import { useTaskContext } from "../TaskContext";
 
 export default function TaskArtifactsPage() {
-  const params = useParams();
-  const id = Array.isArray(params.id) ? params.id[0] : (params.id as string);
-
-  const [task, setTask] = useState<TaskData | null>(null);
-  const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadTask = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { getAllTasks, getAgentTaskStatus } = await import(
-        "@/lib/browser-api"
-      );
-      const { data: allTasks } = await getAllTasks();
-      const foundTask = allTasks?.find((t: any) => t.id?.toString() === id);
-
-      if (foundTask) {
-        setTask({
-          id: foundTask.id.toString(),
-          agent_id: foundTask.agent_id.toString(),
-          status: foundTask.status,
-        });
-
-        const statusResponse = await getAgentTaskStatus(
-          foundTask.agent_id.toString(),
-          foundTask.id.toString()
-        );
-        if (!statusResponse.error && statusResponse.data) {
-          setTaskStatus(statusResponse.data as TaskStatus);
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    loadTask();
-  }, [loadTask]);
+  const { task, taskStatus, loading, error } = useTaskContext();
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="flex h-full items-center justify-center">
         <LoadingSpinner />
       </div>
     );
   }
 
-  const isActive = task ? ["running", "paused"].includes(task.status) : false;
+  if (error || !task) {
+    return (
+      <div className="py-12 text-center text-muted-foreground">
+        <FileText className="mx-auto mb-4 h-16 w-16 opacity-50" />
+        <p>{error || "Task not found"}</p>
+      </div>
+    );
+  }
+
+  const isActive = ["running", "paused"].includes(task.status);
 
   return (
     <div className="main-content">

@@ -4,11 +4,11 @@ import { Bot, Clock, Hash } from "lucide-react";
 
 interface Task {
   id: string;
-  description: string;
+  description?: string;
   agent_id: string;
   agent_name?: string;
   agent_description?: string;
-  created_at: string;
+  created_at?: string;
   execution_id?: string | null;
   result?: Record<string, unknown>;
 }
@@ -36,7 +36,7 @@ export default function TaskInfoPanel({
         {/* Compact Header */}
         <div className="flex flex-row justify-between items-center gap-5">
             <h3 className="truncate font-semibold text-gray-900 dark:text-gray-100">
-                {task.description}
+                {task.description || "No description"}
             </h3>
             <Badge
               className={`px-2 py-0.5 text-xs ${
@@ -81,7 +81,9 @@ export default function TaskInfoPanel({
                     ? new Date(startTime).toLocaleDateString() 
                     : endTime 
                         ? `${executionTime}`
-                        : `${new Date(task.created_at).toLocaleDateString()}`
+                        : task.created_at
+                        ? `${new Date(task.created_at).toLocaleDateString()}`
+                        : "N/A"
                 }
                 </span>
             </div>
