@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bot, Clock, Database, Download, RefreshCw, Share2 } from "lucide-react";
 import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
+import type { DisplayEvent } from "@/types/events";
 
 interface TaskHeaderProps {
   task: {
@@ -18,7 +19,7 @@ interface TaskHeaderProps {
   endTime?: string;
   executionTime: string;
   eventsConnected: boolean;
-  events: unknown[];
+  events: DisplayEvent[];
   refreshing: boolean;
   onRefresh: () => void;
   controlButtons: React.ReactNode;
@@ -132,7 +133,7 @@ export default function TaskHeader({
             <div className="flex items-center gap-2 text-xs">
               <LiveEventIndicator
                 connected={eventsConnected}
-                latestEvent={events[events.length - 1]}
+                latestEvent={events.length > 0 ? events[events.length - 1] : undefined}
                 eventCount={events.length}
               />
             </div>
