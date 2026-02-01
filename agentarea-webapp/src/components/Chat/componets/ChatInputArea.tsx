@@ -229,7 +229,7 @@ export function ChatInputArea({
       ref={containerRef}
       className={cn(
         "w-full",
-        variant === "centered" && "mx-auto max-w-3xl",
+        // variant === "centered" && "mx-auto max-w-3xl",
         containerClassName
       )}
     >

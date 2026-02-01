@@ -130,6 +130,7 @@ export function CreateInstanceDialog({
       mcpServer,
       router,
       resetForm,
+      onOpenChange,
     ]
   );
 

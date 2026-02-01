@@ -423,6 +423,14 @@
     "description": "Description",
     "agent": "Agent",
     "status": "Status",
-    "created": "Created"
+    "created": "Created",
+    "tabs": {
+      "overview": "Overview",
+      "events": "Events",
+      "logs": "Logs",
+      "artifacts": "Artifacts",
+      "memory": "Memory",
+      "metrics": "Metrics"
+    }
   }
 }

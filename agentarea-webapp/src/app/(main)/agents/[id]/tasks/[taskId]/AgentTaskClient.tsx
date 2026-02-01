@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -60,11 +60,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadTaskData();
-  }, [agent.id, taskId]);
-
-  const loadTaskData = async () => {
+  const loadTaskData = useCallback(async () => {
     setLoading(true);
     try {
       // Load task status
@@ -87,7 +83,11 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [agent.id, taskId]);
+
+  useEffect(() => {
+    loadTaskData();
+  }, [loadTaskData]);
 
   const handleTaskAction = async (action: "pause" | "resume" | "cancel") => {
     try {
