@@ -111,8 +111,22 @@ export default function CreateSkillDialog({
       return;
     }
 
-    // Basic GitHub URL validation
-    if (!githubUrl.includes("github.com")) {
+    // GitHub URL validation using parsed hostname
+    let hostname: string | null = null;
+    try {
+      const parsed = new URL(githubUrl);
+      hostname = parsed.hostname.toLowerCase();
+    } catch {
+      hostname = null;
+    }
+
+    const allowedGitHubHosts = new Set([
+      "github.com",
+      "www.github.com",
+      "gist.github.com",
+    ]);
+
+    if (!hostname || !allowedGitHubHosts.has(hostname)) {
       toast({
         title: "Validation Error",
         description: "Please enter a valid GitHub URL",
