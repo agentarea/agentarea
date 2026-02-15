@@ -515,6 +515,49 @@ async def list_triggers(
         raise HTTPException(status_code=500, detail=f"Failed to list triggers: {e!s}") from e
 
 
+# Health check endpoint
+@router.get("/health", response_model=dict[str, Any])
+async def triggers_health_check(
+    health_checker=Depends(get_trigger_health_check),
+) -> dict[str, Any]:
+    """Comprehensive health check endpoint for trigger system.
+
+    Checks all trigger system components including:
+    - Database connectivity
+    - Temporal schedule manager
+    - Webhook manager
+    - Execution metrics
+
+    Returns:
+        Dictionary with detailed health status information
+    """
+    try:
+        if not TRIGGERS_AVAILABLE:
+            return {
+                "overall_status": "unavailable",
+                "service": "triggers",
+                "message": "Triggers service not available",
+                "timestamp": datetime.utcnow().isoformat(),
+                "components": {},
+            }
+
+        # Run comprehensive health check
+        health_status = await health_checker.check_all_components()
+        health_status["service"] = "triggers"
+
+        return health_status
+
+    except Exception as e:
+        logger.error(f"Triggers health check failed: {e}")
+        return {
+            "overall_status": "unhealthy",
+            "service": "triggers",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+            "components": {},
+        }
+
+
 @router.get("/{trigger_id}", response_model=TriggerResponse)
 async def get_trigger(
     trigger_id: UUID,
@@ -1026,45 +1069,3 @@ async def get_execution_correlations(
             status_code=500, detail=f"Failed to get execution correlations: {e!s}"
         ) from e
 
-
-# Health check endpoint
-@router.get("/health", response_model=dict[str, Any])
-async def triggers_health_check(
-    health_checker=Depends(get_trigger_health_check),
-) -> dict[str, Any]:
-    """Comprehensive health check endpoint for trigger system.
-
-    Checks all trigger system components including:
-    - Database connectivity
-    - Temporal schedule manager
-    - Webhook manager
-    - Execution metrics
-
-    Returns:
-        Dictionary with detailed health status information
-    """
-    try:
-        if not TRIGGERS_AVAILABLE:
-            return {
-                "overall_status": "unavailable",
-                "service": "triggers",
-                "message": "Triggers service not available",
-                "timestamp": datetime.utcnow().isoformat(),
-                "components": {},
-            }
-
-        # Run comprehensive health check
-        health_status = await health_checker.check_all_components()
-        health_status["service"] = "triggers"
-
-        return health_status
-
-    except Exception as e:
-        logger.error(f"Triggers health check failed: {e}")
-        return {
-            "overall_status": "unhealthy",
-            "service": "triggers",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
-            "components": {},
-        }

@@ -466,7 +466,7 @@ class TestWorkspaceScopedRepository:
         result = await repository_workspace1.find_by(name="test")
 
         # Assert
-        repository_workspace1.list_all.assert_called_once_with(creator_scoped=False, name="test")
+        repository_workspace1.list_all.assert_called_once_with(name="test")
         assert result == mock_records
 
     async def test_find_one_by_returns_first_match(self, repository_workspace1, mock_session):

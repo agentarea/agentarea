@@ -31,7 +31,11 @@ def mock_agent_service():
 def mock_repository_factory():
     """Create a mock repository factory."""
     factory = MagicMock()
-    factory.create_repository = MagicMock(return_value=MagicMock())
+    mock_repo = MagicMock()
+    mock_repo.list_all = AsyncMock(
+        return_value=[MagicMock(id=UUID("a1b2c3d4-e5f6-789a-bcde-123456789abc"))]
+    )
+    factory.create_repository = MagicMock(return_value=mock_repo)
     return factory
 
 
@@ -50,7 +54,9 @@ def mock_provider_service():
     """Create a mock provider service."""
     service = MagicMock()
     service.list_provider_configs = AsyncMock(return_value=[])
-    service.list_provider_specs = AsyncMock(return_value=[])
+    service.list_provider_specs = AsyncMock(
+        return_value=[MagicMock(id=UUID("932f3839-af2a-455e-80c6-c58fa97e312c"))]
+    )
     service.create_provider_config = AsyncMock()
     service.update_provider_config = AsyncMock()
     return service
@@ -237,10 +243,10 @@ provider_configs:
 
         result = await import_export_service.import_workspace(yaml_content)
 
-        assert result.success is True  # Overall success, but with warnings
+        assert result.success is False
         assert result.created_provider_configs == 0
-        assert len(result.warnings) == 1
-        assert "API key is required" in result.warnings[0]
+        assert len(result.errors) == 1
+        assert "API key is required" in result.errors[0]
 
     @pytest.mark.asyncio
     async def test_import_full_workspace(self, import_export_service, mock_agent_service):
@@ -334,8 +340,8 @@ class TestExportWorkspace:
         assert exported["agents"][0]["name"] == "Test Agent"
         assert exported["agents"][0]["tools"] == [{"type": "code", "name": "agentarea/calculator"}]
         assert exported["agents"][0]["planning"] is True
-        assert len(exported["mcp_instances"]) == 0
-        assert len(exported["provider_configs"]) == 0
+        assert "mcp_instances" not in exported
+        assert "provider_configs" not in exported
 
     @pytest.mark.asyncio
     async def test_export_skips_system_agents(self, import_export_service, mock_agent_service):
@@ -415,10 +421,15 @@ class TestExportWorkspace:
         user_config = MagicMock()
         user_config.workspace_id = "test-workspace"
         user_config.name = "User Config"
+        user_config.description = None
+        user_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
+        user_config.endpoint_url = "https://api.openai.com"
 
         system_config = MagicMock()
         system_config.workspace_id = "system"
         system_config.name = "System Config"
+        system_config.description = None
+        system_config.provider_spec_id = UUID("932f3839-af2a-455e-80c6-c58fa97e312c")
 
         mock_provider_service.list_provider_configs.return_value = [user_config, system_config]
 
@@ -472,12 +483,15 @@ provider_configs: []
 
         mock_agent_service.create_agent.return_value = mock_agent
         mock_mcp_instance_service.create_instance.return_value = mock_mcp
-        mock_agent_service.list.return_value = [mock_agent]
-        mock_mcp_instance_service.list.return_value = [mock_mcp]
+        mock_agent_service.list.return_value = []
+        mock_mcp_instance_service.list.return_value = []
 
         # Import
         import_result = await import_export_service.import_workspace(original_yaml)
         assert import_result.success is True
+
+        mock_agent_service.list.return_value = [mock_agent]
+        mock_mcp_instance_service.list.return_value = [mock_mcp]
 
         # Export
         export_result = await import_export_service.export_workspace()
@@ -608,9 +622,9 @@ provider_configs: []
         options = ImportOptions(override_existing=False)
         result = await import_export_service.import_workspace(yaml_content, options)
 
-        assert result.success is True  # Overall success, but with warnings
-        assert len(result.warnings) == 1
-        assert "already exists" in result.warnings[0]
+        assert result.success is False
+        assert len(result.errors) == 1
+        assert "already exists" in result.errors[0]
 
 
 class TestEdgeCases:

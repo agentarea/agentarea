@@ -3,7 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agentarea_api.api.deps.services import get_webhook_manager
 from agentarea_api.api.v1.webhooks import router
+from agentarea_common.auth.dependencies import get_user_context
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -18,7 +20,15 @@ def mock_webhook_manager():
 
 
 @pytest.fixture
-def app_with_webhooks(mock_webhook_manager):
+def mock_user_context():
+    context = MagicMock()
+    context.user_id = "test_user"
+    context.workspace_id = "test_workspace"
+    return context
+
+
+@pytest.fixture
+def app_with_webhooks(mock_webhook_manager, mock_user_context):
     """Create a FastAPI app with webhook routes for testing."""
     app = FastAPI()
 
@@ -26,9 +36,13 @@ def app_with_webhooks(mock_webhook_manager):
     async def get_mock_webhook_manager():
         return mock_webhook_manager
 
+    async def get_mock_user_context():
+        return mock_user_context
+
     # Include router with dependency override
     app.include_router(router)
-    app.dependency_overrides[router.dependencies[0].dependency] = get_mock_webhook_manager
+    app.dependency_overrides[get_webhook_manager] = get_mock_webhook_manager
+    app.dependency_overrides[get_user_context] = get_mock_user_context
 
     return app
 

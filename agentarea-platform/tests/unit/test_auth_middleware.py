@@ -258,7 +258,7 @@ class TestAuthMiddleware:
         response = await middleware.dispatch(mock_request, mock_call_next)
 
         assert captured_context is not None
-        assert captured_context.workspace_id == "default"
+        assert captured_context.workspace_id == "user-123"
 
     @pytest.mark.asyncio
     async def test_context_cleanup_after_request(

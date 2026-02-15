@@ -7,30 +7,32 @@ from uuid import uuid4
 
 import pytest
 
-from ..auth.context import UserContext
-from ..base.models import WorkspaceScopedMixin
-from ..base.workspace_scoped_repository import WorkspaceScopedRepository
-from .audit_logger import get_audit_logger
-from .config import setup_logging
+from agentarea_common.auth.context import UserContext
+from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
+from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.logging import get_audit_logger, setup_logging
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
 
 
-class MockModel(WorkspaceScopedMixin):
+class MockModel(BaseModel, WorkspaceScopedMixin):
     """Mock model for testing."""
 
-    def __init__(self, **kwargs):
-        self.id = kwargs.get("id", str(uuid4()))
-        self.created_by = kwargs.get("created_by")
-        self.workspace_id = kwargs.get("workspace_id")
-        self.name = kwargs.get("name", "Test")
+    __tablename__ = "mock_models"
 
-    @classmethod
-    def __name__(cls):
-        """Return the mock model name used in tests."""
-        return "MockModel"
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="Test")
 
 
 class TestAuditLoggingIntegration:
     """Test audit logging integration with repository."""
+
+    @pytest.fixture(autouse=True)
+    def reset_audit_logger(self):
+        from agentarea_common.logging import audit_logger as audit_logger_module
+
+        audit_logger_module._audit_logger = None
+        yield
+        audit_logger_module._audit_logger = None
 
     @pytest.fixture
     def user_context(self):
@@ -60,11 +62,7 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_create_logs_audit_event(self, repository, user_context):
         """Test that create operation logs audit event."""
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
-
-            # Mock the model creation
+        with patch.object(repository.audit_logger.logger, "info") as mock_info:
             mock_model = MockModel(id="test123", name="Test Model")
             repository.session.add = Mock()
             repository.session.commit = AsyncMock()
@@ -73,9 +71,8 @@ class TestAuditLoggingIntegration:
             with patch.object(MockModel, "__call__", return_value=mock_model):
                 result = await repository.create(name="Test Model")
 
-            # Verify audit logging was called
-            mock_logger.info.assert_called()
-            call_args = mock_logger.info.call_args
+            mock_info.assert_called()
+            call_args = mock_info.call_args
             assert "AUDIT: CREATE" in call_args[0][0]
             assert call_args[1]["extra"]["action"] == "create"
             assert call_args[1]["extra"]["user_id"] == "user123"
@@ -84,11 +81,7 @@ class TestAuditLoggingIntegration:
     @pytest.mark.asyncio
     async def test_update_logs_audit_event(self, repository, user_context):
         """Test that update operation logs audit event."""
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
-
-            # Mock finding the existing record
+        with patch.object(repository.audit_logger.logger, "info") as mock_info:
             mock_model = MockModel(id="test123", name="Original Name")
             mock_result = Mock()
             mock_result.scalar_one_or_none.return_value = mock_model
@@ -98,20 +91,15 @@ class TestAuditLoggingIntegration:
 
             result = await repository.update("test123", name="Updated Name")
 
-            # Verify audit logging was called
-            mock_logger.info.assert_called()
-            call_args = mock_logger.info.call_args
+            mock_info.assert_called()
+            call_args = mock_info.call_args
             assert "AUDIT: UPDATE" in call_args[0][0]
             assert call_args[1]["extra"]["action"] == "update"
 
     @pytest.mark.asyncio
     async def test_delete_logs_audit_event(self, repository, user_context):
         """Test that delete operation logs audit event."""
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
-
-            # Mock finding the existing record
+        with patch.object(repository.audit_logger.logger, "info") as mock_info:
             mock_model = MockModel(id="test123", name="Test Model")
             mock_result = Mock()
             mock_result.scalar_one_or_none.return_value = mock_model
@@ -121,20 +109,15 @@ class TestAuditLoggingIntegration:
 
             result = await repository.delete("test123")
 
-            # Verify audit logging was called
-            mock_logger.info.assert_called()
-            call_args = mock_logger.info.call_args
+            mock_info.assert_called()
+            call_args = mock_info.call_args
             assert "AUDIT: DELETE" in call_args[0][0]
             assert call_args[1]["extra"]["action"] == "delete"
 
     @pytest.mark.asyncio
     async def test_get_by_id_logs_read_event(self, repository, user_context):
         """Test that get_by_id operation logs read event."""
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
-
-            # Mock finding the record
+        with patch.object(repository.audit_logger.logger, "info") as mock_info:
             mock_model = MockModel(id="test123", name="Test Model")
             mock_result = Mock()
             mock_result.scalar_one_or_none.return_value = mock_model
@@ -142,20 +125,15 @@ class TestAuditLoggingIntegration:
 
             result = await repository.get_by_id("test123")
 
-            # Verify audit logging was called
-            mock_logger.info.assert_called()
-            call_args = mock_logger.info.call_args
+            mock_info.assert_called()
+            call_args = mock_info.call_args
             assert "AUDIT: READ" in call_args[0][0]
             assert call_args[1]["extra"]["action"] == "read"
 
     @pytest.mark.asyncio
     async def test_list_all_logs_list_event(self, repository, user_context):
         """Test that list_all operation logs list event."""
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
-
-            # Mock finding records
+        with patch.object(repository.audit_logger.logger, "info") as mock_info:
             mock_models = [
                 MockModel(id="test1", name="Model 1"),
                 MockModel(id="test2", name="Model 2"),
@@ -166,44 +144,34 @@ class TestAuditLoggingIntegration:
 
             result = await repository.list_all()
 
-            # Verify audit logging was called
-            mock_logger.info.assert_called()
-            call_args = mock_logger.info.call_args
+            mock_info.assert_called()
+            call_args = mock_info.call_args
             assert "AUDIT: LIST" in call_args[0][0]
             assert call_args[1]["extra"]["action"] == "list"
 
     @pytest.mark.asyncio
     async def test_error_logs_error_event(self, repository, user_context):
         """Test that errors log error events."""
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
-
-            # Mock database error
+        with patch.object(repository.audit_logger.logger, "info") as mock_info:
             repository.session.execute = AsyncMock(side_effect=Exception("Database error"))
 
             with pytest.raises(Exception):
                 await repository.get_by_id("test123")
 
-            # Verify error logging was called
-            mock_logger.info.assert_called()
-            call_args = mock_logger.info.call_args
+            mock_info.assert_called()
+            call_args = mock_info.call_args
             assert "AUDIT: ERROR" in call_args[0][0]
             assert call_args[1]["extra"]["action"] == "error"
 
     def test_audit_log_contains_workspace_context(self, user_context):
         """Test that audit logs contain workspace context."""
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = Mock()
-            mock_get_logger.return_value = mock_logger
-
-            audit_logger = get_audit_logger()
+        audit_logger = get_audit_logger()
+        with patch.object(audit_logger.logger, "info") as mock_info:
             audit_logger.log_create(
                 resource_type="test", user_context=user_context, resource_id="test123"
             )
 
-            # Verify workspace context is included
-            call_args = mock_logger.info.call_args
+            call_args = mock_info.call_args
             extra = call_args[1]["extra"]
             assert extra["user_id"] == "user123"
             assert extra["workspace_id"] == "workspace456"
@@ -217,7 +185,7 @@ class TestAuditLoggingIntegration:
 
     def test_structured_logging_format(self, user_context):
         """Test that structured logging produces valid JSON."""
-        from ..logging.config import WorkspaceContextFormatter
+        from agentarea_common.logging.config import WorkspaceContextFormatter
 
         formatter = WorkspaceContextFormatter()
 
