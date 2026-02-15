@@ -407,18 +407,20 @@ class SkillStorageService:
         """
         import mimetypes
 
-        content_type, _ = mimetypes.guess_type(filename)
-        if content_type:
-            return content_type
-
-        # Default fallbacks
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
         defaults = {
             "md": "text/markdown",
-            "yaml": "application/x-yaml",
-            "yml": "application/x-yaml",
+            "yaml": "application/yaml",
+            "yml": "application/yaml",
             "json": "application/json",
             "txt": "text/plain",
         }
 
-        return defaults.get(ext, "application/octet-stream")
+        if ext in defaults:
+            return defaults[ext]
+
+        content_type, _ = mimetypes.guess_type(filename)
+        if content_type:
+            return content_type
+
+        return "application/octet-stream"

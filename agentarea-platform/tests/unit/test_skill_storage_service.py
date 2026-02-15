@@ -195,7 +195,7 @@ class TestStorePackageFromZip:
 
         assert content_types["SKILL.md"] == "text/markdown"
         assert content_types["config.json"] == "application/json"
-        assert content_types["data.yaml"] == "application/x-yaml"
+        assert content_types["data.yaml"] == "application/yaml"
 
 
 class TestStorePackageFromDirectory:
@@ -523,8 +523,8 @@ class TestHelperMethods:
 
     def test_guess_content_type_yaml(self, storage_service):
         """Test content type guessing for YAML."""
-        assert storage_service._guess_content_type("config.yaml") == "application/x-yaml"
-        assert storage_service._guess_content_type("config.yml") == "application/x-yaml"
+        assert storage_service._guess_content_type("config.yaml") == "application/yaml"
+        assert storage_service._guess_content_type("config.yml") == "application/yaml"
 
     def test_guess_content_type_unknown(self, storage_service):
         """Test content type guessing for unknown types."""
