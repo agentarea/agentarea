@@ -67,6 +67,7 @@ export default function CreateAgentClient({
         tools_config: { mcp_server_configs: [], builtin_tools: [] },
         events_config: { events: [] },
         planning: false,
+        skills: [],
       }}
       onSubmit={handleSubmit}
       submitButtonText="Create Agent"

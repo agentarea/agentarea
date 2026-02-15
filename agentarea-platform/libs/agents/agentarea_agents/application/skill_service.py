@@ -277,7 +277,7 @@ class SkillService:
             manifest = self._parser.build_manifest_from_directory(full_path)
 
             if not manifest.main_skill_path:
-                raise ValueError(f"No skill file found in directory: {full_path}")
+                raise ValueError(self._parser.MISSING_SKILL_MESSAGE)
 
             # Read and parse main skill file
             main_skill_file = full_path / manifest.main_skill_path

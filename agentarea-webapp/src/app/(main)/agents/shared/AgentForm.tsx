@@ -26,8 +26,9 @@ import {
   AgentTriggers,
   BasicInformation,
   ToolConfig,
+  SkillsConfig,
 } from "../create/components";
-import type { AgentFormValues } from "../create/types";
+import type { AgentFormValues, AgentSkill } from "../create/types";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
@@ -121,6 +122,11 @@ export default function AgentForm({
   const watchedName = watch("name");
   const [agentName, setAgentName] = useState("");
 
+  // Skills state (managed separately from react-hook-form)
+  const [selectedSkills, setSelectedSkills] = useState<AgentSkill[]>(
+    initialData?.skills || []
+  );
+
   useEffect(() => {
     setAgentName(watchedName || "New Agent");
   }, [watchedName]);
@@ -143,10 +149,16 @@ export default function AgentForm({
     form.setAttribute("data-submitting", "true");
     form.dispatchEvent(new CustomEvent("form-submitting", { detail: { isSubmitting: true } }));
 
+    // Include skills in the submission data
+    const dataWithSkills = {
+      ...data,
+      skills: selectedSkills,
+    };
+
     startTransition(async () => {
       let shouldKeepSubmitting = false;
       try {
-        const result = await onSubmit(data);
+        const result = await onSubmit(dataWithSkills);
 
         if (result?.message?.includes("success")) {
           toast.success("Agent saved successfully!", {
@@ -265,6 +277,11 @@ export default function AgentForm({
               builtinToolFields={builtinToolFields}
               removeBuiltinTool={removeBuiltinTool}
               appendBuiltinTool={appendBuiltinTool}
+            />
+            <Divider />
+            <SkillsConfig
+              selectedSkills={selectedSkills}
+              onSkillsChange={setSelectedSkills}
             />
             {/* Submit button moved to header controls */}
           </form>

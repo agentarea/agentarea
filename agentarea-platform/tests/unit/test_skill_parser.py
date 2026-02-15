@@ -40,6 +40,25 @@ This is the skill content.
         assert "# Test Skill" in result.content
         assert result.raw_content == content
 
+    def test_parse_content_preserves_raw_frontmatter(self):
+        """Test raw frontmatter preserves all fields."""
+        parser = SkillParser()
+        content = """---
+name: Frontmatter Skill
+description: Example
+allowed-tools:
+  - curl
+license: Apache-2.0
+custom-field: custom
+---
+# Frontmatter Skill
+"""
+        result = parser.parse_content(content)
+
+        assert result.metadata.raw_frontmatter["name"] == "Frontmatter Skill"
+        assert result.metadata.raw_frontmatter["license"] == "Apache-2.0"
+        assert result.metadata.raw_frontmatter["custom-field"] == "custom"
+
     def test_parse_content_without_name_extracts_from_heading(self):
         """Test that name is extracted from first heading if not in frontmatter."""
         parser = SkillParser()
@@ -111,23 +130,14 @@ class TestSkillParserFindMainSkillFile:
 
         assert result == "skill.md"
 
-    def test_find_dot_skill_md_extension(self):
-        """Test finding *.skill.md files."""
+    def test_find_skill_md_mixed_case(self):
+        """Test finding Skill.md (mixed case)."""
         parser = SkillParser()
-        files = ["deploy.skill.md", "templates/other.md"]
+        files = ["Skill.md", "README.md"]
 
         result = parser.find_main_skill_file(files)
 
-        assert result == "deploy.skill.md"
-
-    def test_find_fallback_to_any_md(self):
-        """Test fallback to any .md file in root."""
-        parser = SkillParser()
-        files = ["README.md", "templates/nested.md"]
-
-        result = parser.find_main_skill_file(files)
-
-        assert result == "README.md"
+        assert result == "Skill.md"
 
     def test_find_no_skill_file(self):
         """Test when no skill file is found."""
@@ -154,7 +164,7 @@ class TestSkillParserFindMainSkillFile:
 
         result = parser.find_main_skill_file(files)
 
-        assert result == "README.md"
+        assert result is None
 
 
 class TestSkillParserBuildManifest:
@@ -271,7 +281,20 @@ Steps to deploy.
 
         zip_buffer.seek(0)
 
-        with pytest.raises(ValueError, match="No skill file"):
+        with pytest.raises(ValueError, match="No SKILL.md found at package root"):
+            parser.extract_main_skill_from_zip(zip_buffer)
+
+    def test_extract_from_zip_with_only_readme_raises(self):
+        """Test that ZIP with only README.md is rejected."""
+        parser = SkillParser()
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("README.md", "# Readme")
+
+        zip_buffer.seek(0)
+
+        with pytest.raises(ValueError, match="No SKILL.md found at package root"):
             parser.extract_main_skill_from_zip(zip_buffer)
 
     def test_extract_from_zip_with_github_style_root(self):

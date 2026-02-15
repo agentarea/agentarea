@@ -1,7 +1,6 @@
-import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import {
   Card,
   CardDescription,
@@ -9,6 +8,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AddMCPServerForm } from "./form";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Metadata");
+  return { title: t("addMcpServer") };
+}
 
 export default async function AddMCPServerPage() {
   const t = await getTranslations("MCPServersPage");

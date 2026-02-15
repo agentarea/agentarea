@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { PlusCircleIcon, SearchIcon } from "lucide-react";
@@ -7,6 +8,11 @@ import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listProviderSpecsWithModels } from "@/lib/api";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Metadata");
+  return { title: t("providers") };
+}
 
 export default async function ProviderSpecsPage({
   searchParams,

@@ -177,7 +177,7 @@ export async function updateAgent(
     tools_config: { mcp_server_configs: mcpConfigsArray },
     events_config: { events: eventConfigsArray },
     planning: formData.get("planning") === "true",
-    skill_ids: skillIds.length > 0 ? skillIds : null,
+    skill_ids: skillIds.length > 0 ? skillIds : undefined,
   };
 
   const validatedFields = AgentUpdateSchema.safeParse(rawFormData);

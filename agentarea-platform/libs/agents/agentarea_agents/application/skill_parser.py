@@ -60,9 +60,9 @@ class SkillParser:
         "SKILL.md",
         "skill.md",
     ]
-
-    # File extensions that indicate a skill file
-    SKILL_EXTENSIONS: ClassVar[list[str]] = [".skill.md"]
+    MISSING_SKILL_MESSAGE: ClassVar[str] = (
+        "No SKILL.md found at package root. Skills must include a SKILL.md file."
+    )
 
     def parse_content(self, content: str) -> ParsedSkill:
         """Parse raw markdown content with frontmatter.
@@ -113,8 +113,6 @@ class SkillParser:
 
         Looks for:
         1. SKILL.md or skill.md in root
-        2. *.skill.md files in root
-        3. Any .md file in root (fallback)
 
         Args:
             file_paths: List of relative file paths in the package.
@@ -137,17 +135,6 @@ class SkillParser:
             for file_path in root_files:
                 if file_path.lower() == pattern.lower():
                     return file_path
-
-        # Priority 2: Files ending with .skill.md
-        for file_path in root_files:
-            for ext in self.SKILL_EXTENSIONS:
-                if file_path.lower().endswith(ext):
-                    return file_path
-
-        # Priority 3: Any .md file in root
-        for file_path in root_files:
-            if file_path.lower().endswith(".md"):
-                return file_path
 
         return None
 
@@ -268,7 +255,7 @@ class SkillParser:
         manifest = self.build_manifest_from_zip(zip_data)
 
         if not manifest.main_skill_path:
-            raise ValueError("No skill file (SKILL.md or *.skill.md) found in package")
+            raise ValueError(self.MISSING_SKILL_MESSAGE)
 
         # Reset file pointer and extract content
         zip_data.seek(0)

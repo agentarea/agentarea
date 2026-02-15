@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
@@ -9,6 +10,11 @@ import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Metadata");
+  return { title: t("mcpServers") };
+}
 
 export default async function MCPServersPage({
   searchParams,

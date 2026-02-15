@@ -1,4 +1,27 @@
 {
+  "Metadata": {
+    "agents": "Agents",
+    "createAgent": "Create Agent",
+    "tasks": "Tasks",
+    "skills": "Skills",
+    "mcpServers": "MCP Servers",
+    "addMcpServer": "Add MCP Server",
+    "settings": "Settings",
+    "workplace": "Workplace",
+    "providers": "Providers",
+    "providerConfigs": "Provider Configs",
+    "createProviderConfig": "Create Provider Config",
+    "login": "Login",
+    "registration": "Registration",
+    "recovery": "Password Recovery",
+    "editAgent": "Edit {agentName}",
+    "newTask": "New Task - {agentName}",
+    "agentTasks": "{agentName} - Tasks",
+    "agentSettings": "{agentName} - Settings",
+    "taskDetail": "Task: {description}",
+    "editProviderConfig": "Edit {configName}",
+    "createProviderConfigForProvider": "Create {providerName} Config"
+  },
   "Common": {
     "search": "Search",
     "saveChanges": "Save changes",

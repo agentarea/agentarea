@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
@@ -6,6 +7,25 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ProviderConfigFormWrapper from "../../create/components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
 import { getProviderConfig } from "@/lib/api";
+
+interface EditProviderConfigPageProps {
+  params: Promise<{ providerConfigId: string }>;
+}
+
+export async function generateMetadata({ params }: EditProviderConfigPageProps): Promise<Metadata> {
+  const { providerConfigId } = await params;
+  const t = await getTranslations("Metadata");
+  try {
+    const config = await getProviderConfig(providerConfigId);
+    return {
+      title: config?.name
+        ? t("editProviderConfig", { configName: config.name })
+        : t("editProviderConfig", { configName: "Config" }),
+    };
+  } catch {
+    return { title: t("editProviderConfig", { configName: "Config" }) };
+  }
+}
 
 export default async function EditProviderConfigPage({
   params,

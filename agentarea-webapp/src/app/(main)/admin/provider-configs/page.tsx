@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
@@ -9,6 +10,11 @@ import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import ProviderHeaderTabs from "./components/ProviderHeaderTabs";
 import ProvidersData from "./components/ProvidersData";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Metadata");
+  return { title: t("providerConfigs") };
+}
 
 interface TasksPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

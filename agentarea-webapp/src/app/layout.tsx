@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import "./globals.css";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
@@ -8,6 +9,13 @@ import { getServerSession } from "@ory/nextjs/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+
+export const metadata: Metadata = {
+  title: {
+    default: "AgentArea",
+    template: "%s | AgentArea",
+  },
+};
 
 const inter = Inter({
   subsets: ["latin"],

@@ -46,16 +46,9 @@ export default function EditAgentClient({
   const [state, formAction] = useActionState(updateAgent, agentInitialState);
 
   // Skills state (managed separately from react-hook-form for simplicity)
-  // const [selectedSkills, setSelectedSkills] = useState<AgentSkill[]>(
-  //   (agent.skills || []).map((s: any) => ({
-  //     id: s.id,
-  //     name: s.name,
-  //     description: s.description,
-  //   }))
-  // );
-  
+  // Note: agent.skills comes from the API but TypeScript schema may not include it yet
   const [selectedSkills, setSelectedSkills] = useState<AgentSkill[]>(
-    ([]).map((s: any) => ({
+    ((agent as any).skills || []).map((s: any) => ({
       id: s.id,
       name: s.name,
       description: s.description,
