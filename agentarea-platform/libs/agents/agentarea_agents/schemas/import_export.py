@@ -42,13 +42,9 @@ class SkillYAML(BaseModel):
         sources = [self.content, self.github, self.path]
         provided = [s for s in sources if s is not None]
         if len(provided) == 0:
-            raise ValueError(
-                "Skill must have one source: 'content', 'github', or 'path'"
-            )
+            raise ValueError("Skill must have one source: 'content', 'github', or 'path'")
         if len(provided) > 1:
-            raise ValueError(
-                "Skill can only have one source: 'content', 'github', or 'path'"
-            )
+            raise ValueError("Skill can only have one source: 'content', 'github', or 'path'")
         return self
 
 
@@ -78,7 +74,10 @@ class ToolConfigYAML(BaseModel):
 class AgentYAML(BaseModel):
     """Agent configuration in YAML format (without model_id)."""
 
-    id: str | None = Field(default=None, description="Optional agent ID (UUID). If not provided, a new UUID will be generated.")
+    id: str | None = Field(
+        default=None,
+        description="Optional agent ID (UUID). If not provided, a new UUID will be generated.",
+    )
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="", max_length=1000)
     instruction: str = Field(default="", max_length=5000)

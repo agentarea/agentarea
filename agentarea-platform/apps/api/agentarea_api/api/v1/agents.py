@@ -270,6 +270,7 @@ async def delete_agent(
 
 class ToolResponse(BaseModel):
     """Unified tool response format."""
+
     name: str
     type: Literal["code", "mcp"]
     description: str
@@ -282,12 +283,10 @@ class ToolResponse(BaseModel):
 async def get_all_tools(
     user_context: UserContextDep,
     include: str = Query(
-        "code,mcp",
-        description="Comma-separated list of tool types to include (code, mcp)"
+        "code,mcp", description="Comma-separated list of tool types to include (code, mcp)"
     ),
     mcp_instance_id: UUID | None = Query(
-        None,
-        description="Filter MCP tools by specific instance ID"
+        None, description="Filter MCP tools by specific instance ID"
     ),
     mcp_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):

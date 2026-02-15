@@ -1,11 +1,11 @@
 """Skill parser for parsing markdown files with YAML frontmatter."""
 
+import io
 import os
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import BinaryIO
-import zipfile
-import io
+from typing import BinaryIO, ClassVar
 
 import frontmatter
 
@@ -56,13 +56,13 @@ class SkillParser:
     """
 
     # Valid main skill file patterns
-    MAIN_SKILL_PATTERNS = [
+    MAIN_SKILL_PATTERNS: ClassVar[list[str]] = [
         "SKILL.md",
         "skill.md",
     ]
 
     # File extensions that indicate a skill file
-    SKILL_EXTENSIONS = [".skill.md"]
+    SKILL_EXTENSIONS: ClassVar[list[str]] = [".skill.md"]
 
     def parse_content(self, content: str) -> ParsedSkill:
         """Parse raw markdown content with frontmatter.
@@ -151,7 +151,9 @@ class SkillParser:
 
         return None
 
-    def build_manifest_from_paths(self, file_paths: list[str], file_sizes: dict[str, int] | None = None) -> SkillPackageManifest:
+    def build_manifest_from_paths(
+        self, file_paths: list[str], file_sizes: dict[str, int] | None = None
+    ) -> SkillPackageManifest:
         """Build a manifest from a list of file paths.
 
         Args:
@@ -170,11 +172,13 @@ class SkillParser:
         for path in file_paths:
             size = file_sizes.get(path, 0)
             total_size += size
-            files.append(SkillFileInfo(
-                path=path,
-                size=size,
-                is_main_skill=(path == main_skill_path),
-            ))
+            files.append(
+                SkillFileInfo(
+                    path=path,
+                    size=size,
+                    is_main_skill=(path == main_skill_path),
+                )
+            )
 
         return SkillPackageManifest(
             main_skill_path=main_skill_path,
@@ -244,7 +248,9 @@ class SkillParser:
 
         return self.build_manifest_from_paths(file_paths, file_sizes)
 
-    def extract_main_skill_from_zip(self, zip_data: bytes | BinaryIO) -> tuple[ParsedSkill, SkillPackageManifest]:
+    def extract_main_skill_from_zip(
+        self, zip_data: bytes | BinaryIO
+    ) -> tuple[ParsedSkill, SkillPackageManifest]:
         """Extract and parse the main skill from a ZIP file.
 
         Args:
@@ -296,7 +302,9 @@ class SkillParser:
             return None
 
         # Find common root folder
-        non_dir_paths = [p for p in all_paths if not p.endswith("/") and not p.startswith("__MACOSX")]
+        non_dir_paths = [
+            p for p in all_paths if not p.endswith("/") and not p.startswith("__MACOSX")
+        ]
         if not non_dir_paths:
             return path
 
@@ -311,7 +319,7 @@ class SkillParser:
         if len(first_parts) == 1:
             root_folder = first_parts.pop() + "/"
             if path.startswith(root_folder):
-                return path[len(root_folder):]
+                return path[len(root_folder) :]
 
         return path
 
@@ -330,7 +338,9 @@ class SkillParser:
             return normalized_path
 
         # Check with common root prefix
-        non_dir_paths = [p for p in all_paths if not p.endswith("/") and not p.startswith("__MACOSX")]
+        non_dir_paths = [
+            p for p in all_paths if not p.endswith("/") and not p.startswith("__MACOSX")
+        ]
         if not non_dir_paths:
             return None
 

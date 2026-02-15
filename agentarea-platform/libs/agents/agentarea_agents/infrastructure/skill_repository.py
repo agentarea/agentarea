@@ -1,6 +1,5 @@
 """Skill repository for database operations."""
 
-from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -119,4 +118,4 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
             )
         )
         result = await self.session.execute(query)
-        return list(result.scalars().all())
+        return list[Skill](result.scalars().all())

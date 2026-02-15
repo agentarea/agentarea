@@ -146,7 +146,9 @@ class GitHubSkillImporter:
         ref = repo_info.branch or await self._get_default_branch(repo_info.owner, repo_info.repo)
 
         # Build the zipball URL
-        zipball_url = f"{self.GITHUB_API_BASE}/repos/{repo_info.owner}/{repo_info.repo}/zipball/{ref}"
+        zipball_url = (
+            f"{self.GITHUB_API_BASE}/repos/{repo_info.owner}/{repo_info.repo}/zipball/{ref}"
+        )
 
         logger.info(f"Downloading repository from {zipball_url}")
 
@@ -244,9 +246,7 @@ class GitHubSkillImporter:
             )
 
         if response.status_code == 401:
-            raise GitHubSkillImporterError(
-                "Authentication failed. Check your GitHub token."
-            )
+            raise GitHubSkillImporterError("Authentication failed. Check your GitHub token.")
 
         raise GitHubSkillImporterError(
             f"GitHub API error: {response.status_code} - {response.text}"

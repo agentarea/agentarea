@@ -92,7 +92,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Build skill information
             skills_info = []
-            if hasattr(agent, 'skills') and agent.skills:
+            if hasattr(agent, "skills") and agent.skills:
                 for skill in agent.skills:
                     # Get file list for multi-file skills
                     files = []
@@ -101,12 +101,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         # For now, just note it has additional files
                         files = ["(additional files available)"]
 
-                    skills_info.append(SkillInfo(
-                        id=str(skill.id),
-                        name=skill.name,
-                        content=skill.content or "",
-                        files=files,
-                    ))
+                    skills_info.append(
+                        SkillInfo(
+                            id=str(skill.id),
+                            name=skill.name,
+                            content=skill.content or "",
+                            files=files,
+                        )
+                    )
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -345,9 +347,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     # Convert disabled_methods to constructor arguments
                     toolset_methods = (
-                        {method: False for method in disabled_methods}
-                        if disabled_methods
-                        else {}
+                        dict.fromkeys(disabled_methods, False) if disabled_methods else {}
                     )
 
                     # Create and register the code tool instance

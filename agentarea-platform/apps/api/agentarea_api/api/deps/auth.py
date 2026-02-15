@@ -37,8 +37,7 @@ async def get_workspace_id(
     if user_context:
         return user_context.workspace_id
     raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Workspace ID is required but not provided"
+        status_code=status.HTTP_400_BAD_REQUEST, detail="Workspace ID is required but not provided"
     )
 
 

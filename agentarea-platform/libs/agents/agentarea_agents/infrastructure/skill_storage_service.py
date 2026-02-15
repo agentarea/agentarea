@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
+from agentarea_common.config.aws import get_aws_settings, get_s3_client
 from botocore.exceptions import ClientError
-
-from agentarea_common.config.aws import get_s3_client, get_aws_settings
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +102,7 @@ class SkillStorageService:
                 # Strip root folder if present
                 relative_path = info.filename
                 if root_folder and relative_path.startswith(root_folder):
-                    relative_path = relative_path[len(root_folder):]
+                    relative_path = relative_path[len(root_folder) :]
 
                 if not relative_path:
                     continue
@@ -282,13 +281,15 @@ class SkillStorageService:
             for obj in page.get("Contents", []):
                 key = obj["Key"]
                 # Extract relative path
-                relative_path = key[len(prefix):]
+                relative_path = key[len(prefix) :]
                 if relative_path:
-                    files.append(FileInfo(
-                        path=relative_path,
-                        size=obj["Size"],
-                        content_type=self._guess_content_type(relative_path),
-                    ))
+                    files.append(
+                        FileInfo(
+                            path=relative_path,
+                            size=obj["Size"],
+                            content_type=self._guess_content_type(relative_path),
+                        )
+                    )
 
         return files
 

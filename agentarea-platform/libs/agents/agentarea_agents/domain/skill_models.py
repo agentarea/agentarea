@@ -35,9 +35,7 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     source_url: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )  # GitHub URL or original source
-    content: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    )  # Main skill markdown content
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)  # Main skill markdown content
     s3_path: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )  # S3 path for multi-file packages
@@ -50,6 +48,7 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     )
 
     def __repr__(self) -> str:
+        """Return a compact string representation."""
         return f"<Skill {self.name} ({self.id})>"
 
 

@@ -1217,7 +1217,9 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
                 "agent_status": agent.status,
                 "agent_description_length": len(agent.description) if agent.description else 0,
                 "model_id": agent.model_id,
-                "has_tools": bool(agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0),
+                "has_tools": bool(
+                    agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0
+                ),
                 "has_planning": bool(agent.planning),
                 "skills_count": len(skills),
                 "base_url": base_url,
@@ -1584,7 +1586,9 @@ async def get_agent_well_known(
                 "agent_status": agent.status,
                 "agent_description_length": len(agent.description) if agent.description else 0,
                 "model_id": agent.model_id,
-                "has_tools": bool(agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0),
+                "has_tools": bool(
+                    agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0
+                ),
                 "has_planning": bool(agent.planning),
                 "capabilities": ["streaming", "state_transition_history"],
                 "skills_count": len(skills),

@@ -9,7 +9,7 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

@@ -3,12 +3,12 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from agentarea_agents.domain.models import Agent
-from agentarea_agents.domain.skill_models import AgentSkill, Skill
+from agentarea_agents.domain.skill_models import AgentSkill
 
 
 class AgentRepository(WorkspaceScopedRepository[Agent]):

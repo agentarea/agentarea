@@ -3,12 +3,12 @@
 from typing import Annotated
 from uuid import UUID
 
-from agentarea_agents.application.skill_service import SkillService, SkillFileInfo
-from agentarea_agents.domain.skill_models import Skill, SkillSourceType
+from agentarea_agents.application.skill_service import SkillService
+from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.github_skill_importer import (
-    GitHubSkillImporterError,
     GitHubNotFoundError,
     GitHubRateLimitError,
+    GitHubSkillImporterError,
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
@@ -147,13 +147,13 @@ async def create_skill(
         return SkillResponse.from_skill(skill)
 
     except GitHubRateLimitError as e:
-        raise HTTPException(status_code=429, detail=str(e))
+        raise HTTPException(status_code=429, detail=str(e)) from e
     except GitHubNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except GitHubSkillImporterError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/upload", response_model=SkillResponse)
@@ -177,7 +177,7 @@ async def upload_skill(
         return SkillResponse.from_skill(skill)
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("", response_model=list[SkillResponse])
@@ -229,13 +229,10 @@ async def list_skill_files(
         files = await skill_service.get_skill_files(skill_id, include_urls=include_urls)
         return SkillFilesResponse(
             skill_id=str(skill_id),
-            files=[
-                SkillFileResponse(path=f.path, size=f.size, url=f.url)
-                for f in files
-            ],
+            files=[SkillFileResponse(path=f.path, size=f.size, url=f.url) for f in files],
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/{skill_id}/files/{path:path}")
@@ -259,9 +256,9 @@ async def get_skill_file(
         return {"url": url}
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.put("/{skill_id}", response_model=SkillResponse)

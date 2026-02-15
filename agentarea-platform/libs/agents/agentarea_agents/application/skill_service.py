@@ -9,17 +9,13 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 
-from agentarea_agents.application.skill_parser import ParsedSkill, SkillParser
+from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.domain.skill_models import Skill, SkillSourceType
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporter,
-    GitHubSkillImporterError,
 )
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
-from agentarea_agents.infrastructure.skill_storage_service import (
-    FileInfo,
-    SkillStorageService,
-)
+from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +130,7 @@ class SkillService:
         repo = self._get_repository()
 
         # Parse and extract from ZIP
-        parsed, manifest = self._parser.extract_main_skill_from_zip(zip_data)
+        parsed, _manifest = self._parser.extract_main_skill_from_zip(zip_data)
 
         # Use provided values or fall back to parsed values
         skill_name = name or parsed.metadata.name
@@ -153,6 +149,7 @@ class SkillService:
         # Upload package to S3
         if isinstance(zip_data, bytes):
             import io
+
             zip_data = io.BytesIO(zip_data)
         zip_data.seek(0)
 
@@ -198,8 +195,9 @@ class SkillService:
 
         # Parse and extract from ZIP
         import io
+
         zip_buffer = io.BytesIO(zip_data)
-        parsed, manifest = self._parser.extract_main_skill_from_zip(zip_buffer)
+        parsed, _manifest = self._parser.extract_main_skill_from_zip(zip_buffer)
 
         # Use provided values or fall back to parsed values
         skill_name = name or parsed.metadata.name

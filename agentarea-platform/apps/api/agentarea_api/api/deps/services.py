@@ -116,7 +116,9 @@ async def get_agent_service(
 async def get_workspace_import_export_service(
     repository_factory: RepositoryFactoryDep,
     event_broker: EventBrokerDep,
-    mcp_instance_service: Annotated["MCPServerInstanceService", Depends("get_mcp_server_instance_service")],
+    mcp_instance_service: Annotated[
+        "MCPServerInstanceService", Depends("get_mcp_server_instance_service")
+    ],
     provider_service: Annotated["ProviderService", Depends("get_provider_service")],
 ) -> WorkspaceImportExportService:
     """Get a WorkspaceImportExportService instance for the current request."""

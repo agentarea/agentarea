@@ -23,9 +23,7 @@ def load_code_tools_config() -> dict[str, Any]:
         with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
-        logger.info(
-            f"Loaded code tools config with {len(config.get('code_tools', {}))} tools"
-        )
+        logger.info(f"Loaded code tools config with {len(config.get('code_tools', {}))} tools")
         return config
 
     except Exception as e:

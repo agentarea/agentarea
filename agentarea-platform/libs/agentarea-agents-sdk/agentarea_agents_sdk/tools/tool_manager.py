@@ -5,10 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from .base_tool import ToolRegistry
-from .code_tools_loader import (
-    create_code_tool_instance,
-    get_code_tools_metadata,
-)
+from .code_tools_loader import create_code_tool_instance
 from .completion_tool import CompletionTool
 from .mcp_tool import MCPToolFactory
 
@@ -56,7 +53,9 @@ class ToolManager:
             if tool_type == "code":
                 # Code-based tool
                 disabled_methods = settings.get("disabled_methods", [])
-                toolset_methods = {method: False for method in disabled_methods} if disabled_methods else {}
+                toolset_methods = (
+                    {method: False for method in disabled_methods} if disabled_methods else {}
+                )
 
                 tool_instance = create_code_tool_instance(tool_name, toolset_methods)
                 if tool_instance:

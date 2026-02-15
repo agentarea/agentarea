@@ -90,9 +90,7 @@ class ActivityServiceContainer:
         )
         return service, session
 
-    async def get_skill_service(
-        self, user_context: UserContext
-    ) -> tuple[SkillService, Any]:
+    async def get_skill_service(self, user_context: UserContext) -> tuple[SkillService, Any]:
         """Get SkillService with proper session and context."""
         session = self._database.async_session_factory()
         repository_factory = RepositoryFactory(session, user_context)

@@ -142,7 +142,7 @@ class WorkspaceImportExportService:
 
             for instance in instances:
                 # Skip system instances
-                if hasattr(instance, 'workspace_id') and instance.workspace_id == "system":
+                if hasattr(instance, "workspace_id") and instance.workspace_id == "system":
                     continue
 
                 instance_dict: dict[str, Any] = {
@@ -182,7 +182,7 @@ class WorkspaceImportExportService:
 
             for config in configs:
                 # Skip system configs
-                if hasattr(config, 'workspace_id') and config.workspace_id == "system":
+                if hasattr(config, "workspace_id") and config.workspace_id == "system":
                     continue
 
                 config_dict: dict[str, Any] = {
@@ -334,7 +334,9 @@ class WorkspaceImportExportService:
                 except Exception as e:
                     if not options.skip_missing_dependencies:
                         raise
-                    result.warnings.append(f"Failed to import provider config '{provider_yaml.name}': {e}")
+                    result.warnings.append(
+                        f"Failed to import provider config '{provider_yaml.name}': {e}"
+                    )
 
             result.success = True
             return result
@@ -568,9 +570,7 @@ class WorkspaceImportExportService:
             )
             return new_agent
 
-    async def _import_mcp_instance(
-        self, mcp_yaml: MCPInstanceYAML, options: ImportOptions
-    ) -> Any:
+    async def _import_mcp_instance(self, mcp_yaml: MCPInstanceYAML, options: ImportOptions) -> Any:
         """Import a single MCP server instance from YAML."""
         if not self.mcp_instance_service:
             raise RuntimeError("MCP instance service not available")
@@ -668,4 +668,3 @@ class WorkspaceImportExportService:
                 endpoint_url=provider_yaml.endpoint_url,
             )
             return new_config
-
