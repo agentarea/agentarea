@@ -451,9 +451,6 @@ async def list_triggers(
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
     trigger_type: str | None = Query(None, description="Filter by trigger type (cron, webhook)"),
     active_only: bool = Query(False, description="Only return active triggers"),
-    created_by: str | None = Query(
-        None, description="Filter by creator: 'me' for current user's triggers only"
-    ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of triggers to return"),
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     trigger_service: TriggerService = Depends(get_trigger_service),
@@ -463,11 +460,14 @@ async def list_triggers(
     Returns a list of triggers that match the specified criteria. Supports
     filtering by agent ID, trigger type, and active status.
 
+    Access Control:
+        Returns all triggers within the current user's workspace (workspace isolation).
+        All users in the same workspace can see all workspace triggers.
+
     Args:
         agent_id: Optional agent ID filter
         trigger_type: Optional trigger type filter
         active_only: Whether to only return active triggers
-        created_by: Optional creator filter ('me' for current user's triggers)
         limit: Maximum number of triggers to return
         auth_context: Authentication context
         trigger_service: Injected trigger service
@@ -495,15 +495,12 @@ async def list_triggers(
                         status_code=400, detail=f"Invalid trigger type: {trigger_type}"
                     )
 
-        # Determine if we should filter by creator
-        creator_scoped = created_by == "me"
-
         # List triggers
         triggers = await trigger_service.list_triggers(
             agent_id=agent_id,
             trigger_type=domain_trigger_type,
             active_only=active_only,
-            creator_scoped=creator_scoped,
+            creator_scoped=False,
             limit=limit,
         )
 

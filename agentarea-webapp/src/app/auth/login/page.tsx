@@ -1,6 +1,6 @@
 import { Login } from "@ory/elements-react/theme";
 import { OryPageParams, getFlowFactory } from "@ory/nextjs/app";
-import "@ory/elements-react/theme/styles.css";
+// CSS imported via globals.css
 import config from "@/ory.config";
 import { env } from "@/env";
 

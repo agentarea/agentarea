@@ -17,6 +17,14 @@ const inter = Inter({
   preload: true,
 });
 
+// Runtime config to inject into window.__ENV__ for client-side access
+// This avoids the need for NEXT_PUBLIC_* env vars which are bundled at build time
+function getRuntimeConfig() {
+  return {
+    CLIENT_ORY_SDK_URL: process.env.ORY_SDK_URL || "",
+  };
+}
+
 export default async function RootLayout({
   children,
 }: {
@@ -28,9 +36,17 @@ export default async function RootLayout({
   const sidebarDefaultOpen =
     sidebarCookie !== undefined ? sidebarCookie === "true" : true;
   const session = await getServerSession();
+  const runtimeConfig = getRuntimeConfig();
 
   return (
     <html lang={locale} suppressHydrationWarning className={inter.variable}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__ENV__ = ${JSON.stringify(runtimeConfig)};`,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <SessionProvider session={session}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

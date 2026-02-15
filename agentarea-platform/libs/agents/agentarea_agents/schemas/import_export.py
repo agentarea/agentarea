@@ -1,55 +1,93 @@
 """Pydantic schemas for agent import/export YAML configuration."""
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class BuiltinToolConfigYAML(BaseModel):
-    """Builtin tool configuration in YAML format."""
+class SkillYAML(BaseModel):
+    """Skill configuration in YAML format.
 
-    tool_name: str
-    enabled: bool = True
-    requires_user_confirmation: bool = False
+    Supports multiple source types:
+    - content: Raw markdown content inline
+    - github: GitHub repository URL
+    - path: Local file/directory path (relative to YAML file)
+    """
 
-    @field_validator("tool_name")
+    name: str | None = Field(
+        default=None,
+        description="Skill name. If not provided, parsed from SKILL.md frontmatter.",
+    )
+    description: str | None = Field(
+        default=None,
+        description="Skill description. If not provided, parsed from SKILL.md frontmatter.",
+    )
+    # Source options - exactly one must be provided
+    content: str | None = Field(
+        default=None,
+        description="Raw markdown content for single-file skills.",
+    )
+    github: str | None = Field(
+        default=None,
+        description="GitHub repository URL (e.g., https://github.com/owner/repo).",
+    )
+    path: str | None = Field(
+        default=None,
+        description="Local path to skill file, directory, or archive (relative to YAML file).",
+    )
+
+    @model_validator(mode="after")
+    def validate_source(self) -> "SkillYAML":
+        """Ensure exactly one source is provided."""
+        sources = [self.content, self.github, self.path]
+        provided = [s for s in sources if s is not None]
+        if len(provided) == 0:
+            raise ValueError(
+                "Skill must have one source: 'content', 'github', or 'path'"
+            )
+        if len(provided) > 1:
+            raise ValueError(
+                "Skill can only have one source: 'content', 'github', or 'path'"
+            )
+        return self
+
+
+class ToolSettingsYAML(BaseModel):
+    """Tool settings configuration in YAML format."""
+
+    disabled_methods: list[str] | None = None  # For code tools
+    allowed_tools: list[str] | None = None  # For MCP tools
+
+
+class ToolConfigYAML(BaseModel):
+    """Tool configuration in YAML format."""
+
+    type: Literal["code", "mcp"]
+    name: str
+    settings: ToolSettingsYAML | None = None
+
+    @field_validator("name")
     @classmethod
-    def validate_tool_name(cls, v: str) -> str:
+    def validate_name(cls, v: str) -> str:
         """Validate that tool name is not empty."""
         if not v or not v.strip():
-            raise ValueError("tool_name cannot be empty")
+            raise ValueError("Tool name cannot be empty")
         return v.strip()
-
-
-class MCPToolConfigYAML(BaseModel):
-    """MCP tool configuration in YAML format."""
-
-    tool_name: str
-    requires_user_confirmation: bool = False
-
-
-class MCPServerConfigYAML(BaseModel):
-    """MCP server configuration in YAML format."""
-
-    mcp_server_id: str  # Reference to server spec ID
-    allowed_tools: list[MCPToolConfigYAML] | None = None
-
-
-class ToolsConfigYAML(BaseModel):
-    """Complete tools configuration in YAML format."""
-
-    builtin_tools: list[BuiltinToolConfigYAML] | None = None
-    mcp_server_configs: list[MCPServerConfigYAML] | None = None
-    planning: bool | None = False
 
 
 class AgentYAML(BaseModel):
     """Agent configuration in YAML format (without model_id)."""
 
+    id: str | None = Field(default=None, description="Optional agent ID (UUID). If not provided, a new UUID will be generated.")
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="", max_length=1000)
     instruction: str = Field(default="", max_length=5000)
-    tools_config: ToolsConfigYAML | None = None
+    tools: list[ToolConfigYAML] | None = None
+    planning: bool | None = False
+    skill_names: list[str] | None = Field(
+        default=None,
+        description="List of skill names to attach. Skills must be defined in the same YAML or already exist.",
+    )
 
     @field_validator("name")
     @classmethod
@@ -104,11 +142,12 @@ class ProviderConfigYAML(BaseModel):
 class WorkspaceConfigYAML(BaseModel):
     """Complete workspace configuration in YAML format."""
 
+    skills: list[SkillYAML] = Field(default_factory=list)
     agents: list[AgentYAML] = Field(default_factory=list)
     mcp_instances: list[MCPInstanceYAML] = Field(default_factory=list)
     provider_configs: list[ProviderConfigYAML] = Field(default_factory=list)
 
-    @field_validator("agents", "mcp_instances", "provider_configs", mode="before")
+    @field_validator("skills", "agents", "mcp_instances", "provider_configs", mode="before")
     @classmethod
     def ensure_list(cls, v: Any) -> list:
         """Ensure fields are lists even if None."""
@@ -131,6 +170,7 @@ class ImportResult(BaseModel):
     """Result of an import operation."""
 
     success: bool
+    created_skills: int = 0
     created_agents: int = 0
     created_mcp_instances: int = 0
     created_provider_configs: int = 0

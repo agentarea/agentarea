@@ -1,6 +1,6 @@
 import {
   getAgent,
-  listBuiltinTools,
+  listAllTools,
   listMCPServerInstances,
   listMCPServers,
   listModelInstances,
@@ -47,11 +47,9 @@ export async function loadAgentData(): Promise<AgentData> {
   const mcpInstancesResponse = await listMCPServerInstances();
   const mcpInstanceList = mcpInstancesResponse.data || [];
 
-  // Fetch builtin tools
-  const builtinToolsResponse = await listBuiltinTools();
-  const builtinTools = Array.isArray(builtinToolsResponse.data)
-    ? builtinToolsResponse.data
-    : Object.values(builtinToolsResponse.data || {});
+  // Fetch code tools (previously called builtin tools)
+  const codeToolsResponse = await listAllTools({ include: "code" });
+  const builtinTools = codeToolsResponse.data || [];
 
   return {
     mcpServers,

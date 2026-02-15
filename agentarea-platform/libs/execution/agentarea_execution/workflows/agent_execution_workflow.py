@@ -346,11 +346,33 @@ class AgentExecutionWorkflow:
 
         # Build system prompt with agent context and current task
         if self.state.goal:
+            # Build instruction with skills appended
+            agent_instruction = self.state.agent_config.get(
+                "instruction", "You are a helpful AI assistant."
+            )
+
+            # Append skill content to instruction
+            skills = self.state.agent_config.get("skills", [])
+            if skills:
+                skills_content = "\n\n## Skills\n"
+                for skill in skills:
+                    skill_name = skill.get("name", "Unnamed Skill")
+                    skill_body = skill.get("content", "")
+                    skill_files = skill.get("files", [])
+
+                    skills_content += f"\n### Skill: {skill_name}\n"
+                    skills_content += f"{skill_body}\n"
+
+                    if skill_files and skill_files != ["(additional files available)"]:
+                        skills_content += "\nAvailable files in this skill package:\n"
+                        for f in skill_files:
+                            skills_content += f"- {f}\n"
+
+                agent_instruction = agent_instruction + skills_content
+
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
-                agent_instruction=self.state.agent_config.get(
-                    "instruction", "You are a helpful AI assistant."
-                ),
+                agent_instruction=agent_instruction,
                 goal_description=self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
                 available_tools=self.state.available_tools,
@@ -656,7 +678,7 @@ class AgentExecutionWorkflow:
                 tool_args=tool_args,
                 server_instance_id=None,
                 workspace_id=workspace_id,
-                tools_config=self.state.agent_config.get("tools_config"),
+                tools=self.state.agent_config.get("tools"),
             )
 
             result_obj = await workflow.execute_activity(
@@ -966,43 +988,26 @@ class AgentExecutionWorkflow:
         }
 
     def _tool_requires_approval(self, tool_name: str) -> bool:
-        """Check agent tools_config for per-tool user confirmation requirement."""
+        """Check agent tools for per-tool user confirmation requirement."""
         try:
-            tools_config = (self.state.agent_config or {}).get("tools_config") or {}
+            tools = (self.state.agent_config or {}).get("tools") or []
         except Exception:
-            tools_config = {}
+            tools = []
 
-        # Check builtin tools list
-        builtin_tools = tools_config.get("builtin_tools") or []
-        for t in builtin_tools:
-            if isinstance(t, dict):
-                if t.get("tool_name") == tool_name and bool(
-                    t.get("requires_user_confirmation", False)
-                ):
-                    return True
+        # Check each tool in the list
+        for tool_config in tools:
+            if not isinstance(tool_config, dict):
+                continue
 
-        # Check MCP server configs (new shape)
-        mcp_server_configs = tools_config.get("mcp_server_configs") or []
-        for server in mcp_server_configs:
-            allowed = server.get("allowed_tools") or []
-            for m in allowed:
-                if (
-                    isinstance(m, dict)
-                    and m.get("tool_name") == tool_name
-                    and bool(m.get("requires_user_confirmation", False))
-                ):
-                    return True
+            # Check if this is the tool we're looking for
+            if tool_config.get("name") != tool_name:
+                continue
 
-        # Check MCP servers (legacy shape)
-        mcp_servers = tools_config.get("mcp_servers") or []
-        for server in mcp_servers:
-            allowed = server.get("allowed_tools") or []
-            for m in allowed:
-                if (
-                    isinstance(m, dict)
-                    and m.get("tool_name") == tool_name
-                    and bool(m.get("requires_user_confirmation", False))
-                ):
-                    return True
+            # Check settings for requires_user_confirmation
+            settings = tool_config.get("settings", {})
+            if isinstance(settings, dict) and bool(
+                settings.get("requires_user_confirmation", False)
+            ):
+                return True
 
         return False

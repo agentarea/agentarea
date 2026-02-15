@@ -82,13 +82,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not workspace_id:
                 workspace_id = request.headers.get("X-Workspace-ID")
 
-            # Default to "default" if workspace_id is not provided
+            # Use user_id as workspace_id if not provided
+            # Each user gets their own workspace by default
             if not workspace_id:
-                workspace_id = "default"
-                user_id = auth_result.token.user_id if auth_result.token else "unknown"
-                logger.warning(
-                    f"Token and header missing workspace_id for user {user_id}, defaulting to 'default'"
-                )
+                user_id = auth_result.token.user_id if auth_result.token else None
+                if user_id:
+                    workspace_id = user_id
+                    logger.debug(
+                        f"Using user_id as workspace_id for user {user_id}"
+                    )
+                else:
+                    logger.error("No user_id available to use as workspace_id")
+                    raise ValueError("Unable to determine workspace_id: no user_id in token")
 
             # Set user context
             if auth_result.token:

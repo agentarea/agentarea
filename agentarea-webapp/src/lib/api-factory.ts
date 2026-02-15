@@ -623,12 +623,25 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
-    // Builtin Tools API (outside generated schema)
-    listBuiltinTools: async () => {
-      const { data, error } = await client.GET(
-        "/v1/agents/tools/builtin" as any,
-        {}
-      );
+    // Unified Tools API (outside generated schema)
+    listAllTools: async (options?: {
+      include?: "code" | "mcp" | "code,mcp";
+      mcpInstanceId?: string;
+    }) => {
+      const params = new URLSearchParams();
+      if (options?.include) {
+        params.append("include", options.include);
+      }
+      if (options?.mcpInstanceId) {
+        params.append("mcp_instance_id", options.mcpInstanceId);
+      }
+
+      const queryString = params.toString();
+      const path = queryString
+        ? `/v1/agents/tools?${queryString}`
+        : `/v1/agents/tools`;
+
+      const { data, error } = await client.GET(path as any, {});
       return { data, error };
     },
 
@@ -659,6 +672,76 @@ export function createApiClient(client: Client) {
         console.warn("Failed to fetch MCP health status:", error);
         return { health_checks: [], total: 0 };
       }
+    },
+
+    // Skills API
+    listSkills: async () => {
+      const { data, error } = await client.GET("/v1/skills" as any, {});
+      return { data, error };
+    },
+
+    getSkill: async (skillId: string) => {
+      const { data, error } = await client.GET(`/v1/skills/${skillId}` as any, {});
+      return { data, error };
+    },
+
+    getSkillContent: async (skillId: string) => {
+      const { data, error } = await client.GET(`/v1/skills/${skillId}/content` as any, {});
+      return { data, error };
+    },
+
+    getSkillFiles: async (skillId: string, includeUrls: boolean = false) => {
+      const { data, error } = await client.GET(
+        `/v1/skills/${skillId}/files${includeUrls ? '?include_urls=true' : ''}` as any,
+        {}
+      );
+      return { data, error };
+    },
+
+    createSkill: async (skill: {
+      content?: string | null;
+      github_url?: string | null;
+      name?: string | null;
+      description?: string | null;
+    }) => {
+      const { data, error } = await client.POST("/v1/skills" as any, {
+        body: skill,
+      });
+      return { data, error };
+    },
+
+    uploadSkill: async (formData: FormData) => {
+      // For file upload, we need to use fetch directly
+      const response = await fetch("/api/v1/skills/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: "Upload failed" }));
+        return { data: null, error };
+      }
+      const data = await response.json();
+      return { data, error: null };
+    },
+
+    updateSkill: async (
+      skillId: string,
+      skill: {
+        name?: string | null;
+        description?: string | null;
+        content?: string | null;
+      }
+    ) => {
+      const { data, error } = await client.PUT(`/v1/skills/${skillId}` as any, {
+        body: skill,
+      });
+      return { data, error };
+    },
+
+    deleteSkill: async (skillId: string) => {
+      const { data, error } = await client.DELETE(`/v1/skills/${skillId}` as any, {});
+      return { data, error };
     },
   };
 }

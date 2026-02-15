@@ -2,10 +2,11 @@ import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import {
   getAgent,
-  listBuiltinTools,
+  listAllTools,
   listMCPServerInstances,
   listMCPServers,
   listModelInstances,
+  listSkills,
 } from "@/lib/api";
 import EditAgentClient from "./EditAgentClient";
 
@@ -21,13 +22,15 @@ export default async function EditAgentPage({ params }: Props) {
       mcpResponse,
       llmResponse,
       mcpInstancesResponse,
-      builtinToolsResponse,
+      codeToolsResponse,
+      skillsResponse,
     ] = await Promise.all([
       getAgent(id),
       listMCPServers(),
       listModelInstances(),
       listMCPServerInstances(),
-      listBuiltinTools(),
+      listAllTools({ include: "code" }),
+      listSkills(),
     ]);
 
     if (!agentResponse.data) {
@@ -45,9 +48,8 @@ export default async function EditAgentPage({ params }: Props) {
     }));
     const llmModelInstances = llmResponse.data || [];
     const mcpInstanceList = mcpInstancesResponse.data || [];
-    const builtinTools = Array.isArray(builtinToolsResponse.data)
-      ? builtinToolsResponse.data
-      : Object.values(builtinToolsResponse.data || {});
+    const builtinTools = codeToolsResponse.data || [];
+    const availableSkills = skillsResponse.data || [];
 
     return (
       <ContentBlock
@@ -65,6 +67,7 @@ export default async function EditAgentPage({ params }: Props) {
           llmModelInstances={llmModelInstances}
           mcpInstanceList={mcpInstanceList}
           builtinTools={builtinTools}
+          availableSkills={availableSkills}
         />
       </ContentBlock>
     );

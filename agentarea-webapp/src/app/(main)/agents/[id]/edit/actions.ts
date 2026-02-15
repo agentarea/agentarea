@@ -44,6 +44,7 @@ const AgentUpdateSchema = z.object({
     .optional()
     .nullable(),
   planning: z.boolean().optional(),
+  skill_ids: z.array(z.string().uuid()).optional().nullable(),
 });
 
 export async function updateAgent(
@@ -151,6 +152,15 @@ export async function updateAgent(
   });
   const eventConfigsArray = Object.values(eventConfigs);
 
+  // Reconstruct skill_ids array
+  const skillIds: string[] = [];
+  formData.forEach((value, key) => {
+    const match = key.match(/skill_ids\[(\d+)\]/);
+    if (match && typeof value === "string") {
+      skillIds.push(value);
+    }
+  });
+
   // Get form values
   const id = formData.get("id") as string;
   const name = formData.get("name") as string;
@@ -167,6 +177,7 @@ export async function updateAgent(
     tools_config: { mcp_server_configs: mcpConfigsArray },
     events_config: { events: eventConfigsArray },
     planning: formData.get("planning") === "true",
+    skill_ids: skillIds.length > 0 ? skillIds : null,
   };
 
   const validatedFields = AgentUpdateSchema.safeParse(rawFormData);
@@ -199,7 +210,8 @@ export async function updateAgent(
       tools_config: validatedFields.data.tools_config,
       events_config: validatedFields.data.events_config,
       planning: validatedFields.data.planning,
-    });
+      skill_ids: validatedFields.data.skill_ids,
+    } as any);
 
     if (error) {
       console.error("API error:", error);

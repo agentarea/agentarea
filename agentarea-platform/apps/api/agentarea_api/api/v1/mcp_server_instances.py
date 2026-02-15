@@ -167,18 +167,18 @@ async def get_instance_environment(
 @router.get("/", response_model=list[MCPServerInstanceResponse])
 async def list_mcp_server_instances(
     user_context: UserContextDep,
-    created_by: str | None = Query(
-        None, description="Filter by creator: 'me' for current user's instances only"
-    ),
     mcp_server_instance_service: MCPServerInstanceService = Depends(
         get_mcp_server_instance_service
     ),
 ):
-    # Determine if we should filter by creator
-    creator_scoped = created_by == "me"
+    """List all MCP server instances in the workspace.
 
+    Access Control:
+        Returns all instances within the current user's workspace (workspace isolation).
+        All users in the same workspace can see all workspace instances.
+    """
     # Get instances from database (configuration/metadata)
-    instances = await mcp_server_instance_service.list(creator_scoped=creator_scoped)
+    instances = await mcp_server_instance_service.list()
 
     # Get real-time status from golang manager
     try:
@@ -353,20 +353,6 @@ async def get_containers_health(
         ) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get container health: {e!s}") from e
-
-
-@router.get("/{instance_id}/tools", response_model=list[dict[str, Any]])
-async def get_instance_available_tools(
-    instance_id: UUID,
-    user_context: UserContextDep,
-    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
-):
-    """Get available tools for a specific MCP server instance."""
-    instance = await service.get(instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="MCP server instance not found")
-
-    return instance.get_available_tools()
 
 
 @router.post("/{instance_id}/discover-tools")

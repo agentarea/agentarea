@@ -25,7 +25,7 @@ run-worker:
 	uv run --package agentarea-worker python -m agentarea_worker.main
 
 test:
-	uv run python -m pytest tests/unit tests/functional -m "not integration"
+	uv run python -m pytest tests/unit tests/functional apps/api/tests libs/common/tests libs/tasks/tests -m "not integration"
 
 lint:
 	uv run ruff check

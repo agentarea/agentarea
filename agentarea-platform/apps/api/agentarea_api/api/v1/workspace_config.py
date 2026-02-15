@@ -52,10 +52,14 @@ async def import_workspace_config(
       - name: "My Assistant"
         description: "Helpful assistant"
         instruction: "You are a helpful AI assistant"
-        tools_config:
-          builtin_tools:
-            - tool_name: "calculator"
-              enabled: true
+        tools:
+          - type: code
+            name: agentarea/calculator
+          - type: mcp
+            name: my-filesystem
+            settings:
+              allowed_tools: [read_file, write_file]
+        planning: false
 
     mcp_instances:
       - name: "My Filesystem"

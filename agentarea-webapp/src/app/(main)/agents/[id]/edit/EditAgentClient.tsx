@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useActionState, useEffect } from "react";
+import React, { useActionState, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import type { components } from "@/api/schema";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import {
 import { initialState as agentInitialState } from "../../create/types";
 import type { AgentFormValues, EventConfig } from "../../create/types";
 import { updateAgent } from "./actions";
+import SkillsSection from "./components/SkillsSection";
+import type { Skill } from "@/lib/api";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
@@ -20,20 +22,45 @@ type Agent =
   components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
 type MCPInstance = components["schemas"]["MCPServerInstanceResponse"];
 
+interface AgentSkill {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
 export default function EditAgentClient({
   agent,
   mcpServers,
   llmModelInstances,
   mcpInstanceList,
   builtinTools,
+  availableSkills,
 }: {
   agent: Agent;
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
   mcpInstanceList: MCPInstance[];
   builtinTools: any[];
+  availableSkills: Skill[];
 }) {
   const [state, formAction] = useActionState(updateAgent, agentInitialState);
+
+  // Skills state (managed separately from react-hook-form for simplicity)
+  // const [selectedSkills, setSelectedSkills] = useState<AgentSkill[]>(
+  //   (agent.skills || []).map((s: any) => ({
+  //     id: s.id,
+  //     name: s.name,
+  //     description: s.description,
+  //   }))
+  // );
+  
+  const [selectedSkills, setSelectedSkills] = useState<AgentSkill[]>(
+    ([]).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+    }))
+  );
 
   const {
     register,
@@ -157,6 +184,11 @@ export default function EditAgentClient({
       );
     });
 
+    // Add skills
+    selectedSkills.forEach((skill, index) => {
+      formData.append(`skill_ids[${index}]`, skill.id);
+    });
+
     // Call server action
     formAction(formData);
   };
@@ -199,6 +231,13 @@ export default function EditAgentClient({
                 builtinToolFields={builtinToolFields}
                 removeBuiltinTool={removeBuiltinTool}
                 appendBuiltinTool={appendBuiltinTool}
+              />
+            </div>
+            <div className="my-6 h-[1px] w-full bg-slate-200" />
+            <div className="px-6 pb-4">
+              <SkillsSection
+                selectedSkills={selectedSkills}
+                onSkillsChange={setSelectedSkills}
               />
             </div>
           </Card>

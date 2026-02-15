@@ -45,8 +45,12 @@ EXPOSE 8000 80
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 
-# Run with Air for live reloading
-CMD ["air", "-c", ".air.toml"]
+# Copy development startup script for fallback
+COPY start-dev.sh /app/start-dev.sh
+RUN chmod +x /app/start-dev.sh
+
+# Run with Air for live reloading (fallback to start-dev.sh if air.toml missing)
+CMD ["sh", "-c", "if [ -f .air.toml ]; then air -c .air.toml; else /app/start-dev.sh; fi"]
 
 # Production build stage
 FROM golang:1.25-alpine AS builder

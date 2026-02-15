@@ -11,11 +11,15 @@ class BaseCrudService[T]:
         """Get an entity by ID."""
         return await self.repository.get(id)
 
-    async def list(self, creator_scoped: bool = False) -> list[T]:
-        """List all entities with optional creator filtering."""
-        # Check if repository supports creator_scoped (WorkspaceScopedRepository)
+    async def list(self) -> list[T]:
+        """List all entities in the workspace.
+
+        Returns all resources within the current workspace scope.
+        Access control should be handled by authorization layer.
+        """
+        # Check if repository supports workspace scoping
         if hasattr(self.repository, "list_all"):
-            return await self.repository.list_all(creator_scoped=creator_scoped)
+            return await self.repository.list_all()
         else:
             # Fallback for repositories that don't support workspace scoping
             return await self.repository.list()

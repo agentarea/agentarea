@@ -8,7 +8,7 @@ dsn: ${DSN}
 
 serve:
   public:
-    base_url: http://kratos:4433/
+    base_url: http://localhost:4433/
     cors:
       enabled: true
       allowed_origins:
@@ -70,12 +70,40 @@ selfservice:
       ui_url: http://localhost:3000/auth/registration
       after:
         default_browser_return_url: http://localhost:3000/workplace
+        oidc:
+          hooks:
+            - hook: session
 
   methods:
     password:
       enabled: true
     code:
       enabled: true
+    oidc:
+      enabled: true
+      config:
+        providers:
+          - id: google
+            provider: google
+            # Client ID is overridden via docker-compose environment variable via -c flag
+            # The docker-compose passes OIDC_GOOGLE_CLIENT_ID through the environment variable
+            client_id: ${SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_ID}
+            client_secret: ${SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_SECRET}
+            mapper_url: file:///etc/config/kratos/oidc.google.jsonnet
+            scope:
+              - email
+              - profile
+              - openid
+          - id: github
+            provider: github
+            # Client ID is overridden via docker-compose environment variable via -c flag
+            # The docker-compose passes OIDC_GITHUB_CLIENT_ID through the environment variable
+            client_id: ${SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_CLIENT_ID}
+            client_secret: ${SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_CLIENT_SECRET}
+            mapper_url: file:///etc/config/kratos/oidc.github.jsonnet
+            scope:
+              - user:email
+              - read:user
 
 log:
   level: debug

@@ -18,13 +18,19 @@ const (
 
 // Detector handles environment detection logic
 type Detector struct {
-	logger *slog.Logger
+	logger      *slog.Logger
+	stat        func(string) (os.FileInfo, error)
+	getenv      func(string) string
+	userHomeDir func() (string, error)
 }
 
 // NewDetector creates a new environment detector
 func NewDetector(logger *slog.Logger) *Detector {
 	return &Detector{
-		logger: logger,
+		logger:      logger,
+		stat:        os.Stat,
+		getenv:      os.Getenv,
+		userHomeDir: os.UserHomeDir,
 	}
 }
 
@@ -79,7 +85,7 @@ func (d *Detector) isKubernetesEnvironment() bool {
 // checkServiceAccountToken checks for Kubernetes service account token
 func (d *Detector) checkServiceAccountToken() bool {
 	tokenPath := "/var/run/secrets/kubernetes.io/serviceaccount/token"
-	if _, err := os.Stat(tokenPath); err == nil {
+	if _, err := d.stat(tokenPath); err == nil {
 		d.logger.Debug("Found Kubernetes service account token", slog.String("path", tokenPath))
 		return true
 	}
@@ -88,7 +94,7 @@ func (d *Detector) checkServiceAccountToken() bool {
 
 // checkKubernetesServiceHost checks for KUBERNETES_SERVICE_HOST environment variable
 func (d *Detector) checkKubernetesServiceHost() bool {
-	if host := os.Getenv("KUBERNETES_SERVICE_HOST"); host != "" {
+	if host := d.getenv("KUBERNETES_SERVICE_HOST"); host != "" {
 		d.logger.Debug("Found KUBERNETES_SERVICE_HOST", slog.String("host", host))
 		return true
 	}
@@ -98,17 +104,17 @@ func (d *Detector) checkKubernetesServiceHost() bool {
 // checkKubeconfig checks for KUBECONFIG environment variable or default kubeconfig file
 func (d *Detector) checkKubeconfig() bool {
 	// Check KUBECONFIG environment variable
-	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
-		if _, err := os.Stat(kubeconfig); err == nil {
+	if kubeconfig := d.getenv("KUBECONFIG"); kubeconfig != "" {
+		if _, err := d.stat(kubeconfig); err == nil {
 			d.logger.Debug("Found KUBECONFIG file", slog.String("path", kubeconfig))
 			return true
 		}
 	}
 
 	// Check default kubeconfig location
-	if homeDir, err := os.UserHomeDir(); err == nil {
+	if homeDir, err := d.userHomeDir(); err == nil {
 		defaultKubeconfig := filepath.Join(homeDir, ".kube", "config")
-		if _, err := os.Stat(defaultKubeconfig); err == nil {
+		if _, err := d.stat(defaultKubeconfig); err == nil {
 			d.logger.Debug("Found default kubeconfig", slog.String("path", defaultKubeconfig))
 			return true
 		}
@@ -126,7 +132,7 @@ func (d *Detector) checkContainerEnvironment() bool {
 	}
 
 	for _, path := range kubernetesPaths {
-		if _, err := os.Stat(path); err == nil {
+		if _, err := d.stat(path); err == nil {
 			d.logger.Debug("Found Kubernetes path", slog.String("path", path))
 			return true
 		}
@@ -162,9 +168,9 @@ func (d *Detector) GetEnvironmentInfo() map[string]interface{} {
 			"container_environment":   d.checkContainerEnvironment(),
 		},
 		"environment_variables": map[string]string{
-			"KUBERNETES_SERVICE_HOST": os.Getenv("KUBERNETES_SERVICE_HOST"),
-			"KUBERNETES_SERVICE_PORT": os.Getenv("KUBERNETES_SERVICE_PORT"),
-			"KUBECONFIG":              os.Getenv("KUBECONFIG"),
+			"KUBERNETES_SERVICE_HOST": d.getenv("KUBERNETES_SERVICE_HOST"),
+			"KUBERNETES_SERVICE_PORT": d.getenv("KUBERNETES_SERVICE_PORT"),
+			"KUBECONFIG":              d.getenv("KUBECONFIG"),
 		},
 	}
 

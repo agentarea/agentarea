@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.skill_service import SkillService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config import get_database
@@ -86,6 +87,18 @@ class ActivityServiceContainer:
         repository_factory = RepositoryFactory(session, user_context)
         service = TaskEventService(
             repository_factory=repository_factory, event_broker=self.dependencies.event_broker
+        )
+        return service, session
+
+    async def get_skill_service(
+        self, user_context: UserContext
+    ) -> tuple[SkillService, Any]:
+        """Get SkillService with proper session and context."""
+        session = self._database.async_session_factory()
+        repository_factory = RepositoryFactory(session, user_context)
+        service = SkillService(
+            repository_factory=repository_factory,
+            user_context=user_context,
         )
         return service, session
 
@@ -193,6 +206,12 @@ class ActivityContext:
     async def get_task_event_service(self) -> TaskEventService:
         """Get TaskEventService for this context."""
         service, session = await self.container.get_task_event_service(self.user_context)
+        self._sessions.append(session)
+        return service
+
+    async def get_skill_service(self) -> SkillService:
+        """Get SkillService for this context."""
+        service, session = await self.container.get_skill_service(self.user_context)
         self._sessions.append(session)
         return service
 

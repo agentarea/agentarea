@@ -1,0 +1,1945 @@
+/* src/theme/default/global.css */
+
+
+
+  .ory-elements *,
+  .ory-elements ::after,
+  .ory-elements ::before,
+  .ory-elements ::backdrop,
+  .ory-elements ::file-selector-button {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  .ory-elements,
+  :host {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+    font-feature-settings: var(--default-font-feature-settings, normal);
+    font-variation-settings: var(--default-font-variation-settings, normal);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ory-elements hr {
+    height: 0;
+    color: inherit;
+    border-top-width: 1px;
+  }
+  .ory-elements abbr:where([title]) {
+    -webkit-text-decoration: underline dotted;
+    text-decoration: underline dotted;
+  }
+  .ory-elements h1,
+  .ory-elements h2,
+  .ory-elements h3,
+  .ory-elements h4,
+  .ory-elements h5,
+  .ory-elements h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .ory-elements a {
+    color: inherit;
+    -webkit-text-decoration: inherit;
+    text-decoration: inherit;
+  }
+  .ory-elements b,
+  .ory-elements strong {
+    font-weight: bolder;
+  }
+  .ory-elements code,
+  .ory-elements kbd,
+  .ory-elements samp,
+  .ory-elements pre {
+    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+    font-feature-settings: var(--default-mono-font-feature-settings, normal);
+    font-variation-settings: var(--default-mono-font-variation-settings, normal);
+    font-size: 1em;
+  }
+  .ory-elements small {
+    font-size: 80%;
+  }
+  .ory-elements sub,
+  .ory-elements sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  .ory-elements sub {
+    bottom: -0.25em;
+  }
+  .ory-elements sup {
+    top: -0.5em;
+  }
+  .ory-elements table {
+    text-indent: 0;
+    border-color: inherit;
+    border-collapse: collapse;
+  }
+  .ory-elements :-moz-focusring {
+    outline: auto;
+  }
+  .ory-elements progress {
+    vertical-align: baseline;
+  }
+  .ory-elements summary {
+    display: list-item;
+  }
+  .ory-elements ol,
+  .ory-elements ul,
+  .ory-elements menu {
+    list-style: none;
+  }
+  .ory-elements img,
+  .ory-elements svg,
+  .ory-elements video,
+  .ory-elements canvas,
+  .ory-elements audio,
+  .ory-elements iframe,
+  .ory-elements embed,
+  .ory-elements object {
+    display: block;
+    vertical-align: middle;
+  }
+  .ory-elements img,
+  .ory-elements video {
+    max-width: 100%;
+    height: auto;
+  }
+  .ory-elements button,
+  .ory-elements input,
+  .ory-elements select,
+  .ory-elements optgroup,
+  .ory-elements textarea,
+  .ory-elements ::file-selector-button {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+  }
+  .ory-elements :where(select:is([multiple], [size])) optgroup {
+    font-weight: bolder;
+  }
+  .ory-elements :where(select:is([multiple], [size])) optgroup option {
+    padding-inline-start: 20px;
+  }
+  .ory-elements ::file-selector-button {
+    margin-inline-end: 4px;
+  }
+  .ory-elements ::placeholder {
+    opacity: 1;
+  }
+  @supports (not (-webkit-appearance: -apple-pay-button)) or (contain-intrinsic-size: 1px) {
+    .ory-elements ::placeholder {
+      color: currentcolor;
+      @supports (color: color-mix(in lab, red, red)) {
+        color: color-mix(in oklab, currentcolor 50%, transparent);
+      }
+    }
+  }
+  .ory-elements textarea {
+    resize: vertical;
+  }
+  .ory-elements ::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+  .ory-elements ::-webkit-date-and-time-value {
+    min-height: 1lh;
+    text-align: inherit;
+  }
+  .ory-elements ::-webkit-datetime-edit {
+    display: inline-flex;
+  }
+  .ory-elements ::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  .ory-elements ::-webkit-datetime-edit,
+  .ory-elements ::-webkit-datetime-edit-year-field,
+  .ory-elements ::-webkit-datetime-edit-month-field,
+  .ory-elements ::-webkit-datetime-edit-day-field,
+  .ory-elements ::-webkit-datetime-edit-hour-field,
+  .ory-elements ::-webkit-datetime-edit-minute-field,
+  .ory-elements ::-webkit-datetime-edit-second-field,
+  .ory-elements ::-webkit-datetime-edit-millisecond-field,
+  .ory-elements ::-webkit-datetime-edit-meridiem-field {
+    padding-block: 0;
+  }
+  .ory-elements ::-webkit-calendar-picker-indicator {
+    line-height: 1;
+  }
+  .ory-elements :-moz-ui-invalid {
+    box-shadow: none;
+  }
+  .ory-elements button,
+  .ory-elements input:where([type=button], [type=reset], [type=submit]),
+  .ory-elements ::file-selector-button {
+    appearance: button;
+  }
+  .ory-elements ::-webkit-inner-spin-button,
+  .ory-elements ::-webkit-outer-spin-button {
+    height: auto;
+  }
+  .ory-elements [hidden]:where(:not([hidden=until-found])) {
+    display: none !important;
+  }
+
+
+  .ory-elements .pointer-events-none {
+    pointer-events: none;
+  }
+  .ory-elements .invisible {
+    visibility: hidden;
+  }
+  .ory-elements .visible {
+    visibility: visible;
+  }
+  .ory-elements .absolute {
+    position: absolute;
+  }
+  .ory-elements .fixed {
+    position: fixed;
+  }
+  .ory-elements .relative {
+    position: relative;
+  }
+  .ory-elements .inset-0 {
+    inset: calc(var(--spacing) * 0);
+  }
+  .ory-elements .z-50 {
+    z-index: 50;
+  }
+  .ory-elements .col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+  .ory-elements .col-span-full {
+    grid-column: 1 / -1;
+  }
+  .ory-elements .container {
+    width: 100%;
+    @media (width >= 40rem) {
+      max-width: 40rem;
+    }
+    @media (width >= 48rem) {
+      max-width: 48rem;
+    }
+    @media (width >= 64rem) {
+      max-width: 64rem;
+    }
+    @media (width >= 80rem) {
+      max-width: 80rem;
+    }
+    @media (width >= 96rem) {
+      max-width: 96rem;
+    }
+  }
+  .ory-elements .-m-3 {
+    margin: calc(var(--spacing) * -3);
+  }
+  .ory-elements .m-auto {
+    margin: auto;
+  }
+  .ory-elements .mt-1 {
+    margin-top: calc(var(--spacing) * 1);
+  }
+  .ory-elements .mt-4 {
+    margin-top: calc(var(--spacing) * 4);
+  }
+  .ory-elements .mr-auto {
+    margin-right: auto;
+  }
+  .ory-elements .ml-auto {
+    margin-left: auto;
+  }
+  .ory-elements .block {
+    display: block;
+  }
+  .ory-elements .contents {
+    display: contents;
+  }
+  .ory-elements .flex {
+    display: flex;
+  }
+  .ory-elements .grid {
+    display: grid;
+  }
+  .ory-elements .hidden {
+    display: none;
+  }
+  .ory-elements .inline-block {
+    display: inline-block;
+  }
+  .ory-elements .inline-flex {
+    display: inline-flex;
+  }
+  .ory-elements .table {
+    display: table;
+  }
+  .ory-elements .aspect-square {
+    aspect-ratio: 1 / 1;
+  }
+  .ory-elements .size-2 {
+    width: calc(var(--spacing) * 2);
+    height: calc(var(--spacing) * 2);
+  }
+  .ory-elements .size-4 {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+  }
+  .ory-elements .size-5 {
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+  }
+  .ory-elements .size-8 {
+    width: calc(var(--spacing) * 8);
+    height: calc(var(--spacing) * 8);
+  }
+  .ory-elements .size-10 {
+    width: calc(var(--spacing) * 10);
+    height: calc(var(--spacing) * 10);
+  }
+  .ory-elements .size-full {
+    width: 100%;
+    height: 100%;
+  }
+  .ory-elements .h-4 {
+    height: calc(var(--spacing) * 4);
+  }
+  .ory-elements .h-5 {
+    height: calc(var(--spacing) * 5);
+  }
+  .ory-elements .h-9 {
+    height: calc(var(--spacing) * 9);
+  }
+  .ory-elements .h-44 {
+    height: calc(var(--spacing) * 44);
+  }
+  .ory-elements .h-full {
+    height: 100%;
+  }
+  .ory-elements .max-h-9 {
+    max-height: calc(var(--spacing) * 9);
+  }
+  .ory-elements .max-h-10 {
+    max-height: calc(var(--spacing) * 10);
+  }
+  .ory-elements .min-h-5 {
+    min-height: calc(var(--spacing) * 5);
+  }
+  .ory-elements .min-h-\[72px\] {
+    min-height: 72px;
+  }
+  .ory-elements .w-7 {
+    width: calc(var(--spacing) * 7);
+  }
+  .ory-elements .w-full {
+    width: 100%;
+  }
+  .ory-elements .w-px {
+    width: 1px;
+  }
+  .ory-elements .max-w-\(--breakpoint-sm\) {
+    max-width: var(--breakpoint-sm);
+  }
+  .ory-elements .max-w-\[60\%\] {
+    max-width: 60%;
+  }
+  .ory-elements .max-w-\[488px\] {
+    max-width: 488px;
+  }
+  .ory-elements .max-w-full {
+    max-width: 100%;
+  }
+  .ory-elements .min-w-1 {
+    min-width: calc(var(--spacing) * 1);
+  }
+  .ory-elements .min-w-76 {
+    min-width: calc(var(--spacing) * 76);
+  }
+  .ory-elements .flex-1 {
+    flex: 1;
+  }
+  .ory-elements .shrink-0 {
+    flex-shrink: 0;
+  }
+  .ory-elements .grow {
+    flex-grow: 1;
+  }
+  .ory-elements .origin-top-right {
+    transform-origin: 100% 0;
+  }
+  .ory-elements .transform {
+    transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
+  }
+  .ory-elements .animate-caret-blink {
+    animation: var(--animate-caret-blink);
+  }
+  .ory-elements .animate-drop-down-in {
+    animation: var(--animate-drop-down-in);
+  }
+  .ory-elements .animate-spin {
+    animation: var(--animate-spin);
+  }
+  .ory-elements .cursor-pointer {
+    cursor: pointer;
+  }
+  .ory-elements .appearance-none {
+    appearance: none;
+  }
+  .ory-elements .grid-cols-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  .ory-elements .grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ory-elements .grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ory-elements .grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .ory-elements .flex-col {
+    flex-direction: column;
+  }
+  .ory-elements .flex-wrap {
+    flex-wrap: wrap;
+  }
+  .ory-elements .items-center {
+    align-items: center;
+  }
+  .ory-elements .items-end {
+    align-items: flex-end;
+  }
+  .ory-elements .items-start {
+    align-items: flex-start;
+  }
+  .ory-elements .justify-between {
+    justify-content: space-between;
+  }
+  .ory-elements .justify-center {
+    justify-content: center;
+  }
+  .ory-elements .justify-start {
+    justify-content: flex-start;
+  }
+  .ory-elements .justify-stretch {
+    justify-content: stretch;
+  }
+  .ory-elements .gap-1 {
+    gap: calc(var(--spacing) * 1);
+  }
+  .ory-elements .gap-2 {
+    gap: calc(var(--spacing) * 2);
+  }
+  .ory-elements .gap-3 {
+    gap: calc(var(--spacing) * 3);
+  }
+  .ory-elements .gap-4 {
+    gap: calc(var(--spacing) * 4);
+  }
+  .ory-elements .gap-6 {
+    gap: calc(var(--spacing) * 6);
+  }
+  .ory-elements .gap-8 {
+    gap: calc(var(--spacing) * 8);
+  }
+  .ory-elements .self-start {
+    align-self: flex-start;
+  }
+  .ory-elements .self-stretch {
+    align-self: stretch;
+  }
+  .ory-elements .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ory-elements .overflow-hidden {
+    overflow: hidden;
+  }
+  .ory-elements .rounded-\[999px\] {
+    border-radius: 999px;
+  }
+  .ory-elements .rounded-buttons {
+    border-radius: var(--radius-buttons);
+  }
+  .ory-elements .rounded-cards {
+    border-radius: var(--radius-cards);
+  }
+  .ory-elements .rounded-forms {
+    border-radius: var(--radius-forms);
+  }
+  .ory-elements .rounded-general {
+    border-radius: var(--radius-general);
+  }
+  .ory-elements .rounded-identifier {
+    border-radius: var(--radius-identifier);
+  }
+  .ory-elements .rounded-t-cards {
+    border-top-left-radius: var(--radius-cards);
+    border-top-right-radius: var(--radius-cards);
+  }
+  .ory-elements .rounded-l-forms {
+    border-top-left-radius: var(--radius-forms);
+    border-bottom-left-radius: var(--radius-forms);
+  }
+  .ory-elements .rounded-r-none {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .ory-elements .rounded-b-cards {
+    border-bottom-right-radius: var(--radius-cards);
+    border-bottom-left-radius: var(--radius-cards);
+  }
+  .ory-elements .border {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+  }
+  .ory-elements .border-t {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 1px;
+  }
+  .ory-elements .border-b {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 1px;
+  }
+  .ory-elements .border-b-0 {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 0px;
+  }
+  .ory-elements .border-solid {
+    --tw-border-style: solid;
+    border-style: solid;
+  }
+  .ory-elements .border-button-identifier-border-border-default {
+    border-color: var(--color-button-identifier-border-border-default);
+  }
+  .ory-elements .border-button-secondary-border-default {
+    border-color: var(--color-button-secondary-border-default);
+  }
+  .ory-elements .border-button-social-border-default {
+    border-color: var(--color-button-social-border-default);
+  }
+  .ory-elements .border-button-social-border-generic-provider {
+    border-color: var(--color-button-social-border-generic-provider);
+  }
+  .ory-elements .border-checkbox-border-checkbox-border-default {
+    border-color: var(--color-checkbox-border-checkbox-border-default);
+  }
+  .ory-elements .border-form-border-default {
+    border-color: var(--color-form-border-default);
+  }
+  .ory-elements .border-input-border-default {
+    border-color: var(--color-input-border-default);
+  }
+  .ory-elements .border-input-border-focus {
+    border-color: var(--color-input-border-focus);
+  }
+  .ory-elements .border-interface-border-default-primary {
+    border-color: var(--color-interface-border-default-primary);
+  }
+  .ory-elements .border-interface-border-validation-danger {
+    border-color: var(--color-interface-border-validation-danger);
+  }
+  .ory-elements .border-ory-border-default {
+    border-color: var(--color-ory-border-default);
+  }
+  .ory-elements .border-toggle-border-default {
+    border-color: var(--color-toggle-border-default);
+  }
+  .ory-elements .bg-\[white\] {
+    background-color: white;
+  }
+  .ory-elements .bg-button-identifier-background-default {
+    background-color: var(--color-button-identifier-background-default);
+  }
+  .ory-elements .bg-button-primary-background-default {
+    background-color: var(--color-button-primary-background-default);
+  }
+  .ory-elements .bg-button-secondary-background-default {
+    background-color: var(--color-button-secondary-background-default);
+  }
+  .ory-elements .bg-button-social-background-default {
+    background-color: var(--color-button-social-background-default);
+  }
+  .ory-elements .bg-button-social-background-generic-provider {
+    background-color: var(--color-button-social-background-generic-provider);
+  }
+  .ory-elements .bg-checkbox-background-default {
+    background-color: var(--color-checkbox-background-default);
+  }
+  .ory-elements .bg-form-background-default {
+    background-color: var(--color-form-background-default);
+  }
+  .ory-elements .bg-input-background-default {
+    background-color: var(--color-input-background-default);
+  }
+  .ory-elements .bg-interface-background-brand-primary {
+    background-color: var(--color-interface-background-brand-primary);
+  }
+  .ory-elements .bg-interface-background-default-inverted {
+    background-color: var(--color-interface-background-default-inverted);
+  }
+  .ory-elements .bg-interface-background-default-primary {
+    background-color: var(--color-interface-background-default-primary);
+  }
+  .ory-elements .bg-interface-background-default-secondary {
+    background-color: var(--color-interface-background-default-secondary);
+  }
+  .ory-elements .bg-ory-background-default {
+    background-color: var(--color-ory-background-default);
+  }
+  .ory-elements .bg-toggle-background-default {
+    background-color: var(--color-toggle-background-default);
+  }
+  .ory-elements .bg-toggle-foreground-default {
+    background-color: var(--color-toggle-foreground-default);
+  }
+  .ory-elements .bg-transparent {
+    background-color: transparent;
+  }
+  .ory-elements .fill-checkbox-foreground-checked {
+    fill: var(--color-checkbox-foreground-checked);
+  }
+  .ory-elements .object-contain {
+    object-fit: contain;
+  }
+  .ory-elements .p-2 {
+    padding: calc(var(--spacing) * 2);
+  }
+  .ory-elements .p-4 {
+    padding: calc(var(--spacing) * 4);
+  }
+  .ory-elements .p-6 {
+    padding: calc(var(--spacing) * 6);
+  }
+  .ory-elements .p-8 {
+    padding: calc(var(--spacing) * 8);
+  }
+  .ory-elements .p-\[3px\] {
+    padding: 3px;
+  }
+  .ory-elements .px-2 {
+    padding-inline: calc(var(--spacing) * 2);
+  }
+  .ory-elements .px-4 {
+    padding-inline: calc(var(--spacing) * 4);
+  }
+  .ory-elements .px-5 {
+    padding-inline: calc(var(--spacing) * 5);
+  }
+  .ory-elements .px-6 {
+    padding-inline: calc(var(--spacing) * 6);
+  }
+  .ory-elements .px-8 {
+    padding-inline: calc(var(--spacing) * 8);
+  }
+  .ory-elements .px-\[11px\] {
+    padding-inline: 11px;
+  }
+  .ory-elements .py-1\.5 {
+    padding-block: calc(var(--spacing) * 1.5);
+  }
+  .ory-elements .py-2 {
+    padding-block: calc(var(--spacing) * 2);
+  }
+  .ory-elements .py-3 {
+    padding-block: calc(var(--spacing) * 3);
+  }
+  .ory-elements .py-4 {
+    padding-block: calc(var(--spacing) * 4);
+  }
+  .ory-elements .py-4\.5 {
+    padding-block: calc(var(--spacing) * 4.5);
+  }
+  .ory-elements .py-8 {
+    padding-block: calc(var(--spacing) * 8);
+  }
+  .ory-elements .py-12 {
+    padding-block: calc(var(--spacing) * 12);
+  }
+  .ory-elements .py-\[5px\] {
+    padding-block: 5px;
+  }
+  .ory-elements .py-\[13px\] {
+    padding-block: 13px;
+  }
+  .ory-elements .py-\[15px\] {
+    padding-block: 15px;
+  }
+  .ory-elements .pb-12 {
+    padding-bottom: calc(var(--spacing) * 12);
+  }
+  .ory-elements .pl-8 {
+    padding-left: calc(var(--spacing) * 8);
+  }
+  .ory-elements .text-center {
+    text-align: center;
+  }
+  .ory-elements .text-left {
+    text-align: left;
+  }
+  .ory-elements .font-sans-default {
+    font-family: var(--font-sans-default);
+  }
+  .ory-elements .text-lg {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+  .ory-elements .text-sm {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+  .ory-elements .text-xl {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
+  }
+  .ory-elements .text-xs {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+  .ory-elements .leading-none {
+    --tw-leading: 1;
+    line-height: 1;
+  }
+  .ory-elements .leading-normal {
+    --tw-leading: var(--leading-normal);
+    line-height: var(--leading-normal);
+  }
+  .ory-elements .leading-tight {
+    --tw-leading: var(--leading-tight);
+    line-height: var(--leading-tight);
+  }
+  .ory-elements .font-bold {
+    --tw-font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-bold);
+  }
+  .ory-elements .font-medium {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+  .ory-elements .font-normal {
+    --tw-font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight-normal);
+  }
+  .ory-elements .font-semibold {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+  }
+  .ory-elements .text-nowrap {
+    text-wrap: nowrap;
+  }
+  .ory-elements .break-words {
+    overflow-wrap: break-word;
+  }
+  .ory-elements .text-ellipsis {
+    text-overflow: ellipsis;
+  }
+  .ory-elements .text-button-identifier-foreground-default {
+    color: var(--color-button-identifier-foreground-default);
+  }
+  .ory-elements .text-button-link-brand-brand {
+    color: var(--color-button-link-brand-brand);
+  }
+  .ory-elements .text-button-link-default-primary {
+    color: var(--color-button-link-default-primary);
+  }
+  .ory-elements .text-button-link-default-secondary {
+    color: var(--color-button-link-default-secondary);
+  }
+  .ory-elements .text-button-primary-foreground-default {
+    color: var(--color-button-primary-foreground-default);
+  }
+  .ory-elements .text-button-secondary-foreground-default {
+    color: var(--color-button-secondary-foreground-default);
+  }
+  .ory-elements .text-button-social-foreground-default {
+    color: var(--color-button-social-foreground-default);
+  }
+  .ory-elements .text-button-social-foreground-generic-provider {
+    color: var(--color-button-social-foreground-generic-provider);
+  }
+  .ory-elements .text-input-foreground-primary {
+    color: var(--color-input-foreground-primary);
+  }
+  .ory-elements .text-interface-foreground-brand-primary {
+    color: var(--color-interface-foreground-brand-primary);
+  }
+  .ory-elements .text-interface-foreground-default-inverted {
+    color: var(--color-interface-foreground-default-inverted);
+  }
+  .ory-elements .text-interface-foreground-default-primary {
+    color: var(--color-interface-foreground-default-primary);
+  }
+  .ory-elements .text-interface-foreground-default-secondary {
+    color: var(--color-interface-foreground-default-secondary);
+  }
+  .ory-elements .text-interface-foreground-default-tertiary {
+    color: var(--color-interface-foreground-default-tertiary);
+  }
+  .ory-elements .text-interface-foreground-validation-danger {
+    color: var(--color-interface-foreground-validation-danger);
+  }
+  .ory-elements .text-interface-foreground-validation-success {
+    color: var(--color-interface-foreground-validation-success);
+  }
+  .ory-elements .text-interface-foreground-validation-warning {
+    color: var(--color-interface-foreground-validation-warning);
+  }
+  .ory-elements .text-ory-foreground-default {
+    color: var(--color-ory-foreground-default);
+  }
+  .ory-elements .underline {
+    text-decoration-line: underline;
+  }
+  .ory-elements .antialiased {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .ory-elements .mix-blend-multiply {
+    mix-blend-mode: multiply;
+  }
+  .ory-elements .ring {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow:
+      var(--tw-inset-shadow),
+      var(--tw-inset-ring-shadow),
+      var(--tw-ring-offset-shadow),
+      var(--tw-ring-shadow),
+      var(--tw-shadow);
+  }
+  .ory-elements .ring-1 {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow:
+      var(--tw-inset-shadow),
+      var(--tw-inset-ring-shadow),
+      var(--tw-ring-offset-shadow),
+      var(--tw-ring-shadow),
+      var(--tw-shadow);
+  }
+  .ory-elements .ring-button-primary-border-default {
+    --tw-ring-color: var(--color-button-primary-border-default);
+  }
+  .ory-elements .ring-button-secondary-border-default {
+    --tw-ring-color: var(--color-button-secondary-border-default);
+  }
+  .ory-elements .outline-hidden {
+    --tw-outline-style: none;
+    outline-style: none;
+    @media (forced-colors: active) {
+      outline: 2px solid transparent;
+      outline-offset: 2px;
+    }
+  }
+  .ory-elements .filter {
+    filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,);
+  }
+  .ory-elements .transition {
+    transition-property:
+      color,
+      background-color,
+      border-color,
+      outline-color,
+      text-decoration-color,
+      fill,
+      stroke,
+      --tw-gradient-from,
+      --tw-gradient-via,
+      --tw-gradient-to,
+      opacity,
+      box-shadow,
+      transform,
+      translate,
+      scale,
+      rotate,
+      filter,
+      -webkit-backdrop-filter,
+      backdrop-filter,
+      display,
+      content-visibility,
+      overlay,
+      pointer-events;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+  .ory-elements .transition-all {
+    transition-property: all;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+  .ory-elements .transition-colors {
+    transition-property:
+      color,
+      background-color,
+      border-color,
+      outline-color,
+      text-decoration-color,
+      fill,
+      stroke,
+      --tw-gradient-from,
+      --tw-gradient-via,
+      --tw-gradient-to;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+  .ory-elements .duration-100 {
+    --tw-duration: 100ms;
+    transition-duration: 100ms;
+  }
+  .ory-elements .duration-700 {
+    --tw-duration: 700ms;
+    transition-duration: 700ms;
+  }
+  .ory-elements .ease-linear {
+    --tw-ease: linear;
+    transition-timing-function: linear;
+  }
+  .ory-elements .will-change-\[opacity\,transform\] {
+    will-change: opacity, transform;
+  }
+  .ory-elements .select-none {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .ory-elements .ring-inset {
+    --tw-ring-inset: inset;
+  }
+  .ory-elements .group-hover\:text-button-identifier-foreground-hover {
+    &:is(:where(.group):hover *) {
+      @media (hover: hover) {
+        color: var(--color-button-identifier-foreground-hover);
+      }
+    }
+  }
+  .ory-elements .peer-checked\:block {
+    &:is(:where(.peer):checked ~ *) {
+      display: block;
+    }
+  }
+  .ory-elements .placeholder\:h-\[20px\] {
+    &::placeholder {
+      height: 20px;
+    }
+  }
+  .ory-elements .placeholder\:text-input-foreground-tertiary {
+    &::placeholder {
+      color: var(--color-input-foreground-tertiary);
+    }
+  }
+  .ory-elements .first\:border-0 {
+    &:first-child {
+      border-style: var(--tw-border-style);
+      border-width: 0px;
+    }
+  }
+  .ory-elements .checked\:border-checkbox-border-checkbox-border-checked {
+    &:checked {
+      border-color: var(--color-checkbox-border-checkbox-border-checked);
+    }
+  }
+  .ory-elements .checked\:bg-checkbox-background-checked {
+    &:checked {
+      background-color: var(--color-checkbox-background-checked);
+    }
+  }
+  .ory-elements .focus-within\:border-input-border-focus {
+    &:focus-within {
+      border-color: var(--color-input-border-focus);
+    }
+  }
+  .ory-elements .hover\:border-button-identifier-border-border-hover {
+    &:hover {
+      @media (hover: hover) {
+        border-color: var(--color-button-identifier-border-border-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:border-button-social-border-hover {
+    &:hover {
+      @media (hover: hover) {
+        border-color: var(--color-button-social-border-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:border-input-border-hover {
+    &:hover {
+      @media (hover: hover) {
+        border-color: var(--color-input-border-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:bg-button-identifier-background-hover {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-button-identifier-background-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:bg-button-primary-background-hover {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-button-primary-background-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:bg-button-secondary-background-hover {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-button-secondary-background-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:bg-button-social-background-hover {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-button-social-background-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:bg-input-background-hover {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-input-background-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:bg-interface-background-default-primary-hover {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-interface-background-default-primary-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:text-button-link-brand-brand-hover {
+    &:hover {
+      @media (hover: hover) {
+        color: var(--color-button-link-brand-brand-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:text-button-link-default-primary-hover {
+    &:hover {
+      @media (hover: hover) {
+        color: var(--color-button-link-default-primary-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:text-button-link-default-secondary-hover {
+    &:hover {
+      @media (hover: hover) {
+        color: var(--color-button-link-default-secondary-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:text-button-primary-foreground-hover {
+    &:hover {
+      @media (hover: hover) {
+        color: var(--color-button-primary-foreground-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:text-button-secondary-foreground-hover {
+    &:hover {
+      @media (hover: hover) {
+        color: var(--color-button-secondary-foreground-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:text-button-social-foreground-hover {
+    &:hover {
+      @media (hover: hover) {
+        color: var(--color-button-social-foreground-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:ring-button-primary-border-hover {
+    &:hover {
+      @media (hover: hover) {
+        --tw-ring-color: var(--color-button-primary-border-hover);
+      }
+    }
+  }
+  .ory-elements .hover\:ring-button-secondary-border-hover {
+    &:hover {
+      @media (hover: hover) {
+        --tw-ring-color: var(--color-button-secondary-border-hover);
+      }
+    }
+  }
+  .ory-elements .not-focus-within\:hover\:border-input-border-hover {
+    &:not(*:focus-within) {
+      &:hover {
+        @media (hover: hover) {
+          border-color: var(--color-input-border-hover);
+        }
+      }
+    }
+  }
+  .ory-elements .focus\:ring-0 {
+    &:focus {
+      --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+      box-shadow:
+        var(--tw-inset-shadow),
+        var(--tw-inset-ring-shadow),
+        var(--tw-ring-offset-shadow),
+        var(--tw-ring-shadow),
+        var(--tw-shadow);
+    }
+  }
+  .ory-elements .focus\:outline-none {
+    &:focus {
+      --tw-outline-style: none;
+      outline-style: none;
+    }
+  }
+  .ory-elements .focus-visible\:border-input-border-focus {
+    &:focus-visible {
+      border-color: var(--color-input-border-focus);
+    }
+  }
+  .ory-elements .focus-visible\:outline-hidden {
+    &:focus-visible {
+      --tw-outline-style: none;
+      outline-style: none;
+      @media (forced-colors: active) {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+      }
+    }
+  }
+  .ory-elements .focus-visible\:outline-none {
+    &:focus-visible {
+      --tw-outline-style: none;
+      outline-style: none;
+    }
+  }
+  .ory-elements .disabled\:cursor-default {
+    &:disabled {
+      cursor: default;
+    }
+  }
+  .ory-elements .disabled\:cursor-not-allowed {
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+  .ory-elements .disabled\:border-input-border-disabled {
+    &:disabled {
+      border-color: var(--color-input-border-disabled);
+    }
+  }
+  .ory-elements .disabled\:bg-button-primary-background-disabled {
+    &:disabled {
+      background-color: var(--color-button-primary-background-disabled);
+    }
+  }
+  .ory-elements .disabled\:bg-button-secondary-background-disabled {
+    &:disabled {
+      background-color: var(--color-button-secondary-background-disabled);
+    }
+  }
+  .ory-elements .disabled\:bg-input-background-disabled {
+    &:disabled {
+      background-color: var(--color-input-background-disabled);
+    }
+  }
+  .ory-elements .disabled\:text-button-primary-foreground-disabled {
+    &:disabled {
+      color: var(--color-button-primary-foreground-disabled);
+    }
+  }
+  .ory-elements .disabled\:text-button-secondary-foreground-disabled {
+    &:disabled {
+      color: var(--color-button-secondary-foreground-disabled);
+    }
+  }
+  .ory-elements .disabled\:text-input-foreground-disabled {
+    &:disabled {
+      color: var(--color-input-foreground-disabled);
+    }
+  }
+  .ory-elements .disabled\:opacity-50 {
+    &:disabled {
+      opacity: 50%;
+    }
+  }
+  .ory-elements .disabled\:ring-button-primary-border-disabled {
+    &:disabled {
+      --tw-ring-color: var(--color-button-primary-border-disabled);
+    }
+  }
+  .ory-elements .disabled\:ring-button-secondary-border-disabled {
+    &:disabled {
+      --tw-ring-color: var(--color-button-secondary-border-disabled);
+    }
+  }
+  .ory-elements .disabled\:hover\:bg-ui-transparent {
+    &:disabled {
+      &:hover {
+        @media (hover: hover) {
+          background-color: var(--color-ui-transparent);
+        }
+      }
+    }
+  }
+  .ory-elements .has-disabled\:opacity-50 {
+    &:has(*:disabled) {
+      opacity: 50%;
+    }
+  }
+  .ory-elements .data-disabled\:pointer-events-none {
+    &[data-disabled] {
+      pointer-events: none;
+    }
+  }
+  .ory-elements .data-\[disabled\]\:bg-button-secondary-background-disabled {
+    &[data-disabled] {
+      background-color: var(--color-button-secondary-background-disabled);
+    }
+  }
+  .ory-elements .data-\[disabled\]\:text-button-secondary-foreground-disabled {
+    &[data-disabled] {
+      color: var(--color-button-secondary-foreground-disabled);
+    }
+  }
+  .ory-elements .data-\[disabled\=true\]\:border-input-border-disabled {
+    &[data-disabled=true] {
+      border-color: var(--color-input-border-disabled);
+    }
+  }
+  .ory-elements .data-\[disabled\=true\]\:bg-input-background-disabled {
+    &[data-disabled=true] {
+      background-color: var(--color-input-background-disabled);
+    }
+  }
+  .ory-elements .data-\[disabled\=true\]\:text-input-foreground-disabled {
+    &[data-disabled=true] {
+      color: var(--color-input-foreground-disabled);
+    }
+  }
+  .ory-elements .data-\[state\=checked\]\:translate-x-3 {
+    &[data-state=checked] {
+      --tw-translate-x: calc(var(--spacing) * 3);
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+  }
+  .ory-elements .data-\[state\=checked\]\:border-toggle-border-checked {
+    &[data-state=checked] {
+      border-color: var(--color-toggle-border-checked);
+    }
+  }
+  .ory-elements .data-\[state\=checked\]\:bg-toggle-background-checked {
+    &[data-state=checked] {
+      background-color: var(--color-toggle-background-checked);
+    }
+  }
+  .ory-elements .data-\[state\=checked\]\:bg-toggle-foreground-checked {
+    &[data-state=checked] {
+      background-color: var(--color-toggle-foreground-checked);
+    }
+  }
+  .ory-elements .data-\[state\=closed\]\:animate-drop-down-out {
+    &[data-state=closed] {
+      animation: var(--animate-drop-down-out);
+    }
+  }
+  .ory-elements .max-sm\:bottom-0 {
+    @media (width < 40rem) {
+      bottom: calc(var(--spacing) * 0);
+    }
+  }
+  .ory-elements .max-sm\:left-8 {
+    @media (width < 40rem) {
+      left: calc(var(--spacing) * 8);
+    }
+  }
+  .ory-elements .max-sm\:hidden {
+    @media (width < 40rem) {
+      display: none;
+    }
+  }
+  .ory-elements .max-sm\:translate-y-full {
+    @media (width < 40rem) {
+      --tw-translate-y: 100%;
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+  }
+  .ory-elements .max-sm\:rounded-b-branding {
+    @media (width < 40rem) {
+      border-bottom-right-radius: var(--radius-branding);
+      border-bottom-left-radius: var(--radius-branding);
+    }
+  }
+  .ory-elements .max-sm\:py-\[7px\] {
+    @media (width < 40rem) {
+      padding-block: 7px;
+    }
+  }
+  .ory-elements .sm\:top-8 {
+    @media (width >= 40rem) {
+      top: calc(var(--spacing) * 8);
+    }
+  }
+  .ory-elements .sm\:right-0 {
+    @media (width >= 40rem) {
+      right: calc(var(--spacing) * 0);
+    }
+  }
+  .ory-elements .sm\:block {
+    @media (width >= 40rem) {
+      display: block;
+    }
+  }
+  .ory-elements .sm\:hidden {
+    @media (width >= 40rem) {
+      display: none;
+    }
+  }
+  .ory-elements .sm\:w-\[480px\] {
+    @media (width >= 40rem) {
+      width: 480px;
+    }
+  }
+  .ory-elements .sm\:max-w-\[480px\] {
+    @media (width >= 40rem) {
+      max-width: 480px;
+    }
+  }
+  .ory-elements .sm\:translate-x-full {
+    @media (width >= 40rem) {
+      --tw-translate-x: 100%;
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+    }
+  }
+  .ory-elements .sm\:grid-cols-2 {
+    @media (width >= 40rem) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .ory-elements .sm\:grid-cols-3 {
+    @media (width >= 40rem) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  .ory-elements .sm\:flex-row {
+    @media (width >= 40rem) {
+      flex-direction: row;
+    }
+  }
+  .ory-elements .sm\:items-center {
+    @media (width >= 40rem) {
+      align-items: center;
+    }
+  }
+  .ory-elements .sm\:items-end {
+    @media (width >= 40rem) {
+      align-items: flex-end;
+    }
+  }
+  .ory-elements .sm\:rounded-cards {
+    @media (width >= 40rem) {
+      border-radius: var(--radius-cards);
+    }
+  }
+  .ory-elements .sm\:rounded-r-branding {
+    @media (width >= 40rem) {
+      border-top-right-radius: var(--radius-branding);
+      border-bottom-right-radius: var(--radius-branding);
+    }
+  }
+  .ory-elements .sm\:border {
+    @media (width >= 40rem) {
+      border-style: var(--tw-border-style);
+      border-width: 1px;
+    }
+  }
+  .ory-elements .sm\:px-12 {
+    @media (width >= 40rem) {
+      padding-inline: calc(var(--spacing) * 12);
+    }
+  }
+  .ory-elements .sm\:py-14 {
+    @media (width >= 40rem) {
+      padding-block: calc(var(--spacing) * 14);
+    }
+  }
+  .ory-elements .sm\:pl-\[7px\] {
+    @media (width >= 40rem) {
+      padding-left: 7px;
+    }
+  }
+  .ory-elements .md\:mt-16 {
+    @media (width >= 48rem) {
+      margin-top: calc(var(--spacing) * 16);
+    }
+  }
+  .ory-elements .md\:max-w-96 {
+    @media (width >= 48rem) {
+      max-width: calc(var(--spacing) * 96);
+    }
+  }
+  .ory-elements .md\:max-w-\[712px\] {
+    @media (width >= 48rem) {
+      max-width: 712px;
+    }
+  }
+  .ory-elements .md\:grid-cols-2 {
+    @media (width >= 48rem) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .ory-elements .md\:grid-cols-3 {
+    @media (width >= 48rem) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  .ory-elements .md\:grid-cols-5 {
+    @media (width >= 48rem) {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+  .ory-elements .md\:flex-row {
+    @media (width >= 48rem) {
+      flex-direction: row;
+    }
+  }
+  .ory-elements .md\:items-center {
+    @media (width >= 48rem) {
+      align-items: center;
+    }
+  }
+  .ory-elements .md\:justify-between {
+    @media (width >= 48rem) {
+      justify-content: space-between;
+    }
+  }
+  .ory-elements .md\:gap-12 {
+    @media (width >= 48rem) {
+      gap: calc(var(--spacing) * 12);
+    }
+  }
+  .ory-elements .lg\:max-w-\[802px\] {
+    @media (width >= 64rem) {
+      max-width: 802px;
+    }
+  }
+  .ory-elements .lg\:py-4\.5 {
+    @media (width >= 64rem) {
+      padding-block: calc(var(--spacing) * 4.5);
+    }
+  }
+  .ory-elements .xl\:max-w-\[896px\] {
+    @media (width >= 80rem) {
+      max-width: 896px;
+    }
+  }
+  .ory-elements .loading\:cursor-wait {
+    &[data-loading=true] {
+      cursor: wait;
+    }
+  }
+  .ory-elements .loading\:border-button-social-border-disabled {
+    &[data-loading=true] {
+      border-color: var(--color-button-social-border-disabled);
+    }
+  }
+  .ory-elements .loading\:bg-button-primary-background-default {
+    &[data-loading=true] {
+      background-color: var(--color-button-primary-background-default);
+    }
+  }
+  .ory-elements .loading\:bg-button-secondary-background-default {
+    &[data-loading=true] {
+      background-color: var(--color-button-secondary-background-default);
+    }
+  }
+  .ory-elements .loading\:bg-button-social-background-disabled {
+    &[data-loading=true] {
+      background-color: var(--color-button-social-background-disabled);
+    }
+  }
+  .ory-elements .loading\:text-button-primary-foreground-default {
+    &[data-loading=true] {
+      color: var(--color-button-primary-foreground-default);
+    }
+  }
+  .ory-elements .loading\:text-button-secondary-foreground-default {
+    &[data-loading=true] {
+      color: var(--color-button-secondary-foreground-default);
+    }
+  }
+  .ory-elements .loading\:text-button-social-foreground-disabled {
+    &[data-loading=true] {
+      color: var(--color-button-social-foreground-disabled);
+    }
+  }
+  .ory-elements .loading\:ring-button-primary-border-default {
+    &[data-loading=true] {
+      --tw-ring-color: var(--color-button-primary-border-default);
+    }
+  }
+  .ory-elements .loading\:ring-button-secondary-border-default {
+    &[data-loading=true] {
+      --tw-ring-color: var(--color-button-secondary-border-default);
+    }
+  }
+  .ory-elements .loading\:before\:pointer-events-none {
+    &[data-loading=true] {
+      &::before {
+        content: var(--tw-content);
+        pointer-events: none;
+      }
+    }
+  }
+  .ory-elements .loading\:before\:absolute {
+    &[data-loading=true] {
+      &::before {
+        content: var(--tw-content);
+        position: absolute;
+      }
+    }
+  }
+  .ory-elements .loading\:before\:inset-0 {
+    &[data-loading=true] {
+      &::before {
+        content: var(--tw-content);
+        inset: calc(var(--spacing) * 0);
+      }
+    }
+  }
+  .ory-elements .loading\:before\:bg-button-primary-background-default {
+    &[data-loading=true] {
+      &::before {
+        content: var(--tw-content);
+        background-color: var(--color-button-primary-background-default);
+      }
+    }
+  }
+  .ory-elements .loading\:before\:bg-button-secondary-background-default {
+    &[data-loading=true] {
+      &::before {
+        content: var(--tw-content);
+        background-color: var(--color-button-secondary-background-default);
+      }
+    }
+  }
+  .ory-elements .loading\:before\:opacity-80 {
+    &[data-loading=true] {
+      &::before {
+        content: var(--tw-content);
+        opacity: 80%;
+      }
+    }
+  }
+  .ory-elements .loading\:before\:content-\[\'\'\] {
+    &[data-loading=true] {
+      &::before {
+        --tw-content: "";
+        content: var(--tw-content);
+      }
+    }
+  }
+
+
+  .ory-elements,
+  :host {
+    --font-mono:
+      ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Monaco,
+      Consolas,
+      "Liberation Mono",
+      "Courier New",
+      monospace;
+    --spacing: 0.25rem;
+    --breakpoint-sm: 40rem;
+    --text-xs: 0.75rem;
+    --text-xs--line-height: calc(1 / 0.75);
+    --text-sm: 0.875rem;
+    --text-sm--line-height: calc(1.25 / 0.875);
+    --text-lg: 1.125rem;
+    --text-lg--line-height: calc(1.75 / 1.125);
+    --text-xl: 1.25rem;
+    --text-xl--line-height: calc(1.75 / 1.25);
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --leading-tight: 1.25;
+    --leading-normal: 1.5;
+    --animate-spin: spin 1s linear infinite;
+    --default-transition-duration: 150ms;
+    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    --default-mono-font-family: var(--font-mono);
+    --ui-100: #f1f5f9;
+    --ui-200: #e2e8f0;
+    --ui-300: #cbd5e1;
+    --ui-400: #94a3b8;
+    --ui-50: #f8fafc;
+    --ui-500: #64748b;
+    --ui-600: #475569;
+    --ui-700: #334155;
+    --ui-800: #1e293b;
+    --ui-900: #0f172a;
+    --ui-950: #020617;
+    --ui-black: #000000;
+    --ui-danger: #dc2626;
+    --ui-success: #22c55e;
+    --ui-transparent: #ffffff00;
+    --ui-warning: #eab308;
+    --ui-white: #ffffff;
+    --button-identifier-background-default: var( --interface-background-brand-secondary );
+    --button-identifier-background-hover: var( --interface-background-brand-secondary-hover );
+    --button-identifier-border-border-default: var( --interface-border-brand-brand );
+    --button-identifier-border-border-hover: var(--interface-border-brand-brand);
+    --button-identifier-foreground-default: var( --interface-foreground-brand-on-secondary );
+    --button-identifier-foreground-hover: var( --interface-foreground-brand-on-secondary );
+    --button-link-brand-brand: var(--interface-foreground-brand-primary);
+    --button-link-brand-brand-hover: var(--interface-foreground-default-primary);
+    --button-link-default-primary: var(--interface-foreground-default-primary);
+    --button-link-default-primary-hover: var( --interface-foreground-brand-primary );
+    --button-link-default-secondary: var( --interface-foreground-default-secondary );
+    --button-link-default-secondary-hover: var( --interface-foreground-default-tertiary );
+    --button-link-disabled-disabled: var( --interface-foreground-disabled-disabled );
+    --button-primary-background-default: var( --interface-background-brand-primary );
+    --button-primary-background-disabled: var( --interface-background-disabled-disabled );
+    --button-primary-background-hover: var( --interface-background-brand-primary-hover );
+    --button-primary-border-default: var(--interface-border-default-none);
+    --button-primary-border-disabled: var(--interface-border-disabled-disabled);
+    --button-primary-border-hover: var(--interface-border-default-none);
+    --button-primary-foreground-default: var( --interface-foreground-brand-on-primary );
+    --button-primary-foreground-disabled: var( --interface-foreground-disabled-on-disabled );
+    --button-primary-foreground-hover: var( --interface-foreground-brand-on-primary );
+    --button-secondary-background-default: var( --interface-background-default-primary );
+    --button-secondary-background-disabled: var( --interface-background-disabled-disabled );
+    --button-secondary-background-hover: var( --interface-background-default-primary-hover );
+    --button-secondary-border-default: var(--interface-border-default-primary);
+    --button-secondary-border-disabled: var(--interface-border-disabled-disabled);
+    --button-secondary-border-hover: var(--interface-border-default-primary);
+    --button-secondary-foreground-default: var( --interface-foreground-default-primary );
+    --button-secondary-foreground-disabled: var( --interface-foreground-disabled-on-disabled );
+    --button-secondary-foreground-hover: var( --interface-foreground-default-secondary );
+    --button-social-background-default: var( --interface-background-default-primary );
+    --button-social-background-disabled: var( --interface-background-disabled-disabled );
+    --button-social-background-generic-provider: var( --interface-background-default-inverted );
+    --button-social-background-hover: var( --interface-background-default-primary-hover );
+    --button-social-border-default: var(--interface-border-default-primary);
+    --button-social-border-disabled: var(--interface-border-disabled-disabled);
+    --button-social-border-generic-provider: var(--interface-border-default-none);
+    --button-social-border-hover: var(--interface-border-default-primary);
+    --button-social-foreground-default: var( --interface-foreground-default-primary );
+    --button-social-foreground-disabled: var( --interface-foreground-disabled-on-disabled );
+    --button-social-foreground-generic-provider: var( --interface-foreground-default-inverted );
+    --button-social-foreground-hover: var( --interface-foreground-default-secondary );
+    --checkbox-background-checked: var(--interface-background-brand-primary);
+    --checkbox-background-default: var(--interface-background-default-secondary);
+    --checkbox-border-checkbox-border-checked: var( --interface-border-brand-brand );
+    --checkbox-border-checkbox-border-default: var( --interface-border-default-primary );
+    --checkbox-foreground-checked: var(--interface-foreground-brand-on-primary);
+    --checkbox-foreground-default: var(--interface-foreground-default-primary);
+    --form-background-default: var(--interface-background-default-primary);
+    --form-border-default: var(--interface-border-default-primary);
+    --input-background-default: var(--interface-background-default-primary);
+    --input-background-disabled: var(--interface-background-disabled-disabled);
+    --input-background-hover: var(--interface-background-default-primary-hover);
+    --input-border-default: var(--interface-border-default-primary);
+    --input-border-disabled: var(--interface-border-disabled-disabled);
+    --input-border-focus: var(--interface-border-brand-brand);
+    --input-border-hover: var(--interface-border-default-primary);
+    --input-foreground-disabled: var(--interface-foreground-disabled-on-disabled);
+    --input-foreground-primary: var(--interface-foreground-default-primary);
+    --input-foreground-secondary: var(--interface-foreground-default-secondary);
+    --input-foreground-tertiary: var(--interface-foreground-default-tertiary);
+    --interface-background-brand-primary: var(--brand-500);
+    --interface-background-brand-primary-hover: var(--brand-400);
+    --interface-background-brand-secondary: var(--brand-50);
+    --interface-background-brand-secondary-hover: var(--brand-100);
+    --interface-background-default-inverted: var(--ui-900);
+    --interface-background-default-inverted-hover: var(--ui-800);
+    --interface-background-default-none: var(--ui-transparent);
+    --interface-background-default-primary: var(--ui-white);
+    --interface-background-default-primary-hover: var(--ui-50);
+    --interface-background-default-secondary: var(--ui-50);
+    --interface-background-default-secondary-hover: var(--ui-200);
+    --interface-background-default-tertiary: var(--ui-200);
+    --interface-background-default-tertiary-hover: var(--ui-300);
+    --interface-background-disabled-disabled: var(--ui-200);
+    --interface-background-validation-danger: var(--ui-danger);
+    --interface-background-validation-success: var(--ui-success);
+    --interface-background-validation-warning: var(--ui-warning);
+    --interface-border-brand-brand: var(--brand-500);
+    --interface-border-default-inverted: var(--ui-700);
+    --interface-border-default-none: var(--ui-transparent);
+    --interface-border-default-primary: var(--ui-300);
+    --interface-border-disabled-disabled: var(--ui-300);
+    --interface-border-validation-danger: var(--ui-danger);
+    --interface-border-validation-success: var(--ui-success);
+    --interface-border-validation-warning: var(--ui-warning);
+    --interface-foreground-brand-on-primary: var(--brand-50);
+    --interface-foreground-brand-on-secondary: var(--brand-950);
+    --interface-foreground-brand-primary: var(--brand-500);
+    --interface-foreground-brand-secondary: var(--brand-50);
+    --interface-foreground-default-inverted: var(--ui-white);
+    --interface-foreground-default-primary: var(--ui-900);
+    --interface-foreground-default-secondary: var(--ui-700);
+    --interface-foreground-default-tertiary: var(--ui-500);
+    --interface-foreground-disabled-disabled: var(--ui-300);
+    --interface-foreground-disabled-on-disabled: var(--ui-400);
+    --interface-foreground-validation-danger: var(--ui-danger);
+    --interface-foreground-validation-success: var(--ui-success);
+    --interface-foreground-validation-warning: var(--ui-warning);
+    --ory-background-default: var(--interface-background-default-primary);
+    --ory-border-default: var(--interface-border-default-primary);
+    --ory-foreground-default: var(--interface-foreground-default-primary);
+    --radio-background-checked: var(--interface-background-brand-primary);
+    --radio-background-default: var(--interface-background-default-secondary);
+    --radio-border-checked: var(--interface-border-brand-brand);
+    --radio-border-default: var(--interface-border-default-primary);
+    --radio-foreground-checked: var(--interface-foreground-brand-on-primary);
+    --radio-foreground-default: var(--interface-foreground-default-primary);
+    --toggle-background-checked: var(--interface-background-brand-primary);
+    --toggle-background-default: var(--interface-background-default-secondary);
+    --toggle-border-checked: var(--interface-border-default-none);
+    --toggle-border-default: var(--interface-border-default-primary);
+    --toggle-foreground-checked: var(--interface-foreground-brand-on-primary);
+    --toggle-foreground-default: var(--interface-foreground-brand-primary);
+    --brand-100: var(--ui-100);
+    --brand-200: var(--ui-300);
+    --brand-300: var(--ui-500);
+    --brand-400: var(--ui-700);
+    --brand-50: var(--ui-50);
+    --brand-500: var(--ui-900);
+    --brand-600: var(--ui-white);
+    --brand-700: var(--ui-200);
+    --brand-800: var(--ui-400);
+    --brand-900: var(--ui-600);
+    --brand-950: var(--ui-800);
+    --color-ui-transparent: var(--ui-transparent);
+    --color-button-identifier-background-default: var( --button-identifier-background-default );
+    --color-button-identifier-background-hover: var( --button-identifier-background-hover );
+    --color-button-identifier-border-border-default: var( --button-identifier-border-border-default );
+    --color-button-identifier-border-border-hover: var( --button-identifier-border-border-hover );
+    --color-button-identifier-foreground-default: var( --button-identifier-foreground-default );
+    --color-button-identifier-foreground-hover: var( --button-identifier-foreground-hover );
+    --color-button-link-brand-brand: var(--button-link-brand-brand);
+    --color-button-link-brand-brand-hover: var(--button-link-brand-brand-hover);
+    --color-button-link-default-primary: var(--button-link-default-primary);
+    --color-button-link-default-primary-hover: var( --button-link-default-primary-hover );
+    --color-button-link-default-secondary: var(--button-link-default-secondary);
+    --color-button-link-default-secondary-hover: var( --button-link-default-secondary-hover );
+    --color-button-primary-background-default: var( --button-primary-background-default );
+    --color-button-primary-background-disabled: var( --button-primary-background-disabled );
+    --color-button-primary-background-hover: var( --button-primary-background-hover );
+    --color-button-primary-border-default: var(--button-primary-border-default);
+    --color-button-primary-border-disabled: var(--button-primary-border-disabled);
+    --color-button-primary-border-hover: var(--button-primary-border-hover);
+    --color-button-primary-foreground-default: var( --button-primary-foreground-default );
+    --color-button-primary-foreground-disabled: var( --button-primary-foreground-disabled );
+    --color-button-primary-foreground-hover: var( --button-primary-foreground-hover );
+    --color-button-secondary-background-default: var( --button-secondary-background-default );
+    --color-button-secondary-background-disabled: var( --button-secondary-background-disabled );
+    --color-button-secondary-background-hover: var( --button-secondary-background-hover );
+    --color-button-secondary-border-default: var( --button-secondary-border-default );
+    --color-button-secondary-border-disabled: var( --button-secondary-border-disabled );
+    --color-button-secondary-border-hover: var(--button-secondary-border-hover);
+    --color-button-secondary-foreground-default: var( --button-secondary-foreground-default );
+    --color-button-secondary-foreground-disabled: var( --button-secondary-foreground-disabled );
+    --color-button-secondary-foreground-hover: var( --button-secondary-foreground-hover );
+    --color-button-social-background-default: var( --button-social-background-default );
+    --color-button-social-background-disabled: var( --button-social-background-disabled );
+    --color-button-social-background-generic-provider: var( --button-social-background-generic-provider );
+    --color-button-social-background-hover: var(--button-social-background-hover);
+    --color-button-social-border-default: var(--button-social-border-default);
+    --color-button-social-border-disabled: var(--button-social-border-disabled);
+    --color-button-social-border-generic-provider: var( --button-social-border-generic-provider );
+    --color-button-social-border-hover: var(--button-social-border-hover);
+    --color-button-social-foreground-default: var( --button-social-foreground-default );
+    --color-button-social-foreground-disabled: var( --button-social-foreground-disabled );
+    --color-button-social-foreground-generic-provider: var( --button-social-foreground-generic-provider );
+    --color-button-social-foreground-hover: var(--button-social-foreground-hover);
+    --color-checkbox-background-checked: var(--checkbox-background-checked);
+    --color-checkbox-background-default: var(--checkbox-background-default);
+    --color-checkbox-border-checkbox-border-checked: var( --checkbox-border-checkbox-border-checked );
+    --color-checkbox-border-checkbox-border-default: var( --checkbox-border-checkbox-border-default );
+    --color-checkbox-foreground-checked: var(--checkbox-foreground-checked);
+    --color-form-background-default: var(--form-background-default);
+    --color-form-border-default: var(--form-border-default);
+    --color-input-background-default: var(--input-background-default);
+    --color-input-background-disabled: var(--input-background-disabled);
+    --color-input-background-hover: var(--input-background-hover);
+    --color-input-border-default: var(--input-border-default);
+    --color-input-border-disabled: var(--input-border-disabled);
+    --color-input-border-focus: var(--input-border-focus);
+    --color-input-border-hover: var(--input-border-hover);
+    --color-input-foreground-disabled: var(--input-foreground-disabled);
+    --color-input-foreground-primary: var(--input-foreground-primary);
+    --color-input-foreground-tertiary: var(--input-foreground-tertiary);
+    --color-interface-background-brand-primary: var( --interface-background-brand-primary );
+    --color-interface-background-default-inverted: var( --interface-background-default-inverted );
+    --color-interface-background-default-primary: var( --interface-background-default-primary );
+    --color-interface-background-default-primary-hover: var( --interface-background-default-primary-hover );
+    --color-interface-background-default-secondary: var( --interface-background-default-secondary );
+    --color-interface-border-default-primary: var( --interface-border-default-primary );
+    --color-interface-border-validation-danger: var( --interface-border-validation-danger );
+    --color-interface-foreground-brand-primary: var( --interface-foreground-brand-primary );
+    --color-interface-foreground-default-inverted: var( --interface-foreground-default-inverted );
+    --color-interface-foreground-default-primary: var( --interface-foreground-default-primary );
+    --color-interface-foreground-default-secondary: var( --interface-foreground-default-secondary );
+    --color-interface-foreground-default-tertiary: var( --interface-foreground-default-tertiary );
+    --color-interface-foreground-validation-danger: var( --interface-foreground-validation-danger );
+    --color-interface-foreground-validation-success: var( --interface-foreground-validation-success );
+    --color-interface-foreground-validation-warning: var( --interface-foreground-validation-warning );
+    --color-ory-background-default: var(--ory-background-default);
+    --color-ory-border-default: var(--ory-border-default);
+    --color-ory-foreground-default: var(--ory-foreground-default);
+    --color-toggle-background-checked: var(--toggle-background-checked);
+    --color-toggle-background-default: var(--toggle-background-default);
+    --color-toggle-border-checked: var(--toggle-border-checked);
+    --color-toggle-border-default: var(--toggle-border-default);
+    --color-toggle-foreground-checked: var(--toggle-foreground-checked);
+    --color-toggle-foreground-default: var(--toggle-foreground-default);
+    --radius-buttons: 0.25rem;
+    --radius-forms: 0.25rem;
+    --radius-general: 0.25rem;
+    --radius-branding: 0.5rem;
+    --radius-cards: 0.75rem;
+    --radius-identifier: 62.4375rem;
+    --font-sans-default: var(--font-sans);
+    --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+    --animate-drop-down-in: drop-down-in 400ms cubic-bezier(0.16, 1, 0.3, 1);
+    --animate-drop-down-out: drop-down-out 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+@property --tw-rotate-x { syntax: "*"; inherits: false; }
+@property --tw-rotate-y { syntax: "*"; inherits: false; }
+@property --tw-rotate-z { syntax: "*"; inherits: false; }
+@property --tw-skew-x { syntax: "*"; inherits: false; }
+@property --tw-skew-y { syntax: "*"; inherits: false; }
+@property --tw-border-style { syntax: "*"; inherits: false; initial-value: solid; }
+@property --tw-leading { syntax: "*"; inherits: false; }
+@property --tw-font-weight { syntax: "*"; inherits: false; }
+@property --tw-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-shadow-color { syntax: "*"; inherits: false; }
+@property --tw-shadow-alpha { syntax: "<percentage>"; inherits: false; initial-value: 100%; }
+@property --tw-inset-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-inset-shadow-color { syntax: "*"; inherits: false; }
+@property --tw-inset-shadow-alpha { syntax: "<percentage>"; inherits: false; initial-value: 100%; }
+@property --tw-ring-color { syntax: "*"; inherits: false; }
+@property --tw-ring-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-inset-ring-color { syntax: "*"; inherits: false; }
+@property --tw-inset-ring-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-ring-inset { syntax: "*"; inherits: false; }
+@property --tw-ring-offset-width { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --tw-ring-offset-color { syntax: "*"; inherits: false; initial-value: #fff; }
+@property --tw-ring-offset-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-blur { syntax: "*"; inherits: false; }
+@property --tw-brightness { syntax: "*"; inherits: false; }
+@property --tw-contrast { syntax: "*"; inherits: false; }
+@property --tw-grayscale { syntax: "*"; inherits: false; }
+@property --tw-hue-rotate { syntax: "*"; inherits: false; }
+@property --tw-invert { syntax: "*"; inherits: false; }
+@property --tw-opacity { syntax: "*"; inherits: false; }
+@property --tw-saturate { syntax: "*"; inherits: false; }
+@property --tw-sepia { syntax: "*"; inherits: false; }
+@property --tw-drop-shadow { syntax: "*"; inherits: false; }
+@property --tw-drop-shadow-color { syntax: "*"; inherits: false; }
+@property --tw-drop-shadow-alpha { syntax: "<percentage>"; inherits: false; initial-value: 100%; }
+@property --tw-drop-shadow-size { syntax: "*"; inherits: false; }
+@property --tw-duration { syntax: "*"; inherits: false; }
+@property --tw-ease { syntax: "*"; inherits: false; }
+@property --tw-translate-x { syntax: "*"; inherits: false; initial-value: 0; }
+@property --tw-translate-y { syntax: "*"; inherits: false; initial-value: 0; }
+@property --tw-translate-z { syntax: "*"; inherits: false; initial-value: 0; }
+@property --tw-content { syntax: "*"; initial-value: ""; inherits: false; }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes caret-blink {
+  0%, 70%, 100% {
+    opacity: 1;
+  }
+  20%, 50% {
+    opacity: 0;
+  }
+}
+@keyframes drop-down-in {
+  from {
+    opacity: 0;
+    transform: scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes drop-down-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+  @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
+    .ory-elements *,
+    .ory-elements ::before,
+    .ory-elements ::after,
+    .ory-elements ::backdrop {
+      --tw-rotate-x: initial;
+      --tw-rotate-y: initial;
+      --tw-rotate-z: initial;
+      --tw-skew-x: initial;
+      --tw-skew-y: initial;
+      --tw-border-style: solid;
+      --tw-leading: initial;
+      --tw-font-weight: initial;
+      --tw-shadow: 0 0 #0000;
+      --tw-shadow-color: initial;
+      --tw-shadow-alpha: 100%;
+      --tw-inset-shadow: 0 0 #0000;
+      --tw-inset-shadow-color: initial;
+      --tw-inset-shadow-alpha: 100%;
+      --tw-ring-color: initial;
+      --tw-ring-shadow: 0 0 #0000;
+      --tw-inset-ring-color: initial;
+      --tw-inset-ring-shadow: 0 0 #0000;
+      --tw-ring-inset: initial;
+      --tw-ring-offset-width: 0px;
+      --tw-ring-offset-color: #fff;
+      --tw-ring-offset-shadow: 0 0 #0000;
+      --tw-blur: initial;
+      --tw-brightness: initial;
+      --tw-contrast: initial;
+      --tw-grayscale: initial;
+      --tw-hue-rotate: initial;
+      --tw-invert: initial;
+      --tw-opacity: initial;
+      --tw-saturate: initial;
+      --tw-sepia: initial;
+      --tw-drop-shadow: initial;
+      --tw-drop-shadow-color: initial;
+      --tw-drop-shadow-alpha: 100%;
+      --tw-drop-shadow-size: initial;
+      --tw-duration: initial;
+      --tw-ease: initial;
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      --tw-translate-z: 0;
+      --tw-content: "";
+    }
+  }
+
+/*! tailwindcss v4.1.18 | MIT License | https://tailwindcss.com */
+/*# sourceMappingURL=index.css.map */

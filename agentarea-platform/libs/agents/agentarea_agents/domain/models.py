@@ -1,6 +1,11 @@
+from typing import TYPE_CHECKING
+
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import JSON, Boolean, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from agentarea_agents.domain.skill_models import Skill
 
 
 class Agent(BaseModel, WorkspaceScopedMixin):
@@ -13,10 +18,13 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     description: Mapped[str] = mapped_column(String, nullable=True)
     instruction: Mapped[str] = mapped_column(String, nullable=True)
     model_id: Mapped[str] = mapped_column(String, nullable=True)
-    tools_config: Mapped[dict[str, any] | None] = mapped_column(JSON, nullable=True)
+    tools: Mapped[dict[str, any] | None] = mapped_column(JSON, nullable=True)
     events_config: Mapped[dict[str, any] | None] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
     # Relationships
-    # chat_sessions = relationship("ChatSession", back_populates="agent")
-    # Disabled - ChatSession model not implemented
+    skills: Mapped[list["Skill"]] = relationship(
+        "Skill",
+        secondary="agent_skills",
+        back_populates="agents",
+    )

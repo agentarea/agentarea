@@ -87,3 +87,7 @@ mcp-infrastructure/bin
 specs
 .claude
 .serena
+
+openspec
+.agents
+.trae

@@ -4,6 +4,17 @@ export interface ModelInfo {
   config_name?: string;
 }
 
+export interface ToolSettings {
+  disabled_methods?: string[];  // For code tools
+  allowed_tools?: string[];     // For MCP tools
+}
+
+export interface ToolConfig {
+  type: 'code' | 'mcp';
+  name: string;
+  settings?: ToolSettings;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -13,7 +24,14 @@ export interface Agent {
   model_id?: string | null;
   model_info?: ModelInfo | null;
   icon?: string;
-  tools_config?: Record<string, any> | null;
+  tools?: ToolConfig[] | null;
+  // TODO: Consolidate tools vs tools_config
+  tools_config?: {
+    builtin_tools?: Array<{ tool_name: string; [key: string]: any }>;
+    mcp_server_configs?: Array<{ server_id: string; tools?: string[]; [key: string]: any }>;
+    [key: string]: any;
+  } | null;
   events_config?: Record<string, any> | null;
   planning?: boolean | null;
+  skills?: Array<{ id: string; name: string; description?: string | null }> | null;
 }
