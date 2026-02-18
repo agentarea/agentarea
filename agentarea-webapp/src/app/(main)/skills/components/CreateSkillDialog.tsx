@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { FileCode, Github, Upload, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -29,6 +30,8 @@ export default function CreateSkillDialog({
   onSuccess,
 }: CreateSkillDialogProps) {
   const { toast } = useToast();
+  const t = useTranslations("SkillsPage");
+  const tCreate = useTranslations("SkillsPage.create");
   const [activeTab, setActiveTab] = useState("content");
   const [loading, setLoading] = useState(false);
 
@@ -69,8 +72,8 @@ export default function CreateSkillDialog({
   const handleContentSubmit = async () => {
     if (!contentMarkdown.trim()) {
       toast({
-        title: "Validation Error",
-        description: "Please enter skill content",
+        title: tCreate("validationError"),
+        description: tCreate("contentRequired"),
         variant: "destructive",
       });
       return;
@@ -86,14 +89,14 @@ export default function CreateSkillDialog({
 
       if (error) {
         toast({
-          title: "Error",
-          description: (error as any)?.detail || "Failed to create skill",
+          title: t("error.loadSkills"),
+          description: (error as any)?.detail || tCreate("error.createFailed"),
           variant: "destructive",
         });
         return;
       }
 
-      toast({ title: "Success", description: "Skill created successfully" });
+      toast({ title: t("success.skillUpdated"), description: tCreate("success.skillCreated") });
       resetForm();
       onSuccess();
     } finally {
@@ -104,8 +107,8 @@ export default function CreateSkillDialog({
   const handleGithubSubmit = async () => {
     if (!githubUrl.trim()) {
       toast({
-        title: "Validation Error",
-        description: "Please enter a GitHub URL",
+        title: tCreate("validationError"),
+        description: tCreate("githubUrlRequired"),
         variant: "destructive",
       });
       return;
@@ -128,8 +131,8 @@ export default function CreateSkillDialog({
 
     if (!hostname || !allowedGitHubHosts.has(hostname)) {
       toast({
-        title: "Validation Error",
-        description: "Please enter a valid GitHub URL",
+        title: tCreate("validationError"),
+        description: tCreate("githubUrlInvalid"),
         variant: "destructive",
       });
       return;
@@ -145,27 +148,27 @@ export default function CreateSkillDialog({
 
       if (error) {
         const errorDetail = (error as any)?.detail;
-        let message = "Failed to import skill from GitHub";
+        let message = tCreate("error.githubImportFailed");
 
         if (typeof errorDetail === "string") {
           if (errorDetail.includes("rate limit")) {
-            message = "GitHub rate limit exceeded. Please try again later.";
+            message = tCreate("error.githubRateLimit");
           } else if (errorDetail.includes("not found")) {
-            message = "Repository not found or is private.";
+            message = tCreate("error.githubNotFound");
           } else {
             message = errorDetail;
           }
         }
 
         toast({
-          title: "Error",
+          title: t("error.loadSkills"),
           description: message,
           variant: "destructive",
         });
         return;
       }
 
-      toast({ title: "Success", description: "Skill imported successfully" });
+      toast({ title: t("success.skillUpdated"), description: tCreate("success.skillImported") });
       resetForm();
       onSuccess();
     } finally {
@@ -176,8 +179,8 @@ export default function CreateSkillDialog({
   const handleUploadSubmit = async () => {
     if (!uploadFile) {
       toast({
-        title: "Validation Error",
-        description: "Please select a ZIP file to upload",
+        title: tCreate("validationError"),
+        description: tCreate("error.zipRequired"),
         variant: "destructive",
       });
       return;
@@ -194,14 +197,14 @@ export default function CreateSkillDialog({
 
       if (error) {
         toast({
-          title: "Error",
-          description: (error as any)?.detail || "Failed to upload skill",
+          title: t("error.loadSkills"),
+          description: (error as any)?.detail || tCreate("error.uploadFailed"),
           variant: "destructive",
         });
         return;
       }
 
-      toast({ title: "Success", description: "Skill uploaded successfully" });
+      toast({ title: t("success.skillUpdated"), description: tCreate("success.skillUploaded") });
       resetForm();
       onSuccess();
     } finally {
@@ -228,12 +231,12 @@ export default function CreateSkillDialog({
       setUploadFile(file);
     } else {
       toast({
-        title: "Invalid File",
-        description: "Please upload a ZIP file",
+        title: tCreate("error.invalidFile"),
+        description: tCreate("error.zipRequired"),
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, tCreate]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -242,8 +245,8 @@ export default function CreateSkillDialog({
         setUploadFile(file);
       } else {
         toast({
-          title: "Invalid File",
-          description: "Please upload a ZIP file",
+          title: tCreate("error.invalidFile"),
+          description: tCreate("error.zipRequired"),
           variant: "destructive",
         });
       }
@@ -254,9 +257,9 @@ export default function CreateSkillDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add Skill</DialogTitle>
+          <DialogTitle>{tCreate("title")}</DialogTitle>
           <DialogDescription>
-            Create a new skill from content, import from GitHub, or upload a package.
+            {tCreate("description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -264,44 +267,44 @@ export default function CreateSkillDialog({
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="content" className="gap-2">
               <FileCode className="h-4 w-4" />
-              Content
+              {tCreate("contentTab")}
             </TabsTrigger>
             <TabsTrigger value="github" className="gap-2">
               <Github className="h-4 w-4" />
-              GitHub
+              {tCreate("githubTab")}
             </TabsTrigger>
             <TabsTrigger value="upload" className="gap-2">
               <Upload className="h-4 w-4" />
-              Upload
+              {tCreate("uploadTab")}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="content" className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label htmlFor="content-name">Name</Label>
+              <Label htmlFor="content-name">{tCreate("name")}</Label>
               <Input
                 id="content-name"
-                placeholder="My Skill"
+                placeholder={tCreate("namePlaceholder")}
                 value={contentName}
                 onChange={(e) => setContentName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="content-description">Description</Label>
+              <Label htmlFor="content-description">{tCreate("description")}</Label>
               <Input
                 id="content-description"
-                placeholder="What this skill does..."
+                placeholder={tCreate("descriptionPlaceholder")}
                 value={contentDescription}
                 onChange={(e) => setContentDescription(e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="content-markdown">
-                Content <span className="text-red-500">*</span>
+                {tCreate("content")} <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="content-markdown"
-                placeholder="Enter skill content in Markdown..."
+                placeholder={tCreate("contentPlaceholder")}
                 className="min-h-[200px] font-mono text-sm"
                 value={contentMarkdown}
                 onChange={(e) => setContentMarkdown(e.target.value)}
@@ -310,7 +313,7 @@ export default function CreateSkillDialog({
             <div className="flex justify-end">
               <Button onClick={handleContentSubmit} disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Skill
+                {tCreate("createSkill")}
               </Button>
             </div>
           </TabsContent>
@@ -318,32 +321,32 @@ export default function CreateSkillDialog({
           <TabsContent value="github" className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label htmlFor="github-url">
-                GitHub URL <span className="text-red-500">*</span>
+                {tCreate("githubUrl")} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="github-url"
-                placeholder="https://github.com/owner/repo"
+                placeholder={tCreate("githubUrlPlaceholder")}
                 value={githubUrl}
                 onChange={(e) => setGithubUrl(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Public repository containing skill definition
+                {tCreate("githubDescription")}
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="github-name">Name (optional)</Label>
+              <Label htmlFor="github-name">{tCreate("nameOptional")}</Label>
               <Input
                 id="github-name"
-                placeholder="Override imported name"
+                placeholder={tCreate("nameOverride")}
                 value={githubName}
                 onChange={(e) => setGithubName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="github-description">Description (optional)</Label>
+              <Label htmlFor="github-description">{tCreate("descriptionOptional")}</Label>
               <Input
                 id="github-description"
-                placeholder="Override imported description"
+                placeholder={tCreate("descriptionOverride")}
                 value={githubDescription}
                 onChange={(e) => setGithubDescription(e.target.value)}
               />
@@ -351,7 +354,7 @@ export default function CreateSkillDialog({
             <div className="flex justify-end">
               <Button onClick={handleGithubSubmit} disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Import from GitHub
+                {tCreate("importFromGithub")}
               </Button>
             </div>
           </TabsContent>
@@ -378,16 +381,16 @@ export default function CreateSkillDialog({
                     size="sm"
                     onClick={() => setUploadFile(null)}
                   >
-                    Remove
+                    {tCreate("remove")}
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
                   <p className="text-muted-foreground">
-                    Drag and drop a ZIP file, or{" "}
+                    {tCreate("dragDrop")}{" "}
                     <label className="cursor-pointer text-primary hover:underline">
-                      browse
+                      {tCreate("browse")}
                       <input
                         type="file"
                         accept=".zip"
@@ -400,19 +403,19 @@ export default function CreateSkillDialog({
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="upload-name">Name (optional)</Label>
+              <Label htmlFor="upload-name">{tCreate("nameOptional")}</Label>
               <Input
                 id="upload-name"
-                placeholder="Override package name"
+                placeholder={tCreate("nameOverride")}
                 value={uploadName}
                 onChange={(e) => setUploadName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="upload-description">Description (optional)</Label>
+              <Label htmlFor="upload-description">{tCreate("descriptionOptional")}</Label>
               <Input
                 id="upload-description"
-                placeholder="Override package description"
+                placeholder={tCreate("descriptionOverride")}
                 value={uploadDescription}
                 onChange={(e) => setUploadDescription(e.target.value)}
               />
@@ -420,7 +423,7 @@ export default function CreateSkillDialog({
             <div className="flex justify-end">
               <Button onClick={handleUploadSubmit} disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Upload Skill
+                {tCreate("uploadSkill")}
               </Button>
             </div>
           </TabsContent>

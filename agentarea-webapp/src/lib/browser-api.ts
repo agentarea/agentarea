@@ -835,6 +835,14 @@ export const getSkillFiles = async (skillId: string) => {
   return { data, error };
 };
 
+export const getSkillFile = async (skillId: string, filePath: string) => {
+  const { data, error } = await browserClient.GET(
+    `/v1/skills/${skillId}/files/${filePath}` as any,
+    {}
+  );
+  return { data, error };
+};
+
 export const createSkill = async (skill: {
   content?: string | null;
   github_url?: string | null;

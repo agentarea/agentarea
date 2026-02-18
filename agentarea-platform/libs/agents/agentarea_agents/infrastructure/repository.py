@@ -1,14 +1,15 @@
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import or_, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from agentarea_agents.domain.models import Agent
-from agentarea_agents.domain.skill_models import AgentSkill
+from agentarea_agents.domain.skill_models import agent_skills_table
 
 
 class AgentRepository(WorkspaceScopedRepository[Agent]):
@@ -200,17 +201,19 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
             skill_ids: List of skill IDs to associate with the agent.
         """
         # Remove existing associations
-        existing_query = select(AgentSkill).where(AgentSkill.agent_id == agent_id)
-        result = await self.session.execute(existing_query)
-        existing_associations = result.scalars().all()
-
-        for association in existing_associations:
-            await self.session.delete(association)
+        await self.session.execute(
+            delete(agent_skills_table).where(agent_skills_table.c.agent_id == agent_id)
+        )
 
         # Add new associations
         for skill_id in skill_ids:
-            association = AgentSkill(agent_id=agent_id, skill_id=skill_id)
-            self.session.add(association)
+            await self.session.execute(
+                agent_skills_table.insert().values(
+                    agent_id=agent_id,
+                    skill_id=skill_id,
+                    created_at=datetime.now(),
+                )
+            )
 
     async def add_skill(self, agent_id: UUID, skill_id: UUID) -> None:
         """Add a skill to an agent.
@@ -220,16 +223,23 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
             skill_id: The skill ID to add.
         """
         # Check if association already exists
-        query = select(AgentSkill).where(
-            AgentSkill.agent_id == agent_id,
-            AgentSkill.skill_id == skill_id,
+        query = select(agent_skills_table).where(
+            and_(
+                agent_skills_table.c.agent_id == agent_id,
+                agent_skills_table.c.skill_id == skill_id,
+            )
         )
         result = await self.session.execute(query)
         existing = result.scalar_one_or_none()
 
         if existing is None:
-            association = AgentSkill(agent_id=agent_id, skill_id=skill_id)
-            self.session.add(association)
+            await self.session.execute(
+                agent_skills_table.insert().values(
+                    agent_id=agent_id,
+                    skill_id=skill_id,
+                    created_at=datetime.now(),
+                )
+            )
 
     async def remove_skill(self, agent_id: UUID, skill_id: UUID) -> None:
         """Remove a skill from an agent.
@@ -238,12 +248,11 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
             agent_id: The agent ID.
             skill_id: The skill ID to remove.
         """
-        query = select(AgentSkill).where(
-            AgentSkill.agent_id == agent_id,
-            AgentSkill.skill_id == skill_id,
+        await self.session.execute(
+            delete(agent_skills_table).where(
+                and_(
+                    agent_skills_table.c.agent_id == agent_id,
+                    agent_skills_table.c.skill_id == skill_id,
+                )
+            )
         )
-        result = await self.session.execute(query)
-        association = result.scalar_one_or_none()
-
-        if association:
-            await self.session.delete(association)

@@ -6,6 +6,7 @@ import sys
 from code.populate_providers_new_arch import main as populate_providers_new_arch_main
 from code.populate_mcp_providers import main as populate_mcp_providers_main
 from code.populate_default_agent import main as populate_default_agent_main
+from code.populate_skills import main as populate_skills_main
 from code.minio_setup import minio_setup
 
 
@@ -42,6 +43,10 @@ def main():
         print("\n5. Populating default system agent...")
         populate_default_agent_main()
         print("✓ Default agent populated")
+
+        print("\n6. Populating system skills...")
+        populate_skills_main()
+        print("✓ System skills populated")
 
         print("\n" + "=" * 50)
         print("Bootstrap process completed successfully!")

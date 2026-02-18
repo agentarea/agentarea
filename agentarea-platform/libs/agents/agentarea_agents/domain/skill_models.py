@@ -1,10 +1,11 @@
 """Skill domain model."""
 
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,21 +53,41 @@ class Skill(BaseModel, WorkspaceScopedMixin):
         return f"<Skill {self.name} ({self.id})>"
 
 
-class AgentSkill(BaseModel):
-    """Association table for Agent-Skill many-to-many relationship."""
-
-    __tablename__ = "agent_skills"
-
-    agent_id: Mapped[Any] = mapped_column(
+# Association table for Agent-Skill many-to-many relationship
+# Using Table construct to match the database schema exactly
+agent_skills_table = Table(
+    "agent_skills",
+    BaseModel.metadata,
+    Column(
+        "agent_id",
         PG_UUID(as_uuid=True),
         ForeignKey("agents.id", ondelete="CASCADE"),
         primary_key=True,
-    )
-    skill_id: Mapped[Any] = mapped_column(
+    ),
+    Column(
+        "skill_id",
         PG_UUID(as_uuid=True),
         ForeignKey("skills.id", ondelete="CASCADE"),
         primary_key=True,
-    )
+    ),
+    Column("created_at", DateTime, nullable=False, default=datetime.now),
+)
+
+
+# Class-based wrapper for type hints and queries
+class AgentSkill:
+    """Wrapper class for agent_skills association table.
+
+    This class provides a type-safe way to reference the association table
+    in queries without inheriting from BaseModel (which would add an id column).
+    """
+
+    __table__ = agent_skills_table
+
+    def __init__(self, agent_id: Any, skill_id: Any, created_at: datetime | None = None):
+        self.agent_id = agent_id
+        self.skill_id = skill_id
+        self.created_at = created_at or datetime.now()
 
 
 # Import Agent for type hints (avoid circular import at runtime)

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Plus, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { Plus } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import SkillsEmptyState from "./components/SkillsEmptyState";
 import CreateSkillDialog from "./components/CreateSkillDialog";
 
 export default function SkillsClient() {
+  const t = useTranslations("SkillsPage");
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,12 +24,12 @@ export default function SkillsClient() {
     try {
       const { data, error } = await listSkills();
       if (error) {
-        setError("Failed to load skills");
+        setError(t("error.loadSkills"));
         return;
       }
       setSkills((data as Skill[]) || []);
     } catch (e) {
-      setError("Failed to load skills");
+      setError(t("error.loadSkills"));
     } finally {
       setLoading(false);
     }
@@ -46,8 +47,8 @@ export default function SkillsClient() {
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Skills" }],
-        description: "Manage reusable skills that can be assigned to agents",
+        breadcrumb: [{ label: t("title") }],
+        description: t("description"),
         controls: (
           <Button
             className="shrink-0 gap-2"
@@ -56,7 +57,7 @@ export default function SkillsClient() {
             data-test="new-skill-button"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Add Skill
+            {t("addSkill")}
           </Button>
         ),
       }}
