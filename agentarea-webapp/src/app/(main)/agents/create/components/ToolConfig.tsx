@@ -346,7 +346,7 @@ const ToolConfig = ({
         <p>{t("create.agentToolsNote")}</p>
       </>
     ),
-    []
+    [t]
   );
 
   const title = useMemo(
@@ -355,7 +355,7 @@ const ToolConfig = ({
         {t("create.agentTools")}
       </FormLabel>
     ),
-    []
+    [t]
   );
 
   return (

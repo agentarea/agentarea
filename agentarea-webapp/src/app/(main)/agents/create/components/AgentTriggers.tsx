@@ -109,7 +109,7 @@ const AgentTriggers = ({
         <p>{t("create.agentTriggersNoteDescription")}</p>
       </>
     ),
-    []
+    [t]
   );
 
   const title = useMemo(
@@ -118,7 +118,7 @@ const AgentTriggers = ({
         {t("create.agentTriggers")}
       </FormLabel>
     ),
-    []
+    [t]
   );
 
   useEffect(() => {

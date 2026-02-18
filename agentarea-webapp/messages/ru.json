@@ -405,6 +405,14 @@
     "description": "Описание",
     "agent": "Агент",
     "status": "Статус",
-    "created": "Создано"
+    "created": "Создано",
+    "tabs": {
+      "overview": "Обзор",
+      "events": "События",
+      "logs": "Логи",
+      "artifacts": "Артефакты",
+      "memory": "Память",
+      "metrics": "Метрики"
+    }
   }
 }

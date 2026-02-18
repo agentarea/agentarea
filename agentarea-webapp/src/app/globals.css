@@ -45,7 +45,7 @@
 
     /* --primary: 238 85.2% 57.6%; */
     /* --primary-foreground: 238 85.2% 93%; */
-    --primary: 239 84% 67%; /* #8C9EFF */
+    --primary: 225 66% 39%; /* #8C9EFF */
     --primary-foreground: 0 0% 100%; /* #FFFFFF */
     --primary-hover: 234 100% 74.7%;
 
@@ -156,9 +156,13 @@
     @apply space-y-4 pb-[20px] md:pb-[20px] lg:pb-[25px];
   }
 
+  .main-content {
+    @apply h-full space-y-2 overflow-auto px-4 py-5;
+  }
+
   .card {
     @apply rounded-md bg-white dark:bg-zinc-800;
-    @apply cursor-pointer p-[16px] md:p-[20px] lg:p-[24px];
+    @apply cursor-pointer p-[14px] md:p-[16px] lg:p-[18px];
     @apply border border-zinc-200 dark:border-zinc-700;
     @apply transition-all duration-300 hover:shadow-md;
   }

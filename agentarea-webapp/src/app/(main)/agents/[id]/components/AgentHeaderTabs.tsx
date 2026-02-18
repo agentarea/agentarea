@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { List, MessagesSquare, Settings } from "lucide-react";
-import ActiveLink from "./ActiveLink";
+import { ActiveLink } from "@/components/ui/active-link";
 
 export default async function AgentHeaderTabs({
   agentId,
