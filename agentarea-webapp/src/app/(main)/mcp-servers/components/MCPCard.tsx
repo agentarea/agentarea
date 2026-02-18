@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { Server } from "lucide-react";
-import { DockerIcon } from "@/components/ui/docker-icon";
+import { Server, Container } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
@@ -66,7 +65,7 @@ export function MCPServerSpecCard({
             )}
             {server.docker_image_url && (
               <div title="Docker-based">
-                <DockerIcon className="h-4 w-4 text-blue-500" />
+                <Container className="h-4 w-4 text-blue-500" />
               </div>
             )}
           </div>
