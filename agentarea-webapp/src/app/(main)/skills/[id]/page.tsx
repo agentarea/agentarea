@@ -227,7 +227,7 @@ export default function SkillDetailPage() {
     };
 
     fetchData();
-  }, [skillId, router, toast]);
+  }, [skillId, router, toast, t]);
 
   useEffect(() => {
     if (!skill || !content) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
@@ -18,7 +18,7 @@ export default function SkillsClient() {
   const [error, setError] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  const fetchSkills = async () => {
+  const fetchSkills = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -33,11 +33,11 @@ export default function SkillsClient() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     fetchSkills();
-  }, []);
+  }, [fetchSkills]);
 
   const handleSkillCreated = () => {
     setCreateDialogOpen(false);

@@ -162,7 +162,6 @@ export function useScrollManagement({
         });
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messagesCount, isAtBottom, checkIfAtBottom, ...dependencies]);
 
   /**
