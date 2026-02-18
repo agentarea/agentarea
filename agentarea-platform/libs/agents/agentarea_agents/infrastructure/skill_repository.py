@@ -88,7 +88,9 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def list_all(self, limit: int | None = None, offset: int | None = None, **filters) -> list[Skill]:
+    async def list_all(
+        self, limit: int | None = None, offset: int | None = None, **filters
+    ) -> list[Skill]:
         """List all skills in the workspace, including system skills.
 
         System skills (workspace_id='system') are visible to all workspaces.
