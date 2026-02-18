@@ -7,10 +7,9 @@ import { ChatProvider } from "../shared/ChatContext";
 import CreateAgentContent from "./CreateAgentContent";
 import CreateAgentHeaderControls from "./CreateAgentHeaderControls";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("createAgent") };
-}
+export const metadata: Metadata = {
+  title: "Create Agent",
+};
 
 export default async function CreateAgentPage() {
   const t = await getTranslations("AgentsPage");

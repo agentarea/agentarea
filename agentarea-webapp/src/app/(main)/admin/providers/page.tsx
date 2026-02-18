@@ -9,10 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listProviderSpecsWithModels } from "@/lib/api";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("providers") };
-}
+export const metadata: Metadata = {
+  title: "Providers",
+};
 
 export default async function ProviderSpecsPage({
   searchParams,

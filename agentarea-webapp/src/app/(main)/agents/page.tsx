@@ -11,10 +11,9 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput/SearchInput";
 import { Button } from "@/components/ui/button";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("agents") };
-}
+export const metadata: Metadata = {
+  title: "Agents",
+};
 
 interface AgentsBrowsePageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

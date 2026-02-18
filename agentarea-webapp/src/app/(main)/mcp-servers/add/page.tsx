@@ -9,10 +9,9 @@ import {
 } from "@/components/ui/card";
 import { AddMCPServerForm } from "./form";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("addMcpServer") };
-}
+export const metadata: Metadata = {
+  title: "Add MCP Server",
+};
 
 export default async function AddMCPServerPage() {
   const t = await getTranslations("MCPServersPage");

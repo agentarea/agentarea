@@ -8,24 +8,9 @@ import ProviderConfigFormWrapper from "../../create/components/ProviderConfigFor
 import { Button } from "@/components/ui/button";
 import { getProviderConfig } from "@/lib/api";
 
-interface EditProviderConfigPageProps {
-  params: Promise<{ providerConfigId: string }>;
-}
-
-export async function generateMetadata({ params }: EditProviderConfigPageProps): Promise<Metadata> {
-  const { providerConfigId } = await params;
-  const t = await getTranslations("Metadata");
-  try {
-    const config = await getProviderConfig(providerConfigId);
-    return {
-      title: config?.name
-        ? t("editProviderConfig", { configName: config.name })
-        : t("editProviderConfig", { configName: "Config" }),
-    };
-  } catch {
-    return { title: t("editProviderConfig", { configName: "Config" }) };
-  }
-}
+export const metadata: Metadata = {
+  title: "Edit Provider Config",
+};
 
 export default async function EditProviderConfigPage({
   params,

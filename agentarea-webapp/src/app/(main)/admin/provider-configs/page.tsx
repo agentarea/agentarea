@@ -11,10 +11,9 @@ import { Button } from "@/components/ui/button";
 import ProviderHeaderTabs from "./components/ProviderHeaderTabs";
 import ProvidersData from "./components/ProvidersData";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("providerConfigs") };
-}
+export const metadata: Metadata = {
+  title: "Provider Configs",
+};
 
 interface TasksPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

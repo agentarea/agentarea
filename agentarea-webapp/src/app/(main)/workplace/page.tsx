@@ -1,17 +1,15 @@
 import type { Metadata } from "next";
 import React from "react";
-import { getTranslations } from "next-intl/server";
 import AuthGuard from "@/components/auth/AuthGuard";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { getAgents } from "@/components/actions";
 
-export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Workplace",
+};
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("workplace") };
-}
+export const dynamic = "force-dynamic";
 
 export default async function WorkplacePage() {
   const badgeSuggestions = [

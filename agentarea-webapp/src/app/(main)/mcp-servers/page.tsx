@@ -11,10 +11,9 @@ import { Button } from "@/components/ui/button";
 import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("mcpServers") };
-}
+export const metadata: Metadata = {
+  title: "MCP Servers",
+};
 
 export default async function MCPServersPage({
   searchParams,

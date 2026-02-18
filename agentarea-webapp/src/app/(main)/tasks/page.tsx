@@ -8,10 +8,9 @@ import SearchInput from "@/components/SearchInput";
 import { TasksData } from "./components/TasksData";
 import TasksHeaderTabs from "./components/TasksHeaderTabs";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("tasks") };
-}
+export const metadata: Metadata = {
+  title: "Tasks",
+};
 
 interface TasksPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

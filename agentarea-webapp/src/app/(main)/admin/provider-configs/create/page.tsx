@@ -8,10 +8,9 @@ import ProviderConfigFormWrapper from "./components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
 import { getProviderSpec } from "@/lib/api";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-  return { title: t("createProviderConfig") };
-}
+export const metadata: Metadata = {
+  title: "Create Provider Config",
+};
 
 export default async function CreateProviderConfigPage({
   searchParams,

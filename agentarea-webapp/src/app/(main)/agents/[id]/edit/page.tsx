@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import {
   getAgent,
@@ -12,19 +11,12 @@ import {
 } from "@/lib/api";
 import EditAgentClient from "./EditAgentClient";
 
+export const metadata: Metadata = {
+  title: "Edit Agent",
+};
+
 interface Props {
   params: Promise<{ id: string }>;
-}
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params;
-  const agent = await getAgent(id);
-  const t = await getTranslations("Metadata");
-  return {
-    title: agent.data?.name
-      ? t("editAgent", { agentName: agent.data.name })
-      : t("editAgent", { agentName: "Agent" }),
-  };
 }
 
 export default async function EditAgentPage({ params }: Props) {

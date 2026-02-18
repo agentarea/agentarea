@@ -1,24 +1,16 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAgent, listModelInstances } from "@/lib/api";
 import AgentNewTask from "./components/AgentNewTask";
 
+export const metadata: Metadata = {
+  title: "New Task",
+};
+
 interface Props {
   params: Promise<{ id: string }>;
-}
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params;
-  const agent = await getAgent(id);
-  const t = await getTranslations("Metadata");
-  return {
-    title: agent.data?.name
-      ? t("newTask", { agentName: agent.data.name })
-      : t("newTask", { agentName: "Agent" }),
-  };
 }
 
 export default async function AgentNewTaskPage({ params }: Props) {

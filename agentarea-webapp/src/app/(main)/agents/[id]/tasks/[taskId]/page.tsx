@@ -1,22 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
 import { getAgent, getAgentTaskById } from "@/lib/api";
 import AgentTaskClient from "./AgentTaskClient";
 
+export const metadata: Metadata = {
+  title: "Task Details",
+};
+
 interface Props {
   params: Promise<{ id: string; taskId: string }>;
-}
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id, taskId } = await params;
-  const task = await getAgentTaskById(id, taskId);
-  const t = await getTranslations("Metadata");
-  const description = task.data?.description || "Task";
-  const truncatedDesc = description.length > 30 ? description.substring(0, 30) + "..." : description;
-  return {
-    title: t("taskDetail", { description: truncatedDesc }),
-  };
 }
 
 export default async function AgentTaskPage({ params }: Props) {

@@ -5,26 +5,10 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ProviderConfigFormWrapper from "../components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
-import { getProviderSpec } from "@/lib/api";
 
-interface CreateProviderConfigWithSpecPageProps {
-  params: Promise<{ provider_spec_id: string }>;
-}
-
-export async function generateMetadata({ params }: CreateProviderConfigWithSpecPageProps): Promise<Metadata> {
-  const { provider_spec_id } = await params;
-  const t = await getTranslations("Metadata");
-  try {
-    const spec = await getProviderSpec(provider_spec_id);
-    return {
-      title: spec?.data?.name
-        ? t("createProviderConfigForProvider", { providerName: spec.data.name })
-        : t("createProviderConfig"),
-    };
-  } catch {
-    return { title: t("createProviderConfig") };
-  }
-}
+export const metadata: Metadata = {
+  title: "Create Provider Config",
+};
 
 export default async function CreateProviderConfigWithSpecPage({
   params,
