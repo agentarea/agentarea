@@ -1,6 +1,6 @@
 import {
   getAgent,
-  listBuiltinTools,
+  listAllTools,
   listMCPServerInstances,
   listMCPServers,
   listModelInstances,
@@ -47,11 +47,9 @@ export async function loadAgentData(): Promise<AgentData> {
   const mcpInstancesResponse = await listMCPServerInstances();
   const mcpInstanceList = mcpInstancesResponse.data || [];
 
-  // Fetch builtin tools
-  const builtinToolsResponse = await listBuiltinTools();
-  const builtinTools = Array.isArray(builtinToolsResponse.data)
-    ? builtinToolsResponse.data
-    : Object.values(builtinToolsResponse.data || {});
+  // Fetch code tools (previously called builtin tools)
+  const codeToolsResponse = await listAllTools({ include: "code" });
+  const builtinTools = codeToolsResponse.data || [];
 
   return {
     mcpServers,
@@ -89,6 +87,12 @@ export async function loadAgentEditData(
       events: agent.events_config?.events || [],
     },
     planning: agent.planning || false,
+    // Note: agent.skills comes from the API but TypeScript schema may not include it yet
+    skills: ((agent as any).skills || []).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+    })),
   };
 
   return {

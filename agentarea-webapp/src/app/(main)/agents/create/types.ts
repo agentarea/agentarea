@@ -37,6 +37,15 @@ export type BuiltinToolConfig = {
 };
 
 /**
+ * Agent skill reference for form state
+ */
+export type AgentSkill = {
+  id: string;
+  name: string;
+  description?: string | null;
+};
+
+/**
  * Main form values for agent creation
  * Extends the API's AgentCreate type with our custom instruction field
  */
@@ -53,6 +62,7 @@ export type AgentFormValues = {
     events: EventConfig[];
   };
   planning: boolean;
+  skills?: AgentSkill[];
 };
 
 // Default form state matching AgentCreate schema closely

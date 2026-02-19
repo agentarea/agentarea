@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAgent, listModelInstances } from "@/lib/api";
 import AgentNewTask from "./components/AgentNewTask";
+
+export const metadata: Metadata = {
+  title: "New Task",
+};
 
 interface Props {
   params: Promise<{ id: string }>;

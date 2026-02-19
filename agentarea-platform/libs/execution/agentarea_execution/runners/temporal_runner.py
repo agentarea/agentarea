@@ -246,7 +246,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                     tool_args=tool_args,
                     server_instance_id=None,
                     workspace_id=workspace_id,
-                    tools_config=state.agent_config.get("tools_config"),
+                    tools=state.agent_config.get("tools"),
                 )
 
                 # Execute tool call via activity using Pydantic model

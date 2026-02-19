@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from agentarea_api.api.deps.services import get_trigger_health_check, get_trigger_service
+from agentarea_api.api.v1.triggers import require_a2a_execute_auth
 from agentarea_api.main import app
+from agentarea_common.auth.dependencies import get_user_context
 from fastapi.testclient import TestClient
 
 
@@ -30,6 +33,43 @@ def mock_auth_context():
     return context
 
 
+@pytest.fixture
+def mock_health_checker():
+    checker = AsyncMock()
+    checker.check_all_components = AsyncMock()
+    return checker
+
+
+@pytest.fixture(autouse=True)
+def override_user_context(mock_auth_context):
+    async def _override():
+        return mock_auth_context
+
+    app.dependency_overrides[get_user_context] = _override
+    yield
+    app.dependency_overrides.pop(get_user_context, None)
+
+
+@pytest.fixture(autouse=True)
+def override_trigger_dependencies(mock_trigger_service, mock_auth_context, mock_health_checker):
+    async def _override_trigger_service():
+        return mock_trigger_service
+
+    async def _override_auth():
+        return mock_auth_context
+
+    async def _override_health_checker():
+        return mock_health_checker
+
+    app.dependency_overrides[get_trigger_service] = _override_trigger_service
+    app.dependency_overrides[require_a2a_execute_auth] = _override_auth
+    app.dependency_overrides[get_trigger_health_check] = _override_health_checker
+    yield
+    app.dependency_overrides.pop(get_trigger_service, None)
+    app.dependency_overrides.pop(require_a2a_execute_auth, None)
+    app.dependency_overrides.pop(get_trigger_health_check, None)
+
+
 def create_mock_trigger():
     """Create a mock trigger object without rate limiting fields."""
     mock_trigger = MagicMock()
@@ -50,6 +90,11 @@ def create_mock_trigger():
     mock_trigger.last_execution_at = None
     mock_trigger.timezone = "UTC"
     mock_trigger.next_run_time = None
+    mock_trigger.webhook_id = None
+    mock_trigger.allowed_methods = None
+    mock_trigger.webhook_type = None
+    mock_trigger.validation_rules = None
+    mock_trigger.webhook_config = None
     return mock_trigger
 
 
@@ -57,7 +102,7 @@ class TestTriggersAPISimple:
     """Simple test class for triggers API endpoints."""
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
     def test_create_trigger_success_sync(
         self, mock_auth, mock_get_service, client, mock_trigger_service, mock_auth_context
     ):
@@ -97,7 +142,7 @@ class TestTriggersAPISimple:
         mock_trigger_service.create_trigger.assert_called_once()
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
     def test_list_triggers_success_sync(
         self, mock_auth, mock_get_service, client, mock_trigger_service, mock_auth_context
     ):
@@ -121,7 +166,7 @@ class TestTriggersAPISimple:
         assert data[0]["name"] == "Test Trigger"
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
     def test_get_trigger_success_sync(
         self, mock_auth, mock_get_service, client, mock_trigger_service, mock_auth_context
     ):
@@ -144,7 +189,7 @@ class TestTriggersAPISimple:
         assert data["id"] == str(trigger_id)
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
     def test_get_trigger_not_found_sync(
         self, mock_auth, mock_get_service, client, mock_trigger_service, mock_auth_context
     ):
@@ -163,7 +208,7 @@ class TestTriggersAPISimple:
         assert "not found" in response.json()["detail"]
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
     def test_delete_trigger_success_sync(
         self, mock_auth, mock_get_service, client, mock_trigger_service, mock_auth_context
     ):
@@ -181,7 +226,7 @@ class TestTriggersAPISimple:
         assert response.status_code == 204
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
+    @patch("agentarea_api.api.v1.triggers.require_a2a_execute_auth")
     def test_enable_trigger_success_sync(
         self, mock_auth, mock_get_service, client, mock_trigger_service, mock_auth_context
     ):
@@ -203,12 +248,15 @@ class TestTriggersAPISimple:
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
     def test_triggers_health_check_success_sync(
-        self, mock_get_service, client, mock_trigger_service
+        self, mock_get_service, client, mock_trigger_service, mock_health_checker
     ):
         """Test successful triggers health check using sync client."""
         # Setup mocks
         mock_get_service.return_value = mock_trigger_service
-        mock_trigger_service.list_triggers.return_value = []
+        mock_health_checker.check_all_components.return_value = {
+            "overall_status": "healthy",
+            "components": {},
+        }
 
         # Make request
         response = client.get("/v1/triggers/health")
@@ -216,7 +264,7 @@ class TestTriggersAPISimple:
         # Assertions
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
+        assert data["overall_status"] == "healthy"
         assert data["service"] == "triggers"
 
     def test_invalid_trigger_type_sync(self, client):
@@ -249,7 +297,7 @@ class TestTriggersAPISimple:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "unavailable"
+        assert data["overall_status"] == "unavailable"
         assert "not available" in data["message"]
 
 

@@ -1,0 +1,51 @@
+global:
+  deploymentEnv: staging
+  image:
+    # Remove global registry to allow third-party images to pull from Docker Hub
+    registry: ""
+
+backend:
+  image:
+    repository: agentarea/agentarea-api
+    tag: "manual-test-v1-20251204195825"
+
+worker:
+  image:
+    repository: agentarea/agentarea-worker
+    tag: "manual-test-v1-20251204183846"
+
+mcpManager:
+  image:
+    repository: agentarea/agentarea-mcp-manager
+    tag: "manual-test-v1-20251204183846"
+
+frontend:
+  enabled: false
+
+ingress:
+  enabled: true
+  hosts:
+    frontend:
+      host: "staging.agentarea.ai"
+    backend:
+      host: "api.staging.agentarea.ai"
+    kratos:
+      host: "auth.staging.agentarea.ai"
+
+kratos:
+  urls:
+    public: "https://auth.staging.agentarea.ai"
+    admin: "http://kratos-admin.internal"
+  session:
+    cookieDomain: "staging.agentarea.ai"
+  jwt:
+    issuer: "https://auth.staging.agentarea.ai"
+
+jobs:
+  dbMigration:
+    enabled: true
+  bootstrap:
+    enabled: true
+    image:
+      repository: cr.yandex/crp1mu03jgfvckifcqsn/agentarea/agentarea-bootstrap
+      tag: "manual-test-v1-20251204183846"

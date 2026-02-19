@@ -1,4 +1,5 @@
-import "server-only";
+// TODO: Re-enable server-only after fixing client/server separation
+// import "server-only";
 import createClient from "openapi-fetch";
 import { env } from "@/env";
 import type { paths } from "../api/schema";

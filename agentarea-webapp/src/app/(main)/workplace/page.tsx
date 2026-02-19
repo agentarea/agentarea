@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import React from "react";
 import AuthGuard from "@/components/auth/AuthGuard";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { getAgents } from "@/components/actions";
+
+export const metadata: Metadata = {
+  title: "Workplace",
+};
 
 export const dynamic = "force-dynamic";
 

@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getAgent, getAgentTaskById } from "@/lib/api";
 import AgentTaskClient from "./AgentTaskClient";
+
+export const metadata: Metadata = {
+  title: "Task Details",
+};
 
 interface Props {
   params: Promise<{ id: string; taskId: string }>;

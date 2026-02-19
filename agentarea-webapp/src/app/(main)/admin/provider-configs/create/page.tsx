@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
@@ -6,6 +7,10 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ProviderConfigFormWrapper from "./components/ProviderConfigFormWrapper";
 import { Button } from "@/components/ui/button";
 import { getProviderSpec } from "@/lib/api";
+
+export const metadata: Metadata = {
+  title: "Create Provider Config",
+};
 
 export default async function CreateProviderConfigPage({
   searchParams,

@@ -87,11 +87,21 @@ export const {
   getCurrentUser,
   testProtectedEndpoint,
 
-  // Built-in Tools API
-  listBuiltinTools,
+  // Unified Tools API
+  listAllTools,
 
   // MCP health
   getMCPHealthStatus,
+
+  // Skills API
+  listSkills,
+  getSkill,
+  getSkillContent,
+  getSkillFiles,
+  createSkill,
+  uploadSkill,
+  updateSkill,
+  deleteSkill,
 } = api;
 
 // Convenience helpers built on top of the generated API
@@ -209,3 +219,6 @@ export type TaskWithAgent = TaskResponse & {
   agent_name?: string;
   agent_description?: string | null;
 };
+
+// Re-export skill types for convenience
+export type { Skill, SkillContent, SkillFile, SkillCreateRequest, SkillUpdateRequest } from "@/types/skill";

@@ -757,12 +757,25 @@ export const testProtectedEndpoint = async () => {
   return { data, error };
 };
 
-// Builtin Tools API (outside generated schema)
-export const listBuiltinTools = async () => {
-  const { data, error } = await browserClient.GET(
-    "/v1/agents/tools/builtin" as any,
-    {}
-  );
+// Unified Tools API (outside generated schema)
+export const listAllTools = async (options?: {
+  include?: "code" | "mcp" | "code,mcp";
+  mcpInstanceId?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (options?.include) {
+    params.append("include", options.include);
+  }
+  if (options?.mcpInstanceId) {
+    params.append("mcp_instance_id", options.mcpInstanceId);
+  }
+
+  const queryString = params.toString();
+  const path = queryString
+    ? `/v1/agents/tools?${queryString}`
+    : `/v1/agents/tools`;
+
+  const { data, error } = await browserClient.GET(path as any, {});
   return { data, error };
 };
 
@@ -791,6 +804,108 @@ export type TaskWithAgent = TaskResponse & {
   agent_name?: string;
   agent_description?: string | null;
 };
+
+// Skills API
+export const listSkills = async () => {
+  const { data, error } = await browserClient.GET("/v1/skills/" as any, {});
+  return { data, error };
+};
+
+export const getSkill = async (skillId: string) => {
+  const { data, error } = await browserClient.GET(
+    `/v1/skills/${skillId}` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const getSkillContent = async (skillId: string) => {
+  const { data, error } = await browserClient.GET(
+    `/v1/skills/${skillId}/content` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const getSkillFiles = async (skillId: string) => {
+  const { data, error } = await browserClient.GET(
+    `/v1/skills/${skillId}/files` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const getSkillFile = async (skillId: string, filePath: string) => {
+  const { data, error } = await browserClient.GET(
+    `/v1/skills/${skillId}/files/${filePath}` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const createSkill = async (skill: {
+  content?: string | null;
+  github_url?: string | null;
+  name?: string | null;
+  description?: string | null;
+}) => {
+  const { data, error } = await browserClient.POST("/v1/skills/" as any, {
+    body: skill,
+  });
+  return { data, error };
+};
+
+export const uploadSkill = async (formData: FormData) => {
+  // Note: For file uploads, we need to use native fetch
+  try {
+    const response = await fetch("/api/proxy/v1/skills/upload", {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      return { data: null, error: errorData };
+    }
+    const data = await response.json();
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+};
+
+export const updateSkill = async (
+  skillId: string,
+  skill: {
+    name?: string | null;
+    description?: string | null;
+    content?: string | null;
+  }
+) => {
+  const { data, error } = await browserClient.PATCH(
+    `/v1/skills/${skillId}` as any,
+    {
+      body: skill,
+    }
+  );
+  return { data, error };
+};
+
+export const deleteSkill = async (skillId: string) => {
+  const { data, error } = await browserClient.DELETE(
+    `/v1/skills/${skillId}` as any,
+    {}
+  );
+  return { data, error };
+};
+
+// Re-export skill types
+export type {
+  Skill,
+  SkillContent,
+  SkillFile,
+  SkillCreateRequest,
+  SkillUpdateRequest,
+} from "@/types/skill";
 
 // MCP Health Monitoring
 export async function getMCPHealthStatus(): Promise<{

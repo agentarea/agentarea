@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
@@ -9,6 +10,10 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput/SearchInput";
 import { Button } from "@/components/ui/button";
+
+export const metadata: Metadata = {
+  title: "Agents",
+};
 
 interface AgentsBrowsePageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

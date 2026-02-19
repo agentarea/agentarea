@@ -78,5 +78,12 @@ export function createAgentFormData(data: AgentFormValues): FormData {
     );
   });
 
+  // Add skills
+  if (data.skills) {
+    data.skills.forEach((skill: any, index: number) => {
+      formData.append(`skill_ids[${index}]`, skill.id);
+    });
+  }
+
   return formData;
 }

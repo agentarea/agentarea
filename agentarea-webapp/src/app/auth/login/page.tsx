@@ -1,12 +1,16 @@
+import type { Metadata } from "next";
 import { Login } from "@ory/elements-react/theme";
 import { OryPageParams, getFlowFactory } from "@ory/nextjs/app";
-import "@ory/elements-react/theme/styles.css";
+import { FlowType, LoginFlow } from "@ory/client-fetch";
+// CSS imported via globals.css
 import config from "@/ory.config";
 import { env } from "@/env";
-
-import { FlowType, LoginFlow } from "@ory/client-fetch"
 import { serverSideFrontendClient, initOverrides, getPublicUrl } from "@/lib/auth/client";
 import { toGetFlowParameter, QueryParams } from "@/lib/auth/utils";
+
+export const metadata: Metadata = {
+  title: "Login",
+};
 
 async function getLoginFlow(
   config: { project: { login_ui_url: string } },

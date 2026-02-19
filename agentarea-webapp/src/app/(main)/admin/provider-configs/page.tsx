@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
@@ -9,6 +10,10 @@ import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import ProviderHeaderTabs from "./components/ProviderHeaderTabs";
 import ProvidersData from "./components/ProvidersData";
+
+export const metadata: Metadata = {
+  title: "Provider Configs",
+};
 
 interface TasksPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

@@ -1178,18 +1178,16 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
         )
 
         # Add tool-based skills if agent has tools configured
-        if agent.tools_config and isinstance(agent.tools_config, dict):
-            tools_list = agent.tools_config.get("tools", [])
-            if tools_list:
-                skills.append(
-                    AgentSkill(
-                        id="tool-execution",
-                        name="Tool Execution",
-                        description=f"Execute tools and integrations using {agent.name}",
-                        input_modes=["text"],
-                        output_modes=["text", "data"],
-                    )
+        if agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0:
+            skills.append(
+                AgentSkill(
+                    id="tool-execution",
+                    name="Tool Execution",
+                    description=f"Execute tools and integrations using {agent.name}",
+                    input_modes=["text"],
+                    output_modes=["text", "data"],
                 )
+            )
 
         # Add planning skill if agent has planning enabled
         if agent.planning:
@@ -1219,7 +1217,9 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
                 "agent_status": agent.status,
                 "agent_description_length": len(agent.description) if agent.description else 0,
                 "model_id": agent.model_id,
-                "has_tools": bool(agent.tools_config and agent.tools_config.get("tools")),
+                "has_tools": bool(
+                    agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0
+                ),
                 "has_planning": bool(agent.planning),
                 "skills_count": len(skills),
                 "base_url": base_url,
@@ -1548,18 +1548,16 @@ async def get_agent_well_known(
         )
 
         # Add tool-based skills if agent has tools configured
-        if agent.tools_config and isinstance(agent.tools_config, dict):
-            tools_list = agent.tools_config.get("tools", [])
-            if tools_list:
-                skills.append(
-                    AgentSkill(
-                        id="tool-execution",
-                        name="Tool Execution",
-                        description=f"Execute tools and integrations using {agent.name}",
-                        input_modes=["text"],
-                        output_modes=["text", "data"],
-                    )
+        if agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0:
+            skills.append(
+                AgentSkill(
+                    id="tool-execution",
+                    name="Tool Execution",
+                    description=f"Execute tools and integrations using {agent.name}",
+                    input_modes=["text"],
+                    output_modes=["text", "data"],
                 )
+            )
 
         # Add planning skill if agent has planning enabled
         if agent.planning:
@@ -1588,7 +1586,9 @@ async def get_agent_well_known(
                 "agent_status": agent.status,
                 "agent_description_length": len(agent.description) if agent.description else 0,
                 "model_id": agent.model_id,
-                "has_tools": bool(agent.tools_config and agent.tools_config.get("tools")),
+                "has_tools": bool(
+                    agent.tools and isinstance(agent.tools, list) and len(agent.tools) > 0
+                ),
                 "has_planning": bool(agent.planning),
                 "capabilities": ["streaming", "state_transition_history"],
                 "skills_count": len(skills),

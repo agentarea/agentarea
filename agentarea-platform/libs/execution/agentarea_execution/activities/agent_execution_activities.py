@@ -44,6 +44,9 @@ from ..models import (
     LLMCallResult,
     MCPToolRequest,
     MCPToolResult,
+    SkillFileRequest,
+    SkillFileResult,
+    SkillInfo,
     ToolDiscoveryRequest,
     WorkflowEventsRequest,
     WorkflowEventsResult,
@@ -76,16 +79,36 @@ def make_agent_activities(dependencies: ActivityDependencies):
     async def build_agent_config_activity(
         request: AgentConfigRequest,
     ) -> AgentConfigResult:
-        """Build agent configuration."""
+        """Build agent configuration including skills."""
         user_context = create_user_context(request.user_context_data)
 
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
 
-            # Get agent from database
-            agent = await agent_service.get(request.agent_id)
+            # Get agent from database with skills
+            agent = await agent_service.get_with_skills(request.agent_id)
             if not agent:
                 raise ValueError(f"Agent {request.agent_id} not found")
+
+            # Build skill information
+            skills_info = []
+            if hasattr(agent, "skills") and agent.skills:
+                for skill in agent.skills:
+                    # Get file list for multi-file skills
+                    files = []
+                    if skill.s3_path:
+                        # For multi-file skills, we would list files from S3
+                        # For now, just note it has additional files
+                        files = ["(additional files available)"]
+
+                    skills_info.append(
+                        SkillInfo(
+                            id=str(skill.id),
+                            name=skill.name,
+                            content=skill.content or "",
+                            files=files,
+                        )
+                    )
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -94,11 +117,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 description=agent.description,
                 instruction=agent.instruction,
                 model_id=request.override_model or agent.model_id,
-                tools_config=agent.tools_config or {},
+                tools=agent.tools or [],
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,
                 execution_context=request.execution_context,
                 step_type=request.step_type,
+                skills=skills_info,
             )
 
     @activity.defn
@@ -121,7 +145,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             tool_manager = ToolManager()
             all_tools = await tool_manager.discover_available_tools(
                 agent_id=request.agent_id,
-                tools_config=agent.tools_config,
+                tools_config=agent.tools,
                 mcp_server_instance_service=mcp_server_instance_service,
             )
 
@@ -297,41 +321,46 @@ def make_agent_activities(dependencies: ActivityDependencies):
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
 
-            # Create tool executor with properly configured builtin tools
-            from agentarea_agents_sdk.tools.builtin_tools_loader import create_builtin_tool_instance
+            # Create tool executor with properly configured code tools
+            from agentarea_agents_sdk.tools.code_tools_loader import create_code_tool_instance
             from agentarea_agents_sdk.tools.decorator_tool import Toolset, ToolsetAdapter
 
             tool_executor = ToolExecutor()
 
-            # Register builtin tools from configuration
-            if request.tools_config and request.tools_config.get("builtin_tools"):
-                for tool_config in request.tools_config["builtin_tools"]:
-                    if isinstance(tool_config, dict):
-                        builtin_tool_name = tool_config["tool_name"]
-                        # Extract method configuration
-                        disabled_methods = tool_config.get("disabled_methods", {})
+            # Register code tools from configuration (new schema)
+            if request.tools_config and isinstance(request.tools_config, list):
+                for tool_config in request.tools_config:
+                    if not isinstance(tool_config, dict):
+                        continue
 
-                        # Convert disabled_methods to constructor arguments
-                        toolset_methods = (
-                            dict.fromkeys(disabled_methods.keys(), False)
-                            if disabled_methods
-                            else {}
-                        )
-                    else:
-                        builtin_tool_name = tool_config
-                        toolset_methods = {}
+                    # Only process code tools here
+                    if tool_config.get("type") != "code":
+                        continue
 
-                    # Create and register the builtin tool instance
-                    tool_instance = create_builtin_tool_instance(builtin_tool_name, toolset_methods)
+                    tool_name = tool_config.get("name")
+                    if not tool_name:
+                        continue
+
+                    # Extract settings
+                    settings = tool_config.get("settings", {})
+                    disabled_methods = settings.get("disabled_methods", [])
+
+                    # Convert disabled_methods to constructor arguments
+                    toolset_methods = (
+                        dict.fromkeys(disabled_methods, False) if disabled_methods else {}
+                    )
+
+                    # Create and register the code tool instance
+                    tool_instance = create_code_tool_instance(tool_name, toolset_methods)
                     if tool_instance:
                         # Check if tool is a Toolset - if so, wrap it in adapter for compatibility
                         if isinstance(tool_instance, Toolset):
                             tool_instance = ToolsetAdapter(tool_instance)
 
                         tool_executor.register_tool(tool_instance)
-                        logger.info(f"Registered builtin tool for execution: {builtin_tool_name}")
+                        logger.info(f"Registered code tool for execution: {tool_name}")
                     else:
-                        logger.warning(f"Unknown builtin tool requested: {builtin_tool_name}")
+                        logger.warning(f"Unknown code tool requested: {tool_name}")
 
             try:
                 result = await tool_executor.execute_tool(
@@ -536,6 +565,95 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 errors=[f"Critical failure: {e!s}"],
             )
 
+    @activity.defn
+    async def resolve_skill_file_activity(
+        request: SkillFileRequest,
+    ) -> SkillFileResult:
+        """Resolve a file from a skill package.
+
+        This activity retrieves a file from a skill's S3 storage,
+        returning either the content directly or a presigned URL
+        for larger files.
+        """
+        try:
+            from agentarea_agents.infrastructure.skill_storage_service import (
+                SkillStorageService,
+            )
+
+            user_context = create_system_context(request.workspace_id)
+
+            async with ActivityContext(container, user_context) as ctx:
+                # Get skill from database
+                skill_service = await ctx.get_skill_service()
+                skill = await skill_service.get(request.skill_id)
+
+                if not skill:
+                    return SkillFileResult(
+                        success=False,
+                        error=f"Skill {request.skill_id} not found",
+                    )
+
+                # Handle content-only skills
+                if not skill.s3_path:
+                    # For content-only skills, check if requesting the main file
+                    if request.file_path.lower() in ("skill.md", "readme.md"):
+                        content = skill.content or ""
+                        return SkillFileResult(
+                            success=True,
+                            content=content.encode("utf-8"),
+                            content_text=content,
+                            content_type="text/markdown",
+                            size=len(content),
+                        )
+                    return SkillFileResult(
+                        success=False,
+                        error=f"Skill {request.skill_id} has no file storage (content-only)",
+                    )
+
+                # Get file from S3
+                storage_service = SkillStorageService()
+
+                try:
+                    content = await storage_service.get_file_content(
+                        skill.s3_path,
+                        request.file_path,
+                    )
+
+                    # Determine content type
+                    content_type = storage_service._guess_content_type(request.file_path)
+
+                    # For text files, also provide text representation
+                    content_text = None
+                    if content_type.startswith("text/") or content_type in (
+                        "application/json",
+                        "application/x-yaml",
+                    ):
+                        try:
+                            content_text = content.decode("utf-8")
+                        except UnicodeDecodeError:
+                            pass  # Binary content
+
+                    return SkillFileResult(
+                        success=True,
+                        content=content,
+                        content_text=content_text,
+                        content_type=content_type,
+                        size=len(content),
+                    )
+
+                except FileNotFoundError:
+                    return SkillFileResult(
+                        success=False,
+                        error=f"File not found: {request.file_path}",
+                    )
+
+        except Exception as e:
+            logger.error(f"Failed to resolve skill file: {e}")
+            return SkillFileResult(
+                success=False,
+                error=str(e),
+            )
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -545,4 +663,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         create_execution_plan_activity,
         evaluate_goal_progress_activity,
         publish_workflow_events_activity,
+        resolve_skill_file_activity,
     ]

@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 
-from ..config.settings import get_settings
-from .context import UserContext
+from agentarea_common.auth.context import UserContext
+from agentarea_common.config.settings import get_settings
 
 
 def generate_test_jwt_token(

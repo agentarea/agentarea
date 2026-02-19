@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { getAgentTaskStatus, listAgentTasks } from "@/lib/api";
 import AgentTasksList from "./components/AgentTasksList";
 import { TaskStatus, TaskWithStatus } from "./types";
+
+export const metadata: Metadata = {
+  title: "Agent Tasks",
+};
 
 interface Props {
   params: Promise<{ id: string }>;

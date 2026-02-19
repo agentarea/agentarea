@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import AgentEditContent from "./AgentEditContent";
+
+export const metadata: Metadata = {
+  title: "Agent Settings",
+};
 
 interface AgentSettingsPageProps {
   params: Promise<{

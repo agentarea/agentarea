@@ -19,16 +19,26 @@ async def get_workspace_id(
         description="Workspace ID for data isolation. Required for most endpoints.",
         alias="X-Workspace-ID",
     ),
+    user_context: UserContextDep = None,
 ) -> str:
-    """Get the workspace ID from the request header.
+    """Get the workspace ID from the request header or user context.
 
     Args:
         x_workspace_id: Workspace ID provided in X-Workspace-ID header
+        user_context: User context from authentication
 
     Returns:
-        str: The workspace ID, defaults to "default" if not provided
+        str: The workspace ID from header, or user's workspace_id from context
+
+    Note: This function is deprecated. Use UserContextDep.workspace_id instead.
     """
-    return x_workspace_id or "default"
+    if x_workspace_id:
+        return x_workspace_id
+    if user_context:
+        return user_context.workspace_id
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, detail="Workspace ID is required but not provided"
+    )
 
 
 # Type alias for workspace dependency

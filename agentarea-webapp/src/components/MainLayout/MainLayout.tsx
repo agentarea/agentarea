@@ -6,6 +6,7 @@ import {
   Key,
   LucideProps,
   Plug,
+  Sparkles,
   SquareTerminal,
 } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -72,6 +73,12 @@ const navData = {
       titleKey: "connections",
       url: "/mcp-servers",
       icon: Plug,
+    },
+    {
+      title: "Skills",
+      titleKey: "skills",
+      url: "/skills",
+      icon: Sparkles,
     },
     {
       title: "Admin",

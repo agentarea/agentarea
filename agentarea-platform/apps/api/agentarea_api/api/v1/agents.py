@@ -1,17 +1,20 @@
 """Agents API endpoints for managing AI agents."""
 
 import re
+from typing import Any, Literal
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
-from agentarea_agents_sdk.tools.tool_manager import get_available_builtin_tools
-from agentarea_api.api.deps.services import get_agent_service
+from agentarea_agents.schemas.import_export import ToolConfigYAML
+from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
+from agentarea_api.api.deps.services import get_agent_service, get_mcp_server_instance_service
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_database
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -84,32 +87,10 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
         )
 
 
-class MCPToolConfig(BaseModel):
-    tool_name: str
-    requires_user_confirmation: bool = False
-
-
-class MCPConfig(BaseModel):
-    mcp_server_id: str
-    allowed_tools: list[MCPToolConfig] | None = None
-
-
-class BuiltinToolConfig(BaseModel):
-    tool_name: str
-    requires_user_confirmation: bool = False
-    enabled: bool = True
-
-
 class EventConfig(BaseModel):
     event_type: str
     config: dict | None = None
     enabled: bool = True
-
-
-class ToolsConfig(BaseModel):
-    mcp_server_configs: list[MCPConfig] | None = None
-    builtin_tools: list[BuiltinToolConfig] | None = None
-    planning: bool | None = None
 
 
 class EventsConfig(BaseModel):
@@ -121,9 +102,10 @@ class AgentCreate(BaseModel):
     description: str
     instruction: str
     model_id: str
-    tools_config: ToolsConfig | None = None
+    tools: list[ToolConfigYAML] | None = None
     events_config: EventsConfig | None = None
     planning: bool | None = None
+    skill_ids: list[UUID] | None = None
 
 
 class AgentUpdate(BaseModel):
@@ -132,9 +114,10 @@ class AgentUpdate(BaseModel):
     description: str | None = None
     instruction: str | None = None
     model_id: str | None = None
-    tools_config: ToolsConfig | None = None
+    tools: list[ToolConfigYAML] | None = None
     events_config: EventsConfig | None = None
     planning: bool | None = None
+    skill_ids: list[UUID] | None = None
 
 
 class AgentResponse(BaseModel):
@@ -144,12 +127,22 @@ class AgentResponse(BaseModel):
     description: str | None = None
     instruction: str | None = None
     model_id: str | None = None
-    tools_config: dict | None = None
+    tools: list[ToolConfigYAML] | None = None
     events_config: dict | None = None
     planning: bool | None = None
 
     @classmethod
     def from_domain(cls, agent: Agent) -> "AgentResponse":
+        # Convert raw dict/list from database to Pydantic models
+        tools = None
+        if agent.tools:
+            if isinstance(agent.tools, list):
+                # New format - already a list of tool configs
+                tools = [ToolConfigYAML(**tool) for tool in agent.tools]
+            elif isinstance(agent.tools, dict):
+                # Could be legacy format or empty dict
+                tools = []
+
         return cls(
             id=agent.id,
             name=agent.name,
@@ -157,7 +150,7 @@ class AgentResponse(BaseModel):
             description=agent.description,
             instruction=agent.instruction,
             model_id=agent.model_id,
-            tools_config=agent.tools_config,
+            tools=tools,
             events_config=agent.events_config,
             planning=agent.planning,
         )
@@ -173,20 +166,20 @@ async def create_agent(
     # Validate model_id before creating agent
     await validate_model_id(data.model_id, user_context)
 
-    # Validate builtin tools if provided
-    if data.tools_config and data.tools_config.builtin_tools:
-        available_tools = get_available_builtin_tools()
+    # Validate code tools if provided
+    if data.tools:
+        available_code_tools = get_code_tools_metadata()
         invalid_tools = [
-            tool_config.tool_name
-            for tool_config in data.tools_config.builtin_tools
-            if tool_config.tool_name not in available_tools
+            tool_config.name
+            for tool_config in data.tools
+            if tool_config.type == "code" and tool_config.name not in available_code_tools
         ]
         if invalid_tools:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Invalid builtin tools: {invalid_tools}. "
-                    f"Available tools: {list(available_tools.keys())}"
+                    f"Invalid code tools: {invalid_tools}. "
+                    f"Available tools: {list(available_code_tools.keys())}"
                 ),
             )
 
@@ -195,9 +188,10 @@ async def create_agent(
         description=data.description,
         instruction=data.instruction,
         model_id=data.model_id,
-        tools_config=data.tools_config.model_dump() if data.tools_config else None,
+        tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
+        skill_ids=data.skill_ids,
     )
     return AgentResponse.from_domain(agent)
 
@@ -219,16 +213,18 @@ async def get_agent(
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
     user_context: UserContextDep,
-    created_by: str | None = Query(
-        None, description="Filter by creator: 'me' for current user's agents only"
-    ),
     agent_service: AgentService = Depends(get_agent_service),
 ):
-    """List all workspace agents with optional filtering by creator."""
-    # Determine if we should filter by creator
-    creator_scoped = created_by == "me"
+    """List all workspace agents.
 
-    agents = await agent_service.list(creator_scoped=creator_scoped)
+    Access Control:
+        Returns all agents within the current user's workspace (workspace isolation).
+        All users in the same workspace can see all workspace agents.
+
+        Note: User-level access control should be implemented via authorization
+        layer (future ReBAC) rather than query parameters.
+    """
+    agents = await agent_service.list()
     return [AgentResponse.from_domain(agent) for agent in agents]
 
 
@@ -249,9 +245,10 @@ async def update_agent(
         name=data.name,
         description=data.description,
         model_id=data.model_id,
-        tools_config=data.tools_config.model_dump() if data.tools_config else None,
+        tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
+        skill_ids=data.skill_ids,
     )
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -271,10 +268,97 @@ async def delete_agent(
     return {"status": "success"}
 
 
-@router.get("/tools/builtin")
-async def get_builtin_tools(user_context: UserContextDep):
-    """Get available builtin tools with full metadata including available methods."""
-    return get_available_builtin_tools()
+class ToolResponse(BaseModel):
+    """Unified tool response format."""
+
+    name: str
+    type: Literal["code", "mcp"]
+    description: str
+    input_schema: dict[str, Any]
+    mcp_instance_id: UUID | None = None
+    mcp_instance_name: str | None = None
+
+
+@router.get("/tools", response_model=list[ToolResponse])
+async def get_all_tools(
+    user_context: UserContextDep,
+    include: str = Query(
+        "code,mcp", description="Comma-separated list of tool types to include (code, mcp)"
+    ),
+    mcp_instance_id: UUID | None = Query(
+        None, description="Filter MCP tools by specific instance ID"
+    ),
+    mcp_service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """Get all available tools across all types.
+
+    Returns a unified list of tools from:
+    - Code tools (static, YAML-based)
+    - MCP tools (dynamic, from running instances)
+
+    Query Parameters:
+        include: Comma-separated tool types (default: "code,mcp")
+        mcp_instance_id: Filter MCP tools by instance (optional)
+
+    Example:
+        GET /v1/agents/tools?include=code,mcp
+        GET /v1/agents/tools?include=code
+        GET /v1/agents/tools?include=mcp&mcp_instance_id={uuid}
+    """
+    tools = []
+    include_types = {t.strip() for t in include.split(",")}
+
+    # Add code tools if requested
+    if "code" in include_types:
+        code_tools = get_code_tools_metadata()
+        for tool_name, tool_meta in code_tools.items():
+            # Convert code tool format to unified format
+            tools.append(
+                ToolResponse(
+                    name=tool_name,
+                    type="code",
+                    description=tool_meta.get("description", ""),
+                    input_schema=tool_meta.get("input_schema", {}),
+                )
+            )
+
+    # Add MCP tools if requested
+    if "mcp" in include_types:
+        if mcp_instance_id:
+            # Get tools for specific instance
+            instance = await mcp_service.get(mcp_instance_id)
+            if instance:
+                mcp_tools = instance.get_available_tools()
+                for tool in mcp_tools:
+                    # Convert OpenAI function format to unified format
+                    tools.append(
+                        ToolResponse(
+                            name=tool["function"]["name"],
+                            type="mcp",
+                            description=tool["function"].get("description", ""),
+                            input_schema=tool["function"].get("parameters", {}),
+                            mcp_instance_id=instance.id,
+                            mcp_instance_name=instance.name,
+                        )
+                    )
+        else:
+            # Get tools from all MCP instances
+            instances = await mcp_service.list()
+            for instance in instances:
+                mcp_tools = instance.get_available_tools()
+                for tool in mcp_tools:
+                    tools.append(
+                        ToolResponse(
+                            name=tool["function"]["name"],
+                            type="mcp",
+                            description=tool["function"].get("description", ""),
+                            input_schema=tool["function"].get("parameters", {}),
+                            mcp_instance_id=instance.id,
+                            mcp_instance_name=instance.name,
+                        )
+                    )
+
+    return tools
 
 
 # Include A2A protocol subroutes

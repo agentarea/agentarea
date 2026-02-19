@@ -1,0 +1,13 @@
+src/
+project.json
+tsconfig.spec.json
+!dist/
+api-report/
+DEVELOPEMENT.md
+*.config.ts
+config/
+.vscode
+storybook-static/
+stories/
+.stub-responses/
+.storybook/

@@ -63,6 +63,7 @@ export interface AddAgentFormState {
       }> | null;
     } | null;
     planning?: boolean;
+    skill_ids?: string[] | null;
     id?: string;
   };
   // Field-specific errors
@@ -266,6 +267,15 @@ export async function addAgent(
   });
   const eventConfigsArray = Object.values(eventConfigs);
 
+  // Parse skill_ids
+  const skillIds: string[] = [];
+  formData.forEach((value, key) => {
+    const skillMatch = key.match(/skill_ids\[(\d+)\]/);
+    if (skillMatch) {
+      skillIds.push(value as string);
+    }
+  });
+
   // Get form values
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
@@ -283,6 +293,7 @@ export async function addAgent(
     },
     events_config: { events: eventConfigsArray },
     planning: formData.get("planning") === "on",
+    skill_ids: skillIds,
   };
 
   const validatedFields = AgentSchema.safeParse(rawFormData);
@@ -318,7 +329,8 @@ export async function addAgent(
           }
         : null,
       planning: validatedFields.data.planning || null,
-    });
+      skill_ids: skillIds.length > 0 ? skillIds : null,
+    } as any);
 
     if (error) {
       // If the error is from the API, extract field errors if possible

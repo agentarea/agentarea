@@ -1,5 +1,6 @@
-import React, { ReactNode, useState } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import { Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -23,6 +24,7 @@ type ConfigSheetProps = {
   open?: boolean; // External control of open state
   onOpenChange?: (open: boolean) => void; // Optional callback for parent component
   triggerRef?: React.RefObject<HTMLButtonElement | null>; // Optional ref to trigger button
+  shortcut?: string; // Keyboard shortcut (e.g., "t" for Cmd+T)
 };
 
 const ConfigSheet = ({
@@ -37,18 +39,46 @@ const ConfigSheet = ({
   open,
   onOpenChange,
   triggerRef,
+  shortcut,
 }: ConfigSheetProps) => {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
 
   // Use external open state if provided, otherwise use internal state
   const isOpen = open !== undefined ? open : internalIsOpen;
 
-  const handleOpenChange = (open: boolean) => {
-    if (open !== undefined) {
-      setInternalIsOpen(open);
-    }
-    onOpenChange?.(open); // Call parent callback if provided
+  const handleOpenChange = (newOpen: boolean) => {
+    setInternalIsOpen(newOpen);
+    onOpenChange?.(newOpen);
   };
+
+  // Handle keyboard shortcut (Option/Alt + key)
+  useEffect(() => {
+    if (!shortcut) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Use Option/Alt key to avoid conflicts with browser shortcuts
+      if (e.altKey && e.key.toLowerCase() === shortcut.toLowerCase()) {
+        // Don't trigger if user is typing in an input
+        const target = e.target as HTMLElement;
+        const isInputField = target.tagName === "INPUT" ||
+                            target.tagName === "TEXTAREA" ||
+                            target.isContentEditable;
+
+        if (!isInputField) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Toggle the sheet
+          const newState = open !== undefined ? !open : !internalIsOpen;
+          setInternalIsOpen(newState);
+          onOpenChange?.(newState);
+        }
+      }
+    };
+
+    // Use capture phase to intercept before other handlers
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [shortcut, open, internalIsOpen, onOpenChange]);
 
   // Helper to determine if outside click should be ignored (e.g., when interacting with controls)
   const shouldIgnoreOutsideClick = (target: HTMLElement) =>
@@ -62,9 +92,17 @@ const ConfigSheet = ({
         {triggerComponent ? (
           triggerComponent
         ) : (
-          <Button size="xs" ref={triggerRef} className={triggerClassName}>
+          <Button size="xs" ref={triggerRef} className={cn("gap-1.5", triggerClassName)}>
             {triggerIcon}
             {triggerText}
+            {shortcut && (
+              <Badge
+                variant="outline"
+                className="ml-1 h-4 border-muted-foreground/30 bg-background/50 px-1 py-0 text-[10px] font-normal text-muted-foreground"
+              >
+                ⌥{shortcut.toUpperCase()}
+              </Badge>
+            )}
           </Button>
         )}
       </SheetTrigger>

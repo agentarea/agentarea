@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
@@ -9,6 +10,10 @@ import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
+
+export const metadata: Metadata = {
+  title: "MCP Servers",
+};
 
 export default async function MCPServersPage({
   searchParams,

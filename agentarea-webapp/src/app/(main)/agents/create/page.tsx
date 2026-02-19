@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -5,6 +6,10 @@ import AgentPageWrapper from "../shared/AgentPageWrapper";
 import { ChatProvider } from "../shared/ChatContext";
 import CreateAgentContent from "./CreateAgentContent";
 import CreateAgentHeaderControls from "./CreateAgentHeaderControls";
+
+export const metadata: Metadata = {
+  title: "Create Agent",
+};
 
 export default async function CreateAgentPage() {
   const t = await getTranslations("AgentsPage");

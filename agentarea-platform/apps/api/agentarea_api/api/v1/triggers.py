@@ -451,9 +451,6 @@ async def list_triggers(
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
     trigger_type: str | None = Query(None, description="Filter by trigger type (cron, webhook)"),
     active_only: bool = Query(False, description="Only return active triggers"),
-    created_by: str | None = Query(
-        None, description="Filter by creator: 'me' for current user's triggers only"
-    ),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of triggers to return"),
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     trigger_service: TriggerService = Depends(get_trigger_service),
@@ -463,11 +460,14 @@ async def list_triggers(
     Returns a list of triggers that match the specified criteria. Supports
     filtering by agent ID, trigger type, and active status.
 
+    Access Control:
+        Returns all triggers within the current user's workspace (workspace isolation).
+        All users in the same workspace can see all workspace triggers.
+
     Args:
         agent_id: Optional agent ID filter
         trigger_type: Optional trigger type filter
         active_only: Whether to only return active triggers
-        created_by: Optional creator filter ('me' for current user's triggers)
         limit: Maximum number of triggers to return
         auth_context: Authentication context
         trigger_service: Injected trigger service
@@ -495,15 +495,12 @@ async def list_triggers(
                         status_code=400, detail=f"Invalid trigger type: {trigger_type}"
                     )
 
-        # Determine if we should filter by creator
-        creator_scoped = created_by == "me"
-
         # List triggers
         triggers = await trigger_service.list_triggers(
             agent_id=agent_id,
             trigger_type=domain_trigger_type,
             active_only=active_only,
-            creator_scoped=creator_scoped,
+            creator_scoped=False,
             limit=limit,
         )
 
@@ -516,6 +513,49 @@ async def list_triggers(
     except Exception as e:
         logger.error(f"Failed to list triggers: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to list triggers: {e!s}") from e
+
+
+# Health check endpoint
+@router.get("/health", response_model=dict[str, Any])
+async def triggers_health_check(
+    health_checker=Depends(get_trigger_health_check),
+) -> dict[str, Any]:
+    """Comprehensive health check endpoint for trigger system.
+
+    Checks all trigger system components including:
+    - Database connectivity
+    - Temporal schedule manager
+    - Webhook manager
+    - Execution metrics
+
+    Returns:
+        Dictionary with detailed health status information
+    """
+    try:
+        if not TRIGGERS_AVAILABLE:
+            return {
+                "overall_status": "unavailable",
+                "service": "triggers",
+                "message": "Triggers service not available",
+                "timestamp": datetime.utcnow().isoformat(),
+                "components": {},
+            }
+
+        # Run comprehensive health check
+        health_status = await health_checker.check_all_components()
+        health_status["service"] = "triggers"
+
+        return health_status
+
+    except Exception as e:
+        logger.error(f"Triggers health check failed: {e}")
+        return {
+            "overall_status": "unhealthy",
+            "service": "triggers",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+            "components": {},
+        }
 
 
 @router.get("/{trigger_id}", response_model=TriggerResponse)
@@ -1028,46 +1068,3 @@ async def get_execution_correlations(
         raise HTTPException(
             status_code=500, detail=f"Failed to get execution correlations: {e!s}"
         ) from e
-
-
-# Health check endpoint
-@router.get("/health", response_model=dict[str, Any])
-async def triggers_health_check(
-    health_checker=Depends(get_trigger_health_check),
-) -> dict[str, Any]:
-    """Comprehensive health check endpoint for trigger system.
-
-    Checks all trigger system components including:
-    - Database connectivity
-    - Temporal schedule manager
-    - Webhook manager
-    - Execution metrics
-
-    Returns:
-        Dictionary with detailed health status information
-    """
-    try:
-        if not TRIGGERS_AVAILABLE:
-            return {
-                "overall_status": "unavailable",
-                "service": "triggers",
-                "message": "Triggers service not available",
-                "timestamp": datetime.utcnow().isoformat(),
-                "components": {},
-            }
-
-        # Run comprehensive health check
-        health_status = await health_checker.check_all_components()
-        health_status["service"] = "triggers"
-
-        return health_status
-
-    except Exception as e:
-        logger.error(f"Triggers health check failed: {e}")
-        return {
-            "overall_status": "unhealthy",
-            "service": "triggers",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
-            "components": {},
-        }

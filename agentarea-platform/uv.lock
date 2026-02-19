@@ -44,19 +44,21 @@ wheels = [
 name = "aenum"
 version = "3.1.16"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/7a/61ed58e8be9e30c3fe518899cc78c284896d246d51381bab59b5db11e1f3/aenum-3.1.16.tar.gz", hash = "sha256:bfaf9589bdb418ee3a986d85750c7318d9d2839c1b1a1d6fe8fc53ec201cf140", size = 137693 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e3/52/6ad8f63ec8da1bf40f96996d25d5b650fdd38f5975f8c813732c47388f18/aenum-3.1.16-py3-none-any.whl", hash = "sha256:9035092855a98e41b66e3d0998bd7b96280e85ceb3a04cc035636138a1943eaf", size = 165627 },
 ]
 
 [[package]]
 name = "agentarea-agents"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/agents" }
 dependencies = [
     { name = "a2a-sdk" },
     { name = "agentarea-common" },
     { name = "httpx" },
     { name = "pydantic" },
+    { name = "python-frontmatter" },
 ]
 
 [package.metadata]
@@ -65,11 +67,12 @@ requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
+    { name = "python-frontmatter", specifier = ">=1.1.0" },
 ]
 
 [[package]]
 name = "agentarea-agents-sdk"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/agentarea-agents-sdk" }
 dependencies = [
     { name = "httpx" },
@@ -99,7 +102,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agentarea-api"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "agentarea-agents" },
@@ -144,7 +147,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-common"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/common" }
 dependencies = [
     { name = "asyncpg" },
@@ -179,7 +182,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-context"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/context" }
 dependencies = [
     { name = "agentarea-common" },
@@ -213,7 +216,7 @@ dev = [{ name = "sentence-transformers", specifier = ">=2.2.2" }]
 
 [[package]]
 name = "agentarea-execution"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/execution" }
 dependencies = [
     { name = "agentarea-agents-sdk" },
@@ -241,7 +244,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agentarea-llm"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/llm" }
 dependencies = [
     { name = "agentarea-common" },
@@ -258,7 +261,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-mcp"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/mcp" }
 dependencies = [
     { name = "agentarea-common" },
@@ -275,7 +278,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-secrets"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/secrets" }
 dependencies = [
     { name = "agentarea-common" },
@@ -292,7 +295,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-tasks"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/tasks" }
 dependencies = [
     { name = "a2a-sdk" },
@@ -311,7 +314,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-triggers"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "libs/triggers" }
 dependencies = [
     { name = "agentarea-common" },
@@ -328,7 +331,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-worker"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "apps/worker" }
 dependencies = [
     { name = "agentarea-agents" },
@@ -357,7 +360,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-workspace"
-version = "0.0.3"
+version = "0.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "a2a-sdk" },
@@ -2841,6 +2844,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f6/b0/4bc07ccd3572a2f9df7e6782f52b0c6c90dcbb803ac4a167702d7d0dfe1e/python_dotenv-1.1.1.tar.gz", hash = "sha256:a8a6399716257f45be6a007360200409fce5cda2661e3dec71d23dc15f6189ab", size = 41978 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5f/ed/539768cf28c661b5b068d66d96a2f155c4971a5d55684a514c1a0e0dec2f/python_dotenv-1.1.1-py3-none-any.whl", hash = "sha256:31f23644fe2602f88ff55e1f5c79ba497e01224ee7737937930c448e4d0e24dc", size = 20556 },
+]
+
+[[package]]
+name = "python-frontmatter"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/96/de/910fa208120314a12f9a88ea63e03707261692af782c99283f1a2c8a5e6f/python-frontmatter-1.1.0.tar.gz", hash = "sha256:7118d2bd56af9149625745c58c9b51fb67e8d1294a0c76796dafdc72c36e5f6d", size = 16256 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/87/3c8da047b3ec5f99511d1b4d7a5bc72d4b98751c7e78492d14dc736319c5/python_frontmatter-1.1.0-py3-none-any.whl", hash = "sha256:335465556358d9d0e6c98bbeb69b1c969f2a4a21360587b9873bfc3b213407c1", size = 9834 },
 ]
 
 [[package]]

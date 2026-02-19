@@ -13,7 +13,7 @@ class AgentCreated(DomainEvent):
         name: str,
         description: str,
         model_id: str,
-        tools_config: dict[str, Any] | None = None,
+        tools: dict[str, Any] | list[dict[str, Any]] | None = None,
         events_config: dict[str, Any] | None = None,
         planning: bool | None = None,
     ) -> None:
@@ -22,7 +22,7 @@ class AgentCreated(DomainEvent):
         self.name = name
         self.description = description
         self.model_id = model_id
-        self.tools_config = tools_config
+        self.tools = tools
         self.events_config = events_config
         self.planning = planning
 
@@ -36,7 +36,7 @@ class AgentUpdated(DomainEvent):
         name: str,
         description: str | None = None,
         model_id: str | None = None,
-        tools_config: dict[str, Any] | None = None,
+        tools: dict[str, Any] | list[dict[str, Any]] | None = None,
         events_config: dict[str, Any] | None = None,
         planning: bool | None = None,
     ) -> None:
@@ -45,7 +45,7 @@ class AgentUpdated(DomainEvent):
         self.name = name
         self.description = description
         self.model_id = model_id
-        self.tools_config = tools_config
+        self.tools = tools
         self.events_config = events_config
         self.planning = planning
 

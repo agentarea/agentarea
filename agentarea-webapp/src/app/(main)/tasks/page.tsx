@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
@@ -6,6 +7,10 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
 import { TasksData } from "./components/TasksData";
 import TasksHeaderTabs from "./components/TasksHeaderTabs";
+
+export const metadata: Metadata = {
+  title: "Tasks",
+};
 
 interface TasksPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;

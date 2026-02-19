@@ -1,4 +1,27 @@
 {
+  "Metadata": {
+    "agents": "Agents",
+    "createAgent": "Create Agent",
+    "tasks": "Tasks",
+    "skills": "Skills",
+    "mcpServers": "MCP Servers",
+    "addMcpServer": "Add MCP Server",
+    "settings": "Settings",
+    "workplace": "Workplace",
+    "providers": "Providers",
+    "providerConfigs": "Provider Configs",
+    "createProviderConfig": "Create Provider Config",
+    "login": "Login",
+    "registration": "Registration",
+    "recovery": "Password Recovery",
+    "editAgent": "Edit {agentName}",
+    "newTask": "New Task - {agentName}",
+    "agentTasks": "{agentName} - Tasks",
+    "agentSettings": "{agentName} - Settings",
+    "taskDetail": "Task: {description}",
+    "editProviderConfig": "Edit {configName}",
+    "createProviderConfigForProvider": "Create {providerName} Config"
+  },
   "Common": {
     "search": "Search",
     "saveChanges": "Save changes",
@@ -73,6 +96,7 @@
     "workplace": "Workplace",
     "agents": "Agents",
     "browse": "Agents",
+    "skills": "Skills",
     "tasks": "Tasks",
     "llms": "LLM Models",
     "llmBrowse": "Browse",
@@ -431,6 +455,99 @@
       "artifacts": "Artifacts",
       "memory": "Memory",
       "metrics": "Metrics"
+    }
+  },
+
+  "SkillsPage": {
+    "title": "Skills",
+    "description": "Manage reusable skills that can be assigned to agents",
+    "addSkill": "Add Skill",
+    "noSkills": "No skills yet",
+    "noSkillsDescription": "Skills are reusable capabilities that can be assigned to agents. Create your first skill to get started.",
+    "loading": "Loading...",
+    "error": {
+      "loadSkills": "Failed to load skills",
+      "skillNotFound": "Skill not found",
+      "loadFileContent": "Failed to load file content",
+      "updateSkill": "Failed to update skill",
+      "deleteSkill": "Failed to delete skill"
+    },
+    "success": {
+      "skillUpdated": "Skill updated successfully",
+      "skillDeleted": "Skill deleted successfully"
+    },
+    "confirm": {
+      "deleteSkill": "Delete \"{skillName}\"?"
+    },
+    "table": {
+      "name": "Name",
+      "source": "Source",
+      "updated": "Updated"
+    },
+    "detail": {
+      "details": "Details",
+      "files": "Files",
+      "selectFile": "Select a file",
+      "emptyFile": "Empty file",
+      "edit": "Edit",
+      "view": "View",
+      "save": "Save",
+      "delete": "Delete",
+      "name": "Name",
+      "description": "Description",
+      "source": "Source",
+      "updated": "Updated",
+      "skillConfiguration": "Skill Configuration",
+      "editable": "Editable"
+    },
+    "source": {
+      "github": "GitHub",
+      "uploaded": "Uploaded",
+      "content": "Content"
+    },
+    "create": {
+      "title": "Add Skill",
+      "description": "Create a new skill from content, import from GitHub, or upload a package.",
+      "contentTab": "Content",
+      "githubTab": "GitHub",
+      "uploadTab": "Upload",
+      "name": "Name",
+      "namePlaceholder": "My Skill",
+      "description": "Description",
+      "descriptionPlaceholder": "What this skill does...",
+      "content": "Content",
+      "contentPlaceholder": "Enter skill content in Markdown...",
+      "contentRequired": "Please enter skill content",
+      "githubUrl": "GitHub URL",
+      "githubUrlPlaceholder": "https://github.com/owner/repo",
+      "githubUrlRequired": "Please enter a GitHub URL",
+      "githubUrlInvalid": "Please enter a valid GitHub URL",
+      "githubDescription": "Public repository containing skill definition",
+      "nameOptional": "Name (optional)",
+      "nameOverride": "Override imported name",
+      "descriptionOptional": "Description (optional)",
+      "descriptionOverride": "Override imported description",
+      "createSkill": "Create Skill",
+      "importFromGithub": "Import from GitHub",
+      "uploadSkill": "Upload Skill",
+      "dragDrop": "Drag and drop a ZIP file, or",
+      "browse": "browse",
+      "remove": "Remove",
+      "validationError": "Validation Error",
+      "error": {
+        "githubRateLimit": "GitHub rate limit exceeded. Please try again later.",
+        "githubNotFound": "Repository not found or is private.",
+        "githubImportFailed": "Failed to import skill from GitHub",
+        "uploadFailed": "Failed to upload skill",
+        "invalidFile": "Invalid File",
+        "zipRequired": "Please upload a ZIP file",
+        "createFailed": "Failed to create skill"
+      },
+      "success": {
+        "skillCreated": "Skill created successfully",
+        "skillImported": "Skill imported successfully",
+        "skillUploaded": "Skill uploaded successfully"
+      }
     }
   }
 }

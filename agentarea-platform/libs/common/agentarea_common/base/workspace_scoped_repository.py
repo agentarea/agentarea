@@ -105,34 +105,28 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
 
     async def list_all(
         self,
-        creator_scoped: bool = False,
         limit: int | None = None,
         offset: int | None = None,
         **filters: Any,
     ) -> list[T]:
         """List all records in the current workspace.
 
-        By default, returns ALL workspace resources (not just user's).
-        Use creator_scoped=True to filter to only resources created by current user.
+        Returns ALL workspace resources. Access control and filtering should be
+        handled by authorization layer (future ReBAC implementation).
 
         Args:
-            creator_scoped: If True, only return records created by current user
             limit: Maximum number of records to return
             offset: Number of records to skip
             **filters: Additional field filters
 
         Returns:
-            List of records
+            List of records within workspace scope
         """
         try:
             query = select(self.model_class)
 
-            # Apply workspace/creator filtering
-            if creator_scoped:
-                query = query.where(self._get_creator_workspace_filter())
-            else:
-                # Default behavior: return all workspace resources
-                query = query.where(self._get_workspace_filter())
+            # Apply workspace filtering only
+            query = query.where(self._get_workspace_filter())
 
             # Apply additional filters
             for field, value in filters.items():
@@ -154,7 +148,7 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
                 user_context=self.user_context,
                 count=len(records),
                 filters=filters,
-                creator_scoped=creator_scoped,
+                creator_scoped=False,  # No longer used, kept for audit log compatibility
                 limit=limit,
                 offset=offset,
             )
@@ -441,13 +435,14 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
         """Find records by field values within the current workspace.
 
         Args:
-            creator_scoped: If True, only return records created by current user
+            creator_scoped: Deprecated parameter, kept for compatibility but ignored
             **filters: Field filters
 
         Returns:
             List of matching records
         """
-        return await self.list_all(creator_scoped=creator_scoped, **filters)
+        # Note: creator_scoped parameter ignored, kept for backward compatibility
+        return await self.list_all(**filters)
 
     async def find_one_by(self, creator_scoped: bool = False, **filters: Any) -> T | None:
         """Find one record by field values within the current workspace.

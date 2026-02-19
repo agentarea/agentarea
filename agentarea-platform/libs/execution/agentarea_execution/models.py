@@ -143,6 +143,15 @@ class AgentConfigRequest(BaseModel):
     override_model: str | None = None
 
 
+class SkillInfo(BaseModel):
+    """Skill information for execution context."""
+
+    id: str
+    name: str
+    content: str  # Markdown body
+    files: list[str] = Field(default_factory=list)  # Available file paths
+
+
 class AgentConfigResult(BaseModel):
     """Agent configuration result."""
 
@@ -151,11 +160,12 @@ class AgentConfigResult(BaseModel):
     description: str
     instruction: str
     model_id: str
-    tools_config: dict[str, Any] = Field(default_factory=dict)
+    tools: list[dict[str, Any]] = Field(default_factory=list)
     events_config: dict[str, Any] = Field(default_factory=dict)
     planning: bool = False
     execution_context: dict[str, Any] | None = None
     step_type: str | None = None
+    skills: list[SkillInfo] = Field(default_factory=list)
 
 
 class ToolDiscoveryRequest(BaseModel):
@@ -218,7 +228,7 @@ class MCPToolRequest(BaseModel):
     tool_args: dict[str, Any]
     server_instance_id: UUID | None = None
     workspace_id: str  # Required - must be provided explicitly
-    tools_config: dict[str, Any] | None = None
+    tools: list[dict[str, Any]] | None = None
 
 
 class MCPToolResult(BaseModel):
@@ -347,4 +357,34 @@ class CreateTaskFromTriggerResult(BaseModel):
     trigger_id: UUID
     status: str
     task_parameters: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+
+
+# === Skill File Activity Models ===
+
+
+class SkillFileRequest(BaseModel):
+    """Request to resolve a skill file from S3.
+
+    Used by workflows to access individual files from skill packages.
+    """
+
+    skill_id: UUID
+    file_path: str  # Relative path within the skill package
+    workspace_id: str
+    user_context_data: dict[str, Any] | None = None
+
+
+class SkillFileResult(BaseModel):
+    """Result of skill file resolution.
+
+    Contains either the file content or a presigned URL.
+    """
+
+    success: bool = True
+    content: bytes | None = None  # File content as bytes
+    content_text: str | None = None  # File content as text (for text files)
+    presigned_url: str | None = None  # Presigned URL for direct access
+    content_type: str | None = None  # MIME type
+    size: int = 0  # File size in bytes
     error: str | None = None
