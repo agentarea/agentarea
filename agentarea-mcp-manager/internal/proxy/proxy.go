@@ -2,12 +2,14 @@ package proxy
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -75,6 +77,11 @@ func (ps *ProxyServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	slug, hasSlug := ps.extractSlug(r.URL.Path)
 
 	if hasSlug {
+		// Check auth for MCP routes
+		if !ps.checkAuth(w, r) {
+			return // Auth failed, response already sent
+		}
+
 		// Try to find route for MCP service
 		route, err := ps.registry.GetRoute(slug)
 		if err == nil {
@@ -88,6 +95,54 @@ func (ps *ProxyServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// No MCP route matched, forward to manager service
 	ps.forwardToManagerService(w, r)
+}
+
+// checkAuth validates the MCP shared secret for MCP endpoint access
+// Returns true if authenticated, false if auth failed (and writes response)
+func (ps *ProxyServer) checkAuth(w http.ResponseWriter, r *http.Request) bool {
+	// Get shared secret from environment
+	secret := os.Getenv("MCP_SHARED_SECRET")
+
+	// If no secret configured, allow all (development mode)
+	if secret == "" {
+		return true
+	}
+
+	// Extract Bearer token from Authorization header
+	var provided string
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		provided = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	// Also support token in query parameter for easier testing
+	if provided == "" {
+		provided = r.URL.Query().Get("token")
+	}
+
+	if provided == "" {
+		ps.logger.Warn("MCP auth failed: missing Authorization header",
+			slog.String("path", r.URL.Path),
+			slog.String("remote_addr", r.RemoteAddr))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error": "Unauthorized"}`))
+		return false
+	}
+
+	// Constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(secret)) != 1 {
+		ps.logger.Warn("MCP auth failed: invalid token",
+			slog.String("path", r.URL.Path),
+			slog.String("remote_addr", r.RemoteAddr))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error": "Unauthorized"}`))
+		return false
+	}
+
+	// Auth successful
+	return true
 }
 
 // extractSlug extracts the slug from a /mcp/{slug}/... path

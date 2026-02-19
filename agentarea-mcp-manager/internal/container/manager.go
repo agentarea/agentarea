@@ -27,7 +27,6 @@ type Manager struct {
 	containerHealth map[string]*HealthCheckResult // Track health status
 	mutex           sync.RWMutex
 	logger          *slog.Logger
-	traefikManager  *TraefikManager
 	routeManager    interface{} // proxy.RouteManager set at runtime
 	validator       *ContainerValidator
 	healthChecker   *HealthChecker
@@ -36,9 +35,8 @@ type Manager struct {
 	healthCancel    context.CancelFunc
 }
 
-// NewManager creates a new container manager with Traefik integration
+// NewManager creates a new container manager
 func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
-	traefikManager := NewTraefikManager(cfg, logger)
 	healthChecker := NewHealthChecker(cfg, logger)
 	eventPublisher := events.NewEventPublisher(cfg.Redis.URL, logger)
 
@@ -50,7 +48,6 @@ func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 		containers:      make(map[string]*models.Container),
 		containerHealth: make(map[string]*HealthCheckResult),
 		logger:          logger,
-		traefikManager:  traefikManager,
 		healthChecker:   healthChecker,
 		eventPublisher:  eventPublisher,
 		healthCtx:       healthCtx,
@@ -130,8 +127,8 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		Image:       req.Image,
 		Status:      models.StatusStarting,
 		Port:        req.Port,
-		URL:         fmt.Sprintf("%s/mcp/%s", m.config.Traefik.ProxyHost, slug),
-		Host:        m.config.Traefik.ProxyHost,
+		URL:         fmt.Sprintf("http://%s:%d/mcp/%s", m.config.Proxy.DefaultDomain, m.config.Proxy.Port, slug),
+		Host:        fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		Labels:      req.Labels,
@@ -162,7 +159,7 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		return nil, fmt.Errorf("container failed to start: %w", err)
 	}
 
-	// Get container IP for Traefik routing
+	// Get container IP for proxy routing
 	containerIP, err := m.getContainerIP(ctx, container.ID)
 	if err != nil {
 		m.logger.Error("Failed to get container IP",
@@ -172,7 +169,7 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		containerIP = "127.0.0.1" // fallback
 	}
 
-	// Add route for the container using the slug (proxy or Traefik)
+	// Add route for the container using the slug
 	if err := m.addRoute(ctx, slug, containerIP, req.Port); err != nil {
 		m.logger.Error("Failed to add route",
 			slog.String("slug", slug),
@@ -322,7 +319,7 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 		return fmt.Errorf("failed to remove container: %w", err)
 	}
 
-	// Remove route for the container using the slug (proxy or Traefik)
+	// Remove route for the container using the slug
 	if container.Slug != "" {
 		if err := m.removeRoute(ctx, container.Slug); err != nil {
 			m.logger.Error("Failed to remove route",
@@ -400,14 +397,6 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 		podmanContainers = append(podmanContainers, container)
 	}
 
-	// Load Traefik configuration to find existing slugs
-	traefikConfig, err := m.traefikManager.LoadConfig()
-	if err != nil {
-		m.logger.Warn("Failed to load Traefik config for slug discovery",
-			slog.String("error", err.Error()))
-		traefikConfig = nil
-	}
-
 	prefix := m.config.Container.NamePrefix
 	for _, pc := range podmanContainers {
 		names, ok := pc["Names"].([]interface{})
@@ -473,15 +462,8 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 			}
 		}
 
-		// Try to find existing slug from Traefik configuration
-		slug := m.findExistingSlugFromTraefik(serviceName, traefikConfig)
-		if slug == "" {
-			// Fallback to generating a new slug if not found in Traefik
-			slug = generateSlug(serviceName)
-			m.logger.Warn("Could not find existing slug in Traefik config, generating new one",
-				slog.String("service", serviceName),
-				slog.String("slug", slug))
-		}
+		// Generate slug from service name
+		slug := generateSlug(serviceName)
 
 		container := &models.Container{
 			ID:          containerID,
@@ -491,8 +473,8 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 			Image:       pc["Image"].(string),
 			Status:      m.mapPodmanStatus(pc["State"].(string)),
 			Port:        port,
-			URL:         fmt.Sprintf("%s/mcp/%s", m.config.Traefik.ProxyHost, slug),
-			Host:        m.config.Traefik.ProxyHost,
+			URL:         fmt.Sprintf("%s/mcp/%s", fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port), slug),
+			Host:        fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port),
 			CreatedAt:   time.Now(), // We don't have exact creation time
 			UpdatedAt:   time.Now(),
 		}
@@ -512,31 +494,6 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 	return nil
 }
 
-// findExistingSlugFromTraefik finds the existing slug for a service from Traefik configuration
-func (m *Manager) findExistingSlugFromTraefik(serviceName string, config *TraefikConfig) string {
-	if config == nil || config.HTTP.Routers == nil {
-		return ""
-	}
-
-	// Look for router names that match the pattern mcp-{service_name}-{hash}
-	// The slug would be {service_name}-{hash}
-	routerPrefix := fmt.Sprintf("mcp-%s-", serviceName)
-
-	for routerName := range config.HTTP.Routers {
-		if strings.HasPrefix(routerName, routerPrefix) {
-			// Extract slug by removing the "mcp-" prefix
-			slug := strings.TrimPrefix(routerName, "mcp-")
-			m.logger.Info("Found existing slug from Traefik config",
-				slog.String("service", serviceName),
-				slog.String("router", routerName),
-				slog.String("slug", slug))
-			return slug
-		}
-	}
-
-	return ""
-}
-
 // buildPodmanRunArgs builds the arguments for podman run command
 func (m *Manager) buildPodmanRunArgs(container *models.Container) []string {
 	args := []string{"run", "-d"}
@@ -544,11 +501,10 @@ func (m *Manager) buildPodmanRunArgs(container *models.Container) []string {
 	// Add name
 	args = append(args, "--name", container.Name)
 
-	// Add network (important for Traefik discovery)
-	args = append(args, "--network", m.config.Traefik.Network)
+	// Add network for container-to-container communication
+	args = append(args, "--network", m.config.Proxy.Network)
 
-	// No port mapping needed - Traefik will handle routing via path-based routing
-	// The container will expose its internal port and Traefik will proxy to it
+	// No port mapping needed - internal proxy will handle routing via path-based routing
 
 	// Add environment variables
 	for key, value := range container.Environment {
@@ -681,9 +637,9 @@ func (m *Manager) getContainerIP(ctx context.Context, containerID string) (strin
 		return "", fmt.Errorf("Networks not found")
 	}
 
-	mcpNetwork, ok := networks[m.config.Traefik.Network].(map[string]interface{})
+	mcpNetwork, ok := networks[m.config.Proxy.Network].(map[string]interface{})
 	if !ok {
-		return "", fmt.Errorf("network %s not found", m.config.Traefik.Network)
+		return "", fmt.Errorf("network %s not found", m.config.Proxy.Network)
 	}
 
 	ipAddress, ok := mcpNetwork["IPAddress"].(string)
@@ -816,11 +772,11 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Image:       image,
 		Status:      models.StatusValidating,
 		Port:        containerPort,
-		URL:         fmt.Sprintf("%s/mcp/%s", m.config.Traefik.ProxyHost, slug), // External access via unified endpoint
-		Host:        m.config.Traefik.ProxyHost,
+		URL:         fmt.Sprintf("%s/mcp/%s", fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port), slug), // External access via unified endpoint
+		Host:        fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-		Labels:      make(map[string]string), // No labels needed for Traefik
+		Labels:      make(map[string]string),
 		Environment: environment,
 		Command:     command,
 	}
@@ -886,7 +842,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		return fmt.Errorf("container failed to start: %w", err)
 	}
 
-	// Get container IP for Traefik routing
+	// Get container IP for proxy routing
 	containerIP, err := m.getContainerIP(ctx, container.ID)
 	if err != nil {
 		m.logger.Error("Failed to get container IP",
@@ -896,7 +852,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		containerIP = "127.0.0.1" // fallback
 	}
 
-	// Add route for the container using the slug (proxy or Traefik)
+	// Add route for the container using the slug
 	if err := m.addRoute(ctx, slug, containerIP, containerPort); err != nil {
 		m.logger.Error("Failed to add route",
 			slog.String("slug", slug),
@@ -916,7 +872,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 			slog.String("error", err.Error()))
 	}
 
-	m.logger.Info("Container created successfully with Traefik routing",
+	m.logger.Info("Container created successfully with proxy routing",
 		slog.String("container", containerName),
 		slog.String("id", container.ID),
 		slog.String("instance_id", instanceID),
@@ -951,7 +907,7 @@ func (m *Manager) HandleMCPInstanceDeleted(ctx context.Context, instanceID strin
 		return nil // Not an error - container might have been manually deleted
 	}
 
-	// Delete the container using existing functionality (includes Traefik route cleanup)
+	// Delete the container using existing functionality (includes route cleanup)
 	err := m.DeleteContainer(ctx, targetContainer.ServiceName)
 	if err != nil {
 		m.logger.Error("Failed to delete MCP container",
@@ -1258,9 +1214,8 @@ func (m *Manager) SetRouteManager(rm interface{}) {
 	m.routeManager = rm
 }
 
-// addRoute adds a route to either the proxy manager or Traefik
+// addRoute adds a route to the proxy manager
 func (m *Manager) addRoute(ctx context.Context, slug, containerIP string, containerPort int) error {
-	// Try routeManager first (Docker with internal proxy)
 	if m.routeManager != nil {
 		if rm, ok := m.routeManager.(interface {
 			AddMCPService(context.Context, string, string, int) error
@@ -1269,28 +1224,17 @@ func (m *Manager) addRoute(ctx context.Context, slug, containerIP string, contai
 		}
 	}
 
-	// Fall back to Traefik manager
-	if m.traefikManager != nil {
-		return m.traefikManager.AddMCPService(ctx, slug, containerIP, containerPort)
-	}
-
 	return fmt.Errorf("no route manager configured")
 }
 
-// removeRoute removes a route from either the proxy manager or Traefik
+// removeRoute removes a route from the proxy manager
 func (m *Manager) removeRoute(ctx context.Context, slug string) error {
-	// Try routeManager first (Docker with internal proxy)
 	if m.routeManager != nil {
 		if rm, ok := m.routeManager.(interface {
 			RemoveMCPService(context.Context, string) error
 		}); ok {
 			return rm.RemoveMCPService(ctx, slug)
 		}
-	}
-
-	// Fall back to Traefik manager
-	if m.traefikManager != nil {
-		return m.traefikManager.RemoveMCPService(ctx, slug)
 	}
 
 	return fmt.Errorf("no route manager configured")
@@ -1409,7 +1353,7 @@ func (m *Manager) restartContainer(ctx context.Context, container *models.Contai
 		return fmt.Errorf("container failed to start properly: %w", err)
 	}
 
-	// Get container IP for Traefik routing (in case it changed)
+	// Get container IP for proxy routing (in case it changed)
 	containerIP, err := m.getContainerIP(ctx, container.ID)
 	if err != nil {
 		m.logger.Error("Failed to get container IP after restart",

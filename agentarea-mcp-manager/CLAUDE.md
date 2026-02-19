@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Infrastructure Management (from project root)
 
 **Quick start:**
-- `./scripts/start.sh` - Start full infrastructure (Traefik + MCP Manager)
+- `./scripts/start.sh` - Start MCP Manager infrastructure
 - `./scripts/stop.sh` - Stop all services
 - `./scripts/test-mcp.sh` - Test MCP Manager API
 - `./scripts/test-echo.sh` - Test echo service example
@@ -51,10 +51,7 @@ The MCP Infrastructure is a Go-based container orchestration system designed for
 - `internal/providers/` - Docker and URL provider implementations
 - `internal/events/` - Redis-based event publishing/subscribing
 - `internal/secrets/` - Infisical SDK integration for secret management
-
-**traefik/** - Reverse proxy configuration:
-- `traefik.yml` - Static configuration for load balancing
-- `dynamic.yml` - Dynamic routing rules for MCP services
+- `internal/proxy/` - Handwritten HTTP reverse proxy for MCP routing
 
 **scripts/** - Infrastructure management utilities:
 - Shell scripts for starting, stopping, and testing the infrastructure
@@ -63,7 +60,7 @@ The MCP Infrastructure is a Go-based container orchestration system designed for
 
 **Environment-Aware Backend Selection:**
 - Automatically detects Docker Compose vs Kubernetes environments
-- Uses Podman + Traefik for development (Docker Compose)
+- Uses Podman + handwritten proxy for development (Docker Compose)
 - Uses native K8s resources for production (Kubernetes)
 
 **Security-First Container Management:**
@@ -83,13 +80,19 @@ The MCP Infrastructure is a Go-based container orchestration system designed for
 - Health checks and monitoring endpoints
 - Consistent API across Docker Compose and Kubernetes backends
 
+**Handwritten Proxy Routing:**
+- Built-in Go HTTP reverse proxy (no external dependencies like Traefik)
+- Path-based routing: `/mcp/{slug}` routes to specific containers
+- Dynamic route registration/unregistration via RouteManager
+- Direct container IP communication (no port mapping needed)
+
 ### Container Runtime
 
 **Podman Integration:**
 - Uses Podman as container runtime instead of Docker for security
 - Configured with overlay storage driver and custom storage paths
 - Supports rootless operation with proper subuid/subgid mapping
-- Integrated with Traefik for automatic service discovery and routing
+- Integrated with handwritten proxy for service routing
 
 **Template System:**
 - JSON-based templates define container configurations
@@ -104,7 +107,7 @@ All configuration via environment variables with sensible defaults:
 
 - **Server**: `SERVER_HOST`, `SERVER_PORT`, `CORS_ENABLED`
 - **Container**: `CONTAINER_RUNTIME`, `MAX_CONTAINERS`, `DEFAULT_MEMORY_LIMIT`
-- **Traefik**: `TRAEFIK_NETWORK`, `DEFAULT_DOMAIN`, `PROXY_PORT`
+- **Proxy**: `MCP_NETWORK`, `MCP_DEFAULT_DOMAIN`, `MCP_PROXY_PORT`, `MCP_MANAGER_URL`
 - **Logging**: `LOG_LEVEL`, `LOG_FORMAT`
 - **Redis**: `REDIS_URL` for event integration
 - **Secrets**: Infisical configuration for secret management
@@ -124,7 +127,7 @@ All configuration via environment variables with sensible defaults:
 
 **Integration Testing:**
 - Real container lifecycle testing with Podman
-- Traefik integration with dynamic routing
+- Handwritten proxy routing tests
 - Redis event publishing/subscribing
 - Health check and monitoring validation
 
@@ -137,9 +140,9 @@ All configuration via environment variables with sensible defaults:
 
 **Docker Compose (Development):**
 ```yaml
-# Uses Podman + Traefik stack
-# Mounts templates and dynamic configuration
-# Exposes ports 80 (Traefik), 8000 (MCP Manager), 8080 (Traefik Dashboard)
+# Uses Podman + handwritten proxy stack
+# Mounts templates and configuration
+# Exposes ports 8000 (MCP Manager API), 8080 (MCP Proxy)
 ```
 
 **Kubernetes (Production):**
@@ -153,3 +156,34 @@ All configuration via environment variables with sensible defaults:
 - Runs with minimal privileges where possible
 - Network policies for pod communication
 - Secret management via Infisical integration
+
+## Authentication
+
+The MCP proxy supports simple Bearer token authentication to prevent unauthorized access to MCP endpoints.
+
+### Configuration
+
+Set the shared secret via environment variable:
+
+```bash
+export MCP_SHARED_SECRET="your-secret-token"
+```
+
+When `MCP_SHARED_SECRET` is set, all requests to `/mcp/{slug}/...` endpoints require authentication.
+
+### Usage
+
+**Using Authorization header:**
+```bash
+curl -H "Authorization: Bearer $MCP_SHARED_SECRET" \
+     http://localhost:8080/mcp/my-mcp-abc123/tools
+```
+
+**Using query parameter:**
+```bash
+curl "http://localhost:8080/mcp/my-mcp-abc123/tools?token=$MCP_SHARED_SECRET"
+```
+
+### Development Mode
+
+When `MCP_SHARED_SECRET` is not set (empty or undefined), all requests are allowed. This is useful for local development but should NOT be used in production.

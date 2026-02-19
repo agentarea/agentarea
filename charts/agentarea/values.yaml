@@ -435,12 +435,37 @@ mcpManager:
   service:
     type: ClusterIP
     port: 80
-  # Requires privileged mode for Podman
-  securityContext:
-    privileged: true
-    capabilities:
-      add:
-        - SYS_ADMIN
+  
+  # Backend type: "docker" or "kubernetes"
+  # "docker" requires privileged mode for container management
+  # "kubernetes" uses native K8s resources (Deployments, Services, HTTPRoutes)
+  backend: "kubernetes"
+  
+  # Domain for MCP instances (e.g., "mcp.example.com")
+  # MCP instances will be available at: https://mcp.example.com/mcp/{instance-name}
+  domain: "mcp.local"
+  
+  # Gateway API configuration for Envoy Gateway
+  # Used when backend is "kubernetes" to create HTTPRoutes
+  gateway:
+    name: "envoy-gateway"              # Name of the Gateway resource
+    namespace: "envoy-gateway-system"  # Namespace where Gateway is deployed
+  
+  # Runtime configuration for VM isolation (optional)
+  # Set to "kata-qemu" for Kata Containers (requires Kata runtime)
+  # Leave empty "" for standard container runtime
+  runtimeClass: ""
+  
+  # Security context - only used when backend is "docker"
+  # For "kubernetes" backend, leave empty: {}
+  securityContext: {}
+  # For Docker backend, use:
+  # securityContext:
+  #   privileged: true
+  #   capabilities:
+  #     add:
+  #       - SYS_ADMIN
+  
   resources: {}
   extraEnv: []
 

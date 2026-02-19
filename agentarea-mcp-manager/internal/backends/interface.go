@@ -53,6 +53,9 @@ type InstanceSpec struct {
 	// Volume mounts for writable directories (security sandbox)
 	WritablePaths []string `json:"writable_paths,omitempty"`
 
+	// Runtime configuration
+	RuntimeClass string `json:"runtime_class,omitempty"`
+
 	// Metadata
 	InstanceID  string `json:"instance_id"`
 	WorkspaceID string `json:"workspace_id,omitempty"`

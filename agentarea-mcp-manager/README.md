@@ -43,6 +43,7 @@ docker-compose -f docker-compose.prod.yaml up mcp-manager -d
 - **Multi-provider**: Supports Docker containers and URL-based MCP servers
 - **Secret resolution**: Integrates with Python API for secret management
 - **Container management**: Uses Podman for secure container operations
+- **Handwritten proxy**: Built-in Go HTTP reverse proxy for MCP routing (no external dependencies)
 
 ## API Endpoints
 
@@ -57,7 +58,10 @@ Environment variables:
 - `LOG_LEVEL` - Logging level (DEBUG, INFO, WARN, ERROR)
 - `LOG_FORMAT` - Log format (json, text)
 - `REDIS_URL` - Redis connection string
-- `TRAEFIK_CONFIG_PATH` - Path to Traefik dynamic configuration file
+- `MCP_NETWORK` - Docker network for containers (default: agentarea_default)
+- `MCP_PROXY_PORT` - Port for MCP proxy server (default: 8080)
+- `MCP_DEFAULT_DOMAIN` - Default domain for MCP services (default: localhost)
+- `MCP_MANAGER_URL` - URL of MCP manager service (default: http://localhost:8000)
 - `TEMPLATES_DIR` - Directory containing container templates
 
 ## Development Tips
@@ -78,5 +82,18 @@ internal/
   ├── events/        # Event handling and Redis integration
   ├── models/        # Data models
   ├── providers/     # Provider implementations (Docker, URL)
+  ├── proxy/         # Handwritten HTTP reverse proxy
   └── secrets/       # Secret resolution
-``` 
+```
+
+## Proxy Routing
+
+The MCP Manager includes a built-in HTTP reverse proxy (`internal/proxy/proxy.go`) that handles routing to MCP containers:
+
+- **Path-based routing**: `/mcp/{slug}` routes to specific containers
+- **Dynamic registration**: Routes are added/removed as containers start/stop
+- **No port mapping**: Containers use internal IPs, no host port binding needed
+- **No external dependencies**: No Traefik or Nginx required
+
+Example:
+- Container "my-mcp" with slug "my-mcp-abc123" is accessible at `http://localhost:8080/mcp/my-mcp-abc123`

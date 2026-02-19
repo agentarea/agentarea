@@ -27,6 +27,52 @@ import (
 
 const version = "0.1.0"
 
+// backendAdapter adapts the backends.Backend interface to providers.Backend interface
+// to avoid import cycles between providers and backends packages
+type backendAdapter struct {
+	inner backends.Backend
+}
+
+func (a *backendAdapter) CreateInstance(ctx context.Context, spec *providers.BackendInstanceSpec) (*providers.BackendInstanceResult, error) {
+	// Convert providers spec to backends spec
+	innerSpec := &backends.InstanceSpec{
+		InstanceID:  spec.InstanceID,
+		Name:        spec.Name,
+		ServiceName: spec.ServiceName,
+		Image:       spec.Image,
+		Port:        spec.Port,
+		Environment: spec.Environment,
+		Labels:      spec.Labels,
+		Command:     spec.Command,
+		Resources: backends.ResourceRequirements{
+			Limits: backends.ResourceList{
+				CPU:    spec.Resources.Limits.CPU,
+				Memory: spec.Resources.Limits.Memory,
+			},
+			Requests: backends.ResourceList{
+				CPU:    spec.Resources.Requests.CPU,
+				Memory: spec.Resources.Requests.Memory,
+			},
+		},
+	}
+
+	result, err := a.inner.CreateInstance(ctx, innerSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	return &providers.BackendInstanceResult{
+		ID:     result.ID,
+		Name:   result.Name,
+		URL:    result.URL,
+		Status: result.Status,
+	}, nil
+}
+
+func (a *backendAdapter) DeleteInstance(ctx context.Context, instanceID string) error {
+	return a.inner.DeleteInstance(ctx, instanceID)
+}
+
 func main() {
 	// Load configuration
 	cfg := config.Load()
@@ -99,9 +145,13 @@ func main() {
 	var proxyServer *proxy.ProxyServer
 	var routeManager *proxy.RouteManager
 	if envType == "docker" {
+		proxyPort := cfg.Proxy.Port
+		if proxyPort == 0 {
+			proxyPort = 8080
+		}
 		proxyConfig := proxy.ProxyConfig{
-			Port:              80,
-			ManagerServiceURL: cfg.Traefik.ManagerServiceURL,
+			Port:              proxyPort,
+			ManagerServiceURL: cfg.Proxy.ManagerServiceURL,
 			ReadTimeout:       15 * time.Second,
 			WriteTimeout:      15 * time.Second,
 			IdleTimeout:       60 * time.Second,
@@ -132,14 +182,19 @@ func main() {
 
 	// Initialize providers based on environment
 	var providerManager *providers.ProviderManager
+	urlProvider := providers.NewURLProvider(logger)
+
 	if envType == "docker" && containerManager != nil {
 		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
-		urlProvider := providers.NewURLProvider(logger)
-		providerManager = providers.NewProviderManager(dockerProvider, urlProvider)
+		providerManager = providers.NewProviderManager(dockerProvider, nil, urlProvider)
+	} else if envType == "kubernetes" {
+		// For Kubernetes, create a Kubernetes provider that uses the backend
+		adapter := &backendAdapter{inner: backend}
+		kubernetesProvider := providers.NewKubernetesProvider(adapter, logger)
+		providerManager = providers.NewProviderManager(nil, kubernetesProvider, urlProvider)
 	} else {
-		// For Kubernetes, we'll use the backend directly through the API
-		urlProvider := providers.NewURLProvider(logger)
-		providerManager = providers.NewProviderManager(nil, urlProvider)
+		// Fallback - only URL provider
+		providerManager = providers.NewProviderManager(nil, nil, urlProvider)
 	}
 
 	// Initialize event subscriber

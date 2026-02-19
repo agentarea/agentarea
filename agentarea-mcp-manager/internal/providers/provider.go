@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/agentarea/mcp-manager/internal/models"
 )
@@ -14,15 +15,17 @@ type Provider interface {
 
 // ProviderManager manages different types of MCP providers
 type ProviderManager struct {
-	dockerProvider *DockerProvider
-	urlProvider    *URLProvider
+	dockerProvider     *DockerProvider
+	kubernetesProvider *KubernetesProvider
+	urlProvider        *URLProvider
 }
 
 // NewProviderManager creates a new provider manager
-func NewProviderManager(dockerProvider *DockerProvider, urlProvider *URLProvider) *ProviderManager {
+func NewProviderManager(dockerProvider *DockerProvider, kubernetesProvider *KubernetesProvider, urlProvider *URLProvider) *ProviderManager {
 	return &ProviderManager{
-		dockerProvider: dockerProvider,
-		urlProvider:    urlProvider,
+		dockerProvider:     dockerProvider,
+		kubernetesProvider: kubernetesProvider,
+		urlProvider:        urlProvider,
 	}
 }
 
@@ -33,16 +36,45 @@ func (pm *ProviderManager) GetProvider(instance *models.MCPServerInstance) (Prov
 		if typeStr, ok := typeInterface.(string); ok {
 			switch typeStr {
 			case "docker":
-				return pm.dockerProvider, nil
+				if pm.dockerProvider != nil {
+					return pm.dockerProvider, nil
+				}
+				return nil, fmt.Errorf("docker provider not available")
+			case "kubernetes":
+				if pm.kubernetesProvider != nil {
+					return pm.kubernetesProvider, nil
+				}
+				return nil, fmt.Errorf("kubernetes provider not available")
 			case "url":
-				return pm.urlProvider, nil
+				if pm.urlProvider != nil {
+					return pm.urlProvider, nil
+				}
+				return nil, fmt.Errorf("url provider not available")
 			default:
-				// Default to docker if type is not recognized
-				return pm.dockerProvider, nil
+				// Try providers in order: kubernetes, docker, url
+				if pm.kubernetesProvider != nil {
+					return pm.kubernetesProvider, nil
+				}
+				if pm.dockerProvider != nil {
+					return pm.dockerProvider, nil
+				}
+				if pm.urlProvider != nil {
+					return pm.urlProvider, nil
+				}
+				return nil, fmt.Errorf("no providers available")
 			}
 		}
 	}
 
-	// Default to docker provider if no type specified
-	return pm.dockerProvider, nil
+	// Default: try providers in order
+	if pm.kubernetesProvider != nil {
+		return pm.kubernetesProvider, nil
+	}
+	if pm.dockerProvider != nil {
+		return pm.dockerProvider, nil
+	}
+	if pm.urlProvider != nil {
+		return pm.urlProvider, nil
+	}
+	return nil, fmt.Errorf("no providers available")
 }

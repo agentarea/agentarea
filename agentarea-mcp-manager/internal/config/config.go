@@ -17,8 +17,8 @@ type Config struct {
 	// Container runtime configuration
 	Container ContainerConfig `json:"container"`
 
-	// Traefik configuration
-	Traefik TraefikConfig `json:"traefik"`
+	// Proxy configuration for MCP container routing
+	Proxy ProxyConfig `json:"proxy"`
 
 	// Logging configuration
 	Logging LoggingConfig `json:"logging"`
@@ -69,14 +69,14 @@ type ContainerConfig struct {
 	DefaultCPULimit    string `json:"default_cpu_limit"`
 }
 
-// TraefikConfig holds Traefik configuration
-type TraefikConfig struct {
+// ProxyConfig holds MCP proxy configuration
+type ProxyConfig struct {
 	Network           string `json:"network"`
-	ProxyPort         int    `json:"proxy_port"`
+	Port              int    `json:"port"`
 	DefaultDomain     string `json:"default_domain"`
-	ProxyHost         string `json:"proxy_host"`
 	ManagerServiceURL string `json:"manager_service_url"`
-	ConfigPath        string `json:"config_path"`
+	// UseHostPort maps container ports to host ports (for local development)
+	UseHostPort bool `json:"use_host_port"`
 }
 
 // LoggingConfig holds logging configuration
@@ -115,13 +115,12 @@ func Load() *Config {
 			DefaultMemoryLimit: getEnv("DEFAULT_MEMORY_LIMIT", "512m"),
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
 		},
-		Traefik: TraefikConfig{
-			Network:           getEnv("TRAEFIK_NETWORK", "podman"),
-			ProxyPort:         getEnvInt("TRAEFIK_PROXY_PORT", 81),
-			DefaultDomain:     getEnv("DEFAULT_DOMAIN", "localhost"),
-			ProxyHost:         getEnv("MCP_PROXY_HOST", "http://localhost:7999"),
-			ManagerServiceURL: getEnv("MANAGER_SERVICE_URL", "http://localhost:8000"),
-			ConfigPath:        getEnv("TRAEFIK_CONFIG_PATH", "/etc/traefik/dynamic.yml"),
+		Proxy: ProxyConfig{
+			Network:           getEnv("MCP_NETWORK", "agentarea_default"),
+			Port:              getEnvInt("MCP_PROXY_PORT", 8080),
+			DefaultDomain:     getEnv("MCP_DEFAULT_DOMAIN", "localhost"),
+			ManagerServiceURL: getEnv("MCP_MANAGER_URL", "http://localhost:8000"),
+			UseHostPort:       getEnvBool("MCP_USE_HOST_PORT", false),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),
@@ -191,6 +190,9 @@ func loadKubernetesConfig() KubernetesConfig {
 	// Override with environment variables
 	config.Enabled = getEnvBool("KUBERNETES_ENABLED", config.Enabled)
 	config.Namespace = getEnv("KUBERNETES_NAMESPACE", config.Namespace)
+	config.RuntimeClass = getEnv("KUBERNETES_RUNTIME_CLASS", config.RuntimeClass)
+	config.GatewayName = getEnv("KUBERNETES_GATEWAY_NAME", config.GatewayName)
+	config.GatewayNamespace = getEnv("KUBERNETES_GATEWAY_NAMESPACE", config.GatewayNamespace)
 	config.Domain = getEnv("KUBERNETES_DOMAIN", config.Domain)
 	config.IngressClass = getEnv("KUBERNETES_INGRESS_CLASS", config.IngressClass)
 	config.StorageClass = getEnv("KUBERNETES_STORAGE_CLASS", config.StorageClass)
@@ -273,5 +275,5 @@ func (c *Config) GetServiceURL(serviceName string, port int) string {
 
 // GetServiceHost generates a service hostname
 func (c *Config) GetServiceHost(serviceName string) string {
-	return fmt.Sprintf("%s:%d", c.Traefik.DefaultDomain, c.Traefik.ProxyPort)
+	return fmt.Sprintf("%s:%d", c.Proxy.DefaultDomain, c.Proxy.Port)
 }

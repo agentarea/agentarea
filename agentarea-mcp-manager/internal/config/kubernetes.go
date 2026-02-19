@@ -11,6 +11,13 @@ type KubernetesConfig struct {
 	Enabled   bool   `json:"enabled"`
 	Namespace string `json:"namespace"`
 
+	// Runtime configuration
+	RuntimeClass string `json:"runtime_class"`
+
+	// Gateway API configuration
+	GatewayName      string `json:"gateway_name"`
+	GatewayNamespace string `json:"gateway_namespace"`
+
 	// Networking
 	Domain       string `json:"domain"`
 	IngressClass string `json:"ingress_class"`
