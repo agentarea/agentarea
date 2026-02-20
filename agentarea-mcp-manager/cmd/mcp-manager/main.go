@@ -19,6 +19,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/events"
+	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/proxy"
 	"github.com/agentarea/mcp-manager/internal/secrets"
@@ -79,6 +80,24 @@ func main() {
 
 	// Setup logging
 	logger := setupLogging(cfg)
+
+	// Initialize feature service
+	featureConfig := &features.Config{
+		Enabled:  cfg.Features.Enabled,
+		Variants: cfg.Features.Variants,
+	}
+	configProvider := features.NewConfigProvider(logger, featureConfig)
+	envProvider := features.NewEnvironmentProvider(logger, "MCP_FEATURE")
+	hybridProvider := features.NewHybridProvider(logger, envProvider, configProvider)
+	featureService := features.NewService(logger, hybridProvider)
+	features.InitDefaultService(logger, hybridProvider)
+
+	// Log enabled features
+	for _, f := range features.AllFeatures {
+		if featureService.IsEnabled(f) {
+			logger.Info("Feature enabled", slog.String("feature", string(f)))
+		}
+	}
 
 	// Initialize template loader
 	templateLoader := templates.NewLoader(cfg.MCPProvidersPath)

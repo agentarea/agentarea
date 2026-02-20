@@ -38,13 +38,13 @@ logger = logging.getLogger(__name__)
 
 # Trigger system imports (conditional to avoid import errors)
 try:
-    from agentarea_triggers.infrastructure.repository import (
+    from agentarea_triggers.infrastructure.repository import (  # type: ignore[assignment]
         TriggerExecutionRepository,
         TriggerRepository,
     )
-    from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
-    from agentarea_triggers.trigger_service import TriggerService
-    from agentarea_triggers.webhook_manager import DefaultWebhookManager, WebhookExecutionCallback
+    from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager  # type: ignore[assignment]
+    from agentarea_triggers.trigger_service import TriggerService  # type: ignore[assignment]
+    from agentarea_triggers.webhook_manager import DefaultWebhookManager, WebhookExecutionCallback  # type: ignore[assignment]
 
     TRIGGERS_AVAILABLE = True
 except ImportError as e:
@@ -52,22 +52,22 @@ except ImportError as e:
     TRIGGERS_AVAILABLE = False
 
     # Create dummy classes to prevent import errors
-    class TriggerService:
+    class TriggerService:  # type: ignore[no-redef]
         pass
 
-    class TriggerRepository:
+    class TriggerRepository:  # type: ignore[no-redef]
         pass
 
-    class TriggerExecutionRepository:
+    class TriggerExecutionRepository:  # type: ignore[no-redef]
         pass
 
-    class DefaultWebhookManager:
+    class DefaultWebhookManager:  # type: ignore[no-redef]
         pass
 
-    class WebhookExecutionCallback:
+    class WebhookExecutionCallback:  # type: ignore[no-redef]
         pass
 
-    class TemporalScheduleManager:
+    class TemporalScheduleManager:  # type: ignore[no-redef]
         pass
 
 

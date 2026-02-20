@@ -38,7 +38,7 @@ class RedisEventBroker(EventBroker):
 
     Uses CloudEvents-compatible format for cross-language communication
     between Python services and Go MCP Manager.
-    
+
     For cross-language channels (MCP events), uses raw Redis client to avoid
     FastStream binary framing. For internal channels, uses FastStream broker.
     """
@@ -125,7 +125,7 @@ class RedisEventBroker(EventBroker):
 
         # Serialize to JSON using shared format
         serialized_message = SharedEventFormat.serialize(shared_event)
-        
+
         # For cross-language channels (MCP events to Go), use raw Redis
         # to avoid FastStream binary framing
         if self._is_cross_language_channel(channel) and self._raw_redis:

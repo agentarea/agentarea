@@ -466,6 +466,42 @@ mcpManager:
   #     add:
   #       - SYS_ADMIN
   
+  # Feature flags - enable/disable advanced features
+  features:
+    # List of enabled features
+    enabled:
+      - gateway_api        # HTTPRoute creation for Envoy Gateway
+      - state_reconciler   # Background state reconciliation
+      # - warm_pool        # Fast cold start pool (requires extra memory)
+      # - kata_runtime     # VM isolation (requires Kata installed)
+      # - advanced_scaling # KEDA autoscaling
+    
+    # Feature-specific configuration
+    variants: {}
+  
+  # Warm pool configuration for fast cold starts
+  warmPool:
+    enabled: false  # Enable for fast activation (200-500ms vs 5-15s)
+    image:
+      repository: agentarea/mcp-runner
+      tag: "latest"
+      pullPolicy: IfNotPresent
+    
+    # Number of warm pods per node
+    size: 10
+    
+    # Logging level
+    logLevel: "info"
+    
+    # Resource limits for warm pods
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+  
   resources: {}
   extraEnv: []
 
@@ -526,6 +562,7 @@ postgresql:
 # Bitnami Redis dependency configuration
 redis:
   enabled: true
+  architecture: standalone
   auth:
     enabled: true
     existingSecret: "agentarea-redis-secret"

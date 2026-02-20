@@ -37,6 +37,15 @@ type Config struct {
 
 	// Path to MCP providers YAML file
 	MCPProvidersPath string `json:"mcp_providers_path"`
+
+	// Feature flags configuration
+	Features FeaturesConfig `json:"features"`
+}
+
+// FeaturesConfig holds feature flag configuration
+type FeaturesConfig struct {
+	Enabled  []string                       `json:"enabled"`
+	Variants map[string]map[string]string   `json:"variants"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -133,6 +142,7 @@ func Load() *Config {
 		Kubernetes:       loadKubernetesConfig(),
 		Environment:      getEnv("BACKEND_ENVIRONMENT", ""),
 		MCPProvidersPath: getEnv("MCP_PROVIDERS_YAML", "/app/data/mcp_providers.yaml"),
+		Features:         loadFeaturesConfig(),
 	}
 }
 
@@ -236,6 +246,25 @@ func loadKubernetesConfig() KubernetesConfig {
 	if readinessTimeout := getEnv("KUBERNETES_READINESS_TIMEOUT", ""); readinessTimeout != "" {
 		if timeout, err := time.ParseDuration(readinessTimeout); err == nil {
 			config.ReadinessTimeout = timeout
+		}
+	}
+
+	return config
+}
+
+// loadFeaturesConfig loads feature flag configuration from environment
+func loadFeaturesConfig() FeaturesConfig {
+	config := FeaturesConfig{
+		Enabled:  []string{},
+		Variants: make(map[string]map[string]string),
+	}
+
+	// Parse enabled features from comma-separated list
+	if features := getEnv("MCP_FEATURES_ENABLED", ""); features != "" {
+		config.Enabled = strings.Split(features, ",")
+		// Trim whitespace
+		for i, f := range config.Enabled {
+			config.Enabled[i] = strings.TrimSpace(f)
 		}
 	}
 

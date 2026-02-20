@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 
 class SharedEventFormat:
     """Framework-independent event formatter for cross-language communication.
-    
+
     Follows CloudEvents specification (https://cloudevents.io/):
     - specversion: CloudEvents spec version
     - type: Event type (reverse DNS notation)
@@ -24,7 +24,7 @@ class SharedEventFormat:
     - datacontenttype: Content type of data
     - correlationid: Optional request correlation ID
     - data: Event payload
-    
+
     Example:
         {
           "specversion": "1.0",
@@ -56,14 +56,14 @@ class SharedEventFormat:
         event_id: str | UUID | None = None,
     ) -> dict[str, Any]:
         """Create a standardized event following CloudEvents format.
-        
+
         Args:
             event_type: Event type in reverse DNS notation (e.g., "com.agentarea.mcp.instance.created")
             data: Event payload data
             source: Event origin service (default: "agentarea-api")
             correlation_id: Optional request correlation ID for tracing
             event_id: Optional event ID (generated if not provided)
-            
+
         Returns:
             Event dictionary following CloudEvents spec
         """
@@ -81,10 +81,10 @@ class SharedEventFormat:
     @classmethod
     def serialize(cls, event: dict[str, Any]) -> str:
         """Serialize event to JSON string.
-        
+
         Args:
             event: Event dictionary
-            
+
         Returns:
             JSON string representation
         """
@@ -93,10 +93,10 @@ class SharedEventFormat:
     @classmethod
     def deserialize(cls, payload: str) -> dict[str, Any]:
         """Deserialize event from JSON string.
-        
+
         Args:
             payload: JSON string
-            
+
         Returns:
             Event dictionary
         """
@@ -152,21 +152,21 @@ def create_mcp_instance_deleted_event(
 
 def get_channel_for_event_type(event_type: str) -> str:
     """Get Redis channel name for event type.
-    
+
     Pattern: agentarea.events.{domain}.{action}
     Example: agentarea.events.mcp.instance.created
-    
+
     For backward compatibility with Go MCP Manager, also supports
     legacy channel names (MCPServerInstanceCreated, MCPServerInstanceDeleted).
     """
     # Legacy event types (PascalCase) - keep as-is for backward compatibility
     if event_type in ("MCPServerInstanceCreated", "MCPServerInstanceDeleted"):
         return event_type
-    
+
     # Convert reverse DNS to channel path
     # com.agentarea.mcp.instance.created -> agentarea.events.mcp.instance.created
     parts = event_type.split(".")
     if len(parts) >= 2 and parts[0] == "com":
         return f"agentarea.events.{'.'.join(parts[2:])}"
-    
+
     return f"agentarea.events.{event_type}"
