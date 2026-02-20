@@ -9,27 +9,15 @@ CORE_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
 SERVER_HOST: "0.0.0.0"
 SERVER_PORT: "80"
 MCP_PROXY_HOST: "http://{{ include "agentarea.fullname" . }}-mcp-manager"
-
-# Backend type: "docker" or "kubernetes"
 BACKEND_TYPE: "kubernetes"
-
-# Kubernetes configuration
 KUBERNETES_ENABLED: "true"
 KUBERNETES_NAMESPACE: "{{ .Release.Namespace }}"
 KUBERNETES_DOMAIN: "{{ .Values.mcpManager.domain | default "mcp.local" }}"
-
-# Gateway API configuration for Envoy Gateway
 KUBERNETES_GATEWAY_NAME: "{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}"
 KUBERNETES_GATEWAY_NAMESPACE: "{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}"
-
-# Runtime configuration (optional - for Kata Containers)
 KUBERNETES_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass | default "" }}"
-
-# Security settings
 KUBERNETES_SECURITY_RUN_AS_NON_ROOT: "true"
 KUBERNETES_SECURITY_READ_ONLY_ROOT_FS: "true"
-
-# Default resource limits
 KUBERNETES_DEFAULT_CPU_REQUEST: "100m"
 KUBERNETES_DEFAULT_CPU_LIMIT: "500m"
 KUBERNETES_DEFAULT_MEMORY_REQUEST: "128Mi"
@@ -107,4 +95,24 @@ KUBERNETES_DEFAULT_MEMORY_LIMIT: "512Mi"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: KUBERNETES_SECURITY_READ_ONLY_ROOT_FS
+- name: KUBERNETES_DEFAULT_CPU_REQUEST
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: KUBERNETES_DEFAULT_CPU_REQUEST
+- name: KUBERNETES_DEFAULT_CPU_LIMIT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: KUBERNETES_DEFAULT_CPU_LIMIT
+- name: KUBERNETES_DEFAULT_MEMORY_REQUEST
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: KUBERNETES_DEFAULT_MEMORY_REQUEST
+- name: KUBERNETES_DEFAULT_MEMORY_LIMIT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: KUBERNETES_DEFAULT_MEMORY_LIMIT
 {{- end }}
