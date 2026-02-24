@@ -1,41 +1,48 @@
 {
   "name": "@ory/elements-react",
   "version": "0.0.0-unused",
+  "scripts": {
+    "prepare": "tsup --clean --dts"
+  },
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     },
     "./client": {
-      "types": "./src/client/index.ts",
-      "import": "./src/client/index.ts"
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.mjs",
+      "require": "./dist/client/index.js"
     },
     "./theme": {
-      "types": "./src/theme/default/index.ts",
-      "import": "./src/theme/default/index.ts"
+      "types": "./dist/theme/default/index.d.ts",
+      "import": "./dist/theme/default/index.mjs",
+      "require": "./dist/theme/default/index.js"
     },
-    "./theme/styles.css": "./src/theme/default/global.css",
+    "./theme/styles.css": "./dist/theme/default/index.css",
     "./theme/tailwind": {
-      "types": "./tailwind/generated/defaults.d.ts",
-      "import": "./tailwind/generated/defaults.js"
+      "types": "./dist/theme/default/tailwind/defaults.d.ts",
+      "import": "./dist/theme/default/tailwind/defaults.mjs",
+      "require": "./dist/theme/default/tailwind/defaults.js"
     }
   },
   "typesVersions": {
     "*": {
       "index": [
-        "./src/index.ts"
+        "./dist/index.d.ts"
       ],
       "client": [
-        "./src/client/index.ts"
+        "./dist/client/index.d.ts"
       ],
       "theme": [
-        "./src/theme/default/index.ts"
+        "./dist/theme/default/index.d.ts"
       ]
     }
   },
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "dependencies": {
     "@marsidev/react-turnstile": "^1.1.0",
     "@ory/client-fetch": "1.21.5",

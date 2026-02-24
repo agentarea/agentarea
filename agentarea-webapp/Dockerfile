@@ -11,7 +11,7 @@ WORKDIR /app
 # Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* pnpm-workspace.yaml* .npmrc* ./
 
-# Copy workspace packages source (needed for transpilePackages)
+# Copy workspace packages source (prepare scripts will build them)
 COPY packages/ ./packages/
 
 RUN corepack prepare pnpm@9.15.4 --activate && \
@@ -26,8 +26,8 @@ RUN corepack prepare pnpm@9.15.4 --activate && \
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages ./packages
 COPY . .
-# Packages are transpiled by Next.js, no need to copy them separately
 
 RUN  corepack prepare pnpm@9.15.4 --activate && \
   if [ -f yarn.lock ]; then yarn run build; \
