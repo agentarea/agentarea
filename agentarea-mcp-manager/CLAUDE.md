@@ -35,7 +35,7 @@ go build -o bin/activation-service ./cmd/activation-service/...
 
 # Build both
 docker build -t agentarea/mcp-manager:latest .
-docker build -f build/Dockerfile.runner -t agentarea/mcp-runner:latest .
+docker build -f Dockerfile.runner -t agentarea/mcp-runner:latest .
 ```
 
 **Test:**

@@ -1,0 +1,49 @@
+# Build stage
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+# Copy go.mod and go.sum first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the entire project
+COPY . .
+
+# Build the activation service
+RUN go build -o activation-service ./cmd/activation-service/...
+
+# Runtime stage
+FROM alpine:3.19
+
+# Install base dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    tar \
+    gzip \
+    iptables \
+    skopeo
+
+# Create directories
+RUN mkdir -p \
+    /app/mcp-overlay \
+    /var/cache/mcp-images
+
+# Copy activation service from builder
+COPY --from=builder /app/activation-service /usr/local/bin/activation-service
+
+# Make it executable
+RUN chmod +x /usr/local/bin/activation-service
+
+# Ports
+# 8080 - Activation API
+# 3000 - MCP protocol (configurable)
+EXPOSE 8080 3000
+
+# Run as root (needed for mount operations)
+# In production, use more restrictive security context
+USER root
+
+# Start activation service
+ENTRYPOINT ["/usr/local/bin/activation-service"]

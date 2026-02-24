@@ -33,9 +33,12 @@ jobs:
       bootstrap: ${{ steps.filter.outputs.bootstrap }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - id: filter
         uses: dorny/paths-filter@v3
         with:
+          base: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
           filters: |
             platform:
               - 'agentarea-platform/**'
@@ -52,7 +55,7 @@ jobs:
             mcp_manager:
               - 'agentarea-mcp-manager/**'
             mcp_runner:
-              - 'agentarea-mcp-manager/build/Dockerfile.runner'
+              - 'agentarea-mcp-manager/Dockerfile.runner'
               - 'agentarea-mcp-manager/cmd/activation-service/**'
             bootstrap:
               - 'agentarea-bootstrap/**'
@@ -425,7 +428,7 @@ jobs:
     with:
       component: mcp-runner
       context: agentarea-mcp-manager
-      dockerfile: agentarea-mcp-manager/build/Dockerfile.runner
+      dockerfile: agentarea-mcp-manager/Dockerfile.runner
       use-private-registry: false
       push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
