@@ -378,7 +378,7 @@ jobs:
     uses: ./.github/workflows/docker-build-push.yml
     with:
       component: bootstrap
-      context: agentarea-bootstrap
+      context: .
       dockerfile: agentarea-bootstrap/Dockerfile
       use-private-registry: false
       push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
