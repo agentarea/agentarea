@@ -1,6 +1,5 @@
 // Activation service runs inside warm pods
 // Handles on-demand MCP activation via HTTP API
-
 package main
 
 import (
@@ -10,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -47,6 +45,11 @@ type ActivateResponse struct {
 	ActivationTimeMs int    `json:"activation_time_ms"`
 }
 
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
 func main() {
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	logger.Info("Activation service starting", "status", status)
@@ -71,7 +74,9 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		"status": status,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Error("Failed to encode response", "error", err)
+	}
 }
 
 func activateHandler(w http.ResponseWriter, r *http.Request) {
@@ -90,14 +95,48 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Info("Request decoded", "image", req.MCPImage, "port", req.Port, "entrypoint", req.Entrypoint, "command", req.Command)
 
-	// Validation
+	// Validate required fields
 	if req.MCPImage == "" {
 		http.Error(w, `{"error": "mcp_image is required"}`, http.StatusBadRequest)
 		return
 	}
-	if req.Port <= 0 || req.Port > 65535 {
-		http.Error(w, `{"error": "port must be between 1 and 65535"}`, http.StatusBadRequest)
+	if req.MCPImageHash == "" {
+		http.Error(w, `{"error": "mcp_image_hash is required"}`, http.StatusBadRequest)
 		return
+	}
+	if err := ValidatePort(req.Port); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Security: Validate image name
+	if err := ValidateImageName(req.MCPImage); err != nil {
+		logger.Error("Image validation failed", "error", err, "image", req.MCPImage)
+		http.Error(w, fmt.Sprintf(`{"error": "invalid image name: %s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Security: Validate image hash
+	if err := ValidateHash(req.MCPImageHash); err != nil {
+		logger.Error("Hash validation failed", "error", err)
+		http.Error(w, fmt.Sprintf(`{"error": "invalid image hash: %s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Security: Validate entrypoint and command arguments
+	if len(req.Entrypoint) > 0 {
+		if err := ValidateCommandArgs(req.Entrypoint); err != nil {
+			logger.Error("Entrypoint validation failed", "error", err)
+			http.Error(w, fmt.Sprintf(`{"error": "invalid entrypoint: %s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+	}
+	if len(req.Command) > 0 {
+		if err := ValidateCommandArgs(req.Command); err != nil {
+			logger.Error("Command validation failed", "error", err)
+			http.Error(w, fmt.Sprintf(`{"error": "invalid command: %s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
 	}
 
 	logger.Info("Activation requested",
@@ -111,7 +150,7 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 	if err := activate(req); err != nil {
 		status = "waiting"
 		logger.Error("Activation failed", "error", err)
-		http.Error(w, fmt.Sprintf(`{"error": "%v"}`, err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 
@@ -130,7 +169,9 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Error("Failed to encode response", "error", err)
+	}
 }
 
 func activate(req ActivateRequest) error {
@@ -179,7 +220,9 @@ func activate(req ActivateRequest) error {
 
 	if err := waitForReady(30*time.Second, healthPort, healthPath); err != nil {
 		if mcpProcess != nil {
-			mcpProcess.Kill()
+			if killErr := mcpProcess.Kill(); killErr != nil {
+				logger.Error("Failed to kill process", "error", killErr)
+			}
 		}
 		return fmt.Errorf("container failed to become ready: %w", err)
 	}
@@ -191,20 +234,34 @@ func prepareMCP(image, hash, extractDir string) error {
 	cacheDir := "/var/cache/mcp-images"
 
 	// Ensure directories exist
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(extractDir, 0755); err != nil {
+	if err := os.MkdirAll(extractDir, 0750); err != nil {
+		return err
+	}
+
+	// Security: Validate the hash format and construct safe path
+	if err := ValidateHash(hash); err != nil {
 		return err
 	}
 
 	imagePath := filepath.Join(cacheDir, hash+".tar")
 
+	// Security: Validate the constructed path doesn't escape cacheDir
+	if err := ValidateFilePath(cacheDir, imagePath); err != nil {
+		return err
+	}
+
 	// Check if already cached
 	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
 		logger.Info("Downloading MCP image", "image", image)
 
-		cmd := exec.Command("skopeo", "copy", "docker://"+image, "docker-archive:"+imagePath)
+		// Security: Use safe command building
+		cmd, err := BuildSkopeoCommand(image, imagePath)
+		if err != nil {
+			return err
+		}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
@@ -229,19 +286,27 @@ func extractImage(imagePath, extractDir string) error {
 	if err := os.RemoveAll(extractDir); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(extractDir, 0755); err != nil {
+	if err := os.MkdirAll(extractDir, 0750); err != nil {
 		return err
 	}
 
 	// Create temp directory for extraction
-	tempDir := extractDir + ".tmp"
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
+	tempDir, err := os.MkdirTemp("", "mcp-extract-*")
+	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tempDir)
 
+	// Security: Validate tempDir is safe
+	if err := ValidateFilePath(os.TempDir(), tempDir); err != nil {
+		return err
+	}
+
 	// Extract docker archive tar
-	cmd := exec.Command("tar", "-xf", imagePath, "-C", tempDir)
+	cmd, err := SafeCommand("tar", "-xf", imagePath, "-C", tempDir)
+	if err != nil {
+		return err
+	}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to extract archive: %w", err)
 	}
@@ -265,12 +330,25 @@ func extractImage(imagePath, extractDir string) error {
 		return fmt.Errorf("no images in manifest")
 	}
 
-	// Copy config.json to extractDir before extracting layers
+	// Security: Validate config path doesn't escape tempDir
 	if manifest[0].Config != "" {
+		if err := ValidateManifestPath(manifest[0].Config); err != nil {
+			return fmt.Errorf("invalid config path in manifest: %w", err)
+		}
+
 		configSource := filepath.Join(tempDir, manifest[0].Config)
+		// Re-validate the joined path
+		if err := ValidateFilePath(tempDir, configSource); err != nil {
+			return fmt.Errorf("config path validation failed: %w", err)
+		}
+
 		configDest := filepath.Join(extractDir, "config.json")
+		if err := ValidateFilePath(extractDir, configDest); err != nil {
+			return fmt.Errorf("config destination validation failed: %w", err)
+		}
+
 		if data, err := os.ReadFile(configSource); err == nil {
-			if err := os.WriteFile(configDest, data, 0644); err != nil {
+			if err := os.WriteFile(configDest, data, 0600); err != nil {
 				logger.Warn("Failed to copy config.json", "error", err)
 			}
 		}
@@ -278,8 +356,24 @@ func extractImage(imagePath, extractDir string) error {
 
 	// Extract layers in order to create rootfs
 	for _, layerPath := range manifest[0].Layers {
+		// Security: Validate layer path
+		if err := ValidateLayerPath(layerPath); err != nil {
+			logger.Warn("Skipping invalid layer path", "layer", layerPath, "error", err)
+			continue
+		}
+
 		fullPath := filepath.Join(tempDir, layerPath)
-		cmd := exec.Command("tar", "-xf", fullPath, "-C", extractDir)
+		// Re-validate the joined path
+		if err := ValidateFilePath(tempDir, fullPath); err != nil {
+			logger.Warn("Layer path escapes temp directory", "layer", layerPath)
+			continue
+		}
+
+		cmd, err := SafeCommand("tar", "-xf", fullPath, "-C", extractDir)
+		if err != nil {
+			logger.Warn("Invalid tar command", "error", err)
+			continue
+		}
 		if err := cmd.Run(); err != nil {
 			logger.Warn("Failed to extract layer", "layer", layerPath, "error", err)
 			// Continue with other layers
@@ -300,8 +394,14 @@ func buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port 
 	}
 
 	// Apply user environment (overrides image)
+	// Security: Validate environment variable names
 	for k, v := range userEnv {
-		env[k] = v
+		// Only allow valid environment variable names
+		if isValidEnvVarName(k) {
+			env[k] = v
+		} else {
+			logger.Warn("Skipping invalid environment variable name", "name", k)
+		}
 	}
 
 	// Set activation-specific variables
@@ -317,6 +417,25 @@ func buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port 
 	return result
 }
 
+// isValidEnvVarName checks if a string is a valid environment variable name
+func isValidEnvVarName(name string) bool {
+	if name == "" {
+		return false
+	}
+	// Must start with letter or underscore
+	if !(name[0] >= 'A' && name[0] <= 'Z') && !(name[0] >= 'a' && name[0] <= 'z') && name[0] != '_' {
+		return false
+	}
+	// Can contain letters, digits, and underscores
+	for i := 1; i < len(name); i++ {
+		c := name[i]
+		if !(c >= 'A' && c <= 'Z') && !(c >= 'a' && c <= 'z') && !(c >= '0' && c <= '9') && c != '_' {
+			return false
+		}
+	}
+	return true
+}
+
 func startContainer(rootDir string, entrypoint, command []string, env []string) error {
 	// Combine entrypoint and command
 	args := append(entrypoint, command...)
@@ -329,8 +448,16 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 		"args", args[1:],
 	)
 
+	// Security: Validate the executable path
+	if err := SanitizeCommandArg(args[0]); err != nil {
+		return fmt.Errorf("invalid executable: %w", err)
+	}
+
 	// Try chroot first (requires privileged mode)
-	cmd := exec.Command("chroot", append([]string{rootDir}, args...)...)
+	cmd, err := SafeCommand("chroot", append([]string{rootDir}, args...)...)
+	if err != nil {
+		return fmt.Errorf("invalid chroot command: %w", err)
+	}
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -342,7 +469,10 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 		logger.Warn("Chroot failed, falling back to direct execution", "error", err)
 
 		// Fallback: direct execution with modified environment
-		cmd = exec.Command(args[0], args[1:]...)
+		cmd, err = SafeCommand(args[0], args[1:]...)
+		if err != nil {
+			return fmt.Errorf("invalid command: %w", err)
+		}
 		cmd.Dir = rootDir
 		cmd.Env = append(env, buildPathEnv(rootDir)...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -389,6 +519,8 @@ func waitForReady(timeout time.Duration, port int, path string) error {
 	for time.Since(start) < timeout {
 		if path != "" {
 			// HTTP health check
+			// Note: Using http://localhost is acceptable for internal health checks
+			// Security: The health check endpoint is only accessible from localhost
 			resp, err := http.Get(fmt.Sprintf("http://%s%s", address, path))
 			if err == nil {
 				resp.Body.Close()
