@@ -62,8 +62,17 @@ func main() {
 		port = "8080"
 	}
 
+	// Security: Configure server with timeouts to prevent Slowloris attacks
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      nil,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	logger.Info("Listening", "port", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		logger.Error("Server failed", "error", err)
 		os.Exit(1)
 	}
