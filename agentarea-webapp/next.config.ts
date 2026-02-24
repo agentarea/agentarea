@@ -18,7 +18,12 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  transpilePackages: ["@t3-oss/env-nextjs", "@t3-oss/env-core", "@ory/elements-react"],
+  transpilePackages: [
+    "@t3-oss/env-nextjs",
+    "@t3-oss/env-core",
+    "@ory/elements-react",
+    "@ory/nextjs",
+  ],
 };
 
 const withNextIntl = createNextIntlPlugin();

@@ -3,13 +3,10 @@
   "version": "0.0.0-unused",
   "license": "Apache License 2.0",
   "type": "commonjs",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
   "private": false,
-  "scripts": {
-    "prepare": "tsup --clean --dts"
-  },
   "dependencies": {
     "@ory/client-fetch": "1.21.5",
     "cookie": "^1.0.1",
@@ -43,33 +40,29 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./middleware": {
-      "types": "./dist/middleware/index.d.ts",
-      "import": "./dist/middleware/index.mjs",
-      "require": "./dist/middleware/index.js"
+      "types": "./src/middleware/index.ts",
+      "import": "./src/middleware/index.ts"
     },
     "./app": {
-      "types": "./dist/app/index.d.ts",
-      "import": "./dist/app/index.mjs",
-      "require": "./dist/app/index.js"
+      "types": "./src/app/index.ts",
+      "import": "./src/app/index.ts"
     },
     "./pages": {
-      "types": "./dist/pages/index.d.ts",
-      "import": "./dist/pages/index.mjs",
-      "require": "./dist/pages/index.js"
+      "types": "./src/pages/index.ts",
+      "import": "./src/pages/index.ts"
     }
   },
   "typesVersions": {
     "*": {
       "index": [
-        "./dist/index.d.ts"
+        "./src/index.ts"
       ],
       "middleware": [
-        "./dist/middleware/index.d.ts"
+        "./src/middleware/index.ts"
       ]
     }
   }
