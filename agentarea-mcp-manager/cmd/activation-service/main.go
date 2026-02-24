@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -532,10 +533,16 @@ func waitForReady(timeout time.Duration, port int, path string) error {
 
 	for time.Since(start) < timeout {
 		if path != "" {
-			// HTTP health check
-			// Note: Using http://localhost is acceptable for internal health checks
-			// Security: The health check endpoint is only accessible from localhost
-			resp, err := http.Get(fmt.Sprintf("http://%s%s", address, path))
+			// HTTP health check against localhost only.
+			// Construct via url.URL so the host is always the validated
+			// localhost:<port> address and the path is treated as a URL
+			// path component, not a raw string — preventing SSRF.
+			healthURL := &url.URL{
+				Scheme: "http",
+				Host:   address,
+				Path:   path,
+			}
+			resp, err := http.Get(healthURL.String())
 			if err == nil {
 				resp.Body.Close()
 				if resp.StatusCode == http.StatusOK {
