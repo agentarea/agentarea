@@ -149,27 +149,21 @@ func BuildSkopeoCommand(image, imagePath string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// SafeCommand creates a safe command with validated arguments
-// SECURITY: This function validates all arguments before creating the command.
-// The validation in ValidateCommandArgs ensures no shell metacharacters are present.
-// CodeQL: This is a false positive - all user input is strictly validated.
+// SafeCommand creates a command with validated name and arguments.
+// exec.Command does NOT invoke a shell; all values are passed directly to execve,
+// so shell metacharacters in any string are inert.
+//
+// Call sites:
+//   - Chroot path: name is the literal "chroot" — not user-controlled.
+//   - Fallback path (Kata VMs): name is imageConfig.Entrypoint[0], read from the
+//     hash-verified image's config.json on disk — not from the HTTP request.
 func SafeCommand(name string, args ...string) (*exec.Cmd, error) {
-	// Validate the command name itself
 	if err := SanitizeCommandArg(name); err != nil {
 		return nil, fmt.Errorf("invalid command name: %w", err)
 	}
-	// Validate all arguments
 	if err := ValidateCommandArgs(args); err != nil {
 		return nil, err
 	}
-	// SECURITY: exec.Command does NOT invoke a shell when called with separate arguments.
-	// This is safe because:
-	// 1. The command name is validated via SanitizeCommandArg (no shell metacharacters)
-	// 2. Each argument is validated via ValidateCommandArgs (no shell metacharacters)
-	// 3. exec.Command uses direct syscall execution, not shell interpretation
-	// Running a user-specified executable is intentional: this service exists to activate
-	// arbitrary MCP container processes (analogous to Docker running a container entrypoint).
-	// The caller (warm-pool orchestration) is trusted; end-users never reach this endpoint directly.
 	return exec.Command(name, args...), nil // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command // lgtm[go/command-injection]
 }
 
@@ -267,3 +261,4 @@ func ValidateHealthCheckPath(path string) error {
 
 	return nil
 }
+

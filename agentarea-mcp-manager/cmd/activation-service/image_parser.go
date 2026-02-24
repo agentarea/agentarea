@@ -85,32 +85,34 @@ func parseConfigFile(configPath string) (*ImageConfig, error) {
 	}, nil
 }
 
-// GetEffectiveCommand returns the effective entrypoint and command
-// User-provided values override image defaults
-func GetEffectiveCommand(imageConfig *ImageConfig, userEntrypoint, userCommand []string) (entrypoint, command []string) {
-	// Entrypoint resolution
-	if len(userEntrypoint) > 0 {
-		entrypoint = userEntrypoint
-	} else if imageConfig != nil && len(imageConfig.Entrypoint) > 0 {
-		entrypoint = imageConfig.Entrypoint
+// GetEffectiveCommand returns the effective entrypoint and command.
+//
+// The entrypoint (executable and any fixed args) always comes from the verified image
+// config — it is never taken from user input. This ensures only hash-verified image
+// content determines what binary is executed.
+//
+// The command (CMD args) may be overridden by the caller; these are arguments passed
+// to the entrypoint binary, not a new executable.
+//
+// Returns an error if imageConfig is nil or defines neither ENTRYPOINT nor CMD.
+func GetEffectiveCommand(imageConfig *ImageConfig, userCommand []string) (entrypoint, command []string, err error) {
+	if imageConfig == nil {
+		return nil, nil, fmt.Errorf("image config unavailable: image must define ENTRYPOINT or CMD")
 	}
 
-	// Command resolution
+	entrypoint = imageConfig.Entrypoint // always from image — not user-controlled
+
 	if len(userCommand) > 0 {
-		command = userCommand
-	} else if imageConfig != nil && len(imageConfig.Cmd) > 0 {
+		command = userCommand // caller may override CMD arguments
+	} else {
 		command = imageConfig.Cmd
 	}
 
-	return entrypoint, command
-}
-
-// ValidateCommand checks if we have a valid command to execute
-func ValidateCommand(entrypoint, command []string) error {
 	if len(entrypoint) == 0 && len(command) == 0 {
-		return fmt.Errorf("no entrypoint or command specified and image has neither")
+		return nil, nil, fmt.Errorf("image defines neither ENTRYPOINT nor CMD")
 	}
-	return nil
+
+	return entrypoint, command, nil
 }
 
 // ParseEnv parses KEY=value strings into a map

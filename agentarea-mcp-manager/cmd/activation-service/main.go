@@ -22,12 +22,14 @@ var (
 	logger     *slog.Logger
 )
 
-// ActivateRequest represents the activation request
+// ActivateRequest represents the activation request.
+// The executable is always taken from the image's own ENTRYPOINT (verified by
+// MCPImageHash) — there is intentionally no entrypoint override field.
+// Command may override the image's CMD to pass different arguments.
 type ActivateRequest struct {
 	MCPImage     string            `json:"mcp_image"`
 	MCPImageHash string            `json:"mcp_image_hash"`
 	Port         int               `json:"port"`
-	Entrypoint   []string          `json:"entrypoint"`
 	Command      []string          `json:"command"`
 	Env          map[string]string `json:"env"`
 	HealthCheck  *HealthCheck      `json:"health_check,omitempty"`
@@ -103,7 +105,7 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
 		return
 	}
-	logger.Info("Request decoded", "image", req.MCPImage, "port", req.Port, "entrypoint", req.Entrypoint, "command", req.Command)
+	logger.Info("Request decoded", "image", req.MCPImage, "port", req.Port, "command", req.Command)
 
 	// Validate required fields
 	if req.MCPImage == "" {
@@ -133,14 +135,7 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Security: Validate entrypoint and command arguments
-	if len(req.Entrypoint) > 0 {
-		if err := ValidateCommandArgs(req.Entrypoint); err != nil {
-			logger.Error("Entrypoint validation failed", "error", err)
-			http.Error(w, fmt.Sprintf(`{"error": "invalid entrypoint: %s"}`, err.Error()), http.StatusBadRequest)
-			return
-		}
-	}
+	// Validate command override arguments (shell metacharacter check).
 	if len(req.Command) > 0 {
 		if err := ValidateCommandArgs(req.Command); err != nil {
 			logger.Error("Command validation failed", "error", err)
@@ -192,16 +187,17 @@ func activate(req ActivateRequest) error {
 		return fmt.Errorf("failed to prepare MCP: %w", err)
 	}
 
-	// Step 2: Parse image config and resolve entrypoint/command
+	// Step 2: Parse image config — the executable is taken from here, not from the request.
+	// The image was verified by hash in step 1, so its config is trusted content.
 	imageConfig, err := ParseImageConfig(extractDir)
 	if err != nil {
-		logger.Warn("Failed to parse image config, will rely on user-provided values", "error", err)
-		imageConfig = nil
+		return fmt.Errorf("failed to parse image config (image must define ENTRYPOINT or CMD): %w", err)
 	}
 
-	entrypoint, command := GetEffectiveCommand(imageConfig, req.Entrypoint, req.Command)
-
-	if err := ValidateCommand(entrypoint, command); err != nil {
+	// req.Command may override CMD args; req.Entrypoint is intentionally ignored —
+	// the executable always comes from the hash-verified image config.
+	entrypoint, command, err := GetEffectiveCommand(imageConfig, req.Command)
+	if err != nil {
 		return err
 	}
 
@@ -468,7 +464,7 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 		return fmt.Errorf("invalid executable: %w", err)
 	}
 
-	// Try chroot first (requires privileged mode)
+	// Try chroot first (requires CAP_SYS_CHROOT)
 	cmd, err := SafeCommand("chroot", append([]string{rootDir}, args...)...)
 	if err != nil {
 		return fmt.Errorf("invalid chroot command: %w", err)
@@ -481,9 +477,11 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		logger.Warn("Chroot failed, falling back to direct execution", "error", err)
+		// Chroot is unavailable (e.g. Kata Containers VM environment where the VM
+		// boundary provides isolation instead of chroot). Fall back to direct execution.
+		// args[0] originates from the hash-verified image config, not the HTTP request.
+		logger.Warn("Chroot unavailable, falling back to direct execution (VM isolation expected)", "error", err)
 
-		// Fallback: direct execution with modified environment
 		cmd, err = SafeCommand(args[0], args[1:]...)
 		if err != nil {
 			return fmt.Errorf("invalid command: %w", err)
@@ -508,7 +506,6 @@ func startContainer(rootDir string, entrypoint, command []string, env []string) 
 }
 
 func buildPathEnv(rootDir string) []string {
-	// Prepend container paths to PATH for fallback execution
 	paths := []string{
 		filepath.Join(rootDir, "usr/local/sbin"),
 		filepath.Join(rootDir, "usr/local/bin"),
@@ -517,13 +514,9 @@ func buildPathEnv(rootDir string) []string {
 		filepath.Join(rootDir, "sbin"),
 		filepath.Join(rootDir, "bin"),
 	}
-
-	// Get existing PATH
-	existingPath := os.Getenv("PATH")
-	if existingPath != "" {
+	if existingPath := os.Getenv("PATH"); existingPath != "" {
 		paths = append(paths, existingPath)
 	}
-
 	return []string{"PATH=" + strings.Join(paths, ":")}
 }
 

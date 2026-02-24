@@ -44,19 +44,17 @@ spec:
           resources:
             {{- toYaml .Values.mcpManager.warmPool.resources | nindent 12 }}
           securityContext:
-            privileged: true  # Required for overlay mount in minikube
-            allowPrivilegeEscalation: true
+            allowPrivilegeEscalation: false
             capabilities:
+              drop:
+                - ALL
               add:
-                - SYS_ADMIN  # Required for overlay mount
-                - NET_ADMIN  # Required for networking
+                - CHOWN      # tar: restore file ownership from image layers
+                - MKNOD      # tar: recreate device nodes from image layers
+                - SYS_CHROOT # chroot into the extracted container filesystem
           volumeMounts:
             - name: image-cache
               mountPath: /var/cache/mcp-images
-            - name: overlay-work
-              mountPath: /tmp/overlay-work
-            - name: dev-fuse
-              mountPath: /dev/fuse
           livenessProbe:
             httpGet:
               path: /health
@@ -78,11 +76,6 @@ spec:
           hostPath:
             path: /var/lib/mcp-image-cache
             type: DirectoryOrCreate
-        - name: overlay-work
-          emptyDir: {}
-        - name: dev-fuse
-          hostPath:
-            path: /dev/fuse
       tolerations:
         - operator: Exists
       affinity:
