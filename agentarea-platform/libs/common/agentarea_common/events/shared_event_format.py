@@ -114,6 +114,7 @@ class SharedEventFormat:
 
 # Convenience functions for common event types
 
+
 def create_mcp_instance_created_event(
     instance_id: str,
     name: str,

@@ -42,9 +42,14 @@ try:
         TriggerExecutionRepository,
         TriggerRepository,
     )
-    from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager  # type: ignore[assignment]
+    from agentarea_triggers.temporal_schedule_manager import (
+        TemporalScheduleManager,  # type: ignore[assignment]
+    )
     from agentarea_triggers.trigger_service import TriggerService  # type: ignore[assignment]
-    from agentarea_triggers.webhook_manager import DefaultWebhookManager, WebhookExecutionCallback  # type: ignore[assignment]
+    from agentarea_triggers.webhook_manager import (  # type: ignore[assignment]
+        DefaultWebhookManager,
+        WebhookExecutionCallback,
+    )
 
     TRIGGERS_AVAILABLE = True
 except ImportError as e:

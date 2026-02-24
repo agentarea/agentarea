@@ -56,9 +56,9 @@ class RedisEventBroker(EventBroker):
                 await self.redis_broker.connect()
                 # Create raw Redis client for cross-language publishing
                 # FastStream's broker adds binary framing that's incompatible with Go
-                if hasattr(self.redis_broker, '_connection'):
+                if hasattr(self.redis_broker, "_connection"):
                     conn = self.redis_broker._connection
-                    if hasattr(conn, 'redis'):
+                    if hasattr(conn, "redis"):
                         self._raw_redis = conn.redis
                     else:
                         # Fallback: create new Redis client from connection params
@@ -75,6 +75,7 @@ class RedisEventBroker(EventBroker):
         """Create a raw Redis client for cross-language publishing."""
         # Default to localhost:6379, can be overridden via environment
         import os
+
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         return redis.from_url(redis_url, decode_responses=True)
 
@@ -88,8 +89,8 @@ class RedisEventBroker(EventBroker):
         # Check both new format (lowercase) and legacy format (PascalCase)
         channel_lower = channel.lower()
         return (
-            "mcp" in channel_lower or  # Any MCP-related channel
-            channel.startswith("MCPServerInstance")  # Legacy exact match
+            "mcp" in channel_lower  # Any MCP-related channel
+            or channel.startswith("MCPServerInstance")  # Legacy exact match
         )
 
     @override
