@@ -227,6 +227,11 @@ func activate(req ActivateRequest) error {
 		healthPath = req.HealthCheck.Path
 	}
 
+	// Security: Validate health check path to prevent SSRF
+	if err := ValidateHealthCheckPath(healthPath); err != nil {
+		return fmt.Errorf("invalid health check path: %w", err)
+	}
+
 	if err := waitForReady(30*time.Second, healthPort, healthPath); err != nil {
 		if mcpProcess != nil {
 			if killErr := mcpProcess.Kill(); killErr != nil {
