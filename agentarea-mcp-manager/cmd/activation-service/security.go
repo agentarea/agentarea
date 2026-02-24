@@ -164,10 +164,13 @@ func SafeCommand(name string, args ...string) (*exec.Cmd, error) {
 	}
 	// SECURITY: exec.Command does NOT invoke a shell when called with separate arguments.
 	// This is safe because:
-	// 1. The command name is validated to not contain shell metacharacters
-	// 2. Each argument is validated to not contain shell metacharacters
+	// 1. The command name is validated via SanitizeCommandArg (no shell metacharacters)
+	// 2. Each argument is validated via ValidateCommandArgs (no shell metacharacters)
 	// 3. exec.Command uses direct syscall execution, not shell interpretation
-	return exec.Command(name, args...), nil // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	// Running a user-specified executable is intentional: this service exists to activate
+	// arbitrary MCP container processes (analogous to Docker running a container entrypoint).
+	// The caller (warm-pool orchestration) is trusted; end-users never reach this endpoint directly.
+	return exec.Command(name, args...), nil // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command // lgtm[go/command-injection]
 }
 
 // ValidateManifestPath validates that a manifest path is safe
