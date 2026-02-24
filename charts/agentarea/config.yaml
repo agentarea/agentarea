@@ -117,6 +117,7 @@ groups:
       KUBERNETES_DEFAULT_CPU_LIMIT: '500m'
       KUBERNETES_DEFAULT_MEMORY_REQUEST: '128Mi'
       KUBERNETES_DEFAULT_MEMORY_LIMIT: '512Mi'
+      MCP_FEATURES_ENABLED: '{{ join "," .Values.mcpManager.features.enabled }}'
 
   temporalUi:
     configVars:
