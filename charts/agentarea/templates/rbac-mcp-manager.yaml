@@ -26,6 +26,11 @@ rules:
     resources: ["httproutes", "gateways"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   
+  # Ingress for fallback routing
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
   # Events for logging
   - apiGroups: [""]
     resources: ["events"]

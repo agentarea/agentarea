@@ -1,99 +1,106 @@
-# MCP Manager - Go Service
+# MCP Runtime
 
-A Go-based MCP (Model Context Protocol) server manager that handles Docker containers and URL-based MCP servers.
+Fast, secure runtime for Model Context Protocol (MCP) servers with warm pool acceleration.
 
-## Development Setup
+## Features
 
-### Live Reload Development
+- **Fast Cold Start**: ~1.3s activation via warm pools (vs 8-15s standard)
+- **Kubernetes Native**: Gateway API and Ingress support
+- **Feature Flags**: Gradual rollout with pluggable providers
+- **Flexible Routing**: Automatic fallback from Gateway API to Ingress
+- **Container Sandboxing**: Secure execution with proper isolation
 
-The development environment uses [Air](https://github.com/air-verse/air) for live reloading, which automatically rebuilds and restarts the service when you make code changes.
-
-**Start development environment:**
-```bash
-# From project root
-docker-compose -f docker-compose.dev.yaml up mcp-manager -d
-```
-
-**Watch logs:**
-```bash
-docker-compose -f docker-compose.dev.yaml logs mcp-manager -f
-```
-
-**Key features:**
-- ✅ **Live reload**: Code changes trigger automatic rebuild and restart
-- ✅ **Volume mounting**: Source code is mounted for real-time changes
-- ✅ **Fast iteration**: No need to rebuild Docker images for code changes
-- ✅ **Full debugging**: All Go tools available in development container
-
-### Production Build
-
-For production deployments, use the optimized build:
+## Quick Start
 
 ```bash
-# Build production image
-docker-compose -f docker-compose.prod.yaml build mcp-manager
+# Build images
+docker build -t agentarea/mcp-manager:latest .
+docker build -f build/Dockerfile.runner -t agentarea/mcp-runner:latest .
 
-# Run production
-docker-compose -f docker-compose.prod.yaml up mcp-manager -d
+# Deploy with Helm
+helm upgrade agentarea charts/agentarea -n agentarea \
+  --set mcpManager.warmPool.enabled=true \
+  --set mcpManager.features.enabled={warm_pool,gateway_api,state_reconciler}
 ```
 
 ## Architecture
 
-- **Event-driven**: Listens to Redis pub/sub for MCP server lifecycle events
-- **Multi-provider**: Supports Docker containers and URL-based MCP servers
-- **Secret resolution**: Integrates with Python API for secret management
-- **Container management**: Uses Podman for secure container operations
-- **Handwritten proxy**: Built-in Go HTTP reverse proxy for MCP routing (no external dependencies)
+### Warm Pool Fast Activation
 
-## API Endpoints
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
+│   Request   │────▶│  Find Warm   │────▶│    Activate     │
+│   (0ms)     │     │   Pod (0.1s) │     │  (1.3s total)   │
+└─────────────┘     └──────────────┘     └─────────────────┘
+                                                    │
+                       ┌──────────────┐            │
+                       │  Download    │◀───────────┤
+                       │  Image       │            │
+                       └──────────────┘            │
+                                                    │
+                       ┌──────────────┐            │
+                       │  Extract &   │◀───────────┤
+                       │  Start       │            │
+                       └──────────────┘            │
+                                                    ▼
+                                            ┌──────────────┐
+                                            │   Running    │
+                                            │   MCP Server │
+                                            └──────────────┘
+```
 
-- `GET /health` - Health check with service status
-- `GET /containers` - List managed containers
-- `POST /containers` - Create new container (via events)
-- `DELETE /containers/{id}` - Remove container (via events)
+### Components
+
+1. **MCP Manager** (`cmd/mcp-manager/`)
+   - REST API for instance management
+   - Kubernetes backend with warm pool integration
+   - Feature flag system
+
+2. **Activation Service** (`cmd/activation-service/`)
+   - Runs in warm pool pods
+   - Downloads and activates MCP images
+   - Parses ENTRYPOINT/CMD from docker config
+
+## API
+
+**Create Instance:**
+```bash
+curl -X POST http://localhost:80/instances \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instance_id": "my-mcp",
+    "name": "My MCP",
+    "service_name": "my-mcp-svc", 
+    "image": "nginx:alpine",
+    "port": 80,
+    "workspace_id": "ws-123"
+  }'
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "name": "My MCP",
+  "url": "https://mcp.local/mcp/my-mcp",
+  "status": "running"
+}
+```
 
 ## Configuration
 
-Environment variables:
-- `LOG_LEVEL` - Logging level (DEBUG, INFO, WARN, ERROR)
-- `LOG_FORMAT` - Log format (json, text)
-- `REDIS_URL` - Redis connection string
-- `MCP_NETWORK` - Docker network for containers (default: agentarea_default)
-- `MCP_PROXY_PORT` - Port for MCP proxy server (default: 8080)
-- `MCP_DEFAULT_DOMAIN` - Default domain for MCP services (default: localhost)
-- `MCP_MANAGER_URL` - URL of MCP manager service (default: http://localhost:8000)
-- `TEMPLATES_DIR` - Directory containing container templates
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_FEATURES_ENABLED` | Comma-separated feature flags | `gateway_api,state_reconciler` |
+| `WARM_POOL_ENABLED` | Enable warm pool fast start | `false` |
+| `KUBERNETES_GATEWAY_NAME` | Gateway API gateway name | `envoy-gateway` |
 
-## Development Tips
+## Documentation
 
-1. **Code changes**: Simply save your Go files - Air will detect and rebuild
-2. **Dependencies**: Add new dependencies with `go mod tidy` in the container
-3. **Debugging**: Use `docker exec -it mcp-manager sh` to access the container
-4. **Logs**: Air shows build output and runtime logs together
+- [CLAUDE.md](CLAUDE.md) - Developer guide
+- [docs/KATA_WARM_POOL.md](docs/KATA_WARM_POOL.md) - Warm pool design
+- [docs/STATE_SYNC_ARCHITECTURE.md](docs/STATE_SYNC_ARCHITECTURE.md) - State reconciliation
 
-## File Structure
+## License
 
-```
-cmd/mcp-manager/     # Main application entry point
-internal/
-  ├── api/           # HTTP API handlers
-  ├── config/        # Configuration management
-  ├── container/     # Container management
-  ├── events/        # Event handling and Redis integration
-  ├── models/        # Data models
-  ├── providers/     # Provider implementations (Docker, URL)
-  ├── proxy/         # Handwritten HTTP reverse proxy
-  └── secrets/       # Secret resolution
-```
-
-## Proxy Routing
-
-The MCP Manager includes a built-in HTTP reverse proxy (`internal/proxy/proxy.go`) that handles routing to MCP containers:
-
-- **Path-based routing**: `/mcp/{slug}` routes to specific containers
-- **Dynamic registration**: Routes are added/removed as containers start/stop
-- **No port mapping**: Containers use internal IPs, no host port binding needed
-- **No external dependencies**: No Traefik or Nginx required
-
-Example:
-- Container "my-mcp" with slug "my-mcp-abc123" is accessible at `http://localhost:8080/mcp/my-mcp-abc123`
+MIT

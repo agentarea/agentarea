@@ -2,188 +2,175 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Overview
+
+**MCP Runtime** (formerly mcp-manager) - A container orchestration system for running Model Context Protocol (MCP) servers with fast cold start via warm pools.
+
+## Components
+
+### 1. MCP Manager (`cmd/mcp-manager/`)
+Main API service that manages MCP server lifecycle:
+- REST API for instance CRUD operations
+- Kubernetes backend with Gateway API/Ingress routing
+- Feature flags for gradual rollout
+- Warm pool integration for fast activation
+
+### 2. Activation Service (`cmd/activation-service/`)
+Runs inside warm pool pods to activate MCP images on demand:
+- Downloads container images via Skopeo
+- Extracts docker layers to rootfs
+- Parses image ENTRYPOINT/CMD from config
+- Supports user-provided entrypoint/command overrides
+- Configurable health checks
+
 ## Development Commands
 
+**Build:**
+```bash
+# Build MCP Manager
+go build -o bin/mcp-manager ./cmd/mcp-manager
 
-**Build and run:**
-- `go build -o bin/mcp-manager ./cmd/mcp-manager` - Build the Go binary
-- `go run ./cmd/mcp-manager` - Run directly from source
-- `go test ./...` - Run all tests
-- `go mod tidy` - Clean up dependencies
+# Build Activation Service
+go build -o bin/activation-service ./cmd/activation-service/...
 
-**Docker commands:**
-- `docker build -t mcp-manager:latest .` - Build Docker image
-- `docker run -p 8000:8000 mcp-manager:latest` - Run containerized
+# Build both
+docker build -t agentarea/mcp-manager:latest .
+docker build -f build/Dockerfile.runner -t agentarea/mcp-runner:latest .
+```
 
-### Infrastructure Management (from project root)
+**Test:**
+```bash
+go test ./...
+go mod tidy
+```
 
-**Quick start:**
-- `./scripts/start.sh` - Start MCP Manager infrastructure
-- `./scripts/stop.sh` - Stop all services
-- `./scripts/test-mcp.sh` - Test MCP Manager API
-- `./scripts/test-echo.sh` - Test echo service example
+## Architecture
 
-**Docker Compose:**
-- `docker-compose up -d` - Start infrastructure
-- `docker-compose down` - Stop and remove containers
-- `docker-compose logs -f mcp-manager` - View MCP Manager logs
+### Warm Pool Fast Start
+```
+Request → Find Warm Pod → Assign → Activate → Route Ready
+  │            │            │         │          │
+  0ms        ~100ms       ~150ms    ~1200ms    ~1300ms
 
-### API Testing
+Cold Start: 8-15s → Warm Pool: ~1.3s (~10x faster)
+```
 
-**Health and status:**
-- `curl http://localhost:8000/health` - Check MCP Manager health
-- `curl http://localhost:8000/containers` - List managed containers
+### Key Features
 
-**Container management:**
-- `curl -X POST http://localhost:8000/containers -H "Content-Type: application/json" -d '{"service_name": "test", "template": "echo"}'` - Create container from template
-- `curl -X DELETE http://localhost:8000/containers/test` - Delete container
+**Feature Flags** (`internal/features/`):
+- `warm_pool` - Enable warm pool fast activation
+- `gateway_api` - Use Gateway API HTTPRoute
+- `state_reconciler` - Background state reconciliation
+- Pluggable provider: config, env, or hybrid
 
-## Architecture Overview
+**Backends** (`internal/backends/`):
+- Kubernetes: Native Deployments/Services + Gateway API/Ingress
+- Warm Pool: Pre-created pods with activation service
+- Docker: Podman-based (development)
 
-The MCP Infrastructure is a Go-based container orchestration system designed for running Model Context Protocol (MCP) services securely.
+**Warm Pool** (`internal/warmpool/`):
+- DaemonSet with pre-created activation pods
+- Pod selection, assignment, and lifecycle management
+- HTTP activation API
 
-### Core Components
+**Activation** (`cmd/activation-service/`):
+- Skopeo for image download
+- Docker layer extraction to rootfs
+- Image config parsing (ENTRYPOINT/CMD)
+- User override support
+- Chroot execution with fallback
 
-- `cmd/mcp-manager/main.go` - Application entry point with graceful shutdown
-- `internal/api/` - HTTP API handlers for container management
-- `internal/container/` - Container lifecycle management with Podman
-- `internal/config/` - Environment-based configuration system
-- `internal/providers/` - Docker and URL provider implementations
-- `internal/events/` - Redis-based event publishing/subscribing
-- `internal/secrets/` - Infisical SDK integration for secret management
-- `internal/proxy/` - Handwritten HTTP reverse proxy for MCP routing
-
-**scripts/** - Infrastructure management utilities:
-- Shell scripts for starting, stopping, and testing the infrastructure
-
-### Key Architecture Patterns
-
-**Environment-Aware Backend Selection:**
-- Automatically detects Docker Compose vs Kubernetes environments
-- Uses Podman + handwritten proxy for development (Docker Compose)
-- Uses native K8s resources for production (Kubernetes)
-
-**Security-First Container Management:**
-- **Podman-in-Docker** instead of Docker-in-Docker eliminates Docker socket exposure risks
-- **Rootless containers** by default with proper user namespace separation  
-- **Single privileged container** manages child containers safely
-- **Resource limits** enforced per container (memory, CPU)
-
-**Event-Driven Integration:**
-- Redis-based event system for integration with core AgentArea platform
-- Publishes container lifecycle events (created, started, stopped, failed)
-- Subscribes to MCP server instance events from core system
-
-**REST API Design:**
-- RESTful HTTP API for container lifecycle management
-- Template-based container creation with environment-specific configurations
-- Health checks and monitoring endpoints
-- Consistent API across Docker Compose and Kubernetes backends
-
-**Handwritten Proxy Routing:**
-- Built-in Go HTTP reverse proxy (no external dependencies like Traefik)
-- Path-based routing: `/mcp/{slug}` routes to specific containers
-- Dynamic route registration/unregistration via RouteManager
-- Direct container IP communication (no port mapping needed)
-
-### Container Runtime
-
-**Podman Integration:**
-- Uses Podman as container runtime instead of Docker for security
-- Configured with overlay storage driver and custom storage paths
-- Supports rootless operation with proper subuid/subgid mapping
-- Integrated with handwritten proxy for service routing
-
-**Template System:**
-- JSON-based templates define container configurations
-- Support for environment variables, volumes, resource limits
-- Pre-built templates for common MCP server types
-- Extensible template system for custom MCP implementations
-
-### Configuration Management
+## Configuration
 
 **Environment Variables:**
-All configuration via environment variables with sensible defaults:
+```bash
+# Core
+LOG_LEVEL=info
+SERVER_PORT=80
+BACKEND_TYPE=kubernetes
 
-- **Server**: `SERVER_HOST`, `SERVER_PORT`, `CORS_ENABLED`
-- **Container**: `CONTAINER_RUNTIME`, `MAX_CONTAINERS`, `DEFAULT_MEMORY_LIMIT`
-- **Proxy**: `MCP_NETWORK`, `MCP_DEFAULT_DOMAIN`, `MCP_PROXY_PORT`, `MCP_MANAGER_URL`
-- **Logging**: `LOG_LEVEL`, `LOG_FORMAT`
-- **Redis**: `REDIS_URL` for event integration
-- **Secrets**: Infisical configuration for secret management
+# Kubernetes
+KUBERNETES_NAMESPACE=agentarea
+KUBERNETES_DOMAIN=mcp.local
+KUBERNETES_GATEWAY_NAME=envoy-gateway
 
-**Security Configuration:**
-- CORS disabled by default, configurable origins
-- Resource limits with container quotas
-- Network isolation with dedicated container networks
-- Optional authentication middleware support
+# Feature Flags
+MCP_FEATURES_ENABLED=warm_pool,gateway_api,state_reconciler
+
+# Warm Pool
+WARM_POOL_ENABLED=true
+WARM_POOL_SIZE=10
+```
+
+## API
+
+**Create Instance:**
+```bash
+curl -X POST http://localhost:80/instances \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instance_id": "my-mcp",
+    "name": "My MCP",
+    "service_name": "my-mcp-svc",
+    "image": "nginx:alpine",
+    "port": 80,
+    "workspace_id": "ws-123",
+    "entrypoint": ["/docker-entrypoint.sh"],  // optional override
+    "command": ["nginx", "-g", "daemon off;"]  // optional override
+  }'
+```
 
 ## Testing
 
-**Test Scripts:**
-- `scripts/test-mcp.sh` - Complete MCP Manager API testing
-- `scripts/test-echo.sh` - Echo service deployment and testing
-- Go unit tests with `go test ./...`
+**Manual Test:**
+```bash
+# Start infrastructure
+docker-compose -f docker-compose.dev-infra.yaml up -d
 
-**Integration Testing:**
-- Real container lifecycle testing with Podman
-- Handwritten proxy routing tests
-- Redis event publishing/subscribing
-- Health check and monitoring validation
+# Deploy warm pool DaemonSet
+kubectl apply -f charts/agentarea/templates/warm-pool/
 
-**Test Environment:**
-- Requires Docker/Docker Compose for infrastructure
-- Uses localhost endpoints for API testing
-- Includes cleanup procedures for test containers
+# Test instance creation
+curl -X POST http://localhost:8080/instances \
+  -d '{"instance_id":"test","name":"Test","service_name":"test-svc","image":"nginx:alpine","port":80,"workspace_id":"test"}'
+```
 
 ## Deployment
 
-**Docker Compose (Development):**
-```yaml
-# Uses Podman + handwritten proxy stack
-# Mounts templates and configuration
-# Exposes ports 8000 (MCP Manager API), 8080 (MCP Proxy)
-```
+**Images:**
+- `agentarea/mcp-manager:latest` - Main API service
+- `agentarea/mcp-runner:latest` - Activation service (warm pool pods)
 
-**Kubernetes (Production):**
-- Native K8s Deployments and Services
-- Ingress for external access
-- ConfigMaps for template storage
-- RBAC for secure cluster access
-
-**Security Considerations:**
-- No Docker socket mounting required
-- Runs with minimal privileges where possible
-- Network policies for pod communication
-- Secret management via Infisical integration
-
-## Authentication
-
-The MCP proxy supports simple Bearer token authentication to prevent unauthorized access to MCP endpoints.
-
-### Configuration
-
-Set the shared secret via environment variable:
-
+**Helm:**
 ```bash
-export MCP_SHARED_SECRET="your-secret-token"
+helm upgrade agentarea charts/agentarea -n agentarea \
+  --set mcpManager.warmPool.enabled=true \
+  --set mcpManager.features.enabled={warm_pool,gateway_api}
 ```
 
-When `MCP_SHARED_SECRET` is set, all requests to `/mcp/{slug}/...` endpoints require authentication.
+## File Structure
 
-### Usage
-
-**Using Authorization header:**
-```bash
-curl -H "Authorization: Bearer $MCP_SHARED_SECRET" \
-     http://localhost:8080/mcp/my-mcp-abc123/tools
+```
+agentarea-mcp-manager/
+├── cmd/
+│   ├── mcp-manager/        # Main API service
+│   └── activation-service/ # Warm pool activation
+├── internal/
+│   ├── api/               # HTTP handlers
+│   ├── backends/          # K8s, Docker backends
+│   ├── features/          # Feature flag system
+│   ├── warmpool/          # Warm pool client
+│   └── ...
+├── build/
+│   └── Dockerfile.runner  # Activation service image
+├── docs/                  # Implementation docs
+├── archive/design/        # Design decision docs
+└── api/                   # OpenAPI specs
 ```
 
-**Using query parameter:**
-```bash
-curl "http://localhost:8080/mcp/my-mcp-abc123/tools?token=$MCP_SHARED_SECRET"
-```
+## Security
 
-### Development Mode
-
-When `MCP_SHARED_SECRET` is not set (empty or undefined), all requests are allowed. This is useful for local development but should NOT be used in production.
+- RBAC for Kubernetes resources (including Ingress)
+- Warm pool pods run privileged (for chroot)
+- No Docker socket exposure
+- Image caching for fast activation

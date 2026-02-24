@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -21,13 +23,24 @@ var (
 	logger     *slog.Logger
 )
 
+// ActivateRequest represents the activation request
 type ActivateRequest struct {
 	MCPImage     string            `json:"mcp_image"`
 	MCPImageHash string            `json:"mcp_image_hash"`
+	Port         int               `json:"port"`
+	Entrypoint   []string          `json:"entrypoint"`
+	Command      []string          `json:"command"`
 	Env          map[string]string `json:"env"`
-	Config       json.RawMessage   `json:"config,omitempty"`
+	HealthCheck  *HealthCheck      `json:"health_check,omitempty"`
 }
 
+// HealthCheck represents health check configuration
+type HealthCheck struct {
+	Path string `json:"path,omitempty"`
+	Port int    `json:"port,omitempty"`
+}
+
+// ActivateResponse represents the activation response
 type ActivateResponse struct {
 	Status           string `json:"status"`
 	MCPPort          int    `json:"mcp_port"`
@@ -71,13 +84,26 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req ActivateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Error("Failed to decode request", "error", err)
 		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+	logger.Info("Request decoded", "image", req.MCPImage, "port", req.Port, "entrypoint", req.Entrypoint, "command", req.Command)
+
+	// Validation
+	if req.MCPImage == "" {
+		http.Error(w, `{"error": "mcp_image is required"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Port <= 0 || req.Port > 65535 {
+		http.Error(w, `{"error": "port must be between 1 and 65535"}`, http.StatusBadRequest)
 		return
 	}
 
 	logger.Info("Activation requested",
 		"image", req.MCPImage,
 		"hash", req.MCPImageHash,
+		"port", req.Port,
 	)
 
 	status = "activating"
@@ -99,7 +125,7 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ActivateResponse{
 		Status:           "ready",
-		MCPPort:          3000,
+		MCPPort:          req.Port,
 		ActivationTimeMs: int(elapsed),
 	}
 
@@ -108,35 +134,61 @@ func activateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func activate(req ActivateRequest) error {
+	extractDir := "/app/mcp-overlay"
+
 	// Step 1: Download/extract MCP image
-	if err := prepareMCP(req.MCPImage, req.MCPImageHash); err != nil {
+	if err := prepareMCP(req.MCPImage, req.MCPImageHash, extractDir); err != nil {
 		return fmt.Errorf("failed to prepare MCP: %w", err)
 	}
 
-	// Step 2: Set environment
-	for k, v := range req.Env {
-		os.Setenv(k, v)
+	// Step 2: Parse image config and resolve entrypoint/command
+	imageConfig, err := ParseImageConfig(extractDir)
+	if err != nil {
+		logger.Warn("Failed to parse image config, will rely on user-provided values", "error", err)
+		imageConfig = nil
 	}
 
-	// Step 3: Start MCP process
-	if err := startMCP(); err != nil {
-		return fmt.Errorf("failed to start MCP: %w", err)
+	entrypoint, command := GetEffectiveCommand(imageConfig, req.Entrypoint, req.Command)
+
+	if err := ValidateCommand(entrypoint, command); err != nil {
+		return err
 	}
 
-	// Step 4: Wait for ready
-	if err := waitForReady(30 * time.Second); err != nil {
+	logger.Info("Resolved command",
+		"entrypoint", entrypoint,
+		"command", command,
+	)
+
+	// Step 3: Build environment
+	env := buildEnvironment(imageConfig, req.Env, req.Port, req.MCPImageHash)
+
+	// Step 4: Start MCP process
+	if err := startContainer(extractDir, entrypoint, command, env); err != nil {
+		return fmt.Errorf("failed to start container: %w", err)
+	}
+
+	// Step 5: Wait for ready
+	healthPort := req.Port
+	if req.HealthCheck != nil && req.HealthCheck.Port > 0 {
+		healthPort = req.HealthCheck.Port
+	}
+	healthPath := ""
+	if req.HealthCheck != nil {
+		healthPath = req.HealthCheck.Path
+	}
+
+	if err := waitForReady(30*time.Second, healthPort, healthPath); err != nil {
 		if mcpProcess != nil {
 			mcpProcess.Kill()
 		}
-		return fmt.Errorf("MCP failed to become ready: %w", err)
+		return fmt.Errorf("container failed to become ready: %w", err)
 	}
 
 	return nil
 }
 
-func prepareMCP(image, hash string) error {
+func prepareMCP(image, hash, extractDir string) error {
 	cacheDir := "/var/cache/mcp-images"
-	extractDir := "/app/mcp-overlay"
 
 	// Ensure directories exist
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
@@ -152,16 +204,12 @@ func prepareMCP(image, hash string) error {
 	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
 		logger.Info("Downloading MCP image", "image", image)
 
-		// Pull image using skopeo or similar
-		// For now, use a simple download command
 		cmd := exec.Command("skopeo", "copy", "docker://"+image, "docker-archive:"+imagePath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
 		if err := cmd.Run(); err != nil {
-			// Fallback: try wget for tar.gz URLs
-			logger.Warn("Skopeo failed, trying direct download", "error", err)
-			// In real implementation, handle different image formats
+			return fmt.Errorf("skopeo failed: %w", err)
 		}
 	} else {
 		logger.Info("Using cached MCP image", "path", imagePath)
@@ -171,12 +219,6 @@ func prepareMCP(image, hash string) error {
 	logger.Info("Extracting MCP image")
 	if err := extractImage(imagePath, extractDir); err != nil {
 		return fmt.Errorf("failed to extract: %w", err)
-	}
-
-	// Perform overlay mount
-	logger.Info("Mounting overlay")
-	if err := mountOverlay(); err != nil {
-		return fmt.Errorf("failed to mount overlay: %w", err)
 	}
 
 	return nil
@@ -191,49 +233,105 @@ func extractImage(imagePath, extractDir string) error {
 		return err
 	}
 
-	// Extract tar
-	cmd := exec.Command("tar", "-xf", imagePath, "-C", extractDir)
-	return cmd.Run()
-}
+	// Create temp directory for extraction
+	tempDir := extractDir + ".tmp"
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempDir)
 
-func mountOverlay() error {
-	lowerDir := "/app/base"       // Base runner files
-	upperDir := "/app/mcp-overlay" // MCP-specific files
-	workDir := "/tmp/overlay-work"
-	mergeDir := "/app/mcp"
+	// Extract docker archive tar
+	cmd := exec.Command("tar", "-xf", imagePath, "-C", tempDir)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to extract archive: %w", err)
+	}
 
-	// Ensure directories exist
-	for _, dir := range []string{lowerDir, workDir, mergeDir} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
+	// Parse manifest.json to get layer order and config file
+	manifestPath := filepath.Join(tempDir, "manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("failed to read manifest: %w", err)
+	}
+
+	var manifest []struct {
+		Config string   `json:"Config"`
+		Layers []string `json:"Layers"`
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		return fmt.Errorf("failed to parse manifest: %w", err)
+	}
+
+	if len(manifest) == 0 {
+		return fmt.Errorf("no images in manifest")
+	}
+
+	// Copy config.json to extractDir before extracting layers
+	if manifest[0].Config != "" {
+		configSource := filepath.Join(tempDir, manifest[0].Config)
+		configDest := filepath.Join(extractDir, "config.json")
+		if data, err := os.ReadFile(configSource); err == nil {
+			if err := os.WriteFile(configDest, data, 0644); err != nil {
+				logger.Warn("Failed to copy config.json", "error", err)
+			}
 		}
 	}
 
-	// Unmount if already mounted (cleanup from previous activation)
-	exec.Command("umount", mergeDir).Run()
-
-	// Mount overlay
-	options := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", lowerDir, upperDir, workDir)
-	cmd := exec.Command("mount", "-t", "overlay", "overlay", "-o", options, mergeDir)
-	return cmd.Run()
-}
-
-func startMCP() error {
-	startScript := "/app/mcp/start.sh"
-
-	// Check if start script exists
-	if _, err := os.Stat(startScript); os.IsNotExist(err) {
-		// Try alternative entry points
-		startScript = "/app/mcp/entrypoint.sh"
-		if _, err := os.Stat(startScript); os.IsNotExist(err) {
-			startScript = "/app/mcp/run"
+	// Extract layers in order to create rootfs
+	for _, layerPath := range manifest[0].Layers {
+		fullPath := filepath.Join(tempDir, layerPath)
+		cmd := exec.Command("tar", "-xf", fullPath, "-C", extractDir)
+		if err := cmd.Run(); err != nil {
+			logger.Warn("Failed to extract layer", "layer", layerPath, "error", err)
+			// Continue with other layers
 		}
 	}
 
-	logger.Info("Starting MCP", "script", startScript)
+	return nil
+}
 
-	cmd := exec.Command(startScript)
-	cmd.Dir = "/app/mcp"
+func buildEnvironment(imageConfig *ImageConfig, userEnv map[string]string, port int, imageHash string) []string {
+	env := make(map[string]string)
+
+	// Start with image environment
+	if imageConfig != nil {
+		for k, v := range ParseEnv(imageConfig.Env) {
+			env[k] = v
+		}
+	}
+
+	// Apply user environment (overrides image)
+	for k, v := range userEnv {
+		env[k] = v
+	}
+
+	// Set activation-specific variables
+	env["MCP_PORT"] = fmt.Sprintf("%d", port)
+	env["MCP_IMAGE_HASH"] = imageHash
+
+	// Convert to KEY=value format
+	result := make([]string, 0, len(env))
+	for k, v := range env {
+		result = append(result, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return result
+}
+
+func startContainer(rootDir string, entrypoint, command []string, env []string) error {
+	// Combine entrypoint and command
+	args := append(entrypoint, command...)
+	if len(args) == 0 {
+		return fmt.Errorf("no command to execute")
+	}
+
+	logger.Info("Starting container",
+		"executable", args[0],
+		"args", args[1:],
+	)
+
+	// Try chroot first (requires privileged mode)
+	cmd := exec.Command("chroot", append([]string{rootDir}, args...)...)
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
@@ -241,33 +339,73 @@ func startMCP() error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return err
+		logger.Warn("Chroot failed, falling back to direct execution", "error", err)
+
+		// Fallback: direct execution with modified environment
+		cmd = exec.Command(args[0], args[1:]...)
+		cmd.Dir = rootDir
+		cmd.Env = append(env, buildPathEnv(rootDir)...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("failed to start process: %w", err)
+		}
 	}
 
 	mcpProcess = cmd.Process
-	logger.Info("MCP process started", "pid", mcpProcess.Pid)
+	logger.Info("Container process started", "pid", mcpProcess.Pid)
 
 	return nil
 }
 
-func waitForReady(timeout time.Duration) error {
-	start := time.Now()
-	mcpPort := os.Getenv("MCP_PORT")
-	if mcpPort == "" {
-		mcpPort = "3000"
+func buildPathEnv(rootDir string) []string {
+	// Prepend container paths to PATH for fallback execution
+	paths := []string{
+		filepath.Join(rootDir, "usr/local/sbin"),
+		filepath.Join(rootDir, "usr/local/bin"),
+		filepath.Join(rootDir, "usr/sbin"),
+		filepath.Join(rootDir, "usr/bin"),
+		filepath.Join(rootDir, "sbin"),
+		filepath.Join(rootDir, "bin"),
 	}
 
+	// Get existing PATH
+	existingPath := os.Getenv("PATH")
+	if existingPath != "" {
+		paths = append(paths, existingPath)
+	}
+
+	return []string{"PATH=" + strings.Join(paths, ":")}
+}
+
+func waitForReady(timeout time.Duration, port int, path string) error {
+	start := time.Now()
+	address := fmt.Sprintf("localhost:%d", port)
+
 	for time.Since(start) < timeout {
-		// Try to connect to MCP health endpoint
-		resp, err := http.Get("http://localhost:" + mcpPort + "/health")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
+		if path != "" {
+			// HTTP health check
+			resp, err := http.Get(fmt.Sprintf("http://%s%s", address, path))
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					return nil
+				}
+			}
+		} else {
+			// TCP connect check
+			conn, err := net.DialTimeout("tcp", address, time.Second)
+			if err == nil {
+				conn.Close()
 				return nil
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	return fmt.Errorf("timeout waiting for MCP ready")
+	return fmt.Errorf("timeout waiting for ready")
 }

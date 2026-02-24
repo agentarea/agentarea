@@ -53,7 +53,7 @@ func NewClient(client kubernetes.Interface, namespace string) *Client {
 // FindAvailablePod finds a warm pod in "waiting" state
 func (c *Client) FindAvailablePod(ctx context.Context) (*corev1.Pod, error) {
 	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app=mcp-warm-pool,mcp.agentarea.io/status=waiting",
+		LabelSelector: "app.kubernetes.io/component=warm-pool,mcp.agentarea.io/status=waiting",
 		Limit:         1,
 	})
 	if err != nil {
@@ -75,7 +75,6 @@ func (c *Client) AssignPod(ctx context.Context, pod *corev1.Pod, instance *model
 
 	pod.Labels["mcp.agentarea.io/status"] = "activating"
 	pod.Labels["mcp.agentarea.io/instance-id"] = instance.InstanceID
-	pod.Labels["mcp.agentarea.io/instance-name"] = instance.Name
 
 	updated, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{})
 	if err != nil {
@@ -89,8 +88,17 @@ func (c *Client) AssignPod(ctx context.Context, pod *corev1.Pod, instance *model
 type ActivationRequest struct {
 	MCPImage     string            `json:"mcp_image"`
 	MCPImageHash string            `json:"mcp_image_hash"`
-	Env          map[string]string `json:"env"`
-	Config       json.RawMessage   `json:"config,omitempty"`
+	Port         int               `json:"port"`
+	Entrypoint   []string          `json:"entrypoint,omitempty"`
+	Command      []string          `json:"command,omitempty"`
+	Env          map[string]string `json:"env,omitempty"`
+	HealthCheck  *HealthCheck      `json:"health_check,omitempty"`
+}
+
+// HealthCheck represents health check configuration
+type HealthCheck struct {
+	Path string `json:"path,omitempty"`
+	Port int    `json:"port,omitempty"`
 }
 
 // ActivationResponse holds activation result
@@ -176,7 +184,7 @@ func (c *Client) ReturnToPool(ctx context.Context, pod *corev1.Pod) error {
 // GetPoolStatus returns current warm pool status
 func (c *Client) GetPoolStatus(ctx context.Context) (*PoolStatus, error) {
 	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app=mcp-warm-pool",
+		LabelSelector: "app.kubernetes.io/component=warm-pool",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list warm pods: %w", err)

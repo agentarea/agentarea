@@ -42,6 +42,7 @@ type InstanceSpec struct {
 	// Configuration
 	Environment map[string]string `json:"environment,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
+	Entrypoint  []string          `json:"entrypoint,omitempty"`
 	Command     []string          `json:"command,omitempty"`
 
 	// Resource requirements

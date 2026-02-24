@@ -501,6 +501,31 @@ func (k *KubernetesBackend) createHTTPRoute(ctx context.Context, instanceName st
 	return nil
 }
 
+// createRoute creates a route for external access using Gateway API or Ingress
+// Priority: 1) Gateway API HTTPRoute (if configured), 2) Ingress (fallback)
+func (k *KubernetesBackend) createRoute(ctx context.Context, instanceName string, spec *InstanceSpec) error {
+	// Try Gateway API HTTPRoute first if gateway is configured
+	if k.k8sConfig.GatewayName != "" {
+		if err := k.createHTTPRoute(ctx, instanceName, spec); err != nil {
+			// Check if it's because Gateway API is not available
+			if strings.Contains(err.Error(), "no matches for kind") ||
+				strings.Contains(err.Error(), "could not find the requested resource") {
+				k.logger.Warn("Gateway API not available, falling back to Ingress",
+					slog.String("error", err.Error()))
+				// Fall through to Ingress
+			} else {
+				return err
+			}
+		} else {
+			return nil
+		}
+	}
+
+	// Fallback to Ingress
+	k.logger.Info("Using Ingress for routing", slog.String("instance_name", instanceName))
+	return k.createIngress(ctx, instanceName, spec)
+}
+
 // Helper functions for pointer conversion
 func strPtr(s string) *string {
 	return &s

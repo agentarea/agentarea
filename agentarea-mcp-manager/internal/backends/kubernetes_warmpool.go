@@ -64,7 +64,15 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 	activationReq := warmpool.ActivationRequest{
 		MCPImage:     spec.Image,
 		MCPImageHash: hashImage(spec.Image),
+		Port:         spec.Port,
+		Entrypoint:   spec.Entrypoint,
+		Command:      spec.Command,
+		Env:          spec.Environment,
 	}
+
+	k.logger.Info("Sending activation request",
+		slog.Int("port", spec.Port),
+		slog.String("image", spec.Image))
 
 	if err := warmPoolClient.ActivatePod(ctx, pod, activationReq); err != nil {
 		// Return pod to pool and fallback
@@ -87,10 +95,11 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 		return nil, fmt.Errorf("failed to create service: %w", err)
 	}
 
-	// Create HTTPRoute for routing
-	if err := k.createHTTPRoute(ctx, instanceName, spec); err != nil {
+	// Create route for external access
+	// Try Gateway API HTTPRoute first, fall back to Ingress if needed
+	if err := k.createRoute(ctx, instanceName, spec); err != nil {
 		k.cleanupResources(ctx, instanceName)
-		return nil, fmt.Errorf("failed to create HTTPRoute: %w", err)
+		return nil, fmt.Errorf("failed to create route: %w", err)
 	}
 
 	result := &InstanceResult{

@@ -22,6 +22,7 @@ KUBERNETES_DEFAULT_CPU_REQUEST: "100m"
 KUBERNETES_DEFAULT_CPU_LIMIT: "500m"
 KUBERNETES_DEFAULT_MEMORY_REQUEST: "128Mi"
 KUBERNETES_DEFAULT_MEMORY_LIMIT: "512Mi"
+MCP_FEATURES_ENABLED: "{{ join "," .Values.mcpManager.features.enabled }}"
 {{- end }}
 
 {{- define "agentarea.mcpManager.envs" }}
@@ -115,4 +116,9 @@ KUBERNETES_DEFAULT_MEMORY_LIMIT: "512Mi"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: KUBERNETES_DEFAULT_MEMORY_LIMIT
+- name: MCP_FEATURES_ENABLED
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_FEATURES_ENABLED
 {{- end }}
