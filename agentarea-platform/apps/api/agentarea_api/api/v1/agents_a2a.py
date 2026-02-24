@@ -299,7 +299,7 @@ def convert_a2a_message_to_task(
     message_content = ""
     if message_params.message and message_params.message.parts:
         for part in message_params.message.parts:
-            if hasattr(part, "text"):
+            if isinstance(part, TextPart):
                 message_content += part.text
 
     # Extract proper user context from authentication
@@ -346,9 +346,10 @@ def convert_a2a_message_to_task(
         },
     }
     # Merge any provided metadata from A2A params (e.g., requires_human_approval)
-    if getattr(message_params, "metadata", None):
+    extra_metadata = getattr(message_params, "metadata", None)
+    if extra_metadata:
         try:
-            a2a_metadata.update(message_params.metadata)
+            a2a_metadata.update(extra_metadata)
         except Exception:  # noqa: S110
             # If metadata merging fails, continue with base metadata
             pass

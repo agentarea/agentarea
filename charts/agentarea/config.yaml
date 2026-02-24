@@ -101,10 +101,23 @@ groups:
     configVars:
       LOG_LEVEL: 'INFO'
       CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
-      TRAEFIK_NETWORK: 'podman'
       SERVER_HOST: '0.0.0.0'
       SERVER_PORT: '80'
       MCP_PROXY_HOST: 'http://{{ include "agentarea.fullname" . }}-mcp-manager'
+      BACKEND_TYPE: 'kubernetes'
+      KUBERNETES_ENABLED: 'true'
+      KUBERNETES_NAMESPACE: '{{ .Release.Namespace }}'
+      KUBERNETES_DOMAIN: '{{ .Values.mcpManager.domain | default "mcp.local" }}'
+      KUBERNETES_GATEWAY_NAME: '{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}'
+      KUBERNETES_GATEWAY_NAMESPACE: '{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}'
+      KUBERNETES_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass | default "" }}'
+      KUBERNETES_SECURITY_RUN_AS_NON_ROOT: 'true'
+      KUBERNETES_SECURITY_READ_ONLY_ROOT_FS: 'true'
+      KUBERNETES_DEFAULT_CPU_REQUEST: '100m'
+      KUBERNETES_DEFAULT_CPU_LIMIT: '500m'
+      KUBERNETES_DEFAULT_MEMORY_REQUEST: '128Mi'
+      KUBERNETES_DEFAULT_MEMORY_LIMIT: '512Mi'
+      MCP_FEATURES_ENABLED: '{{ join "," .Values.mcpManager.features.enabled }}'
 
   temporalUi:
     configVars:

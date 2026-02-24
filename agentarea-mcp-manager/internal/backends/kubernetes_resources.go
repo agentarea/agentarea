@@ -21,6 +21,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // createConfigMap creates a ConfigMap for the MCP instance
@@ -216,6 +218,14 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 
 	container.VolumeMounts = volumeMounts
 
+		// Determine runtime class based on trust level
+	runtimeClassName := k.k8sConfig.RuntimeClass
+	
+	// If instance specifies a runtime class, use it
+	if spec.RuntimeClass != "" {
+		runtimeClassName = spec.RuntimeClass
+	}
+	
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("mcp-%s", instanceName),
@@ -234,14 +244,21 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
 				},
-				Spec: corev1.PodSpec{
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: &k.k8sConfig.SecurityContext.RunAsNonRoot,
-						RunAsUser:    &k.k8sConfig.SecurityContext.RunAsUser,
-					},
-					Containers: []corev1.Container{container},
-					Volumes:    k.createVolumes(spec),
-				},
+				Spec: func() corev1.PodSpec {
+					spec := corev1.PodSpec{
+						SecurityContext: &corev1.PodSecurityContext{
+							RunAsNonRoot: &k.k8sConfig.SecurityContext.RunAsNonRoot,
+							RunAsUser:    &k.k8sConfig.SecurityContext.RunAsUser,
+						},
+						Containers: []corev1.Container{container},
+						Volumes:    k.createVolumes(spec),
+					}
+					// Only set RuntimeClassName if it's not empty
+					if runtimeClassName != "" {
+						spec.RuntimeClassName = &runtimeClassName
+					}
+					return spec
+				}(),
 			},
 		},
 	}
@@ -388,6 +405,134 @@ func (k *KubernetesBackend) createIngress(ctx context.Context, instanceName stri
 	}
 
 	return nil
+}
+
+// createHTTPRoute creates a Gateway API HTTPRoute for the MCP server
+func (k *KubernetesBackend) createHTTPRoute(ctx context.Context, instanceName string, spec *InstanceSpec) error {
+	// Only create HTTPRoute if Gateway is configured
+	if k.k8sConfig.GatewayName == "" {
+		k.logger.Debug("No gateway configured, skipping HTTPRoute creation",
+			slog.String("instance_name", instanceName))
+		return nil
+	}
+
+	pathPrefix := fmt.Sprintf("/mcp/%s", instanceName)
+	
+	// Determine gateway namespace
+	gatewayNs := k.k8sConfig.GatewayNamespace
+	if gatewayNs == "" {
+		gatewayNs = "envoy-gateway-system" // Default for Envoy Gateway
+	}
+
+	httpRoute := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("mcp-%s", instanceName),
+			Namespace: k.k8sConfig.Namespace,
+			Labels:    k.getCommonLabels(instanceName),
+			Annotations: map[string]string{
+				"agentarea.io/instance-id":  spec.InstanceID,
+				"agentarea.io/workspace-id": spec.WorkspaceID,
+				"agentarea.io/auth-required": "true",
+			},
+		},
+		Spec: gatewayv1.HTTPRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{
+				ParentRefs: []gatewayv1.ParentReference{
+					{
+						Group:     (*gatewayv1.Group)(strPtr("gateway.networking.k8s.io")),
+						Kind:      (*gatewayv1.Kind)(strPtr("Gateway")),
+						Name:      gatewayv1.ObjectName(k.k8sConfig.GatewayName),
+						Namespace: (*gatewayv1.Namespace)(&gatewayNs),
+					},
+				},
+			},
+			Rules: []gatewayv1.HTTPRouteRule{
+				{
+					Matches: []gatewayv1.HTTPRouteMatch{
+						{
+							Path: &gatewayv1.HTTPPathMatch{
+								Type:  (*gatewayv1.PathMatchType)(strPtr("PathPrefix")),
+								Value: strPtr(pathPrefix),
+							},
+						},
+					},
+					BackendRefs: []gatewayv1.HTTPBackendRef{
+						{
+							BackendRef: gatewayv1.BackendRef{
+								BackendObjectReference: gatewayv1.BackendObjectReference{
+									Group: (*gatewayv1.Group)(strPtr("")),
+									Kind:  (*gatewayv1.Kind)(strPtr("Service")),
+									Name:  gatewayv1.ObjectName(fmt.Sprintf("mcp-%s", instanceName)),
+									Port:  (*gatewayv1.PortNumber)(intPtr(int32(spec.Port))),
+								},
+							},
+						},
+					},
+					Filters: []gatewayv1.HTTPRouteFilter{
+						{
+							Type: gatewayv1.HTTPRouteFilterURLRewrite,
+							URLRewrite: &gatewayv1.HTTPURLRewriteFilter{
+								Path: &gatewayv1.HTTPPathModifier{
+									Type:               gatewayv1.HTTPPathModifierType("ReplacePrefixMatch"),
+									ReplacePrefixMatch: strPtr("/"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := k.client.Create(ctx, httpRoute); err != nil {
+		if errors.IsAlreadyExists(err) {
+			k.logger.Debug("HTTPRoute already exists, skipping",
+				slog.String("instance_name", instanceName))
+			return nil
+		}
+		return fmt.Errorf("failed to create HTTPRoute: %w", err)
+	}
+
+	k.logger.Info("Created HTTPRoute for MCP",
+		slog.String("instance_name", instanceName),
+		slog.String("path", pathPrefix),
+		slog.String("gateway", fmt.Sprintf("%s/%s", gatewayNs, k.k8sConfig.GatewayName)))
+
+	return nil
+}
+
+// createRoute creates a route for external access using Gateway API or Ingress
+// Priority: 1) Gateway API HTTPRoute (if configured), 2) Ingress (fallback)
+func (k *KubernetesBackend) createRoute(ctx context.Context, instanceName string, spec *InstanceSpec) error {
+	// Try Gateway API HTTPRoute first if gateway is configured
+	if k.k8sConfig.GatewayName != "" {
+		if err := k.createHTTPRoute(ctx, instanceName, spec); err != nil {
+			// Check if it's because Gateway API is not available
+			if strings.Contains(err.Error(), "no matches for kind") ||
+				strings.Contains(err.Error(), "could not find the requested resource") {
+				k.logger.Warn("Gateway API not available, falling back to Ingress",
+					slog.String("error", err.Error()))
+				// Fall through to Ingress
+			} else {
+				return err
+			}
+		} else {
+			return nil
+		}
+	}
+
+	// Fallback to Ingress
+	k.logger.Info("Using Ingress for routing", slog.String("instance_name", instanceName))
+	return k.createIngress(ctx, instanceName, spec)
+}
+
+// Helper functions for pointer conversion
+func strPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int32) *int32 {
+	return &i
 }
 
 // waitForDeploymentReady waits for the deployment to be ready

@@ -77,6 +77,8 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
+          {{- if eq (default "docker" .Values.mcpManager.backend) "docker" }}
+          # Docker/Podman backend requires privileged access
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -96,4 +98,7 @@ spec:
         - name: cgroup
           hostPath:
             path: /sys/fs/cgroup
+      {{- else }}
+          # Kubernetes backend - no special volumes needed
+      {{- end }}
 {{- end }}

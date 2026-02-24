@@ -17,9 +17,6 @@ podman system info > /dev/null 2>&1 || {
     rm -rf /var/lib/containers/storage/overlay-* 2>/dev/null || true
 }
 
-# Create Podman network if it doesn't exist
-podman network exists podman 2>/dev/null || podman network create podman 2>/dev/null || true
-
 echo "Podman initialization complete"
 podman info --format "Storage Driver: {{.Store.GraphDriverName}}" || echo "Warning: Could not get podman info"
 

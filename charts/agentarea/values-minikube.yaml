@@ -1,0 +1,128 @@
+# Values for local minikube development on ARM64 (Apple Silicon)
+# Usage: helm upgrade agentarea charts/agentarea -f values-minikube.yaml
+
+global:
+  deploymentEnv: "development"
+  image:
+    pullPolicy: IfNotPresent
+
+# Backend API - use local minikube images
+backend:
+  image:
+    repository: agentarea/agentarea-api
+    tag: "latest"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  # Build locally: eval $(minikube docker-env) && docker build ...
+  # If images not available, disable for now
+  enabled: true
+
+# Worker - use local minikube images  
+worker:
+  image:
+    repository: agentarea/agentarea-worker
+    tag: "latest"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  enabled: true
+
+# MCP Manager - Kubernetes backend
+mcpManager:
+  backend: "kubernetes"
+  gateway:
+    name: "envoy-gateway"
+    namespace: "envoy-gateway-system"
+  runtimeClass: ""  # Use standard runtime for local dev
+  securityContext: {}  # No privileged mode needed for K8s backend
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# PostgreSQL - keep default size, clean minikube disk instead
+# Run: minikube ssh -- "docker system prune -af"
+postgresql:
+  primary:
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+# Redis - disable persistence for local dev
+redis:
+  master:
+    persistence:
+      enabled: false
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+# MinIO - keep existing PVC size
+minio:
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Temporal - reduced resources
+temporal:
+  resources:
+    limits:
+      cpu: 250m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+temporalUi:
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# Kratos - reduced resources
+kratos:
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Disable jobs for local dev
+jobs:
+  bootstrap:
+    enabled: false
+  dbMigration:
+    enabled: true
+
+# Disable ingress for local dev
+ingress:
+  enabled: false

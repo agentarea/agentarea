@@ -130,6 +130,7 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "S101"]
+"apps/api/agentarea_api/main.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

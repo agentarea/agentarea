@@ -21,6 +21,8 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // KubernetesBackend implements the Backend interface using Kubernetes resources
@@ -55,6 +57,10 @@ func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger) (*KubernetesB
 	}
 	if err := networkingv1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add networking/v1 to scheme: %w", err)
+	}
+	// Add Gateway API scheme
+	if err := gatewayv1.Install(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add gateway API to scheme: %w", err)
 	}
 
 	runtimeClient, err := client.New(k8sConfig, client.Options{Scheme: scheme})
@@ -109,6 +115,7 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 		k.createDeployment,
 		k.createService,
 		k.createIngress,
+		k.createHTTPRoute, // Gateway API route
 	}
 
 	for _, createFunc := range resources {

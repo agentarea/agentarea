@@ -19,7 +19,7 @@ async def get_workspace_id(
         description="Workspace ID for data isolation. Required for most endpoints.",
         alias="X-Workspace-ID",
     ),
-    user_context: UserContextDep = None,
+    user_context: UserContextDep | None = None,
 ) -> str:
     """Get the workspace ID from the request header or user context.
 
@@ -62,7 +62,7 @@ async def get_admin_user_context(
     """
     # In a real implementation, check if user has admin role
     # For now, check if user has admin role in their roles list
-    if "admin" not in user_context.roles:
+    if not user_context.roles or "admin" not in user_context.roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform this action"
         )

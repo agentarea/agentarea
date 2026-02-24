@@ -345,10 +345,16 @@ func (h *HealthChecker) getContainerIP(ctx context.Context, containerID string) 
 
 // getContainerExposedPort retrieves the first exposed HTTP port from a container
 func (h *HealthChecker) getContainerExposedPort(ctx context.Context, containerID string) (int, error) {
-	cmd := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{range $port, $config := .Config.ExposedPorts}}{{$port}} {{end}}")
+	// Try NetworkSettings.Ports first (newer Podman versions)
+	cmd := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{range $port, $config := .NetworkSettings.Ports}}{{$port}} {{end}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get container exposed ports: %w", err)
+		// Fall back to Config.ExposedPorts (older Podman versions)
+		cmd = exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{range $port, $config := .Config.ExposedPorts}}{{$port}} {{end}}")
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get container exposed ports: %w", err)
+		}
 	}
 
 	portsStr := strings.TrimSpace(string(output))

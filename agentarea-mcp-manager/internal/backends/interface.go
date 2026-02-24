@@ -42,6 +42,7 @@ type InstanceSpec struct {
 	// Configuration
 	Environment map[string]string `json:"environment,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
+	Entrypoint  []string          `json:"entrypoint,omitempty"`
 	Command     []string          `json:"command,omitempty"`
 
 	// Resource requirements
@@ -52,6 +53,9 @@ type InstanceSpec struct {
 
 	// Volume mounts for writable directories (security sandbox)
 	WritablePaths []string `json:"writable_paths,omitempty"`
+
+	// Runtime configuration
+	RuntimeClass string `json:"runtime_class,omitempty"`
 
 	// Metadata
 	InstanceID  string `json:"instance_id"`

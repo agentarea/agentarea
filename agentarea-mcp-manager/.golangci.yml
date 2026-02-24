@@ -46,7 +46,7 @@ linters-settings:
       - (*log.Logger).Print*
       - (*log.Logger).Printf
       - (*log.Logger).Println
-    # Remove the deprecated ignore option
+
   revive:
     rules:
       - name: exported

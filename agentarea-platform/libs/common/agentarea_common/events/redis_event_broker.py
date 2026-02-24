@@ -7,10 +7,12 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, override
 from uuid import UUID
 
+import redis.asyncio as redis
 from faststream.redis import RedisBroker
 
 from .base_events import DomainEvent, EventEnvelope
 from .broker import EventBroker
+from .shared_event_format import SharedEventFormat, get_channel_for_event_type
 
 if TYPE_CHECKING:
     from .event_models import BaseEvent
@@ -32,28 +34,72 @@ class JSONEncoder(json.JSONEncoder):
 
 
 class RedisEventBroker(EventBroker):
+    """Redis event broker using framework-independent shared event format.
+
+    Uses CloudEvents-compatible format for cross-language communication
+    between Python services and Go MCP Manager.
+
+    For cross-language channels (MCP events), uses raw Redis client to avoid
+    FastStream binary framing. For internal channels, uses FastStream broker.
+    """
+
     def __init__(self, redis_broker: RedisBroker):
         super().__init__()
         self.redis_broker = redis_broker
         self._connected = False
+        self._raw_redis: redis.Redis | None = None
 
     async def _ensure_connected(self):
         """Ensure the Redis broker is connected before publishing."""
         if not self._connected:
             try:
                 await self.redis_broker.connect()
+                # Create raw Redis client for cross-language publishing
+                # FastStream's broker adds binary framing that's incompatible with Go
+                if hasattr(self.redis_broker, "_connection"):
+                    conn = self.redis_broker._connection
+                    if hasattr(conn, "redis"):
+                        self._raw_redis = conn.redis
+                    else:
+                        # Fallback: create new Redis client from connection params
+                        self._raw_redis = await self._create_raw_redis()
+                else:
+                    self._raw_redis = await self._create_raw_redis()
                 self._connected = True
                 logger.info("Redis event broker connected successfully")
             except Exception as e:
-                logger.warning(f"Failed to connect Redis event broker: {e}")
+                logger.warning(f"Failed to connect Redis broker: {e}")
                 raise
+
+    async def _create_raw_redis(self) -> redis.Redis:
+        """Create a raw Redis client for cross-language publishing."""
+        # Default to localhost:6379, can be overridden via environment
+        import os
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        return redis.from_url(redis_url, decode_responses=True)
 
     async def is_connected(self) -> bool:
         """Check if the Redis broker is connected."""
         return self._connected
 
+    def _is_cross_language_channel(self, channel: str) -> bool:
+        """Check if channel is for cross-language communication (Go services)."""
+        # MCP events need to be consumed by Go MCP Manager
+        # Check both new format (lowercase) and legacy format (PascalCase)
+        channel_lower = channel.lower()
+        return (
+            "mcp" in channel_lower  # Any MCP-related channel
+            or channel.startswith("MCPServerInstance")  # Legacy exact match
+        )
+
     @override
     async def publish(self, event: DomainEvent | EventEnvelope | BaseEvent) -> None:
+        """Publish event using shared framework-independent format.
+
+        Converts internal event format to CloudEvents-compatible format
+        for cross-language compatibility with Go services.
+        """
         # Ensure we're connected before publishing
         await self._ensure_connected()
 
@@ -62,27 +108,38 @@ class RedisEventBroker(EventBroker):
             # Supports typed Pydantic BaseEvent models without importing them here
             envelope = event.to_envelope()  # type: ignore[attr-defined]
         else:
-            envelope = EventEnvelope.from_any(event)  # DomainEvent | EventEnvelope | dict
+            envelope = EventEnvelope.from_any(event)
 
-        # Then publish to Redis for distributed subscribers
-        # Keep timestamp as unix float for backward compatibility
-        event_data: dict[str, Any] = {
-            "event_id": str(envelope.event_id),
-            "timestamp": str(envelope.timestamp.timestamp()),
-            "event_type": envelope.event_type,
-            "data": envelope.data,
-        }
-        channel = self._get_channel_for_event(envelope.event_type)
+        # Convert to shared event format (CloudEvents compatible)
+        # This ensures cross-language compatibility with Go services
+        channel = get_channel_for_event_type(envelope.event_type)
+
+        shared_event = SharedEventFormat.create_event(
+            event_type=envelope.event_type,
+            data=envelope.data,
+            source="agentarea-api",
+            correlation_id=str(envelope.event_id),
+            event_id=envelope.event_id,
+        )
 
         logger.info(f"Publishing event to channel: {channel}")
 
-        # JSON-serialize the message using custom encoder to handle datetime/UUID objects
-        # This ensures proper UTF-8 encoding and handles non-primitive types
-        serialized_message = json.dumps(event_data, cls=JSONEncoder)
-        await self.redis_broker.publish(message=serialized_message, channel=channel)
+        # Serialize to JSON using shared format
+        serialized_message = SharedEventFormat.serialize(shared_event)
+
+        # For cross-language channels (MCP events to Go), use raw Redis
+        # to avoid FastStream binary framing
+        if self._is_cross_language_channel(channel) and self._raw_redis:
+            await self._raw_redis.publish(channel, serialized_message)
+            logger.debug(f"Published to {channel} using raw Redis (cross-language)")
+        else:
+            # For internal Python channels, use FastStream broker
+            await self.redis_broker.publish(message=serialized_message, channel=channel)
+            logger.debug(f"Published to {channel} using FastStream broker")
 
     def _get_channel_for_event(self, event_type: str) -> str:
-        return event_type
+        """Get channel name for event type."""
+        return get_channel_for_event_type(event_type)
 
     async def __aenter__(self):
         """Async context manager entry."""

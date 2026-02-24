@@ -7,6 +7,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
+# Suppress noisy third-party loggers before any imports trigger them
+for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
+
 from agentarea_common.di.container import get_container, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers

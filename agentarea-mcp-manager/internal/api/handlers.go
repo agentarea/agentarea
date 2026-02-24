@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/container"
+	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/templates"
 )
@@ -192,7 +193,21 @@ func (h *Handler) createInstance(c *gin.Context) {
 		},
 	}
 
-	result, err := h.backend.CreateInstance(c.Request.Context(), spec)
+	var result *backends.InstanceResult
+	var err error
+
+	// Try warm pool if enabled and backend supports it
+	if features.IsEnabled(features.WarmPool) {
+		if k8sBackend, ok := h.backend.(*backends.KubernetesBackend); ok {
+			h.logger.Info("Attempting to create instance with warm pool",
+				slog.String("instance_id", req.InstanceID))
+			result, err = k8sBackend.CreateInstanceWithWarmPool(c.Request.Context(), spec)
+		} else {
+			result, err = h.backend.CreateInstance(c.Request.Context(), spec)
+		}
+	} else {
+		result, err = h.backend.CreateInstance(c.Request.Context(), spec)
+	}
 	if err != nil {
 		h.logger.Error("Failed to create instance", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
