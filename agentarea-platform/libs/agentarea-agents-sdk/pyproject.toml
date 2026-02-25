@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-agents-sdk"
-version = "0.0.7"
+version = "0.0.8"
 description = "Independent Agent SDK for AgentArea - agentic AI components"
 license = {text = "EPL-2.0"}
 requires-python = ">=3.12"
