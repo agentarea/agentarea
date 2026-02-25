@@ -11,7 +11,7 @@ WORKDIR /app
 # Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* pnpm-workspace.yaml* .npmrc* ./
 
-# Copy workspace packages (full source needed for prepare scripts that build them)
+# Copy workspace packages source (prepare scripts will build them)
 COPY packages/ ./packages/
 
 RUN corepack prepare pnpm@9.15.4 --activate && \
