@@ -23,8 +23,19 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.HELM_GH_APP_ID }}
+          private-key: ${{ secrets.HELM_GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: helm-charts,agentarea
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -65,6 +76,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/${{ github.repository }}
           git add charts/agentarea/Chart.yaml
           git commit -m "chore(helm): bump chart version to ${{ steps.version.outputs.chart_version }}"
           git push origin HEAD:main
@@ -102,15 +114,6 @@ jobs:
           helm package charts/agentarea --destination dist
 
           ls -la dist
-
-      - name: Generate GitHub App Token
-        id: generate-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.HELM_GH_APP_ID }}
-          private-key: ${{ secrets.HELM_GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: helm-charts
 
       - name: Checkout Helm Charts Repo
         uses: actions/checkout@v4
