@@ -89,11 +89,14 @@ jobs:
             context: agentarea-webapp
             file: agentarea-webapp/Dockerfile
           - name: bootstrap
-            context: agentarea-bootstrap
+            context: .
             file: agentarea-bootstrap/Dockerfile
           - name: mcp-manager
             context: agentarea-mcp-manager
             file: agentarea-mcp-manager/Dockerfile
+          - name: mcp-runner
+            context: agentarea-mcp-manager
+            file: agentarea-mcp-manager/Dockerfile.runner
 
     steps:
       - uses: actions/checkout@v4
