@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-common"
-version = "0.0.6"
+version = "0.0.7"
 description = "Common utilities and infrastructure for AgentArea"
 license = {text = "EPL-2.0"}
 requires-python = ">=3.12"
