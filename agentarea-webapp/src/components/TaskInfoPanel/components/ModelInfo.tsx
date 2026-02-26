@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import { Task } from "../types";
 import Section from "./Section";
 import ActionLink from "./ActionLink";
+import ExpandableText from "./ExpandableText";
 import { getAgent, listModelInstances } from "@/lib/browser-api";
 import { Agent } from "@/types/agent";
 import ModelBadge from "@/components/ui/model-badge";
@@ -14,6 +16,7 @@ interface ModelInfoProps {
 }
 
 export default function ModelInfo({ task }: ModelInfoProps) {
+  const t = useTranslations("TaskInfoPanel");
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -58,7 +61,7 @@ export default function ModelInfo({ task }: ModelInfoProps) {
 
   if (loading) {
     return (
-      <Section title="Agent model">
+      <Section title={t("agentInfo")}>
         <div className="flex justify-center py-4">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>
@@ -68,9 +71,9 @@ export default function ModelInfo({ task }: ModelInfoProps) {
 
   if (!agent) {
     return (
-      <Section title="Agent model">
+      <Section title={t("agentInfo")}>
         <div className="text-xs text-muted-foreground">
-          Failed to load agent details.
+          {t("failedToLoadAgent")}
         </div>
       </Section>
     );
@@ -79,11 +82,21 @@ export default function ModelInfo({ task }: ModelInfoProps) {
   const validTriggers = agent.events_config?.events?.filter((e: any) => e.source) || [];
 
   return (
-    <Section title="Agent info" contentClassName="space-y-4 text-xs">
+    <Section title={t("agentInfo")} contentClassName="space-y-4 text-xs">
+      {/* Agent Name */}
+      <div className="space-y-1.5">
+        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {t("agent")}
+        </div>
+        <div className="text-sm font-semibold text-foreground">
+          {agent.name}
+        </div>
+      </div>
+
       {/* Model */}
       <div className="space-y-1.5">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Model
+          {t("model")}
         </div>
         <div>
           <ModelBadge
@@ -98,11 +111,9 @@ export default function ModelInfo({ task }: ModelInfoProps) {
       {agent.description && agent.description.trim().length > 0 && (
         <div className="space-y-1.5">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Description / Goal
+            {t("descriptionGoal")}
           </div>
-          <p className="text-xs text-foreground/90 leading-relaxed">
-            {agent.description}
-          </p>
+          <ExpandableText content={agent.description} />
         </div>
       )}
 
@@ -110,11 +121,9 @@ export default function ModelInfo({ task }: ModelInfoProps) {
       {agent.instruction && agent.instruction.trim().length > 0 && (
         <div className="space-y-1.5">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Instruction
+            {t("instruction")}
           </div>
-          <p className="text-xs text-foreground/90 leading-relaxed">
-            {agent.description}
-          </p>
+          <ExpandableText content={agent.instruction} />
         </div>
       )}
 
@@ -122,7 +131,7 @@ export default function ModelInfo({ task }: ModelInfoProps) {
       {validTriggers.length > 0 && (
         <div className="space-y-1.5">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Triggers
+            {t("triggers")}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {validTriggers.map((event: any, index: number) => (
@@ -137,7 +146,7 @@ export default function ModelInfo({ task }: ModelInfoProps) {
       {/* Tools */}
       <div className="space-y-1.5">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Tools
+          {t("tools")}
         </div>
         <div>
           <ToolsDisplay agent={agent} />
@@ -148,7 +157,7 @@ export default function ModelInfo({ task }: ModelInfoProps) {
       {agent.skills && agent.skills.length > 0 && (
         <div className="space-y-1.5">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Skills
+            {t("skills")}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {agent.skills.map((skill) => (
@@ -167,7 +176,7 @@ export default function ModelInfo({ task }: ModelInfoProps) {
       {/* Link to full details */}
       <div className="pt-2">
         <ActionLink href={`/agents/${task.agent_id}`}>
-          Open full agent details
+          {t("openFullAgentDetails")}
         </ActionLink>
       </div>
     </Section>

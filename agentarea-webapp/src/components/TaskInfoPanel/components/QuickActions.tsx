@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { Task } from "../types";
 import Section from "./Section";
 import ActionLink from "./ActionLink";
@@ -7,21 +8,23 @@ interface QuickActionsProps {
 }
 
 export default function QuickActions({ task }: QuickActionsProps) {
+  const t = useTranslations("TaskInfoPanel");
+
   return (
-    <Section title="Quick actions" contentClassName="space-y-1.5 text-xs">
-        {task.execution_id && (
-          <ActionLink href={`/tasks/${task.id}?tab=events`}>
-            View task events
-          </ActionLink>
-        )}
-        <ActionLink href={`/agents/${task.agent_id}`}>
-          Open agent details
+    <Section title={t("quickActions")} contentClassName="space-y-1.5 text-xs">
+      {task.execution_id && (
+        <ActionLink href={`/tasks/${task.id}?tab=events`}>
+          {t("viewTaskEvents")}
         </ActionLink>
-        {task.result && (
-          <ActionLink onClick={() => {}}>
-            Inspect task result
-          </ActionLink>
-        )}
+      )}
+      <ActionLink href={`/agents/${task.agent_id}`}>
+        {t("openAgentDetails")}
+      </ActionLink>
+      {task.result && (
+        <ActionLink onClick={() => {}}>
+          {t("inspectTaskResult")}
+        </ActionLink>
+      )}
     </Section>
   );
 }

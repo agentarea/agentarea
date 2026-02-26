@@ -1,9 +1,12 @@
+import { useTranslations } from "next-intl";
+
 interface TaskInfoTabsProps {
   activeTab: "overview" | "model";
   setActiveTab: (tab: "overview" | "model") => void;
 }
 
 export default function TaskInfoTabs({ activeTab, setActiveTab }: TaskInfoTabsProps) {
+  const t = useTranslations("TaskInfoPanel");
   return (
     <div className="px-3 pt-2.5 pb-1.5 text-xs">
       <div className="relative flex w-full items-center gap-px rounded-md bg-sidebar p-0.5">
@@ -22,7 +25,7 @@ export default function TaskInfoTabs({ activeTab, setActiveTab }: TaskInfoTabsPr
               : "text-muted-foreground"
           }`}
         >
-          Overview
+          {t("overview")}
         </button>
         <button
           type="button"
@@ -33,7 +36,7 @@ export default function TaskInfoTabs({ activeTab, setActiveTab }: TaskInfoTabsPr
               : "text-muted-foreground"
           }`}
         >
-          Model info
+          {t("modelInfo")}
         </button>
       </div>
     </div>

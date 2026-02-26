@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Task } from "../types";
 
@@ -7,6 +8,7 @@ interface TaskInfoHeaderProps {
 }
 
 export default function TaskInfoHeader({ task, currentStatus }: TaskInfoHeaderProps) {
+  const t = useTranslations("TaskInfoPanel");
   const statusVariant =
     currentStatus === "running"
       ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
@@ -20,10 +22,10 @@ export default function TaskInfoHeader({ task, currentStatus }: TaskInfoHeaderPr
     <div className="flex items-start justify-between gap-3 px-3 pb-3 pt-3">
       <div className="space-y-1">
         <div className="text-xs uppercase tracking-wide text-muted-foreground font-normal">
-          Agent Task
+          {t("agentTask")}
         </div>
         <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
-          {task.description || "Untitled task"}
+          {task.description || t("untitledTask")}
         </h3>
       </div>
       <Badge
