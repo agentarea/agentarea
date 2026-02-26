@@ -10,21 +10,23 @@ import ModelInfo from "./components/ModelInfo";
 import { Task } from "./types";
 
 interface TaskInfoPanelProps {
-  task: Task;
-  currentStatus: string;
-  isActive: boolean;
-  startTime: string;
+  task?: Task | null;
+  agentId?: string; // Optional agentId if no task
+  currentStatus?: string;
+  isActive?: boolean;
+  startTime?: string;
   endTime?: string;
-  executionTime: string;
+  executionTime?: string;
 }
 
 export default function TaskInfoPanel({
   task,
-  currentStatus,
-  isActive,
-  startTime,
+  agentId,
+  currentStatus = "unknown",
+  isActive = false,
+  startTime = "",
   endTime,
-  executionTime,
+  executionTime = "N/A",
 }: TaskInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "model">("overview");
   const formattedStart = startTime
@@ -32,9 +34,26 @@ export default function TaskInfoPanel({
     : "N/A";
   const formattedEnd = endTime ? new Date(endTime).toLocaleString() : "—";
 
+  // If we have no task but have an agentId, we show ModelInfo directly (Agent Info mode)
+  if (!task && agentId) {
+    return (
+      <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
+        <div className="h-full bg-white dark:bg-zinc-800">
+           <div className="space-y-3 px-3.5 py-3 text-xs">
+             <ModelInfo agentId={agentId} />
+           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!task) {
+    return null;
+  }
+
   return (
-    <div className="h-full overflow-auto">
-      <div className="h-full border-l border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800">
+    <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
+      <div className="h-full bg-white dark:bg-zinc-800">
         {/* Header */}
         <TaskInfoHeader task={task} currentStatus={currentStatus} />
 

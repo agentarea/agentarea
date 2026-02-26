@@ -12,19 +12,24 @@ import ToolsDisplay from "@/components/ToolsDisplay";
 import { Badge } from "@/components/ui/badge";
 
 interface ModelInfoProps {
-  task: Task;
+  task?: Task | null;
+  agentId?: string;
 }
 
-export default function ModelInfo({ task }: ModelInfoProps) {
+export default function ModelInfo({ task, agentId }: ModelInfoProps) {
   const t = useTranslations("TaskInfoPanel");
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const targetAgentId = task?.agent_id || agentId;
+
   useEffect(() => {
     const fetchAgent = async () => {
+      if (!targetAgentId) return;
+
       try {
         setLoading(true);
-        const { data } = await getAgent(task.agent_id);
+        const { data } = await getAgent(targetAgentId);
         const agentData = data as Agent;
         
         if (agentData) {
@@ -54,10 +59,10 @@ export default function ModelInfo({ task }: ModelInfoProps) {
       }
     };
 
-    if (task.agent_id) {
+    if (targetAgentId) {
       fetchAgent();
     }
-  }, [task.agent_id]);
+  }, [targetAgentId]);
 
   if (loading) {
     return (
@@ -175,7 +180,7 @@ export default function ModelInfo({ task }: ModelInfoProps) {
 
       {/* Link to full details */}
       <div className="pt-2">
-        <ActionLink href={`/agents/${task.agent_id}`}>
+        <ActionLink href={`/agents/${targetAgentId}`}>
           {t("openFullAgentDetails")}
         </ActionLink>
       </div>
