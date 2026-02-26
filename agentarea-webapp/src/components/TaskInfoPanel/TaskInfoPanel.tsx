@@ -54,11 +54,11 @@ export default function TaskInfoPanel({
                 formattedEnd={formattedEnd}
               />
 
-              {/* Quick links / actions */}
-              <QuickActions task={task} />
-
               {/* Metadata */}
               <Metadata task={task} />
+
+              {/* Quick links / actions */}
+              <QuickActions task={task} />
             </>
           )}
 

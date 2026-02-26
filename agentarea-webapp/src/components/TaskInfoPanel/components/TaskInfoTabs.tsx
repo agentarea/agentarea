@@ -6,7 +6,7 @@ interface TaskInfoTabsProps {
 export default function TaskInfoTabs({ activeTab, setActiveTab }: TaskInfoTabsProps) {
   return (
     <div className="px-3 pt-2.5 pb-1.5 text-xs">
-      <div className="relative flex w-full items-center gap-px rounded-md bg-muted/70 p-0.5">
+      <div className="relative flex w-full items-center gap-px rounded-md bg-sidebar p-0.5">
         {/* Animated active background */}
         <div
           className={`absolute inset-y-0 w-1/2 rounded-md bg-card shadow-sm ring-1 ring-border/60 transition-transform duration-200 ${

@@ -5,7 +5,7 @@ import ModelBadge from "@/components/ui/model-badge";
 import { cn } from "@/lib/utils";
 import { Agent } from "@/types/agent";
 import Timer from "./Timer";
-import ToolsDisplay from "./ToolsDisplay";
+import ToolsDisplay from "@/components/ToolsDisplay";
 
 interface Props {
   agent: Agent;

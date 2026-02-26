@@ -19,13 +19,13 @@ export default function Section({
   return (
     <section
       className={cn(
-        "rounded-md border border-border bg-card text-card-foreground shadow-sm",
+        "rounded-md border border-border bg-card text-card-foreground shadow-sm overflow-hidden",
         className
       )}
     >
       <div
         className={cn(
-          "border-b border-border bg-muted/50 px-3 py-1",
+          "border-b border-border bg-sidebar px-3 py-1",
           headerClassName
         )}
       >
