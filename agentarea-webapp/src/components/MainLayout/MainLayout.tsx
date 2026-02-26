@@ -115,7 +115,7 @@ export default function MainLayout({
           </main>
         </div>
       </SidebarProvider>
-      <ThemeToggle className="absolute bottom-2 right-2" />
+      <ThemeToggle className="fixed bottom-4 right-4 z-50" />
     </>
   );
 }

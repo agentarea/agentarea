@@ -11,7 +11,7 @@ import {
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
-import TaskInfoPanel from "./components/TaskInfoPanel";
+import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -187,9 +187,9 @@ export default function TaskDetailsPage() {
 
   return (
     <>
-      <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-        {/* Left Panel - Chat */}
-        <ResizablePanel defaultSize={isMobile ? 100 : 60} minSize={isMobile ? 100 : 30}>
+      <div className="flex h-full w-full">
+        {/* Left side - Chat (flexible) */}
+        <div className="flex-1">
           <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
             <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
             <div className="relative z-1 h-full">
@@ -218,36 +218,35 @@ export default function TaskDetailsPage() {
               />
             </div>
           </div>
-        </ResizablePanel>
+        </div>
 
-        {/* Right Panel - Task Information */}
+        {/* Right side - fixed width task info (desktop only) */}
         {!isMobile && (
-          <>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={40} minSize={20}>
-              <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700 px-4">
-                <TaskInfoPanel
-                  task={{
-                    id: task.id,
-                    description: task.description || "",
-                    agent_id: task.agent_id,
-                    agent_name: task.agent_name,
-                    agent_description: task.agent_description,
-                    created_at: task.created_at || "",
-                    execution_id: task.execution_id || null,
-                    result: task.result,
-                  }}
-                  currentStatus={currentStatus}
-                  isActive={isActive}
-                  startTime={startTime}
-                  endTime={endTime}
-                  executionTime={executionTime}
-                />
-              </div>
-            </ResizablePanel>
-          </>
+          <div className="relative h-full w-[360px]">
+            <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
+            {/* <div className="relative z-10 h-full overflow-auto pr-4"> */}
+            <div className="relative z-10 h-full overflow-auto">
+              <TaskInfoPanel
+                task={{
+                  id: task.id,
+                  description: task.description || "",
+                  agent_id: task.agent_id,
+                  agent_name: task.agent_name,
+                  agent_description: task.agent_description,
+                  created_at: task.created_at || "",
+                  execution_id: task.execution_id || null,
+                  result: task.result,
+                }}
+                currentStatus={currentStatus}
+                isActive={isActive}
+                startTime={startTime}
+                endTime={endTime}
+                executionTime={executionTime}
+              />
+            </div>
+          </div>
         )}
-      </ResizablePanelGroup>
+      </div>
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
