@@ -42,6 +42,7 @@ interface FullChatProps {
   className?: string;
   height?: string;
   placeholder?: string;
+  welcomeComponent?: React.ReactNode;
   badgeSuggestions?: BadgeSuggestion[];
 }
 
@@ -51,6 +52,7 @@ export default function FullChat({
   onAgentChange,
   startCentered = false,
   placeholder,
+  welcomeComponent,
   taskId,
   initialMessages = [],
   onTaskCreated,
@@ -331,20 +333,29 @@ export default function FullChat({
   return (
     <div
       className={cn(
-        "mx-auto flex h-full w-full flex-col gap-0 overflow-hidden rounded-lg transition-all duration-700 ease-out",
+        "mx-auto flex h-full w-full flex-col gap-0 rounded-lg transition-all duration-700 ease-out",
         "justify-between",
-        startCentered ? "justify-center" : "justify-between",
-        (startCentered && !hasUserMessages) ? "max-w-3xl mx-auto" : "",
+        (startCentered && !hasUserMessages) 
+          ? "justify-center gap-8 overflow-y-auto overflow-x-hidden md:overflow-visible" // Allow vertical scroll on mobile/small screens if content overflows
+          : "justify-between overflow-hidden",
+        (startCentered && !hasUserMessages) ? "max-w-3xl mx-auto py-8 md:py-0" : "", // Add padding on mobile to ensure content isn't cut off at edges
       )}
     >
-      {/* Placeholder/Title */}
-      {!hasUserMessages && placeholder ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="relative flex flex-col items-center justify-center">
-            <h1 className="relative z-10 text-primary/20 dark:text-accent-foreground/20">
-              {placeholder}
-            </h1>
-          </div>
+      {/* Placeholder/Title/Welcome Component */}
+      {!hasUserMessages && (welcomeComponent || placeholder) ? (
+        <div className={cn(
+          "flex items-center justify-center transition-all duration-500",
+          "flex-none w-full"
+        )}>
+          {welcomeComponent ? (
+            welcomeComponent
+          ) : (
+            <div className="relative flex flex-col items-center justify-center">
+              <h1 className="relative z-10 text-primary/20 dark:text-accent-foreground/20">
+                {placeholder}
+              </h1>
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -399,16 +410,30 @@ export default function FullChat({
       </div>
 
       {/* Input Area */}
-      <div
-        ref={cardContainerRef}
-        className={cn(
-          "card mx-auto w-full cursor-auto bg-white hover:shadow-none dark:bg-zinc-900",
-          "px-2 pb-2 pt-0 border-t",
-          "transition-[max-width] duration-700 ease-out",
-          (startCentered && !hasUserMessages) ? "max-w-3xl" : "",
+      <div className={cn(
+        "relative mx-auto w-full transition-all duration-700 ease-out group",
+        (startCentered && !hasUserMessages) ? "max-w-3xl" : "",
+      )}>
+        {/* Subtle decorative elements for centered state */}
+        {(startCentered && !hasUserMessages) && (
+          <>
+            <div className="absolute -left-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-primary/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+            <div className="absolute -right-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+          </>
         )}
-      >
-        <ChatInputArea
+
+        <div
+          ref={cardContainerRef}
+          className={cn(
+            "card relative w-full cursor-auto bg-white hover:shadow-none dark:bg-zinc-900",
+            "px-2 pb-2 pt-0 border-t",
+            (startCentered && !hasUserMessages) 
+              ? "border shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] rounded-2xl dark:border-zinc-800 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]" 
+              : "rounded-t-lg",
+            "transition-all duration-500 ease-out",
+          )}
+        >
+          <ChatInputArea
           input={input}
           inputDisplay={inputDisplay}
           onInputChange={handleInputChange}
@@ -439,14 +464,17 @@ export default function FullChat({
           isStopping={isPausing}
         />
       </div>
+      </div>
 
       {/* Badge Suggestions */}
       {startCentered && (
-        <BadgeSuggestions
-          suggestions={badgeSuggestions || []}
-          onBadgeClick={handleBadgeClick}
-          visible={!hasUserMessages}
-        />
+        <div className="flex-none w-full pb-4">
+          <BadgeSuggestions
+            suggestions={badgeSuggestions || []}
+            onBadgeClick={handleBadgeClick}
+            visible={!hasUserMessages}
+          />
+        </div>
       )}
     </div>
   );

@@ -549,5 +549,64 @@
         "skillUploaded": "Skill uploaded successfully"
       }
     }
+  },
+  "TaskInfoPanel": {
+    "agentTask": "Agent Task",
+    "untitledTask": "Untitled task",
+    "overview": "Overview",
+    "modelInfo": "Agent info",
+    "keyMetrics": "Key metrics",
+    "status": "Status",
+    "taskActive": "Task is currently active",
+    "taskNotRunning": "Task is not running",
+    "executionTime": "Execution Time",
+    "executionTimeDesc": "Measured from start to completion",
+    "started": "Started",
+    "ended": "Ended",
+    "quickActions": "Quick actions",
+    "viewTaskEvents": "View task events",
+    "openAgentDetails": "Open agent details",
+    "inspectTaskResult": "Inspect task result",
+    "metadata": "Metadata",
+    "taskId": "Task ID",
+    "agent": "Agent",
+    "executionId": "Execution ID",
+    "agentInfo": "Agent info",
+    "failedToLoadAgent": "Failed to load agent details.",
+    "model": "Model",
+    "descriptionGoal": "Description / Goal",
+    "instruction": "Instruction",
+    "triggers": "Triggers",
+    "tools": "Tools",
+    "skills": "Skills",
+    "openFullAgentDetails": "Open full agent details",
+    "unknown": "Unknown",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "openPanel": "Show details panel",
+    "closePanel": "Hide details panel"
+  },
+  "Workplace": {
+    "hero": {
+      "title": "How can I help you today?"
+    },
+    "suggestions": {
+      "askSpecificAgent": {
+        "label": "Ask Specific Agent",
+        "text": "I need help from agent @"
+      },
+      "analyzeProject": {
+        "label": "Analyze Project Structure",
+        "text": "Analyze the current project structure and identify potential architectural improvements."
+      },
+      "generateDocs": {
+        "label": "Generate Documentation",
+        "text": "Generate comprehensive documentation for the core modules of this project."
+      },
+      "debugIssue": {
+        "label": "Debug Issue",
+        "text": "I'm facing a bug with the API integration. Can you help me debug it?"
+      }
+    }
   }
 }
