@@ -33,40 +33,58 @@ export default function TaskInfoPanelDock({
     [storageKey, isMobile]
   );
 
+  // No localStorage logic anymore.
+  // Mobile -> Closed by default
+  // Desktop -> Open by default (defaultOpen prop)
   const [open, setOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return defaultOpen;
-    return defaultOpen;
+    // On client: check width immediately
+    // If mobile (width < 768), force closed.
+    // If desktop, use defaultOpen.
+    return window.innerWidth >= 768 && defaultOpen;
   });
 
+  // We still need to react to isMobile changes if window resizes across breakpoint?
+  // Or just initial state is enough? User said "at the beginning".
+  // But if user resizes window from desktop to mobile, should it close?
+  // Let's keep it simple: initial state is what matters most.
+  // But we might want to update `open` if `isMobile` changes drastically?
+  // For now, let's just remove the localStorage effect entirely.
+
+  // Remove localStorage writing effect
+  // useEffect(() => {
+  //   try {
+  //     window.localStorage.setItem(resolvedStorageKey, String(open));
+  //   } catch {
+  //     // ignore
+  //   }
+  // }, [open, resolvedStorageKey]);
+
+  const [currentWidth, setCurrentWidth] = useState(widthPx);
+
+  // Responsive width adjustment
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const fallback = isMobile ? false : defaultOpen;
-
-    try {
-      const stored = window.localStorage.getItem(resolvedStorageKey);
-      if (stored === null) {
-        setOpen(fallback);
+    const handleResize = () => {
+      // Check if tablet size (md breakpoint is 768px, lg is 1024px)
+      // We want narrower panel on tablet/small desktop
+      if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+        setCurrentWidth(260);
       } else {
-        setOpen(stored === "true");
+        setCurrentWidth(widthPx);
       }
-    } catch {
-      setOpen(fallback);
-    }
-  }, [defaultOpen, isMobile, resolvedStorageKey]);
+    };
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(resolvedStorageKey, String(open));
-    } catch {
-      // ignore
-    }
-  }, [open, resolvedStorageKey]);
+    // Initial check
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [widthPx]);
 
   const panelTransformClosed = useMemo(() => {
-    const delta = Math.max(widthPx - effectiveCollapsedWidthPx, 0);
+    const delta = Math.max(currentWidth - effectiveCollapsedWidthPx, 0);
     return `translateX(${delta}px)`;
-  }, [widthPx, effectiveCollapsedWidthPx]);
+  }, [currentWidth, effectiveCollapsedWidthPx]);
 
   const label = open ? t("closePanel") : t("openPanel");
 
@@ -113,25 +131,25 @@ export default function TaskInfoPanelDock({
           isMobile
             ? "transition-transform duration-200 ease-out"
             : "transition-[width] duration-200 ease-out",
-          isMobile ? "fixed inset-y-0 right-0 z-40" : "hidden md:block",
+          isMobile ? "fixed inset-y-0 right-0 z-40 w-[95%] max-w-[360px]" : "hidden md:block",
           className
         )}
         style={
           isMobile
             ? {
-                width: `min(${widthPx}px, 100vw)`,
+                width: undefined, // Handled by classNames for mobile
                 transform: open
                   ? "translateX(0)"
                   : `translateX(calc(100% - ${effectiveCollapsedWidthPx}px))`,
               }
-            : { width: open ? widthPx : effectiveCollapsedWidthPx }
+            : { width: open ? currentWidth : effectiveCollapsedWidthPx }
         }
       >
         {handleButton}
         <div
           className="absolute inset-y-0 right-0 transition-transform duration-200 ease-out"
           style={{
-            width: widthPx,
+            width: isMobile ? "100%" : currentWidth,
             transform: isMobile
               ? "translateX(0)"
               : open

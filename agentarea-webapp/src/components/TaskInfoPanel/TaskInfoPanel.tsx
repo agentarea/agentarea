@@ -38,7 +38,7 @@ export default function TaskInfoPanel({
   if (!task && agentId) {
     return (
       <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
-        <div className="h-full bg-white dark:bg-zinc-800">
+        <div className="min-h-full bg-white dark:bg-zinc-800">
            <div className="space-y-3 px-3.5 py-3 text-xs">
              <ModelInfo agentId={agentId} />
            </div>
@@ -53,7 +53,7 @@ export default function TaskInfoPanel({
 
   return (
     <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
-      <div className="h-full bg-white dark:bg-zinc-800">
+      <div className="min-h-full bg-white dark:bg-zinc-800">
         {/* Header */}
         <TaskInfoHeader task={task} currentStatus={currentStatus} />
 

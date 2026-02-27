@@ -13,18 +13,13 @@ export default function QuickActions({ task }: QuickActionsProps) {
   return (
     <Section title={t("quickActions")} contentClassName="space-y-1.5 text-xs">
       {task.execution_id && (
-        <ActionLink href={`/tasks/${task.id}?tab=events`}>
+        <ActionLink href={`/tasks/${task.id}/events`}>
           {t("viewTaskEvents")}
         </ActionLink>
       )}
       <ActionLink href={`/agents/${task.agent_id}`}>
         {t("openAgentDetails")}
       </ActionLink>
-      {task.result && (
-        <ActionLink onClick={() => {}}>
-          {t("inspectTaskResult")}
-        </ActionLink>
-      )}
     </Section>
   );
 }

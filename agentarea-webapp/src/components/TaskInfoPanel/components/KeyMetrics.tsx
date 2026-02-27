@@ -20,7 +20,7 @@ export default function KeyMetrics({
   const t = useTranslations("TaskInfoPanel");
 
   return (
-    <Section title={t("keyMetrics")} contentClassName="text-xs grid grid-cols-2 gap-3">
+    <Section title={t("keyMetrics")} contentClassName="text-xs grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-3">
       <div className="space-y-1">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {t("status")}
