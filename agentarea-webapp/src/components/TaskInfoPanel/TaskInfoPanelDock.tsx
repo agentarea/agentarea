@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 interface TaskInfoPanelDockProps {
   panel: ReactNode;
-  storageKey: string;
+  storageKey?: string; // Kept for API compatibility but unused
   className?: string;
   widthPx?: number;
   collapsedWidthPx?: number;
@@ -28,11 +28,6 @@ export default function TaskInfoPanelDock({
 
   const effectiveCollapsedWidthPx = isMobile ? 0 : 0; // On mobile, we want it fully hidden, so width is 0. On desktop, also 0 for collapsed state.
 
-  const resolvedStorageKey = useMemo(
-    () => `${storageKey}:${isMobile ? "mobile" : "desktop"}`,
-    [storageKey, isMobile]
-  );
-
   // No localStorage logic anymore.
   // Mobile -> Closed by default
   // Desktop -> Open by default (defaultOpen prop)
@@ -43,22 +38,6 @@ export default function TaskInfoPanelDock({
     // If desktop, use defaultOpen.
     return window.innerWidth >= 768 && defaultOpen;
   });
-
-  // We still need to react to isMobile changes if window resizes across breakpoint?
-  // Or just initial state is enough? User said "at the beginning".
-  // But if user resizes window from desktop to mobile, should it close?
-  // Let's keep it simple: initial state is what matters most.
-  // But we might want to update `open` if `isMobile` changes drastically?
-  // For now, let's just remove the localStorage effect entirely.
-
-  // Remove localStorage writing effect
-  // useEffect(() => {
-  //   try {
-  //     window.localStorage.setItem(resolvedStorageKey, String(open));
-  //   } catch {
-  //     // ignore
-  //   }
-  // }, [open, resolvedStorageKey]);
 
   const [currentWidth, setCurrentWidth] = useState(widthPx);
 

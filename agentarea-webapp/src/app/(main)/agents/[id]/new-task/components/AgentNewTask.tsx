@@ -45,7 +45,6 @@ export default function AgentNewTask({ agent }: Props) {
             </div>
       </div>
       <TaskInfoPanelDock
-        storageKey={`agent-task-info-panel:${agent.id}`}
         panel={<TaskInfoPanel agentId={agent.id} />}
       />
     </div>
