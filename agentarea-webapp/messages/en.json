@@ -582,6 +582,8 @@
     "openFullAgentDetails": "Open full agent details",
     "unknown": "Unknown",
     "showMore": "Show more",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "openPanel": "Show details panel",
+    "closePanel": "Hide details panel"
   }
 }

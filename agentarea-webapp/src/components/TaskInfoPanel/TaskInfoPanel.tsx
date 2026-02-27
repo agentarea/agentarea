@@ -61,7 +61,7 @@ export default function TaskInfoPanel({
         <TaskInfoTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
         {/* Content sections */}
-        <div className="space-y-3 px-3.5 py-3 text-xs">
+        <div className="space-y-1.5 px-3.5 py-3 text-xs">
           {activeTab === "overview" && (
             <>
               {/* Key metrics */}

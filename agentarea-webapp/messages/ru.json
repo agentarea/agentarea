@@ -448,6 +448,8 @@
     "openFullAgentDetails": "Открыть полные детали агента",
     "unknown": "Неизвестно",
     "showMore": "Показать больше",
-    "showLess": "Свернуть"
+    "showLess": "Свернуть",
+    "openPanel": "Показать панель",
+    "closePanel": "Скрыть панель"
   }
 }
