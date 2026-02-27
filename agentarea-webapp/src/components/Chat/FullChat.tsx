@@ -40,7 +40,6 @@ interface FullChatProps {
   onTaskStarted?: (taskId: string) => void;
   onTaskFinished?: (taskId: string) => void;
   className?: string;
-  height?: string;
   placeholder?: string;
   welcomeComponent?: React.ReactNode;
   badgeSuggestions?: BadgeSuggestion[];
@@ -339,6 +338,7 @@ export default function FullChat({
           ? "justify-center gap-8 overflow-y-auto overflow-x-hidden md:overflow-visible" // Allow vertical scroll on mobile/small screens if content overflows
           : "justify-between overflow-hidden",
         (startCentered && !hasUserMessages) ? "max-w-3xl mx-auto py-8 md:py-0" : "", // Add padding on mobile to ensure content isn't cut off at edges
+        className
       )}
     >
       {/* Placeholder/Title/Welcome Component */}

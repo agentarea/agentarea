@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Bot, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 export default function WorkplaceHero() {
   const t = useTranslations("Workplace.hero");
