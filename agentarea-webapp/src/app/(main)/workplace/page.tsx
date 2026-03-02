@@ -1,29 +1,38 @@
-import type { Metadata } from "next";
 import React from "react";
 import AuthGuard from "@/components/auth/AuthGuard";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
 import { getAgents } from "@/components/actions";
-
-export const metadata: Metadata = {
-  title: "Workplace",
-};
+import { WorkplaceChat } from "@/components/Chat/WorkplaceChat";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function WorkplacePage() {
+  const t = await getTranslations("Workplace.suggestions");
+
   const badgeSuggestions = [
-    { label: "Create new agent for my project", text: "Create new agent for my project" },
-    { label: "Add task for agent", text: "Create new task for agent - @" },
-    { label: "Ask agent about my project", text: "Ask agent about my project" },
-    { label: "Something about my project", text: "Something about my project" },
-    { label: "Test test :)", text: "Test test lala" },
+    { 
+      label: t("askSpecificAgent.label"), 
+      text: t("askSpecificAgent.text") 
+    },
+    { 
+      label: t("analyzeProject.label"), 
+      text: t("analyzeProject.text") 
+    },
+    { 
+      label: t("generateDocs.label"), 
+      text: t("generateDocs.text") 
+    },
+    { 
+      label: t("debugIssue.label"), 
+      text: t("debugIssue.text") 
+    },
   ];
 
   // Fetch agents server-side
   const { data: agentsData, error } = await getAgents();
 
-  const agents = agentsData?.map((agent) => ({
+  const agents = agentsData?.map((agent: any) => ({
     id: String(agent.id),
     name: agent.name,
     description: agent.description,
@@ -38,6 +47,7 @@ export default async function WorkplacePage() {
         header={{
           breadcrumb: [{ label: "Workplace", href: "/workplace" }],
         }}
+        className="p-0"
       >
         {error ? (
           <div className="flex h-full items-center justify-center">
@@ -51,11 +61,16 @@ export default async function WorkplacePage() {
             </div>
           </div>
         ) : (
-          <WorkplaceChat
-            initialAgent={defaultAgent}
-            availableAgents={agents}
-            badgeSuggestions={badgeSuggestions}
-          />
+          <div className="relative h-full w-full overflow-hidden">
+            <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
+            <div className="relative z-1 h-full p-4">
+              <WorkplaceChat
+                initialAgent={defaultAgent}
+                availableAgents={agents}
+                badgeSuggestions={badgeSuggestions}
+              />
+            </div>
+          </div>
         )}
       </ContentBlock>
     </AuthGuard>

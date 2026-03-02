@@ -249,35 +249,6 @@ export function ChatInputArea({
           onKeyDown={onKeyDown}
         />
 
-        {/* Agent Selector */}
-        {/*
-          {availableAgents && availableAgents.length > 1 && currentAgent && onAgentChange && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Agent:</span>
-              <Select
-                value={currentAgent.id}
-                onValueChange={(agentId) => {
-                  const agent = availableAgents.find((a) => a.id === agentId);
-                  if (agent) {
-                    onAgentChange(agent);
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 w-48 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableAgents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        */}
-
         <div className="flex items-center justify-between gap-2">
           {/* Selected Files Display */}
           <div className="flex flex-row flex-wrap gap-2">
