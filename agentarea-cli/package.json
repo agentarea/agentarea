@@ -19,7 +19,7 @@
 		"ink": "^4.1.0",
 		"meow": "^11.0.0",
 		"react": "^18.2.0",
-		"axios": "^1.6.0",
+		"axios": "^1.13.5",
 		"eventsource": "^2.0.2",
 		"@zowe/secrets-for-zowe-sdk": "^8.8.3",
 		"async-exit-hook": "^2.0.1",
