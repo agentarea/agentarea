@@ -42,25 +42,30 @@ export function TeamSwitcher({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <div className="flex aspect-square size-8 items-center justify-center bg-transparent text-sidebar-primary-foreground">
                 {activeTeam.logoFile ? (
                   <img
                     src={activeTeam.logoFile}
                     alt={activeTeam.name}
                     width={32}
                     height={32}
+                    className=""
                   />
                 ) : (
-                  <activeTeam.logo className="size-4" />
+                  <activeTeam.logo className="size-4 text-zinc-900 dark:text-zinc-100" />
                 )}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{activeTeam.name}</span>
-                <span className="truncate text-xs">{activeTeam.plan}</span>
+                <span className="truncate font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                  {activeTeam.name}
+                </span>
+                <span className="truncate text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+                  {activeTeam.plan}
+                </span>
               </div>
-              <ChevronsUpDown className="ml-auto" />
+              <ChevronsUpDown className="ml-auto text-zinc-400" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

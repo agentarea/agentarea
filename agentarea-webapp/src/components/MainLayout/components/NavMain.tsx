@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Circle, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Collapsible,
   CollapsibleContent,
@@ -152,16 +153,17 @@ export function NavMain({
                   <DropdownMenu open={isHovered} modal={false}>
                     <DropdownMenuTrigger asChild>
                       <SidebarMenuButton
-                        className="ring-0 transition-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        className="group/btn relative overflow-hidden transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 data-[state=open]:bg-zinc-100 dark:data-[state=open]:bg-zinc-800"
                         onMouseEnter={() => openOnHover(item.url)}
                         onMouseLeave={() => closeOnHoverLeave(item.url)}
                       >
-                        {item.icon && <item.icon />}
+                        {item.icon && <item.icon className="transition-colors group-hover/btn:text-primary" />}
                         {state === "collapsed" ? null : (
-                          <span>
+                          <span className="font-medium">
                             {item.titleKey ? t(item.titleKey) : item.title}
                           </span>
                         )}
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-0 bg-primary transition-all duration-300 group-hover/btn:h-6 rounded-r-full" />
                       </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -205,30 +207,43 @@ export function NavMain({
               <Collapsible
                 key={item.title}
                 asChild
+                defaultOpen={isCollapsibleOpen(item.url)}
                 open={isCollapsibleOpen(item.url)}
-                className="group/collapsible"
-                onOpenChange={(open: boolean) => {
-                  if (open) {
-                    setOpenCollapsibles(
-                      (prev: Set<string>) => new Set([...prev, item.url])
-                    );
-                  } else {
-                    setOpenCollapsibles((prev: Set<string>) => {
-                      const next = new Set(prev);
+                onOpenChange={(open) => {
+                  setOpenCollapsibles((prev) => {
+                    const next = new Set(prev);
+                    if (open) {
+                      next.add(item.url);
+                    } else {
                       next.delete(item.url);
-                      return next;
-                    });
-                  }
+                    }
+                    return next;
+                  });
                 }}
+                className="group/collapsible"
               >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton>
-                      {item.icon && <item.icon />}
-                      <span>
+                    <SidebarMenuButton
+                      tooltip={item.titleKey ? t(item.titleKey) : item.title}
+                      className={cn(
+                        "group/btn relative overflow-hidden transition-all duration-200",
+                        isItemActive(item.url) 
+                          ? "bg-zinc-100 dark:bg-zinc-800 font-medium text-primary" 
+                          : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                      )}
+                    >
+                      {item.icon && <item.icon className={cn("transition-colors duration-200", isItemActive(item.url) ? "text-primary" : "text-zinc-500 group-hover/btn:text-zinc-900 dark:text-zinc-400 dark:group-hover/btn:text-zinc-100")} />}
+                      <span className={cn("transition-colors", isItemActive(item.url) ? "text-primary" : "")}>
                         {item.titleKey ? t(item.titleKey) : item.title}
                       </span>
-                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      
+                      {/* Active indicator strip */}
+                      {isItemActive(item.url) && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-primary rounded-r-full" />
+                      )}
+                      
+                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-zinc-400 group-hover/btn:text-zinc-600 dark:group-hover/btn:text-zinc-300" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -238,8 +253,15 @@ export function NavMain({
                           <SidebarMenuSubButton
                             asChild
                             isActive={isItemActive(subItem.url)}
+                            className={cn(
+                              "transition-all duration-200 relative overflow-hidden",
+                              isItemActive(subItem.url) 
+                                ? "bg-primary/5 text-primary font-medium"
+                                : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                            )}
                           >
                             <Link href={subItem.url}>
+                              {/* Dot indicator removed as requested */}
                               <span>
                                 {subItem.titleKey
                                   ? t(subItem.titleKey)

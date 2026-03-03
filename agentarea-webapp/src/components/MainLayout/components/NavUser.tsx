@@ -50,17 +50,17 @@ export function NavUser() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="h-8 w-8 rounded-xl border border-zinc-200 dark:border-zinc-700">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg bg-primary text-primary-foreground dark:bg-primary-foreground dark:text-primary">
+                <AvatarFallback className="rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium">
                   {user.name.charAt(0)}
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
+                <span className="truncate font-semibold text-zinc-900 dark:text-zinc-100">{user.name}</span>
+                <span className="truncate text-xs text-zinc-500">{user.email}</span>
               </div>
               {/* <ChevronsUpDown className="ml-auto size-4" /> */}
             </SidebarMenuButton>
