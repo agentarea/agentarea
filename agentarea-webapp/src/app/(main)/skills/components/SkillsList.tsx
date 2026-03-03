@@ -23,6 +23,8 @@ export default function SkillsList({
 }: SkillsListProps) {
   const router = useRouter();
 
+  const t = useTranslations("SkillsPage");
+
   const hasSkills = skills.length > 0;
 
   // No skills at all (and no search query) -> Global empty state
@@ -37,14 +39,14 @@ export default function SkillsList({
     return (
       <div className="flex h-64 flex-col items-center justify-center text-center">
         <p className="text-lg font-medium text-muted-foreground">
-          No skills match your search &quot;{searchQuery}&quot;
+          {t("noMatchingSkills", { query: searchQuery })}
         </p>
         <Button 
           variant="link" 
           onClick={() => router.push("/skills")}
           className="mt-2"
         >
-          Clear search
+          {t("clearSearch")}
         </Button>
       </div>
     );

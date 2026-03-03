@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { FileCode, Github, Upload } from "lucide-react";
@@ -29,27 +30,30 @@ function getSourceIcon(sourceType: string) {
   }
 }
 
-function getSourceLabel(sourceType: string) {
-  switch (sourceType) {
-    case "github":
-      return "GitHub";
-    case "upload":
-      return "Uploaded";
-    default:
-      return "Content";
-  }
-}
-
 export default function SkillsTable({ skills }: SkillsTableProps) {
+  const t = useTranslations("SkillsPage.table");
+  const tSource = useTranslations("SkillsPage.source");
+
+  function getSourceLabel(sourceType: string) {
+    switch (sourceType) {
+      case "github":
+        return tSource("github");
+      case "upload":
+        return tSource("uploaded");
+      default:
+        return tSource("content");
+    }
+  }
+
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Source</TableHead>
-            <TableHead>Created</TableHead>
+            <TableHead>{t("name")}</TableHead>
+            <TableHead>{t("description")}</TableHead>
+            <TableHead>{t("source")}</TableHead>
+            <TableHead>{t("created")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

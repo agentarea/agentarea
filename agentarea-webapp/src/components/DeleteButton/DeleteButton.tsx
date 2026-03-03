@@ -21,6 +21,7 @@ interface DeleteButtonProps {
     unexpectedError?: string;
   };
   successMessage?: string;
+  size?: "default" | "sm" | "lg" | "icon" | "xs";
 }
 
 export default function DeleteButton({
@@ -33,6 +34,7 @@ export default function DeleteButton({
   description,
   errorMessages = {},
   successMessage = "Item deleted successfully",
+  size = "sm",
 }: DeleteButtonProps) {
   const router = useRouter();
   const tCommon = useTranslations("Common");
@@ -86,7 +88,7 @@ export default function DeleteButton({
       onConfirm={handleDelete}
       type="delete"
     >
-      <Button variant="destructiveOutline" size="sm">
+      <Button variant="destructiveOutline" size={size}>
         <Trash2 className="h-4 w-4" />
         {tCommon("delete")}
       </Button>

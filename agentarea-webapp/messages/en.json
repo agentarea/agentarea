@@ -465,6 +465,8 @@
     "backToSkills": "Back to Skills",
     "searchPlaceholder": "Search skills...",
     "noSkills": "No skills yet",
+    "noMatchingSkills": "No skills match your search \"{query}\"",
+    "clearSearch": "Clear search",
     "noSkillsDescription": "Skills are reusable capabilities that can be assigned to agents. Create your first skill to get started.",
     "loading": "Loading...",
     "error": {
@@ -479,6 +481,7 @@
       "skillDeleted": "Skill deleted successfully"
     },
     "confirm": {
+      "deleteSkillTitle": "Delete Skill",
       "deleteSkill": "Delete \"{skillName}\"?"
     },
     "table": {

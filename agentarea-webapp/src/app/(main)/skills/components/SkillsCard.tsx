@@ -1,4 +1,5 @@
 import { FileCode, Github, Sparkles, Upload } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import type { Skill } from "@/types/skill";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
@@ -18,18 +19,20 @@ function getSourceIcon(sourceType: string) {
   }
 }
 
-function getSourceLabel(sourceType: string) {
-  switch (sourceType) {
-    case "github":
-      return "GitHub";
-    case "upload":
-      return "Uploaded";
-    default:
-      return "Content";
-  }
-}
-
 export default function SkillsCard({ skill }: SkillsCardProps) {
+  const t = useTranslations("SkillsPage.source");
+
+  function getSourceLabel(sourceType: string) {
+    switch (sourceType) {
+      case "github":
+        return t("github");
+      case "upload":
+        return t("uploaded");
+      default:
+        return t("content");
+    }
+  }
+
   return (
     <LinkedCard
       href={`/skills/${skill.id}`}

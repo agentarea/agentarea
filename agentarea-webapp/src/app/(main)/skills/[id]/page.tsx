@@ -29,6 +29,7 @@ import {
   FileTreeFolder,
 } from "@/components/ai-elements/file-tree";
 import { Streamdown } from "streamdown";
+import DeleteButton from "@/components/DeleteButton";
 import {
   getSkill,
   getSkillContent,
@@ -173,7 +174,6 @@ export default function SkillDetailPage() {
   const [files, setFiles] = useState<SkillFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -318,27 +318,6 @@ export default function SkillDetailPage() {
     }
   };
 
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      const { error } = await deleteSkill(skillId);
-
-      if (error) {
-        toast({
-          title: t("error.loadSkills"),
-          description: t("error.deleteSkill"),
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({ title: t("success.skillDeleted"), description: t("success.skillDeleted") });
-      router.push("/skills");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const renderFileTree = (nodes: FileNode[]): React.ReactNode => {
     return nodes.map((node) => {
       if (node.type === "folder") {
@@ -414,23 +393,16 @@ export default function SkillDetailPage() {
               )}
               {tDetail("save")}
             </Button>
-            <Button
-              variant="destructive"
+            <DeleteButton
               size="xs"
-              disabled={deleting}
-              onClick={() => {
-                if (window.confirm(t("confirm.deleteSkill", { skillName: skill.name }))) {
-                  handleDelete();
-                }
-              }}
-            >
-              {deleting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              {tDetail("delete")}
-            </Button>
+              itemId={skillId}
+              itemName={skill.name}
+              onDelete={deleteSkill}
+              redirectPath="/skills"
+              title={t("confirm.deleteSkillTitle") || tDetail("delete")}
+              description={t("confirm.deleteSkill", { skillName: skill.name })}
+              successMessage={t("success.skillDeleted")}
+            />
           </div>
         ),
       }}

@@ -464,7 +464,24 @@
     "backToSkills": "Назад к навыкам",
     "searchPlaceholder": "Поиск навыков...",
     "noSkills": "Навыков пока нет",
+    "noMatchingSkills": "Нет навыков, соответствующих запросу \"{query}\"",
+    "clearSearch": "Очистить поиск",
     "createFirstSkill": "Создайте первый навык, чтобы начать.",
+    "error": {
+      "loadSkills": "Не удалось загрузить навыки",
+      "skillNotFound": "Навык не найден",
+      "loadFileContent": "Не удалось загрузить контент файла",
+      "updateSkill": "Не удалось обновить навык",
+      "deleteSkill": "Не удалось удалить навык"
+    },
+    "success": {
+      "skillUpdated": "Навык успешно обновлен",
+      "skillDeleted": "Навык успешно удален"
+    },
+    "confirm": {
+      "deleteSkillTitle": "Удалить навык",
+      "deleteSkill": "Удалить \"{skillName}\"?"
+    },
     "table": {
       "name": "Имя",
       "description": "Описание",
