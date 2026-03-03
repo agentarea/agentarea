@@ -462,6 +462,8 @@
     "title": "Skills",
     "description": "Manage reusable skills that can be assigned to agents",
     "addSkill": "Add Skill",
+    "backToSkills": "Back to Skills",
+    "searchPlaceholder": "Search skills...",
     "noSkills": "No skills yet",
     "noSkillsDescription": "Skills are reusable capabilities that can be assigned to agents. Create your first skill to get started.",
     "loading": "Loading...",
