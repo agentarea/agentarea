@@ -5,29 +5,60 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      chart_bump_type:
+        description: 'Chart version bump type'
+        required: false
+        type: choice
+        default: 'patch'
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.HELM_GH_APP_ID }}
+          private-key: ${{ secrets.HELM_GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: helm-charts,agentarea
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
           version: v3.13.2
 
-      - name: Determine version strategy
+      - name: Bump chart version
         id: version
         run: |
-          # Read chart version from Chart.yaml (independent versioning)
-          CHART_VERSION=$(grep "^version:" charts/agentarea/Chart.yaml | awk '{print $2}')
+          # Determine bump type: manual dispatch uses input, tag push always bumps patch
+          BUMP_TYPE="${{ github.event.inputs.chart_bump_type }}"
+          if [ -z "$BUMP_TYPE" ]; then
+            BUMP_TYPE="patch"
+          fi
 
-          # Read app version from VERSION file (single source of truth)
+          python3 scripts/bump-chart-version.py "$BUMP_TYPE"
+
+          CHART_VERSION=$(grep "^version:" charts/agentarea/Chart.yaml | awk '{print $2}')
           APP_VERSION=$(cat VERSION | tr -d '[:space:]')
 
           # Verify appVersion in Chart.yaml matches VERSION file
@@ -37,8 +68,18 @@ jobs:
             echo "Please run 'python3 scripts/update-appversion.py' to sync"
             exit 1
           fi
-          
+
+          echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
           echo "✅ Release: chart v${CHART_VERSION}, app v${APP_VERSION}"
+
+      - name: Commit bumped chart version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/${{ github.repository }}
+          git add charts/agentarea/Chart.yaml
+          git commit -m "chore(helm): bump chart version to ${{ steps.version.outputs.chart_version }}"
+          git push origin HEAD:main
 
       - name: Add repositories
         run: |
@@ -71,17 +112,8 @@ jobs:
         run: |
           mkdir -p dist
           helm package charts/agentarea --destination dist
-          
-          ls -la dist
 
-      - name: Generate GitHub App Token
-        id: generate-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.HELM_GH_APP_ID }}
-          private-key: ${{ secrets.HELM_GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: helm-charts
+          ls -la dist
 
       - name: Checkout Helm Charts Repo
         uses: actions/checkout@v4
@@ -93,20 +125,20 @@ jobs:
       - name: Update Helm Repo
         run: |
           cd helm-charts-repo
-          
+
           # Copy new chart package
           cp ../dist/*.tgz .
-          
+
           if [ -f index.yaml ]; then
             helm repo index . --url https://agentarea.github.io/helm-charts --merge index.yaml
           else
             helm repo index . --url https://agentarea.github.io/helm-charts
           fi
-          
+
           # Configure git
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          
+
           # Commit and push
           git add .
           git commit -m "Release chart agentarea-${{ steps.version.outputs.chart_version }}"

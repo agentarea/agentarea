@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import FullChat, { type Agent } from "./FullChat";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
+import WorkplaceHero from "./componets/WorkplaceHero";
 
 interface WorkplaceChatProps {
   initialAgent: Agent;
@@ -28,6 +29,7 @@ export function WorkplaceChat({
       onAgentChange={setSelectedAgent}
       startCentered
       badgeSuggestions={badgeSuggestions}
+      welcomeComponent={<WorkplaceHero />}
     />
   );
 }

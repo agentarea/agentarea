@@ -585,5 +585,28 @@
     "showLess": "Show less",
     "openPanel": "Show details panel",
     "closePanel": "Hide details panel"
+  },
+  "Workplace": {
+    "hero": {
+      "title": "How can I help you today?"
+    },
+    "suggestions": {
+      "askSpecificAgent": {
+        "label": "Ask Specific Agent",
+        "text": "I need help from agent @"
+      },
+      "analyzeProject": {
+        "label": "Analyze Project Structure",
+        "text": "Analyze the current project structure and identify potential architectural improvements."
+      },
+      "generateDocs": {
+        "label": "Generate Documentation",
+        "text": "Generate comprehensive documentation for the core modules of this project."
+      },
+      "debugIssue": {
+        "label": "Debug Issue",
+        "text": "I'm facing a bug with the API integration. Can you help me debug it?"
+      }
+    }
   }
 }
