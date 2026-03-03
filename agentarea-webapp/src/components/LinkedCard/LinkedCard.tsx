@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ArrowRight } from "lucide-react";
 import { HoverLink } from "@/components/ui/hover-link";
 import { ReactNode, ComponentType, isValidElement } from "react";
 import { cn } from "@/lib/utils";
@@ -42,39 +42,45 @@ export default function LinkedCard({
   const CardContent = (
     <Card
       className={cn(
-        "group h-full flex flex-col justify-between px-4 py-4 cursor-pointer transition-all hover:shadow-md hover:border-primary/20",
+        "group h-full flex flex-col justify-between px-4 py-4 cursor-pointer transition-all duration-300",
+        "border border-zinc-200 dark:border-zinc-800",
+        "bg-white dark:bg-zinc-950",
+        "hover:shadow-lg hover:shadow-zinc-200/50 dark:hover:shadow-zinc-900/50",
+        "hover:border-primary/20 dark:hover:border-primary/20",
+        "hover:-translate-y-0.5",
+        "active:scale-[0.99]",
         className
       )}
       onClick={onClick}
     >
       <div className="flex flex-col h-full">
         <div className="flex gap-3 mb-2">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary dark:bg-primary/10 group-hover:bg-primary/10 dark:group-hover:bg-primary/20 transition-colors duration-300">
             {isStringIcon ? (
               <img
                 src={icon as string}
                 alt={title}
-                className="h-5 w-5 rounded object-contain"
+                className="h-6 w-6 rounded object-contain transition-transform group-hover:scale-110 duration-300"
               />
             ) : IconComponent ? (
-              <IconComponent className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+              <IconComponent className="h-5 w-5 transition-colors duration-300" />
             ) : isValidElement(icon) ? (
               icon
             ) : (
-              <Sparkles className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+              <Sparkles className="h-5 w-5 transition-colors duration-300" />
             )}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pt-0.5">
             <h4
               className={cn(
-                "truncate font-medium text-sm text-zinc-900 dark:text-zinc-100 leading-tight",
-                subtitle ? "mb-1.5" : "h-full flex items-center"
+                "truncate font-medium text-[15px] text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight group-hover:text-primary transition-colors duration-300",
+                subtitle ? "mb-1" : "h-full flex items-center"
               )}
             >
               {title}
             </h4>
             {subtitle ? (
-              <div className="flex flex-wrap items-center gap-2">{subtitle}</div>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">{subtitle}</div>
             ) : null}
           </div>
         </div>

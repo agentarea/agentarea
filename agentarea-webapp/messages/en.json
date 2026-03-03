@@ -513,7 +513,6 @@
       "uploadTab": "Upload",
       "name": "Name",
       "namePlaceholder": "My Skill",
-      "description": "Description",
       "descriptionPlaceholder": "What this skill does...",
       "content": "Content",
       "contentPlaceholder": "Enter skill content in Markdown...",

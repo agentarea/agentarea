@@ -1,20 +1,43 @@
 {
+  "Metadata": {
+    "agents": "Агенты",
+    "createAgent": "Создать агента",
+    "tasks": "Задачи",
+    "skills": "Навыки",
+    "mcpServers": "MCP Серверы",
+    "addMcpServer": "Добавить MCP сервер",
+    "settings": "Настройки",
+    "workplace": "Рабочее место",
+    "providers": "Провайдеры",
+    "providerConfigs": "Конфигурации провайдеров",
+    "createProviderConfig": "Создать конфигурацию провайдера",
+    "login": "Вход",
+    "registration": "Регистрация",
+    "recovery": "Восстановление пароля",
+    "editAgent": "Редактировать {agentName}",
+    "newTask": "Новая задача - {agentName}",
+    "agentTasks": "{agentName} - Задачи",
+    "agentSettings": "{agentName} - Настройки",
+    "taskDetail": "Задача: {description}",
+    "editProviderConfig": "Редактировать {configName}",
+    "createProviderConfigForProvider": "Создать конфигурацию {providerName}"
+  },
   "Common": {
     "search": "Поиск",
     "saveChanges": "Сохранить изменения",
     "grid": "Сетка",
     "table": "Таблица",
     "delete": "Удалить",
-    "edit": "Редактирование",
+    "edit": "Редактировать",
     "add": "Добавить",
     "cancel": "Отменить",
     "save": "Сохранить",
+    "close": "Закрыть",
+    "back": "Назад",
+    "create": "Создать",
     "today": "Сегодня",
     "yesterday": "Вчера",
     "at": "в",
-    "close": "Закрыть",
-    "back": "Назад",
-    "create": "Создание",
     "deleteDescription": "Вы уверены, что хотите удалить \"{itemName}\"? Это действие не может быть отменено.",
     "emptyState": {
       "title": "Пустые данные",
@@ -45,6 +68,10 @@
       "support": "Поддержка"
     },
     "sections": {
+      "agents": {
+        "title": "Агенты",
+        "description": "Управление агентами и их конфигурациями"
+      },
       "modelInstances": {
         "title": "Экземпляры моделей",
         "description": "Управление настроенными экземплярами AI моделей, готовыми к использованию агентами"
@@ -65,21 +92,22 @@
   },
 
   "Sidebar": {
+    "admin": "Админ",
     "workplace": "Рабочее место",
     "agents": "Агенты",
     "browse": "Агенты",
+    "skills": "Навыки",
     "tasks": "Задачи",
     "llms": "Модели LLM",
     "llmBrowse": "Обзор",
     "mcp": "Серверы MCP",
     "mcpServers": "Серверы",
-    "settings": "Настройки",
-    "logout": "Выйти",
-    "admin": "Админ",
     "connections": "Соединения",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
-    "modelSpecs": "Спецификации моделей"
+    "modelSpecs": "Спецификации моделей",
+    "settings": "Настройки",
+    "logout": "Выйти"
   },
 
   "LlmBrowsePage": {
@@ -146,10 +174,10 @@
     "noToolsConf": "Нет настроенных инструментов",
     "name": "Имя",
     "status": "Статус",
+    "settings": "Настройки",
     "model": "Модель",
     "description": "Описание",
     "tools": "Инструменты",
-    "settings": "Настройки",
     "noTools": "Нет инструментов",
     "createTask": "Создать задачу",
     "currentTasks": "Текущие задачи",
@@ -158,7 +186,6 @@
     "mainDescriptionPage": "Обзор и управление вашими агентами",
     "deployNewAgent": "Создать нового агента",
     "deployNewAgentDescription": "Создайте нового агента, чтобы начать работу.",
-    "deployNewAgentButton": "Создать агента",
     "noAgentsYet": "Нет агентов",
     "getStartedByAddingYourFirstAgent": "Начните работу, добавив своего первого агента.",
     "addYourFirstAgent": "Добавьте своего первого агента",
@@ -217,7 +244,6 @@
       "selected": "Выбрано",
       "added": "Добавлено",
       "remove": "Удалить",
-
       "tool": "Инструмент",
       "activeMcpServers": "Активные MCP серверы",
       "builtinTools": "Встроенные инструменты",
@@ -254,8 +280,8 @@
     "description": "Подключите серверы MCP, которые предоставляют инструменты, контекст и возможности для ваших агентов",
     "noServers": "MCP серверы не найдены",
     "addServer": "Добавить MCP сервер",
-    "createCustomButton": "Новый MCP сервер",
     "emptyDescription": "Добавьте новый MCP сервер для подключения к AI сервисам",
+    "createCustomButton": "Новый MCP сервер",
     "tools": {
       "title": "Инструменты",
       "description": "Инструменты для работы с MCP серверами"
@@ -275,10 +301,6 @@
         "versionPlaceholder": "1.0.0",
         "versionRequired": "Версия является обязательной"
       }
-    },
-    "marketplace": {
-      "title": "Маркетплейс",
-      "description": "Откройте для себя и установите MCP серверы, которые предоставляют инструменты, контекст и возможности для ваших агентов"
     }
   },
 
@@ -292,9 +314,9 @@
     "providerConfigsSection": "Конфигурации провайдеров",
     "providerSpecsSection": "Спецификации провайдеров",
     "deleteProviderConfiguration": "Удалить конфигурацию провайдера",
+    "createConfig": "Создать конфигурацию",
     "deleteProviderConfigurationDescription": "Вы уверены, что хотите удалить конфигурацию провайдера \"{configName}\"? Это действие не может быть отменено и приведет к удалению конфигурации.",
     "thisProviderConfiguration": "эту конфигурацию провайдера",
-    "createConfig": "Создать конфигурацию",
     "table": {
       "provider": "Провайдер",
       "description": "Описание",
@@ -332,6 +354,26 @@
       "builtIn": "Встроенный",
       "custom": "Пользовательский"
     }
+  },
+
+  "ProviderConfigsPage": {
+    "title": "Конфигурации провайдеров",
+    "noConfigs": "Нет конфигураций провайдеров",
+    "addConfig": "Добавить конфигурацию",
+    "emptyDescription": "Добавьте новую конфигурацию провайдера для подключения к AI сервисам",
+    "create": {
+      "title": "Добавить конфигурацию провайдера",
+      "backToConfigs": "Вернуться к конфигурациям провайдеров",
+      "success": "Конфигурация провайдера успешно создана",
+      "error": "Не удалось создать конфигурацию провайдера"
+    }
+  },
+
+  "ModelSpecsPage": {
+    "title": "Спецификации моделей",
+    "noSpecs": "Нет спецификаций моделей",
+    "addSpec": "Добавить спецификацию модели",
+    "emptyDescription": "Добавьте новую спецификацию модели для определения доступных AI моделей"
   },
 
   "ProviderConfigForm": {
@@ -413,6 +455,76 @@
       "artifacts": "Артефакты",
       "memory": "Память",
       "metrics": "Метрики"
+    }
+  },
+  "SkillsPage": {
+    "title": "Навыки",
+    "description": "Управление многоразовыми навыками агентов.",
+    "addSkill": "Добавить навык",
+    "searchPlaceholder": "Поиск навыков...",
+    "noSkills": "Навыков пока нет",
+    "createFirstSkill": "Создайте первый навык, чтобы начать.",
+    "table": {
+      "name": "Имя",
+      "description": "Описание",
+      "source": "Источник",
+      "created": "Создано",
+      "actions": "Действия"
+    },
+    "details": {
+      "title": "Детали навыка",
+      "sourceCode": "Исходный код",
+      "configuration": "Конфигурация",
+      "skillConfiguration": "Конфигурация навыка",
+      "editable": "Редактируемый"
+    },
+    "source": {
+      "github": "GitHub",
+      "uploaded": "Загружено",
+      "content": "Контент"
+    },
+    "create": {
+      "title": "Добавить навык",
+      "description": "Создайте новый навык из контента, импортируйте с GitHub или загрузите пакет.",
+      "contentTab": "Контент",
+      "githubTab": "GitHub",
+      "uploadTab": "Загрузка",
+      "name": "Имя",
+      "namePlaceholder": "Мой навык",
+      "descriptionPlaceholder": "Что делает этот навык...",
+      "content": "Контент",
+      "contentPlaceholder": "Введите контент навыка в Markdown...",
+      "contentRequired": "Пожалуйста, введите контент навыка",
+      "githubUrl": "URL GitHub",
+      "githubUrlPlaceholder": "https://github.com/owner/repo",
+      "githubUrlRequired": "Пожалуйста, введите URL GitHub",
+      "githubUrlInvalid": "Пожалуйста, введите корректный URL GitHub",
+      "githubDescription": "Публичный репозиторий с определением навыка",
+      "nameOptional": "Имя (необязательно)",
+      "nameOverride": "Переопределить импортированное имя",
+      "descriptionOptional": "Описание (необязательно)",
+      "descriptionOverride": "Переопределить импортированное описание",
+      "createSkill": "Создать навык",
+      "importFromGithub": "Импортировать с GitHub",
+      "uploadSkill": "Загрузить навык",
+      "dragDrop": "Перетащите ZIP файл или",
+      "browse": "выберите",
+      "remove": "Удалить",
+      "validationError": "Ошибка валидации",
+      "error": {
+        "githubRateLimit": "Превышен лимит запросов GitHub. Попробуйте позже.",
+        "githubNotFound": "Репозиторий не найден или является приватным.",
+        "githubImportFailed": "Не удалось импортировать навык с GitHub",
+        "uploadFailed": "Не удалось загрузить навык",
+        "invalidFile": "Неверный файл",
+        "zipRequired": "Пожалуйста, загрузите ZIP файл",
+        "createFailed": "Не удалось создать навык"
+      },
+      "success": {
+        "skillCreated": "Навык успешно создан",
+        "skillImported": "Навык успешно импортирован",
+        "skillUploaded": "Навык успешно загружен"
+      }
     }
   },
   "TaskInfoPanel": {
