@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { HoverLink } from "@/components/ui/hover-link";
 import { ReactNode, ComponentType, isValidElement } from "react";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,6 @@ export default function LinkedCard({
   className,
 }: LinkedCardProps) {
   const isStringIcon = typeof icon === "string";
-  const isComponentIcon = typeof icon === "function";
   // Check if icon is a Lucide component (function) or React Element
   const isLucideIcon = typeof icon === 'object' && icon !== null && 'render' in icon; // Lucide icons are exotic objects
   const isFunctionComponent = typeof icon === 'function';

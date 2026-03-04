@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { FileCode, Github, Upload, Type, AlignLeft, Link as LinkIcon, FileText, Sparkles } from "lucide-react";
+import { FileCode, Github, Upload, Link as LinkIcon, FileText, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 export function CreateSkillForm() {
   const { toast } = useToast();
   const router = useRouter();
-  const t = useTranslations("SkillsPage");
   const tCreate = useTranslations("SkillsPage.create");
   const [activeTab, setActiveTab] = useState("content");
-  const [loading, setLoading] = useState(false);
 
   // Content tab state
   const [contentName, setContentName] = useState("");
@@ -46,7 +44,6 @@ export function CreateSkillForm() {
       return;
     }
 
-    setLoading(true);
     try {
       const { error } = await createSkill({
         content: contentMarkdown,
@@ -75,8 +72,6 @@ export function CreateSkillForm() {
         description: tCreate("error.createFailed"),
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -90,7 +85,12 @@ export function CreateSkillForm() {
       return;
     }
 
-    if (!githubUrl.includes("github.com")) {
+    try {
+      const url = new URL(githubUrl);
+      if (url.hostname !== "github.com" && url.hostname !== "www.github.com") {
+        throw new Error("Invalid GitHub URL");
+      }
+    } catch {
       toast({
         title: tCreate("validationError"),
         description: tCreate("githubUrlInvalid"),
@@ -99,7 +99,6 @@ export function CreateSkillForm() {
       return;
     }
 
-    setLoading(true);
     try {
       const { error } = await createSkill({
         github_url: githubUrl,
@@ -128,8 +127,6 @@ export function CreateSkillForm() {
         description: tCreate("error.githubImportFailed"),
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -143,7 +140,6 @@ export function CreateSkillForm() {
       return;
     }
 
-    setLoading(true);
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -173,8 +169,6 @@ export function CreateSkillForm() {
         description: tCreate("error.uploadFailed"),
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
