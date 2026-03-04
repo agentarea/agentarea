@@ -1,28 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import React from "react";
 import { useTranslations } from "next-intl";
 import FullChat from "@/components/Chat/FullChat";
 import { Agent } from "@/types/agent";
-import TaskDetails from "./TaskDetails";
+import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
+import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 
 interface Props {
   agent: Agent;
 }
 
 export default function AgentNewTask({ agent }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [isTaskRunning, setIsTaskRunning] = useState(false);
-  const [isTaskActive, setIsTaskActive] = useState(false);
   const t = useTranslations("AgentsPage.descriptionPage");
 
   // Handle task creation from chat
   const handleTaskCreated = (taskId: string) => {
-    setIsTaskActive(true);
-    setIsTaskRunning(true);
     // Change path to /tasks/[id] without navigation
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `/tasks/${taskId}`);
@@ -31,7 +24,7 @@ export default function AgentNewTask({ agent }: Props) {
 
   // Handle task completion
   const handleTaskFinished = (taskId: string) => {
-    setIsTaskRunning(false);
+    void taskId;
   };
 
   return (
@@ -51,10 +44,8 @@ export default function AgentNewTask({ agent }: Props) {
               />
             </div>
       </div>
-      <TaskDetails
-        agent={agent}
-        isTaskRunning={isTaskRunning}
-        isTaskActive={isTaskActive}
+      <TaskInfoPanelDock
+        panel={<TaskInfoPanel agentId={agent.id} />}
       />
     </div>
   );

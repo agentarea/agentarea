@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  Info,
   Loader2,
   Pause,
   Play,
@@ -11,7 +10,8 @@ import {
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
-import TaskInfoPanel from "./components/TaskInfoPanel";
+import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
+import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,12 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { useTaskEvents } from "@/hooks/useTaskEvents";
 import {
   cancelAgentTask,
@@ -35,22 +29,14 @@ import {
   resumeAgentTask,
 } from "@/lib/browser-api";
 import FullChat from "@/components/Chat/FullChat";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
-  const isMobile = useIsMobile();
   const { task, taskStatus, loading, error, refresh } = useTaskContext();
 
   const [refreshing, setRefreshing] = useState(false);
   const [controlling, setControlling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [isTaskInfoSheetOpen, setIsTaskInfoSheetOpen] = useState(false);
 
   // Events hook for real-time events
   const { refresh: refreshEvents } = useTaskEvents(
@@ -187,26 +173,12 @@ export default function TaskDetailsPage() {
 
   return (
     <>
-      <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-        {/* Left Panel - Chat */}
-        <ResizablePanel defaultSize={isMobile ? 100 : 60} minSize={isMobile ? 100 : 30}>
+      <div className="flex h-full w-full">
+        {/* Left side - Chat (flexible) */}
+        <div className="flex-1">
           <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
             <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
             <div className="relative z-1 h-full">
-              {/* Mobile button to open task info */}
-              {isMobile && (
-                <div className="absolute top-4 right-4 z-10">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsTaskInfoSheetOpen(true)}
-                    className="gap-2"
-                  >
-                    <Info className="h-4 w-4" />
-                    Task Info
-                  </Button>
-                </div>
-              )}
               <FullChat
                 agent={{
                   id: task.agent_id,
@@ -218,36 +190,31 @@ export default function TaskDetailsPage() {
               />
             </div>
           </div>
-        </ResizablePanel>
+        </div>
 
-        {/* Right Panel - Task Information */}
-        {!isMobile && (
-          <>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={40} minSize={20}>
-              <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700 px-4">
-                <TaskInfoPanel
-                  task={{
-                    id: task.id,
-                    description: task.description || "",
-                    agent_id: task.agent_id,
-                    agent_name: task.agent_name,
-                    agent_description: task.agent_description,
-                    created_at: task.created_at || "",
-                    execution_id: task.execution_id || null,
-                    result: task.result,
-                  }}
-                  currentStatus={currentStatus}
-                  isActive={isActive}
-                  startTime={startTime}
-                  endTime={endTime}
-                  executionTime={executionTime}
-                />
-              </div>
-            </ResizablePanel>
-          </>
-        )}
-      </ResizablePanelGroup>
+        <TaskInfoPanelDock
+          storageKey="task-info-panel"
+          panel={
+            <TaskInfoPanel
+              task={{
+                id: task.id,
+                description: task.description || "",
+                agent_id: task.agent_id,
+                agent_name: task.agent_name,
+                agent_description: task.agent_description,
+                created_at: task.created_at || "",
+                execution_id: task.execution_id || null,
+                result: task.result,
+              }}
+              currentStatus={currentStatus}
+              isActive={isActive}
+              startTime={startTime}
+              endTime={endTime}
+              executionTime={executionTime}
+            />
+          }
+        />
+      </div>
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
@@ -285,32 +252,6 @@ export default function TaskDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Mobile Task Info Sheet */}
-      <Sheet open={isTaskInfoSheetOpen} onOpenChange={setIsTaskInfoSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Task Information</SheetTitle>
-          </SheetHeader>
-          <TaskInfoPanel
-            task={{
-              id: task.id,
-              description: task.description || "",
-              agent_id: task.agent_id,
-              agent_name: task.agent_name,
-              agent_description: task.agent_description,
-              created_at: task.created_at || "",
-              execution_id: task.execution_id || null,
-              result: task.result,
-            }}
-            currentStatus={currentStatus}
-            isActive={isActive}
-            startTime={startTime}
-            endTime={endTime}
-            executionTime={executionTime}
-          />
-        </SheetContent>
-      </Sheet>
     </>
   );
 }
