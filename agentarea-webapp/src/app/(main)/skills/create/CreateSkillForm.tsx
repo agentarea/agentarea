@@ -2,15 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { FileCode, Github, Upload, Loader2, ArrowLeft, Type, AlignLeft, Link as LinkIcon, FileText, Sparkles } from "lucide-react";
+import { FileCode, Github, Upload, Type, AlignLeft, Link as LinkIcon, FileText, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { Textarea } from "@/components/ui/textarea";
 import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createSkill, uploadSkill } from "@/lib/browser-api";
 import { useToast } from "@/hooks/use-toast";
 

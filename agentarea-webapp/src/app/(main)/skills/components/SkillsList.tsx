@@ -2,12 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SkillsTable from "./SkillsTable";
 import SkillsCard from "./SkillsCard";
 import SkillsEmptyState from "./SkillsEmptyState";
-import { useState } from "react";
 import type { Skill } from "@/types/skill";
 
 interface SkillsListProps {

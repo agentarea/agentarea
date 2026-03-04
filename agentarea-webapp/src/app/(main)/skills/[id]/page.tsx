@@ -8,7 +8,6 @@ import {
   FileCode,
   Github,
   Upload,
-  Trash2,
   Save,
   Loader2,
   ExternalLink,
