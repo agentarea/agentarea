@@ -30,7 +30,7 @@ export function AnimatedTabs({
   return (
     <div
       className={cn(
-        "relative flex w-full items-center gap-1 rounded-md bg-zinc-100 dark:bg-zinc-900 p-1 text-sm font-medium",
+        "relative flex w-full items-center gap-1 rounded-md bg-sidebar dark:bg-zinc-900 p-1 text-sm font-medium",
         className
       )}
     >
