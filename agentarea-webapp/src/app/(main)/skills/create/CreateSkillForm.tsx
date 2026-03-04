@@ -4,11 +4,12 @@ import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { FileCode, Github, Upload, Link as LinkIcon, FileText, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
+import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { createSkill, uploadSkill } from "@/lib/browser-api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -227,20 +228,17 @@ export function CreateSkillForm() {
     <form id="create-skill-form" onSubmit={handleSubmit} className="overflow-auto h-full">
       <div className="form-content lg:max-w-xl lg:mx-auto">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="content" className="flex items-center gap-2">
-              <FileCode className="h-4 w-4" />
-              {tCreate("contentTab")}
-            </TabsTrigger>
-            <TabsTrigger value="github" className="flex items-center gap-2">
-              <Github className="h-4 w-4" />
-              {tCreate("githubTab")}
-            </TabsTrigger>
-            <TabsTrigger value="upload" className="flex items-center gap-2">
-              <Upload className="h-4 w-4" />
-              {tCreate("uploadTab")}
-            </TabsTrigger>
-          </TabsList>
+          <div className="mb-6">
+            <AnimatedTabs
+              activeTab={activeTab}
+              onChange={setActiveTab}
+              tabs={[
+                { value: "content", label: tCreate("contentTab"), icon: <FileCode className="h-4 w-4" /> },
+                { value: "github", label: tCreate("githubTab"), icon: <Github className="h-4 w-4" /> },
+                { value: "upload", label: tCreate("uploadTab"), icon: <Upload className="h-4 w-4" /> },
+              ]}
+            />
+          </div>
 
           <TabsContent value="content" className="space-y-4">
             <div className="grid gap-4">
