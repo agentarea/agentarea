@@ -48,19 +48,24 @@ export default function SearchInput({
   // Автоматическое обновление URL если указан urlParamName
   useEffect(() => {
     if (urlParamName) {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams(searchParams.toString());
 
       if (debouncedQuery.trim()) {
         params.set(urlParamName, debouncedQuery);
+      } else {
+        params.delete(urlParamName);
       }
 
-      const currentPath = urlPath || window.location.pathname;
-      const newUrl = params.toString()
-        ? `${currentPath}?${params.toString()}`
-        : currentPath;
-      router.replace(newUrl, { scroll: false });
+      const currentString = searchParams.toString();
+      const newString = params.toString();
+
+      if (currentString !== newString) {
+        const currentPath = urlPath || window.location.pathname;
+        const newUrl = newString ? `${currentPath}?${newString}` : currentPath;
+        router.replace(newUrl, { scroll: false });
+      }
     }
-  }, [debouncedQuery, urlParamName, urlPath, router]);
+  }, [debouncedQuery, urlParamName, urlPath, router, searchParams]);
 
   // Вызываем callback если он указан
   useEffect(() => {

@@ -282,7 +282,23 @@
     "noServers": "MCP серверы не найдены",
     "addServer": "Добавить MCP сервер",
     "emptyDescription": "Добавьте новый MCP сервер для подключения к AI сервисам",
-    "createCustomButton": "Новый MCP сервер",
+    "createCustomButton": "Добавить свой сервер",
+    "myActiveServers": "Мои активные серверы",
+    "browseSpecifications": "Просмотр спецификаций MCP",
+    "table": {
+      "name": "Имя",
+      "description": "Описание",
+      "endpoint": "Эндпоинт",
+      "status": "Статус",
+      "version": "Версия",
+      "updated": "Обновлено"
+    },
+    "status": {
+      "running": "Запущен",
+      "error": "Ошибка",
+      "starting": "Запуск",
+      "setup": "Настройка"
+    },
     "tools": {
       "title": "Инструменты",
       "description": "Инструменты для работы с MCP серверами"
@@ -319,6 +335,7 @@
     "deleteProviderConfigurationDescription": "Вы уверены, что хотите удалить конфигурацию провайдера \"{configName}\"? Это действие не может быть отменено и приведет к удалению конфигурации.",
     "thisProviderConfiguration": "эту конфигурацию провайдера",
     "table": {
+      "name": "Имя",
       "provider": "Провайдер",
       "description": "Описание",
       "models": "Модели"
@@ -449,6 +466,15 @@
     "agent": "Агент",
     "status": "Статус",
     "created": "Создано",
+    "status": {
+      "running": "Выполняется",
+      "completed": "Завершено",
+      "success": "Успешно",
+      "failed": "Ошибка",
+      "error": "Ошибка",
+      "paused": "Пауза",
+      "pending": "Ожидание"
+    },
     "tabs": {
       "overview": "Обзор",
       "events": "События",

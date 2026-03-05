@@ -56,7 +56,7 @@ export default async function MCPServersPage({
       subheader={
         <>
           <SearchInput urlParamName="search" urlPath="/mcp-servers" />
-          <MCPHeaderTabs />
+          <MCPHeaderTabs currentTab={tab} />
         </>
       }
     >

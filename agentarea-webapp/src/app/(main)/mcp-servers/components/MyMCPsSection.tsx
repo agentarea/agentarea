@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle, Clock, XCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
@@ -26,6 +27,7 @@ export function MyMCPsSection({
   searchQuery = "",
   hasNoData = false,
 }: MyMCPsSectionProps) {
+  const t = useTranslations("MCPServersPage");
   const router = useRouter();
   const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
   const [healthLoading, setHealthLoading] = useState(true);
@@ -93,7 +95,7 @@ export function MyMCPsSection({
         return (
           <Badge variant="success" className="w-fit">
             <CheckCircle className="mr-1 h-3 w-3" />
-            Running
+            {t("status.running")}
           </Badge>
         );
       case "unhealthy":
@@ -101,21 +103,21 @@ export function MyMCPsSection({
         return (
           <Badge variant="destructive" className="w-fit">
             <XCircle className="mr-1 h-3 w-3" />
-            Error
+            {t("status.error")}
           </Badge>
         );
       case "starting":
         return (
           <Badge variant="yellow" className="w-fit">
             <Clock className="mr-1 h-3 w-3" />
-            Starting
+            {t("status.starting")}
           </Badge>
         );
       default:
         return (
           <Badge variant="yellow" className="w-fit">
             <AlertCircle className="mr-1 h-3 w-3" />
-            Setup
+            {t("status.setup")}
           </Badge>
         );
     }
@@ -125,19 +127,19 @@ export function MyMCPsSection({
   const instanceColumns = [
     {
       accessor: "name",
-      header: "Name",
+      header: t("table.name"),
       render: (value: string) => <span className="truncate">{value}</span>,
     },
     {
       accessor: "description",
-      header: "Description",
+      header: t("table.description"),
       render: (value: string) => (
         <span className="truncate text-sm text-gray-500">{value || "-"}</span>
       ),
     },
     {
       accessor: "endpoint_url",
-      header: "Endpoint",
+      header: t("table.endpoint"),
       render: (value: string) => (
         <span className="truncate font-mono text-xs text-gray-400">
           {value || "-"}
@@ -146,7 +148,7 @@ export function MyMCPsSection({
     },
     {
       accessor: "status",
-      header: "Status",
+      header: t("table.status"),
       render: (_: string, item: MCPInstance) => {
         const healthStatus = getHealthStatus(item);
         return getStatusBadge(healthStatus);

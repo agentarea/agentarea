@@ -43,7 +43,7 @@ export default async function SkillsPage({
       subheader={
         <>
           <SearchInput urlParamName="search" urlPath="/skills" />
-          <SkillsHeaderTabs />
+          <SkillsHeaderTabs currentTab={viewMode} />
         </>
       }
     >
