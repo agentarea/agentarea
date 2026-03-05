@@ -84,13 +84,15 @@ export default function FullChat({
     clearFiles();
   }, [agent.id]);
 
-  const { currentTaskId, setCurrentTaskId, sseUrl, callbacks } =
-    useTaskLifecycle(agent.id, {
+  const { currentTaskId, setCurrentTaskId, callbacks } = useTaskLifecycle(
+    agent.id,
+    {
       initialTaskId: taskId,
       onTaskCreated,
       onTaskStarted,
       onTaskFinished,
-    });
+    }
+  );
 
   const {
     messagesContainerRef,
