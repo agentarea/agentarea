@@ -464,7 +464,7 @@
     "title": "Задачи",
     "description": "Описание",
     "agent": "Агент",
-    "status": "Статус",
+    "statusLabel": "Статус",
     "created": "Создано",
     "status": {
       "running": "Выполняется",

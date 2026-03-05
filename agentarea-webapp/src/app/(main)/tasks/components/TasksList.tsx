@@ -53,7 +53,7 @@ export default function TasksList({
     },
     {
       accessor: "status",
-      header: t("status"),
+      header: t("statusLabel"),
       render: (value: string) => {
         const variant =
           statusVariants[value as keyof typeof statusVariants] || "secondary";

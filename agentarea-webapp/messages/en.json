@@ -464,7 +464,7 @@
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
-    "status": "Status",
+    "statusLabel": "Status",
     "created": "Created",
     "status": {
       "running": "Running",
