@@ -232,6 +232,7 @@
     "noMatchingAgents": "No matching agents",
     "noMatchingAgentsDescription": "No agents match your search query",
     "descriptionPage": {
+      "titleNewTask": "New task for {agentName}",
       "placeholderNewTask": "Write new task for {agentName}...",
       "agentDetails": "Agent details",
       "taskDetails": "Task details",

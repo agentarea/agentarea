@@ -1,8 +1,8 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { ReactNode, useState } from "react";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export interface TabItem {
   value: string;
@@ -64,7 +64,7 @@ export function AnimatedTabs({
                 }}
               />
             )}
-            
+
             {!isActive && isHovered && (
               <motion.div
                 layoutId={`${layoutId}-hover`}
@@ -77,7 +77,11 @@ export function AnimatedTabs({
             )}
 
             <span className="relative z-10 flex items-center justify-center gap-2">
-              {tab.icon && <span className="flex items-center justify-center">{tab.icon}</span>}
+              {tab.icon && (
+                <span className="flex items-center justify-center">
+                  {tab.icon}
+                </span>
+              )}
               <span className="truncate">{tab.label}</span>
             </span>
           </button>

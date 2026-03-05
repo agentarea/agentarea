@@ -194,6 +194,7 @@
     "noMatchingAgents": "Нет подходящих агентов",
     "noMatchingAgentsDescription": "Ни один агент не соответствует вашему поисковому запросу",
     "descriptionPage": {
+      "titleNewTask": "Новая задача для {agentName}",
       "placeholderNewTask": "Напишите новую задачу для {agentName}...",
       "agentDetails": "Детали агента",
       "taskDetails": "Детали задачи",

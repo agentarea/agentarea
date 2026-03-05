@@ -1,15 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Loader2,
-  Pause,
-  Play,
-  X,
-} from "lucide-react";
+import { Bot, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { ChatWelcome } from "@/components/Chat/componets/ChatWelcome";
+import FullChat from "@/components/Chat/FullChat";
 import EmptyState from "@/components/EmptyState";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Button } from "@/components/ui/button";
@@ -28,7 +25,6 @@ import {
   pauseAgentTask,
   resumeAgentTask,
 } from "@/lib/browser-api";
-import FullChat from "@/components/Chat/FullChat";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
@@ -171,6 +167,17 @@ export default function TaskDetailsPage() {
   const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
 
+  const welcomeComponent = (
+    <ChatWelcome
+      icon={Bot}
+      variant="neutral"
+      size="sm"
+      animate={false}
+      titleClassName="text-muted-foreground opacity-70"
+      title={`Chat with ${task.agent_name || "Agent"}`}
+    />
+  );
+
   return (
     <>
       <div className="flex h-full w-full">
@@ -180,6 +187,7 @@ export default function TaskDetailsPage() {
             <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
             <div className="relative z-1 h-full">
               <FullChat
+                welcomeComponent={welcomeComponent}
                 agent={{
                   id: task.agent_id,
                   name: task.agent_name || `Agent ${task.agent_id}`,
