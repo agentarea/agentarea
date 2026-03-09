@@ -3,25 +3,31 @@
 import React, { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { useMentions } from "@/hooks/useMentions";
 import { pauseAgentTask } from "@/lib/browser-api";
-import { extractPlainText, formatTextForTextarea, restoreMentionIds } from "@/utils/mentions";
-import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
-import { MessageRenderer } from "./MessageComponents";
+import { cn } from "@/lib/utils";
+import {
+  extractPlainText,
+  formatTextForTextarea,
+  restoreMentionIds,
+} from "@/utils/mentions";
 import { BadgeSuggestions } from "./componets/BadgeSuggestions";
-import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
+import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
-import { parseSSEStream } from "./handlers/sseParser";
+import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
+import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { createSSEEventHandler } from "./handlers/eventHandlers";
-
+import { parseSSEStream } from "./handlers/sseParser";
+import {
+  useChatMessages,
+  type ChatMessage,
+  type UserChatMessage,
+} from "./hooks/useChatMessages";
+import { useFileUpload } from "./hooks/useFileUpload";
 // Import hooks
 import { useScrollManagement } from "./hooks/useScrollManagement";
-import { useFileUpload } from "./hooks/useFileUpload";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
-import { useChatMessages, type ChatMessage, type UserChatMessage } from "./hooks/useChatMessages";
-
-import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
+import { MessageRenderer } from "./MessageComponents";
 
 export interface Agent {
   id: string;
@@ -63,11 +69,12 @@ export default function FullChat({
   const t = useTranslations("Chat");
 
   // Hooks for state management
-  const { messages, setMessages, hasUserMessages, addUserMessage } = useChatMessages({
-    agentName: agent.name,
-    agentId: agent.id,
-    initialMessages,
-  });
+  const { messages, setMessages, hasUserMessages, addUserMessage } =
+    useChatMessages({
+      agentName: agent.name,
+      agentId: agent.id,
+      initialMessages,
+    });
 
   // Clear messages when agent changes
   React.useEffect(() => {
@@ -77,17 +84,15 @@ export default function FullChat({
     clearFiles();
   }, [agent.id]);
 
-  const {
-    currentTaskId,
-    setCurrentTaskId,
-    sseUrl,
-    callbacks,
-  } = useTaskLifecycle(agent.id, {
-    initialTaskId: taskId,
-    onTaskCreated,
-    onTaskStarted,
-    onTaskFinished,
-  });
+  const { currentTaskId, setCurrentTaskId, callbacks } = useTaskLifecycle(
+    agent.id,
+    {
+      initialTaskId: taskId,
+      onTaskCreated,
+      onTaskStarted,
+      onTaskFinished,
+    }
+  );
 
   const {
     messagesContainerRef,
@@ -140,8 +145,13 @@ export default function FullChat({
 
       setTimeout(() => {
         if (textareaRef.current) {
-          const displayCursorPos = formatTextForTextarea(newText.substring(0, newCursorPosition)).length;
-          textareaRef.current.setSelectionRange(displayCursorPos, displayCursorPos);
+          const displayCursorPos = formatTextForTextarea(
+            newText.substring(0, newCursorPosition)
+          ).length;
+          textareaRef.current.setSelectionRange(
+            displayCursorPos,
+            displayCursorPos
+          );
           textareaRef.current.focus();
         }
       }, 0);
@@ -159,7 +169,7 @@ export default function FullChat({
         const length = text.length;
         textareaRef.current.setSelectionRange(length, length);
 
-        if (text.endsWith('@')) {
+        if (text.endsWith("@")) {
           const syntheticEvent = {
             target: {
               value: text,
@@ -189,12 +199,13 @@ export default function FullChat({
     });
 
     let newInput = displayValue;
-    const sortedReplacements = Array.from(replacementMap.entries())
-      .sort((a, b) => b[0].length - a[0].length);
+    const sortedReplacements = Array.from(replacementMap.entries()).sort(
+      (a, b) => b[0].length - a[0].length
+    );
 
     sortedReplacements.forEach(([display, storage]) => {
-      const escaped = display.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      newInput = newInput.replace(new RegExp(escaped, 'g'), storage);
+      const escaped = display.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      newInput = newInput.replace(new RegExp(escaped, "g"), storage);
     });
 
     setInput(newInput);
@@ -334,19 +345,25 @@ export default function FullChat({
       className={cn(
         "mx-auto flex h-full w-full flex-col gap-0 rounded-lg transition-all duration-700 ease-out",
         "justify-between",
-        (startCentered && !hasUserMessages) 
+        startCentered && !hasUserMessages
           ? "justify-center gap-8 overflow-y-auto overflow-x-hidden md:overflow-visible" // Allow vertical scroll on mobile/small screens if content overflows
           : "justify-between overflow-hidden",
-        (startCentered && !hasUserMessages) ? "max-w-3xl mx-auto py-8 md:py-0" : "", // Add padding on mobile to ensure content isn't cut off at edges
+        startCentered && !hasUserMessages
+          ? "max-w-3xl mx-auto py-8 md:py-0"
+          : "", // Add padding on mobile to ensure content isn't cut off at edges
         className
       )}
     >
       {/* Placeholder/Title/Welcome Component */}
       {!hasUserMessages && (welcomeComponent || placeholder) ? (
-        <div className={cn(
-          "flex items-center justify-center transition-all duration-500",
-          "flex-none w-full"
-        )}>
+        <div
+          className={cn(
+            // Keep Workplace visuals intact when startCentered is true
+            startCentered
+              ? "flex items-center justify-center transition-all duration-500 flex-none w-full"
+              : "flex flex-1 min-h-0 w-full items-center justify-center transition-all duration-500 pb-24"
+          )}
+        >
           {welcomeComponent ? (
             welcomeComponent
           ) : (
@@ -410,12 +427,14 @@ export default function FullChat({
       </div>
 
       {/* Input Area */}
-      <div className={cn(
-        "relative mx-auto w-full transition-all duration-700 ease-out group",
-        (startCentered && !hasUserMessages) ? "max-w-3xl" : "",
-      )}>
+      <div
+        className={cn(
+          "relative mx-auto w-full transition-all duration-700 ease-out group",
+          startCentered && !hasUserMessages ? "max-w-3xl" : ""
+        )}
+      >
         {/* Subtle decorative elements for centered state */}
-        {(startCentered && !hasUserMessages) && (
+        {startCentered && !hasUserMessages && (
           <>
             <div className="absolute -left-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-primary/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
             <div className="absolute -right-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
@@ -427,43 +446,43 @@ export default function FullChat({
           className={cn(
             "card relative w-full cursor-auto bg-white hover:shadow-none dark:bg-zinc-900",
             "px-2 pb-2 pt-0 border-t",
-            (startCentered && !hasUserMessages) 
-              ? "border shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] rounded-2xl dark:border-zinc-800 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]" 
+            startCentered && !hasUserMessages
+              ? "border shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] rounded-2xl dark:border-zinc-800 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]"
               : "rounded-t-lg",
-            "transition-all duration-500 ease-out",
+            "transition-all duration-500 ease-out"
           )}
         >
           <ChatInputArea
-          input={input}
-          inputDisplay={inputDisplay}
-          onInputChange={handleInputChange}
-          onSubmit={sendMessage}
-          isLoading={isLoading}
-          placeholder={t("writeNewTaskFor", { agentName: agent.name })}
-          selectedFiles={selectedFiles}
-          onRemoveFile={removeFile}
-          onOpenFileDialog={openFileDialog}
-          fileInputRef={fileInputRef}
-          textareaRef={textareaRef}
-          onKeyDown={handleKeyDown}
-          mentionProps={{
-            show: showMentions,
-            agents: filteredAgents,
-            position: mentionPosition,
-            selectedIndex: selectedMentionIndex,
-            menuRef: mentionMenuRef,
-            onAgentSelect: handleAgentSelect,
-          }}
-          containerRef={cardContainerRef}
-          variant="centered"
-          rows={3}
-          currentAgent={agent}
-          availableAgents={availableAgents}
-          onAgentChange={onAgentChange}
-          onStop={isLoading && currentTaskId ? handlePause : undefined}
-          isStopping={isPausing}
-        />
-      </div>
+            input={input}
+            inputDisplay={inputDisplay}
+            onInputChange={handleInputChange}
+            onSubmit={sendMessage}
+            isLoading={isLoading}
+            placeholder={t("writeNewTaskFor", { agentName: agent.name })}
+            selectedFiles={selectedFiles}
+            onRemoveFile={removeFile}
+            onOpenFileDialog={openFileDialog}
+            fileInputRef={fileInputRef}
+            textareaRef={textareaRef}
+            onKeyDown={handleKeyDown}
+            mentionProps={{
+              show: showMentions,
+              agents: filteredAgents,
+              position: mentionPosition,
+              selectedIndex: selectedMentionIndex,
+              menuRef: mentionMenuRef,
+              onAgentSelect: handleAgentSelect,
+            }}
+            containerRef={cardContainerRef}
+            variant="centered"
+            rows={3}
+            currentAgent={agent}
+            availableAgents={availableAgents}
+            onAgentChange={onAgentChange}
+            onStop={isLoading && currentTaskId ? handlePause : undefined}
+            isStopping={isPausing}
+          />
+        </div>
       </div>
 
       {/* Badge Suggestions */}

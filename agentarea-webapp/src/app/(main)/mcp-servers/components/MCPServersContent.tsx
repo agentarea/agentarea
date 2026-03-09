@@ -103,7 +103,7 @@ export default async function MCPServersContent({
       {/* My Active Servers Section */}
       <div id="my-mcps">
         <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          My Active Servers ({filteredInstances.length})
+          {t("myActiveServers")} ({filteredInstances.length})
         </h4>
         <MyMCPsSection
           mcpInstances={filteredInstances}
@@ -117,7 +117,7 @@ export default async function MCPServersContent({
       {/* Browse MCP Specifications Section */}
       <div id="specs-section">
         <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          Browse MCP Specifications ({filteredServers.length})
+          {t("browseSpecifications")} ({filteredServers.length})
         </h4>
         <MCPSpecsSection
           mcpServers={filteredServers}

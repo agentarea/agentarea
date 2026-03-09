@@ -61,7 +61,7 @@ export default async function ProviderConfigsPage({
             urlParamName="search"
             urlPath="/admin/provider-configs"
           />
-          <ProviderHeaderTabs />
+          <ProviderHeaderTabs currentTab={tab} />
         </>
       }
     >

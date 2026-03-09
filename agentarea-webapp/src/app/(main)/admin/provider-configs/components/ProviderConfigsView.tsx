@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import ModelsList from "./ModelsList";
@@ -20,13 +21,14 @@ export default function ProviderConfigsView({
   viewMode,
   hasNoData,
 }: ProviderConfigsViewProps) {
+  const t = useTranslations("Models.table");
   const router = useRouter();
 
   // Define table columns for configs
   const configColumns = [
     {
       accessor: "name",
-      header: "Name",
+      header: t("name"),
       render: (value: string, item: any) => (
         <div className="flex items-center gap-2">
           {item.spec?.icon_url && (
@@ -42,11 +44,11 @@ export default function ProviderConfigsView({
     },
     {
       accessor: "provider_spec_name",
-      header: "Provider",
+      header: t("provider"),
     },
     {
       accessor: "model_instances",
-      header: "Models",
+      header: t("models"),
       render: (value: any[]) => <ModelsList models={value || []} />,
     },
   ];

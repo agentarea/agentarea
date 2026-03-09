@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import FullChat, { type Agent } from "./FullChat";
+import { useTranslations } from "next-intl";
+import { Sparkles } from "lucide-react";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
-import WorkplaceHero from "./componets/WorkplaceHero";
+import { ChatWelcome } from "./componets/ChatWelcome";
+import FullChat, { type Agent } from "./FullChat";
 
 interface WorkplaceChatProps {
   initialAgent: Agent;
@@ -20,6 +22,7 @@ export function WorkplaceChat({
   availableAgents,
   badgeSuggestions,
 }: WorkplaceChatProps) {
+  const t = useTranslations("Workplace.hero");
   const [selectedAgent, setSelectedAgent] = useState<Agent>(initialAgent);
 
   return (
@@ -29,7 +32,7 @@ export function WorkplaceChat({
       onAgentChange={setSelectedAgent}
       startCentered
       badgeSuggestions={badgeSuggestions}
-      welcomeComponent={<WorkplaceHero />}
+      welcomeComponent={<ChatWelcome icon={Sparkles} title={t("title")} />}
     />
   );
 }

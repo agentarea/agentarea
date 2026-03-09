@@ -40,7 +40,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       subheader={
         <>
           <SearchInput urlParamName="search" urlPath="/tasks" />
-          <TasksHeaderTabs />
+          <TasksHeaderTabs currentTab={tab} />
         </>
       }
     >

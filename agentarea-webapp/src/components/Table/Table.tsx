@@ -29,8 +29,19 @@ interface TableProps {
 export default function Table({ data, columns, onRowClick }: TableProps) {
   return (
     <TableComponent>
-      <TableHeader>
-        <TableRow className="pointer-events-none">
+      <TableHeader
+        className="relative"
+        style={{
+          backgroundImage: `repeating-linear-gradient(
+            -45deg,
+            color-mix(in srgb, currentColor 4%, transparent),
+            color-mix(in srgb, currentColor 4%, transparent) 1px,
+            transparent 1px,
+            transparent 10px
+          )`,
+        }}
+      >
+        <TableRow className="pointer-events-none hover:bg-transparent">
           {columns.map((column) => (
             <TableHead
               key={column.accessor}
@@ -55,7 +66,7 @@ export default function Table({ data, columns, onRowClick }: TableProps) {
             key={item.id}
             onClick={() => onRowClick?.(item)}
             className={cn(
-              "group cursor-pointer border-zinc-100 py-[18px] transition-all duration-300 hover:bg-primary/10 dark:border-zinc-700 dark:hover:bg-white/10",
+              "group cursor-pointer border-b border-zinc-100 transition-colors duration-200 hover:bg-primary/5 dark:border-zinc-800 dark:hover:bg-primary/10",
               item.className
             )}
           >

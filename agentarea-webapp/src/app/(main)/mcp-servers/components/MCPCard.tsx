@@ -1,9 +1,22 @@
-import Link from "next/link";
-import { Server, Container } from "lucide-react";
+import { 
+  Container, 
+  Server, 
+  Database, 
+  Folder, 
+  Github, 
+  Globe, 
+  MessageSquare, 
+  Cloud, 
+  Terminal, 
+  Cpu, 
+  Search, 
+  Mail, 
+  Command,
+  Box
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { HoverLink } from "@/components/ui/hover-link";
 import { MCPServer, MCPInstance } from "../types";
+import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface MCPServerSpecCardProps {
   server: MCPServer;
@@ -15,33 +28,43 @@ interface MCPInstanceCardProps {
   serverSpec?: MCPServer;
 }
 
+function getMCPIcon(name: string) {
+  const lower = name.toLowerCase();
+  if (lower.includes("postgres") || lower.includes("sql") || lower.includes("mongo") || lower.includes("redis")) return Database;
+  if (lower.includes("file") || lower.includes("fs")) return Folder;
+  if (lower.includes("git")) return Github;
+  if (lower.includes("fetch") || lower.includes("http") || lower.includes("web") || lower.includes("browser")) return Globe;
+  if (lower.includes("slack") || lower.includes("discord") || lower.includes("chat")) return MessageSquare;
+  if (lower.includes("drive") || lower.includes("cloud") || lower.includes("aws") || lower.includes("s3")) return Cloud;
+  if (lower.includes("docker") || lower.includes("kube")) return Container;
+  if (lower.includes("terminal") || lower.includes("shell") || lower.includes("bash")) return Terminal;
+  if (lower.includes("memory")) return Cpu;
+  if (lower.includes("search") || lower.includes("brave") || lower.includes("google")) return Search;
+  if (lower.includes("mail") || lower.includes("gmail") || lower.includes("outlook")) return Mail;
+  if (lower.includes("linear") || lower.includes("jira") || lower.includes("project")) return Command;
+  if (lower.includes("obsidian") || lower.includes("notion")) return Box;
+  
+  return Server;
+}
+
 export function MCPInstanceCard({
   instance,
   serverSpec,
 }: MCPInstanceCardProps) {
   return (
-    <Link
+    <LinkedCard
       href={`/mcp-servers/${instance.id}`}
-    >
-      <Card className="group h-full flex flex-col justify-between px-4 py-4">
-        <div className="mb-2 flex gap-2">
-          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded bg-slate-100 dark:bg-slate-800">
-            <Server className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="truncate">{instance.name}</h4>
-            {serverSpec && (
-              <p className="truncate text-xs text-gray-500">
-                {serverSpec.name}
-              </p>
-            )}
-          </div>
-        </div>
-      <div className="flex justify-end -mb-2 -mt-1 -mr-2">
-        <HoverLink text="View" />
-      </div>
-      </Card>
-    </Link>
+      title={instance.name}
+      icon={getMCPIcon(instance.name)}
+      type="view"
+      subtitle={
+        serverSpec && (
+          <p className="truncate text-xs text-gray-500 w-full">
+            {serverSpec.name}
+          </p>
+        )
+      }
+    />
   );
 }
 
@@ -50,30 +73,29 @@ export function MCPServerSpecCard({
   onConfigure,
 }: MCPServerSpecCardProps) {
   return (
-    <Card className="group h-full flex flex-col justify-between px-4 py-4 cursor-pointer" onClick={() => onConfigure(server)}>
-      <div className="mb-2 flex gap-2">
-        <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded bg-slate-100 dark:bg-slate-800">
-          <Server className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h4 className="truncate">{server.name}</h4>
-          <div className="flex items-center gap-1 mt-1">
-            {server.version && (
-              <Badge size="sm">
-                v{server.version}
-              </Badge>
-            )}
-            {server.docker_image_url && (
-              <div title="Docker-based">
-                <Container className="h-4 w-4 text-blue-500" />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex justify-end -mb-2 -mt-1 -mr-2">
-        <HoverLink text="Configure" />
-      </div>
-    </Card>
+    <LinkedCard
+      onClick={() => onConfigure(server)}
+      title={server.name}
+      icon={getMCPIcon(server.name)}
+      type="config"
+      subtitle={
+        <>
+          {server.version && (
+            <Badge
+              size="sm"
+              variant="secondary"
+              className="h-5 px-1.5 font-normal"
+            >
+              v{server.version}
+            </Badge>
+          )}
+          {server.docker_image_url && (
+            <div title="Docker-based" className="flex items-center">
+              <Container className="h-4 w-4 text-blue-500" />
+            </div>
+          )}
+        </>
+      }
+    />
   );
 }

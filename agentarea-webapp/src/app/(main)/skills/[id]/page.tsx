@@ -3,32 +3,15 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
-import {
-  FileCode,
-  Github,
-  Upload,
-  Trash2,
-  Save,
-  Loader2,
-  ExternalLink,
-  File,
-  Pencil,
-  Eye,
-} from "lucide-react";
+import { Loader2, Save, Eye, Pencil } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FileTree,
-  FileTreeFile,
-  FileTreeFolder,
-} from "@/components/ai-elements/file-tree";
 import { Streamdown } from "streamdown";
+import DeleteButton from "@/components/DeleteButton";
+import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
+import SkillPanel from "@/components/SkillPanel/SkillPanel";
 import {
   getSkill,
   getSkillContent,
@@ -42,14 +25,6 @@ import {
 } from "@/lib/browser-api";
 import { useToast } from "@/hooks/use-toast";
 import YAML from "js-yaml";
-
-interface FileNode {
-  name: string;
-  path: string;
-  type: "file" | "folder";
-  children: FileNode[];
-  size?: number;
-}
 
 // Parse YAML frontmatter from markdown
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string; rawFrontmatter: string } {
@@ -71,101 +46,12 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
   return { frontmatter, body, rawFrontmatter };
 }
 
-function buildFileTree(files: SkillFile[], skillContent?: SkillContent | null): FileNode[] {
-  const root: FileNode[] = [];
-  const nodeMap = new Map<string, FileNode>();
-  const hasSkillMd = files.some(f => f.path === "SKILL.md" || f.path.endsWith("/SKILL.md"));
-
-  // Add SKILL.md only if not in files list
-  if (skillContent?.content && !hasSkillMd) {
-    root.push({
-      name: "SKILL.md",
-      path: "SKILL.md",
-      type: "file",
-      children: [],
-      size: skillContent.content.length,
-    });
-  }
-
-  const sortedFiles = [...files].sort((a, b) => a.path.localeCompare(b.path));
-
-  for (const file of sortedFiles) {
-    const parts = file.path.split("/");
-    let currentPath = "";
-    let currentLevel = root;
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isLast = i === parts.length - 1;
-      currentPath = currentPath ? `${currentPath}/${part}` : part;
-
-      let node = nodeMap.get(currentPath);
-
-      if (!node) {
-        node = {
-          name: part,
-          path: currentPath,
-          type: isLast ? "file" : "folder",
-          children: [],
-          ...(isLast && { size: file.size }),
-        };
-        nodeMap.set(currentPath, node);
-        currentLevel.push(node);
-      }
-
-      if (!isLast) {
-        currentLevel = node.children;
-      }
-    }
-  }
-
-  const sortNodes = (nodes: FileNode[]) => {
-    nodes.sort((a, b) => {
-      if (a.type === b.type) {
-        return a.name.localeCompare(b.name);
-      }
-      return a.type === "folder" ? -1 : 1;
-    });
-    nodes.forEach((node) => {
-      if (node.children.length > 0) {
-        sortNodes(node.children);
-      }
-    });
-  };
-
-  sortNodes(root);
-  return root;
-}
-
-function getSourceIcon(sourceType: string) {
-  switch (sourceType) {
-    case "github":
-      return <Github className="h-4 w-4" />;
-    case "zip":
-      return <Upload className="h-4 w-4" />;
-    default:
-      return <FileCode className="h-4 w-4" />;
-  }
-}
-
-function getSourceLabel(sourceType: string, tSource: (key: string) => string) {
-  switch (sourceType) {
-    case "github":
-      return tSource("github");
-    case "zip":
-      return tSource("uploaded");
-    default:
-      return tSource("content");
-  }
-}
-
 export default function SkillDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const t = useTranslations("SkillsPage");
   const tDetail = useTranslations("SkillsPage.detail");
-  const tSource = useTranslations("SkillsPage.source");
   const skillId = params.id as string;
 
   const [skill, setSkill] = useState<Skill | null>(null);
@@ -173,7 +59,6 @@ export default function SkillDetailPage() {
   const [files, setFiles] = useState<SkillFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -318,51 +203,6 @@ export default function SkillDetailPage() {
     }
   };
 
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      const { error } = await deleteSkill(skillId);
-
-      if (error) {
-        toast({
-          title: t("error.loadSkills"),
-          description: t("error.deleteSkill"),
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({ title: t("success.skillDeleted"), description: t("success.skillDeleted") });
-      router.push("/skills");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const renderFileTree = (nodes: FileNode[]): React.ReactNode => {
-    return nodes.map((node) => {
-      if (node.type === "folder") {
-        return (
-          <FileTreeFolder key={node.path} name={node.name} path={node.path}>
-            {renderFileTree(node.children)}
-          </FileTreeFolder>
-        );
-      }
-      return (
-        <FileTreeFile key={node.path} name={node.name} path={node.path}>
-          <span className="size-4" />
-          <File className="size-4 text-muted-foreground shrink-0" />
-          <span className="truncate flex-1">{node.name}</span>
-          {node.size !== undefined && (
-            <span className="text-xs text-muted-foreground ml-2">
-              {(node.size / 1024).toFixed(1)} KB
-            </span>
-          )}
-        </FileTreeFile>
-      );
-    });
-  };
-
   if (loading) {
     return (
       <ContentBlock
@@ -385,7 +225,6 @@ export default function SkillDetailPage() {
   }
 
   const isContentEditable = skill.source_type === "content";
-  const fileTreeNodes = buildFileTree(files, content);
   const canEditFile = isContentEditable && selectedFile === "SKILL.md";
 
   // Parse frontmatter for display
@@ -394,6 +233,7 @@ export default function SkillDetailPage() {
 
   return (
     <ContentBlock
+      className="p-0 overflow-hidden"
       header={{
         breadcrumb: [
           { label: t("title"), href: "/skills" },
@@ -414,96 +254,25 @@ export default function SkillDetailPage() {
               )}
               {tDetail("save")}
             </Button>
-            <Button
-              variant="destructive"
+            <DeleteButton
               size="xs"
-              disabled={deleting}
-              onClick={() => {
-                if (window.confirm(t("confirm.deleteSkill", { skillName: skill.name }))) {
-                  handleDelete();
-                }
-              }}
-            >
-              {deleting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              {tDetail("delete")}
-            </Button>
+              itemId={skillId}
+              itemName={skill.name}
+              onDelete={deleteSkill}
+              redirectPath="/skills"
+              title={t("confirm.deleteSkillTitle") || tDetail("delete")}
+              description={t("confirm.deleteSkill", { skillName: skill.name })}
+              successMessage={t("success.skillDeleted")}
+            />
           </div>
         ),
       }}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
-        {/* Sidebar */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">{tDetail("details")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">{tDetail("name")}</Label>
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">{tDetail("description")}</Label>
-                <Input
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder={tDetail("description")}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="flex items-center gap-2 pt-1">
-                <Badge variant="outline" className="gap-1 text-xs">
-                  {getSourceIcon(skill.source_type)}
-                  {getSourceLabel(skill.source_type, tSource)}
-                </Badge>
-                {skill.source_url && (
-                  <a
-                    href={skill.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground pt-2 border-t">
-                {tDetail("updated")} {formatDistanceToNow(new Date(skill.updated_at), { addSuffix: true })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {fileTreeNodes.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">{tDetail("files")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <FileTree
-                  defaultExpanded={new Set()}
-                  selectedPath={selectedFile || undefined}
-                  onSelect={(path) => void handleFileSelect(path)}
-                >
-                  {renderFileTree(fileTreeNodes)}
-                </FileTree>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="lg:col-span-3">
-          <Card className="h-full">
-            <CardHeader className="border-b py-3 flex flex-row items-center justify-between">
+      <div className="flex h-full w-full overflow-hidden">
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-auto p-6">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="border-b py-3 flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-sm font-mono">
                 {selectedFile || tDetail("selectFile")}
               </CardTitle>
@@ -525,31 +294,31 @@ export default function SkillDetailPage() {
                 </Button>
               )}
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 flex-1 overflow-auto relative">
               {loadingFile ? (
-                <div className="flex h-96 items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center">
                   <LoadingSpinner />
                 </div>
               ) : !selectedFile ? (
-                <div className="flex h-96 items-center justify-center text-muted-foreground text-sm">
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
                   {tDetail("selectFile")}
                 </div>
               ) : !fileContent ? (
-                <div className="flex h-96 items-center justify-center text-muted-foreground text-sm">
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
                   {tDetail("emptyFile")}
                 </div>
               ) : isEditing && canEditFile ? (
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full h-[600px] p-4 bg-background text-sm font-mono resize-none focus:outline-none"
+                  className="w-full h-full p-4 bg-background text-sm font-mono resize-none focus:outline-none"
                   spellCheck={false}
                 />
               ) : (
                 <div className="p-6 space-y-4">
                   {/* Frontmatter card */}
                   {hasFrontmatter && (
-                    <div className="rounded-lg border bg-card overflow-hidden">
+                    <div className="rounded-lg border bg-card overflow-hidden shrink-0">
                       <div className="bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b">
                         {tDetail("skillConfiguration")}
                       </div>
@@ -558,9 +327,9 @@ export default function SkillDetailPage() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Content */}
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <div className="prose prose-sm dark:prose-invert max-w-none pb-10">
                     <Streamdown>{parsed?.body || fileContent}</Streamdown>
                   </div>
                 </div>
@@ -568,6 +337,19 @@ export default function SkillDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Right Sidebar Dock */}
+        <TaskInfoPanelDock
+          storageKey="skill-info-panel"
+          panel={
+            <SkillPanel
+              skill={skill}
+              files={files}
+              onFileSelect={handleFileSelect}
+              selectedFile={selectedFile}
+            />
+          }
+        />
       </div>
     </ContentBlock>
   );

@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { LayoutDashboardIcon, TablePropertiesIcon } from "lucide-react";
 import HeaderTabs from "@/components/HeaderTabs";
 
-export default async function TasksHeaderTabs({
+export default async function SkillsHeaderTabs({
   currentTab,
 }: {
   currentTab?: string;

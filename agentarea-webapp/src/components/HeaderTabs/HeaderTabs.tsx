@@ -15,12 +15,14 @@ export interface HeaderTabsProps {
   tabs: TabItem[];
   paramName?: string;
   defaultTab?: string;
+  currentTab?: string;
 }
 
 export default function HeaderTabs({
   tabs,
   paramName = "tab",
   defaultTab,
+  currentTab,
 }: HeaderTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -34,8 +36,8 @@ export default function HeaderTabs({
 
   const urlTab = searchParams.get(paramName);
 
-  // Active tab is purely derived from URL or default - no cookie sync on mount
-  const activeTab = urlTab || defaultTab || tabs[0]?.value;
+  // Active tab is derived from URL, passed currentTab, or default
+  const activeTab = urlTab || currentTab || defaultTab || tabs[0]?.value;
 
   const handleTabChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());

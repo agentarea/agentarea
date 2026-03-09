@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import ModelsList from "./ModelsList";
 import { ProviderConfig, ProviderSpec } from "./types";
+import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface ProviderConfigCardProps {
   config: ProviderConfig;
@@ -13,37 +12,30 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
   const modelInstances = config.model_instances || [];
 
   return (
-    <Link
+    <LinkedCard
       href={`/admin/provider-configs/edit/${config.id}`}
+      title={config.name}
+      icon={config.spec?.icon_url}
+      type="edit"
+      subtitle={
+        <p className="truncate text-xs text-gray-500 w-full">
+          {config.spec?.name}
+        </p>
+      }
     >
-      <Card className="h-full px-4 py-4">
-        <div className="mb-2 flex gap-2">
-          {config.spec?.icon_url && (
-            <img
-              src={config.spec.icon_url}
-              alt={`${config.spec.name} icon`}
-              className="h-5 w-5 rounded dark:invert"
-            />
-          )}
-          <div className="min-w-0 flex-1">
-            <h4 className="truncate">{config.name}</h4>
-            <p className="truncate text-xs text-gray-500">
-              {config.spec?.name}
-            </p>
-          </div>
-        </div>
-
-        {/* Display Model Instances */}
-        {modelInstances.length > 0 ? (
-          <ModelsList models={modelInstances} />
-        ) : (
-          <Badge variant="yellow" className="w-fit" size="sm">
-            <AlertCircle className="mr-1 h-3 w-3" />
-            No instances configured
-          </Badge>
-        )}
-      </Card>
-    </Link>
+      {modelInstances.length > 0 ? (
+        <ModelsList models={modelInstances} />
+      ) : (
+        <Badge
+          variant="secondary"
+          className="w-fit bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border-yellow-200"
+          size="sm"
+        >
+          <AlertCircle className="mr-1 h-3 w-3" />
+          No instances configured
+        </Badge>
+      )}
+    </LinkedCard>
   );
 }
 
@@ -53,22 +45,12 @@ interface ProviderSpecCardProps {
 
 export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
   return (
-    <Link href={`/admin/provider-configs/create/${spec.id}`}>
-      <Card className="h-full px-4 py-4">
-        <div className="flex items-center gap-2">
-          {spec.icon_url && (
-            <img
-              src={spec.icon_url}
-              alt={`${spec.name} icon`}
-              className="h-5 w-5 rounded dark:invert"
-            />
-          )}
-          <div className="min-w-0 flex-1">
-            <h4 className="truncate">{spec.name}</h4>
-            {/* <p className="text-sm text-gray-500">{spec.provider_key}</p> */}
-          </div>
-        </div>
-      </Card>
-    </Link>
+    <LinkedCard
+      className="py-3"
+      href={`/admin/provider-configs/create/${spec.id}`}
+      title={spec.name}
+      icon={spec.icon_url}
+      type="config"
+    />
   );
 }
