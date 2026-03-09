@@ -83,7 +83,7 @@ protected_v1_router.include_router(mcp_auth_configs.router)
 # MCP OAuth Links management - PROTECTED
 protected_v1_router.include_router(mcp_oauth_links.router)
 
-# MCP Personal Access Tokens management - PROTECTED
+# MCP API Keys management - PROTECTED
 protected_v1_router.include_router(mcp_access_tokens.router)
 
 # Compound MCPs - PROTECTED

@@ -1,10 +1,10 @@
-"""API endpoints for MCP Personal Access Tokens (PATs).
+"""API endpoints for MCP API Keys.
 
-PAT lifecycle (management — JWT-protected):
-  POST   /v1/mcp-access-tokens          → create PAT (returns raw token once)
-  GET    /v1/mcp-access-tokens          → list PATs (no raw token)
-  GET    /v1/mcp-access-tokens/{id}     → get PAT
-  DELETE /v1/mcp-access-tokens/{id}     → revoke PAT
+API Key lifecycle (management — JWT-protected):
+  POST   /v1/api-keys          → create API key (returns raw token once)
+  GET    /v1/api-keys          → list API keys (no raw token)
+  GET    /v1/api-keys/{id}     → get API key
+  DELETE /v1/api-keys/{id}     → revoke API key
 """
 
 import logging
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Management router — JWT-protected (included in protected_v1_router)
 # ---------------------------------------------------------------------------
 
-router = APIRouter(prefix="/mcp-access-tokens", tags=["mcp-access-tokens"])
+router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ router = APIRouter(prefix="/mcp-access-tokens", tags=["mcp-access-tokens"])
 # ---------------------------------------------------------------------------
 
 
-async def get_token_service(
+async def get_api_key_service(
     db_session: DatabaseSessionDep,
     user_context: UserContextDep,
 ) -> MCPAccessTokenService:
@@ -46,14 +46,14 @@ async def get_token_service(
 # ---------------------------------------------------------------------------
 
 
-class AccessTokenCreateRequest(BaseModel):
-    name: str = Field(description="Human-friendly label for this token")
+class APIKeyCreateRequest(BaseModel):
+    name: str = Field(description="Human-friendly label for this API key")
     expires_in_days: int | None = Field(
         default=None, description="Optional expiry in days (omit for non-expiring)"
     )
 
 
-class AccessTokenResponse(BaseModel):
+class APIKeyResponse(BaseModel):
     id: UUID
     name: str
     token_prefix: str
@@ -68,8 +68,8 @@ class AccessTokenResponse(BaseModel):
         from_attributes = True
 
 
-class AccessTokenCreateResponse(AccessTokenResponse):
-    """Extends AccessTokenResponse with the raw token — shown ONCE at creation."""
+class APIKeyCreateResponse(APIKeyResponse):
+    """Extends APIKeyResponse with the raw token — shown ONCE at creation."""
 
     token: str = Field(description="Raw token value — copy it now, it won't be shown again")
 
@@ -79,53 +79,53 @@ class AccessTokenCreateResponse(AccessTokenResponse):
 # ---------------------------------------------------------------------------
 
 
-@router.post("/", response_model=AccessTokenCreateResponse, status_code=201)
-async def create_access_token(
-    data: AccessTokenCreateRequest,
-    service: MCPAccessTokenService = Depends(get_token_service),
+@router.post("/", response_model=APIKeyCreateResponse, status_code=201)
+async def create_api_key(
+    data: APIKeyCreateRequest,
+    service: MCPAccessTokenService = Depends(get_api_key_service),
 ):
-    """Create a new PAT. The raw ``token`` value is returned once — store it securely."""
+    """Create a new API key. The raw ``token`` value is returned once — store it securely."""
     try:
         record, raw_token = await service.create_token(
             name=data.name,
             expires_in_days=data.expires_in_days,
         )
-        resp = AccessTokenCreateResponse.model_validate(record)
-        resp.token = raw_token
-        return resp
+        base = APIKeyResponse.model_validate(record)
+        return APIKeyCreateResponse(**base.model_dump(), token=raw_token)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to create token: {exc}") from exc
 
 
-@router.get("/", response_model=list[AccessTokenResponse])
-async def list_access_tokens(
+@router.get("/", response_model=list[APIKeyResponse])
+async def list_api_keys(
     user_context: UserContextDep,
-    service: MCPAccessTokenService = Depends(get_token_service),
+    service: MCPAccessTokenService = Depends(get_api_key_service),
 ):
-    """List all PATs for the current workspace."""
+    """List all API keys for the current workspace."""
     tokens = await service.list_tokens()
-    return [AccessTokenResponse.model_validate(t) for t in tokens]
+    return [APIKeyResponse.model_validate(t) for t in tokens]
 
 
-@router.get("/{token_id}", response_model=AccessTokenResponse)
-async def get_access_token(
+@router.get("/{token_id}", response_model=APIKeyResponse)
+async def get_api_key(
     token_id: UUID,
     user_context: UserContextDep,
-    service: MCPAccessTokenService = Depends(get_token_service),
+    service: MCPAccessTokenService = Depends(get_api_key_service),
 ):
+    """Get a single API key by ID."""
     token = await service.get_token(token_id)
     if token is None:
-        raise HTTPException(status_code=404, detail="Access token not found")
-    return AccessTokenResponse.model_validate(token)
+        raise HTTPException(status_code=404, detail="API key not found")
+    return APIKeyResponse.model_validate(token)
 
 
 @router.delete("/{token_id}", status_code=204)
-async def revoke_access_token(
+async def revoke_api_key(
     token_id: UUID,
     user_context: UserContextDep,
-    service: MCPAccessTokenService = Depends(get_token_service),
+    service: MCPAccessTokenService = Depends(get_api_key_service),
 ):
-    """Immediately revoke a PAT."""
+    """Immediately revoke an API key."""
     revoked = await service.revoke_token(token_id)
     if not revoked:
-        raise HTTPException(status_code=404, detail="Access token not found")
+        raise HTTPException(status_code=404, detail="API key not found")

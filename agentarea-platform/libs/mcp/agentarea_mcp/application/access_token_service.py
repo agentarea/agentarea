@@ -51,13 +51,12 @@ class MCPAccessTokenService:
         if expires_in_days:
             expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
 
-        record = MCPAccessToken(
+        created = await self._repo.create(
             name=name,
             token_hash=token_hash,
             token_prefix=token_prefix,
             expires_at=expires_at,
         )
-        created = await self._repo.create(record)
         logger.info("Created MCP access token '%s' (id=%s)", name, created.id)
         return created, raw_token
 
@@ -80,14 +79,14 @@ class MCPAccessTokenService:
         return record
 
     async def get_token(self, token_id: UUID) -> MCPAccessToken | None:
-        return await self._repo.get(token_id)
+        return await self._repo.get_by_id(token_id)
 
     async def list_tokens(self) -> list[MCPAccessToken]:
         return await self._repo.list_all()
 
     async def revoke_token(self, token_id: UUID) -> bool:
         """Immediately deactivate a PAT. Returns False if not found."""
-        record = await self._repo.get(token_id)
+        record = await self._repo.get_by_id(token_id)
         if record is None:
             return False
         await self._repo.update(token_id, is_active=False)
