@@ -10,7 +10,6 @@ This test validates the complete task execution flow:
 Run with: pytest tests/integration/test_task_execution_module.py -v
 """
 
-import asyncio
 import pytest
 from uuid import uuid4
 from datetime import datetime

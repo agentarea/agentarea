@@ -12,6 +12,9 @@ on:
       - "agentarea-webapp/**"
       - ".github/workflows/frontend-integration.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest

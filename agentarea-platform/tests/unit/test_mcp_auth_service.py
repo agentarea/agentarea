@@ -1,12 +1,12 @@
 """Unit tests for MCPAuthService."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
-from agentarea_mcp.application.auth_service import MCPAuthService, _secret_key
+from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.domain.auth_models import (
     AUTH_TYPE_API_KEY,
     AUTH_TYPE_BEARER,
