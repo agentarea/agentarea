@@ -87,6 +87,13 @@ Kratos Public URL
 {{- end -}}
 
 {{/*
+Kratos Public Browser URL (for client-side JS, falls back to kratosPublicUrl)
+*/}}
+{{- define "agentarea.kratosPublicBrowserUrl" -}}
+{{- .Values.kratos.urls.publicBrowser | default (include "agentarea.kratosPublicUrl" .) | trimSuffix "/" -}}
+{{- end -}}
+
+{{/*
 Kratos Admin URL
 */}}
 {{- define "agentarea.kratosAdminUrl" -}}
