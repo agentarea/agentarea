@@ -62,9 +62,7 @@ class StopMCPInstanceWorkflow:
                 )
 
                 if not delete_result.success:
-                    raise RuntimeError(
-                        f"Container deletion failed: {delete_result.error}"
-                    )
+                    raise RuntimeError(f"Container deletion failed: {delete_result.error}")
 
             # Step 3: Mark stopped
             self._status = "stopped"
@@ -102,9 +100,7 @@ class StopMCPInstanceWorkflow:
                 error_message=str(e),
             )
 
-    async def _update_status(
-        self, request: StopMCPInstanceRequest, status: str
-    ) -> None:
+    async def _update_status(self, request: StopMCPInstanceRequest, status: str) -> None:
         await workflow.execute_activity(
             "update_mcp_instance_status_activity",
             args=[
@@ -145,9 +141,7 @@ class StopMCPInstanceWorkflow:
                 )
             ],
             start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
-            retry_policy=RetryPolicy(
-                maximum_attempts=EVENT_PUBLISH_RETRY_ATTEMPTS
-            ),
+            retry_policy=RetryPolicy(maximum_attempts=EVENT_PUBLISH_RETRY_ATTEMPTS),
             result_type=PublishMCPEventResult,
         )
 

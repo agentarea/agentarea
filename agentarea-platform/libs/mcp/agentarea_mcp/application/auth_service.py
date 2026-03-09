@@ -94,9 +94,7 @@ class MCPAuthService:
 
         return {}
 
-    async def _get_oauth2_token(
-        self, config: MCPAuthConfig, creds: dict[str, Any]
-    ) -> str:
+    async def _get_oauth2_token(self, config: MCPAuthConfig, creds: dict[str, Any]) -> str:
         """Return a valid OAuth2 access token, refreshing if needed."""
         import time
 
@@ -109,9 +107,7 @@ class MCPAuthService:
 
         return access_token
 
-    async def _refresh_oauth2_token(
-        self, config: MCPAuthConfig, creds: dict[str, Any]
-    ) -> str:
+    async def _refresh_oauth2_token(self, config: MCPAuthConfig, creds: dict[str, Any]) -> str:
         """Obtain a new access token using Client Credentials or Refresh Token flow."""
         import time
 
@@ -238,9 +234,7 @@ class MCPAuthService:
         """Delete auth config, checking for linked instances first."""
         linked = await self._repo.get_linked_instance_ids(config_id)
         if linked:
-            raise ValueError(
-                f"Cannot delete auth config {config_id}: linked to instances {linked}"
-            )
+            raise ValueError(f"Cannot delete auth config {config_id}: linked to instances {linked}")
 
         existing = await self._repo.get(config_id)
         if existing is None:

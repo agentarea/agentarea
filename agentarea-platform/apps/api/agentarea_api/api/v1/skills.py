@@ -377,7 +377,11 @@ async def remove_skill_member(
     removed = await skill_service.remove_member(skill_id, child_skill_id)
     if not removed:
         raise HTTPException(status_code=404, detail="Member association not found")
-    return {"status": "removed", "parent_skill_id": str(skill_id), "child_skill_id": str(child_skill_id)}
+    return {
+        "status": "removed",
+        "parent_skill_id": str(skill_id),
+        "child_skill_id": str(child_skill_id),
+    }
 
 
 @router.get("/{skill_id}/flatten", response_model=list[str])

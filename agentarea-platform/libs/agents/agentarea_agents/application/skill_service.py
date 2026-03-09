@@ -647,7 +647,7 @@ def _topological_sort(members: list[SkillMember]) -> list[UUID]:
 
     for m in members:
         sid = str(m.child_skill_id)
-        for dep in (m.dependencies or []):
+        for dep in m.dependencies or []:
             if dep in skill_ids:
                 graph[dep].append(sid)
                 in_degree[sid] += 1

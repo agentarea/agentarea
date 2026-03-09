@@ -31,7 +31,9 @@ def upgrade() -> None:
         # Auth type: api_key | bearer | oauth2
         sa.Column("auth_type", sa.String(50), nullable=False),
         # Non-sensitive config (header name, token_url, client_id, scopes, etc.)
-        sa.Column("config", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default="{}"),
+        sa.Column(
+            "config", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default="{}"
+        ),
         # Encrypted credentials reference key stored in secret manager
         sa.Column("secret_key", sa.String(512), nullable=True),
         sa.Column("name", sa.String(255), nullable=False),
@@ -108,7 +110,9 @@ def upgrade() -> None:
         ),
         sa.Column("order", sa.Integer(), nullable=False, server_default="0"),
         # Per-member config: namespace prefix, aliases, condition expression
-        sa.Column("config", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default="{}"),
+        sa.Column(
+            "config", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default="{}"
+        ),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )
     op.create_primary_key(
@@ -269,9 +273,7 @@ def downgrade() -> None:
     op.drop_index("ix_compound_mcps_workspace_id", table_name="compound_mcps")
     op.drop_table("compound_mcps")
 
-    op.drop_index(
-        "ix_mcp_server_instances_auth_config_id", table_name="mcp_server_instances"
-    )
+    op.drop_index("ix_mcp_server_instances_auth_config_id", table_name="mcp_server_instances")
     op.drop_column("mcp_server_instances", "auth_config_id")
 
     op.drop_index("ix_mcp_auth_configs_auth_type", table_name="mcp_auth_configs")

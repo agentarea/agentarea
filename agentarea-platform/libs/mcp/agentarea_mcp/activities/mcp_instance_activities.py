@@ -121,9 +121,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                 if resp.status_code in (200, 201, 409):
                     return CreateContainerResult(success=True)
                 else:
-                    error_msg = (
-                        f"Go manager returned {resp.status_code}: {resp.text}"
-                    )
+                    error_msg = f"Go manager returned {resp.status_code}: {resp.text}"
                     logger.error(error_msg)
                     return CreateContainerResult(success=False, error=error_msg)
 
@@ -151,9 +149,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                 if resp.status_code in (200, 204, 404):
                     return DeleteContainerResult(success=True)
                 else:
-                    error_msg = (
-                        f"Go manager returned {resp.status_code}: {resp.text}"
-                    )
+                    error_msg = f"Go manager returned {resp.status_code}: {resp.text}"
                     logger.error(error_msg)
                     return DeleteContainerResult(success=False, error=error_msg)
 
@@ -203,9 +199,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
 
         except Exception as e:
             logger.error("Health check failed: %s", e)
-            return PollContainerHealthResult(
-                healthy=False, status="error", error=str(e)
-            )
+            return PollContainerHealthResult(healthy=False, status="error", error=str(e))
 
     @activity.defn(name="discover_mcp_tools_activity")
     async def discover_mcp_tools_activity(
@@ -285,9 +279,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             return DiscoverToolsResult(success=True, tools=tools)
 
         except Exception as e:
-            logger.warning(
-                "Tool discovery failed for %s: %s", request.instance_id, e
-            )
+            logger.warning("Tool discovery failed for %s: %s", request.instance_id, e)
             return DiscoverToolsResult(success=False, error=str(e))
 
     @activity.defn(name="publish_mcp_event_activity")
@@ -300,9 +292,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
 
         try:
             # Convert RedisRouter → RedisEventBroker (same pattern as agent activities)
-            redis_event_broker = create_event_broker_from_router(
-                dependencies.event_broker
-            )
+            redis_event_broker = create_event_broker_from_router(dependencies.event_broker)
 
             event_data = dict(request.event_data)
             event_data["instance_id"] = str(request.instance_id)
@@ -348,9 +338,7 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
                 instance = await repo.get_by_id(request.instance_id)
 
                 if not instance:
-                    return GetInstanceEnvironmentResult(
-                        error="Instance not found"
-                    )
+                    return GetInstanceEnvironmentResult(error="Instance not found")
 
                 env_var_names = instance.get_configured_env_vars()
                 if not env_var_names:

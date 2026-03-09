@@ -72,9 +72,7 @@ class MCPOAuthLinkRepository(WorkspaceScopedRepository[MCPOAuthLink]):
 
     async def get_by_token(self, token: str) -> MCPOAuthLink | None:
         """Look up an OAuth link by its shareable token (no workspace filter — token is unique)."""
-        result = await self.session.execute(
-            select(MCPOAuthLink).where(MCPOAuthLink.token == token)
-        )
+        result = await self.session.execute(select(MCPOAuthLink).where(MCPOAuthLink.token == token))
         return result.scalar_one_or_none()
 
     async def list_by_instance(self, mcp_instance_id: UUID) -> list[MCPOAuthLink]:
@@ -156,5 +154,3 @@ class CompoundMCPRepository(WorkspaceScopedRepository[CompoundMCP]):
         await self.session.delete(member)
         await self.session.commit()
         return True
-
-

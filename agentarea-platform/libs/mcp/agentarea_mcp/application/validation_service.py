@@ -63,7 +63,10 @@ class MCPConfigurationValidator:
             # URL type: remote MCP server, no container needed
             if "endpoint_url" not in json_spec:
                 errors.append("Required field 'endpoint_url' is missing for type 'url'")
-            elif not isinstance(json_spec["endpoint_url"], str) or not json_spec["endpoint_url"].strip():
+            elif (
+                not isinstance(json_spec["endpoint_url"], str)
+                or not json_spec["endpoint_url"].strip()
+            ):
                 errors.append("Field 'endpoint_url' must be a non-empty string")
             else:
                 url = json_spec["endpoint_url"]
@@ -90,7 +93,11 @@ class MCPConfigurationValidator:
 
             if "port" not in json_spec:
                 errors.append("Required field 'port' is missing")
-            elif not isinstance(json_spec["port"], int) or json_spec["port"] < 1 or json_spec["port"] > 65535:
+            elif (
+                not isinstance(json_spec["port"], int)
+                or json_spec["port"] < 1
+                or json_spec["port"] > 65535
+            ):
                 errors.append("Field 'port' must be an integer between 1 and 65535")
 
         # Validate environment variables if present

@@ -43,9 +43,7 @@ class OAuthLinkCreateRequest(BaseModel):
         default_factory=dict,
         description="OAuth provider config: provider, auth_url, token_url, client_id, scopes, …",
     )
-    expires_in_days: int | None = Field(
-        default=None, description="Optional link expiry in days"
-    )
+    expires_in_days: int | None = Field(default=None, description="Optional link expiry in days")
 
 
 class OAuthLinkResponse(BaseModel):
@@ -61,6 +59,7 @@ class OAuthLinkResponse(BaseModel):
 
     class Config:
         """Pydantic config."""
+
         from_attributes = True
 
 

@@ -110,16 +110,12 @@ class StartMCPInstanceWorkflow:
                         )
                     ],
                     start_to_close_timeout=CONTAINER_START_TIMEOUT,
-                    retry_policy=RetryPolicy(
-                        maximum_attempts=CONTAINER_CREATE_RETRY_ATTEMPTS
-                    ),
+                    retry_policy=RetryPolicy(maximum_attempts=CONTAINER_CREATE_RETRY_ATTEMPTS),
                     result_type=CreateContainerResult,
                 )
 
                 if not create_result.success:
-                    raise RuntimeError(
-                        f"Container creation failed: {create_result.error}"
-                    )
+                    raise RuntimeError(f"Container creation failed: {create_result.error}")
 
                 # Step 4: Poll health until healthy
                 self._status = "polling_health"
@@ -127,9 +123,7 @@ class StartMCPInstanceWorkflow:
                 healthy = await self._poll_until_healthy(instance_id)
 
                 if not healthy:
-                    raise RuntimeError(
-                        "Container failed to become healthy within timeout"
-                    )
+                    raise RuntimeError("Container failed to become healthy within timeout")
 
             # Step 5: Mark running
             self._status = "running"
@@ -149,17 +143,13 @@ class StartMCPInstanceWorkflow:
                         )
                     ],
                     start_to_close_timeout=DB_UPDATE_TIMEOUT,
-                    retry_policy=RetryPolicy(
-                        maximum_attempts=DEFAULT_RETRY_ATTEMPTS
-                    ),
+                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
                     result_type=ResolveAuthHeadersResult,
                 )
                 if auth_result.headers:
                     auth_headers = auth_result.headers
             except Exception as auth_err:
-                workflow.logger.warning(
-                    "Auth header resolution failed (non-fatal): %s", auth_err
-                )
+                workflow.logger.warning("Auth header resolution failed (non-fatal): %s", auth_err)
 
             # Step 6: Discover tools (non-fatal if this fails)
             self._status = "discovering_tools"
@@ -170,9 +160,7 @@ class StartMCPInstanceWorkflow:
                 "instance_name": request.instance_name,
             }
             if is_url_type:
-                discover_kwargs["endpoint_url"] = json_spec_with_env.get(
-                    "endpoint_url"
-                )
+                discover_kwargs["endpoint_url"] = json_spec_with_env.get("endpoint_url")
                 # Merge json_spec headers with auth headers (auth takes precedence)
                 spec_headers = dict(json_spec_with_env.get("headers", {}))
                 spec_headers.update(auth_headers)
@@ -257,9 +245,7 @@ class StartMCPInstanceWorkflow:
 
             # Terminal states — stop polling
             if health_result.status in ("error", "failed", "stopped"):
-                workflow.logger.error(
-                    "Container entered terminal state: %s", health_result.status
-                )
+                workflow.logger.error("Container entered terminal state: %s", health_result.status)
                 return False
 
             await asyncio.sleep(HEALTH_POLL_INTERVAL_SECONDS)
@@ -313,9 +299,7 @@ class StartMCPInstanceWorkflow:
                 )
             ],
             start_to_close_timeout=EVENT_PUBLISH_TIMEOUT,
-            retry_policy=RetryPolicy(
-                maximum_attempts=EVENT_PUBLISH_RETRY_ATTEMPTS
-            ),
+            retry_policy=RetryPolicy(maximum_attempts=EVENT_PUBLISH_RETRY_ATTEMPTS),
             result_type=PublishMCPEventResult,
         )
 

@@ -81,7 +81,9 @@ async def oauth_authorization_server_metadata() -> JSONResponse:
             "registration_endpoint": f"{api_base}/oauth2/register",
             "jwks_uri": _rewrite(hydra_meta.get("jwks_uri")),
             "response_types_supported": hydra_meta.get("response_types_supported", ["code"]),
-            "grant_types_supported": hydra_meta.get("grant_types_supported", ["authorization_code"]),
+            "grant_types_supported": hydra_meta.get(
+                "grant_types_supported", ["authorization_code"]
+            ),
             "code_challenge_methods_supported": hydra_meta.get(
                 "code_challenge_methods_supported", ["S256"]
             ),
@@ -178,8 +180,7 @@ async def hydra_oauth2_proxy(path: str, request: Request) -> Response:
         target = f"{target}?{request.url.query}"
 
     forward_headers = {
-        k: v for k, v in request.headers.items()
-        if k.lower() not in ("host", "content-length")
+        k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")
     }
     async with httpx.AsyncClient(timeout=httpx.Timeout(30)) as client:
         upstream = await client.request(

@@ -358,9 +358,7 @@ async def start_mcp_server_instance(
                 "message": "Instance start already in progress",
                 "workflow_id": workflow_id,
             }
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start workflow: {e}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to start workflow: {e}") from e
 
 
 @router.post("/{instance_id}/stop")
@@ -420,9 +418,7 @@ async def stop_mcp_server_instance(
                 "message": "Instance stop already in progress",
                 "workflow_id": workflow_id,
             }
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start workflow: {e}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to start workflow: {e}") from e
 
 
 # REMOVED: Insecure endpoint that exposed secrets via HTTP
@@ -488,19 +484,14 @@ async def test_mcp_auth(
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
     if not instance.auth_config_id:
-        raise HTTPException(
-            status_code=400, detail="No auth config attached to this MCP instance"
-        )
+        raise HTTPException(status_code=400, detail="No auth config attached to this MCP instance")
 
     try:
-
         # Re-resolve session/secret-manager via the instance service's internals
         # This is a lightweight connectivity test using httpx
         mcp_url: str = instance.json_spec.get("url", "")
         if not mcp_url:
-            raise HTTPException(
-                status_code=400, detail="MCP instance has no URL in json_spec"
-            )
+            raise HTTPException(status_code=400, detail="MCP instance has no URL in json_spec")
 
         return {
             "status": "pending",
@@ -514,9 +505,7 @@ async def test_mcp_auth(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Auth test failed: {exc}"
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"Auth test failed: {exc}") from exc
 
 
 @router.post("/{instance_id}/oauth-link")

@@ -495,9 +495,7 @@ class MCPServerInstanceService:
             await session.execute(stmt)
             await session.commit()
 
-            logger.info(
-                "Discovered %d tools for instance %s", len(tools), instance_id
-            )
+            logger.info("Discovered %d tools for instance %s", len(tools), instance_id)
             return True
 
         except Exception as e:

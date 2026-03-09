@@ -115,17 +115,13 @@ class CompoundMCPService:
         If the member config has ``namespace_prefix`` use that, otherwise
         use the first 8 chars of the instance ID as a stable prefix.
         """
-        return member.config.get(
-            "namespace_prefix", str(member.mcp_instance_id)[:8]
-        )
+        return member.config.get("namespace_prefix", str(member.mcp_instance_id)[:8])
 
     def get_tool_aliases(self, member: CompoundMCPMember) -> dict[str, str]:
         """Return tool name alias mapping for this member: {original: alias}."""
         return member.config.get("aliases", {})
 
-    def get_status_summary(
-        self, member_statuses: dict[str, str]
-    ) -> str:
+    def get_status_summary(self, member_statuses: dict[str, str]) -> str:
         """Aggregate individual member statuses into a compound status.
 
         Args:
@@ -142,5 +138,3 @@ class CompoundMCPService:
         if "running" in statuses:
             return "degraded"
         return "stopped"
-
-

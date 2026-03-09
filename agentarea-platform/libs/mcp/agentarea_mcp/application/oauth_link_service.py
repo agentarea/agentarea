@@ -141,9 +141,7 @@ class MCPOAuthLinkService:
     # OAuth Authorization Code flow helpers
     # ------------------------------------------------------------------
 
-    def build_authorization_url(
-        self, link: MCPOAuthLink, redirect_uri: str, state: str
-    ) -> str:
+    def build_authorization_url(self, link: MCPOAuthLink, redirect_uri: str, state: str) -> str:
         """Construct the provider's authorization URL for the OAuth flow."""
         cfg = link.provider_config
         auth_url: str = cfg.get("auth_url", "")
@@ -212,9 +210,7 @@ class MCPOAuthLinkService:
 
         return {"sub": "unknown"}
 
-    def check_access_control(
-        self, link: MCPOAuthLink, requesting_workspace_id: str
-    ) -> bool:
+    def check_access_control(self, link: MCPOAuthLink, requesting_workspace_id: str) -> bool:
         """Return True if the given workspace is allowed to use this link."""
         if link.access_control == ACCESS_CONTROL_PUBLIC:
             return True

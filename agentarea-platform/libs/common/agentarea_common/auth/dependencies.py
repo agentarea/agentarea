@@ -136,7 +136,9 @@ async def get_user_context(
                 headers={"WWW-Authenticate": "Bearer"},
             )
         ContextManager.set_context(user_context)
-        logger.debug(f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}")
+        logger.debug(
+            f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
+        )
         return user_context
 
     # Otherwise, verify as JWT
@@ -221,7 +223,9 @@ async def get_optional_user(
             logger.debug("Optional API key authentication failed: invalid or expired key")
             return None
         ContextManager.set_context(user_context)
-        logger.debug(f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}")
+        logger.debug(
+            f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
+        )
         return user_context
 
     # Otherwise, verify as JWT

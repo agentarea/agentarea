@@ -97,9 +97,9 @@ const eslintConfig = [
       "react-hooks/exhaustive-deps": "warn",
     },
   },
-  // Allow require in config files
+  // Allow require in config files and CJS loaders
   {
-    files: ["*.config.{ts,js,mjs}", "tailwind.config.ts"],
+    files: ["*.config.{ts,js,mjs}", "tailwind.config.ts", "*.cjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

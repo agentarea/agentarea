@@ -48,6 +48,7 @@ class CompoundMCPMemberResponse(BaseModel):
 
     class Config:
         """Pydantic config."""
+
         from_attributes = True
 
 
@@ -61,6 +62,7 @@ class CompoundMCPResponse(BaseModel):
 
     class Config:
         """Pydantic config."""
+
         from_attributes = True
 
 
