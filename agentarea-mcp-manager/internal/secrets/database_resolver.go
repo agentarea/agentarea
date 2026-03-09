@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentarea/mcp-manager/internal/database"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 )
 
@@ -27,28 +28,6 @@ type DatabaseSecretResolver struct {
 
 // NewDatabaseSecretResolver creates a resolver that reads from PostgreSQL
 func NewDatabaseSecretResolver(logger *slog.Logger) (*DatabaseSecretResolver, error) {
-	// Get database connection string from environment
-	dbHost := os.Getenv("POSTGRES_HOST")
-	if dbHost == "" {
-		dbHost = "db"
-	}
-	dbPort := os.Getenv("POSTGRES_PORT")
-	if dbPort == "" {
-		dbPort = "5432"
-	}
-	dbUser := os.Getenv("POSTGRES_USER")
-	if dbUser == "" {
-		return nil, errors.New("POSTGRES_USER environment variable is required")
-	}
-	dbPassword := os.Getenv("POSTGRES_PASSWORD")
-	if dbPassword == "" {
-		return nil, errors.New("POSTGRES_PASSWORD environment variable is required")
-	}
-	dbName := os.Getenv("POSTGRES_DB")
-	if dbName == "" {
-		dbName = "aiagents"
-	}
-
 	// Get encryption key from environment
 	encryptionKey := os.Getenv("SECRET_MANAGER_ENCRYPTION_KEY")
 	if encryptionKey == "" {
@@ -67,11 +46,11 @@ func NewDatabaseSecretResolver(logger *slog.Logger) (*DatabaseSecretResolver, er
 		return nil, fmt.Errorf("invalid Fernet key length: got %d bytes, expected 32", len(keyBytes))
 	}
 
-	// Build connection string
-	connStr := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		dbUser, dbPassword, dbHost, dbPort, dbName,
-	)
+	// Build connection string: prefer DATABASE_URL, fall back to individual vars
+	connStr := database.BuildConnStr(logger)
+	if connStr == "" {
+		return nil, errors.New("database credentials not configured (set DATABASE_URL or POSTGRES_USER/POSTGRES_PASSWORD)")
+	}
 
 	// Connect to database
 	db, err := sql.Open("pgx", connStr)
@@ -86,9 +65,7 @@ func NewDatabaseSecretResolver(logger *slog.Logger) (*DatabaseSecretResolver, er
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	logger.Info("Initialized database secret resolver",
-		slog.String("db_host", dbHost),
-		slog.String("db_name", dbName))
+	logger.Info("Initialized database secret resolver")
 
 	return &DatabaseSecretResolver{
 		db:     db,

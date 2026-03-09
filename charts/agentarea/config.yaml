@@ -4,6 +4,7 @@ groups:
       POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
+      POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
     secrets:
       - name: POSTGRES_USER
         secretName: "{{ .Values.global.secrets.postgresql }}"
@@ -13,7 +14,7 @@ groups:
         key: "password"
     envExtras:
       - name: DATABASE_URL
-        value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+        value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}"
 
   redis:
     configVars:
@@ -146,6 +147,7 @@ groups:
       POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
+      POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
     secrets:
       - name: POSTGRES_USER
         secretName: '{{ .Values.global.secrets.postgresql }}'
@@ -155,4 +157,4 @@ groups:
         key: 'password'
     envExtras:
       - name: DATABASE_URL
-        value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+        value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}"

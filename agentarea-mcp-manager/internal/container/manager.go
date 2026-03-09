@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/database"
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/models"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -817,9 +818,10 @@ func (m *Manager) HandleMCPInstanceDeleted(ctx context.Context, instanceID strin
 	return nil
 }
 
-// sandboxImage is the container image used to wrap stdio-based MCP servers over HTTP/SSE.
-// supercorp/supergateway includes Node.js + npx so npm-based MCP servers work out of the box.
-const sandboxImage = "docker.io/supercorp/supergateway:latest"
+// sandboxImage is the container image used to wrap stdio-based MCP servers over streamable-http.
+// agentarea/mcp-bridge includes Python, Node.js (npx), and uv (uvx) so most MCP servers work
+// out of the box. It proxies stdio-based MCP servers over streamable-http at /mcp.
+const sandboxImage = "agentarea/mcp-bridge:latest"
 const sandboxPort = 8080
 
 // ResolveContainerSpec derives the actual image, port, command, and environment that
@@ -844,7 +846,7 @@ func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port i
 	specType, _ := jsonSpec["type"].(string)
 
 	if specType == "command" {
-		// Wrap stdio command with supergateway sandbox
+		// Wrap stdio command with mcp-bridge (stdio → streamable-http proxy)
 		cmd, _ := jsonSpec["command"].(string)
 		var args []string
 		if rawArgs, ok := jsonSpec["args"].([]interface{}); ok {
@@ -854,12 +856,11 @@ func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port i
 				}
 			}
 		}
-		stdioCmdParts := append([]string{cmd}, args...)
-		stdioCmd := strings.Join(stdioCmdParts, " ")
 
 		image = sandboxImage
 		port = sandboxPort
-		command = []string{"--stdio", stdioCmd, "--port", fmt.Sprintf("%d", sandboxPort), "--host", "0.0.0.0"}
+		// bridge.py <command> [args...] — the entrypoint is "python bridge.py"
+		command = append([]string{cmd}, args...)
 		return
 	}
 
@@ -1302,28 +1303,11 @@ func (m *Manager) restartContainer(ctx context.Context, container *models.Contai
 func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
 	m.logger.Info("Starting database synchronization for pending instances")
 
-	dbHost := os.Getenv("POSTGRES_HOST")
-	if dbHost == "" {
-		dbHost = "db"
-	}
-	dbPort := os.Getenv("POSTGRES_PORT")
-	if dbPort == "" {
-		dbPort = "5432"
-	}
-	dbUser := os.Getenv("POSTGRES_USER")
-	dbPassword := os.Getenv("POSTGRES_PASSWORD")
-	dbName := os.Getenv("POSTGRES_DB")
-	if dbName == "" {
-		dbName = "aiagents"
-	}
-
-	if dbUser == "" || dbPassword == "" {
+	connStr := database.BuildConnStr(m.logger)
+	if connStr == "" {
 		m.logger.Warn("Database credentials not configured, skipping instance sync")
 		return nil
 	}
-
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		dbUser, dbPassword, dbHost, dbPort, dbName)
 
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
