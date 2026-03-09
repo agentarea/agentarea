@@ -330,6 +330,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.image.repository | string | `"oryd/kratos"` |  |
 | kratos.image.tag | string | `"v1.3.1"` |  |
 | kratos.urls.public | string | `""` |  |
+| kratos.urls.publicBrowser | string | `""` |  |
 | kratos.urls.admin | string | `""` |  |
 | kratos.database.name | string | `"kratos"` |  |
 | kratos.configMapOverrideName | string | `""` |  |
