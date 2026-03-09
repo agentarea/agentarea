@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"curl -s -X POST \\\"http://localhost:8888/mcp\\\" \\\\\\n  -H \\\"Content-Type: application/json\\\" \\\\\\n  -H \\\"Accept: application/json, text/event-stream\\\" \\\\\\n  -d '{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":1,\\...",
-  "error": "Exit code 1\nExpecting value: line 1 column 1 (char 0)",
-  "timestamp": "2026-03-09T18:34:45.942Z",
-  "retry_count": 3
-}
