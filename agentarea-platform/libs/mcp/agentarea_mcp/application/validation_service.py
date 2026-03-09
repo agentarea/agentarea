@@ -59,6 +59,28 @@ class MCPConfigurationValidator:
                     for i, item in enumerate(args):
                         if not isinstance(item, str):
                             errors.append(f"Arg at index {i} must be a string")
+        elif spec_type == "url":
+            # URL type: remote MCP server, no container needed
+            if "endpoint_url" not in json_spec:
+                errors.append("Required field 'endpoint_url' is missing for type 'url'")
+            elif not isinstance(json_spec["endpoint_url"], str) or not json_spec["endpoint_url"].strip():
+                errors.append("Field 'endpoint_url' must be a non-empty string")
+            else:
+                url = json_spec["endpoint_url"]
+                if not url.startswith(("http://", "https://")):
+                    errors.append("Field 'endpoint_url' must start with http:// or https://")
+
+            # Validate headers if present
+            if "headers" in json_spec:
+                headers = json_spec["headers"]
+                if not isinstance(headers, dict):
+                    errors.append("Field 'headers' must be a dictionary")
+                else:
+                    for key, value in headers.items():
+                        if not isinstance(key, str) or not key.strip():
+                            errors.append(f"Header key '{key}' must be a non-empty string")
+                        if not isinstance(value, str):
+                            errors.append(f"Header '{key}' value must be a string")
         else:
             # Docker type (default): requires "image" and "port"
             if "image" not in json_spec:

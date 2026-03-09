@@ -14,7 +14,7 @@ const HeaderSchema = z.object({
 // Define the schema for validation
 const MCPServerSchema = z
   .object({
-    type: z.enum(["docker", "external"], {
+    type: z.enum(["docker", "command", "external"], {
       required_error: "Server type is required",
     }),
     name: z.string().min(1, "Server name is required"),
@@ -22,6 +22,9 @@ const MCPServerSchema = z
     // Docker-specific fields
     dockerImageUrl: z.string().optional(),
     version: z.string().optional(),
+    // Command-specific fields
+    command: z.string().optional(),
+    args: z.string().optional(),
     // External-specific fields
     endpointUrl: z.string().optional(),
     headers: z.array(HeaderSchema).optional().default([]),
@@ -31,11 +34,12 @@ const MCPServerSchema = z
   })
   .refine(
     (data) => {
-      // Validate docker-specific fields when type is docker
       if (data.type === "docker") {
         return data.dockerImageUrl && data.dockerImageUrl.length > 0;
       }
-      // Validate external-specific fields when type is external
+      if (data.type === "command") {
+        return data.command && data.command.length > 0;
+      }
       if (data.type === "external") {
         return data.endpointUrl && data.endpointUrl.length > 0;
       }
@@ -55,6 +59,8 @@ export interface MCPServerFormState {
     description?: string[];
     dockerImageUrl?: string[];
     version?: string[];
+    command?: string[];
+    args?: string[];
     endpointUrl?: string[];
     headers?: Array<{
       key?: string[];
@@ -65,11 +71,13 @@ export interface MCPServerFormState {
     _form?: string[]; // General form errors
   };
   fieldValues?: {
-    type: "docker" | "external";
+    type: "docker" | "command" | "external";
     name: string;
     description: string;
     dockerImageUrl?: string;
     version?: string;
+    command?: string;
+    args?: string;
     endpointUrl?: string;
     headers: Array<{
       key: string;
@@ -103,16 +111,21 @@ export async function addMCPServer(
   }));
 
   const rawFormData = {
-    type: formData.get("type") as "docker" | "external",
+    type: formData.get("type") as "docker" | "command" | "external",
     name: formData.get("name") as string,
     description: formData.get("description") as string,
     dockerImageUrl: formData.get("dockerImageUrl") as string,
     version: (formData.get("version") as string) || "1.0.0",
+    command: formData.get("command") as string,
+    args: formData.get("args") as string,
     endpointUrl: formData.get("endpointUrl") as string,
     headers,
     tags: formData.get("tags") as string,
     isPublic: formData.get("isPublic") === "true",
   };
+
+  // Extract auth config ID (not part of Zod validation, optional)
+  const authConfigId = formData.get("authConfigId") as string | null;
 
   const validatedFields = MCPServerSchema.safeParse(rawFormData);
 
@@ -131,6 +144,8 @@ export async function addMCPServer(
         description: errorsByPath.description,
         dockerImageUrl: errorsByPath.dockerImageUrl,
         version: errorsByPath.version,
+        command: errorsByPath.command,
+        args: errorsByPath.args,
         endpointUrl: errorsByPath.endpointUrl,
         tags: errorsByPath.tags,
         isPublic: errorsByPath.isPublic,
@@ -142,6 +157,8 @@ export async function addMCPServer(
         description: rawFormData.description,
         dockerImageUrl: rawFormData.dockerImageUrl,
         version: rawFormData.version,
+        command: rawFormData.command,
+        args: rawFormData.args,
         endpointUrl: rawFormData.endpointUrl,
         headers: rawFormData.headers,
         tags: rawFormData.tags ? [rawFormData.tags] : [],
@@ -163,9 +180,31 @@ export async function addMCPServer(
         is_public: validatedFields.data.isPublic,
         env_schema: [],
       });
-    } else {
-      // Create External MCP Server Instance
+    } else if (validatedFields.data.type === "command") {
+      // Create Command-based MCP Server Instance (npx/uvx via supergateway sandbox)
+      const argsArray = validatedFields.data.args
+        ? validatedFields.data.args.trim().split(/\s+/)
+        : [];
       const jsonSpec: Record<string, unknown> = {
+        type: "command",
+        command: validatedFields.data.command!,
+        args: argsArray,
+      };
+
+      if (validatedFields.data.tags) {
+        jsonSpec.tags = [validatedFields.data.tags];
+      }
+
+      response = await createMCPServerInstance({
+        name: validatedFields.data.name,
+        description: validatedFields.data.description,
+        server_spec_id: null,
+        json_spec: jsonSpec,
+      });
+    } else {
+      // Create External URL MCP Server Instance
+      const jsonSpec: Record<string, unknown> = {
+        type: "url",
         endpoint_url: validatedFields.data.endpointUrl!,
         is_public: validatedFields.data.isPublic,
       };
@@ -184,12 +223,16 @@ export async function addMCPServer(
         jsonSpec.tags = [validatedFields.data.tags];
       }
 
-      response = await createMCPServerInstance({
+      const instancePayload: any = {
         name: validatedFields.data.name,
         description: validatedFields.data.description,
         server_spec_id: null,
         json_spec: jsonSpec,
-      });
+      };
+      if (authConfigId) {
+        instancePayload.auth_config_id = authConfigId;
+      }
+      response = await createMCPServerInstance(instancePayload);
     }
 
     if (response.data) {
@@ -207,6 +250,8 @@ export async function addMCPServer(
           description: validatedFields.data.description,
           dockerImageUrl: validatedFields.data.dockerImageUrl,
           version: validatedFields.data.version,
+          command: validatedFields.data.command,
+          args: validatedFields.data.args,
           endpointUrl: validatedFields.data.endpointUrl,
           headers: validatedFields.data.headers || [],
           tags: validatedFields.data.tags ? [validatedFields.data.tags] : [],

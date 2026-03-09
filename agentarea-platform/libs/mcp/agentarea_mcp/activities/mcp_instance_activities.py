@@ -43,6 +43,8 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
         PollContainerHealthResult,
         PublishMCPEventRequest,
         PublishMCPEventResult,
+        ResolveAuthHeadersRequest,
+        ResolveAuthHeadersResult,
         UpdateInstanceStatusRequest,
         UpdateInstanceStatusResult,
     )
@@ -211,37 +213,46 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
     ) -> DiscoverToolsResult:
         """Connect to running MCP server and discover tools.
 
-        Resolves the container's direct IP:port from the Go manager health
-        endpoint so we bypass Traefik (avoids host-header mismatches).
-        Falls back to the Traefik gateway URL if the direct endpoint is
-        unavailable.
+        For container-based MCPs: resolves the container's direct IP:port
+        from the Go manager health endpoint to bypass Traefik.
+        For url-type MCPs: connects directly to the provided endpoint_url.
         """
         from agentarea_common.config import get_settings
 
         try:
             settings = get_settings()
+            custom_headers: dict[str, str] = dict(request.headers) if request.headers else {}
 
-            # Resolve direct container URL from Go manager
-            mcp_manager_url = settings.mcp.MCP_MANAGER_URL
-            mcp_url = None
-            try:
-                async with httpx.AsyncClient(timeout=5) as client:
-                    resp = await client.get(
-                        f"{mcp_manager_url}/instances/{request.instance_id}/health",
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        details = data.get("details", {})
-                        direct_endpoint = details.get("direct_http_endpoint")
-                        if direct_endpoint:
-                            mcp_url = f"{direct_endpoint}/mcp"
-            except Exception as exc:
-                logger.debug("Direct endpoint resolution failed: %s", exc)
+            if request.endpoint_url:
+                # URL-type MCP: connect directly to external endpoint
+                url = request.endpoint_url.rstrip("/")
+                # Append /mcp if the URL doesn't already end with it
+                if not url.endswith("/mcp"):
+                    mcp_url = f"{url}/mcp"
+                else:
+                    mcp_url = url
+            else:
+                # Container-based MCP: resolve from Go manager
+                mcp_manager_url = settings.mcp.MCP_MANAGER_URL
+                mcp_url = None
+                try:
+                    async with httpx.AsyncClient(timeout=5) as client:
+                        resp = await client.get(
+                            f"{mcp_manager_url}/instances/{request.instance_id}/health",
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            details = data.get("details", {})
+                            direct_endpoint = details.get("direct_http_endpoint")
+                            if direct_endpoint:
+                                mcp_url = f"{direct_endpoint}/mcp"
+                except Exception as exc:
+                    logger.debug("Direct endpoint resolution failed: %s", exc)
 
-            if not mcp_url:
-                # Fallback to Traefik gateway
-                gateway_url = settings.mcp.MCP_GATEWAY_URL
-                mcp_url = f"{gateway_url}/mcp/{request.instance_name}/mcp"
+                if not mcp_url:
+                    # Fallback to Traefik gateway
+                    gateway_url = settings.mcp.MCP_GATEWAY_URL
+                    mcp_url = f"{gateway_url}/mcp/{request.instance_name}/mcp"
 
             logger.info("Tool discovery connecting to %s", mcp_url)
 
@@ -249,7 +260,9 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             from mcp.client.streamable_http import streamablehttp_client
 
             async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=15)
+                mcp_url,
+                timeout=timedelta(seconds=15),
+                headers=custom_headers if custom_headers else None,
             ) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
@@ -357,6 +370,61 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
             logger.error("Failed to resolve environment: %s", e)
             return GetInstanceEnvironmentResult(error=str(e))
 
+    @activity.defn(name="resolve_auth_headers_activity")
+    async def resolve_auth_headers_activity(
+        request: ResolveAuthHeadersRequest,
+    ) -> ResolveAuthHeadersResult:
+        """Resolve authentication headers for an MCP instance's auth config.
+
+        Looks up the instance's auth_config_id, loads the MCPAuthConfig,
+        and calls get_auth_headers() to produce the headers (handles
+        api_key, bearer, and oauth2 with token refresh).
+        """
+        from agentarea_common.auth.context import UserContext
+        from agentarea_common.config import get_database
+
+        from agentarea_mcp.application.auth_service import MCPAuthService
+        from agentarea_mcp.infrastructure.auth_repository import (
+            MCPAuthConfigRepository,
+        )
+        from agentarea_mcp.infrastructure.repository import (
+            MCPServerInstanceRepository,
+        )
+
+        try:
+            db = get_database()
+            async with db.async_session_factory() as session:
+                user_context = UserContext(
+                    user_id=request.user_id,
+                    workspace_id=request.workspace_id,
+                )
+
+                # Load the instance to get auth_config_id
+                instance_repo = MCPServerInstanceRepository(session, user_context)
+                instance = await instance_repo.get_by_id(request.instance_id)
+                if not instance or not instance.auth_config_id:
+                    return ResolveAuthHeadersResult()
+
+                # Load the auth config and resolve headers
+                auth_repo = MCPAuthConfigRepository(session, user_context)
+                secret_manager = dependencies.secret_manager_factory.create(
+                    session=session, user_context=user_context
+                )
+                auth_service = MCPAuthService(auth_repo, secret_manager)
+                auth_config = await auth_service.get(instance.auth_config_id)
+                if not auth_config:
+                    return ResolveAuthHeadersResult(
+                        error=f"Auth config {instance.auth_config_id} not found"
+                    )
+
+                headers = await auth_service.get_auth_headers(auth_config)
+                await session.commit()  # persist any refreshed tokens
+                return ResolveAuthHeadersResult(headers=headers)
+
+        except Exception as e:
+            logger.error("Failed to resolve auth headers: %s", e)
+            return ResolveAuthHeadersResult(error=str(e))
+
     return [
         update_mcp_instance_status_activity,
         create_mcp_container_activity,
@@ -365,4 +433,5 @@ def make_mcp_activities(dependencies: ActivityDependencies) -> list:
         discover_mcp_tools_activity,
         publish_mcp_event_activity,
         get_mcp_instance_environment_activity,
+        resolve_auth_headers_activity,
     ]

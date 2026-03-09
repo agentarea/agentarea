@@ -361,6 +361,74 @@ OAuth links let you share an MCP instance endpoint that enforces an Authorizatio
 
 ---
 
+## Client Configuration
+
+With RFC 9728 discovery, MCP clients authenticate automatically -- you only need to point them at the SSE endpoint. No manual token setup required.
+
+<Tabs>
+  <Tab title="Cursor">
+    Add to your `~/.cursor/mcp.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "my-agentarea-mcp": {
+          "url": "https://your-agentarea.example.com/mcp/<instance-id>/sse"
+        }
+      }
+    }
+    ```
+
+    When Cursor connects, it will:
+    1. Receive a `401` with `WWW-Authenticate` header
+    2. Discover the authorization server via `.well-known` endpoints
+    3. Register itself as an OAuth client (DCR)
+    4. Open your browser for authorization
+    5. Exchange the code for tokens and connect
+
+    <Tip>
+    No `Authorization` header or API key needed in the config -- Cursor handles the full OAuth flow automatically via RFC 9728 discovery.
+    </Tip>
+  </Tab>
+
+  <Tab title="Claude Desktop">
+    Add to your `claude_desktop_config.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "my-agentarea-mcp": {
+          "url": "https://your-agentarea.example.com/mcp/<instance-id>/sse"
+        }
+      }
+    }
+    ```
+
+    Claude Desktop follows the same RFC 9728 discovery flow as Cursor. The browser-based authorization step opens automatically on first connection.
+  </Tab>
+
+  <Tab title="Manual (PAT)">
+    If your client does not support RFC 9728, use a [Personal Access Token](/mcp-access-tokens) instead:
+
+    ```json
+    {
+      "mcpServers": {
+        "my-agentarea-mcp": {
+          "url": "https://your-agentarea.example.com/mcp/<instance-id>/sse",
+          "headers": {
+            "Authorization": "Bearer aat_your_token_here"
+          }
+        }
+      }
+    }
+    ```
+
+    See [MCP Access Tokens](/mcp-access-tokens) for how to create and manage PATs.
+  </Tab>
+</Tabs>
+
+---
+
 ## Hydra Proxy Architecture
 
 ```

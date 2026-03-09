@@ -22,6 +22,7 @@ class MCPServerInstanceCreateRequest(BaseModel):
     description: str | None = Field(None, description="Description of the instance")
     server_spec_id: str | None = Field(None, description="ID of the MCP server spec (optional)")
     json_spec: dict[str, Any] = Field(..., description="Configuration specification as JSON")
+    auth_config_id: str | None = Field(None, description="ID of the auth config to use")
 
 
 class MCPServerInstanceUpdate(BaseModel):
@@ -38,6 +39,7 @@ class MCPServerInstanceResponse(BaseModel):
     server_spec_id: str | None
     json_spec: dict[str, Any]
     status: str
+    auth_config_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -51,6 +53,7 @@ class MCPServerInstanceResponse(BaseModel):
                 "server_spec_id": instance.server_spec_id,
                 "json_spec": instance.json_spec,
                 "status": instance.status,
+                "auth_config_id": instance.auth_config_id,
                 "created_at": instance.created_at,
                 "updated_at": instance.updated_at,
             }
@@ -71,6 +74,7 @@ async def create_mcp_server_instance(
             description=data.description,
             server_spec_id=data.server_spec_id,
             json_spec=data.json_spec,
+            auth_config_id=data.auth_config_id,
         )
 
         if not instance:
@@ -383,6 +387,7 @@ async def stop_mcp_server_instance(
         instance_id=instance_id,
         user_id=user_context.user_id,
         workspace_id=user_context.workspace_id,
+        json_spec=instance.json_spec or {},
     )
 
     try:

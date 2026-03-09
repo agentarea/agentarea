@@ -42,7 +42,7 @@ class CompoundMCPService:
         return compound
 
     async def get(self, compound_id: UUID) -> CompoundMCP | None:
-        return await self._repo.get(compound_id)
+        return await self._repo.get_by_id(compound_id)
 
     async def list(self) -> list[CompoundMCP]:
         return await self._repo.list_all()
@@ -63,7 +63,7 @@ class CompoundMCPService:
             updates["description"] = description
         if updates:
             return await self._repo.update(compound_id, **updates)
-        return await self._repo.get(compound_id)
+        return await self._repo.get_by_id(compound_id)
 
     async def delete(self, compound_id: UUID) -> bool:
         return await self._repo.delete(compound_id)

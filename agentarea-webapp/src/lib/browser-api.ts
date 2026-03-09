@@ -898,6 +898,29 @@ export const deleteSkill = async (skillId: string) => {
   return { data, error };
 };
 
+// MCP Auth Config API
+export const listMCPAuthConfigs = async () => {
+  const { data, error } = await browserClient.GET(
+    "/v1/mcp-auth-configs/" as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const createMCPAuthConfig = async (body: {
+  name: string;
+  description?: string;
+  auth_type: string;
+  config?: Record<string, any>;
+  credentials?: Record<string, any>;
+}) => {
+  const { data, error } = await browserClient.POST(
+    "/v1/mcp-auth-configs/" as any,
+    { body }
+  );
+  return { data, error };
+};
+
 // Re-export skill types
 export type {
   Skill,

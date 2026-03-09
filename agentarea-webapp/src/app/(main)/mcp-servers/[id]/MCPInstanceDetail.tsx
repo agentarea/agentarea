@@ -128,8 +128,10 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     return () => clearInterval(interval);
   }, [instance.status, router]);
 
-  // Fetch connection URL when instance is running
+  // Fetch connection URL when instance is running (skip for URL-type — it has its own endpoint)
+  const jsonSpecType = (instance.json_spec?.type as string) || "docker";
   useEffect(() => {
+    if (jsonSpecType === "url") return; // URL-type uses endpoint_url directly
     if (instance.status === "running" && instance.name) {
       setIsLoadingUrl(true);
       getMCPInstanceHealth(instance.name)
@@ -143,7 +145,7 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
         .catch(console.error)
         .finally(() => setIsLoadingUrl(false));
     }
-  }, [instance.status, instance.name]);
+  }, [instance.status, instance.name, jsonSpecType]);
 
   const handleStart = async () => {
     setIsActioning(true);
@@ -191,8 +193,22 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const containerPort = instance.json_spec?.port as number | undefined;
   const tools = (instance.json_spec?.available_tools ?? []) as Array<{name: string; description: string}>;
 
+  // Determine MCP type
+  const specType = (instance.json_spec?.type as string) || "docker";
+  const isUrlType = specType === "url";
+  const isCommandType = specType === "command";
+
+  // Command-type fields
+  const commandStr = instance.json_spec?.command as string | undefined;
+  const commandArgs = (instance.json_spec?.args ?? []) as string[];
+
+  // URL-type fields
+  const endpointUrl = instance.json_spec?.endpoint_url as string | undefined;
+  const customHeaders = (instance.json_spec?.headers ?? {}) as Record<string, string>;
+
   // Generate SSE endpoint URL from connection URL
-  const sseUrl = connectionUrl ? `${connectionUrl.replace(/\/$/, "")}/sse` : null;
+  const effectiveConnectionUrl = isUrlType ? endpointUrl : connectionUrl;
+  const sseUrl = effectiveConnectionUrl ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
 
   return (
     <div className="space-y-6 p-6">
@@ -202,6 +218,9 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold">{instance.name}</h2>
             <StatusBadge status={instance.status} />
+            <Badge variant="outline" size="sm">
+              {isCommandType ? "Command" : isUrlType ? "External URL" : "Docker"}
+            </Badge>
           </div>
           {instance.description && (
             <p className="text-sm text-muted-foreground">{instance.description}</p>
@@ -262,8 +281,8 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
         </div>
       </div>
 
-      {/* Connection URL - Only show when running */}
-      {instance.status === "running" && (
+      {/* Connection URL - Show when running, or always for URL-type */}
+      {(instance.status === "running" || isUrlType) && (
         <Card className="p-4 space-y-4 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10">
           <div className="flex items-center gap-2">
             <LinkIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -271,26 +290,28 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
               Connection URL
             </h3>
           </div>
-          
-          {isLoadingUrl ? (
+
+          {!isUrlType && isLoadingUrl ? (
             <div className="text-sm text-muted-foreground">Loading connection details...</div>
-          ) : connectionUrl ? (
+          ) : effectiveConnectionUrl ? (
             <div className="space-y-3">
               {/* Main connection URL */}
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">MCP Endpoint</label>
+                <label className="text-xs text-muted-foreground">
+                  {isUrlType ? "External Endpoint" : "MCP Endpoint"}
+                </label>
                 <div className="flex gap-2">
                   <Input
-                    value={connectionUrl}
+                    value={effectiveConnectionUrl}
                     readOnly
                     className="font-mono text-sm bg-white dark:bg-slate-950"
                   />
-                  <CopyButton text={connectionUrl} label="Connection URL" />
+                  <CopyButton text={effectiveConnectionUrl} label="Connection URL" />
                 </div>
               </div>
-              
+
               {/* SSE endpoint URL */}
-              {sseUrl && (
+              {sseUrl && !isUrlType && (
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">SSE Endpoint (for MCP clients)</label>
                   <div className="flex gap-2">
@@ -303,9 +324,11 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                   </div>
                 </div>
               )}
-              
+
               <p className="text-xs text-muted-foreground">
-                Use these URLs to connect your MCP client to this server instance.
+                {isUrlType
+                  ? "This MCP server is hosted externally at the URL above."
+                  : "Use these URLs to connect your MCP client to this server instance."}
               </p>
             </div>
           ) : (
@@ -337,8 +360,49 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
           </Card>
         )}
 
-        {/* Container info */}
-        {(containerImage || containerPort) && (
+        {/* Configuration info - type-aware */}
+        {isCommandType && commandStr && (
+          <Card className="p-4 space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Command
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="font-mono bg-muted rounded p-2 break-all">
+                {commandStr} {commandArgs.join(" ")}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Runs in a sandbox container via supergateway.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {isUrlType && (
+          <Card className="p-4 space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              External Server
+            </h3>
+            <div className="space-y-2 text-sm">
+              {endpointUrl && (
+                <div className="font-mono bg-muted rounded p-2 break-all">
+                  {endpointUrl}
+                </div>
+              )}
+              {Object.keys(customHeaders).length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Custom Headers</p>
+                  {Object.entries(customHeaders).map(([key]) => (
+                    <div key={key} className="font-mono text-xs">
+                      {key}: ••••••
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {!isCommandType && !isUrlType && (containerImage || containerPort) && (
           <Card className="p-4 space-y-3">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
               Container

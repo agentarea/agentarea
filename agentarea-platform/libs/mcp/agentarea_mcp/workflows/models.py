@@ -34,6 +34,7 @@ class StopMCPInstanceRequest(BaseModel):
     instance_id: UUID
     user_id: str
     workspace_id: str
+    json_spec: dict[str, Any] = Field(default_factory=dict)
 
 
 class StopMCPInstanceResult(BaseModel):
@@ -105,6 +106,8 @@ class DiscoverToolsRequest(BaseModel):
 
     instance_id: UUID
     instance_name: str  # slug used in gateway URL
+    endpoint_url: str | None = None  # direct URL for url-type MCPs
+    headers: dict[str, str] = Field(default_factory=dict)  # custom headers for auth
 
 
 class DiscoverToolsResult(BaseModel):
@@ -138,4 +141,17 @@ class GetInstanceEnvironmentRequest(BaseModel):
 
 class GetInstanceEnvironmentResult(BaseModel):
     env_vars: dict[str, str] = Field(default_factory=dict)
+    error: str | None = None
+
+
+class ResolveAuthHeadersRequest(BaseModel):
+    """Request to resolve auth headers for an MCP instance's auth config."""
+
+    instance_id: UUID
+    user_id: str
+    workspace_id: str
+
+
+class ResolveAuthHeadersResult(BaseModel):
+    headers: dict[str, str] = Field(default_factory=dict)
     error: str | None = None

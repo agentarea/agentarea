@@ -50,19 +50,21 @@ class StopMCPInstanceWorkflow:
             await self._update_status(request, "stopping")
             await self._publish_event(request, "mcp.server.stopping")
 
-            # Step 2: Delete container via Go manager
-            delete_result = await workflow.execute_activity(
-                "delete_mcp_container_activity",
-                args=[DeleteContainerRequest(instance_id=instance_id)],
-                start_to_close_timeout=CONTAINER_STOP_TIMEOUT,
-                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-                result_type=DeleteContainerResult,
-            )
-
-            if not delete_result.success:
-                raise RuntimeError(
-                    f"Container deletion failed: {delete_result.error}"
+            # Step 2: Delete container via Go manager (skip for url-type)
+            spec_type = request.json_spec.get("type", "docker")
+            if spec_type != "url":
+                delete_result = await workflow.execute_activity(
+                    "delete_mcp_container_activity",
+                    args=[DeleteContainerRequest(instance_id=instance_id)],
+                    start_to_close_timeout=CONTAINER_STOP_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+                    result_type=DeleteContainerResult,
                 )
+
+                if not delete_result.success:
+                    raise RuntimeError(
+                        f"Container deletion failed: {delete_result.error}"
+                    )
 
             # Step 3: Mark stopped
             self._status = "stopped"

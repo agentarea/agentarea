@@ -105,18 +105,29 @@ class CompoundMCP(BaseModel, WorkspaceScopedMixin):
 
 
 class CompoundMCPMember(BaseModel):
-    """Association between a CompoundMCP and its member MCPServerInstances."""
+    """Association between a CompoundMCP and its member MCPServerInstances.
+
+    Uses composite primary key (compound_id, mcp_instance_id) instead of
+    the default ``id`` column from BaseModel.
+    """
 
     __tablename__ = "compound_mcp_members"
+
+    # Override BaseModel's id — this table uses a composite PK instead
+    id = None  # type: ignore[assignment]
+    # Override updated_at — not in the migration
+    updated_at = None  # type: ignore[assignment]
 
     compound_id: Mapped[str] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("compound_mcps.id", ondelete="CASCADE"),
+        primary_key=True,
         nullable=False,
     )
     mcp_instance_id: Mapped[str] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("mcp_server_instances.id", ondelete="CASCADE"),
+        primary_key=True,
         nullable=False,
     )
     order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -136,6 +147,9 @@ class CompoundMCPMember(BaseModel):
         self.mcp_instance_id = mcp_instance_id
         self.order = order
         self.config = config or {}
+
+    def __repr__(self) -> str:
+        return f"<CompoundMCPMember compound={self.compound_id} instance={self.mcp_instance_id}>"
 
 
 class MCPOAuthLink(BaseModel, WorkspaceScopedMixin):

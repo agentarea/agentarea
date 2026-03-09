@@ -1,3 +1,8 @@
+---
+title: Compound MCPs
+description: Combine multiple MCP servers into a single virtual endpoint with parallel, fallback, or conditional routing.
+---
+
 # Compound MCPs
 
 <Info>

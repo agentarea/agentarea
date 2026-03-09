@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Server, Container } from "lucide-react";
+import { Server, Container, Terminal, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { HoverLink } from "@/components/ui/hover-link";
@@ -15,10 +15,23 @@ interface MCPInstanceCardProps {
   serverSpec?: MCPServer;
 }
 
+function InstanceTypeIcon({ type }: { type: string }) {
+  switch (type) {
+    case "command":
+      return <Terminal className="h-4 w-4 text-orange-500" />;
+    case "url":
+      return <Globe className="h-4 w-4 text-blue-500" />;
+    default:
+      return <Container className="h-4 w-4 text-purple-500" />;
+  }
+}
+
 export function MCPInstanceCard({
   instance,
   serverSpec,
 }: MCPInstanceCardProps) {
+  const specType = (instance.json_spec?.type as string) || "docker";
+
   return (
     <Link
       href={`/mcp-servers/${instance.id}`}
@@ -30,11 +43,12 @@ export function MCPInstanceCard({
           </div>
           <div className="min-w-0 flex-1">
             <h4 className="truncate">{instance.name}</h4>
-            {serverSpec && (
-              <p className="truncate text-xs text-gray-500">
-                {serverSpec.name}
-              </p>
-            )}
+            <div className="flex items-center gap-1 mt-0.5">
+              <InstanceTypeIcon type={specType} />
+              <span className="text-xs text-gray-500">
+                {specType === "command" ? "Command" : specType === "url" ? "External" : serverSpec?.name || "Docker"}
+              </span>
+            </div>
           </div>
         </div>
       <div className="flex justify-end -mb-2 -mt-1 -mr-2">

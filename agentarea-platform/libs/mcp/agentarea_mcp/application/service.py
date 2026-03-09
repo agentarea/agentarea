@@ -220,6 +220,7 @@ class MCPServerInstanceService:
         description: str | None = None,
         server_spec_id: str | None = None,
         json_spec: dict[str, Any] | None = None,
+        auth_config_id: str | None = None,
     ) -> MCPServerInstance | None:
         spec = json_spec or {}
 
@@ -229,13 +230,17 @@ class MCPServerInstanceService:
             raise MCPValidationError(validation_errors)
 
         # Create instance using workspace-scoped repository
-        instance = await self.repository.create(
-            name=name,
-            description=description,
-            server_spec_id=server_spec_id,
-            json_spec=spec,
-            status="pending",  # Will be updated by mcp-infrastructure
-        )
+        create_kwargs: dict[str, Any] = {
+            "name": name,
+            "description": description,
+            "server_spec_id": server_spec_id,
+            "json_spec": spec,
+            "status": "pending",  # Will be updated by mcp-infrastructure
+        }
+        if auth_config_id:
+            create_kwargs["auth_config_id"] = auth_config_id
+
+        instance = await self.repository.create(**create_kwargs)
 
         # Publish event for MCP Infrastructure to handle deployment
         await self.event_broker.publish(
@@ -435,16 +440,32 @@ class MCPServerInstanceService:
         if not instance or instance.status != "running":
             return False
 
-        slug = instance.name
-        gateway_url = get_settings().mcp.MCP_GATEWAY_URL
-        mcp_url = f"{gateway_url}/mcp/{slug}/mcp"
+        # Determine the MCP URL based on instance type
+        instance_type = (instance.json_spec or {}).get("type", "docker")
+        if instance_type == "url":
+            # External MCP — connect directly to the configured URL
+            mcp_url = (instance.json_spec or {}).get("url", "")
+            if not mcp_url:
+                logger.warning("URL-type instance %s has no url in json_spec", instance_id)
+                return False
+        else:
+            # Docker or command-type — routed via Traefik gateway using instance ID
+            gateway_url = get_settings().mcp.MCP_GATEWAY_URL
+            mcp_url = f"{gateway_url}/mcp/{instance_id}/mcp"
+
+        # Build optional headers (e.g. for auth on external MCPs)
+        headers: dict[str, str] = {}
+        auth_header = (instance.json_spec or {}).get("auth_header")
+        auth_value = (instance.json_spec or {}).get("auth_value")
+        if auth_header and auth_value:
+            headers[auth_header] = auth_value
 
         try:
             from mcp import ClientSession
             from mcp.client.streamable_http import streamablehttp_client
 
             async with streamablehttp_client(
-                mcp_url, timeout=timedelta(seconds=10)
+                mcp_url, timeout=timedelta(seconds=10), headers=headers
             ) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream) as session:
                     await session.initialize()
@@ -460,14 +481,24 @@ class MCPServerInstanceService:
             ]
 
             instance.set_available_tools(tools)
-            updated_instance = await self.repository.update(
-                instance_id, json_spec=instance.json_spec
+            new_json_spec = dict(instance.json_spec)  # copy to ensure new object
+
+            # Direct DB update to avoid SQLAlchemy JSON mutation detection issues
+            from sqlalchemy import update as sa_update
+
+            session = self.repository.session
+            stmt = (
+                sa_update(type(instance))
+                .where(type(instance).id == instance_id)
+                .values(json_spec=new_json_spec)
             )
+            await session.execute(stmt)
+            await session.commit()
 
             logger.info(
                 "Discovered %d tools for instance %s", len(tools), instance_id
             )
-            return updated_instance is not None
+            return True
 
         except Exception as e:
             logger.warning("Tool discovery failed for %s: %s", instance_id, e)

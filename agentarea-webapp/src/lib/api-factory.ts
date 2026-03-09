@@ -780,6 +780,23 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.DELETE(`/v1/skills/${skillId}` as any, {});
       return { data, error };
     },
+
+    // MCP Auth Config API
+    listMCPAuthConfigs: async () => {
+      const { data, error } = await client.GET("/v1/mcp-auth-configs/" as any, {});
+      return { data, error };
+    },
+
+    createMCPAuthConfig: async (body: {
+      name: string;
+      description?: string;
+      auth_type: string;
+      config?: Record<string, any>;
+      credentials?: Record<string, any>;
+    }) => {
+      const { data, error } = await client.POST("/v1/mcp-auth-configs/" as any, { body });
+      return { data, error };
+    },
   };
 }
 
