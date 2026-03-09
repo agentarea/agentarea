@@ -36,9 +36,11 @@ security_optional = HTTPBearer(auto_error=False)
 
 async def _validate_api_key(token: str, request: Request) -> UserContext | None:
     """Validate an API key and return UserContext, or None if invalid."""
-    from agentarea_common.config import get_database
     from agentarea_mcp.domain.auth_models import MCPAccessToken
-    from sqlalchemy import select, update as sa_update
+    from sqlalchemy import select
+    from sqlalchemy import update as sa_update
+
+    from agentarea_common.config import get_database
 
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
@@ -65,7 +67,7 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
             )
             await session.commit()
         except Exception:
-            pass
+            logger.debug("Failed to increment API key access count", exc_info=True)
 
         # workspace_id from header takes precedence, fallback to record's workspace
         workspace_id = request.headers.get("X-Workspace-ID") or str(record.workspace_id)

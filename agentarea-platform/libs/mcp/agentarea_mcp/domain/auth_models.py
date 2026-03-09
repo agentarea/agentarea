@@ -148,7 +148,7 @@ class CompoundMCPMember(BaseModel):
         self.order = order
         self.config = config or {}
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return f"<CompoundMCPMember compound={self.compound_id} instance={self.mcp_instance_id}>"
 
 

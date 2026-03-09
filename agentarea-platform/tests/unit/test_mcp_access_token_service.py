@@ -37,7 +37,7 @@ def _make_token(
 def repo():
     r = MagicMock()
     r.create = AsyncMock()
-    r.get = AsyncMock()
+    r.get_by_id = AsyncMock()
     r.get_by_hash = AsyncMock()
     r.list_all = AsyncMock()
     r.update = AsyncMock()
@@ -82,10 +82,10 @@ class TestCreateToken:
 
         assert raw.startswith(_TOKEN_PREFIX)
         assert record is stored
-        # Repo received a model with the correct hash
-        created_model = repo.create.call_args[0][0]
-        assert created_model.token_hash == hash_token(raw)
-        assert created_model.token_prefix == raw[:12]
+        # Repo received kwargs with the correct hash
+        kwargs = repo.create.call_args[1]
+        assert kwargs["token_hash"] == hash_token(raw)
+        assert kwargs["token_prefix"] == raw[:12]
 
     @pytest.mark.asyncio
     async def test_expiry_set_when_expires_in_days_given(self, service, repo):
@@ -94,9 +94,9 @@ class TestCreateToken:
 
         await service.create_token("expiring", expires_in_days=7)
 
-        model = repo.create.call_args[0][0]
-        assert model.expires_at is not None
-        assert model.expires_at > datetime.utcnow()
+        kwargs = repo.create.call_args[1]
+        assert kwargs["expires_at"] is not None
+        assert kwargs["expires_at"] > datetime.utcnow()
 
     @pytest.mark.asyncio
     async def test_no_expiry_when_not_given(self, service, repo):
@@ -105,8 +105,8 @@ class TestCreateToken:
 
         await service.create_token("forever")
 
-        model = repo.create.call_args[0][0]
-        assert model.expires_at is None
+        kwargs = repo.create.call_args[1]
+        assert kwargs["expires_at"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@ class TestRevokeToken:
     @pytest.mark.asyncio
     async def test_revoke_existing_token_returns_true(self, service, repo):
         record = _make_token()
-        repo.get.return_value = record
+        repo.get_by_id.return_value = record
 
         result = await service.revoke_token(record.id)
 
@@ -178,7 +178,7 @@ class TestRevokeToken:
 
     @pytest.mark.asyncio
     async def test_revoke_missing_token_returns_false(self, service, repo):
-        repo.get.return_value = None
+        repo.get_by_id.return_value = None
         result = await service.revoke_token(uuid4())
         assert result is False
         repo.update.assert_not_called()
@@ -201,14 +201,14 @@ class TestListAndGet:
     @pytest.mark.asyncio
     async def test_get_returns_record(self, service, repo):
         record = _make_token()
-        repo.get.return_value = record
+        repo.get_by_id.return_value = record
 
         result = await service.get_token(record.id)
         assert result is record
 
     @pytest.mark.asyncio
     async def test_get_missing_returns_none(self, service, repo):
-        repo.get.return_value = None
+        repo.get_by_id.return_value = None
         result = await service.get_token(uuid4())
         assert result is None
 
