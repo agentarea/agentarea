@@ -61,7 +61,8 @@ export function DefaultButtonSocial({
 
   const ssoNodeCount = ssoNodes.length ?? 0
 
-  const Logo = logos[(attributes.value as string).split("-")[0]]
+  const logoKey = (attributes.value as string).split("-")[0]
+  const Logo = logos[logoKey]
 
   const showLabel =
     flowType === FlowType.Settings ||

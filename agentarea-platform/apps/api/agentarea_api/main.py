@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 # from fastapi_mcp import AuthConfig, FastApiMCP
 from agentarea_api.api.events import events_router
+from agentarea_api.api.v1.mcp_oauth_as import oauth_as_router
 from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
 
 logger = logging.getLogger(__name__)
@@ -248,6 +249,8 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
     # Add routers - PUBLIC routes first (no auth), then PROTECTED routes (auth required)
+    # RFC 9728 OAuth AS metadata — no prefix so /.well-known/... is top-level
+    app.include_router(oauth_as_router)
     app.include_router(events_router, prefix="/events", tags=["events"])
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(protected_v1_router, tags=["v1"])
@@ -298,9 +301,13 @@ def create_app() -> FastAPI:
         }
 
         # Apply global security and ensure operation-level security
+        # Skip /mcp/* routes (MCP proxy endpoints handle their own auth)
         default_security = [{"bearer": []}]
         openapi_schema["security"] = default_security
-        for path_item in openapi_schema.get("paths", {}).values():
+        for path, path_item in openapi_schema.get("paths", {}).items():
+            # Skip MCP proxy routes - they handle auth differently
+            if path.startswith("/mcp"):
+                continue
             for method in ("get", "post", "put", "delete", "patch", "options", "head"):
                 op = path_item.get(method)
                 if op and "security" not in op:

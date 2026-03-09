@@ -371,6 +371,58 @@ The following table lists configurable parameters of the chart and their default
 | kratos.config.identity.schemas[0].id | string | `"default"` |  |
 | kratos.config.identity.schemas[0].url | string | `"file:///etc/config/kratos/identity.schema.json"` |  |
 
+## Configuration System
+
+The chart uses a centralized configuration system defined in `config.yaml`. Environment variables and secrets are auto-generated into templates via `scripts/generate_env_tpls.py`.
+
+### Conditional Dependencies
+
+Some configuration groups are conditionally included based on feature flags:
+
+```yaml
+# config.yaml
+storage:
+  # Only included when MinIO is enabled
+  conditional: '{{ .Values.minio.enabled }}'
+  configVars:
+    AWS_REGION: '{{ .Values.global.storage.region }}'
+  secrets:
+    - name: AWS_ACCESS_KEY_ID
+      secretName: "{{ .Values.global.secrets.minio }}"
+```
+
+When `minio.enabled=false`:
+- The storage ConfigMap is not created
+- Storage secrets are not mounted
+- Services should use external S3-compatible storage
+
+### Adding New Configuration Groups
+
+1. Add entry to `config.yaml`:
+```yaml
+groups:
+  myservice:
+    conditional: '{{ .Values.myService.enabled }}'  # Optional
+    configVars:
+      MY_VAR: 'value'
+    secrets:
+      - name: MY_SECRET
+        secretName: "{{ .Values.global.secrets.myService }}"
+        key: "password"
+```
+
+2. Regenerate templates:
+```bash
+python3 scripts/generate_env_tpls.py
+```
+
+3. Reference in deployments:
+```yaml
+env:
+  {{- include "agentarea.myservice.envs" . | nindent 12 }}
+  {{- include "agentarea.myservice.secrets.envs" . | nindent 12 }}
+```
+
 ## Secrets
 
 For production, create required secrets ahead of time and reference them via `global.secrets.*`:

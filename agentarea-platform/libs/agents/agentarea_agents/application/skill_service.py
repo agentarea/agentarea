@@ -12,7 +12,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 
 from agentarea_agents.application.skill_parser import SkillParser
-from agentarea_agents.domain.skill_models import Skill, SkillSourceType
+from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSourceType
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporter,
 )
@@ -492,6 +492,108 @@ class SkillService:
             expires_in=expires_in,
         )
 
+    # ------------------------------------------------------------------
+    # Skill member management (skill-as-bundle / self-referential)
+    # ------------------------------------------------------------------
+
+    async def add_member(
+        self,
+        parent_skill_id: UUID | str,
+        child_skill_id: UUID | str,
+        order: int = 0,
+        is_required: bool = True,
+        dependencies: list[str] | None = None,
+    ) -> SkillMember:
+        """Add a child skill to a parent skill, validating for cycles first.
+
+        Args:
+            parent_skill_id: The parent skill ID.
+            child_skill_id: The child skill to add.
+            order: Execution order hint.
+            is_required: Whether this child is required.
+            dependencies: IDs of other children that must run before this one.
+
+        Returns:
+            Created or updated SkillMember.
+
+        Raises:
+            ValueError: If the parent or child skill is not found, or if adding
+                        the child would create a cycle.
+        """
+        from uuid import UUID as _UUID
+
+        parent_id = _UUID(str(parent_skill_id))
+        child_id = _UUID(str(child_skill_id))
+
+        repo = self._get_repository()
+
+        if parent_id == child_id:
+            raise ValueError("A skill cannot be a member of itself")
+
+        # Fetch existing members and simulate adding the new one for cycle detection
+        existing = await repo.get_members(parent_id)
+        test_members = [
+            *existing,
+            SkillMember(
+                parent_skill_id=parent_id,
+                child_skill_id=child_id,
+                dependencies=dependencies or [],
+            ),
+        ]
+        try:
+            _topological_sort(test_members)
+        except ValueError as exc:
+            raise ValueError(f"Adding skill {child_id} would create a cycle") from exc
+
+        return await repo.add_member(
+            parent_skill_id=parent_id,
+            child_skill_id=child_id,
+            order=order,
+            is_required=is_required,
+            dependencies=dependencies,
+        )
+
+    async def remove_member(
+        self,
+        parent_skill_id: UUID | str,
+        child_skill_id: UUID | str,
+    ) -> bool:
+        """Remove a child skill from a parent skill.
+
+        Returns:
+            True if removed, False if the association did not exist.
+        """
+        from uuid import UUID as _UUID
+
+        repo = self._get_repository()
+        return await repo.remove_member(
+            _UUID(str(parent_skill_id)),
+            _UUID(str(child_skill_id)),
+        )
+
+    async def get_members(self, parent_skill_id: UUID | str) -> list[SkillMember]:
+        """Get all direct child skills of a parent skill.
+
+        Returns:
+            List of SkillMember objects ordered by 'order' field.
+        """
+        from uuid import UUID as _UUID
+
+        repo = self._get_repository()
+        return await repo.get_members(_UUID(str(parent_skill_id)))
+
+    async def flatten(self, parent_skill_id: UUID | str) -> list[UUID]:
+        """Return child skill IDs in topological execution order.
+
+        Raises:
+            ValueError: If circular dependencies are detected.
+        """
+        from uuid import UUID as _UUID
+
+        repo = self._get_repository()
+        members = await repo.get_members(_UUID(str(parent_skill_id)))
+        return _topological_sort(members)
+
     async def get_skill_file_content(
         self,
         skill_id: UUID | str,
@@ -523,3 +625,47 @@ class SkillService:
             raise FileNotFoundError(f"File not found: {path}")
 
         return await self.storage_service.get_file_content(skill.s3_path, path)
+
+
+def _topological_sort(members: list[SkillMember]) -> list[UUID]:
+    """Kahn's algorithm topological sort over SkillMember children.
+
+    Args:
+        members: List of SkillMember objects for a parent skill.
+
+    Returns:
+        Child skill IDs in valid execution order.
+
+    Raises:
+        ValueError: If a circular dependency is detected.
+    """
+    from uuid import UUID
+
+    skill_ids = {str(m.child_skill_id) for m in members}
+    in_degree: dict[str, int] = dict.fromkeys(skill_ids, 0)
+    graph: dict[str, list[str]] = {sid: [] for sid in skill_ids}
+
+    for m in members:
+        sid = str(m.child_skill_id)
+        for dep in (m.dependencies or []):
+            if dep in skill_ids:
+                graph[dep].append(sid)
+                in_degree[sid] += 1
+
+    queue = [sid for sid, deg in in_degree.items() if deg == 0]
+    result: list[UUID] = []
+    visited = 0
+
+    while queue:
+        node = queue.pop(0)
+        result.append(UUID(node))
+        visited += 1
+        for neighbor in graph[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if visited != len(skill_ids):
+        raise ValueError("Circular dependency detected in skill members")
+
+    return result

@@ -84,17 +84,22 @@ func (h *HealthChecker) PerformHealthCheck(ctx context.Context, container *model
 			result.HTTPReachable = false
 			result.Error = "Could not determine container IP for health check"
 		} else {
-			// Get the container's internal exposed port
-			internalPort, err := h.getContainerExposedPort(ctx, container.ID)
-			if err != nil {
-				h.logger.Warn("Failed to get container exposed port for health check",
-					slog.String("container", container.Name),
-					slog.String("error", err.Error()))
-				// Skip HTTP health check but consider container healthy since it's running
-				result.Healthy = true
-				result.HTTPReachable = false
-				result.Error = "Could not determine container exposed port for health check"
-			} else {
+			// Use the container's configured port first, then fall back to detecting exposed port
+			internalPort := container.Port
+			if internalPort == 0 {
+				detectedPort, err := h.getContainerExposedPort(ctx, container.ID)
+				if err != nil {
+					h.logger.Warn("Failed to get container exposed port for health check",
+						slog.String("container", container.Name),
+						slog.String("error", err.Error()))
+					// Skip HTTP health check but consider container healthy since it's running
+					result.Healthy = true
+					result.HTTPReachable = false
+					result.Error = "Could not determine container exposed port for health check"
+				}
+				internalPort = detectedPort
+			}
+			if internalPort > 0 {
 				// Construct direct URL to container using internal port
 				directURL := fmt.Sprintf("http://%s:%d", containerIP, internalPort)
 
@@ -200,8 +205,10 @@ func (h *HealthChecker) checkHTTPEndpoint(ctx context.Context, url string) (bool
 	}
 	defer resp.Body.Close()
 
-	// Consider 2xx and 3xx status codes as healthy
-	healthy := resp.StatusCode >= 200 && resp.StatusCode < 400
+	// Any HTTP response means the server is up and reachable.
+	// MCP servers may return 4xx on GET / (e.g. 403 from host checks, 405 method not allowed).
+	// Only connection failures (handled above) indicate the server is down.
+	healthy := resp.StatusCode < 500
 
 	return healthy, responseTime, nil
 }

@@ -18,7 +18,7 @@ Thank you for your interest in contributing to AgentArea! This guide will help y
   <Step title="Set Up Development Environment">
     ```bash
     # Start the development environment
-    make dev-up
+    make up-dev
     
     # Verify everything is working
     curl http://localhost:8000/health
@@ -98,15 +98,15 @@ For feature requests, please describe:
 <Tabs>
   <Tab title="Python (Backend)">
     ```python
-    # Use Black for formatting
-    black .
-    
-    # Use isort for imports
-    isort .
-    
-    # Use mypy for type checking
-    mypy src/
-    
+    # Use ruff for formatting
+    uv run ruff format
+
+    # Use ruff for linting and import sorting
+    uv run ruff check --fix
+
+    # Use pyright for type checking
+    uv run pyright
+
     # Follow PEP 8 and use descriptive names
     def create_agent_instance(agent_config: AgentConfig) -> Agent:
         """Create a new agent instance with the given configuration."""
@@ -176,14 +176,20 @@ For feature requests, please describe:
 </CardGroup>
 
 ```bash
-# Run all tests
-make test
+# Run all Python tests
+make agentarea-platform-test
+# or
+cd agentarea-platform && uv run pytest
 
 # Run specific test suites
-pytest tests/unit/
-pytest tests/integration/
+cd agentarea-platform && uv run pytest tests/unit/
+cd agentarea-platform && uv run pytest tests/integration/
 npm test # Frontend tests
-go test ./... # Go tests
+
+# Run Go tests
+make test-go
+# or
+cd agentarea-mcp-manager && go test ./...
 ```
 
 ### Documentation
@@ -245,17 +251,15 @@ Add screenshots for UI changes
 
 ```
 agentarea/
-├── core/                    # Backend API and services
-│   ├── src/agentarea/      # Main application code
-│   ├── tests/              # Test suites
-│   └── docs/               # Technical documentation
-├── frontend/               # React/Next.js frontend
-│   ├── src/                # Source code
-│   ├── components/         # Reusable components
-│   └── pages/              # Page components
-├── agentarea-mcp-manager/  # MCP server management
-├── docs/                   # User documentation
-└── scripts/               # Development and deployment scripts
+├── agentarea-platform/     # Python backend (FastAPI + Temporal)
+│   ├── apps/               # API, worker, CLI apps
+│   └── libs/               # Domain libraries (uv workspace)
+├── agentarea-webapp/       # Next.js frontend + packages
+├── agentarea-mcp-manager/  # Go MCP server orchestration
+├── agentarea-cli/          # Node.js CLI (Ink/React)
+├── charts/                 # Helm charts
+├── docs/                   # Mintlify documentation
+└── scripts/                # Build/deploy utilities
 ```
 
 ### Design Principles

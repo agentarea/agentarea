@@ -44,8 +44,8 @@ vim .env
 # Using Docker Compose
 docker compose -f docker-compose.dev.yaml up -d
 
-# Or using make (if available)
-make dev-up
+# Or using make
+make up-dev
 ```
 
 ### 4. Verify Installation
@@ -149,25 +149,25 @@ docker compose -f docker-compose.dev.yaml exec db psql -U agentarea -d agentarea
 ## 📚 Next Steps
 
 ### For Backend Developers
-1. **[System Architecture](../core/docs/SYSTEM_ARCHITECTURE.md)** - Understand the technical implementation
-2. **[CLI Usage](../core/docs/CLI_USAGE.md)** - Master the command-line interface
-3. **[API Documentation](http://localhost:8000/docs)** - Explore available endpoints
-4. **[Auth Implementation](auth_implementation.md)** - Learn authentication patterns
+1. **[Platform Architecture](/architecture)** - Understand the system design
+2. **[Building Agents](/building-agents)** - Create and configure AI agents
+3. **[API Reference](/api-reference)** - Explore available endpoints
+4. **[Agent Communication](/agent-communication)** - A2A protocol patterns
 
 ### For Frontend Developers
-1. **[Agent Chat Implementation](../core/docs/agent-chat-implementation-plan.md)** - Chat system design
-2. **[API Reference](#)** - Frontend integration patterns *(Coming Soon)*
-3. **[UI Components](#)** - Reusable component library *(Coming Soon)*
+1. **[Platform Overview](/platform-overview)** - Understand the full stack
+2. **[API Reference](/api-reference)** - API integration patterns
+3. **[Features](/features)** - All platform capabilities
 
 ### For DevOps/Infrastructure
-1. **[Architecture Decisions](architecture-decisions.md)** - Infrastructure choices
-2. **[Deployment Guide](#)** - Production deployment *(Coming Soon)*
-3. **[Monitoring Setup](#)** - Observability configuration *(Coming Soon)*
+1. **[Infrastructure](/infrastructure)** - Architecture and scaling patterns
+2. **[Deployment Guide](/deployment)** - Docker, Kubernetes, and cloud deployment
+3. **[Monitoring](/monitoring)** - Observability and alerting setup
 
 ### For Product/Business
-1. **[Project Overview](project-overview.md)** - Vision and roadmap
-2. **[Architecture Insights](architecture_insights.md)** - High-level system design
-3. **[Task Assignment](task_assignment.md)** - Current development priorities
+1. **[Platform Overview](/platform-overview)** - Vision and architecture
+2. **[Roadmap](/roadmap)** - Development priorities
+3. **[Features](/features)** - All platform capabilities
 
 ## 🔍 Troubleshooting
 
@@ -244,5 +244,4 @@ If you've reached this point, you should have:
 
 ---
 
-*Last updated: January 2025*
-*Next review: February 2025*
+*Last updated: March 2026*

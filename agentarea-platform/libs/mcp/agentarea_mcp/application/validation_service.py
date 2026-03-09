@@ -29,6 +29,10 @@ class MCPConfigurationValidator:
     def validate_json_spec(json_spec: dict[str, Any]) -> list[str]:
         """Validate a JSON specification for MCP instance creation.
 
+        Supports two spec types:
+        - "docker" (default): requires "image" and "port"
+        - "command": requires "command" field; runs via supergateway sandbox
+
         Args:
             json_spec: The JSON specification to validate
 
@@ -37,22 +41,34 @@ class MCPConfigurationValidator:
         """
         errors: list[str] = []
 
-        # Required fields
-        required_fields = ["image", "port"]
-        for field in required_fields:
-            if field not in json_spec:
-                errors.append(f"Required field '{field}' is missing")
+        spec_type = json_spec.get("type", "docker")
 
-        # Validate image field
-        if "image" in json_spec:
-            image = json_spec["image"]
-            if not isinstance(image, str) or not image.strip():
+        if spec_type == "command":
+            # Command type: requires "command" field
+            if "command" not in json_spec:
+                errors.append("Required field 'command' is missing for type 'command'")
+            elif not isinstance(json_spec["command"], str) or not json_spec["command"].strip():
+                errors.append("Field 'command' must be a non-empty string")
+
+            # Validate args if present
+            if "args" in json_spec:
+                args = json_spec["args"]
+                if not isinstance(args, list):
+                    errors.append("Field 'args' must be a list of strings")
+                else:
+                    for i, item in enumerate(args):
+                        if not isinstance(item, str):
+                            errors.append(f"Arg at index {i} must be a string")
+        else:
+            # Docker type (default): requires "image" and "port"
+            if "image" not in json_spec:
+                errors.append("Required field 'image' is missing")
+            elif not isinstance(json_spec["image"], str) or not json_spec["image"].strip():
                 errors.append("Field 'image' must be a non-empty string")
 
-        # Validate port field
-        if "port" in json_spec:
-            port = json_spec["port"]
-            if not isinstance(port, int) or port < 1 or port > 65535:
+            if "port" not in json_spec:
+                errors.append("Required field 'port' is missing")
+            elif not isinstance(json_spec["port"], int) or json_spec["port"] < 1 or json_spec["port"] > 65535:
                 errors.append("Field 'port' must be an integer between 1 and 65535")
 
         # Validate environment variables if present

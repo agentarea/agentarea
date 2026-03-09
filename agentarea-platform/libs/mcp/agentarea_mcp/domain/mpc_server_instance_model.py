@@ -1,7 +1,9 @@
 from typing import Any
+from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, String, Text
+from sqlalchemy import JSON, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -17,6 +19,11 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         JSON, nullable=False
     )  # Unified configuration storage
     status: Mapped[str] = mapped_column(String(50), default="pending")
+    auth_config_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("mcp_auth_configs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     def __init__(
         self,
@@ -27,6 +34,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         status: str = "pending",
         workspace_id: str | None = None,
         created_by: str | None = None,
+        auth_config_id: UUID | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -35,6 +43,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         self.server_spec_id = server_spec_id
         self.json_spec = json_spec or {}
         self.status = status
+        self.auth_config_id = auth_config_id
         if workspace_id is not None:
             self.workspace_id = workspace_id
         if created_by is not None:

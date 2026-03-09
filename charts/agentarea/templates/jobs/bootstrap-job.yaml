@@ -60,6 +60,7 @@ spec:
           env:
             {{- include "agentarea.databaseJobs.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.databaseJobs.envs" . | nindent 12 }}
+            {{- if .Values.minio.enabled }}
             # MinIO configuration
             - name: MINIO_ROOT_USER
               valueFrom:
@@ -73,6 +74,7 @@ spec:
                   key: root-password
             - name: MINIO_ENDPOINT
               value: "http://{{ include "agentarea.minio.host" . }}:9000"
+            {{- end }}
 
             # Admin user configuration (can be overridden via extraEnv)
             - name: ADMIN_EMAIL

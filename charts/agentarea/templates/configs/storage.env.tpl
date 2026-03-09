@@ -28,6 +28,7 @@ AWS_ENDPOINT_URL: "http://{{ include "agentarea.minio.host" . }}:9000"
 {{- end }}
 
 {{- define "agentarea.storage.secrets.envs" }}
+{{ if .Values.minio.enabled }}
 - name: AWS_ACCESS_KEY_ID
   valueFrom:
     secretKeyRef:
@@ -38,4 +39,5 @@ AWS_ENDPOINT_URL: "http://{{ include "agentarea.minio.host" . }}:9000"
     secretKeyRef:
       name: "{{ .Values.global.secrets.minio }}"
       key: root-password
+{{- end }}
 {{- end }}

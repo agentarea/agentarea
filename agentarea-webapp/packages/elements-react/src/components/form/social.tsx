@@ -38,8 +38,8 @@ export function OryFormSsoButtons() {
 
   return (
     <Form.SsoRoot nodes={filteredNodes}>
-      {filteredNodes.map((node) => (
-        <Node node={node} key={getNodeId(node)} />
+      {filteredNodes.map((node, index) => (
+        <Node node={node} key={`${getNodeId(node)}-${index}`} />
       ))}
     </Form.SsoRoot>
   )

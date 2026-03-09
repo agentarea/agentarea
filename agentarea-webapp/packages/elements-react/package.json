@@ -1,42 +1,43 @@
 {
   "name": "@ory/elements-react",
   "version": "0.0.0-unused",
+  "type": "module",
   "scripts": {
-    "prepare": "tsup --clean --dts"
+    "build": "tsup --clean --dts"
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
       "require": "./dist/index.js"
     },
     "./client": {
-      "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.mjs",
+      "types": "./src/client/index.ts",
+      "import": "./src/client/index.ts",
       "require": "./dist/client/index.js"
     },
     "./theme": {
-      "types": "./dist/theme/default/index.d.ts",
-      "import": "./dist/theme/default/index.mjs",
+      "types": "./src/theme/default/index.ts",
+      "import": "./src/theme/default/index.ts",
       "require": "./dist/theme/default/index.js"
     },
-    "./theme/styles.css": "./dist/theme/default/index.css",
+    "./theme/styles.css": "./src/theme/default/global.css",
     "./theme/tailwind": {
-      "types": "./dist/theme/default/tailwind/defaults.d.ts",
-      "import": "./dist/theme/default/tailwind/defaults.mjs",
-      "require": "./dist/theme/default/tailwind/defaults.js"
+      "types": "./tailwind/generated/variables.css",
+      "import": "./tailwind/generated/variables.css",
+      "require": "./tailwind/generated/variables.css"
     }
   },
   "typesVersions": {
     "*": {
       "index": [
-        "./dist/index.d.ts"
+        "./src/index.ts"
       ],
       "client": [
-        "./dist/client/index.d.ts"
+        "./src/client/index.ts"
       ],
       "theme": [
-        "./dist/theme/default/index.d.ts"
+        "./src/theme/default/index.ts"
       ]
     }
   },

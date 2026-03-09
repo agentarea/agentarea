@@ -1,11 +1,16 @@
 # Development stage with live reload
 FROM golang:1.25-alpine AS development
 
+# Install docker-cli binary (API 1.41 compatible version 20.10)
+RUN apk add --no-cache curl && \
+    curl -fsSL https://download.docker.com/linux/static/stable/$(uname -m)/docker-20.10.17.tgz | tar xzf - -C /tmp && \
+    mv /tmp/docker/docker /usr/local/bin/docker && \
+    rm -rf /tmp/docker
+
 # Install development dependencies including Air for live reload
 RUN apk add --no-cache \
     git \
     ca-certificates \
-    curl \
     podman \
     buildah \
     skopeo \
@@ -33,6 +38,10 @@ RUN adduser -D -u 1000 -g users -s /bin/sh podman-user \
 
 # Set working directory
 WORKDIR /app
+
+# Pre-download Go dependencies so they're cached in the image layer
+COPY go.mod go.sum ./
+RUN go mod download
 
 # Initialize Podman for the user (as podman-user)
 USER podman-user

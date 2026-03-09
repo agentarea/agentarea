@@ -168,31 +168,37 @@ func (v *ContainerValidator) DryRunValidation(ctx context.Context, instance *mod
 		result.Valid = false
 	}
 
-	// Extract image from json_spec
-	image, ok := instance.JSONSpec["image"].(string)
-	if !ok || image == "" {
-		result.Errors = append(result.Errors, "Missing or invalid image in json_spec")
-		result.Valid = false
-		return result, nil
-	}
+	specType, _ := instance.JSONSpec["type"].(string)
 
-	// Validate container image
-	imageValidation, err := v.ValidateContainerImage(ctx, image, true)
-	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("Image validation failed: %v", err))
-		result.Valid = false
-		return result, nil
-	}
+	if specType == "command" {
+		// Command type uses the supergateway sandbox image — no image validation needed
+		result.ImageExists = true
+		result.CanPull = true
+	} else {
+		// Docker type: validate the image field
+		image, ok := instance.JSONSpec["image"].(string)
+		if !ok || image == "" {
+			result.Errors = append(result.Errors, "Missing or invalid image in json_spec")
+			result.Valid = false
+			return result, nil
+		}
 
-	// Merge image validation results
-	result.ImageExists = imageValidation.ImageExists
-	result.CanPull = imageValidation.CanPull
-	result.EstimatedSize = imageValidation.EstimatedSize
-	result.Errors = append(result.Errors, imageValidation.Errors...)
-	result.Warnings = append(result.Warnings, imageValidation.Warnings...)
+		imageValidation, err := v.ValidateContainerImage(ctx, image, true)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Image validation failed: %v", err))
+			result.Valid = false
+			return result, nil
+		}
 
-	if !imageValidation.Valid {
-		result.Valid = false
+		result.ImageExists = imageValidation.ImageExists
+		result.CanPull = imageValidation.CanPull
+		result.EstimatedSize = imageValidation.EstimatedSize
+		result.Errors = append(result.Errors, imageValidation.Errors...)
+		result.Warnings = append(result.Warnings, imageValidation.Warnings...)
+
+		if !imageValidation.Valid {
+			result.Valid = false
+		}
 	}
 
 	// Check container limits
@@ -251,31 +257,37 @@ func (v *ContainerValidator) DryRunValidationWithLimits(ctx context.Context, ins
 		result.Valid = false
 	}
 
-	// Extract image from json_spec
-	image, ok := instance.JSONSpec["image"].(string)
-	if !ok || image == "" {
-		result.Errors = append(result.Errors, "Missing or invalid image in json_spec")
-		result.Valid = false
-		return result, nil
-	}
+	specType, _ := instance.JSONSpec["type"].(string)
 
-	// Validate container image
-	imageValidation, err := v.ValidateContainerImage(ctx, image, true)
-	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("Image validation failed: %v", err))
-		result.Valid = false
-		return result, nil
-	}
+	if specType == "command" {
+		// Command type uses the supergateway sandbox image — no image validation needed
+		result.ImageExists = true
+		result.CanPull = true
+	} else {
+		// Docker type: validate the image field
+		image, ok := instance.JSONSpec["image"].(string)
+		if !ok || image == "" {
+			result.Errors = append(result.Errors, "Missing or invalid image in json_spec")
+			result.Valid = false
+			return result, nil
+		}
 
-	// Merge image validation results
-	result.ImageExists = imageValidation.ImageExists
-	result.CanPull = imageValidation.CanPull
-	result.EstimatedSize = imageValidation.EstimatedSize
-	result.Errors = append(result.Errors, imageValidation.Errors...)
-	result.Warnings = append(result.Warnings, imageValidation.Warnings...)
+		imageValidation, err := v.ValidateContainerImage(ctx, image, true)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Image validation failed: %v", err))
+			result.Valid = false
+			return result, nil
+		}
 
-	if !imageValidation.Valid {
-		result.Valid = false
+		result.ImageExists = imageValidation.ImageExists
+		result.CanPull = imageValidation.CanPull
+		result.EstimatedSize = imageValidation.EstimatedSize
+		result.Errors = append(result.Errors, imageValidation.Errors...)
+		result.Warnings = append(result.Warnings, imageValidation.Warnings...)
+
+		if !imageValidation.Valid {
+			result.Valid = false
+		}
 	}
 
 	// Check container limits using provided values (no manager callbacks)
@@ -309,45 +321,52 @@ func (v *ContainerValidator) DryRunValidationWithLimits(ctx context.Context, ins
 	return result, nil
 }
 
-// validateJSONSpec validates the structure of json_spec
+// validateJSONSpec validates the structure of json_spec.
+// Supports two types:
+//   - "docker" (default): requires "image" and "port" fields
+//   - "command": requires "command" field; runs via supergateway sandbox
 func (v *ContainerValidator) validateJSONSpec(jsonSpec map[string]interface{}) error {
-	required := []string{"image", "port"}
-	for _, field := range required {
-		if _, exists := jsonSpec[field]; !exists {
-			return fmt.Errorf("required field %s is missing", field)
-		}
-	}
+	specType, _ := jsonSpec["type"].(string)
 
-	// Validate image field
-	if image, ok := jsonSpec["image"].(string); !ok || image == "" {
-		return fmt.Errorf("image field must be a non-empty string")
-	}
+	switch specType {
+	case "command":
+		// Command type: needs a "command" field (e.g. "npx" or "uvx")
+		cmd, ok := jsonSpec["command"].(string)
+		if !ok || cmd == "" {
+			return fmt.Errorf("command field must be a non-empty string for type 'command'")
+		}
 
-	// Validate port field
-	switch port := jsonSpec["port"].(type) {
-	case int:
-		if port < 1 || port > 65535 {
-			return fmt.Errorf("port must be between 1 and 65535")
-		}
-	case float64:
-		if port < 1 || port > 65535 {
-			return fmt.Errorf("port must be between 1 and 65535")
-		}
 	default:
-		return fmt.Errorf("port field must be a number")
+		// Docker type (or unspecified): needs "image" and "port"
+		if image, ok := jsonSpec["image"].(string); !ok || image == "" {
+			return fmt.Errorf("image field must be a non-empty string")
+		}
+
+		switch port := jsonSpec["port"].(type) {
+		case int:
+			if port < 1 || port > 65535 {
+				return fmt.Errorf("port must be between 1 and 65535")
+			}
+		case float64:
+			if port < 1 || port > 65535 {
+				return fmt.Errorf("port must be between 1 and 65535")
+			}
+		default:
+			return fmt.Errorf("port field must be a number")
+		}
+
+		// Validate cmd if present (docker type override entrypoint)
+		if cmd, exists := jsonSpec["cmd"]; exists {
+			if _, ok := cmd.([]interface{}); !ok {
+				return fmt.Errorf("cmd field must be an array")
+			}
+		}
 	}
 
-	// Validate environment variables if present
+	// Validate environment variables if present (applies to all types)
 	if env, exists := jsonSpec["environment"]; exists {
 		if _, ok := env.(map[string]interface{}); !ok {
 			return fmt.Errorf("environment field must be an object")
-		}
-	}
-
-	// Validate command if present
-	if cmd, exists := jsonSpec["cmd"]; exists {
-		if _, ok := cmd.([]interface{}); !ok {
-			return fmt.Errorf("cmd field must be an array")
 		}
 	}
 

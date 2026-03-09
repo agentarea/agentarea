@@ -92,6 +92,7 @@ export const {
 
   // MCP health
   getMCPHealthStatus,
+  getMCPInstanceHealth,
 
   // Skills API
   listSkills,

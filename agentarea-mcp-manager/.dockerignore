@@ -39,3 +39,4 @@ Thumbs.db
 dist/
 build/
 bin/
+codeql-db/

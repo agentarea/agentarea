@@ -8,7 +8,12 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from agentarea_agents.domain.skill_models import Skill, agent_skills_table
+from agentarea_agents.domain.skill_models import (
+    Skill,
+    SkillMember,
+    agent_skills_table,
+    skill_members_table,
+)
 
 
 class SkillRepository(WorkspaceScopedRepository[Skill]):
@@ -204,3 +209,96 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    # ------------------------------------------------------------------
+    # Skill member management (self-referential skill-as-bundle)
+    # ------------------------------------------------------------------
+
+    async def get_members(self, parent_skill_id: UUID) -> list[SkillMember]:
+        """Get all child skills for a parent skill, ordered by 'order' field."""
+        query = (
+            select(skill_members_table)
+            .where(skill_members_table.c.parent_skill_id == parent_skill_id)
+            .order_by(skill_members_table.c.order)
+        )
+        result = await self.session.execute(query)
+        rows = result.fetchall()
+        return [
+            SkillMember(
+                parent_skill_id=row.parent_skill_id,
+                child_skill_id=row.child_skill_id,
+                order=row.order,
+                is_required=row.is_required,
+                dependencies=row.dependencies or [],
+            )
+            for row in rows
+        ]
+
+    async def add_member(
+        self,
+        parent_skill_id: UUID,
+        child_skill_id: UUID,
+        order: int = 0,
+        is_required: bool = True,
+        dependencies: list[str] | None = None,
+    ) -> SkillMember:
+        """Add a child skill to a parent skill. Updates if association already exists."""
+        query = select(skill_members_table).where(
+            and_(
+                skill_members_table.c.parent_skill_id == parent_skill_id,
+                skill_members_table.c.child_skill_id == child_skill_id,
+            )
+        )
+        result = await self.session.execute(query)
+        existing = result.fetchone()
+
+        deps = dependencies or []
+        if existing is not None:
+            await self.session.execute(
+                skill_members_table.update()
+                .where(
+                    and_(
+                        skill_members_table.c.parent_skill_id == parent_skill_id,
+                        skill_members_table.c.child_skill_id == child_skill_id,
+                    )
+                )
+                .values(order=order, is_required=is_required, dependencies=deps)
+            )
+        else:
+            await self.session.execute(
+                skill_members_table.insert().values(
+                    parent_skill_id=parent_skill_id,
+                    child_skill_id=child_skill_id,
+                    order=order,
+                    is_required=is_required,
+                    dependencies=deps,
+                )
+            )
+        return SkillMember(
+            parent_skill_id=parent_skill_id,
+            child_skill_id=child_skill_id,
+            order=order,
+            is_required=is_required,
+            dependencies=deps,
+        )
+
+    async def remove_member(self, parent_skill_id: UUID, child_skill_id: UUID) -> bool:
+        """Remove a child skill from a parent skill. Returns True if removed."""
+        query = select(skill_members_table).where(
+            and_(
+                skill_members_table.c.parent_skill_id == parent_skill_id,
+                skill_members_table.c.child_skill_id == child_skill_id,
+            )
+        )
+        result = await self.session.execute(query)
+        if result.fetchone() is None:
+            return False
+        await self.session.execute(
+            skill_members_table.delete().where(
+                and_(
+                    skill_members_table.c.parent_skill_id == parent_skill_id,
+                    skill_members_table.c.child_skill_id == child_skill_id,
+                )
+            )
+        )
+        return True

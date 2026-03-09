@@ -22,7 +22,6 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
       - MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
-      - MCP_PROXY_HOST=http://localhost:7999
       - REDIS_URL=redis://redis:6379
       - MCP_CLIENT_TIMEOUT=30
       # Server settings
@@ -201,7 +200,6 @@ services:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
     container_name: agentarea-mcp-manager
     restart: unless-stopped
-    command: ["sleep", "infinity"]
     privileged: true
     ports:
       - "7999:80" # Internal proxy (unified entry point)
@@ -218,7 +216,6 @@ services:
       LOG_LEVEL: INFO
       TRAEFIK_NETWORK: podman
       REDIS_URL: redis://redis:6379
-      MCP_PROXY_HOST: http://localhost:7999
       CORE_API_URL: http://app:8000
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}

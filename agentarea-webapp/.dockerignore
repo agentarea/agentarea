@@ -4,6 +4,8 @@ node_modules
 .pnpm-debug.log
 yarn.lock
 package-lock.json
+packages/*/node_modules
+packages/*/dist
 
 # production outputs
 .next

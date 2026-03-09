@@ -40,6 +40,7 @@ metadata:
 data:
   {{- include "agentarea.redis.configVars" . | nindent 2 }}
 ---
+{{- if .Values.minio.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -52,6 +53,7 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation
 data:
   {{- include "agentarea.storage.configVars" . | nindent 2 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
