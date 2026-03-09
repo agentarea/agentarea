@@ -2,7 +2,11 @@ import { getTranslations } from "next-intl/server";
 import { LayoutDashboardIcon, TablePropertiesIcon } from "lucide-react";
 import HeaderTabs from "@/components/HeaderTabs";
 
-export default async function TasksHeaderTabs() {
+export default async function TasksHeaderTabs({
+  currentTab,
+}: {
+  currentTab?: string;
+}) {
   const t = await getTranslations("Common");
 
   return (
@@ -21,6 +25,7 @@ export default async function TasksHeaderTabs() {
       ]}
       paramName="tab"
       defaultTab="grid"
+      currentTab={currentTab}
     />
   );
 }

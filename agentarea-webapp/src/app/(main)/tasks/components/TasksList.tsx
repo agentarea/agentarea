@@ -14,56 +14,36 @@ interface TasksListProps {
   viewMode?: string;
 }
 
-const statusConfig = {
-  running: {
-    badgeVariant: "default" as const,
-    label: "Running",
-  },
-  completed: {
-    badgeVariant: "success" as const,
-    label: "Completed",
-  },
-  success: {
-    badgeVariant: "success" as const,
-    label: "Success",
-  },
-  failed: {
-    badgeVariant: "destructive" as const,
-    label: "Failed",
-  },
-  error: {
-    badgeVariant: "destructive" as const,
-    label: "Error",
-  },
-  paused: {
-    badgeVariant: "secondary" as const,
-    label: "Paused",
-  },
-  pending: {
-    badgeVariant: "secondary" as const,
-    label: "Pending",
-  },
-};
+const statusVariants = {
+  running: "default",
+  completed: "success",
+  success: "success",
+  failed: "destructive",
+  error: "destructive",
+  paused: "secondary",
+  pending: "secondary",
+} as const;
 
 export default function TasksList({
   initialTasks,
   viewMode = "grid",
 }: TasksListProps) {
   const t = useTranslations("TasksPage");
+  const tStatus = useTranslations("TasksPage.status");
   const router = useRouter();
 
   // Define table columns for tasks
   const taskColumns = [
     {
       accessor: "description",
-      header: t("description") || "Description",
+      header: t("description"),
       render: (value: string) => (
         <span className="truncate font-medium">{value}</span>
       ),
     },
     {
       accessor: "agent_name",
-      header: t("agent") || "Agent",
+      header: t("agent"),
       render: (value: string) => (
         <div className="flex items-center gap-1.5 text-xs">
           <Bot className="h-3 w-3" />
@@ -73,21 +53,25 @@ export default function TasksList({
     },
     {
       accessor: "status",
-      header: t("status") || "Status",
+      header: t("statusLabel"),
       render: (value: string) => {
-        const status =
-          statusConfig[value as keyof typeof statusConfig] ||
-          statusConfig.pending;
+        const variant =
+          statusVariants[value as keyof typeof statusVariants] || "secondary";
+        // Check if translation exists, otherwise fallback to capitalized value
+        const label = ["running", "completed", "success", "failed", "error", "paused", "pending"].includes(value)
+          ? tStatus(value)
+          : value.charAt(0).toUpperCase() + value.slice(1);
+          
         return (
-          <Badge variant={status.badgeVariant} className="whitespace-nowrap">
-            {status.label}
+          <Badge variant={variant} className="whitespace-nowrap">
+            {label}
           </Badge>
         );
       },
     },
     {
       accessor: "created_at",
-      header: t("created") || "Created",
+      header: t("created"),
       render: (value: string) => (
         <div className="flex flex-col gap-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">

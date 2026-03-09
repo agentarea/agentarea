@@ -620,6 +620,7 @@ kratos:
   # If not set, these default to internal Kubernetes service DNS names
   urls:
     public: "" # e.g. https://auth.example.com
+    publicBrowser: "" # Browser-facing URL, defaults to public. Set when pods can't resolve the public domain (e.g. Tailscale)
     admin: ""  # e.g. http://kratos-admin.internal
   
   database:

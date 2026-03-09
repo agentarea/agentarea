@@ -20,7 +20,6 @@ export default function AgentsList({
   viewMode = "grid",
 }: AgentsListProps) {
   const t = useTranslations("AgentsPage");
-  const commonT = useTranslations("Common");
   const router = useRouter();
 
   // Define table columns for agents

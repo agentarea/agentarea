@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import ModelsList from "./ModelsList";
@@ -20,13 +21,14 @@ export default function ProviderSpecView({
   viewMode,
   hasNoData,
 }: ProviderSpecViewProps) {
+  const t = useTranslations("Models.table");
   const router = useRouter();
 
   // Define table columns for specs
   const specColumns = [
     {
       accessor: "name",
-      header: "Name",
+      header: t("name"),
       render: (value: string, item: any) => (
         <div className="flex items-center gap-2">
           {item.icon_url && (
@@ -42,7 +44,7 @@ export default function ProviderSpecView({
     },
     {
       accessor: "description",
-      header: "Description",
+      header: t("description"),
       render: (value: string) => (
         <span className="block max-w-[300px] truncate" title={value}>
           {value || "-"}
@@ -51,7 +53,7 @@ export default function ProviderSpecView({
     },
     {
       accessor: "models",
-      header: "Models",
+      header: t("models"),
       render: (value: any[]) => <ModelsList models={value || []} />,
     },
   ];

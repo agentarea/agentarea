@@ -232,6 +232,7 @@
     "noMatchingAgents": "No matching agents",
     "noMatchingAgentsDescription": "No agents match your search query",
     "descriptionPage": {
+      "titleNewTask": "New task for {agentName}",
       "placeholderNewTask": "Write new task for {agentName}...",
       "agentDetails": "Agent details",
       "taskDetails": "Task details",
@@ -320,6 +321,22 @@
     "addServer": "Add MCP Server",
     "emptyDescription": "Add a new MCP server to connect to AI services",
     "createCustomButton": "Add Custom Server",
+    "myActiveServers": "My Active Servers",
+    "browseSpecifications": "Browse MCP Specifications",
+    "table": {
+      "name": "Name",
+      "description": "Description",
+      "endpoint": "Endpoint",
+      "status": "Status",
+      "version": "Version",
+      "updated": "Updated"
+    },
+    "status": {
+      "running": "Running",
+      "error": "Error",
+      "starting": "Starting",
+      "setup": "Setup"
+    },
     "tools": {
       "title": "Tools",
       "description": "Tools for working with MCP servers"
@@ -356,6 +373,7 @@
     "deleteProviderConfigurationDescription": "Are you sure you want to delete the provider configuration \"{configName}\"? This action cannot be undone and will permanently remove the configuration.",
     "thisProviderConfiguration": "this provider configuration",
     "table": {
+      "name": "Name",
       "provider": "Provider",
       "description": "Description",
       "models": "Models"
@@ -446,8 +464,17 @@
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
-    "status": "Status",
+    "statusLabel": "Status",
     "created": "Created",
+    "status": {
+      "running": "Running",
+      "completed": "Completed",
+      "success": "Success",
+      "failed": "Failed",
+      "error": "Error",
+      "paused": "Paused",
+      "pending": "Pending"
+    },
     "tabs": {
       "overview": "Overview",
       "events": "Events",
@@ -462,7 +489,15 @@
     "title": "Skills",
     "description": "Manage reusable skills that can be assigned to agents",
     "addSkill": "Add Skill",
+    "backToSkills": "Back to Skills",
+    "skill": "Skill",
+    "untitledSkill": "Untitled Skill",
+    "skillId": "Skill ID",
+    "sourceUrl": "Source URL",
+    "searchPlaceholder": "Search skills...",
     "noSkills": "No skills yet",
+    "noMatchingSkills": "No skills match your search \"{query}\"",
+    "clearSearch": "Clear search",
     "noSkillsDescription": "Skills are reusable capabilities that can be assigned to agents. Create your first skill to get started.",
     "loading": "Loading...",
     "error": {
@@ -477,12 +512,15 @@
       "skillDeleted": "Skill deleted successfully"
     },
     "confirm": {
+      "deleteSkillTitle": "Delete Skill",
       "deleteSkill": "Delete \"{skillName}\"?"
     },
     "table": {
       "name": "Name",
+      "description": "Description",
       "source": "Source",
-      "updated": "Updated"
+      "updated": "Updated",
+      "created": "Created"
     },
     "detail": {
       "details": "Details",
@@ -513,7 +551,6 @@
       "uploadTab": "Upload",
       "name": "Name",
       "namePlaceholder": "My Skill",
-      "description": "Description",
       "descriptionPlaceholder": "What this skill does...",
       "content": "Content",
       "contentPlaceholder": "Enter skill content in Markdown...",
@@ -547,6 +584,65 @@
         "skillCreated": "Skill created successfully",
         "skillImported": "Skill imported successfully",
         "skillUploaded": "Skill uploaded successfully"
+      }
+    }
+  },
+  "TaskInfoPanel": {
+    "agentTask": "Agent Task",
+    "untitledTask": "Untitled task",
+    "overview": "Overview",
+    "modelInfo": "Agent info",
+    "keyMetrics": "Key metrics",
+    "status": "Status",
+    "taskActive": "Task is currently active",
+    "taskNotRunning": "Task is not running",
+    "executionTime": "Execution Time",
+    "executionTimeDesc": "Measured from start to completion",
+    "started": "Started",
+    "ended": "Ended",
+    "quickActions": "Quick actions",
+    "viewTaskEvents": "View task events",
+    "openAgentDetails": "Open agent details",
+    "inspectTaskResult": "Inspect task result",
+    "metadata": "Metadata",
+    "taskId": "Task ID",
+    "agent": "Agent",
+    "executionId": "Execution ID",
+    "agentInfo": "Agent info",
+    "failedToLoadAgent": "Failed to load agent details.",
+    "model": "Model",
+    "descriptionGoal": "Description / Goal",
+    "instruction": "Instruction",
+    "triggers": "Triggers",
+    "tools": "Tools",
+    "skills": "Skills",
+    "openFullAgentDetails": "Open full agent details",
+    "unknown": "Unknown",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "openPanel": "Show details panel",
+    "closePanel": "Hide details panel"
+  },
+  "Workplace": {
+    "hero": {
+      "title": "How can I help you today?"
+    },
+    "suggestions": {
+      "askSpecificAgent": {
+        "label": "Ask Specific Agent",
+        "text": "I need help from agent @"
+      },
+      "analyzeProject": {
+        "label": "Analyze Project Structure",
+        "text": "Analyze the current project structure and identify potential architectural improvements."
+      },
+      "generateDocs": {
+        "label": "Generate Documentation",
+        "text": "Generate comprehensive documentation for the core modules of this project."
+      },
+      "debugIssue": {
+        "label": "Debug Issue",
+        "text": "I'm facing a bug with the API integration. Can you help me debug it?"
       }
     }
   }

@@ -115,29 +115,33 @@ export default async function ProvidersData({
   // Render both views
   return (
     <div className="space-y-8">
-      <div>
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          {t("providerConfigsSection")} ({filteredConfigs.length})
-        </h4>
-        <ProviderConfigsView
-          configs={filteredConfigs}
-          searchQuery={searchQuery}
-          viewMode={viewMode}
-          hasNoData={hasNoConfigs}
-        />
-      </div>
+      {(filteredConfigs.length > 0 || !searchQuery.trim()) && (
+        <div>
+          <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+            {t("providerConfigsSection")} ({filteredConfigs.length})
+          </h4>
+          <ProviderConfigsView
+            configs={filteredConfigs}
+            searchQuery={searchQuery}
+            viewMode={viewMode}
+            hasNoData={hasNoConfigs}
+          />
+        </div>
+      )}
 
-      <div>
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          {t("providerSpecsSection")} ({filteredProviderSpecs.length})
-        </h4>
-        <ProviderSpecView
-          specs={filteredProviderSpecs}
-          searchQuery={searchQuery}
-          viewMode={viewMode}
-          hasNoData={hasNoSpecs}
-        />
-      </div>
+      {(filteredProviderSpecs.length > 0 || !searchQuery.trim()) && (
+        <div>
+          <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+            {t("providerSpecsSection")} ({filteredProviderSpecs.length})
+          </h4>
+          <ProviderSpecView
+            specs={filteredProviderSpecs}
+            searchQuery={searchQuery}
+            viewMode={viewMode}
+            hasNoData={hasNoSpecs}
+          />
+        </div>
+      )}
     </div>
   );
 }

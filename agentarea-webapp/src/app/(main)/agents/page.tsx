@@ -8,7 +8,7 @@ import AgentsContent from "@/app/(main)/agents/components/AgentsContent";
 import AgentsHeaderTabs from "@/app/(main)/agents/components/AgentsHeaderTabs";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import SearchInput from "@/components/SearchInput/SearchInput";
+import SearchInput from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -58,7 +58,7 @@ export default async function AgentsBrowsePage({
       subheader={
         <>
           <SearchInput urlParamName="search" urlPath="/agents" />
-          <AgentsHeaderTabs />
+          <AgentsHeaderTabs currentTab={tab} />
         </>
       }
     >

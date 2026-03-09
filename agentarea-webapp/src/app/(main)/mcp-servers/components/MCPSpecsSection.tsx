@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import Table from "@/components/Table/Table";
 import { CreateInstanceDialog } from "./CreateInstanceDialog";
@@ -20,6 +21,7 @@ export function MCPSpecsSection({
   searchParams,
   viewMode = "grid",
 }: MCPSpecsSectionProps) {
+  const t = useTranslations("MCPServersPage.table");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null);
 
@@ -50,7 +52,7 @@ export function MCPSpecsSection({
   const serverColumns = [
     {
       accessor: "name",
-      header: "Name",
+      header: t("name"),
       render: (value: string, item: MCPServer) => {
         const category = getMCPServerCategory(item.tags || []);
         return (
@@ -75,7 +77,7 @@ export function MCPSpecsSection({
     },
     {
       accessor: "description",
-      header: "Description",
+      header: t("description"),
       render: (value: string) => (
         <span className="truncate text-sm text-muted-foreground">
           {value || "-"}
@@ -84,7 +86,7 @@ export function MCPSpecsSection({
     },
     {
       accessor: "version",
-      header: "Version",
+      header: t("version"),
       render: (value: string) => (
         <span className="font-mono text-xs text-muted-foreground">
           v{value}
@@ -93,7 +95,7 @@ export function MCPSpecsSection({
     },
     {
       accessor: "updated_at",
-      header: "Updated",
+      header: t("updated"),
       render: (value: string) => (
         <span className="text-xs text-muted-foreground">
           {new Date(value).toLocaleDateString()}
