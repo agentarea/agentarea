@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 const KRATOS_PUBLIC_URL = process.env.ORY_SDK_URL || "http://localhost:4433";
 const HYDRA_ADMIN_URL =
   process.env.HYDRA_ADMIN_URL ||
-  process.env.NEXT_PUBLIC_ORY_HYDRA_ADMIN_URL ||
+  process.env.ORY_HYDRA_ADMIN_URL ||
   "http://localhost:4445";
 
 export async function GET(request: NextRequest) {

@@ -85,7 +85,7 @@ async def create_mcp_server_instance(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create instance: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/check")
@@ -135,11 +135,11 @@ async def check_mcp_server_instance_configuration(
                 }
     except httpx.RequestError as e:
         raise HTTPException(
-            status_code=503, detail=f"Unable to connect to container manager for validation: {e!s}"
+            status_code=503, detail="Unable to connect to container manager for validation"
         ) from e
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to validate configuration: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e
 
 
@@ -165,7 +165,7 @@ async def get_instance_environment(
             "message": f"Instance has {len(env_vars)} environment variables configured",
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get environment: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/", response_model=list[MCPServerInstanceResponse])
@@ -446,10 +446,10 @@ async def get_containers_health(
             return response.json()
     except httpx.RequestError as e:
         raise HTTPException(
-            status_code=503, detail=f"Unable to connect to container manager: {e!s}"
+            status_code=503, detail="Unable to connect to container manager"
         ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get container health: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{instance_id}/discover-tools")
@@ -505,7 +505,7 @@ async def test_mcp_auth(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Auth test failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/{instance_id}/oauth-link")

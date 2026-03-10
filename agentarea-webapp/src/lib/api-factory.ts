@@ -749,7 +749,7 @@ export function createApiClient(client: Client) {
 
     uploadSkill: async (formData: FormData) => {
       // For file upload, we need to use fetch directly
-      const response = await fetch("/api/v1/skills/upload", {
+      const response = await fetch("/api/proxy/v1/skills/upload", {
         method: "POST",
         body: formData,
         credentials: "include",

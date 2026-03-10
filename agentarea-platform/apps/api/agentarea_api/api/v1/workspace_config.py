@@ -101,7 +101,7 @@ async def import_workspace_config(
         raise
     except Exception as e:
         logger.exception("Failed to import workspace configuration")
-        raise HTTPException(status_code=500, detail=f"Import failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/import/file", response_model=ImportResult)
@@ -151,7 +151,7 @@ async def import_workspace_config_file(
         raise
     except Exception as e:
         logger.exception("Failed to import workspace configuration from file")
-        raise HTTPException(status_code=500, detail=f"Import failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/export", response_class=PlainTextResponse)
@@ -185,4 +185,4 @@ async def export_workspace_config(
 
     except Exception as e:
         logger.exception("Failed to export workspace configuration")
-        raise HTTPException(status_code=500, detail=f"Export failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
