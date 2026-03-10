@@ -4,6 +4,7 @@ groups:
       POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
+      POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
     secrets:
       - name: POSTGRES_USER
         secretName: "{{ .Values.global.secrets.postgresql }}"
@@ -13,7 +14,7 @@ groups:
         key: "password"
     envExtras:
       - name: DATABASE_URL
-        value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+        value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}"
 
   redis:
     configVars:
@@ -28,6 +29,8 @@ groups:
         value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
 
   storage:
+    # Only include storage config when MinIO is enabled
+    conditional: '{{ .Values.minio.enabled }}'
     configVars:
       AWS_REGION: '{{ .Values.global.storage.region }}'
       S3_BUCKET_NAME: '{{ .Values.global.storage.bucket }}'
@@ -103,7 +106,6 @@ groups:
       CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
       SERVER_HOST: '0.0.0.0'
       SERVER_PORT: '80'
-      MCP_PROXY_HOST: 'http://{{ include "agentarea.fullname" . }}-mcp-manager'
       BACKEND_TYPE: 'kubernetes'
       KUBERNETES_ENABLED: 'true'
       KUBERNETES_NAMESPACE: '{{ .Release.Namespace }}'
@@ -145,6 +147,7 @@ groups:
       POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
       POSTGRES_PORT: '{{ .Values.global.database.port }}'
       POSTGRES_DB: '{{ .Values.global.database.name }}'
+      POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
     secrets:
       - name: POSTGRES_USER
         secretName: '{{ .Values.global.secrets.postgresql }}'
@@ -154,4 +157,4 @@ groups:
         key: 'password'
     envExtras:
       - name: DATABASE_URL
-        value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+        value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}"

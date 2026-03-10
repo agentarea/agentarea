@@ -1,12 +1,12 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "name": "AgentArea Platform",
+  "name": "AgentArea",
   "theme": "maple",
   "colors": { 
-    "primary": "#3498db"
+    "primary": "#3b82f6"
   },
   
-  "versions": ["v0.2"],
+  "versions": ["v1"],
   "feedback": {
     "thumbsRating": true,
     "suggestEdit": true
@@ -15,7 +15,6 @@
     "prompt": "Search AgentArea documentation..."
   },
   "navigation": {
-    "pages": [],
     "groups": [
       {
         "group": "Get Started",
@@ -27,12 +26,35 @@
         ]
       },
       {
+        "group": "Features",
+        "icon": "sparkles",
+        "pages": [
+          "features",
+          "agentic-networks",
+          "agent-governance",
+          "mcp-integration",
+          "mcp-oauth",
+          "compound-mcps",
+          "event-triggers"
+        ]
+      },
+      {
         "group": "Core Concepts",
         "icon": "lightbulb",
         "pages": [
           "building-agents",
-          "agent-communication",
-          "mcp-integration"
+          "agent-communication"
+        ]
+      },
+      {
+        "group": "Technical Deep-Dives",
+        "icon": "code",
+        "pages": [
+          "architecture",
+          "temporal-workflows",
+          "warm-pool",
+          "skill-sandboxing",
+          "feature-flags"
         ]
       },
       {
@@ -56,9 +78,10 @@
         "group": "Resources",
         "icon": "book",
         "pages": [
-          "architecture",
           "security",
-          "troubleshooting"
+          "mcp-access-tokens",
+          "troubleshooting",
+          "api-reference"
         ]
       },
       {
@@ -74,13 +97,15 @@
     ]
   },
   "footerSocials": {
-    "github": "https://github.com/agentarea/agentarea"
+    "github": "https://github.com/agentarea/agentarea",
+    "discord": "https://discord.gg/5tduPwheYQ",
+    "twitter": "https://twitter.com/agentarea_hq"
   },
   "anchors": [
     {
-      "name": "API Playground",
+      "name": "API Reference",
       "icon": "code",
-      "url": "http://localhost:8000/docs"
+      "url": "/api-reference"
     },
     {
       "name": "GitHub",
@@ -88,9 +113,9 @@
       "url": "https://github.com/agentarea/agentarea"
     },
     {
-      "name": "Community",
+      "name": "Discord",
       "icon": "discord",
-      "url": "https://github.com/agentarea/agentarea/discussions"
+      "url": "https://discord.gg/5tduPwheYQ"
     }
   ],
   "topbarLinks": [

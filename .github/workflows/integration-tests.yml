@@ -1,0 +1,245 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:  # Manual trigger only — integration tests not yet stable
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
+  REDIS_URL: redis://localhost:6379/0
+  TEMPORAL_HOST: localhost:7233
+
+jobs:
+  # Quick smoke test - validates core services can start
+  smoke-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentarea_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      temporal:
+        image: temporalio/auto-setup:1.29.1
+        env:
+          DB: postgres12_pgx
+          DB_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PWD: postgres
+          POSTGRES_SEEDS: postgres
+          DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+        options: >-
+          --health-cmd "temporal operator cluster health 2>/dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 7233:7233
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Cache uv
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+
+      - name: Install dependencies
+        working-directory: ./agentarea-platform
+        run: uv sync --all-extras --group dev
+
+      - name: Run database migrations
+        working-directory: ./agentarea-platform
+        run: |
+          cd apps/api
+          uv run --package agentarea-api agentarea-api migrate
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Smoke test - Repository layer
+        working-directory: ./agentarea-platform
+        run: |
+          uv run pytest tests/integration/repositories/ -v --tb=short -x
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          REDIS_URL: ${{ env.REDIS_URL }}
+
+      - name: Smoke test - Temporal workflows
+        working-directory: ./agentarea-platform
+        run: |
+          uv run pytest tests/integration/test_temporal_workflow.py -v --tb=short
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          TEMPORAL_HOST: ${{ env.TEMPORAL_HOST }}
+
+  # Full integration tests with all services
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentarea_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      temporal:
+        image: temporalio/auto-setup:1.29.1
+        env:
+          DB: postgres12_pgx
+          DB_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PWD: postgres
+          POSTGRES_SEEDS: postgres
+        options: >-
+          --health-cmd "temporal operator cluster health 2>/dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 7233:7233
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Cache uv
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+
+      - name: Install dependencies
+        working-directory: ./agentarea-platform
+        run: uv sync --all-extras --group dev
+
+      - name: Run database migrations
+        working-directory: ./agentarea-platform
+        run: |
+          cd apps/api
+          uv run --package agentarea-api agentarea-api migrate
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Run integration tests
+        working-directory: ./agentarea-platform
+        run: |
+          uv run pytest tests/integration/ -v --tb=short \
+            --ignore=tests/integration/test_full_workflow_with_real_llm.py \
+            --ignore=tests/integration/test_real_llm_with_mocked_db.py \
+            --ignore=tests/integration/test_mcp_real_integration.py \
+            -m "not slow"
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          REDIS_URL: ${{ env.REDIS_URL }}
+          TEMPORAL_HOST: ${{ env.TEMPORAL_HOST }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: agentarea-platform/test-results.xml
+
+  # Module-specific integration tests (run when specific modules change)
+  module-tests:
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    strategy:
+      matrix:
+        module:
+          - name: tasks
+            path: agentarea-platform/libs/agentarea-tasks
+            test_path: tests/integration/test_task_event_integration.py
+          - name: agents
+            path: agentarea-platform/libs/agentarea-agents
+            test_path: tests/integration/test_a2a_real_integration.py
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if module changed
+        id: changed
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            module:
+              - '${{ matrix.module.path }}/**'
+              - '${{ matrix.module.test_path }}'
+
+      - name: Set up Python
+        if: steps.changed.outputs.module == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        if: steps.changed.outputs.module == 'true'
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Run module integration tests
+        if: steps.changed.outputs.module == 'true'
+        working-directory: ./agentarea-platform
+        run: |
+          uv sync --all-extras --group dev
+          uv run pytest ${{ matrix.module.test_path }} -v --tb=short
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          REDIS_URL: ${{ env.REDIS_URL }}

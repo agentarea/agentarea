@@ -80,8 +80,12 @@ def render_secrets_envs(group_name: str, cfg: dict) -> str | None:
     secrets = cfg.get("secrets") or []
     if not secrets:
         return None
+    conditional = cfg.get("conditional")
     lines = []
     lines.append(f'{{{{- define "agentarea.{group_name}.secrets.envs" }}}}')
+    if conditional:
+        cond = conditional.replace('{{', '').replace('}}', '').strip()
+        lines.append(f"{{{{ if {cond} }}}}")
     for sec in secrets:
         name = sec.get("name")
         if "value" in sec and sec["value"] is not None:
@@ -97,6 +101,8 @@ def render_secrets_envs(group_name: str, cfg: dict) -> str | None:
                 f"      name: {quote_if_needed(sec.get('secretName'))}",
                 f"      key: {sec.get('key')}",
             ])
+    if conditional:
+        lines.append("{{- end }}")
     lines.append("{{- end }}")
     return "\n".join(lines)
 

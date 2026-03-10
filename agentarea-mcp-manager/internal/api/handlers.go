@@ -149,14 +149,15 @@ func (h *Handler) listInstances(c *gin.Context) {
 // createInstance creates a new MCP server instance
 func (h *Handler) createInstance(c *gin.Context) {
 	var req struct {
-		InstanceID  string            `json:"instance_id" binding:"required"`
-		Name        string            `json:"name" binding:"required"`
-		ServiceName string            `json:"service_name" binding:"required"`
-		Image       string            `json:"image" binding:"required"`
-		Port        int               `json:"port"`
-		Command     []string          `json:"command,omitempty"`
-		Environment map[string]string `json:"environment,omitempty"`
-		WorkspaceID string            `json:"workspace_id" binding:"required"`
+		InstanceID  string                 `json:"instance_id" binding:"required"`
+		Name        string                 `json:"name" binding:"required"`
+		ServiceName string                 `json:"service_name" binding:"required"`
+		Image       string                 `json:"image"` // optional when json_spec is provided
+		Port        int                    `json:"port"`
+		Command     []string               `json:"command,omitempty"`
+		Environment map[string]string      `json:"environment,omitempty"`
+		WorkspaceID string                 `json:"workspace_id" binding:"required"`
+		JSONSpec    map[string]interface{} `json:"json_spec,omitempty"` // full spec; takes precedence when present
 		Resources   struct {
 			Requests backends.ResourceList `json:"requests,omitempty"`
 			Limits   backends.ResourceList `json:"limits,omitempty"`
@@ -172,16 +173,52 @@ func (h *Handler) createInstance(c *gin.Context) {
 		return
 	}
 
+	// If a full json_spec is supplied, resolve the effective image/port/command from it.
+	// This handles both "docker" type (image+port) and "command" type (sandbox+supergateway).
+	if len(req.JSONSpec) > 0 {
+		image, port, command, environment := container.ResolveContainerSpec(req.JSONSpec)
+		if req.Image == "" {
+			req.Image = image
+		}
+		if req.Port == 0 {
+			req.Port = port
+		}
+		if len(req.Command) == 0 {
+			req.Command = command
+		}
+		// Merge environment: json_spec env vars are the base; request-level env overrides
+		if req.Environment == nil {
+			req.Environment = make(map[string]string)
+		}
+		for k, v := range environment {
+			if _, exists := req.Environment[k]; !exists {
+				req.Environment[k] = v
+			}
+		}
+	}
+
+	if req.Image == "" {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Code:    http.StatusBadRequest,
+			Message: "image is required (provide image directly or via json_spec with type='docker'/'command')",
+		})
+		return
+	}
+
 	// Set default port if not specified
 	if req.Port == 0 {
 		req.Port = 8000
 	}
 
+	// Use instance_id as service_name for deterministic routing
+	serviceName := req.InstanceID
+
 	// Create instance spec
 	spec := &backends.InstanceSpec{
 		InstanceID:  req.InstanceID,
 		Name:        req.Name,
-		ServiceName: req.ServiceName,
+		ServiceName: serviceName,
 		Image:       req.Image,
 		Port:        req.Port,
 		Command:     req.Command,

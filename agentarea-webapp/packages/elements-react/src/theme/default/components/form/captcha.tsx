@@ -17,7 +17,7 @@ type Config = {
 
 export const DefaultCaptcha = ({ node }: OryNodeCaptchaProps) => {
   const { setValue, formState } = useFormContext()
-  const ref = useRef<TurnstileInstance>()
+  const ref = useRef<TurnstileInstance>(undefined)
   // In this node, we only care about the `captcha-turnstile-options` node as that contains
   // all required information to render the captcha.
 

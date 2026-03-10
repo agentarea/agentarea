@@ -674,6 +674,43 @@ export function createApiClient(client: Client) {
       }
     },
 
+    getMCPInstanceHealth: async (instanceName: string): Promise<{
+      health_check: {
+        service_name: string;
+        slug: string;
+        url: string;
+        healthy: boolean;
+        http_reachable: boolean;
+        response_time_ms: number;
+        error?: string;
+        timestamp: string;
+        container_status: string;
+        details?: {
+          proxy_url?: string;
+          direct_http_endpoint?: string;
+          container_port?: number;
+          container_image?: string;
+        };
+      } | null;
+    }> => {
+      try {
+        const { data, error } = await client.GET(
+          "/v1/mcp-server-instances/health/containers"
+        );
+        if (error || !data) {
+          return { health_check: null };
+        }
+        const healthData = data as any;
+        const healthCheck = healthData.health_checks?.find(
+          (check: any) => check.service_name === instanceName
+        );
+        return { health_check: healthCheck || null };
+      } catch (error) {
+        console.warn("Failed to fetch MCP instance health:", error);
+        return { health_check: null };
+      }
+    },
+
     // Skills API
     listSkills: async () => {
       const { data, error } = await client.GET("/v1/skills" as any, {});
@@ -741,6 +778,23 @@ export function createApiClient(client: Client) {
 
     deleteSkill: async (skillId: string) => {
       const { data, error } = await client.DELETE(`/v1/skills/${skillId}` as any, {});
+      return { data, error };
+    },
+
+    // MCP Auth Config API
+    listMCPAuthConfigs: async () => {
+      const { data, error } = await client.GET("/v1/mcp-auth-configs/" as any, {});
+      return { data, error };
+    },
+
+    createMCPAuthConfig: async (body: {
+      name: string;
+      description?: string;
+      auth_type: string;
+      config?: Record<string, any>;
+      credentials?: Record<string, any>;
+    }) => {
+      const { data, error } = await client.POST("/v1/mcp-auth-configs/" as any, { body });
       return { data, error };
     },
   };

@@ -8,7 +8,6 @@ LOG_LEVEL: "INFO"
 CORE_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
 SERVER_HOST: "0.0.0.0"
 SERVER_PORT: "80"
-MCP_PROXY_HOST: "http://{{ include "agentarea.fullname" . }}-mcp-manager"
 BACKEND_TYPE: "kubernetes"
 KUBERNETES_ENABLED: "true"
 KUBERNETES_NAMESPACE: "{{ .Release.Namespace }}"
@@ -46,11 +45,6 @@ MCP_FEATURES_ENABLED: "{{ join "," .Values.mcpManager.features.enabled }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: SERVER_PORT
-- name: MCP_PROXY_HOST
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: MCP_PROXY_HOST
 - name: BACKEND_TYPE
   valueFrom:
     configMapKeyRef:

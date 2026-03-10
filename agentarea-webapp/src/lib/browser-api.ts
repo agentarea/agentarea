@@ -898,6 +898,29 @@ export const deleteSkill = async (skillId: string) => {
   return { data, error };
 };
 
+// MCP Auth Config API
+export const listMCPAuthConfigs = async () => {
+  const { data, error } = await browserClient.GET(
+    "/v1/mcp-auth-configs/" as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const createMCPAuthConfig = async (body: {
+  name: string;
+  description?: string;
+  auth_type: string;
+  config?: Record<string, any>;
+  credentials?: Record<string, any>;
+}) => {
+  const { data, error } = await browserClient.POST(
+    "/v1/mcp-auth-configs/" as any,
+    { body }
+  );
+  return { data, error };
+};
+
 // Re-export skill types
 export type {
   Skill,
@@ -935,5 +958,42 @@ export async function getMCPHealthStatus(): Promise<{
     console.warn("Failed to fetch MCP health status:", error);
     // Return empty health checks instead of throwing
     return { health_checks: [], total: 0 };
+  }
+}
+
+export async function getMCPInstanceHealth(instanceName: string): Promise<{
+  health_check: {
+    service_name: string;
+    slug: string;
+    url: string;
+    healthy: boolean;
+    http_reachable: boolean;
+    response_time_ms: number;
+    error?: string;
+    timestamp: string;
+    container_status: string;
+    details?: {
+      proxy_url?: string;
+      direct_http_endpoint?: string;
+      container_port?: number;
+      container_image?: string;
+    };
+  } | null;
+}> {
+  try {
+    const { data, error } = await browserClient.GET(
+      "/v1/mcp-server-instances/health/containers"
+    );
+    if (error || !data) {
+      return { health_check: null };
+    }
+    const healthData = data as any;
+    const healthCheck = healthData.health_checks?.find(
+      (check: any) => check.service_name === instanceName
+    );
+    return { health_check: healthCheck || null };
+  } catch (error) {
+    console.warn("Failed to fetch MCP instance health:", error);
+    return { health_check: null };
   }
 }

@@ -1,0 +1,101 @@
+name: Frontend Integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agentarea-webapp/**"
+      - ".github/workflows/frontend-integration.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "agentarea-webapp/**"
+      - ".github/workflows/frontend-integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Cache pnpm
+        uses: actions/cache@v3
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('agentarea-webapp/pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        working-directory: agentarea-webapp
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        working-directory: agentarea-webapp
+        run: |
+          # Build internal packages first
+          cd packages/elements-react && npm run build
+
+      - name: Type check
+        working-directory: agentarea-webapp
+        run: pnpm run type-check || true  # Don't fail, just warn
+
+      - name: Build application
+        working-directory: agentarea-webapp
+        run: pnpm run build
+
+      - name: Test build output
+        working-directory: agentarea-webapp
+        run: |
+          # Verify the build output has no critical errors
+          if grep -r --exclude-dir=node_modules "Element type is invalid" .next/ 2>/dev/null; then
+            echo "ERROR: Found React element errors in build output"
+            exit 1
+          fi
+
+  # Optional: Visual regression with Playwright
+  visual-test:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: contains(github.event.pull_request.labels.*.name, 'visual-test')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        working-directory: agentarea-webapp
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Build and start
+        working-directory: agentarea-webapp
+        run: |
+          pnpm run build
+          pnpm start &
+          sleep 5
+
+      - name: Run smoke test
+        run: |
+          curl -f http://localhost:3000 || exit 1

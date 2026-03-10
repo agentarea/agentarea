@@ -29,12 +29,29 @@ serve:
   admin:
     port: 4445
     host: 0.0.0.0
+    cors:
+      enabled: true
+      allowed_origins:
+        - http://localhost:3000
+        - http://localhost:3001
+      allowed_methods:
+        - POST
+        - GET
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allowed_headers:
+        - Authorization
+        - Content-Type
+      exposed_headers:
+        - Content-Type
 
 urls:
   self:
     issuer: http://localhost:4444
-  consent: http://localhost:3000/auth/consent
-  login: http://localhost:3000/auth/login
+  consent: http://localhost:3000/api/hydra/consent-redirect
+  login: http://localhost:3000/api/hydra/login
   logout: http://localhost:3000/auth/logout
   error: http://localhost:3000/auth/error
 
@@ -51,6 +68,8 @@ oidc:
       - pairwise
     pairwise:
       salt: some-random-salt
+  dynamic_client_registration:
+    enabled: true
 
 log:
   level: debug
@@ -64,5 +83,10 @@ ttl:
   id_token: 1h
   auth_code: 10m
 
+strategies:
+  access_token: jwt
+
 oauth2:
   expose_internal_errors: true
+  allowed_top_level_claims:
+    - workspace_id

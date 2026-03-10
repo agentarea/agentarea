@@ -1,4 +1,9 @@
-"""MCP event handlers using existing EventBroker architecture."""
+"""MCP event handlers using existing EventBroker architecture.
+
+Status changes and tool discovery are now handled by Temporal workflows
+(StartMCPInstanceWorkflow / StopMCPInstanceWorkflow). These Redis subscribers
+remain for observability logging of events from the Go MCP Manager.
+"""
 
 import logging
 from typing import Any
@@ -18,7 +23,6 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
         logger.info(f"Received MCPServerCreating event: {message}")
 
         try:
-            # Extract event data
             event_data = message.get("data", {})
             config_id = event_data.get("config_id") or message.get("config_id")
             runtime_id = event_data.get("runtime_id") or message.get("runtime_id")
@@ -27,10 +31,6 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
                 logger.warning("MCPServerCreating event missing config_id")
                 return
 
-            # Update instance status to "creating"
-
-            # Note: In real implementation, we'd properly inject dependencies
-            # For now, this is a placeholder for the event handling pattern
             logger.info(f"MCP server {config_id} is creating with runtime {runtime_id}")
 
         except Exception as e:
@@ -95,14 +95,16 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
 
     @router.subscriber("MCPServerInstanceStatusChanged")
     async def handle_instance_status_change(message: dict[str, Any]) -> None:
-        """Handle MCP server instance status change events from MCP Manager."""
+        """Log MCP server instance status change events from Go MCP Manager.
+
+        Status persistence and tool discovery are handled by Temporal workflows.
+        This handler remains for observability.
+        """
         logger.info(f"Received MCPServerInstanceStatusChanged event: {message}")
 
         try:
-            # Extract event data from the FastStream message format
             event_data = message.get("data", {})
             if isinstance(event_data, dict) and "data" in event_data:
-                # Unwrap nested data structure
                 status_data = event_data["data"]
             else:
                 status_data = event_data
@@ -116,18 +118,15 @@ def register_mcp_event_handlers(router: RedisRouter) -> None:
                 logger.warning("MCPServerInstanceStatusChanged event missing instance_id")
                 return
 
-            logger.info(f"Updating MCP instance {instance_id} status to {status}")
-
-            # TODO: Update instance status in database
-            # This would require injecting the MCP instance service
-            # For now, this is a placeholder that logs the event
-            logger.info(f"MCP instance {instance_id} status updated to {status}")
-            if container_id:
-                logger.info(f"Container ID: {container_id}")
-            if url:
-                logger.info(f"Instance URL: {url}")
+            logger.info(
+                "MCP instance %s status: %s (container=%s, url=%s)",
+                instance_id,
+                status,
+                container_id,
+                url,
+            )
 
         except Exception as e:
             logger.error(f"Failed to handle instance status change event: {e}")
 
-    logger.info("✅ MCP event handlers registered")
+    logger.info("MCP event handlers registered")

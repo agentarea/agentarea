@@ -13,6 +13,10 @@ from . import (
     agents_a2a,
     agents_tasks,
     agents_well_known,
+    compound_mcps,
+    mcp_access_tokens,
+    mcp_auth_configs,
+    mcp_oauth_links,
     mcp_server_instances,
     mcp_servers_specifications,
     model_instances,
@@ -72,6 +76,18 @@ protected_v1_router.include_router(workspace_config.router)
 
 # Skills management - PROTECTED
 protected_v1_router.include_router(skills.router)
+
+# MCP Auth Configs - PROTECTED
+protected_v1_router.include_router(mcp_auth_configs.router)
+
+# MCP OAuth Links management - PROTECTED
+protected_v1_router.include_router(mcp_oauth_links.router)
+
+# MCP API Keys management - PROTECTED
+protected_v1_router.include_router(mcp_access_tokens.router)
+
+# Compound MCPs - PROTECTED
+protected_v1_router.include_router(compound_mcps.router)
 
 # ============================================================================
 # LEGACY: Keep old v1_router for backward compatibility during migration

@@ -1,7 +1,7 @@
 // Copyright © 2024 Ory Corp
 // SPDX-License-Identifier: Apache-2.0
 
-import { OryMiddlewareOptions } from "src/middleware/middleware"
+import { OryMiddlewareOptions } from "../middleware/middleware"
 import { orySdkUrl } from "./sdk"
 import { joinUrlPaths } from "./utils"
 

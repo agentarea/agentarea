@@ -1,10 +1,11 @@
 import builtins
 import logging
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.service import BaseCrudService
-from agentarea_common.config import get_database
+from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
@@ -219,6 +220,7 @@ class MCPServerInstanceService:
         description: str | None = None,
         server_spec_id: str | None = None,
         json_spec: dict[str, Any] | None = None,
+        auth_config_id: str | None = None,
     ) -> MCPServerInstance | None:
         spec = json_spec or {}
 
@@ -228,13 +230,17 @@ class MCPServerInstanceService:
             raise MCPValidationError(validation_errors)
 
         # Create instance using workspace-scoped repository
-        instance = await self.repository.create(
-            name=name,
-            description=description,
-            server_spec_id=server_spec_id,
-            json_spec=spec,
-            status="pending",  # Will be updated by mcp-infrastructure
-        )
+        create_kwargs: dict[str, Any] = {
+            "name": name,
+            "description": description,
+            "server_spec_id": server_spec_id,
+            "json_spec": spec,
+            "status": "pending",  # Will be updated by mcp-infrastructure
+        }
+        if auth_config_id:
+            create_kwargs["auth_config_id"] = auth_config_id
+
+        instance = await self.repository.create(**create_kwargs)
 
         # Publish event for MCP Infrastructure to handle deployment
         await self.event_broker.publish(
@@ -317,17 +323,12 @@ class MCPServerInstanceService:
         if not instance:
             return False
 
-        # TODO: Implement actual start logic
-        # This would involve:
-        # 1. Getting environment variables from secret manager
-        # 2. Starting the Docker container with environment variables
-        # 3. Updating status
-
         # Get environment variables for container startup
         env_vars = await self.get_instance_environment(id)
         logger.info("Starting instance %s with %d environment variables", id, len(env_vars))
 
-        updated_instance = await self.repository.update(id, status="running")
+        # Set to "starting" — the actual "running" status comes from Go manager via Redis event
+        updated_instance = await self.repository.update(id, status="starting")
         if not updated_instance:
             return False
 
@@ -346,8 +347,8 @@ class MCPServerInstanceService:
         if not instance:
             return False
 
-        # TODO: Implement actual stop logic
-        updated_instance = await self.repository.update(id, status="stopped")
+        # Set to "stopping" — the actual "stopped" status comes from Go manager via Redis event
+        updated_instance = await self.repository.update(id, status="stopping")
         if not updated_instance:
             return False
 
@@ -426,6 +427,9 @@ class MCPServerInstanceService:
     async def discover_and_store_tools(self, instance_id: UUID) -> bool:
         """Discover available tools from MCP server instance and store them.
 
+        Connects to the running MCP server via Traefik gateway, lists tools,
+        and persists them in json_spec["available_tools"].
+
         Args:
             instance_id: The MCP server instance ID
 
@@ -433,27 +437,67 @@ class MCPServerInstanceService:
             True if tools were successfully discovered and stored, False otherwise
         """
         instance = await self.repository.get_by_id(instance_id)
-        if not instance:
+        if not instance or instance.status != "running":
             return False
 
+        # Determine the MCP URL based on instance type
+        instance_type = (instance.json_spec or {}).get("type", "docker")
+        if instance_type == "url":
+            # External MCP — connect directly to the configured URL
+            mcp_url = (instance.json_spec or {}).get("url", "")
+            if not mcp_url:
+                logger.warning("URL-type instance %s has no url in json_spec", instance_id)
+                return False
+        else:
+            # Docker or command-type — routed via Traefik gateway using instance ID
+            gateway_url = get_settings().mcp.MCP_GATEWAY_URL
+            mcp_url = f"{gateway_url}/mcp/{instance_id}/mcp"
+
+        # Build optional headers (e.g. for auth on external MCPs)
+        headers: dict[str, str] = {}
+        auth_header = (instance.json_spec or {}).get("auth_header")
+        auth_value = (instance.json_spec or {}).get("auth_value")
+        if auth_header and auth_value:
+            headers[auth_header] = auth_value
+
         try:
-            # TODO: Implement actual MCP server connection and tool discovery
-            # This would involve:
-            # 1. Connecting to the MCP server instance (stdio/http/sse)
-            # 2. Calling list_tools() on the MCP session
-            # 3. Extracting tool metadata (name, description, inputSchema)
+            from mcp import ClientSession
+            from mcp.client.streamable_http import streamablehttp_client
 
-            # For now, storing empty list as placeholder
-            discovered_tools = []
+            async with streamablehttp_client(
+                mcp_url, timeout=timedelta(seconds=10), headers=headers
+            ) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    result = await session.list_tools()
 
-            # Store the discovered tools in the instance
-            instance.set_available_tools(discovered_tools)
-            updated_instance = await self.repository.update(
-                instance_id, json_spec=instance.json_spec
+            tools = [
+                {
+                    "name": t.name,
+                    "description": t.description or "",
+                    "inputSchema": t.inputSchema if t.inputSchema else {},
+                }
+                for t in result.tools
+            ]
+
+            instance.set_available_tools(tools)
+            new_json_spec = dict(instance.json_spec)  # copy to ensure new object
+
+            # Direct DB update to avoid SQLAlchemy JSON mutation detection issues
+            from sqlalchemy import update as sa_update
+
+            session = self.repository.session
+            stmt = (
+                sa_update(type(instance))
+                .where(type(instance).id == instance_id)
+                .values(json_spec=new_json_spec)
             )
+            await session.execute(stmt)
+            await session.commit()
 
-            return updated_instance is not None
+            logger.info("Discovered %d tools for instance %s", len(tools), instance_id)
+            return True
 
         except Exception as e:
-            logger.error("Error discovering tools for instance %s: %s", instance_id, e)
+            logger.warning("Tool discovery failed for %s: %s", instance_id, e)
             return False

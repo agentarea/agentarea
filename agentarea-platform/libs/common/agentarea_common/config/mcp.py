@@ -8,10 +8,14 @@ from .base import BaseAppSettings
 class MCPSettings(BaseAppSettings):
     """MCP (Model Context Protocol) configuration."""
 
-    MCP_MANAGER_URL: str = "http://mcp-manager:8000"  # Internal container communication
-    MCP_PROXY_HOST: str = "http://localhost:7999"  # Host for agents to access MCP servers
+    MCP_MANAGER_URL: str = "http://mcp-manager:8000"
+    MCP_GATEWAY_URL: str = "http://agentarea-traefik:8080"
     MCP_CLIENT_TIMEOUT: int = 30
     REDIS_URL: str = "redis://localhost:6379"
+    HYDRA_PUBLIC_URL: str = "http://hydra:4444"
+    HYDRA_ADMIN_URL: str = "http://hydra:4445"
+    HYDRA_BROWSER_URL: str = "http://localhost:4444"
+    MCP_OAUTH_SCOPES: str = "openid offline_access"
 
 
 class MCPManagerSettings(BaseSettings):

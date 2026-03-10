@@ -17,9 +17,6 @@ type Config struct {
 	// Container runtime configuration
 	Container ContainerConfig `json:"container"`
 
-	// Proxy configuration for MCP container routing
-	Proxy ProxyConfig `json:"proxy"`
-
 	// Logging configuration
 	Logging LoggingConfig `json:"logging"`
 
@@ -61,10 +58,8 @@ type ServerConfig struct {
 
 // ContainerConfig holds container runtime configuration
 type ContainerConfig struct {
-	Runtime          string `json:"runtime"`
-	StorageDriver    string `json:"storage_driver"`
-	StorageRunroot   string `json:"storage_runroot"`
-	StorageGraphroot string `json:"storage_graphroot"`
+	Runtime string `json:"runtime"`
+	Network string `json:"network"` // Docker network for container-to-container communication
 
 	// Management settings
 	NamePrefix      string        `json:"name_prefix"`
@@ -76,16 +71,6 @@ type ContainerConfig struct {
 	// Resource limits
 	DefaultMemoryLimit string `json:"default_memory_limit"`
 	DefaultCPULimit    string `json:"default_cpu_limit"`
-}
-
-// ProxyConfig holds MCP proxy configuration
-type ProxyConfig struct {
-	Network           string `json:"network"`
-	Port              int    `json:"port"`
-	DefaultDomain     string `json:"default_domain"`
-	ManagerServiceURL string `json:"manager_service_url"`
-	// UseHostPort maps container ports to host ports (for local development)
-	UseHostPort bool `json:"use_host_port"`
 }
 
 // LoggingConfig holds logging configuration
@@ -112,10 +97,8 @@ func Load() *Config {
 			CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{}),
 		},
 		Container: ContainerConfig{
-			Runtime:            getEnv("CONTAINER_RUNTIME", "podman"),
-			StorageDriver:      getEnv("CONTAINERS_STORAGE_DRIVER", "overlay"),
-			StorageRunroot:     getEnv("CONTAINERS_STORAGE_RUNROOT", "/tmp/containers"),
-			StorageGraphroot:   getEnv("CONTAINERS_STORAGE_GRAPHROOT", "/var/lib/containers/storage"),
+			Runtime:            getEnv("CONTAINER_RUNTIME", "docker"),
+			Network:            getEnv("MCP_NETWORK", "agentarea_default"),
 			NamePrefix:         getEnv("CONTAINER_NAME_PREFIX", "mcp-"),
 			ManagedByLabel:     getEnv("CONTAINER_MANAGED_BY_LABEL", "mcp-manager"),
 			MaxContainers:      getEnvInt("MAX_CONTAINERS", 50),
@@ -123,13 +106,6 @@ func Load() *Config {
 			ShutdownTimeout:    getEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 			DefaultMemoryLimit: getEnv("DEFAULT_MEMORY_LIMIT", "512m"),
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
-		},
-		Proxy: ProxyConfig{
-			Network:           getEnv("MCP_NETWORK", "agentarea_default"),
-			Port:              getEnvInt("MCP_PROXY_PORT", 8080),
-			DefaultDomain:     getEnv("MCP_DEFAULT_DOMAIN", "localhost"),
-			ManagerServiceURL: getEnv("MCP_MANAGER_URL", "http://localhost:8000"),
-			UseHostPort:       getEnvBool("MCP_USE_HOST_PORT", false),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),
@@ -302,7 +278,7 @@ func (c *Config) GetServiceURL(serviceName string, port int) string {
 	return fmt.Sprintf("http://%s:%d", c.GetContainerName(serviceName), port)
 }
 
-// GetServiceHost generates a service hostname
+// GetServiceHost generates a service hostname (Traefik handles routing)
 func (c *Config) GetServiceHost(serviceName string) string {
-	return fmt.Sprintf("%s:%d", c.Proxy.DefaultDomain, c.Proxy.Port)
+	return c.GetContainerName(serviceName)
 }

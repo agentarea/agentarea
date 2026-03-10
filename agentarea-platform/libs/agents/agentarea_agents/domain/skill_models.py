@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import Column, DateTime, ForeignKey, String, Table, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -88,6 +88,54 @@ class AgentSkill:
         self.agent_id = agent_id
         self.skill_id = skill_id
         self.created_at = created_at or datetime.now()
+
+
+# Self-referential association table for Skill members (skill-as-bundle pattern)
+skill_members_table = Table(
+    "skill_members",
+    BaseModel.metadata,
+    Column(
+        "parent_skill_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("skills.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "child_skill_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("skills.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("order", Integer, nullable=False, default=0),
+    Column("is_required", Boolean, nullable=False, default=True),
+    # List of child_skill_id strings that must execute before this child
+    Column("dependencies", JSON, nullable=False, default=list),
+)
+
+
+class SkillMember:
+    """Wrapper class for skill_members self-referential association table.
+
+    Tracks child skills within a parent skill (skill-as-bundle pattern).
+    Agents attach a Skill normally; if that Skill has members, they are
+    resolved at execution time via topological sort.
+    """
+
+    __table__ = skill_members_table
+
+    def __init__(
+        self,
+        parent_skill_id: Any,
+        child_skill_id: Any,
+        order: int = 0,
+        is_required: bool = True,
+        dependencies: list[str] | None = None,
+    ):
+        self.parent_skill_id = parent_skill_id
+        self.child_skill_id = child_skill_id
+        self.order = order
+        self.is_required = is_required
+        self.dependencies = dependencies or []
 
 
 # Import Agent for type hints (avoid circular import at runtime)

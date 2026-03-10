@@ -4,7 +4,7 @@ This module provides centralized configuration management with clean separation
 of concerns across different settings domains.
 """
 
-from .app import AppSettings
+from .app import AppSettings, get_app_settings
 from .aws import AWSSettings, get_aws_settings, get_s3_client
 from .base import BaseAppSettings
 from .broker import BrokerSettings, KafkaSettings, RedisSettings
@@ -41,6 +41,7 @@ __all__ = [
     "TriggerSettings",
     # Workflow
     "WorkflowSettings",
+    "get_app_settings",
     "get_aws_settings",
     "get_database",
     "get_db",

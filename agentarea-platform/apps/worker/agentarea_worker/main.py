@@ -24,6 +24,8 @@ from agentarea_execution.interfaces import ActivityDependencies
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
+from agentarea_mcp.activities import make_mcp_activities
+from agentarea_mcp.workflows import StartMCPInstanceWorkflow, StopMCPInstanceWorkflow
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
@@ -105,6 +107,7 @@ class AgentAreaWorker:
         # Create basic dependencies for activities
         dependencies = create_activity_dependencies()
         activities = create_activities_for_worker(dependencies)
+        mcp_activities = make_mcp_activities(dependencies)
 
         # Initialize DI container for workflows
         initialize_di_container(settings.workflow)
@@ -112,8 +115,12 @@ class AgentAreaWorker:
         self.worker = Worker(
             self.client,
             task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
-            workflows=[AgentExecutionWorkflow],
-            activities=activities,
+            workflows=[
+                AgentExecutionWorkflow,
+                StartMCPInstanceWorkflow,
+                StopMCPInstanceWorkflow,
+            ],
+            activities=activities + mcp_activities,
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
             max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
         )

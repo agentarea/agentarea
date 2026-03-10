@@ -2,12 +2,11 @@ package container
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -16,8 +15,10 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/database"
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/models"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Manager manages container lifecycle for MCP servers
@@ -27,7 +28,6 @@ type Manager struct {
 	containerHealth map[string]*HealthCheckResult // Track health status
 	mutex           sync.RWMutex
 	logger          *slog.Logger
-	routeManager    interface{} // proxy.RouteManager set at runtime
 	validator       *ContainerValidator
 	healthChecker   *HealthChecker
 	eventPublisher  *events.EventPublisher
@@ -77,14 +77,19 @@ func (m *Manager) Initialize(ctx context.Context) error {
 	}
 	m.logger.Info("Container discovery completed")
 
-	// Synchronize with Core API to handle pending instances
-	m.logger.Info("Starting Core API synchronization...")
-	if err := m.syncWithCoreAPI(ctx); err != nil {
-		m.logger.Error("Failed to sync with Core API", slog.String("error", err.Error()))
-		// Don't fail initialization - log warning and continue
-		m.logger.Warn("Continuing without full sync - some instances may need manual intervention")
+	// Skip Core API sync if SKIP_INSTANCE_SYNC is set (useful for dev)
+	if os.Getenv("SKIP_INSTANCE_SYNC") != "true" {
+		// Synchronize with Core API to handle pending instances
+		m.logger.Info("Starting Core API synchronization...")
+		if err := m.syncWithCoreAPI(ctx); err != nil {
+			m.logger.Error("Failed to sync with Core API", slog.String("error", err.Error()))
+			// Don't fail initialization - log warning and continue
+			m.logger.Warn("Continuing without full sync - some instances may need manual intervention")
+		}
+		m.logger.Info("Core API synchronization completed")
+	} else {
+		m.logger.Info("Skipping Core API synchronization (SKIP_INSTANCE_SYNC=true)")
 	}
-	m.logger.Info("Core API synchronization completed")
 
 	// Auto-restart containers that should be running
 	m.logger.Info("Starting auto-restart check...")
@@ -127,16 +132,17 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		Image:       req.Image,
 		Status:      models.StatusStarting,
 		Port:        req.Port,
-		URL:         fmt.Sprintf("http://%s:%d/mcp/%s", m.config.Proxy.DefaultDomain, m.config.Proxy.Port, slug),
-		Host:        fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port),
+		URL:         fmt.Sprintf("/mcp/%s", slug),
+		Host:        containerName,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		Labels:      req.Labels,
 		Environment: req.Environment,
+		Command:     req.Command,
 	}
 
-	// Build runtime run command
-	args := m.buildPodmanRunArgs(container)
+	// Build container run command (Traefik labels are added automatically)
+	args := m.buildContainerRunArgs(container)
 
 	// Execute runtime run
 	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, args...)
@@ -159,35 +165,15 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		return nil, fmt.Errorf("container failed to start: %w", err)
 	}
 
-	// Get container IP for proxy routing
-	containerIP, err := m.getContainerIP(ctx, container.ID)
-	if err != nil {
-		m.logger.Error("Failed to get container IP",
-			slog.String("container", containerName),
-			slog.String("error", err.Error()))
-		// Continue without IP - container is still created
-		containerIP = "127.0.0.1" // fallback
-	}
-
-	// Add route for the container using the slug
-	if err := m.addRoute(ctx, slug, containerIP, req.Port); err != nil {
-		m.logger.Error("Failed to add route",
-			slog.String("slug", slug),
-			slog.String("service", req.ServiceName),
-			slog.String("error", err.Error()))
-		// Continue - container is created but routing may not work
-	}
-
 	container.Status = models.StatusRunning
 	m.containers[req.ServiceName] = container
 
-	m.logger.Info("Container created successfully with slug",
+	m.logger.Info("Container created successfully",
 		slog.String("container", containerName),
 		slog.String("id", container.ID),
 		slog.String("service", req.ServiceName),
 		slog.String("slug", slug),
-		slog.String("url", container.URL),
-		slog.String("container_ip", containerIP))
+		slog.String("url", container.URL))
 
 	return container, nil
 }
@@ -317,17 +303,6 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 			slog.String("error", err.Error()),
 			slog.String("output", string(output)))
 		return fmt.Errorf("failed to remove container: %w", err)
-	}
-
-	// Remove route for the container using the slug
-	if container.Slug != "" {
-		if err := m.removeRoute(ctx, container.Slug); err != nil {
-			m.logger.Error("Failed to remove route",
-				slog.String("slug", container.Slug),
-				slog.String("service", serviceName),
-				slog.String("error", err.Error()))
-			// Continue - container is removed but route may remain
-		}
 	}
 
 	delete(m.containers, serviceName)
@@ -473,8 +448,8 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 			Image:       pc["Image"].(string),
 			Status:      m.mapPodmanStatus(pc["State"].(string)),
 			Port:        port,
-			URL:         fmt.Sprintf("%s/mcp/%s", fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port), slug),
-			Host:        fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port),
+			URL:         fmt.Sprintf("/mcp/%s", slug),
+			Host:        containerName,
 			CreatedAt:   time.Now(), // We don't have exact creation time
 			UpdatedAt:   time.Now(),
 		}
@@ -494,27 +469,39 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 	return nil
 }
 
-// buildPodmanRunArgs builds the arguments for podman run command
-func (m *Manager) buildPodmanRunArgs(container *models.Container) []string {
+// buildContainerRunArgs builds the arguments for the container runtime run command.
+// Traefik labels are added so that Traefik auto-discovers the container and routes
+// /mcp/{slug}/* traffic to it.
+func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	args := []string{"run", "-d"}
 
 	// Add name
 	args = append(args, "--name", container.Name)
 
 	// Add network for container-to-container communication
-	args = append(args, "--network", m.config.Proxy.Network)
-
-	// No port mapping needed - internal proxy will handle routing via path-based routing
+	args = append(args, "--network", m.config.Container.Network)
 
 	// Add environment variables
 	for key, value := range container.Environment {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Add labels for automatic service discovery
+	// Add user-supplied labels
 	for key, value := range container.Labels {
 		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
 	}
+
+	// Add Traefik labels for automatic routing
+	slug := container.Slug
+	port := container.Port
+	args = append(args,
+		"--label", "traefik.enable=true",
+		"--label", fmt.Sprintf("traefik.http.routers.%s.rule=PathPrefix(`/mcp/%s`)", slug, slug),
+		"--label", fmt.Sprintf("traefik.http.routers.%s.entrypoints=mcp", slug),
+		"--label", fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port=%d", slug, port),
+		"--label", fmt.Sprintf("traefik.http.middlewares.%s-strip.stripprefix.prefixes=/mcp/%s", slug, slug),
+		"--label", fmt.Sprintf("traefik.http.routers.%s.middlewares=%s-strip", slug, slug),
+	)
 
 	// Add default resource limits
 	if m.config.Container.DefaultMemoryLimit != "" {
@@ -607,49 +594,6 @@ func mergeEnvironment(template, request map[string]string) map[string]string {
 	return result
 }
 
-// getContainerIP retrieves the IP address of a container in the mcp-network
-func (m *Manager) getContainerIP(ctx context.Context, containerID string) (string, error) {
-	// Use a simpler approach to get container IP
-	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to inspect container: %w", err)
-	}
-
-	// Parse JSON to extract IP
-	var inspectData []map[string]interface{}
-	if err := json.Unmarshal(output, &inspectData); err != nil {
-		return "", fmt.Errorf("failed to parse inspect output: %w", err)
-	}
-
-	if len(inspectData) == 0 {
-		return "", fmt.Errorf("no container data found")
-	}
-
-	// Navigate to the IP address
-	networkSettings, ok := inspectData[0]["NetworkSettings"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("NetworkSettings not found")
-	}
-
-	networks, ok := networkSettings["Networks"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("Networks not found")
-	}
-
-	mcpNetwork, ok := networks[m.config.Proxy.Network].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("network %s not found", m.config.Proxy.Network)
-	}
-
-	ipAddress, ok := mcpNetwork["IPAddress"].(string)
-	if !ok || ipAddress == "" {
-		return "", fmt.Errorf("IPAddress not found or empty")
-	}
-
-	return ipAddress, nil
-}
-
 // HandleMCPInstanceCreated handles the creation of an MCP server instance from domain events
 func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name string, jsonSpec map[string]interface{}) error {
 	// Publish validating status
@@ -703,44 +647,14 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 			slog.Any("warnings", validationResult.Warnings))
 	}
 
-	// Extract image (validated above)
-	image, ok := jsonSpec["image"].(string)
-	if !ok || image == "" {
-		return fmt.Errorf("image is required in json_spec")
+	// Resolve the actual container spec (handles both "docker" and "command" types)
+	image, containerPort, command, environment := ResolveContainerSpec(jsonSpec)
+	if image == "" {
+		return fmt.Errorf("image is required in json_spec (or use type='command')")
 	}
 
 	// Get container name for later use
 	containerName := m.config.GetContainerName(name)
-
-	// Extract container port (for internal use)
-	containerPort := 8000 // Default MCP port
-	if p, ok := jsonSpec["port"].(float64); ok {
-		containerPort = int(p)
-	} else if p, ok := jsonSpec["port"].(int); ok {
-		containerPort = p
-	}
-
-	// Extract environment variables
-	environment := make(map[string]string)
-	if env, ok := jsonSpec["environment"].(map[string]interface{}); ok {
-		for k, v := range env {
-			if str, ok := v.(string); ok {
-				environment[k] = str
-			}
-		}
-	}
-
-	// Extract custom command (optional)
-	var command []string
-	if cmdInterface, ok := jsonSpec["cmd"]; ok {
-		if cmdSlice, ok := cmdInterface.([]interface{}); ok {
-			for _, cmdItem := range cmdSlice {
-				if cmdStr, ok := cmdItem.(string); ok {
-					command = append(command, cmdStr)
-				}
-			}
-		}
-	}
 
 	// Add MCP-specific environment variables
 	environment["MCP_INSTANCE_ID"] = instanceID
@@ -772,8 +686,8 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Image:       image,
 		Status:      models.StatusValidating,
 		Port:        containerPort,
-		URL:         fmt.Sprintf("%s/mcp/%s", fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port), slug), // External access via unified endpoint
-		Host:        fmt.Sprintf("%s:%d", m.config.Proxy.DefaultDomain, m.config.Proxy.Port),
+		URL:         fmt.Sprintf("/mcp/%s", slug),
+		Host:        containerName,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		Labels:      make(map[string]string),
@@ -800,8 +714,8 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		slog.String("instance_id", instanceID),
 		slog.String("image", image))
 
-	// Build podman run command
-	args := m.buildPodmanRunArgs(container)
+	// Build container run command
+	args := m.buildContainerRunArgs(container)
 
 	// Execute container runtime run command
 	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, args...)
@@ -842,26 +756,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		return fmt.Errorf("container failed to start: %w", err)
 	}
 
-	// Get container IP for proxy routing
-	containerIP, err := m.getContainerIP(ctx, container.ID)
-	if err != nil {
-		m.logger.Error("Failed to get container IP",
-			slog.String("container", containerName),
-			slog.String("error", err.Error()))
-		// Continue without IP - container is still created
-		containerIP = "127.0.0.1" // fallback
-	}
-
-	// Add route for the container using the slug
-	if err := m.addRoute(ctx, slug, containerIP, containerPort); err != nil {
-		m.logger.Error("Failed to add route",
-			slog.String("slug", slug),
-			slog.String("service", name),
-			slog.String("error", err.Error()))
-		// Continue - container is created but routing may not work
-	}
-
-	// Update final status and container info
+	// Update final status — Traefik discovers the container via labels
 	container.Status = models.StatusRunning
 	container.UpdatedAt = time.Now()
 
@@ -872,12 +767,11 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 			slog.String("error", err.Error()))
 	}
 
-	m.logger.Info("Container created successfully with proxy routing",
+	m.logger.Info("Container created successfully",
 		slog.String("container", containerName),
 		slog.String("id", container.ID),
 		slog.String("instance_id", instanceID),
 		slog.String("url", container.URL),
-		slog.String("container_ip", containerIP),
 		slog.Int("container_port", containerPort),
 		slog.Any("command", command),
 		slog.String("final_status", string(container.Status)))
@@ -924,7 +818,76 @@ func (m *Manager) HandleMCPInstanceDeleted(ctx context.Context, instanceID strin
 	return nil
 }
 
-// generateSlug generates a URL-friendly slug from a name with a random suffix
+// sandboxImage is the container image used to wrap stdio-based MCP servers over streamable-http.
+// agentarea/mcp-bridge includes Python, Node.js (npx), and uv (uvx) so most MCP servers work
+// out of the box. It proxies stdio-based MCP servers over streamable-http at /mcp.
+const sandboxImage = "agentarea/mcp-bridge:latest"
+const sandboxPort = 8080
+
+// ResolveContainerSpec derives the actual image, port, command, and environment that
+// should be used when launching a container for a given json_spec.
+//
+// Two spec types are supported:
+//   - "docker" (default): the spec must contain "image" and "port". The container is
+//     launched as-is and is expected to serve MCP over HTTP/SSE natively.
+//   - "command": the spec must contain "command" (e.g. "npx" or "uvx") plus optional
+//     "args". The command is wrapped with supergateway so its stdio transport is
+//     exposed over HTTP/SSE on sandboxPort.
+func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port int, command []string, environment map[string]string) {
+	environment = make(map[string]string)
+	if envMap, ok := jsonSpec["environment"].(map[string]interface{}); ok {
+		for k, v := range envMap {
+			if s, ok := v.(string); ok {
+				environment[k] = s
+			}
+		}
+	}
+
+	specType, _ := jsonSpec["type"].(string)
+
+	if specType == "command" {
+		// Wrap stdio command with mcp-bridge (stdio → streamable-http proxy)
+		cmd, _ := jsonSpec["command"].(string)
+		var args []string
+		if rawArgs, ok := jsonSpec["args"].([]interface{}); ok {
+			for _, a := range rawArgs {
+				if s, ok := a.(string); ok {
+					args = append(args, s)
+				}
+			}
+		}
+
+		image = sandboxImage
+		port = sandboxPort
+		// bridge.py <command> [args...] — the entrypoint is "python bridge.py"
+		command = append([]string{cmd}, args...)
+		return
+	}
+
+	// Docker type (default)
+	image, _ = jsonSpec["image"].(string)
+	if p, ok := jsonSpec["port"].(float64); ok {
+		port = int(p)
+	} else if p, ok := jsonSpec["port"].(int); ok {
+		port = p
+	} else {
+		port = 8000
+	}
+
+	// Optional entrypoint override
+	if cmdInterface, ok := jsonSpec["cmd"]; ok {
+		if cmdSlice, ok := cmdInterface.([]interface{}); ok {
+			for _, cmdItem := range cmdSlice {
+				if cmdStr, ok := cmdItem.(string); ok {
+					command = append(command, cmdStr)
+				}
+			}
+		}
+	}
+	return
+}
+
+// generateSlug generates a URL-friendly slug from a name
 func generateSlug(name string) string {
 	// Convert to lowercase and replace spaces/special chars with hyphens
 	slug := strings.ToLower(name)
@@ -936,12 +899,7 @@ func generateSlug(name string) string {
 	// Remove leading/trailing hyphens
 	slug = strings.Trim(slug, "-")
 
-	// Add random suffix to ensure uniqueness
-	randomBytes := make([]byte, 4)
-	rand.Read(randomBytes)
-	randomSuffix := hex.EncodeToString(randomBytes)
-
-	return fmt.Sprintf("%s-%s", slug, randomSuffix)
+	return slug
 }
 
 // ValidateContainerSpec validates container specification before creation
@@ -959,8 +917,9 @@ func (m *Manager) ValidateContainerSpec(ctx context.Context, instance *models.MC
 		return nil, fmt.Errorf("dry-run validation failed: %w", err)
 	}
 
-	// Additional image validation if requested
-	if allowImagePull {
+	// Additional image validation/pull if requested (skip for command type)
+	specType, _ := instance.JSONSpec["type"].(string)
+	if allowImagePull && specType != "command" {
 		image, ok := instance.JSONSpec["image"].(string)
 		if ok && image != "" {
 			imageResult, err := m.validator.ValidateContainerImage(ctx, image, allowImagePull)
@@ -1022,8 +981,9 @@ func (m *Manager) ValidateContainerSpecWithLimits(ctx context.Context, instance 
 		return nil, fmt.Errorf("dry-run validation failed: %w", err)
 	}
 
-	// Additional image validation if requested
-	if allowImagePull {
+	// Additional image validation/pull if requested (skip for command type)
+	specType, _ := instance.JSONSpec["type"].(string)
+	if allowImagePull && specType != "command" {
 		image, ok := instance.JSONSpec["image"].(string)
 		if ok && image != "" {
 			imageResult, err := m.validator.ValidateContainerImage(ctx, image, allowImagePull)
@@ -1209,37 +1169,6 @@ func (m *Manager) GetContainerHealthStatus(serviceName string) (*HealthCheckResu
 }
 
 // Shutdown gracefully shuts down the container manager
-// SetRouteManager sets the route manager for proxy-based routing
-func (m *Manager) SetRouteManager(rm interface{}) {
-	m.routeManager = rm
-}
-
-// addRoute adds a route to the proxy manager
-func (m *Manager) addRoute(ctx context.Context, slug, containerIP string, containerPort int) error {
-	if m.routeManager != nil {
-		if rm, ok := m.routeManager.(interface {
-			AddMCPService(context.Context, string, string, int) error
-		}); ok {
-			return rm.AddMCPService(ctx, slug, containerIP, containerPort)
-		}
-	}
-
-	return fmt.Errorf("no route manager configured")
-}
-
-// removeRoute removes a route from the proxy manager
-func (m *Manager) removeRoute(ctx context.Context, slug string) error {
-	if m.routeManager != nil {
-		if rm, ok := m.routeManager.(interface {
-			RemoveMCPService(context.Context, string) error
-		}); ok {
-			return rm.RemoveMCPService(ctx, slug)
-		}
-	}
-
-	return fmt.Errorf("no route manager configured")
-}
-
 func (m *Manager) Shutdown(ctx context.Context) error {
 	m.logger.Info("Shutting down container manager")
 
@@ -1310,13 +1239,13 @@ func (m *Manager) shouldContainerBeRunning(container *models.Container) bool {
 	return true
 }
 
-// getRealTimeContainerStatus gets the real-time status from Podman
+// getRealTimeContainerStatus gets the real-time status from the container runtime
 func (m *Manager) getRealTimeContainerStatus(ctx context.Context, container *models.Container) models.ContainerStatus {
 	if container.ID == "" {
 		return models.StatusError
 	}
 
-	cmd := exec.CommandContext(ctx, "podman", "inspect", container.ID, "--format", "{{.State.Status}}")
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", container.ID, "--format", "{{.State.Status}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		m.logger.Debug("Failed to get real-time container status",
@@ -1353,28 +1282,7 @@ func (m *Manager) restartContainer(ctx context.Context, container *models.Contai
 		return fmt.Errorf("container failed to start properly: %w", err)
 	}
 
-	// Get container IP for proxy routing (in case it changed)
-	containerIP, err := m.getContainerIP(ctx, container.ID)
-	if err != nil {
-		m.logger.Error("Failed to get container IP after restart",
-			slog.String("container", container.Name),
-			slog.String("error", err.Error()))
-		// Continue - container is started but routing may not work
-		containerIP = "127.0.0.1" // fallback
-	}
-
-	// Update/refresh route for the container (proxy or Traefik)
-	if container.Slug != "" {
-		if err := m.addRoute(ctx, container.Slug, containerIP, container.Port); err != nil {
-			m.logger.Error("Failed to update route after restart",
-				slog.String("slug", container.Slug),
-				slog.String("service", container.ServiceName),
-				slog.String("error", err.Error()))
-			// Continue - container is running but routing may not work
-		}
-	}
-
-	// Update final status
+	// Update final status — Traefik re-discovers the container automatically
 	container.Status = models.StatusRunning
 	container.UpdatedAt = time.Now()
 
@@ -1390,105 +1298,103 @@ func (m *Manager) restartContainer(ctx context.Context, container *models.Contai
 	return nil
 }
 
-// syncWithCoreAPI synchronizes with the Core API to handle pending instances
+// syncWithCoreAPI synchronizes with the database to handle instances that need containers.
+// Queries the DB directly to avoid HTTP auth complexity.
 func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
-	m.logger.Info("Starting synchronization with Core API")
+	m.logger.Info("Starting database synchronization for pending instances")
 
-	// Get all MCP instances from Core API
-	url := fmt.Sprintf("%s/v1/mcp-server-instances/", m.config.CoreAPIURL)
-	m.logger.Info("Fetching MCP instances from Core API", slog.String("url", url))
-
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+	connStr := database.BuildConnStr(m.logger)
+	if connStr == "" {
+		m.logger.Warn("Database credentials not configured, skipping instance sync")
+		return nil
 	}
 
-	resp, err := client.Get(url)
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to fetch MCP instances: %w", err)
+		return fmt.Errorf("failed to open database connection: %w", err)
 	}
-	defer resp.Body.Close()
+	defer db.Close()
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Core API returned status %d", resp.StatusCode)
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
+
+	// Fetch all instances that should have a running container
+	// Includes 'pending', 'starting', and 'running' because start_instance
+	// may update DB status without actually creating the container
+	rows, err := db.QueryContext(ctx,
+		`SELECT id::text, name, json_spec FROM mcp_server_instances WHERE status IN ('pending', 'starting', 'running')`)
+	if err != nil {
+		return fmt.Errorf("failed to query mcp_server_instances: %w", err)
+	}
+	defer rows.Close()
 
 	var instances []models.MCPServerInstance
-	if err := json.NewDecoder(resp.Body).Decode(&instances); err != nil {
-		return fmt.Errorf("failed to decode instances response: %w", err)
+	for rows.Next() {
+		var inst models.MCPServerInstance
+		var jsonSpecRaw []byte
+		if err := rows.Scan(&inst.InstanceID, &inst.Name, &jsonSpecRaw); err != nil {
+			m.logger.Warn("Failed to scan instance row", slog.String("error", err.Error()))
+			continue
+		}
+		if err := json.Unmarshal(jsonSpecRaw, &inst.JSONSpec); err != nil {
+			m.logger.Warn("Failed to parse json_spec",
+				slog.String("instance_id", inst.InstanceID),
+				slog.String("error", err.Error()))
+			continue
+		}
+		instances = append(instances, inst)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating instance rows: %w", err)
 	}
 
-	m.logger.Info("Fetched MCP instances from Core API",
-		slog.Int("total_instances", len(instances)))
+	m.logger.Info("Fetched instances from database", slog.Int("total", len(instances)))
 
-	// Process each instance
 	pendingCount := 0
 	for _, instance := range instances {
 		m.logger.Info("Processing instance",
 			slog.String("instance_id", instance.InstanceID),
-			slog.String("name", instance.Name),
-			slog.String("status", instance.Status))
+			slog.String("name", instance.Name))
 
-		// Check if instance should have a container but doesn't exist
-		if instance.Status == "pending" || instance.Status == "starting" {
-			// Check if container already exists
-			if _, exists := m.containers[instance.Name]; !exists {
-				m.logger.Info("Creating missing container for pending instance",
-					slog.String("instance_id", instance.InstanceID),
-					slog.String("name", instance.Name))
+		// Skip if container already tracked in memory
+		if _, exists := m.containers[instance.Name]; exists {
+			m.logger.Debug("Container already exists, skipping", slog.String("name", instance.Name))
+			continue
+		}
 
-				// Extract image and port from JSONSpec
-				image, imageOk := instance.JSONSpec["image"].(string)
-				portFloat, portOk := instance.JSONSpec["port"].(float64)
-				port := int(portFloat)
+		image, port, command, environment := ResolveContainerSpec(instance.JSONSpec)
+		if image == "" {
+			m.logger.Error("Invalid json_spec for instance (missing image or command)",
+				slog.String("instance_id", instance.InstanceID))
+			continue
+		}
+		environment["MCP_INSTANCE_ID"] = instance.InstanceID
 
-				if !imageOk || !portOk {
-					m.logger.Error("Invalid JSON spec for instance",
-						slog.String("instance_id", instance.InstanceID),
-						slog.String("error", "missing image or port"))
-					continue
-				}
+		req := models.CreateContainerRequest{
+			ServiceName: instance.Name,
+			Image:       image,
+			Port:        port,
+			Environment: environment,
+			Command:     command,
+		}
 
-				// Extract environment variables
-				environment := make(map[string]string)
-				if envMap, ok := instance.JSONSpec["environment"].(map[string]interface{}); ok {
-					for k, v := range envMap {
-						if strVal, ok := v.(string); ok {
-							environment[k] = strVal
-						}
-					}
-				}
-
-				// Add MCP instance ID to environment for tracking
-				environment["MCP_INSTANCE_ID"] = instance.InstanceID
-
-				// Create container request
-				req := models.CreateContainerRequest{
-					ServiceName: instance.Name,
-					Image:       image,
-					Port:        port,
-					Environment: environment,
-				}
-
-				// Create container
-				if _, err := m.CreateContainer(ctx, req); err != nil {
-					m.logger.Error("Failed to create container for pending instance",
-						slog.String("instance_id", instance.InstanceID),
-						slog.String("name", instance.Name),
-						slog.String("error", err.Error()))
-				} else {
-					m.logger.Info("Successfully created container for pending instance",
-						slog.String("instance_id", instance.InstanceID),
-						slog.String("name", instance.Name))
-				}
-				pendingCount++
-			}
+		if _, err := m.CreateContainer(ctx, req); err != nil {
+			m.logger.Error("Failed to create container for instance",
+				slog.String("instance_id", instance.InstanceID),
+				slog.String("name", instance.Name),
+				slog.String("error", err.Error()))
+		} else {
+			m.logger.Info("Successfully created container for instance",
+				slog.String("instance_id", instance.InstanceID),
+				slog.String("name", instance.Name))
+			pendingCount++
 		}
 	}
 
-	m.logger.Info("Core API synchronization completed",
+	m.logger.Info("Database synchronization completed",
 		slog.Int("total_instances", len(instances)),
-		slog.Int("pending_processed", pendingCount))
+		slog.Int("containers_created", pendingCount))
 
 	return nil
 }

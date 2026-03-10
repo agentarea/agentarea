@@ -119,6 +119,28 @@ class SkillFilesResponse(BaseModel):
     files: list[SkillFileResponse]
 
 
+class SkillMemberAddRequest(BaseModel):
+    """Request to add a child skill member."""
+
+    child_skill_id: UUID = Field(..., description="ID of the child skill to add")
+    order: int = Field(0, description="Execution order hint")
+    is_required: bool = Field(True, description="Whether this child is required")
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="IDs of sibling children that must run before this one",
+    )
+
+
+class SkillMemberResponse(BaseModel):
+    """Skill member response model."""
+
+    parent_skill_id: str
+    child_skill_id: str
+    order: int
+    is_required: bool
+    dependencies: list[str]
+
+
 # ============================================================================
 # Endpoints
 # ============================================================================
@@ -293,3 +315,83 @@ async def delete_skill(
         raise HTTPException(status_code=404, detail="Skill not found")
 
     return {"status": "deleted", "id": str(skill_id)}
+
+
+# ============================================================================
+# Skill member endpoints (skill-as-bundle)
+# ============================================================================
+
+
+@router.post("/{skill_id}/members", response_model=SkillMemberResponse)
+async def add_skill_member(
+    skill_id: UUID,
+    request: SkillMemberAddRequest,
+    skill_service: SkillServiceDep,
+):
+    """Add a child skill to a parent skill bundle."""
+    try:
+        member = await skill_service.add_member(
+            parent_skill_id=skill_id,
+            child_skill_id=request.child_skill_id,
+            order=request.order,
+            is_required=request.is_required,
+            dependencies=request.dependencies,
+        )
+        return SkillMemberResponse(
+            parent_skill_id=str(member.parent_skill_id),
+            child_skill_id=str(member.child_skill_id),
+            order=member.order,
+            is_required=member.is_required,
+            dependencies=member.dependencies,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/{skill_id}/members", response_model=list[SkillMemberResponse])
+async def list_skill_members(
+    skill_id: UUID,
+    skill_service: SkillServiceDep,
+):
+    """List all child skills of a parent skill bundle."""
+    members = await skill_service.get_members(skill_id)
+    return [
+        SkillMemberResponse(
+            parent_skill_id=str(m.parent_skill_id),
+            child_skill_id=str(m.child_skill_id),
+            order=m.order,
+            is_required=m.is_required,
+            dependencies=m.dependencies,
+        )
+        for m in members
+    ]
+
+
+@router.delete("/{skill_id}/members/{child_skill_id}")
+async def remove_skill_member(
+    skill_id: UUID,
+    child_skill_id: UUID,
+    skill_service: SkillServiceDep,
+):
+    """Remove a child skill from a parent skill bundle."""
+    removed = await skill_service.remove_member(skill_id, child_skill_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Member association not found")
+    return {
+        "status": "removed",
+        "parent_skill_id": str(skill_id),
+        "child_skill_id": str(child_skill_id),
+    }
+
+
+@router.get("/{skill_id}/flatten", response_model=list[str])
+async def flatten_skill_members(
+    skill_id: UUID,
+    skill_service: SkillServiceDep,
+):
+    """Return child skill IDs in topological execution order."""
+    try:
+        ordered_ids = await skill_service.flatten(skill_id)
+        return [str(sid) for sid in ordered_ids]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

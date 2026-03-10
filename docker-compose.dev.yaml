@@ -23,10 +23,17 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
-      - MCP_MANAGER_URL=http://mcp-manager:80/api/mcp
-      - MCP_PROXY_HOST=http://localhost:7999
+      - MCP_MANAGER_URL=http://mcp-manager:80
+      - MCP_GATEWAY_URL=http://agentarea-traefik:8080
       - REDIS_URL=redis://redis:6379
       - MCP_CLIENT_TIMEOUT=30
+      # Hydra OAuth2 AS
+      - HYDRA_PUBLIC_URL=http://hydra:4444
+      - HYDRA_ADMIN_URL=http://hydra:4445
+      - HYDRA_BROWSER_URL=http://localhost:4444
+      - MCP_OAUTH_SCOPES=openid offline_access
+      # Public API base URL (used in OAuth AS metadata and WWW-Authenticate)
+      - API_BASE_URL=http://localhost:8000
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -40,6 +47,7 @@ services:
       - ./agentarea-platform/apps/api/agentarea_api:/app/apps/api/agentarea_api
       - ./agentarea-platform/libs:/app/libs
       - ./agentarea-platform/apps/api/alembic:/app/apps/api/alembic
+      - ./agentarea-bootstrap/data/mcp_providers.yaml:/app/data/mcp_providers.yaml:ro
       # - ${INFISICAL_TOKEN_VOLUME:-./.volumes/infisical-local-data}:/app/bootstrap
     depends_on:
       db:
@@ -58,6 +66,7 @@ services:
       - default
       - mcp-network
       - temporal-network
+      - auth-network
     command: ["agentarea-api", "serve", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "info"]
     working_dir: /app/apps/api
 
@@ -229,6 +238,25 @@ services:
       - mcp-network
     command: ["redis-server", "--save", "", "--appendonly", "no"] # Disable persistence for dev
 
+  traefik:
+    image: traefik:v3.3
+    container_name: agentarea-traefik
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=agentarea_mcp-network
+      - --entrypoints.mcp.address=:8080
+      - --entrypoints.traefik.address=:8888
+      - --api.insecure=true
+    ports:
+      - "8686:8080"  # MCP traffic
+      - "8687:8888"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - mcp-network
+
   mcp-manager:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
     build:
@@ -240,16 +268,14 @@ services:
         - linux/arm64
     container_name: mcp-manager
     restart: unless-stopped
-    privileged: true
     ports:
-      - "7999:80" # Internal proxy (unified entry point)
+      - "7999:80" # API server
     tmpfs:
       - /tmp
       - /run
     volumes:
-      - mcp_containers:/var/lib/containers/storage
       - ./agentarea-mcp-manager:/app:rw # Mount source code for live reload
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/run/docker.sock:/var/run/docker.sock # Docker socket for container management
     networks:
       - mcp-network
       - default
@@ -257,10 +283,12 @@ services:
     command: ["sh", "-c", "if [ -f /app/.air.toml ] && command -v air >/dev/null 2>&1; then exec air -c /app/.air.toml; else exec /app/start-dev.sh; fi"]
     environment:
       LOG_LEVEL: INFO
-      TRAEFIK_NETWORK: podman
+      SERVER_PORT: 80
+      MCP_NETWORK: agentarea_mcp-network
+      SKIP_INSTANCE_SYNC: "true"
       REDIS_URL: redis://redis:6379
-      MCP_PROXY_HOST: http://localhost:7999
       CORE_API_URL: http://agentarea-backend:8000
+      CONTAINER_RUNTIME: docker
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings
@@ -368,6 +396,10 @@ services:
       - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
       - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
 
+      # MCP settings
+      - MCP_MANAGER_URL=http://mcp-manager:80
+      - MCP_GATEWAY_URL=http://agentarea-traefik:8080
+
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
@@ -378,6 +410,7 @@ services:
     networks:
       - temporal-network
       - default
+      - mcp-network
     volumes:
       - ./agentarea-platform/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
       - ./agentarea-platform/libs:/app/libs
@@ -430,33 +463,37 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # # Ory Hydra OAuth2/OIDC Server
-  # hydra:
-  #   image: oryd/hydra:v2.2.0
-  #   ports:
-  #     - "4444:4444" # public API
-  #     - "4445:4445" # admin API
-  #   environment:
-  #     DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
-  #     URLS_SELF_ISSUER: http://localhost:4444
-  #     URLS_CONSENT: http://localhost:3000/auth/consent
-  #     URLS_LOGIN: http://localhost:3000/auth/login
-  #     URLS_LOGOUT: http://localhost:3000/auth/logout
-  #     URLS_ERROR: http://localhost:3000/auth/error
-  #     SECRETS_SYSTEM: this-is-the-primary-secret-replace-me-in-production
-  #     OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
-  #     OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: some-random-salt
-  #     LOG_LEVEL: debug
-  #     LOG_LEAK_SENSITIVE_VALUES: true
-  #   command: serve all --dev
-  #   volumes:
-  #     - ./config/auth/hydra:/etc/config/hydra
-  #   networks:
-  #     - auth-network
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #   restart: unless-stopped
+  # Ory Hydra OAuth2/OIDC Server
+  hydra:
+    image: oryd/hydra:v2.2.0
+    ports:
+      - "4444:4444" # public API
+      - "4445:4445" # admin API
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
+      URLS_SELF_ISSUER: http://localhost:4444
+      URLS_CONSENT: http://localhost:3000/auth/consent
+      URLS_LOGIN: http://localhost:3000/api/hydra/login
+      URLS_LOGOUT: http://localhost:3000/auth/logout
+      URLS_ERROR: http://localhost:3000/auth/error
+      SECRETS_SYSTEM: this-is-the-primary-secret-replace-me-in-production
+      OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
+      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: some-random-salt
+      LOG_LEVEL: debug
+      LOG_LEAK_SENSITIVE_VALUES: true
+      # Enable Dynamic Client Registration
+      OAUTH2_ALLOWED_TOP_LEVEL_CLAIMS: workspace_id
+    command: serve all -c /etc/config/hydra/hydra.yml --dev
+    volumes:
+      - ./config/auth/hydra:/etc/config/hydra
+    networks:
+      - auth-network
+    depends_on:
+      db:
+        condition: service_healthy
+      hydra-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   # MailSlurper for email testing (catches emails in development)
   mailslurper:
@@ -467,19 +504,19 @@ services:
     networks:
       - auth-network
 
-  # # Hydra OAuth2 Client Setup
-  # hydra-migrate:
-  #   image: oryd/hydra:v2.2.0
-  #   environment:
-  #     DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
-  #   command: migrate -c /etc/config/hydra/hydra.yml sql -e --yes
-  #   volumes:
-  #     - ./config/auth/hydra:/etc/config/hydra
-  #   networks:
-  #     - auth-network
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
+  # Hydra DB Migration
+  hydra-migrate:
+    image: oryd/hydra:v2.2.0
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
+    command: migrate sql -e --yes
+    networks:
+      - auth-network
+    depends_on:
+      db:
+        condition: service_healthy
+      bootstrap_db:
+        condition: service_completed_successfully
 
   # # Register OAuth2 client for frontend
   # hydra-client-setup:
@@ -510,8 +547,6 @@ volumes:
   postgres_data:
   minio_data:
   redis_data:
-  mcp_containers:
-    driver: local
 
 networks:
   mcp-network:

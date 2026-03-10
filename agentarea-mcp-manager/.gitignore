@@ -27,3 +27,4 @@ build-errors.log
 *.swp
 *.swo
 *~ 
+codeql-db/

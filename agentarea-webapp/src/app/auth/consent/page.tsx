@@ -20,17 +20,13 @@ export default function ConsentPage() {
       return;
     }
 
-    // Get consent request information (server-side should use proxy or server action instead)
-    // TODO: This should be moved to a server action to avoid exposing admin URL to browser
-    fetch(
-      `http://localhost:4445/admin/oauth2/auth/requests/consent?consent_challenge=${consentChallenge}`
-    )
+    fetch(`/api/hydra/consent?challenge=${consentChallenge}`)
       .then((response) => response.json())
       .then((data) => {
         setConsentRequest(data);
         setLoading(false);
       })
-      .catch((error) => {
+      .catch(() => {
         setError("Failed to fetch consent request");
         setLoading(false);
       });
@@ -42,7 +38,7 @@ export default function ConsentPage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:4445/admin/oauth2/auth/requests/consent/accept?consent_challenge=${consentChallenge}`,
+        `/api/hydra/consent?challenge=${consentChallenge}&action=accept`,
         {
           method: "PUT",
           headers: {
@@ -85,7 +81,7 @@ export default function ConsentPage() {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:4445/admin/oauth2/auth/requests/consent/reject?consent_challenge=${consentChallenge}`,
+        `/api/hydra/consent?challenge=${consentChallenge}&action=reject`,
         {
           method: "PUT",
           headers: {

@@ -11,6 +11,14 @@ class AppSettings(BaseAppSettings):
     APP_NAME: str = "AI Agent Service"
     DEBUG: bool = False
 
+    # Public base URL for this API (used in OAuth AS metadata and redirect URLs)
+    API_BASE_URL: str = "http://localhost:8000"
+    # AgentArea frontend URL (users are redirected here to log in if no session)
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+
+    # Kratos public API URL (used to validate browser session cookies in OAuth AS)
+    KRATOS_PUBLIC_URL: str = "http://kratos:4433"
+
     # Kratos Authentication Configuration
     KRATOS_JWKS_B64: str = (
         "ewogICJrZXlzIjogWwogICAgewogICAgICAia3R5IjogIkVDIiwKICAgICAgImtpZCI6ICJh"

@@ -83,7 +83,12 @@ function UnlinkRow({ button, isSubmitting }: UnlinkRowProps) {
   // so we delay the state update by 100ms
   const [clicked, setClicked] = useDebounceValue(false, 100)
   const provider = extractProvider(button.meta.label?.context) ?? ""
-  const Logo = logos[(button.attributes.value as string).split("-")[0]]
+  const logoKey = (button.attributes.value as string).split("-")[0]
+  const LogoComponent = logos[logoKey]
+  // Handle cases where the SVG import might be wrapped in a module object
+  const Logo = LogoComponent && typeof LogoComponent === "object" && "default" in LogoComponent
+    ? LogoComponent.default
+    : LogoComponent
 
   const localOnClick = () => {
     button.onClick()

@@ -1,16 +1,16 @@
-import { 
-  Container, 
-  Server, 
-  Database, 
-  Folder, 
-  Github, 
-  Globe, 
-  MessageSquare, 
-  Cloud, 
-  Terminal, 
-  Cpu, 
-  Search, 
-  Mail, 
+import {
+  Container,
+  Server,
+  Database,
+  Folder,
+  Github,
+  Globe,
+  MessageSquare,
+  Cloud,
+  Terminal,
+  Cpu,
+  Search,
+  Mail,
   Command,
   Box
 } from "lucide-react";
@@ -43,7 +43,7 @@ function getMCPIcon(name: string) {
   if (lower.includes("mail") || lower.includes("gmail") || lower.includes("outlook")) return Mail;
   if (lower.includes("linear") || lower.includes("jira") || lower.includes("project")) return Command;
   if (lower.includes("obsidian") || lower.includes("notion")) return Box;
-  
+
   return Server;
 }
 
@@ -51,6 +51,8 @@ export function MCPInstanceCard({
   instance,
   serverSpec,
 }: MCPInstanceCardProps) {
+  const specType = (instance.json_spec?.type as string) || "docker";
+
   return (
     <LinkedCard
       href={`/mcp-servers/${instance.id}`}
@@ -58,11 +60,9 @@ export function MCPInstanceCard({
       icon={getMCPIcon(instance.name)}
       type="view"
       subtitle={
-        serverSpec && (
-          <p className="truncate text-xs text-gray-500 w-full">
-            {serverSpec.name}
-          </p>
-        )
+        <p className="truncate text-xs text-gray-500 w-full">
+          {specType === "command" ? "Command" : specType === "url" ? "External" : serverSpec?.name || "Docker"}
+        </p>
       }
     />
   );

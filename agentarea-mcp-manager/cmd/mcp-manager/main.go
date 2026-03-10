@@ -21,7 +21,6 @@ import (
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/providers"
-	"github.com/agentarea/mcp-manager/internal/proxy"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 	"github.com/agentarea/mcp-manager/internal/templates"
 )
@@ -149,7 +148,7 @@ func main() {
 		// Get the container manager from the docker backend for compatibility
 		containerManager = dockerBackend.GetManager()
 
-		// Initialize Docker backend
+		// Initialize Docker backend (Traefik handles routing via container labels)
 		if err := backend.Initialize(ctx); err != nil {
 			logger.Error("Failed to initialize Docker backend", slog.String("error", err.Error()))
 			os.Exit(1)
@@ -158,37 +157,6 @@ func main() {
 	default:
 		logger.Error("Unsupported environment type", slog.String("type", envType))
 		os.Exit(1)
-	}
-
-	// Start internal proxy server in background only for Docker environments
-	var proxyServer *proxy.ProxyServer
-	var routeManager *proxy.RouteManager
-	if envType == "docker" {
-		proxyPort := cfg.Proxy.Port
-		if proxyPort == 0 {
-			proxyPort = 8080
-		}
-		proxyConfig := proxy.ProxyConfig{
-			Port:              proxyPort,
-			ManagerServiceURL: cfg.Proxy.ManagerServiceURL,
-			ReadTimeout:       15 * time.Second,
-			WriteTimeout:      15 * time.Second,
-			IdleTimeout:       60 * time.Second,
-		}
-		proxyServer = proxy.NewProxyServer(proxyConfig, logger)
-		routeManager = proxy.NewRouteManager(proxyServer, cfg, logger)
-
-		// Set the route manager in the container manager for route registration
-		if containerManager != nil {
-			containerManager.SetRouteManager(routeManager)
-		}
-
-		// Start proxy server in background
-		go func() {
-			if err := proxyServer.Start(); err != nil && err != http.ErrServerClosed {
-				logger.Error("Proxy server failed", slog.String("error", err.Error()))
-			}
-		}()
 	}
 
 	// Initialize secret resolver with Infisical SDK
@@ -264,13 +232,6 @@ func main() {
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Server forced to shutdown", slog.String("error", err.Error()))
-	}
-
-	// Shutdown proxy server if it exists (Docker environment)
-	if proxyServer != nil {
-		if err := proxyServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("Failed to shutdown proxy server", slog.String("error", err.Error()))
-		}
 	}
 
 	// Close event subscriber

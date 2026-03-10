@@ -1,154 +1,197 @@
 # Welcome to AgentArea
 
 <Info>
-Build, deploy, and manage AI agents at scale. Create your first agent in under 5 minutes with pre-built templates and seamless MCP integration.
+The open-core platform for building **governed agentic networks**. Create multi-agent systems with VPC-inspired architecture, built-in compliance controls, and native A2A communication.
 </Info>
 
 <CardGroup cols={2}>
   <Card title="⚡ Quick Start" icon="rocket" href="/getting-started">
-    Get AgentArea running locally in 5 minutes
+    Get AgentArea running in 5 minutes
   </Card>
   <Card title="🤖 Build Your First Agent" icon="bot" href="/building-agents">
-    Create a working AI agent with our templates
+    Create a working AI agent
   </Card>
 </CardGroup>
 
-## 🚀 What is AgentArea?
+---
 
-AgentArea is an open-source platform that enables developers to:
+## What is AgentArea?
 
-- **Build AI Agents** with templates and customizable components
-- **Deploy at Scale** with Docker and Kubernetes support
-- **Enable Agent Communication** with built-in multi-agent workflows
-- **Integrate Tools** using the Model Context Protocol (MCP)
-- **Monitor Performance** with real-time analytics and debugging
+AgentArea is an open-core platform purpose-built for **agentic networks** and **agent governance**.
 
-## ✨ Key Features
+Unlike single-agent frameworks, AgentArea provides:
+
+- **🌐 VPC-Inspired Networks**: Isolated agent groups with granular permissions
+- **🛡️ Governance Controls**: Tool approvals, budget limits, audit trails
+- **🔗 A2A Protocol**: Native agent-to-agent communication
+- **⚡ Production Infrastructure**: Temporal workflows, Kubernetes-native
+
+---
+
+## Core Capabilities
 
 <CardGroup cols={2}>
-  <Card title="Multi-Agent Communication" icon="bot">
-    Enable your AI agents to collaborate, share information, and work together on complex tasks
+  <Card title="🌐 Agentic Networks" icon="network-wired" href="/agentic-networks">
+    VPC-inspired architecture with isolated agent groups. Configure granular permissions between agents and control inter-agent communication.
   </Card>
   
-  <Card title="Model Context Protocol" icon="link">
-    Built-in support for MCP allows agents to access external tools and data sources securely
+  <Card title="🛡️ Agent Governance" icon="shield-halved" href="/agent-governance">
+    Granular tool permissions with approval workflows. Require human approval for sensitive operations and maintain full audit trails.
   </Card>
   
-  <Card title="Scalable Infrastructure" icon="server">
-    Auto-scaling container orchestration ensures your agents can handle any workload
+  <Card title="🔗 A2A Protocol" icon="arrows-turn-to-dots" href="/agent-communication">
+    Native agent-to-agent communication. Agents discover, connect, and collaborate. Supports teams, delegation, and hierarchies.
   </Card>
   
-  <Card title="Developer-Friendly APIs" icon="code">
-    RESTful APIs and SDKs make integration simple and straightforward
+  <Card title="⚡ Event Triggers" icon="bolt" href="/event-triggers">
+    Fire agents on schedules, webhooks, or events. Build reactive systems that respond to external stimuli in real-time.
+  </Card>
+  
+  <Card title="🔌 MCP Integration" icon="plug" href="/mcp-integration">
+    Model Context Protocol for external tools. Warm pool acceleration (~1.3s vs 8-15s cold start). Compound MCPs for complex workflows.
+  </Card>
+  
+  <Card title="🏗️ Production Ready" icon="server" href="/deployment">
+    Temporal for durable execution. Kubernetes-native. Multi-LLM via LiteLLM. Multiple secret backends.
   </Card>
 </CardGroup>
 
-## 🎯 Who is AgentArea For?
+---
 
-<Tabs>
-  <Tab title="Developers">
-    **Build powerful AI agents** with our comprehensive development tools:
-    - Pre-built agent templates
-    - Local development environment
-    - Real-time testing and debugging
-    - CI/CD integration
-  </Tab>
-  
-  <Tab title="Businesses">
-    **Deploy AI solutions** that scale with your needs:
-    - Customer service automation
-    - Internal process optimization
-    - Data analysis and reporting
-    - Multi-channel communication
-  </Tab>
-  
-  <Tab title="Enterprises">
-    **Enterprise-grade platform** with security and compliance:
-    - Role-based access control
-    - Audit logging and compliance
-    - Private cloud deployment
-    - Custom integrations
-  </Tab>
-</Tabs>
-
-## 🏗️ Architecture Overview
-
-AgentArea is built on modern cloud-native principles:
+## Architecture
 
 ```mermaid
-graph TD
-    A[Frontend Interface] --> B[Core API]
-    B --> C[Agent Runtime]
-    C --> D[MCP Manager]
-    C --> E[Message Queue]
-    D --> F[External Tools]
-    E --> G[Database]
+graph LR
+    subgraph "Frontend"
+        A[Next.js Dashboard]
+    end
     
-    style A fill:#e1f5fe
-    style B fill:#f3e5f5
-    style C fill:#e8f5e8
-    style D fill:#fff3e0
+    subgraph "Backend"
+        B[FastAPI]
+        C[Temporal Worker]
+    end
+    
+    subgraph "MCP Layer"
+        D[MCP Manager - Go]
+        E[Warm Pool]
+    end
+    
+    subgraph "Data"
+        F[(PostgreSQL)]
+        G[(Redis)]
+    end
+    
+    A --> B
+    B --> C
+    B --> D
+    D --> E
+    B --> F
+    B --> G
 ```
 
-- **Frontend**: React-based dashboard for managing agents and conversations
-- **Core API**: FastAPI backend handling all business logic
-- **Agent Runtime**: Scalable container orchestration for running AI agents
-- **MCP Manager**: Model Context Protocol integration for external tool access
-- **Message Queue**: Redis-based communication between components
+---
 
-## 🚀 Quick Start
-
-Get started with AgentArea in just a few minutes:
+## Quick Start
 
 <Steps>
-  <Step title="Installation">
-    Clone the repository and start the development environment:
+  <Step title="Clone Repository">
     ```bash
     git clone https://github.com/agentarea/agentarea
     cd agentarea
-    make dev-up
     ```
   </Step>
   
-  <Step title="Create Your First Agent">
-    Use our web interface or API to create a simple agent:
+  <Step title="Start Platform">
     ```bash
-    curl -X POST http://localhost:8000/v1/agents \
-      -H "Content-Type: application/json" \
-      -d '{"name": "My First Agent", "template": "chatbot"}'
+    make up-dev
     ```
   </Step>
   
-  <Step title="Start Chatting">
-    Open the AgentArea dashboard and start a conversation with your agent!
+  <Step title="Access Dashboard">
+    Open http://localhost:3000 in your browser
   </Step>
 </Steps>
 
-## 📚 Next Steps
+<Note>
+**Prerequisites**: Docker & Docker Compose required. See [Getting Started](/getting-started) for detailed setup.
+</Note>
+
+---
+
+## Who is AgentArea For?
+
+<Tabs>
+  <Tab title="Developers">
+    **Build powerful AI agents** with:
+    - DDD architecture with clean separation
+    - Temporal workflows for durable execution
+    - Real-time SSE streaming
+    - Type-safe APIs with OpenAPI
+  </Tab>
+  
+  <Tab title="Teams">
+    **Collaborate on agent systems** with:
+    - Workspace isolation
+    - Role-based access control
+    - Shared MCP server management
+    - Audit trails for compliance
+  </Tab>
+  
+  <Tab title="Enterprises">
+    **Deploy at scale** with:
+    - Kubernetes-native deployment
+    - Multi-cloud support
+    - Enterprise auth (Ory Kratos/Hydra)
+    - SOC 2 / GDPR ready
+  </Tab>
+</Tabs>
+
+---
+
+## Documentation
 
 <CardGroup cols={3}>
-  <Card title="Getting Started Guide" icon="rocket" href="/getting-started">
-    Complete step-by-step setup and tutorial
+  <Card title="Getting Started" icon="rocket" href="/getting-started">
+    Setup and first agent
   </Card>
-  
-  <Card title="Core Concepts" icon="lightbulb" href="/building-agents">
-    Learn how to create and customize AI agents
+  <Card title="Features" icon="sparkles" href="/features">
+    All capabilities
   </Card>
-  
-  <Card title="API Documentation" icon="terminal" href="/api-reference">
-    Explore our comprehensive API reference
+  <Card title="Architecture" icon="code" href="/architecture">
+    Technical details
+  </Card>
+  <Card title="Building Agents" icon="bot" href="/building-agents">
+    Agent development
+  </Card>
+  <Card title="MCP Integration" icon="plug" href="/mcp-integration">
+    External tools
+  </Card>
+  <Card title="Deployment" icon="server" href="/deployment">
+    Production setup
   </Card>
 </CardGroup>
 
-## 🤝 Community & Support
+---
 
-- **GitHub**: [AgentArea Repository](https://github.com/agentarea/agentarea)
-- **Documentation**: You're reading it! 📖
-- **Issues**: Report bugs and request features on GitHub
-- **Contributing**: Check our [Contributing Guide](/contributing)
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card title="💬 Discord" icon="discord" href="https://discord.gg/5tduPwheYQ">
+    Join our community
+  </Card>
+  <Card title="🐙 GitHub" icon="github" href="https://github.com/agentarea/agentarea">
+    Contribute & report issues
+  </Card>
+</CardGroup>
+
+---
+
+## License
+
+AgentArea is open-source under the **Eclipse Public License v2.0 (EPLv2)**. The core platform is free to use, with enterprise features available for compliance-critical deployments.
 
 ---
 
 <Note>
-Ready to build the future of AI agents? [Get started now](/getting-started) or [explore our API](/api-reference)!
+Ready to build governed agentic networks? [Get started now](/getting-started) or explore our [features](/features)!
 </Note>

@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2019",
+    "target": "ES2022",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
-    "moduleResolution": "Bundler",
+    "moduleResolution": "bundler",
     "module": "ESNext",
     "preserveWatchOutput": true,
     "skipLibCheck": true,
@@ -16,12 +16,13 @@
     "resolveJsonModule": true,
     "declarationDir": "dist/types",
     "jsx": "react-jsx",
-    "lib": ["ES6", "DOM", "WebWorker"],
+    "lib": ["ES2022", "DOM", "WebWorker"],
     "rootDir": ".",
     "paths": {
       "@ory/elements-react": ["./src/index.ts"],
       "$snapshots/*": ["./.stub-responses/*"]
-    }
+    },
+    "typeRoots": ["./node_modules/@types", "../node_modules/@types"]
   },
   "exclude": [
     "node_modules",

@@ -9,7 +9,9 @@ Provides:
 - verify_workspace_access: Verify user has access to specific workspace
 """
 
+import hashlib
 import logging
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -22,12 +24,59 @@ from .providers.factory import AuthProviderFactory
 
 logger = logging.getLogger(__name__)
 
+_API_KEY_PREFIX = "aat_"
+
 # Security schemes
 # Required authentication - raises 401 if no token
 security_required = HTTPBearer()
 
 # Optional authentication - returns None if no token (doesn't raise error)
 security_optional = HTTPBearer(auto_error=False)
+
+
+async def _validate_api_key(token: str, request: Request) -> UserContext | None:
+    """Validate an API key and return UserContext, or None if invalid."""
+    from agentarea_mcp.domain.auth_models import MCPAccessToken
+    from sqlalchemy import select
+    from sqlalchemy import update as sa_update
+
+    from agentarea_common.config import get_database
+
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    async with get_database().async_session_factory() as session:
+        result = await session.execute(
+            select(MCPAccessToken).where(MCPAccessToken.token_hash == token_hash)
+        )
+        record = result.scalar_one_or_none()
+
+        if record is None or not record.is_active:
+            return None
+        if record.expires_at and datetime.utcnow() >= record.expires_at:
+            return None
+
+        # Increment access count (best-effort)
+        try:
+            await session.execute(
+                sa_update(MCPAccessToken)
+                .where(MCPAccessToken.id == record.id)
+                .values(
+                    access_count=MCPAccessToken.access_count + 1,
+                    last_accessed_at=datetime.utcnow(),
+                )
+            )
+            await session.commit()
+        except Exception:
+            logger.debug("Failed to increment API key access count", exc_info=True)
+
+        # workspace_id from header takes precedence, fallback to record's workspace
+        workspace_id = request.headers.get("X-Workspace-ID") or str(record.workspace_id)
+
+        return UserContext(
+            user_id=str(record.created_by),
+            workspace_id=workspace_id,
+            roles=[],
+        )
 
 
 def get_auth_provider():
@@ -75,8 +124,25 @@ async def get_user_context(
         async def protected_endpoint(user: UserContext = Depends(get_user_context)):
             return {"user_id": user.user_id}
     """
-    auth_provider = get_auth_provider()
     token = credentials.credentials
+
+    # Check if this is an API key (prefix-based routing)
+    if token.startswith(_API_KEY_PREFIX):
+        user_context = await _validate_api_key(token, request)
+        if user_context is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired API key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        ContextManager.set_context(user_context)
+        logger.debug(
+            f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
+        )
+        return user_context
+
+    # Otherwise, verify as JWT
+    auth_provider = get_auth_provider()
 
     try:
         # Verify token using auth provider
@@ -148,8 +214,22 @@ async def get_optional_user(
         logger.debug("No authentication credentials provided (optional auth)")
         return None
 
-    auth_provider = get_auth_provider()
     token = credentials.credentials
+
+    # Check if this is an API key (prefix-based routing)
+    if token.startswith(_API_KEY_PREFIX):
+        user_context = await _validate_api_key(token, request)
+        if user_context is None:
+            logger.debug("Optional API key authentication failed: invalid or expired key")
+            return None
+        ContextManager.set_context(user_context)
+        logger.debug(
+            f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
+        )
+        return user_context
+
+    # Otherwise, verify as JWT
+    auth_provider = get_auth_provider()
 
     try:
         # Verify token using auth provider

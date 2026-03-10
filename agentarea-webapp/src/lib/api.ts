@@ -92,6 +92,7 @@ export const {
 
   // MCP health
   getMCPHealthStatus,
+  getMCPInstanceHealth,
 
   // Skills API
   listSkills,
@@ -102,6 +103,10 @@ export const {
   uploadSkill,
   updateSkill,
   deleteSkill,
+
+  // MCP Auth Config API
+  listMCPAuthConfigs,
+  createMCPAuthConfig,
 } = api;
 
 // Convenience helpers built on top of the generated API
