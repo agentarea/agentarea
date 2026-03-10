@@ -160,6 +160,7 @@ class AgentConfigResult(BaseModel):
     description: str
     instruction: str
     model_id: str
+    context_window: int = 128000  # From ModelSpec, used for context window management
     tools: list[dict[str, Any]] = Field(default_factory=list)
     events_config: dict[str, Any] = Field(default_factory=dict)
     planning: bool = False

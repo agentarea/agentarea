@@ -110,13 +110,26 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         )
                     )
 
+            # Fetch model context window from ModelSpec
+            model_id_str = request.override_model or agent.model_id
+            context_window = 128000  # default fallback
+            if model_id_str:
+                try:
+                    model_instance_service = await ctx.get_model_instance_service()
+                    model_instance = await model_instance_service.get(UUID(model_id_str))
+                    if model_instance and model_instance.model_spec:
+                        context_window = model_instance.model_spec.context_window
+                except Exception as e:
+                    logger.warning(f"Could not fetch context_window for model {model_id_str}: {e}")
+
             # Build configuration using Pydantic model
             return AgentConfigResult(
                 id=str(agent.id),
                 name=agent.name,
                 description=agent.description,
                 instruction=agent.instruction,
-                model_id=request.override_model or agent.model_id,
+                model_id=model_id_str,
+                context_window=context_window,
                 tools=agent.tools or [],
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,

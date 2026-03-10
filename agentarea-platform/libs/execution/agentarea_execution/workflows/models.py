@@ -88,4 +88,5 @@ class AgentExecutionState(BaseModel):
     final_response: str | None = None
     success: bool = False
     budget_usd: float | None = None
+    context_window: int = 128000  # From ModelSpec, for context window management
     user_context_data: dict[str, Any] = Field(default_factory=dict)

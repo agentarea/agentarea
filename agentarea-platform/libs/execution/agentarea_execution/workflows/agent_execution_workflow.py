@@ -181,6 +181,9 @@ class AgentExecutionWorkflow:
         except AttributeError:
             self.state.agent_config = dict(agent_config_result)
 
+        # Store context window in state for context management
+        self.state.context_window = self.state.agent_config.get("context_window", 128000)
+
         # Validate configuration
         if not StateValidator.validate_agent_config(self.state.agent_config):
             raise ApplicationError("Invalid agent configuration")
