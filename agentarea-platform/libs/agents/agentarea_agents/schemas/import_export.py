@@ -53,12 +53,14 @@ class ToolSettingsYAML(BaseModel):
 
     disabled_methods: list[str] | None = None  # For code tools
     allowed_tools: list[str] | None = None  # For MCP tools
+    a2a_url: str | None = None  # For agent tools — explicit A2A endpoint URL
+    description_override: str | None = None  # For agent tools — custom description
 
 
 class ToolConfigYAML(BaseModel):
     """Tool configuration in YAML format."""
 
-    type: Literal["code", "mcp"]
+    type: Literal["code", "mcp", "agent"]
     name: str
     settings: ToolSettingsYAML | None = None
 

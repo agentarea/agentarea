@@ -1,5 +1,7 @@
 """Tools for agent execution workflows."""
 
+from .a2a_agent_tool import A2AAgentTool
+from .a2a_tool_factory import A2AAgentToolFactory
 from .base_tool import BaseTool, ToolExecutionError, ToolRegistry
 from .calculate_tool import CalculateTool
 from .completion_tool import CompletionTool
@@ -11,6 +13,8 @@ from .tool_executor import ToolExecutor
 from .tool_manager import ToolManager
 
 __all__ = [
+    "A2AAgentTool",
+    "A2AAgentToolFactory",
     "BaseTool",
     "CalculateTool",
     "CompletionTool",
