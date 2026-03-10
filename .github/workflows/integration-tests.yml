@@ -1,17 +1,7 @@
 name: Integration Tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "agentarea-platform/**"
-      - ".github/workflows/integration-tests.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "agentarea-platform/**"
-      - ".github/workflows/integration-tests.yml"
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual trigger only — integration tests not yet stable
 
 permissions:
   contents: read
