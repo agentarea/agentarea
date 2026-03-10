@@ -270,16 +270,17 @@ export default function SkillDetailPage() {
     >
       <div className="flex h-full w-full overflow-hidden">
         {/* Main Content Area */}
-        <div className="flex-1 overflow-auto p-6">
-          <Card className="h-full flex flex-col">
-            <CardHeader className="border-b py-3 flex flex-row items-center justify-between shrink-0">
-              <CardTitle className="text-sm font-mono">
+        <div className="flex-1 overflow-auto p-4 md:p-6">
+          <Card className="h-full flex flex-col overflow-hidden p-0 cursor-default hover:shadow-none">
+            <CardHeader className="border-b border-border/70 bg-sidebar p-3 flex flex-row items-center justify-between shrink-0 space-y-0">
+              <CardTitle className="text-xs font-mono">
                 {selectedFile || tDetail("selectFile")}
               </CardTitle>
               {canEditFile && (
                 <Button
                   variant="ghost"
                   size="xs"
+                  className="h-7 px-2 text-xs"
                   onClick={() => setIsEditing(!isEditing)}
                 >
                   {isEditing ? (
@@ -311,25 +312,25 @@ export default function SkillDetailPage() {
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full h-full p-4 bg-background text-sm font-mono resize-none focus:outline-none"
+                  className="w-full h-full p-6 bg-background text-sm font-mono leading-relaxed resize-none focus:outline-none"
                   spellCheck={false}
                 />
               ) : (
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-6">
                   {/* Frontmatter card */}
                   {hasFrontmatter && (
-                    <div className="rounded-lg border bg-card overflow-hidden shrink-0">
-                      <div className="bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b">
+                    <div className="rounded-md border border-border/70 bg-card overflow-hidden shrink-0">
+                      <div className="bg-sidebar px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider border-b border-border/70">
                         {tDetail("skillConfiguration")}
                       </div>
                       <div className="p-4">
-                        <pre className="text-sm font-mono whitespace-pre-wrap text-foreground">{parsed!.rawFrontmatter}</pre>
+                        <pre className="text-xs font-mono whitespace-pre-wrap text-foreground">{parsed!.rawFrontmatter}</pre>
                       </div>
                     </div>
                   )}
 
                   {/* Content */}
-                  <div className="prose prose-sm dark:prose-invert max-w-none pb-10">
+                  <div className="prose prose-sm dark:prose-invert max-w-none pb-10 prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-xl prose-h1:mt-6 prose-h1:mb-2 prose-h2:text-lg prose-h2:mt-5 prose-h2:mb-2 prose-h3:text-base prose-h3:mt-4 prose-h3:mb-1.5 prose-p:leading-relaxed prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-pre:bg-muted prose-pre:border prose-pre:border-border/70 prose-pre:rounded-md prose-pre:p-4 prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
                     <Streamdown>{parsed?.body || fileContent}</Streamdown>
                   </div>
                 </div>
