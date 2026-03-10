@@ -8,6 +8,11 @@ from temporalio.exceptions import ApplicationError
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
+    from .context_manager import (
+        ContextWindowManager,
+        find_compaction_boundary,
+        validate_tool_pairs,
+    )
     from .helpers import (
         BudgetTracker,
         EventManager,
@@ -27,6 +32,8 @@ from ..models import (
     AgentConfigResult,
     AgentExecutionRequest,
     AgentExecutionResult,
+    CompactMessagesRequest,
+    CompactMessagesResult,
     LLMCallRequest,
     LLMCallResult,
     MCPToolRequest,
@@ -56,6 +63,7 @@ class AgentExecutionWorkflow:
         self.state = AgentExecutionState()
         self.event_manager: EventManager | None = None
         self.budget_tracker: BudgetTracker | None = None
+        self.context_manager: ContextWindowManager | None = None
         self._paused = False
         self._pause_reason = ""
 
@@ -181,8 +189,9 @@ class AgentExecutionWorkflow:
         except AttributeError:
             self.state.agent_config = dict(agent_config_result)
 
-        # Store context window in state for context management
+        # Store context window in state and initialize context manager
         self.state.context_window = self.state.agent_config.get("context_window", 128000)
+        self.context_manager = ContextWindowManager(self.state.context_window)
 
         # Validate configuration
         if not StateValidator.validate_agent_config(self.state.agent_config):
@@ -397,6 +406,29 @@ class AgentExecutionWorkflow:
             #         Message(role="user", content=f"Status: {status_msg}")
             #     )
 
+        # Check context window and compact if needed (skip first iteration)
+        if self.context_manager and iteration > 1:
+            messages_dict_est = [
+                {"role": msg.role, "content": msg.content or ""}
+                for msg in self.state.messages
+            ]
+            estimated = self.context_manager.estimate_usage(messages_dict_est)
+            self.context_manager.update_usage(estimated)
+
+            if self.context_manager.needs_compaction():
+                await self._compact_context_if_needed()
+            elif self.context_manager.should_warn():
+                self.event_manager.add_event(
+                    EventTypes.CONTEXT_WARNING,
+                    {
+                        "iteration": self.state.current_iteration,
+                        "usage_ratio": self.context_manager.get_usage_ratio(),
+                        "message_count": len(self.state.messages),
+                    },
+                )
+                await self._publish_events_immediately()
+                self.context_manager.mark_warning_sent()
+
         # Call LLM
         llm_response = await self._call_llm()
 
@@ -488,6 +520,12 @@ class AgentExecutionWorkflow:
                 "usage": usage_payload,
             }
             self.budget_tracker.add_cost(usage_info["cost"])
+
+            # Update context window manager with actual token usage
+            if self.context_manager and usage_payload:
+                prompt_tokens = usage_payload.get("prompt_tokens", 0)
+                if prompt_tokens > 0:
+                    self.context_manager.update_usage(prompt_tokens)
 
             self.event_manager.add_event(
                 EventTypes.LLM_CALL_COMPLETED,
@@ -805,6 +843,125 @@ class AgentExecutionWorkflow:
         except Exception as e:
             workflow.logger.warning(f"Goal evaluation failed: {e}")
 
+    async def _compact_context_if_needed(self) -> bool:
+        """Check context usage and compact if threshold exceeded.
+
+        Uses the head-and-tail strategy:
+        1. Keep system prompt (head)
+        2. Summarize middle messages via LLM
+        3. Keep recent messages (tail)
+        4. Validate tool pairs aren't broken
+
+        Returns True if compaction was performed.
+        """
+        if not self.context_manager or not self.context_manager.needs_compaction():
+            return False
+
+        workflow.logger.info(
+            f"Context compaction triggered at {self.context_manager.get_usage_ratio():.1%} usage"
+        )
+
+        # Convert messages to dict for boundary finding
+        messages_dict = [
+            MessageBuilder.normalize_message_dict({
+                "role": msg.role,
+                "content": msg.content,
+                "tool_call_id": msg.tool_call_id,
+                "name": msg.name,
+                "tool_calls": msg.tool_calls,
+            })
+            for msg in self.state.messages
+        ]
+
+        # Find safe compaction boundary
+        boundary = find_compaction_boundary(messages_dict)
+        if boundary <= 1:
+            workflow.logger.warning("No safe compaction boundary found, skipping")
+            return False
+
+        # Messages to compact: everything between system prompt and boundary
+        messages_to_compact = messages_dict[1:boundary]
+        if not messages_to_compact:
+            return False
+
+        # Call compaction activity
+        try:
+            compact_request = CompactMessagesRequest(
+                messages_to_compact=messages_to_compact,
+                model_id=self.state.agent_config.get("model_id"),
+                workspace_id=self.state.workspace_id,
+                user_context_data=self.state.user_context_data,
+            )
+
+            result: CompactMessagesResult = await workflow.execute_activity(
+                Activities.COMPACT_MESSAGES,
+                args=[compact_request],
+                start_to_close_timeout=LLM_CALL_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+
+            # Rebuild message list: system prompt + summary + kept recent messages
+            system_msg = self.state.messages[0]
+            recent_messages = list(self.state.messages[boundary:])
+
+            summary_msg = Message(
+                role="user",
+                content=f"[Previous conversation summary]\n{result.summary}",
+            )
+
+            self.state.messages = [system_msg, summary_msg] + recent_messages
+
+            # Validate tool pairs in new message list
+            new_messages_dict = [
+                MessageBuilder.normalize_message_dict({
+                    "role": msg.role,
+                    "content": msg.content,
+                    "tool_call_id": msg.tool_call_id,
+                    "name": msg.name,
+                    "tool_calls": msg.tool_calls,
+                })
+                for msg in self.state.messages
+            ]
+            if not validate_tool_pairs(new_messages_dict):
+                workflow.logger.error("Tool pair validation failed after compaction!")
+                # Repair: drop orphaned tool results
+                tool_use_ids: set[str] = set()
+                for msg in self.state.messages:
+                    if msg.role == "assistant" and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            if isinstance(tc, dict) and tc.get("id"):
+                                tool_use_ids.add(tc["id"])
+                self.state.messages = [
+                    msg for msg in self.state.messages
+                    if not (msg.role == "tool" and msg.tool_call_id not in tool_use_ids)
+                ]
+
+            self.context_manager.mark_compacted()
+
+            # Publish compaction event
+            self.event_manager.add_event(
+                EventTypes.CONTEXT_COMPACTED,
+                {
+                    "iteration": self.state.current_iteration,
+                    "messages_compacted": result.original_message_count,
+                    "tokens_saved": result.estimated_tokens_saved,
+                    "compaction_number": self.context_manager.compaction_count,
+                    "messages_remaining": len(self.state.messages),
+                },
+            )
+            await self._publish_events_immediately()
+
+            workflow.logger.info(
+                f"Compacted {result.original_message_count} messages, "
+                f"~{result.estimated_tokens_saved} tokens saved, "
+                f"{len(self.state.messages)} messages remaining"
+            )
+            return True
+
+        except Exception as e:
+            workflow.logger.error(f"Context compaction failed: {e}")
+            return False
+
     async def _check_budget_status(self) -> None:
         """Check budget status and send warnings if needed."""
         if self.budget_tracker.should_warn():
@@ -988,6 +1145,7 @@ class AgentExecutionWorkflow:
             ),
             "paused": self._paused,
             "pause_reason": self._pause_reason,
+            "context": self.context_manager.get_status() if self.context_manager else None,
         }
 
     def _tool_requires_approval(self, tool_name: str) -> bool:
