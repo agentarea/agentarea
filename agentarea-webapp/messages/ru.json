@@ -520,8 +520,19 @@
       "created": "Создано",
       "actions": "Действия"
     },
-    "details": {
+    "detail": {
       "title": "Детали навыка",
+      "details": "Детали",
+      "files": "Файлы",
+      "selectFile": "Выберите файл",
+      "emptyFile": "Пустой файл",
+      "edit": "Редактировать",
+      "view": "Просмотр",
+      "save": "Сохранить",
+      "delete": "Удалить",
+      "name": "Имя",
+      "description": "Описание",
+      "updated": "Обновлено",
       "sourceCode": "Исходный код",
       "configuration": "Конфигурация",
       "skillConfiguration": "Конфигурация навыка",

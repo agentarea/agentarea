@@ -209,7 +209,7 @@ export default function SkillDetailPage() {
         header={{
           breadcrumb: [
             { label: t("title"), href: "/skills" },
-            { label: t("loading") },
+            { label: skillId },
           ],
         }}
       >
