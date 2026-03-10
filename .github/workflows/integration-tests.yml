@@ -51,7 +51,7 @@ jobs:
       temporal:
         image: temporalio/auto-setup:1.29.1
         env:
-          DB: postgresql
+          DB: postgres12_pgx
           DB_PORT: 5432
           POSTGRES_USER: postgres
           POSTGRES_PWD: postgres
@@ -143,7 +143,7 @@ jobs:
       temporal:
         image: temporalio/auto-setup:1.29.1
         env:
-          DB: postgresql
+          DB: postgres12_pgx
           DB_PORT: 5432
           POSTGRES_USER: postgres
           POSTGRES_PWD: postgres
