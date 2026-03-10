@@ -59,7 +59,7 @@ jobs:
         working-directory: agentarea-webapp
         run: |
           # Verify the build output has no critical errors
-          if grep -r "Element type is invalid" .next/ 2>/dev/null; then
+          if grep -r --exclude-dir=node_modules "Element type is invalid" .next/ 2>/dev/null; then
             echo "ERROR: Found React element errors in build output"
             exit 1
           fi
