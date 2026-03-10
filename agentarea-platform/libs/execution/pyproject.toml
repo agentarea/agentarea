@@ -8,6 +8,7 @@ dependencies = [
     "temporalio>=1.18.2",
     "pydantic>=2.0.0",
     "agentarea-agents-sdk",
+    "tiktoken>=0.7.0",
 ]
 
 [project.optional-dependencies]
