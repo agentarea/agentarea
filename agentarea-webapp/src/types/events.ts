@@ -27,6 +27,8 @@ export type WorkflowEventType =
   | "ToolCallFailed"
   | "BudgetWarning"
   | "BudgetExceeded"
+  | "ContextWarning"
+  | "ContextCompacted"
   | "HumanApprovalRequested"
   | "HumanApprovalReceived";
 
@@ -67,6 +69,11 @@ export interface SSEMessage {
       chunk?: string;
       chunk_index?: number;
       is_final?: boolean;
+
+      // Context management fields
+      usage_ratio?: number;
+      messages_compacted?: number;
+      tokens_saved?: number;
 
       // Error fields
       error?: string;
@@ -228,6 +235,18 @@ export const EVENT_TYPE_CONFIG: Record<
     icon: "credit-card",
     color: "red",
   },
+  ContextWarning: {
+    title: "Context Window Warning",
+    level: "warning",
+    icon: "alert-triangle",
+    color: "yellow",
+  },
+  ContextCompacted: {
+    title: "Context Compacted",
+    level: "info",
+    icon: "minimize-2",
+    color: "blue",
+  },
   HumanApprovalRequested: {
     title: "Human Approval Requested",
     level: "warning",
@@ -279,6 +298,10 @@ export const mapSSEToDisplayEvent = (
     budgetwarning: "BudgetWarning",
     budget_exceeded: "BudgetExceeded",
     budgetexceeded: "BudgetExceeded",
+    context_warning: "ContextWarning",
+    contextwarning: "ContextWarning",
+    context_compacted: "ContextCompacted",
+    contextcompacted: "ContextCompacted",
     human_approval_requested: "HumanApprovalRequested",
     humanapprovalrequested: "HumanApprovalRequested",
     human_approval_received: "HumanApprovalReceived",
@@ -330,6 +353,10 @@ export const mapSSEToDisplayEvent = (
     description = `${config?.title}: ${eventData.tool_name}`;
   } else if (eventData.error) {
     description = `${config?.title}: ${eventData.error}`;
+  } else if (eventData.usage_ratio) {
+    description = `${config?.title}: ${Math.round(eventData.usage_ratio * 100)}% of context window used`;
+  } else if (eventData.messages_compacted) {
+    description = `${config?.title}: ${eventData.messages_compacted} messages summarized, ~${eventData.tokens_saved || 0} tokens saved`;
   } else if (eventData.cost) {
     description = `${config?.title} (Cost: $${eventData.cost.toFixed(4)})`;
   } else if (eventData.iteration) {
