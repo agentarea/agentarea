@@ -4,6 +4,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from .a2a_tool_factory import A2AAgentToolFactory
 from .base_tool import ToolRegistry
 from .code_tools_loader import create_code_tool_instance
 from .completion_tool import CompletionTool
@@ -27,6 +28,9 @@ class ToolManager:
         agent_id: UUID,
         tools_config: list[dict[str, Any]] | None,
         mcp_server_instance_service,
+        agent_service=None,
+        base_url: str = "",
+        auth_token: str | None = None,
     ) -> list[dict[str, Any]]:
         """Discover available tools for an agent.
 
@@ -34,6 +38,9 @@ class ToolManager:
             agent_id: The agent ID
             tools_config: Agent's tools configuration (list of tool definitions)
             mcp_server_instance_service: Service for MCP server instances
+            agent_service: Optional agent service for resolving agent-type tools
+            base_url: Base URL for constructing A2A endpoints
+            auth_token: Optional auth token for A2A calls
 
         Returns:
             List of available tool definitions (OpenAI format)
@@ -76,6 +83,27 @@ class ToolManager:
                 )
                 for mcp_tool in mcp_tools:
                     all_tools.append(mcp_tool.get_openai_function_definition())
+
+            elif tool_type == "agent":
+                # Agent-to-agent tool via A2A protocol
+                if not agent_service or not base_url:
+                    logger.warning(
+                        f"Skipping agent tool '{tool_name}': "
+                        "agent_service or base_url not provided"
+                    )
+                    continue
+
+                a2a_tool = await A2AAgentToolFactory.create_tool(
+                    agent_name=tool_name,
+                    agent_service=agent_service,
+                    base_url=base_url,
+                    a2a_url_override=settings.get("a2a_url"),
+                    auth_token=auth_token,
+                    description_override=settings.get("description_override"),
+                )
+                if a2a_tool:
+                    all_tools.append(a2a_tool.get_openai_function_definition())
+                    logger.info(f"Added agent tool: {tool_name}")
 
         logger.info(f"Discovered {len(all_tools)} tools for agent {agent_id}")
         return all_tools

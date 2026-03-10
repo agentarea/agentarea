@@ -143,10 +143,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Use tool manager to discover available tools
             tool_manager = ToolManager()
+            base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
             all_tools = await tool_manager.discover_available_tools(
                 agent_id=request.agent_id,
                 tools_config=agent.tools,
                 mcp_server_instance_service=mcp_server_instance_service,
+                agent_service=agent_service,
+                base_url=base_url,
             )
 
             return all_tools
@@ -361,6 +364,42 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         logger.info(f"Registered code tool for execution: {tool_name}")
                     else:
                         logger.warning(f"Unknown code tool requested: {tool_name}")
+
+            # Register agent tools from configuration
+            if request.tools and isinstance(request.tools, list):
+                agent_configs = [
+                    tc
+                    for tc in request.tools
+                    if isinstance(tc, dict) and tc.get("type") == "agent"
+                ]
+                if agent_configs:
+                    base_url = os.environ.get(
+                        "API_BASE_URL", "http://localhost:8000/api/v1"
+                    )
+                    agent_service = await ctx.get_agent_service()
+
+                    for tool_config in agent_configs:
+                        agent_name = tool_config.get("name")
+                        if not agent_name:
+                            continue
+
+                        from agentarea_agents_sdk.tools.a2a_tool_factory import (
+                            A2AAgentToolFactory,
+                        )
+
+                        a2a_tool = await A2AAgentToolFactory.create_tool(
+                            agent_name=agent_name,
+                            agent_service=agent_service,
+                            base_url=base_url,
+                            a2a_url_override=(tool_config.get("settings") or {}).get(
+                                "a2a_url"
+                            ),
+                        )
+                        if a2a_tool:
+                            tool_executor.register_tool(a2a_tool)
+                            logger.info(
+                                f"Registered agent tool for execution: {agent_name}"
+                            )
 
             try:
                 result = await tool_executor.execute_tool(
