@@ -292,6 +292,23 @@ class WorkflowEventsResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class CompactMessagesRequest(BaseModel):
+    """Request to compact/summarize older messages."""
+
+    messages_to_compact: list[dict[str, Any]]
+    model_id: str
+    workspace_id: str
+    user_context_data: dict[str, Any] | None = None
+
+
+class CompactMessagesResult(BaseModel):
+    """Result of message compaction."""
+
+    summary: str
+    original_message_count: int
+    estimated_tokens_saved: int
+
+
 # === Trigger Activity Models ===
 
 

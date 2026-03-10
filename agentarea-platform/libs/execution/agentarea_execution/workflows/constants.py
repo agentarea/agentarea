@@ -53,6 +53,9 @@ class EventTypes:
     BUDGET_WARNING: Final[str] = "BudgetWarning"
     BUDGET_EXCEEDED: Final[str] = "BudgetExceeded"
 
+    CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
+    CONTEXT_WARNING: Final[str] = "ContextWarning"
+
     HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
 
@@ -71,6 +74,7 @@ class Activities:
     CREATE_EXECUTION_PLAN: Final[str] = "create_execution_plan_activity"
     EVALUATE_GOAL_PROGRESS: Final[str] = "evaluate_goal_progress_activity"
     PUBLISH_WORKFLOW_EVENTS: Final[str] = "publish_workflow_events_activity"
+    COMPACT_MESSAGES: Final[str] = "compact_messages_activity"
 
 
 # Execution statuses

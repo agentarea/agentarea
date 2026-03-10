@@ -36,6 +36,8 @@ from ..interfaces import ActivityDependencies
 from ..models import (
     AgentConfigRequest,
     AgentConfigResult,
+    CompactMessagesRequest,
+    CompactMessagesResult,
     ExecutionPlanRequest,
     ExecutionPlanResult,
     GoalEvaluationRequest,
@@ -706,6 +708,134 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 error=str(e),
             )
 
+    @activity.defn
+    async def compact_messages_activity(
+        request: CompactMessagesRequest,
+    ) -> CompactMessagesResult:
+        """Summarize older messages to reduce context window usage.
+
+        Uses the same model as the agent to generate a concise summary
+        of older conversation history, preserving key decisions, tool
+        results, and reasoning.
+        """
+        try:
+            model_uuid = UUID(request.model_id)
+
+            if request.workspace_id:
+                user_context = create_system_context(request.workspace_id)
+            elif request.user_context_data:
+                user_context = create_user_context(request.user_context_data)
+            else:
+                raise ValueError("Either workspace_id or user_context_data must be provided")
+
+            async with ActivityContext(container, user_context) as ctx:
+                model_instance_service = await ctx.get_model_instance_service()
+                model_instance = await model_instance_service.get(model_uuid)
+                if not model_instance:
+                    raise ValueError(f"Model instance {request.model_id} not found")
+
+                provider_type = model_instance.provider_config.provider_spec.provider_type
+                model_name = model_instance.model_spec.model_name
+                endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+
+                api_key = None
+                api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
+                if api_key_secret_name:
+                    from agentarea_common.config import get_database
+
+                    secret_session = get_database().async_session_factory()
+                    try:
+                        secret_manager = dependencies.secret_manager_factory.create(
+                            session=secret_session, user_context=user_context
+                        )
+                        api_key = await secret_manager.get_secret(api_key_secret_name)
+                    finally:
+                        await secret_session.close()
+
+            docker_host = os.environ.get("LLM_DOCKER_HOST")
+            if docker_host and provider_type == "ollama_chat":
+                endpoint_url = f"http://{docker_host}:11434"
+
+            llm_model = LLMModel(
+                provider_type=provider_type,
+                model_name=model_name,
+                api_key=api_key,
+                endpoint_url=endpoint_url,
+            )
+
+            # Build compaction prompt
+            conversation_text = ""
+            for msg in request.messages_to_compact:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if msg.get("tool_calls"):
+                    tool_names = [
+                        tc.get("function", {}).get("name", "?")
+                        for tc in msg["tool_calls"]
+                        if isinstance(tc, dict)
+                    ]
+                    content += f" [Called tools: {', '.join(tool_names)}]"
+                if msg.get("name"):
+                    role = f"tool({msg['name']})"
+                conversation_text += f"[{role}]: {content}\n"
+
+            compaction_prompt = (
+                "Summarize the following conversation history concisely. Preserve:\n"
+                "1. The original task/goal\n"
+                "2. Key decisions made and reasoning\n"
+                "3. Important tool results and data obtained\n"
+                "4. Current state of progress\n"
+                "5. Any errors encountered and how they were handled\n\n"
+                "Be concise but complete. Use bullet points for key facts.\n\n"
+                f"Conversation to summarize:\n{conversation_text}"
+            )
+
+            summary_request = LLMRequest(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a conversation summarizer. Create concise, factual "
+                            "summaries that preserve all important information for "
+                            "continuing the task."
+                        ),
+                    },
+                    {"role": "user", "content": compaction_prompt},
+                ],
+                max_tokens=2000,
+            )
+
+            complete_content = ""
+            async for chunk in llm_model.ainvoke_stream(summary_request):
+                if chunk.content:
+                    complete_content += chunk.content
+
+            original_tokens = sum(
+                len(msg.get("content", "") or "") // 4 for msg in request.messages_to_compact
+            )
+            summary_tokens = len(complete_content) // 4
+
+            return CompactMessagesResult(
+                summary=complete_content,
+                original_message_count=len(request.messages_to_compact),
+                estimated_tokens_saved=max(0, original_tokens - summary_tokens),
+            )
+
+        except Exception as e:
+            logger.error(f"Message compaction failed: {e}")
+            # On failure, return a basic concatenation as fallback
+            fallback = "Previous conversation summary (compaction failed):\n"
+            for msg in request.messages_to_compact[-5:]:
+                role = msg.get("role", "?")
+                content = (msg.get("content", "") or "")[:200]
+                fallback += f"- [{role}]: {content}\n"
+
+            return CompactMessagesResult(
+                summary=fallback,
+                original_message_count=len(request.messages_to_compact),
+                estimated_tokens_saved=0,
+            )
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -716,4 +846,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         evaluate_goal_progress_activity,
         publish_workflow_events_activity,
         resolve_skill_file_activity,
+        compact_messages_activity,
     ]
