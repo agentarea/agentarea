@@ -31,6 +31,9 @@ class ToolManager:
         agent_service=None,
         base_url: str = "",
         auth_token: str | None = None,
+        task_service=None,
+        workspace_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Discover available tools for an agent.
 
@@ -100,6 +103,9 @@ class ToolManager:
                     a2a_url_override=settings.get("a2a_url"),
                     auth_token=auth_token,
                     description_override=settings.get("description_override"),
+                    task_service=task_service,
+                    workspace_id=workspace_id,
+                    user_id=user_id,
                 )
                 if a2a_tool:
                     all_tools.append(a2a_tool.get_openai_function_definition())

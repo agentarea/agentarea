@@ -17,7 +17,6 @@ from . import (
     mcp_access_tokens,
     mcp_auth_configs,
     mcp_oauth_links,
-    mcp_remote,
     mcp_server_instances,
     mcp_servers_specifications,
     model_instances,
@@ -59,7 +58,6 @@ protected_v1_router.include_router(agents_well_known.router, prefix="/agents/{ag
 # MCP server management - PROTECTED
 protected_v1_router.include_router(mcp_servers_specifications.router)
 protected_v1_router.include_router(mcp_server_instances.router)
-protected_v1_router.include_router(mcp_remote.router)
 
 # LLM architecture routers (4-entity system) - PROTECTED
 protected_v1_router.include_router(provider_specs.router)

@@ -393,25 +393,43 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
                     agent_service = await ctx.get_agent_service()
 
+                    # Create task service for internal delegation
+                    from agentarea_agents_sdk.tools.agent_delegation_tool import (
+                        create_task_service_for_delegation,
+                    )
+                    from agentarea_common.database import get_database
+
+                    delegation_session = get_database().async_session_factory()
+                    ctx._sessions.append(delegation_session)
+
+                    delegation_task_service = create_task_service_for_delegation(
+                        session=delegation_session,
+                        user_context=user_context,
+                        event_broker=dependencies.event_broker,
+                    )
+
+                    from agentarea_agents_sdk.tools.a2a_tool_factory import (
+                        A2AAgentToolFactory,
+                    )
+
                     for tool_config in agent_configs:
                         agent_name = tool_config.get("name")
                         if not agent_name:
                             continue
 
-                        from agentarea_agents_sdk.tools.a2a_tool_factory import (
-                            A2AAgentToolFactory,
-                        )
-
-                        a2a_tool = await A2AAgentToolFactory.create_tool(
+                        delegation_tool = await A2AAgentToolFactory.create_tool(
                             agent_name=agent_name,
                             agent_service=agent_service,
                             base_url=base_url,
                             a2a_url_override=(tool_config.get("settings") or {}).get(
                                 "a2a_url"
                             ),
+                            task_service=delegation_task_service,
+                            workspace_id=request.workspace_id,
+                            user_id=user_context.user_id,
                         )
-                        if a2a_tool:
-                            tool_executor.register_tool(a2a_tool)
+                        if delegation_tool:
+                            tool_executor.register_tool(delegation_tool)
                             logger.info(
                                 f"Registered agent tool for execution: {agent_name}"
                             )

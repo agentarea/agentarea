@@ -2,6 +2,7 @@
 
 from .a2a_agent_tool import A2AAgentTool
 from .a2a_tool_factory import A2AAgentToolFactory
+from .agent_delegation_tool import AgentDelegationTool
 from .base_tool import BaseTool, ToolExecutionError, ToolRegistry
 from .calculate_tool import CalculateTool
 from .completion_tool import CompletionTool
@@ -15,6 +16,7 @@ from .tool_manager import ToolManager
 __all__ = [
     "A2AAgentTool",
     "A2AAgentToolFactory",
+    "AgentDelegationTool",
     "BaseTool",
     "CalculateTool",
     "CompletionTool",

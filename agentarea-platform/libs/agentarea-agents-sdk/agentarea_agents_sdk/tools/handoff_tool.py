@@ -1,8 +1,10 @@
 """Agent handoff tool for multi-agent coordination.
 
 .. deprecated::
-    Use :class:`~agentarea_agents_sdk.tools.a2a_agent_tool.A2AAgentTool` instead,
-    which delegates via the A2A protocol over HTTP.
+    Use :class:`~agentarea_agents_sdk.tools.internal_a2a_agent_tool.InternalA2AAgentTool`
+    for same-platform delegation, or
+    :class:`~agentarea_agents_sdk.tools.a2a_agent_tool.A2AAgentTool`
+    for external A2A-protocol delegation.
 """
 
 import json
@@ -13,7 +15,8 @@ from typing import Any
 from .base_tool import BaseTool, ToolExecutionError
 
 warnings.warn(
-    "AgentHandoffTool is deprecated. Use A2AAgentTool for A2A-protocol agent delegation.",
+    "AgentHandoffTool is deprecated. Use InternalA2AAgentTool (same-platform) "
+    "or A2AAgentTool (external A2A) instead.",
     DeprecationWarning,
     stacklevel=2,
 )
