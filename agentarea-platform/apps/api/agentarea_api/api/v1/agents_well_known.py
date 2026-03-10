@@ -33,20 +33,29 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
     return AgentCard(
         name=agent.name,
         description=agent.description,
-        url=f"{base_url}/v1/agents/{agent_id}/rpc",  # Agent-specific RPC endpoint
+        url=f"{base_url}/v1/agents/{agent_id}/a2a/rpc",
         version="1.0.0",
         documentation_url=f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
         capabilities=AgentCapabilities(
-            streaming=True, pushNotifications=False, stateTransitionHistory=True
+            streaming=True,
+            push_notifications=False,
+            state_transition_history=True,
         ),
         provider=AgentProvider(organization="AgentArea"),
+        security_schemes={
+            "bearer": {
+                "type": "http",
+                "scheme": "bearer",
+            }
+        },
+        security=[{"bearer": []}],
         skills=[
             AgentSkill(
                 id="text-processing",
                 name="Text Processing",
                 description=f"Process and respond to text messages using {agent.name}",
-                inputModes=["text"],
-                outputModes=["text"],
+                input_modes=["text/plain"],
+                output_modes=["text/plain"],
             )
         ],
     )
@@ -108,7 +117,7 @@ async def get_agent_a2a_info(
 
         return {
             "protocol": "A2A",
-            "version": "1.0.0",
+            "version": "0.3.0",
             "server": "AgentArea",
             "agent": {
                 "id": str(agent_id),
@@ -134,6 +143,8 @@ async def get_agent_a2a_info(
                 "message/stream",
                 "tasks/get",
                 "tasks/cancel",
+                "tasks/resubscribe",
+                "tasks/list",
                 "agent/authenticatedExtendedCard",
             ],
             "capabilities": {
