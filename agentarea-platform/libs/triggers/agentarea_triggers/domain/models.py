@@ -77,7 +77,11 @@ class CronTrigger(Trigger):
     trigger_type: TriggerType = Field(default=TriggerType.CRON, frozen=True)
     cron_expression: str = Field(..., min_length=1)
     timezone: str = Field(default="UTC")
-    next_run_time: datetime | None = None
+
+    # Data extraction for poll-based channels (email, RSS, API polling)
+    data_extractor: str | None = None  # "mailslurper", "imap", "rss", etc.
+    data_extractor_config: dict[str, Any] | None = None  # Connection/auth details
+    data_extractor_state: dict[str, Any] | None = None  # Cursor/checkpoint tracking
 
     @field_validator("cron_expression")
     @classmethod
@@ -191,6 +195,8 @@ class TriggerCreate(BaseModel):
     # Cron-specific fields
     cron_expression: str | None = None
     timezone: str = Field(default="UTC")
+    data_extractor: str | None = None
+    data_extractor_config: dict[str, Any] | None = None
 
     # Webhook-specific fields
     webhook_id: str | None = None
@@ -227,6 +233,8 @@ class TriggerUpdate(BaseModel):
     # Cron-specific fields
     cron_expression: str | None = None
     timezone: str | None = None
+    data_extractor: str | None = None
+    data_extractor_config: dict[str, Any] | None = None
 
     # Webhook-specific fields
     allowed_methods: list[str] | None = None

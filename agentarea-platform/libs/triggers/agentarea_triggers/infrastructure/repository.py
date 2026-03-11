@@ -66,7 +66,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "cron_expression": entity.cron_expression,
                     "timezone": entity.timezone,
-                    "next_run_time": entity.next_run_time,
+                    "data_extractor": entity.data_extractor,
+                    "data_extractor_config": entity.data_extractor_config,
+                    "data_extractor_state": entity.data_extractor_state,
                 }
             )
         elif isinstance(entity, WebhookTrigger):
@@ -110,7 +112,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "cron_expression": entity.cron_expression,
                     "timezone": entity.timezone,
-                    "next_run_time": entity.next_run_time,
+                    "data_extractor": entity.data_extractor,
+                    "data_extractor_config": entity.data_extractor_config,
+                    "data_extractor_state": entity.data_extractor_state,
                 }
             )
         elif isinstance(entity, WebhookTrigger):
@@ -153,6 +157,8 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             # Cron-specific fields
             cron_expression=trigger_data.cron_expression,
             timezone=trigger_data.timezone,
+            data_extractor=trigger_data.data_extractor,
+            data_extractor_config=trigger_data.data_extractor_config,
             # Webhook-specific fields
             webhook_id=trigger_data.webhook_id,
             allowed_methods=trigger_data.allowed_methods,
@@ -253,18 +259,26 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         return self._orm_to_domain(trigger_orm)
 
-    async def list_cron_triggers_due(self, current_time: datetime) -> list[CronTrigger]:
-        """List cron triggers that are due for execution."""
+    async def list_cron_triggers_with_extractors(
+        self, extractor_type: str | None = None
+    ) -> list[CronTrigger]:
+        """List active cron triggers that have data extractors configured.
+
+        Temporal handles cron scheduling; this finds triggers that need
+        poll-based data extraction (email, RSS, etc.).
+        """
+        conditions = [
+            TriggerORM.trigger_type == TriggerType.CRON.value,
+            TriggerORM.is_active.is_(True),
+            TriggerORM.data_extractor.isnot(None),
+        ]
+        if extractor_type:
+            conditions.append(TriggerORM.data_extractor == extractor_type)
+
         stmt = (
             select(TriggerORM)
-            .where(
-                and_(
-                    TriggerORM.trigger_type == TriggerType.CRON.value,
-                    TriggerORM.is_active is True,
-                    TriggerORM.next_run_time <= current_time,
-                )
-            )
-            .order_by(TriggerORM.next_run_time)
+            .where(and_(*conditions))
+            .order_by(TriggerORM.created_at.desc())
         )
         result = await self.session.execute(stmt)
         trigger_orms = result.scalars().all()
@@ -276,6 +290,19 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 triggers.append(trigger)
 
         return triggers
+
+    async def update_extractor_state(
+        self, trigger_id: UUID, state: dict[str, Any]
+    ) -> bool:
+        """Update the data extractor state (cursor/checkpoint) for a trigger."""
+        stmt = (
+            update(TriggerORM)
+            .where(TriggerORM.id == trigger_id)
+            .values(data_extractor_state=state, updated_at=datetime.utcnow())
+        )
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return result.rowcount > 0
 
     async def update_execution_tracking(
         self, trigger_id: UUID, last_execution_at: datetime, consecutive_failures: int = 0
@@ -344,7 +371,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 **base_data,
                 cron_expression=trigger_orm.cron_expression,
                 timezone=trigger_orm.timezone or "UTC",
-                next_run_time=trigger_orm.next_run_time,
+                data_extractor=trigger_orm.data_extractor,
+                data_extractor_config=trigger_orm.data_extractor_config,
+                data_extractor_state=trigger_orm.data_extractor_state,
             )
         elif trigger_orm.trigger_type == TriggerType.WEBHOOK.value:
             from ..domain.enums import WebhookType
@@ -388,7 +417,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "cron_expression": trigger.cron_expression,
                     "timezone": trigger.timezone,
-                    "next_run_time": trigger.next_run_time,
+                    "data_extractor": trigger.data_extractor,
+                    "data_extractor_config": trigger.data_extractor_config,
+                    "data_extractor_state": trigger.data_extractor_state,
                 }
             )
         elif isinstance(trigger, WebhookTrigger):
