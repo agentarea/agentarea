@@ -1131,6 +1131,11 @@ class TriggerService:
         if trigger_data:
             params["trigger_data"] = trigger_data
 
+        # Build channel_origin for outbound routing
+        channel_origin = self._build_channel_origin(trigger, trigger_data)
+        if channel_origin:
+            params["channel_origin"] = channel_origin
+
         # Use LLM to extract additional parameters if instruction is provided
         llm_instruction = trigger.task_parameters.get("llm_parameter_extraction")
         if llm_instruction and self.llm_condition_evaluator:
@@ -1162,6 +1167,65 @@ class TriggerService:
                 # Continue with basic parameters
 
         return params
+
+    def _build_channel_origin(
+        self, trigger: Trigger, trigger_data: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Build channel_origin metadata for outbound routing.
+
+        Extracts channel-specific routing info from trigger data so the
+        ChannelRouter can send responses back to the originating channel.
+
+        Returns:
+            Channel origin dict or None if no outbound routing needed.
+        """
+        # If extractor already provided channel_origin, use it
+        if trigger_data.get("channel_origin"):
+            return trigger_data["channel_origin"]
+
+        # Build channel_origin from webhook trigger data
+        if isinstance(trigger, WebhookTrigger):
+            webhook_type = trigger.webhook_type
+            if hasattr(webhook_type, "value"):
+                webhook_type = webhook_type.value
+
+            if webhook_type == "telegram":
+                chat_id = trigger_data.get("chat_id")
+                if chat_id:
+                    return {
+                        "type": "telegram",
+                        "chat_id": str(chat_id),
+                        "message_id": trigger_data.get("message_id"),
+                        "user_display_name": trigger_data.get("username", ""),
+                        "presentation": "concise",
+                    }
+
+            elif webhook_type == "slack":
+                channel_id = trigger_data.get("channel") or trigger_data.get("channel_id")
+                if channel_id:
+                    return {
+                        "type": "slack",
+                        "channel_id": channel_id,
+                        "thread_ts": trigger_data.get("thread_ts") or trigger_data.get("ts"),
+                        "user_display_name": trigger_data.get("user_name", ""),
+                        "presentation": "concise",
+                    }
+
+            elif webhook_type == "discord":
+                channel_id = trigger_data.get("channel_id")
+                if channel_id:
+                    return {
+                        "type": "discord",
+                        "channel_id": channel_id,
+                        "message_id": trigger_data.get("id"),
+                        "presentation": "concise",
+                    }
+
+            # Generic webhook — no outbound routing
+            return None
+
+        # Cron triggers without extractors don't have channel_origin
+        return None
 
     async def evaluate_trigger_conditions(
         self, trigger: Trigger, event_data: dict[str, Any]
