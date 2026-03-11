@@ -4,6 +4,7 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
+from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
@@ -47,6 +48,7 @@ from ..models import (
 from .constants import (
     ACTIVITY_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
+    DELEGATION_TIMEOUT,
     EVENT_PUBLISH_RETRY_ATTEMPTS,
     EVENT_PUBLISH_TIMEOUT,
     HEARTBEAT_TIMEOUT,
@@ -320,6 +322,9 @@ class AgentExecutionWorkflow:
         # Restore messages from compacted dicts
         self.state.messages = [Message(**msg) for msg in state.messages]
 
+        # Restore agent tool registry for delegation routing
+        self._agent_tool_registry = state.agent_tool_registry
+
         # Initialize helpers with restored cost
         self.event_manager = EventManager(
             task_id=self.state.task_id,
@@ -334,7 +339,8 @@ class AgentExecutionWorkflow:
             f"Restored from run {state.continued_from_run_id}, "
             f"iteration {state.current_iteration}, "
             f"cost ${state.total_cost:.4f}, "
-            f"{len(self.state.messages)} messages"
+            f"{len(self.state.messages)} messages, "
+            f"{len(self._agent_tool_registry)} agent tools"
         )
 
     async def _continue_as_new(self) -> None:
@@ -375,6 +381,7 @@ class AgentExecutionWorkflow:
             context_window=self.state.context_window,
             user_context_data=self.state.user_context_data,
             continued_from_run_id=workflow.info().run_id,
+            agent_tool_registry=self._agent_tool_registry,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
@@ -783,23 +790,45 @@ class AgentExecutionWorkflow:
         await self._evaluate_goal_progress()
 
     async def _execute_tool_calls(self, tool_calls: list[ToolCall]) -> None:
-        """Execute tools, routing agent delegations to child workflows."""
+        """Execute tools, running agent delegations in parallel.
+
+        Agent delegations are started concurrently as child workflows.
+        Regular MCP/code tools run sequentially (they may have side effects
+        that depend on execution order).
+        """
+        import asyncio
+
         completion_call = None
+        agent_calls: list[ToolCall] = []
+        regular_calls: list[ToolCall] = []
+
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
-
             if tool_name == "completion":
-                # Defer completion until after executing all tools
                 completion_call = tool_call
-                continue
             elif tool_name in self._agent_tool_registry:
-                # Route to child workflow (no polling, native Temporal await)
-                await self._execute_agent_delegation(tool_call)
+                agent_calls.append(tool_call)
             else:
-                # Execute MCP/code tool via activity
-                await self._execute_mcp_tool(tool_call)
+                regular_calls.append(tool_call)
 
-        # After executing tools, handle completion if it was present
+        # Run agent delegations in parallel (fan-out)
+        if agent_calls:
+            if len(agent_calls) == 1:
+                await self._execute_agent_delegation(agent_calls[0])
+            else:
+                workflow.logger.info(
+                    f"Fan-out: delegating to {len(agent_calls)} agents in parallel"
+                )
+                tasks = [
+                    self._execute_agent_delegation(tc) for tc in agent_calls
+                ]
+                await asyncio.gather(*tasks)
+
+        # Run regular tools sequentially
+        for tool_call in regular_calls:
+            await self._execute_mcp_tool(tool_call)
+
+        # Handle completion last
         if completion_call:
             await self._handle_task_completion(completion_call)
 
@@ -1040,12 +1069,17 @@ class AgentExecutionWorkflow:
             )
 
             # Start child workflow and await result
+            # - execution_timeout: caps total child runtime
+            # - parent_close_policy: TERMINATE ensures child is cancelled
+            #   if the parent workflow is cancelled or completed
             child_workflow_id = f"delegation-{self.state.execution_id}-{tool_call.id}"
             child_result: AgentExecutionResult = await workflow.execute_child_workflow(
                 AgentExecutionWorkflow.run,
                 args=[child_request],
                 id=child_workflow_id,
                 task_queue="agent-tasks",
+                execution_timeout=DELEGATION_TIMEOUT,
+                parent_close_policy=ParentClosePolicy.TERMINATE,
             )
 
             # Extract result

@@ -18,6 +18,9 @@ EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
 # Heartbeat configuration
 HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
 
+# Agent delegation
+DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for child agent
+
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
