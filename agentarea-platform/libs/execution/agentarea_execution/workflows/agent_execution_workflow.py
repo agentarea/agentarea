@@ -1344,7 +1344,7 @@ class AgentExecutionWorkflow:
                 content=f"[Previous conversation summary]\n{result.summary}",
             )
 
-            self.state.messages = [system_msg, summary_msg] + recent_messages
+            self.state.messages = [system_msg, summary_msg, *recent_messages]
 
             # Validate tool pairs in new message list
             new_messages_dict = [

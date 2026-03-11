@@ -5,21 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-try:
-    import tiktoken
-
-    _encoding = tiktoken.get_encoding("cl100k_base")
-    _HAS_TIKTOKEN = True
-except ImportError:
-    _encoding = None
-    _HAS_TIKTOKEN = False
-
 from .constants import (
     CONTEXT_COMPACT_THRESHOLD,
     CONTEXT_RESERVE_FOR_OUTPUT,
     CONTEXT_WARNING_THRESHOLD,
     DEFAULT_CONTEXT_WINDOW,
-    MIN_RECENT_MESSAGES_TO_KEEP,
     TOKENS_PER_MESSAGE_OVERHEAD,
 )
 
@@ -27,13 +17,12 @@ from .constants import (
 def estimate_tokens(text: str) -> int:
     """Estimate token count for a string.
 
-    Uses tiktoken cl100k_base if available, falls back to chars/3.5.
+    Uses character-based approximation (~4 chars per token for English text).
+    Sufficient for context window management decisions.
     """
     if not text:
         return 0
-    if _HAS_TIKTOKEN and _encoding is not None:
-        return len(_encoding.encode(text))
-    return max(1, int(len(text) / 3.5))
+    return max(1, len(text) // 4)
 
 
 def estimate_tokens_for_messages(messages: list[dict[str, Any]]) -> int:

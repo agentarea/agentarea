@@ -8,12 +8,11 @@ enabling:
 """
 
 import asyncio
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any
 
 from temporalio import activity
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 async def _heartbeat_every(delay: float) -> None:
@@ -23,7 +22,7 @@ async def _heartbeat_every(delay: float) -> None:
         activity.heartbeat()
 
 
-def auto_heartbeater(fn: F) -> F:
+def auto_heartbeater[F: Callable[..., Any]](fn: F) -> F:
     """Decorator that auto-heartbeats during long-running activities.
 
     If heartbeat_timeout is configured on the activity execution,
