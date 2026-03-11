@@ -46,6 +46,8 @@ from ..models import (
     LLMCallResult,
     MCPToolRequest,
     MCPToolResult,
+    RecallHistoryRequest,
+    RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
     SkillFileRequest,
@@ -882,6 +884,72 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             return ResolveAgentToolsResult(agent_map=agent_map)
 
+    @activity.defn
+    async def recall_history_activity(
+        request: RecallHistoryRequest,
+    ) -> RecallHistoryResult:
+        """Recall context from past task executions via the DB event log (tier 2).
+
+        Allows agents to recover context that was compacted out of the
+        working set, or to review what happened in earlier executions.
+        """
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            task_event_service = await ctx.get_task_event_service()
+
+            try:
+                # Fetch events, optionally filtered by type
+                if request.event_types:
+                    events = []
+                    for event_type in request.event_types:
+                        type_events = await task_event_service.get_events_by_type(
+                            event_type=event_type,
+                            limit=request.limit,
+                        )
+                        events.extend(type_events)
+                    # Sort by timestamp descending, limit total
+                    events.sort(
+                        key=lambda e: e.created_at if hasattr(e, "created_at") else "",
+                        reverse=True,
+                    )
+                    events = events[: request.limit]
+                else:
+                    events = await task_event_service.get_task_events(
+                        task_id=request.task_id,
+                        limit=request.limit,
+                    )
+
+                # Serialize events to dicts
+                events_data = []
+                for event in events:
+                    event_dict = {
+                        "event_type": event.event_type,
+                        "data": event.data if hasattr(event, "data") else {},
+                        "created_at": str(event.created_at) if hasattr(event, "created_at") else "",
+                    }
+                    events_data.append(event_dict)
+
+                # Build a brief summary
+                event_type_counts: dict[str, int] = {}
+                for e in events_data:
+                    t = e.get("event_type", "unknown")
+                    event_type_counts[t] = event_type_counts.get(t, 0) + 1
+
+                summary_parts = [f"{count}x {etype}" for etype, count in event_type_counts.items()]
+                summary = f"Retrieved {len(events_data)} events: {', '.join(summary_parts)}"
+
+                return RecallHistoryResult(
+                    events=events_data,
+                    total_count=len(events_data),
+                    summary=summary,
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to recall history for task {request.task_id}: {e}")
+                return RecallHistoryResult(
+                    summary=f"Failed to recall history: {e}",
+                )
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -894,4 +962,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         resolve_skill_file_activity,
         compact_messages_activity,
         resolve_agent_tools_activity,
+        recall_history_activity,
     ]

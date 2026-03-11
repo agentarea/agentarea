@@ -88,6 +88,7 @@ class Activities:
     PUBLISH_WORKFLOW_EVENTS: Final[str] = "publish_workflow_events_activity"
     COMPACT_MESSAGES: Final[str] = "compact_messages_activity"
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
+    RECALL_HISTORY: Final[str] = "recall_history_activity"
 
 
 # Execution statuses

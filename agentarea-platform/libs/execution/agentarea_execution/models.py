@@ -398,6 +398,29 @@ class ResolveAgentToolsResult(BaseModel):
     agent_map: dict[str, str] = Field(default_factory=dict)  # name → agent_id
 
 
+class RecallHistoryRequest(BaseModel):
+    """Request to recall context from past task executions.
+
+    Used by the recall_history tool to query the DB event log (tier 2)
+    for relevant past context that was compacted out of the working set.
+    """
+
+    task_id: UUID
+    workspace_id: str
+    query: str | None = None  # Optional search query to filter events
+    event_types: list[str] | None = None  # Filter by event types
+    limit: int = 20
+    user_context_data: dict[str, Any] | None = None
+
+
+class RecallHistoryResult(BaseModel):
+    """Result of history recall."""
+
+    events: list[dict[str, Any]] = Field(default_factory=list)
+    total_count: int = 0
+    summary: str = ""
+
+
 class SkillFileRequest(BaseModel):
     """Request to resolve a skill file from S3.
 

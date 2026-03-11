@@ -39,6 +39,8 @@ from ..models import (
     LLMCallRequest,
     LLMCallResult,
     MCPToolRequest,
+    RecallHistoryRequest,
+    RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
     ToolDiscoveryRequest,
@@ -240,6 +242,38 @@ class AgentExecutionWorkflow:
                         available_tools.append(dict(tool.__dict__))
                     except Exception:  # noqa: S110
                         pass
+
+        # Inject built-in recall_history tool for querying past execution context
+        available_tools.append({
+            "type": "function",
+            "function": {
+                "name": "recall_history",
+                "description": (
+                    "Recall context from past executions of this task. "
+                    "Use when you need information that may have been compacted "
+                    "out of the current conversation, or to review what happened "
+                    "in earlier execution attempts."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Optional search query to describe what you're looking for",
+                        },
+                        "event_types": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Filter by event types (e.g. ToolCallCompleted, LLMCallCompleted)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max events to return (default 20)",
+                        },
+                    },
+                },
+            },
+        })
 
         self.state.available_tools = available_tools
 
@@ -802,14 +836,22 @@ class AgentExecutionWorkflow:
         agent_calls: list[ToolCall] = []
         regular_calls: list[ToolCall] = []
 
+        recall_calls: list[ToolCall] = []
+
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
             if tool_name == "completion":
                 completion_call = tool_call
+            elif tool_name == "recall_history":
+                recall_calls.append(tool_call)
             elif tool_name in self._agent_tool_registry:
                 agent_calls.append(tool_call)
             else:
                 regular_calls.append(tool_call)
+
+        # Run recall_history calls (can run in parallel with agent calls)
+        for tool_call in recall_calls:
+            await self._execute_recall_history(tool_call)
 
         # Run agent delegations in parallel (fan-out)
         if agent_calls:
@@ -1017,6 +1059,62 @@ class AgentExecutionWorkflow:
                 },
             )
             await self._publish_events_immediately()
+
+    async def _execute_recall_history(self, tool_call: ToolCall) -> None:
+        """Execute recall_history tool via activity to query the DB event log."""
+        try:
+            tool_args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            tool_args = {}
+
+        request = RecallHistoryRequest(
+            task_id=UUID(self.state.task_id),
+            workspace_id=self.state.workspace_id,
+            query=tool_args.get("query"),
+            event_types=tool_args.get("event_types"),
+            limit=tool_args.get("limit", 20),
+            user_context_data=self.state.user_context_data,
+        )
+
+        try:
+            result: RecallHistoryResult = await workflow.execute_activity(
+                Activities.RECALL_HISTORY,
+                args=[request],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+
+            # Format events for the agent
+            if result.events:
+                content_parts = [result.summary, ""]
+                for event in result.events:
+                    content_parts.append(
+                        f"[{event.get('created_at', '')}] "
+                        f"{event.get('event_type', '')}: "
+                        f"{json.dumps(event.get('data', {}), default=str)[:500]}"
+                    )
+                content = "\n".join(content_parts)
+            else:
+                content = "No events found for this task."
+
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=content,
+                    tool_call_id=tool_call.id,
+                    name="recall_history",
+                )
+            )
+        except Exception as e:
+            workflow.logger.error(f"Recall history failed: {e}")
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Failed to recall history: {e}",
+                    tool_call_id=tool_call.id,
+                    name="recall_history",
+                )
+            )
 
     async def _execute_agent_delegation(self, tool_call: ToolCall) -> None:
         """Delegate to another agent via Temporal child workflow.
