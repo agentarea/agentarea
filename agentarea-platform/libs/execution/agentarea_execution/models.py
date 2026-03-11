@@ -384,6 +384,20 @@ class CreateTaskFromTriggerResult(BaseModel):
 # === Skill File Activity Models ===
 
 
+class ResolveAgentToolsRequest(BaseModel):
+    """Request to resolve agent tool names to agent IDs."""
+
+    agent_names: list[str]
+    workspace_id: str
+    user_context_data: dict[str, Any] | None = None
+
+
+class ResolveAgentToolsResult(BaseModel):
+    """Result of agent tool resolution. Maps agent names to their IDs."""
+
+    agent_map: dict[str, str] = Field(default_factory=dict)  # name → agent_id
+
+
 class SkillFileRequest(BaseModel):
     """Request to resolve a skill file from S3.
 

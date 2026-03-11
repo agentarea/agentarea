@@ -38,6 +38,8 @@ from ..models import (
     LLMCallRequest,
     LLMCallResult,
     MCPToolRequest,
+    ResolveAgentToolsRequest,
+    ResolveAgentToolsResult,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     WorkflowEventsRequest,
@@ -68,6 +70,8 @@ class AgentExecutionWorkflow:
         self.context_manager: ContextWindowManager | None = None
         self._paused = False
         self._pause_reason = ""
+        # Maps sanitized agent tool names to their config (type=agent entries)
+        self._agent_tool_registry: dict[str, dict] = {}
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -239,6 +243,59 @@ class AgentExecutionWorkflow:
 
         if not StateValidator.validate_tools(self.state.available_tools):
             raise ApplicationError("Invalid tools configuration")
+
+        # Resolve agent tools for workflow-level delegation
+        await self._resolve_agent_tools()
+
+    async def _resolve_agent_tools(self) -> None:
+        """Build agent tool registry by resolving agent names to IDs.
+
+        Identifies agent-type tools from config and resolves their IDs
+        so the workflow can start child workflows directly instead of
+        routing through the activity-level polling delegation.
+        """
+        tools_config = self.state.agent_config.get("tools", [])
+        agent_names = [
+            tc.get("name")
+            for tc in tools_config
+            if isinstance(tc, dict) and tc.get("type") == "agent" and tc.get("name")
+        ]
+
+        if not agent_names:
+            return
+
+        resolve_request = ResolveAgentToolsRequest(
+            agent_names=agent_names,
+            workspace_id=self.state.workspace_id,
+            user_context_data=self.state.user_context_data,
+        )
+
+        result: ResolveAgentToolsResult = await workflow.execute_activity(
+            Activities.RESOLVE_AGENT_TOOLS,
+            args=[resolve_request],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
+
+        # Build registry: sanitized tool name → {agent_id, agent_name, config}
+        import re
+        for agent_name, agent_id in result.agent_map.items():
+            sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", agent_name)
+            sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+            if not sanitized or sanitized[0].isdigit():
+                sanitized = f"agent_{sanitized}"
+            tool_name = f"delegate_to_{sanitized}"
+
+            self._agent_tool_registry[tool_name] = {
+                "agent_id": agent_id,
+                "agent_name": agent_name,
+            }
+
+        if self._agent_tool_registry:
+            workflow.logger.info(
+                f"Registered {len(self._agent_tool_registry)} agent tools for delegation: "
+                f"{list(self._agent_tool_registry.keys())}"
+            )
 
     async def _restore_from_continued_state(self, continued_state: dict) -> None:
         """Restore workflow state from a continue-as-new restart."""
@@ -726,17 +783,20 @@ class AgentExecutionWorkflow:
         await self._evaluate_goal_progress()
 
     async def _execute_tool_calls(self, tool_calls: list[ToolCall]) -> None:
-        """Execute MCP tools first, then handle completion signal if present."""
+        """Execute tools, routing agent delegations to child workflows."""
         completion_call = None
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
 
             if tool_name == "completion":
-                # Defer completion until after executing all MCP tools
+                # Defer completion until after executing all tools
                 completion_call = tool_call
                 continue
+            elif tool_name in self._agent_tool_registry:
+                # Route to child workflow (no polling, native Temporal await)
+                await self._execute_agent_delegation(tool_call)
             else:
-                # Execute MCP tool
+                # Execute MCP/code tool via activity
                 await self._execute_mcp_tool(tool_call)
 
         # After executing tools, handle completion if it was present
@@ -923,6 +983,127 @@ class AgentExecutionWorkflow:
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
+                    "error": str(e),
+                    "iteration": self.state.current_iteration,
+                },
+            )
+            await self._publish_events_immediately()
+
+    async def _execute_agent_delegation(self, tool_call: ToolCall) -> None:
+        """Delegate to another agent via Temporal child workflow.
+
+        Instead of routing through execute_mcp_tool_activity (which polls),
+        starts a child workflow directly and awaits its result. This is
+        efficient (no polling), durable (survives worker crashes), and
+        supports cancellation propagation.
+        """
+        tool_name = tool_call.function["name"]
+        agent_info = self._agent_tool_registry[tool_name]
+        agent_id = agent_info["agent_id"]
+        agent_name = agent_info["agent_name"]
+
+        # Parse the message argument
+        try:
+            tool_args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            tool_args = {}
+
+        message = tool_args.get("message", "")
+
+        self.event_manager.add_event(
+            EventTypes.AGENT_DELEGATION_STARTED,
+            {
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "target_agent_id": agent_id,
+                "target_agent_name": agent_name,
+                "iteration": self.state.current_iteration,
+                "message": message[:200],
+            },
+        )
+        await self._publish_events_immediately()
+
+        try:
+            # Build child workflow request
+            child_request = AgentExecutionRequest(
+                task_id=UUID(self.state.task_id),
+                agent_id=UUID(agent_id),
+                user_id=self.state.user_id,
+                workspace_id=self.state.workspace_id,
+                task_query=message,
+                max_reasoning_iterations=MAX_ITERATIONS,
+                workflow_metadata={
+                    "source": "agent_delegation",
+                    "parent_execution_id": self.state.execution_id,
+                    "parent_agent_id": self.state.agent_id,
+                },
+            )
+
+            # Start child workflow and await result
+            child_workflow_id = f"delegation-{self.state.execution_id}-{tool_call.id}"
+            child_result: AgentExecutionResult = await workflow.execute_child_workflow(
+                AgentExecutionWorkflow.run,
+                args=[child_request],
+                id=child_workflow_id,
+                task_queue="agent-tasks",
+            )
+
+            # Extract result
+            if child_result.success:
+                result_text = child_result.final_response or "(Agent completed without response)"
+            else:
+                result_text = child_result.error_message or "(Agent failed without details)"
+
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=result_text,
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            )
+
+            self.event_manager.add_event(
+                EventTypes.AGENT_DELEGATION_COMPLETED,
+                {
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "target_agent_name": agent_name,
+                    "success": child_result.success,
+                    "iteration": self.state.current_iteration,
+                    "child_iterations": child_result.reasoning_iterations_used,
+                    "child_cost": child_result.total_cost,
+                },
+            )
+            await self._publish_events_immediately()
+
+            # Account for child's cost in parent budget
+            if child_result.total_cost > 0:
+                self.budget_tracker.add_cost(child_result.total_cost)
+
+            workflow.logger.info(
+                f"Agent delegation to '{agent_name}' completed "
+                f"(success={child_result.success}, cost=${child_result.total_cost:.4f})"
+            )
+
+        except Exception as e:
+            workflow.logger.error(f"Agent delegation to '{agent_name}' failed: {e}")
+
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Agent delegation failed: {e}",
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            )
+
+            self.event_manager.add_event(
+                EventTypes.AGENT_DELEGATION_FAILED,
+                {
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "target_agent_name": agent_name,
                     "error": str(e),
                     "iteration": self.state.current_iteration,
                 },

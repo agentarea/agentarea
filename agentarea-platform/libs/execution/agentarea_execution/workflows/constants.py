@@ -61,6 +61,10 @@ class EventTypes:
 
     WORKFLOW_CONTINUED_AS_NEW: Final[str] = "WorkflowContinuedAsNew"
 
+    AGENT_DELEGATION_STARTED: Final[str] = "AgentDelegationStarted"
+    AGENT_DELEGATION_COMPLETED: Final[str] = "AgentDelegationCompleted"
+    AGENT_DELEGATION_FAILED: Final[str] = "AgentDelegationFailed"
+
     HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
 
@@ -80,6 +84,7 @@ class Activities:
     EVALUATE_GOAL_PROGRESS: Final[str] = "evaluate_goal_progress_activity"
     PUBLISH_WORKFLOW_EVENTS: Final[str] = "publish_workflow_events_activity"
     COMPACT_MESSAGES: Final[str] = "compact_messages_activity"
+    RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
 
 
 # Execution statuses

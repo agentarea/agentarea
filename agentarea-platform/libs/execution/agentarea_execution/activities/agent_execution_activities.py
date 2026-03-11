@@ -46,6 +46,8 @@ from ..models import (
     LLMCallResult,
     MCPToolRequest,
     MCPToolResult,
+    ResolveAgentToolsRequest,
+    ResolveAgentToolsResult,
     SkillFileRequest,
     SkillFileResult,
     SkillInfo,
@@ -858,6 +860,28 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 estimated_tokens_saved=0,
             )
 
+    @activity.defn
+    async def resolve_agent_tools_activity(
+        request: ResolveAgentToolsRequest,
+    ) -> ResolveAgentToolsResult:
+        """Resolve agent names to their IDs for workflow-level delegation."""
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            agent_service = await ctx.get_agent_service()
+            agent_map: dict[str, str] = {}
+
+            for agent_name in request.agent_names:
+                try:
+                    agent = await agent_service.get_by_name(agent_name)
+                    if agent:
+                        agent_map[agent_name] = str(agent.id)
+                    else:
+                        logger.warning(f"Agent '{agent_name}' not found for delegation")
+                except Exception as e:
+                    logger.error(f"Failed to resolve agent '{agent_name}': {e}")
+
+            return ResolveAgentToolsResult(agent_map=agent_map)
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -869,4 +893,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         publish_workflow_events_activity,
         resolve_skill_file_activity,
         compact_messages_activity,
+        resolve_agent_tools_activity,
     ]
