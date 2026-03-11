@@ -23,6 +23,7 @@ with workflow.unsafe.imports_passed_through():
     from .models import (
         AgentExecutionState,
         AgentGoal,
+        ContinueAsNewState,
         Message,
         ToolCall,
     )
@@ -46,6 +47,7 @@ from .constants import (
     DEFAULT_RETRY_ATTEMPTS,
     EVENT_PUBLISH_RETRY_ATTEMPTS,
     EVENT_PUBLISH_TIMEOUT,
+    HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
     MAX_ITERATIONS,
     TOOL_EXECUTION_TIMEOUT,
@@ -126,6 +128,11 @@ class AgentExecutionWorkflow:
     async def _initialize_workflow(self, request: AgentExecutionRequest) -> None:
         """Initialize workflow state and dependencies."""
         workflow.logger.info(f"Initializing workflow for agent {request.agent_id}")
+
+        # Check if this is a continue-as-new restart
+        if request.continued_state:
+            await self._restore_from_continued_state(request.continued_state)
+            return
 
         # Populate state attributes
         self.state.execution_id = workflow.info().workflow_id
@@ -233,6 +240,113 @@ class AgentExecutionWorkflow:
         if not StateValidator.validate_tools(self.state.available_tools):
             raise ApplicationError("Invalid tools configuration")
 
+    async def _restore_from_continued_state(self, continued_state: dict) -> None:
+        """Restore workflow state from a continue-as-new restart."""
+        workflow.logger.info("Restoring workflow from continue-as-new state")
+
+        state = ContinueAsNewState(**continued_state)
+
+        self.state.execution_id = state.execution_id
+        self.state.agent_id = state.agent_id
+        self.state.task_id = state.task_id
+        self.state.user_id = state.user_id
+        self.state.workspace_id = state.workspace_id
+        self.state.goal = state.goal
+        self.state.agent_config = state.agent_config
+        self.state.available_tools = state.available_tools
+        self.state.current_iteration = state.current_iteration
+        self.state.budget_usd = state.budget_usd
+        self.state.context_window = state.context_window
+        self.state.user_context_data = state.user_context_data
+        self.state.status = ExecutionStatus.EXECUTING
+
+        # Restore messages from compacted dicts
+        self.state.messages = [Message(**msg) for msg in state.messages]
+
+        # Initialize helpers with restored cost
+        self.event_manager = EventManager(
+            task_id=self.state.task_id,
+            agent_id=self.state.agent_id,
+            execution_id=self.state.execution_id,
+        )
+        self.budget_tracker = BudgetTracker(self.state.budget_usd)
+        self.budget_tracker.add_cost(state.total_cost)
+        self.context_manager = ContextWindowManager(self.state.context_window)
+
+        workflow.logger.info(
+            f"Restored from run {state.continued_from_run_id}, "
+            f"iteration {state.current_iteration}, "
+            f"cost ${state.total_cost:.4f}, "
+            f"{len(self.state.messages)} messages"
+        )
+
+    async def _continue_as_new(self) -> None:
+        """Compact messages and continue workflow with fresh event history."""
+        workflow.logger.info(
+            f"Continue-as-new triggered at iteration {self.state.current_iteration}, "
+            f"event history suggests reset"
+        )
+
+        # Compact messages before carrying state forward
+        await self._compact_context_if_needed()
+
+        # Serialize messages to dicts
+        messages_dict = [
+            MessageBuilder.normalize_message_dict({
+                "role": msg.role,
+                "content": msg.content,
+                "tool_call_id": msg.tool_call_id,
+                "name": msg.name,
+                "tool_calls": msg.tool_calls,
+            })
+            for msg in self.state.messages
+        ]
+
+        continued_state = ContinueAsNewState(
+            execution_id=self.state.execution_id,
+            agent_id=self.state.agent_id,
+            task_id=self.state.task_id,
+            user_id=self.state.user_id,
+            workspace_id=self.state.workspace_id,
+            goal=self.state.goal,
+            messages=messages_dict,
+            agent_config=self.state.agent_config,
+            available_tools=self.state.available_tools,
+            current_iteration=self.state.current_iteration,
+            total_cost=self.budget_tracker.cost,
+            budget_usd=self.state.budget_usd,
+            context_window=self.state.context_window,
+            user_context_data=self.state.user_context_data,
+            continued_from_run_id=workflow.info().run_id,
+        )
+
+        # Publish event before continuing (persisted in DB via tier 2)
+        self.event_manager.add_event(
+            EventTypes.WORKFLOW_CONTINUED_AS_NEW,
+            {
+                "iteration": self.state.current_iteration,
+                "total_cost": self.budget_tracker.cost,
+                "messages_carried": len(self.state.messages),
+                "continued_from_run_id": workflow.info().run_id,
+                "reason": "Temporal event history size limit approaching",
+            },
+        )
+        await self._publish_events_immediately()
+
+        # Build new request with continued state
+        new_request = AgentExecutionRequest(
+            task_id=UUID(self.state.task_id),
+            agent_id=UUID(self.state.agent_id),
+            user_id=self.state.user_id,
+            workspace_id=self.state.workspace_id,
+            task_query=self.state.goal.description if self.state.goal else "",
+            max_reasoning_iterations=self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS,
+            budget_usd=self.state.budget_usd,
+            continued_state=continued_state.model_dump(),
+        )
+
+        workflow.continue_as_new(args=[new_request])
+
     async def _execute_main_loop(self) -> dict[str, Any]:
         """Main execution loop with dynamic termination conditions."""
         workflow.logger.info("Starting main execution loop")
@@ -265,6 +379,11 @@ class AgentExecutionWorkflow:
                     f"Stopping execution after iteration {self.state.current_iteration}: {reason}"
                 )
                 break
+
+            # Check if Temporal suggests resetting event history
+            if workflow.info().is_continue_as_new_suggested():
+                await self._continue_as_new()
+                # continue_as_new raises an exception internally, so we won't reach here
 
             # Check for pause
             if self._paused:
@@ -482,6 +601,7 @@ class AgentExecutionWorkflow:
                 Activities.CALL_LLM,
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
 
@@ -726,6 +846,7 @@ class AgentExecutionWorkflow:
                 Activities.EXECUTE_MCP_TOOL,
                 args=[mcp_request],
                 start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
 
@@ -897,6 +1018,7 @@ class AgentExecutionWorkflow:
                 Activities.COMPACT_MESSAGES,
                 args=[compact_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=2),
             )
 

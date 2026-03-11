@@ -54,6 +54,7 @@ from ..models import (
     WorkflowEventsResult,
 )
 from .event_publisher import create_event_publisher, publish_enriched_llm_error_event
+from .heartbeat import auto_heartbeater
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return all_tools
 
     @activity.defn
+    @auto_heartbeater
     async def call_llm_activity(
         request: LLMCallRequest,
     ) -> LLMCallResult:
@@ -331,6 +333,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             ) from e
 
     @activity.defn
+    @auto_heartbeater
     async def execute_mcp_tool_activity(
         request: MCPToolRequest,
     ) -> MCPToolResult:
@@ -727,6 +730,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             )
 
     @activity.defn
+    @auto_heartbeater
     async def compact_messages_activity(
         request: CompactMessagesRequest,
     ) -> CompactMessagesResult:

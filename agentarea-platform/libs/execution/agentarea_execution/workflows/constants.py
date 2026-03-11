@@ -15,6 +15,9 @@ LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=2)
 TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=3)
 EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
 
+# Heartbeat configuration
+HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
+
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
@@ -55,6 +58,8 @@ class EventTypes:
 
     CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
     CONTEXT_WARNING: Final[str] = "ContextWarning"
+
+    WORKFLOW_CONTINUED_AS_NEW: Final[str] = "WorkflowContinuedAsNew"
 
     HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"

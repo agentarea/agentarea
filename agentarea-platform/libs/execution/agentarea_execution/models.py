@@ -32,6 +32,9 @@ class AgentExecutionRequest(BaseModel):
     # Additional workflow metadata
     workflow_metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # Continue-as-new state (populated when workflow restarts with fresh event history)
+    continued_state: dict[str, Any] | None = None
+
 
 class AgentExecutionResult(BaseModel):
     """Result of agent execution workflow."""
