@@ -256,10 +256,9 @@ def create_app() -> FastAPI:
 
     # Mount MCP Streamable HTTP server at /mcp
     # Auto-exposes all FastAPI endpoints as MCP tools via fastapi-mcp
+    from agentarea_common.auth.dependencies import get_user_context
     from fastapi import Depends
     from fastapi_mcp import AuthConfig, FastApiMCP
-
-    from agentarea_common.auth.dependencies import get_user_context
 
     mcp_server = FastApiMCP(
         app,

@@ -85,7 +85,9 @@ class TriggerResponse(BaseModel):
     has_channel_credentials: bool = False
 
     @classmethod
-    def from_domain_model(cls, trigger: Any, has_channel_credentials: bool = False) -> "TriggerResponse":
+    def from_domain_model(
+        cls, trigger: Any, has_channel_credentials: bool = False
+    ) -> "TriggerResponse":
         """Create response from domain model."""
         if not TRIGGERS_AVAILABLE:
             # Return mock response when triggers not available
@@ -922,9 +924,7 @@ async def get_execution_history(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution history for trigger {trigger_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{trigger_id}/status", response_model=TriggerStatusResponse)
@@ -1019,9 +1019,7 @@ async def get_execution_metrics(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution metrics for trigger {trigger_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{trigger_id}/timeline", response_model=ExecutionTimelineResponse)
@@ -1071,9 +1069,7 @@ async def get_execution_timeline(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution timeline for trigger {trigger_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{trigger_id}/correlations", response_model=ExecutionCorrelationResponse)
@@ -1129,6 +1125,4 @@ async def get_execution_correlations(
         raise
     except Exception as e:
         logger.error(f"Failed to get execution correlations for trigger {trigger_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e

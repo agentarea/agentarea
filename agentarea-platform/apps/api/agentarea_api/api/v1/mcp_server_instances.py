@@ -138,9 +138,7 @@ async def check_mcp_server_instance_configuration(
             status_code=503, detail="Unable to connect to container manager for validation"
         ) from e
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{instance_id}/environment")
@@ -445,9 +443,7 @@ async def get_containers_health(
             # No URL transformation needed - Go manager returns correct external URLs
             return response.json()
     except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503, detail="Unable to connect to container manager"
-        ) from e
+        raise HTTPException(status_code=503, detail="Unable to connect to container manager") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error") from e
 

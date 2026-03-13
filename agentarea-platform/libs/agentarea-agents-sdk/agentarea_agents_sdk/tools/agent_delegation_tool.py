@@ -52,10 +52,7 @@ class AgentDelegationTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return (
-            f"Delegate a task to the '{self._agent_name}' agent. "
-            f"{self._agent_description}"
-        )
+        return f"Delegate a task to the '{self._agent_name}' agent. {self._agent_description}"
 
     def get_schema(self) -> dict[str, Any]:
         return {

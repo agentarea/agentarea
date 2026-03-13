@@ -141,7 +141,9 @@ class EmailAdapter:
         except Exception as e:
             logger.error("Email send failed: %s", e)
 
-    async def _resolve_smtp_credentials(self, channel_config: dict[str, Any]) -> dict[str, Any] | None:
+    async def _resolve_smtp_credentials(
+        self, channel_config: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Resolve SMTP credentials from the secret store.
 
         Secret name is derived: channel_cred:{type}:{trigger_id}

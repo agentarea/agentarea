@@ -244,36 +244,38 @@ class AgentExecutionWorkflow:
                         pass
 
         # Inject built-in recall_history tool for querying past execution context
-        available_tools.append({
-            "type": "function",
-            "function": {
-                "name": "recall_history",
-                "description": (
-                    "Recall context from past executions of this task. "
-                    "Use when you need information that may have been compacted "
-                    "out of the current conversation, or to review what happened "
-                    "in earlier execution attempts."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Optional search query to describe what you're looking for",
-                        },
-                        "event_types": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Filter by event types (e.g. ToolCallCompleted, LLMCallCompleted)",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Max events to return (default 20)",
+        available_tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "recall_history",
+                    "description": (
+                        "Recall context from past executions of this task. "
+                        "Use when you need information that may have been compacted "
+                        "out of the current conversation, or to review what happened "
+                        "in earlier execution attempts."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Optional search query to describe what you're looking for",
+                            },
+                            "event_types": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Filter by event types (e.g. ToolCallCompleted, LLMCallCompleted)",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Max events to return (default 20)",
+                            },
                         },
                     },
                 },
-            },
-        })
+            }
+        )
 
         self.state.available_tools = available_tools
 
@@ -315,6 +317,7 @@ class AgentExecutionWorkflow:
 
         # Build registry: sanitized tool name → {agent_id, agent_name, config}
         import re
+
         for agent_name, agent_id in result.agent_map.items():
             sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", agent_name)
             sanitized = re.sub(r"_+", "_", sanitized).strip("_")
@@ -389,13 +392,15 @@ class AgentExecutionWorkflow:
 
         # Serialize messages to dicts
         messages_dict = [
-            MessageBuilder.normalize_message_dict({
-                "role": msg.role,
-                "content": msg.content,
-                "tool_call_id": msg.tool_call_id,
-                "name": msg.name,
-                "tool_calls": msg.tool_calls,
-            })
+            MessageBuilder.normalize_message_dict(
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "tool_call_id": msg.tool_call_id,
+                    "name": msg.name,
+                    "tool_calls": msg.tool_calls,
+                }
+            )
             for msg in self.state.messages
         ]
 
@@ -438,7 +443,9 @@ class AgentExecutionWorkflow:
             user_id=self.state.user_id,
             workspace_id=self.state.workspace_id,
             task_query=self.state.goal.description if self.state.goal else "",
-            max_reasoning_iterations=self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS,
+            max_reasoning_iterations=self.state.goal.max_iterations
+            if self.state.goal
+            else MAX_ITERATIONS,
             budget_usd=self.state.budget_usd,
             continued_state=continued_state.model_dump(),
         )
@@ -626,8 +633,7 @@ class AgentExecutionWorkflow:
         # Check context window and compact if needed (skip first iteration)
         if self.context_manager and iteration > 1:
             messages_dict_est = [
-                {"role": msg.role, "content": msg.content or ""}
-                for msg in self.state.messages
+                {"role": msg.role, "content": msg.content or ""} for msg in self.state.messages
             ]
             estimated = self.context_manager.estimate_usage(messages_dict_est)
             self.context_manager.update_usage(estimated)
@@ -861,9 +867,7 @@ class AgentExecutionWorkflow:
                 workflow.logger.info(
                     f"Fan-out: delegating to {len(agent_calls)} agents in parallel"
                 )
-                tasks = [
-                    self._execute_agent_delegation(tc) for tc in agent_calls
-                ]
+                tasks = [self._execute_agent_delegation(tc) for tc in agent_calls]
                 await asyncio.gather(*tasks)
 
         # Run regular tools sequentially
@@ -1297,13 +1301,15 @@ class AgentExecutionWorkflow:
 
         # Convert messages to dict for boundary finding
         messages_dict = [
-            MessageBuilder.normalize_message_dict({
-                "role": msg.role,
-                "content": msg.content,
-                "tool_call_id": msg.tool_call_id,
-                "name": msg.name,
-                "tool_calls": msg.tool_calls,
-            })
+            MessageBuilder.normalize_message_dict(
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "tool_call_id": msg.tool_call_id,
+                    "name": msg.name,
+                    "tool_calls": msg.tool_calls,
+                }
+            )
             for msg in self.state.messages
         ]
 
@@ -1348,13 +1354,15 @@ class AgentExecutionWorkflow:
 
             # Validate tool pairs in new message list
             new_messages_dict = [
-                MessageBuilder.normalize_message_dict({
-                    "role": msg.role,
-                    "content": msg.content,
-                    "tool_call_id": msg.tool_call_id,
-                    "name": msg.name,
-                    "tool_calls": msg.tool_calls,
-                })
+                MessageBuilder.normalize_message_dict(
+                    {
+                        "role": msg.role,
+                        "content": msg.content,
+                        "tool_call_id": msg.tool_call_id,
+                        "name": msg.name,
+                        "tool_calls": msg.tool_calls,
+                    }
+                )
                 for msg in self.state.messages
             ]
             if not validate_tool_pairs(new_messages_dict):
@@ -1367,7 +1375,8 @@ class AgentExecutionWorkflow:
                             if isinstance(tc, dict) and tc.get("id"):
                                 tool_use_ids.add(tc["id"])
                 self.state.messages = [
-                    msg for msg in self.state.messages
+                    msg
+                    for msg in self.state.messages
                     if not (msg.role == "tool" and msg.tool_call_id not in tool_use_ids)
                 ]
 

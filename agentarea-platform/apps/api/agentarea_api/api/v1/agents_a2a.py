@@ -800,6 +800,7 @@ async def handle_message_stream_sse(
                         content = event_data.get("content", event_data.get("text", ""))
                         if content:
                             from uuid import uuid4 as _uuid4
+
                             artifact_evt = JSONRPCResponse(
                                 id=request_id,
                                 result=StreamResponseArtifactUpdate(
@@ -828,8 +829,12 @@ async def handle_message_stream_sse(
                 # Log streaming completion
                 stream_duration_ms = (time.time() - stream_start_time) * 1000
                 log_a2a_operation(
-                    "message_stream", agent_id, auth_context, request_id,
-                    created_task.id, status="stream_completed",
+                    "message_stream",
+                    agent_id,
+                    auth_context,
+                    request_id,
+                    created_task.id,
+                    status="stream_completed",
                     duration_ms=stream_duration_ms,
                     extra_metadata={"events_streamed": event_count},
                 )
@@ -837,9 +842,14 @@ async def handle_message_stream_sse(
             except Exception as stream_error:
                 stream_duration_ms = (time.time() - stream_start_time) * 1000
                 log_a2a_operation(
-                    "message_stream", agent_id, auth_context, request_id,
-                    created_task.id, status="stream_failed",
-                    duration_ms=stream_duration_ms, error=str(stream_error),
+                    "message_stream",
+                    agent_id,
+                    auth_context,
+                    request_id,
+                    created_task.id,
+                    status="stream_failed",
+                    duration_ms=stream_duration_ms,
+                    error=str(stream_error),
                 )
                 error_resp = JSONRPCResponse(
                     id=request_id,
@@ -1137,7 +1147,7 @@ async def handle_task_resubscribe(
     request, request_id, params, task_service, agent_id, auth_context, event_stream_service
 ):
     """Handle tasks/resubscribe — re-attach to SSE stream for an existing task."""
-    start_time = time.time()
+    time.time()
     log_a2a_operation("task_resubscribe", agent_id, auth_context, request_id, status="started")
 
     try:
@@ -1164,7 +1174,8 @@ async def handle_task_resubscribe(
                 yield f"data: {final.model_dump_json(by_alias=True)}\n\n"
 
             return StreamingResponse(
-                done_stream(), media_type="text/event-stream",
+                done_stream(),
+                media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
@@ -1225,7 +1236,8 @@ async def handle_task_resubscribe(
                     yield f"data: {update.model_dump_json(by_alias=True)}\n\n"
 
         return StreamingResponse(
-            event_stream(), media_type="text/event-stream",
+            event_stream(),
+            media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
@@ -1495,8 +1507,9 @@ async def handle_agent_jsonrpc(
         a2a_version = request.headers.get("a2a-version")
         if a2a_version and not a2a_version.startswith("0.3"):
             return create_error_response(
-                request_data.get("id"), -32007,
-                f"Unsupported A2A version: {a2a_version}. Supported: 0.3.x"
+                request_data.get("id"),
+                -32007,
+                f"Unsupported A2A version: {a2a_version}. Supported: 0.3.x",
             )
 
         # Validate JSON-RPC request structure

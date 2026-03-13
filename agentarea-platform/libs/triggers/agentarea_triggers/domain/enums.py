@@ -1,16 +1,16 @@
 """Trigger system enums and value objects."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class TriggerType(str, Enum):
+class TriggerType(StrEnum):
     """Types of triggers supported by the system."""
 
     CRON = "cron"
     WEBHOOK = "webhook"
 
 
-class TriggerStatus(str, Enum):
+class TriggerStatus(StrEnum):
     """Status of a trigger."""
 
     ACTIVE = "active"
@@ -19,7 +19,7 @@ class TriggerStatus(str, Enum):
     FAILED = "failed"
 
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     """Status of a trigger execution."""
 
     SUCCESS = "success"
@@ -28,7 +28,7 @@ class ExecutionStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class WebhookType(str, Enum):
+class WebhookType(StrEnum):
     """Types of webhook integrations supported.
 
     This Enum provides constants for known types but the system supports

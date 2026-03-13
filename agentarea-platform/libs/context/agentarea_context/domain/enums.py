@@ -1,14 +1,14 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class ContextType(str, Enum):
+class ContextType(StrEnum):
     WORKING = "working"
     FACTUAL = "factual"
     EPISODIC = "episodic"
     SEMANTIC = "semantic"
 
 
-class ContextScope(str, Enum):
+class ContextScope(StrEnum):
     TASK = "task"
     AGENT = "agent"
     GLOBAL = "global"

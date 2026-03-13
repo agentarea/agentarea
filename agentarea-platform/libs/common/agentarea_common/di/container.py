@@ -51,12 +51,12 @@ def get_container() -> DIContainer:
     return _container
 
 
-def register_singleton(interface: type[T], instance: T) -> None:
+def register_singleton[T](interface: type[T], instance: T) -> None:
     """Convenience function to register a singleton."""
     _container.register_singleton(interface, instance)
 
 
-def register_factory(interface: type[T], factory: Callable[[], T]) -> None:
+def register_factory[T](interface: type[T], factory: Callable[[], T]) -> None:
     """Convenience function to register a factory."""
     _container.register_factory(interface, factory)
 

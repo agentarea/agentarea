@@ -275,11 +275,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         if extractor_type:
             conditions.append(TriggerORM.data_extractor == extractor_type)
 
-        stmt = (
-            select(TriggerORM)
-            .where(and_(*conditions))
-            .order_by(TriggerORM.created_at.desc())
-        )
+        stmt = select(TriggerORM).where(and_(*conditions)).order_by(TriggerORM.created_at.desc())
         result = await self.session.execute(stmt)
         trigger_orms = result.scalars().all()
 
@@ -291,9 +287,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         return triggers
 
-    async def update_extractor_state(
-        self, trigger_id: UUID, state: dict[str, Any]
-    ) -> bool:
+    async def update_extractor_state(self, trigger_id: UUID, state: dict[str, Any]) -> bool:
         """Update the data extractor state (cursor/checkpoint) for a trigger."""
         stmt = (
             update(TriggerORM)

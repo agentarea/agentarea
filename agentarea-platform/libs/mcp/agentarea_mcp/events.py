@@ -1,14 +1,14 @@
 """MCP Event schemas for event-driven architecture."""
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
-class MCPEventType(str, Enum):
+class MCPEventType(StrEnum):
     """MCP event types for event sourcing."""
 
     # Server lifecycle events

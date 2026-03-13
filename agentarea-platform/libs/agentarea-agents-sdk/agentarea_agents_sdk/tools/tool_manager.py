@@ -91,8 +91,7 @@ class ToolManager:
                 # Agent-to-agent tool via A2A protocol
                 if not agent_service or not base_url:
                     logger.warning(
-                        f"Skipping agent tool '{tool_name}': "
-                        "agent_service or base_url not provided"
+                        f"Skipping agent tool '{tool_name}': agent_service or base_url not provided"
                     )
                     continue
 
