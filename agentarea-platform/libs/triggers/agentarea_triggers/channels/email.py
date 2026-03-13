@@ -1,11 +1,17 @@
 """Email channel adapter for outbound message delivery via SMTP."""
 
+from __future__ import annotations
+
+import json
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import register_adapter
+
+if TYPE_CHECKING:
+    from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
 logger = logging.getLogger(__name__)
 
@@ -16,24 +22,13 @@ class EmailAdapter:
     Inbound is handled by data extractors (MailSlurper, IMAP).
     This adapter handles outbound: formatting events as HTML emails.
 
-    Uses summary presentation — batches events and sends one email at completion.
+    Credentials (smtp_host, smtp_port, username, password, from_address, use_tls)
+    are resolved from the secret store via channel_config["secret_key"].
+    The secret store holds a JSON blob with these fields.
     """
 
-    def __init__(
-        self,
-        smtp_host: str = "localhost",
-        smtp_port: int = 25,
-        from_address: str = "agent@agentarea.local",
-        use_tls: bool = False,
-        username: str | None = None,
-        password: str | None = None,
-    ):
-        self.smtp_host = smtp_host
-        self.smtp_port = smtp_port
-        self.from_address = from_address
-        self.use_tls = use_tls
-        self.username = username
-        self.password = password
+    def __init__(self, secret_manager: BaseSecretManager | None = None):
+        self._secret_manager = secret_manager
 
     def format(self, event: dict[str, Any], presentation: str) -> str:
         """Format a workflow event as HTML for email.
@@ -91,14 +86,23 @@ class EmailAdapter:
         )
 
     async def send(self, channel_config: dict[str, Any], message: str) -> None:
-        """Send email via SMTP."""
+        """Send email via SMTP.
+
+        Resolves SMTP credentials from the secret store using
+        channel_config["secret_key"].
+        """
         reply_to = channel_config.get("reply_to")
         if not reply_to:
             logger.error("No reply_to address in channel config")
             return
 
+        smtp_creds = await self._resolve_smtp_credentials(channel_config)
+        if not smtp_creds:
+            logger.error("Cannot resolve SMTP credentials — set secret_key in channel_origin")
+            return
+
         subject = channel_config.get("subject", "Agent Update")
-        from_addr = channel_config.get("from_address", self.from_address)
+        from_addr = smtp_creds.get("from_address", "agent@agentarea.local")
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -120,14 +124,15 @@ class EmailAdapter:
             import aiosmtplib
 
             smtp_kwargs: dict[str, Any] = {
-                "hostname": channel_config.get("smtp_host", self.smtp_host),
-                "port": channel_config.get("smtp_port", self.smtp_port),
+                "hostname": smtp_creds.get("smtp_host", "localhost"),
+                "port": smtp_creds.get("smtp_port", 25),
             }
-            if self.use_tls:
+            if smtp_creds.get("use_tls"):
                 smtp_kwargs["use_tls"] = True
-            if self.username:
-                smtp_kwargs["username"] = self.username
-                smtp_kwargs["password"] = self.password
+            username = smtp_creds.get("username")
+            if username:
+                smtp_kwargs["username"] = username
+                smtp_kwargs["password"] = smtp_creds.get("password", "")
 
             await aiosmtplib.send(msg, **smtp_kwargs)
             logger.info("Email sent to %s: %s", reply_to, subject)
@@ -135,6 +140,28 @@ class EmailAdapter:
             logger.error("aiosmtplib not installed — cannot send email")
         except Exception as e:
             logger.error("Email send failed: %s", e)
+
+    async def _resolve_smtp_credentials(self, channel_config: dict[str, Any]) -> dict[str, Any] | None:
+        """Resolve SMTP credentials from the secret store.
+
+        Secret name is derived: channel_cred:{type}:{trigger_id}
+        """
+        if not self._secret_manager:
+            logger.error("No secret_manager configured on EmailAdapter")
+            return None
+
+        trigger_id = channel_config.get("trigger_id")
+        if not trigger_id:
+            logger.error("No trigger_id in channel_config — cannot resolve credentials")
+            return None
+
+        secret_name = f"channel_cred:{channel_config.get('type', 'email')}:{trigger_id}"
+        raw = await self._secret_manager.get_secret(secret_name)
+        if not raw:
+            logger.error("Secret %s not found in store", secret_name)
+            return None
+
+        return json.loads(raw)
 
 
 def _escape_html(text: str) -> str:
@@ -172,12 +199,9 @@ def _html_to_plain(html: str) -> str:
 
 
 def create_email_adapter(
-    smtp_host: str = "localhost",
-    smtp_port: int = 25,
-    from_address: str = "agent@agentarea.local",
-    **kwargs: Any,
+    secret_manager: BaseSecretManager | None = None,
 ) -> EmailAdapter:
     """Create and register an email adapter."""
-    adapter = EmailAdapter(smtp_host=smtp_host, smtp_port=smtp_port, from_address=from_address, **kwargs)
+    adapter = EmailAdapter(secret_manager=secret_manager)
     register_adapter("email", adapter)
     return adapter

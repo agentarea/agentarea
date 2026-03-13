@@ -1,5 +1,6 @@
 """Tests for channel adapters and router."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -22,8 +23,16 @@ class TestTelegramAdapter:
     """Test Telegram outbound adapter."""
 
     @pytest.fixture
-    def adapter(self):
-        return TelegramAdapter(bot_token="test-token")
+    def secret_manager(self):
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(
+            return_value=json.dumps({"bot_token": "test-token"})  # noqa: S106
+        )
+        return sm
+
+    @pytest.fixture
+    def adapter(self, secret_manager):
+        return TelegramAdapter(secret_manager=secret_manager)
 
     def test_format_workflow_completed(self, adapter):
         event = {"event_type": "WorkflowCompleted", "data": {"result": "Done!"}}
@@ -53,7 +62,7 @@ class TestTelegramAdapter:
 
     @pytest.mark.asyncio
     async def test_send_calls_bot_api(self, adapter):
-        channel_config = {"chat_id": "12345", "bot_token": "test-token"}
+        channel_config = {"type": "telegram", "trigger_id": "test-trigger", "chat_id": "12345"}
         with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
             mock_resp = AsyncMock()
@@ -72,15 +81,16 @@ class TestTelegramAdapter:
             assert kwargs["json"]["text"] == "Hello"
 
     @pytest.mark.asyncio
-    async def test_send_no_token_logs_error(self, adapter):
-        adapter.bot_token = None
+    async def test_send_no_secret_key_logs_error(self):
+        """Without secret_key, send logs error and returns."""
+        adapter = TelegramAdapter()
         channel_config = {"chat_id": "12345"}
         # Should not raise, just log
         await adapter.send(channel_config, "Hello")
 
     @pytest.mark.asyncio
     async def test_send_no_chat_id_logs_error(self, adapter):
-        channel_config = {"bot_token": "test-token"}
+        channel_config = {"type": "telegram", "trigger_id": "test-trigger"}
         await adapter.send(channel_config, "Hello")
 
     def test_escape_md(self):
@@ -94,7 +104,7 @@ class TestEmailAdapter:
 
     @pytest.fixture
     def adapter(self):
-        return EmailAdapter(smtp_host="localhost", smtp_port=25)
+        return EmailAdapter()
 
     def test_format_workflow_completed(self, adapter):
         event = {"event_type": "WorkflowCompleted", "data": {"result": "Report generated"}}
@@ -193,7 +203,7 @@ class TestAdapterRegistry:
         assert "listed_adapter" in names
 
     def test_create_telegram_adapter_registers(self):
-        adapter = create_telegram_adapter("token123")
+        adapter = create_telegram_adapter()
         assert isinstance(adapter, TelegramAdapter)
         assert get_adapter("telegram") is adapter
 

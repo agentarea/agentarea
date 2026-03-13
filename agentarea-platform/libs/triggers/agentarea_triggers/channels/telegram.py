@@ -1,11 +1,17 @@
 """Telegram channel adapter for outbound message delivery."""
 
+from __future__ import annotations
+
+import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from . import register_adapter
+
+if TYPE_CHECKING:
+    from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +25,13 @@ class TelegramAdapter:
     Inbound is handled by the existing Telegram webhook parser.
     This adapter handles outbound: formatting events and sending via Bot API.
 
-    Requires TELEGRAM_BOT_TOKEN in the channel config or environment.
+    Credentials (bot_token) are resolved from the secret store via
+    channel_config["secret_key"]. The secret store holds a JSON blob
+    like {"bot_token": "123:ABC"}.
     """
 
-    def __init__(self, bot_token: str | None = None):
-        self.bot_token = bot_token
+    def __init__(self, secret_manager: BaseSecretManager | None = None):
+        self._secret_manager = secret_manager
 
     def format(self, event: dict[str, Any], presentation: str) -> str:
         """Format a workflow event for Telegram.
@@ -67,10 +75,13 @@ class TelegramAdapter:
         return f"\u2139\ufe0f {_escape_md(event_type)}"
 
     async def send(self, channel_config: dict[str, Any], message: str) -> None:
-        """Send message via Telegram Bot API."""
-        token = channel_config.get("bot_token") or self.bot_token
+        """Send message via Telegram Bot API.
+
+        Resolves bot_token from the secret store using channel_config["secret_key"].
+        """
+        token = await self._resolve_bot_token(channel_config)
         if not token:
-            logger.error("No Telegram bot token configured")
+            logger.error("No Telegram bot token — set secret_key in channel_origin")
             return
 
         chat_id = channel_config.get("chat_id")
@@ -107,6 +118,29 @@ class TelegramAdapter:
         except httpx.HTTPError as e:
             logger.error("Telegram send failed: %s", e)
 
+    async def _resolve_bot_token(self, channel_config: dict[str, Any]) -> str | None:
+        """Resolve bot token from the secret store.
+
+        Secret name is derived: channel_cred:{type}:{trigger_id}
+        """
+        if not self._secret_manager:
+            logger.error("No secret_manager configured on TelegramAdapter")
+            return None
+
+        trigger_id = channel_config.get("trigger_id")
+        if not trigger_id:
+            logger.error("No trigger_id in channel_config — cannot resolve credentials")
+            return None
+
+        secret_name = f"channel_cred:{channel_config.get('type', 'telegram')}:{trigger_id}"
+        raw = await self._secret_manager.get_secret(secret_name)
+        if not raw:
+            logger.error("Secret %s not found in store", secret_name)
+            return None
+
+        creds = json.loads(raw)
+        return creds.get("bot_token")
+
 
 def _escape_md(text: str) -> str:
     """Escape special characters for Telegram MarkdownV2."""
@@ -124,8 +158,10 @@ def _strip_md(text: str) -> str:
     return text.replace("*", "").replace("_", "").replace("\\", "")
 
 
-def create_telegram_adapter(bot_token: str | None = None) -> TelegramAdapter:
+def create_telegram_adapter(
+    secret_manager: BaseSecretManager | None = None,
+) -> TelegramAdapter:
     """Create and register a Telegram adapter."""
-    adapter = TelegramAdapter(bot_token)
+    adapter = TelegramAdapter(secret_manager=secret_manager)
     register_adapter("telegram", adapter)
     return adapter

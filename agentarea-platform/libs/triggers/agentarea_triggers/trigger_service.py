@@ -54,8 +54,10 @@ class TriggerService:
         task_service: Any | None = None,
         llm_condition_evaluator: LLMConditionEvaluator | None = None,
         temporal_schedule_manager: TemporalScheduleManager | None = None,
+        secret_manager: Any | None = None,  # BaseSecretManager for channel credentials
     ):
         """Initialize with repository factory, event broker, and optional dependencies."""
+        self._secret_manager = secret_manager
         # Create repositories using factory
         self.trigger_repository = repository_factory.create_repository(TriggerRepository)
         self.trigger_execution_repository = repository_factory.create_repository(
@@ -1181,7 +1183,12 @@ class TriggerService:
         """
         # If extractor already provided channel_origin, use it
         if trigger_data.get("channel_origin"):
-            return trigger_data["channel_origin"]
+            origin = trigger_data["channel_origin"]
+            # Ensure trigger_id is set for credential lookup
+            origin.setdefault("trigger_id", str(trigger.id))
+            return origin
+
+        trigger_id = str(trigger.id)
 
         # Build channel_origin from webhook trigger data
         if isinstance(trigger, WebhookTrigger):
@@ -1194,6 +1201,7 @@ class TriggerService:
                 if chat_id:
                     return {
                         "type": "telegram",
+                        "trigger_id": trigger_id,
                         "chat_id": str(chat_id),
                         "message_id": trigger_data.get("message_id"),
                         "user_display_name": trigger_data.get("username", ""),
@@ -1205,6 +1213,7 @@ class TriggerService:
                 if channel_id:
                     return {
                         "type": "slack",
+                        "trigger_id": trigger_id,
                         "channel_id": channel_id,
                         "thread_ts": trigger_data.get("thread_ts") or trigger_data.get("ts"),
                         "user_display_name": trigger_data.get("user_name", ""),
@@ -1216,6 +1225,7 @@ class TriggerService:
                 if channel_id:
                     return {
                         "type": "discord",
+                        "trigger_id": trigger_id,
                         "channel_id": channel_id,
                         "message_id": trigger_data.get("id"),
                         "presentation": "concise",

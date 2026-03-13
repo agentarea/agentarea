@@ -379,6 +379,7 @@ async def get_trigger_service(
         task_service=task_service,
         llm_condition_evaluator=llm_condition_evaluator,
         temporal_schedule_manager=temporal_schedule_manager,
+        secret_manager=secret_manager,
     )
 
 

@@ -16,12 +16,14 @@ Key endpoints:
 - GET /triggers/{trigger_id}/status - Get trigger status and schedule info
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
+    BaseSecretManagerDep,
     get_trigger_health_check,
     get_trigger_service,
 )
@@ -79,8 +81,11 @@ class TriggerResponse(BaseModel):
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
 
+    # Channel credentials indicator (actual credentials never returned)
+    has_channel_credentials: bool = False
+
     @classmethod
-    def from_domain_model(cls, trigger: Any) -> "TriggerResponse":
+    def from_domain_model(cls, trigger: Any, has_channel_credentials: bool = False) -> "TriggerResponse":
         """Create response from domain model."""
         if not TRIGGERS_AVAILABLE:
             # Return mock response when triggers not available
@@ -142,6 +147,8 @@ class TriggerResponse(BaseModel):
                     "webhook_config": trigger.webhook_config,
                 }
             )
+
+        response_data["has_channel_credentials"] = has_channel_credentials
 
         return cls(**response_data)
 
@@ -215,6 +222,13 @@ class TriggerCreateRequest(BaseModel):
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: dict[str, Any] | None = None
 
+    # Channel credentials — stored encrypted, never returned in responses
+    channel_credentials: dict[str, Any] | None = Field(
+        None,
+        description="Channel credentials (bot_token, SMTP password, etc). "
+        "Stored encrypted in the secret store. Never returned in responses.",
+    )
+
     @field_validator("trigger_type")
     @classmethod
     def validate_trigger_type(cls, v: str) -> str:
@@ -249,6 +263,12 @@ class TriggerUpdateRequest(BaseModel):
     # Cron-specific fields
     cron_expression: str | None = None
     timezone: str | None = None
+
+    # Channel credentials — stored encrypted, never returned in responses
+    channel_credentials: dict[str, Any] | None = Field(
+        None,
+        description="Channel credentials to update. Pass to rotate credentials.",
+    )
 
     # Webhook-specific fields
     allowed_methods: list[str] | None = None
@@ -337,6 +357,17 @@ def _check_triggers_availability():
         )
 
 
+async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) -> bool:
+    """Check if channel credentials exist for a trigger."""
+    channel_type = "generic"
+    if hasattr(trigger, "webhook_type"):
+        wt = trigger.webhook_type
+        channel_type = wt.value if hasattr(wt, "value") else str(wt)
+    secret_name = f"channel_cred:{channel_type}:{trigger_id}"
+    raw = await secret_manager.get_secret(secret_name)
+    return raw is not None
+
+
 def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) -> Any:
     """Convert API request to domain model for creation."""
     if not TRIGGERS_AVAILABLE:
@@ -405,16 +436,21 @@ async def create_trigger(
     request: TriggerCreateRequest,
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    secret_manager: BaseSecretManagerDep = None,
 ) -> TriggerResponse:
     """Create a new trigger.
 
     Creates a new trigger with the specified configuration. The trigger will be
     validated and, if it's a cron trigger, automatically scheduled.
 
+    If channel_credentials are provided, they are stored encrypted in the secret
+    store under key ``channel_cred:{webhook_type}:{trigger_id}``.
+
     Args:
         request: Trigger creation request data
         auth_context: Authentication context
         trigger_service: Injected trigger service
+        secret_manager: Injected secret manager for credential storage
 
     Returns:
         The created trigger
@@ -434,9 +470,18 @@ async def create_trigger(
         # Create trigger
         trigger = await trigger_service.create_trigger(trigger_data)
 
+        # Store channel credentials if provided
+        has_creds = False
+        if request.channel_credentials and secret_manager:
+            channel_type = request.webhook_type or "generic"
+            secret_name = f"channel_cred:{channel_type}:{trigger.id}"
+            await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
+            has_creds = True
+            logger.info(f"Stored channel credentials for trigger {trigger.id}")
+
         logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
 
-        return TriggerResponse.from_domain_model(trigger)
+        return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
 
     except TriggerValidationError as e:
         logger.warning(f"Trigger validation failed: {e}")
@@ -600,17 +645,20 @@ async def update_trigger(
     request: TriggerUpdateRequest,
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    secret_manager: BaseSecretManagerDep = None,
 ) -> TriggerResponse:
     """Update an existing trigger.
 
     Updates the specified trigger with the provided data. Only non-null fields
-    in the request will be updated.
+    in the request will be updated. If channel_credentials are provided,
+    they replace the existing credentials in the secret store.
 
     Args:
         trigger_id: The unique identifier of the trigger
         request: Trigger update request data
         auth_context: Authentication context
         trigger_service: Injected trigger service
+        secret_manager: Injected secret manager for credential storage
 
     Returns:
         The updated trigger
@@ -627,9 +675,25 @@ async def update_trigger(
         # Update trigger
         updated_trigger = await trigger_service.update_trigger(trigger_id, trigger_update)
 
+        # Update channel credentials if provided
+        has_creds = False
+        if request.channel_credentials and secret_manager:
+            # Determine channel type from the updated trigger
+            channel_type = "generic"
+            if hasattr(updated_trigger, "webhook_type"):
+                wt = updated_trigger.webhook_type
+                channel_type = wt.value if hasattr(wt, "value") else str(wt)
+            secret_name = f"channel_cred:{channel_type}:{trigger_id}"
+            await secret_manager.set_secret(secret_name, json.dumps(request.channel_credentials))
+            has_creds = True
+            logger.info(f"Updated channel credentials for trigger {trigger_id}")
+        elif secret_manager:
+            # Check if credentials already exist
+            has_creds = await _has_credentials(secret_manager, updated_trigger, trigger_id)
+
         logger.info(f"Updated trigger {trigger_id}")
 
-        return TriggerResponse.from_domain_model(updated_trigger)
+        return TriggerResponse.from_domain_model(updated_trigger, has_channel_credentials=has_creds)
 
     except TriggerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

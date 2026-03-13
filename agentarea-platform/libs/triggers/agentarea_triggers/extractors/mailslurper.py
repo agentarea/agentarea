@@ -83,6 +83,7 @@ class MailSlurperExtractor:
             )
 
         # Build channel origin for reply routing
+        # trigger_id is set by TriggerService._build_channel_origin
         first_email = new_emails[0]
         channel_origin = {
             "type": "email",
