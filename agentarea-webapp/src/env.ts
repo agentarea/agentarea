@@ -5,16 +5,15 @@ export const env = createEnv({
   server: {
     ORY_ADMIN_URL: z.string().url(),
     ORY_SDK_URL: z.string().url(),
+    ORY_BROWSER_URL: z.string().url().optional(),
     API_URL: z.string().url(),
   },
-  client: {
-    NEXT_PUBLIC_ORY_SDK_URL: z.string().url().optional(),
-  },
+  client: {},
   runtimeEnv: {
     ORY_ADMIN_URL: process.env.ORY_ADMIN_URL,
     ORY_SDK_URL: process.env.ORY_SDK_URL,
+    ORY_BROWSER_URL: process.env.ORY_BROWSER_URL,
     API_URL: process.env.API_URL,
-    NEXT_PUBLIC_ORY_SDK_URL: process.env.NEXT_PUBLIC_ORY_SDK_URL,
   },
   skipValidation: true,
 });

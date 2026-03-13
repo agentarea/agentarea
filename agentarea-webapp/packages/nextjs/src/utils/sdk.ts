@@ -2,10 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Gets environment variable, prioritizing the NEXT_PUBLIC_ prefixed version
+ * Gets environment variable, prioritizing the non-prefixed version on the server
+ * so that in-cluster URLs are used for server-side requests.
  */
 function getEnv(name: string): string | undefined {
-  return process.env[`NEXT_PUBLIC_${name}`] || process.env[name]
+  if (typeof window !== "undefined") {
+    // Check runtime config injected via window.__ENV__ in layout
+    if (name === "ORY_SDK_URL" && (window as any).__ENV__?.CLIENT_ORY_SDK_URL) {
+      return (window as any).__ENV__.CLIENT_ORY_SDK_URL
+    }
+    return process.env[name]
+  }
+  return process.env[name]
 }
 
 export function orySdkUrl() {
