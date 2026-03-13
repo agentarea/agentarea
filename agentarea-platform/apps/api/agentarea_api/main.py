@@ -202,7 +202,6 @@ async def app_lifespan(app: FastAPI):
 @asynccontextmanager
 async def combined_lifespan(app: FastAPI):
     """Combined lifespan for app and FastAPI-MCP server."""
-    # Run app lifespan - FastAPI-MCP is integrated directly
     async with app_lifespan(app):
         yield
 
@@ -255,17 +254,25 @@ def create_app() -> FastAPI:
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(protected_v1_router, tags=["v1"])
 
-    # mcp_server = FastApiMCP(
-    #     app,
-    #     auth_config=AuthConfig(
-    #         dependencies=[Depends(verify_mcp_auth)],
-    #     ),
-    # )
-    # # Mount HTTP MCP server at /mcp endpoint
-    # # Accepts JSON-RPC 2.0 requests with streamable-http transport
-    # mcp_server.mount_http()
+    # Mount MCP Streamable HTTP server at /mcp
+    # Auto-exposes all FastAPI endpoints as MCP tools via fastapi-mcp
+    from fastapi import Depends
+    from fastapi_mcp import AuthConfig, FastApiMCP
 
-    logger.info("FastAPI-MCP server mounted at /mcp with authentication enabled")
+    from agentarea_common.auth.dependencies import get_user_context
+
+    mcp_server = FastApiMCP(
+        app,
+        name="AgentArea",
+        description="AgentArea platform — agents, tasks, MCP servers, tools",
+        auth_config=AuthConfig(
+            dependencies=[Depends(get_user_context)],
+        ),
+        headers=["authorization", "x-workspace-id"],
+    )
+    mcp_server.mount_http()
+
+    logger.info("MCP Streamable HTTP server mounted at /mcp")
 
     # Register workspace error handlers
     register_workspace_error_handlers(app)

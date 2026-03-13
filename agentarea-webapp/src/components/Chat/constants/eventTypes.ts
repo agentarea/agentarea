@@ -20,6 +20,10 @@ export const EVENT_TOOL_CALL_STARTED = "ToolCallStarted";
 export const EVENT_TOOL_CALL_COMPLETED = "ToolCallCompleted";
 export const EVENT_TOOL_CALL_FAILED = "ToolCallFailed";
 
+// Context events
+export const EVENT_CONTEXT_WARNING = "ContextWarning";
+export const EVENT_CONTEXT_COMPACTED = "ContextCompacted";
+
 // System events
 export const EVENT_CONNECTED = "connected";
 export const EVENT_TASK_CREATED = "task_created";
@@ -47,6 +51,10 @@ export const CANONICAL_EVENT_TYPES = {
   TOOL_CALL_STARTED: EVENT_TOOL_CALL_STARTED,
   TOOL_CALL_COMPLETED: EVENT_TOOL_CALL_COMPLETED,
   TOOL_CALL_FAILED: EVENT_TOOL_CALL_FAILED,
+
+  // Context
+  CONTEXT_WARNING: EVENT_CONTEXT_WARNING,
+  CONTEXT_COMPACTED: EVENT_CONTEXT_COMPACTED,
 
   // System
   CONNECTED: EVENT_CONNECTED,

@@ -4,10 +4,16 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
+from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
+    from .context_manager import (
+        ContextWindowManager,
+        find_compaction_boundary,
+        validate_tool_pairs,
+    )
     from .helpers import (
         BudgetTracker,
         EventManager,
@@ -18,6 +24,7 @@ with workflow.unsafe.imports_passed_through():
     from .models import (
         AgentExecutionState,
         AgentGoal,
+        ContinueAsNewState,
         Message,
         ToolCall,
     )
@@ -27,9 +34,15 @@ from ..models import (
     AgentConfigResult,
     AgentExecutionRequest,
     AgentExecutionResult,
+    CompactMessagesRequest,
+    CompactMessagesResult,
     LLMCallRequest,
     LLMCallResult,
     MCPToolRequest,
+    RecallHistoryRequest,
+    RecallHistoryResult,
+    ResolveAgentToolsRequest,
+    ResolveAgentToolsResult,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     WorkflowEventsRequest,
@@ -37,8 +50,10 @@ from ..models import (
 from .constants import (
     ACTIVITY_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
+    DELEGATION_TIMEOUT,
     EVENT_PUBLISH_RETRY_ATTEMPTS,
     EVENT_PUBLISH_TIMEOUT,
+    HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
     MAX_ITERATIONS,
     TOOL_EXECUTION_TIMEOUT,
@@ -56,8 +71,11 @@ class AgentExecutionWorkflow:
         self.state = AgentExecutionState()
         self.event_manager: EventManager | None = None
         self.budget_tracker: BudgetTracker | None = None
+        self.context_manager: ContextWindowManager | None = None
         self._paused = False
         self._pause_reason = ""
+        # Maps sanitized agent tool names to their config (type=agent entries)
+        self._agent_tool_registry: dict[str, dict] = {}
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -118,6 +136,11 @@ class AgentExecutionWorkflow:
     async def _initialize_workflow(self, request: AgentExecutionRequest) -> None:
         """Initialize workflow state and dependencies."""
         workflow.logger.info(f"Initializing workflow for agent {request.agent_id}")
+
+        # Check if this is a continue-as-new restart
+        if request.continued_state:
+            await self._restore_from_continued_state(request.continued_state)
+            return
 
         # Populate state attributes
         self.state.execution_id = workflow.info().workflow_id
@@ -181,6 +204,10 @@ class AgentExecutionWorkflow:
         except AttributeError:
             self.state.agent_config = dict(agent_config_result)
 
+        # Store context window in state and initialize context manager
+        self.state.context_window = self.state.agent_config.get("context_window", 128000)
+        self.context_manager = ContextWindowManager(self.state.context_window)
+
         # Validate configuration
         if not StateValidator.validate_agent_config(self.state.agent_config):
             raise ApplicationError("Invalid agent configuration")
@@ -216,10 +243,207 @@ class AgentExecutionWorkflow:
                     except Exception:  # noqa: S110
                         pass
 
+        # Inject built-in recall_history tool for querying past execution context
+        available_tools.append({
+            "type": "function",
+            "function": {
+                "name": "recall_history",
+                "description": (
+                    "Recall context from past executions of this task. "
+                    "Use when you need information that may have been compacted "
+                    "out of the current conversation, or to review what happened "
+                    "in earlier execution attempts."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Optional search query to describe what you're looking for",
+                        },
+                        "event_types": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Filter by event types (e.g. ToolCallCompleted, LLMCallCompleted)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max events to return (default 20)",
+                        },
+                    },
+                },
+            },
+        })
+
         self.state.available_tools = available_tools
 
         if not StateValidator.validate_tools(self.state.available_tools):
             raise ApplicationError("Invalid tools configuration")
+
+        # Resolve agent tools for workflow-level delegation
+        await self._resolve_agent_tools()
+
+    async def _resolve_agent_tools(self) -> None:
+        """Build agent tool registry by resolving agent names to IDs.
+
+        Identifies agent-type tools from config and resolves their IDs
+        so the workflow can start child workflows directly instead of
+        routing through the activity-level polling delegation.
+        """
+        tools_config = self.state.agent_config.get("tools", [])
+        agent_names = [
+            tc.get("name")
+            for tc in tools_config
+            if isinstance(tc, dict) and tc.get("type") == "agent" and tc.get("name")
+        ]
+
+        if not agent_names:
+            return
+
+        resolve_request = ResolveAgentToolsRequest(
+            agent_names=agent_names,
+            workspace_id=self.state.workspace_id,
+            user_context_data=self.state.user_context_data,
+        )
+
+        result: ResolveAgentToolsResult = await workflow.execute_activity(
+            Activities.RESOLVE_AGENT_TOOLS,
+            args=[resolve_request],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
+
+        # Build registry: sanitized tool name → {agent_id, agent_name, config}
+        import re
+        for agent_name, agent_id in result.agent_map.items():
+            sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", agent_name)
+            sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+            if not sanitized or sanitized[0].isdigit():
+                sanitized = f"agent_{sanitized}"
+            tool_name = f"delegate_to_{sanitized}"
+
+            self._agent_tool_registry[tool_name] = {
+                "agent_id": agent_id,
+                "agent_name": agent_name,
+            }
+
+        if self._agent_tool_registry:
+            workflow.logger.info(
+                f"Registered {len(self._agent_tool_registry)} agent tools for delegation: "
+                f"{list(self._agent_tool_registry.keys())}"
+            )
+
+    async def _restore_from_continued_state(self, continued_state: dict) -> None:
+        """Restore workflow state from a continue-as-new restart."""
+        workflow.logger.info("Restoring workflow from continue-as-new state")
+
+        state = ContinueAsNewState(**continued_state)
+
+        self.state.execution_id = state.execution_id
+        self.state.agent_id = state.agent_id
+        self.state.task_id = state.task_id
+        self.state.user_id = state.user_id
+        self.state.workspace_id = state.workspace_id
+        self.state.goal = state.goal
+        self.state.agent_config = state.agent_config
+        self.state.available_tools = state.available_tools
+        self.state.current_iteration = state.current_iteration
+        self.state.budget_usd = state.budget_usd
+        self.state.context_window = state.context_window
+        self.state.user_context_data = state.user_context_data
+        self.state.status = ExecutionStatus.EXECUTING
+
+        # Restore messages from compacted dicts
+        self.state.messages = [Message(**msg) for msg in state.messages]
+
+        # Restore agent tool registry for delegation routing
+        self._agent_tool_registry = state.agent_tool_registry
+
+        # Initialize helpers with restored cost
+        self.event_manager = EventManager(
+            task_id=self.state.task_id,
+            agent_id=self.state.agent_id,
+            execution_id=self.state.execution_id,
+        )
+        self.budget_tracker = BudgetTracker(self.state.budget_usd)
+        self.budget_tracker.add_cost(state.total_cost)
+        self.context_manager = ContextWindowManager(self.state.context_window)
+
+        workflow.logger.info(
+            f"Restored from run {state.continued_from_run_id}, "
+            f"iteration {state.current_iteration}, "
+            f"cost ${state.total_cost:.4f}, "
+            f"{len(self.state.messages)} messages, "
+            f"{len(self._agent_tool_registry)} agent tools"
+        )
+
+    async def _continue_as_new(self) -> None:
+        """Compact messages and continue workflow with fresh event history."""
+        workflow.logger.info(
+            f"Continue-as-new triggered at iteration {self.state.current_iteration}, "
+            f"event history suggests reset"
+        )
+
+        # Compact messages before carrying state forward
+        await self._compact_context_if_needed()
+
+        # Serialize messages to dicts
+        messages_dict = [
+            MessageBuilder.normalize_message_dict({
+                "role": msg.role,
+                "content": msg.content,
+                "tool_call_id": msg.tool_call_id,
+                "name": msg.name,
+                "tool_calls": msg.tool_calls,
+            })
+            for msg in self.state.messages
+        ]
+
+        continued_state = ContinueAsNewState(
+            execution_id=self.state.execution_id,
+            agent_id=self.state.agent_id,
+            task_id=self.state.task_id,
+            user_id=self.state.user_id,
+            workspace_id=self.state.workspace_id,
+            goal=self.state.goal,
+            messages=messages_dict,
+            agent_config=self.state.agent_config,
+            available_tools=self.state.available_tools,
+            current_iteration=self.state.current_iteration,
+            total_cost=self.budget_tracker.cost,
+            budget_usd=self.state.budget_usd,
+            context_window=self.state.context_window,
+            user_context_data=self.state.user_context_data,
+            continued_from_run_id=workflow.info().run_id,
+            agent_tool_registry=self._agent_tool_registry,
+        )
+
+        # Publish event before continuing (persisted in DB via tier 2)
+        self.event_manager.add_event(
+            EventTypes.WORKFLOW_CONTINUED_AS_NEW,
+            {
+                "iteration": self.state.current_iteration,
+                "total_cost": self.budget_tracker.cost,
+                "messages_carried": len(self.state.messages),
+                "continued_from_run_id": workflow.info().run_id,
+                "reason": "Temporal event history size limit approaching",
+            },
+        )
+        await self._publish_events_immediately()
+
+        # Build new request with continued state
+        new_request = AgentExecutionRequest(
+            task_id=UUID(self.state.task_id),
+            agent_id=UUID(self.state.agent_id),
+            user_id=self.state.user_id,
+            workspace_id=self.state.workspace_id,
+            task_query=self.state.goal.description if self.state.goal else "",
+            max_reasoning_iterations=self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS,
+            budget_usd=self.state.budget_usd,
+            continued_state=continued_state.model_dump(),
+        )
+
+        workflow.continue_as_new(args=[new_request])
 
     async def _execute_main_loop(self) -> dict[str, Any]:
         """Main execution loop with dynamic termination conditions."""
@@ -253,6 +477,11 @@ class AgentExecutionWorkflow:
                     f"Stopping execution after iteration {self.state.current_iteration}: {reason}"
                 )
                 break
+
+            # Check if Temporal suggests resetting event history
+            if workflow.info().is_continue_as_new_suggested():
+                await self._continue_as_new()
+                # continue_as_new raises an exception internally, so we won't reach here
 
             # Check for pause
             if self._paused:
@@ -394,6 +623,29 @@ class AgentExecutionWorkflow:
             #         Message(role="user", content=f"Status: {status_msg}")
             #     )
 
+        # Check context window and compact if needed (skip first iteration)
+        if self.context_manager and iteration > 1:
+            messages_dict_est = [
+                {"role": msg.role, "content": msg.content or ""}
+                for msg in self.state.messages
+            ]
+            estimated = self.context_manager.estimate_usage(messages_dict_est)
+            self.context_manager.update_usage(estimated)
+
+            if self.context_manager.needs_compaction():
+                await self._compact_context_if_needed()
+            elif self.context_manager.should_warn():
+                self.event_manager.add_event(
+                    EventTypes.CONTEXT_WARNING,
+                    {
+                        "iteration": self.state.current_iteration,
+                        "usage_ratio": self.context_manager.get_usage_ratio(),
+                        "message_count": len(self.state.messages),
+                    },
+                )
+                await self._publish_events_immediately()
+                self.context_manager.mark_warning_sent()
+
         # Call LLM
         llm_response = await self._call_llm()
 
@@ -447,6 +699,7 @@ class AgentExecutionWorkflow:
                 Activities.CALL_LLM,
                 args=[llm_request],
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
 
@@ -485,6 +738,12 @@ class AgentExecutionWorkflow:
                 "usage": usage_payload,
             }
             self.budget_tracker.add_cost(usage_info["cost"])
+
+            # Update context window manager with actual token usage
+            if self.context_manager and usage_payload:
+                prompt_tokens = usage_payload.get("prompt_tokens", 0)
+                if prompt_tokens > 0:
+                    self.context_manager.update_usage(prompt_tokens)
 
             self.event_manager.add_event(
                 EventTypes.LLM_CALL_COMPLETED,
@@ -565,20 +824,53 @@ class AgentExecutionWorkflow:
         await self._evaluate_goal_progress()
 
     async def _execute_tool_calls(self, tool_calls: list[ToolCall]) -> None:
-        """Execute MCP tools first, then handle completion signal if present."""
+        """Execute tools, running agent delegations in parallel.
+
+        Agent delegations are started concurrently as child workflows.
+        Regular MCP/code tools run sequentially (they may have side effects
+        that depend on execution order).
+        """
+        import asyncio
+
         completion_call = None
+        agent_calls: list[ToolCall] = []
+        regular_calls: list[ToolCall] = []
+
+        recall_calls: list[ToolCall] = []
+
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
-
             if tool_name == "completion":
-                # Defer completion until after executing all MCP tools
                 completion_call = tool_call
-                continue
+            elif tool_name == "recall_history":
+                recall_calls.append(tool_call)
+            elif tool_name in self._agent_tool_registry:
+                agent_calls.append(tool_call)
             else:
-                # Execute MCP tool
-                await self._execute_mcp_tool(tool_call)
+                regular_calls.append(tool_call)
 
-        # After executing tools, handle completion if it was present
+        # Run recall_history calls (can run in parallel with agent calls)
+        for tool_call in recall_calls:
+            await self._execute_recall_history(tool_call)
+
+        # Run agent delegations in parallel (fan-out)
+        if agent_calls:
+            if len(agent_calls) == 1:
+                await self._execute_agent_delegation(agent_calls[0])
+            else:
+                workflow.logger.info(
+                    f"Fan-out: delegating to {len(agent_calls)} agents in parallel"
+                )
+                tasks = [
+                    self._execute_agent_delegation(tc) for tc in agent_calls
+                ]
+                await asyncio.gather(*tasks)
+
+        # Run regular tools sequentially
+        for tool_call in regular_calls:
+            await self._execute_mcp_tool(tool_call)
+
+        # Handle completion last
         if completion_call:
             await self._handle_task_completion(completion_call)
 
@@ -685,6 +977,7 @@ class AgentExecutionWorkflow:
                 Activities.EXECUTE_MCP_TOOL,
                 args=[mcp_request],
                 start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
             )
 
@@ -767,6 +1060,188 @@ class AgentExecutionWorkflow:
             )
             await self._publish_events_immediately()
 
+    async def _execute_recall_history(self, tool_call: ToolCall) -> None:
+        """Execute recall_history tool via activity to query the DB event log."""
+        try:
+            tool_args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            tool_args = {}
+
+        request = RecallHistoryRequest(
+            task_id=UUID(self.state.task_id),
+            workspace_id=self.state.workspace_id,
+            query=tool_args.get("query"),
+            event_types=tool_args.get("event_types"),
+            limit=tool_args.get("limit", 20),
+            user_context_data=self.state.user_context_data,
+        )
+
+        try:
+            result: RecallHistoryResult = await workflow.execute_activity(
+                Activities.RECALL_HISTORY,
+                args=[request],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+
+            # Format events for the agent
+            if result.events:
+                content_parts = [result.summary, ""]
+                for event in result.events:
+                    content_parts.append(
+                        f"[{event.get('created_at', '')}] "
+                        f"{event.get('event_type', '')}: "
+                        f"{json.dumps(event.get('data', {}), default=str)[:500]}"
+                    )
+                content = "\n".join(content_parts)
+            else:
+                content = "No events found for this task."
+
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=content,
+                    tool_call_id=tool_call.id,
+                    name="recall_history",
+                )
+            )
+        except Exception as e:
+            workflow.logger.error(f"Recall history failed: {e}")
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Failed to recall history: {e}",
+                    tool_call_id=tool_call.id,
+                    name="recall_history",
+                )
+            )
+
+    async def _execute_agent_delegation(self, tool_call: ToolCall) -> None:
+        """Delegate to another agent via Temporal child workflow.
+
+        Instead of routing through execute_mcp_tool_activity (which polls),
+        starts a child workflow directly and awaits its result. This is
+        efficient (no polling), durable (survives worker crashes), and
+        supports cancellation propagation.
+        """
+        tool_name = tool_call.function["name"]
+        agent_info = self._agent_tool_registry[tool_name]
+        agent_id = agent_info["agent_id"]
+        agent_name = agent_info["agent_name"]
+
+        # Parse the message argument
+        try:
+            tool_args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            tool_args = {}
+
+        message = tool_args.get("message", "")
+
+        self.event_manager.add_event(
+            EventTypes.AGENT_DELEGATION_STARTED,
+            {
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "target_agent_id": agent_id,
+                "target_agent_name": agent_name,
+                "iteration": self.state.current_iteration,
+                "message": message[:200],
+            },
+        )
+        await self._publish_events_immediately()
+
+        try:
+            # Build child workflow request
+            child_request = AgentExecutionRequest(
+                task_id=UUID(self.state.task_id),
+                agent_id=UUID(agent_id),
+                user_id=self.state.user_id,
+                workspace_id=self.state.workspace_id,
+                task_query=message,
+                max_reasoning_iterations=MAX_ITERATIONS,
+                workflow_metadata={
+                    "source": "agent_delegation",
+                    "parent_execution_id": self.state.execution_id,
+                    "parent_agent_id": self.state.agent_id,
+                },
+            )
+
+            # Start child workflow and await result
+            # - execution_timeout: caps total child runtime
+            # - parent_close_policy: TERMINATE ensures child is cancelled
+            #   if the parent workflow is cancelled or completed
+            child_workflow_id = f"delegation-{self.state.execution_id}-{tool_call.id}"
+            child_result: AgentExecutionResult = await workflow.execute_child_workflow(
+                AgentExecutionWorkflow.run,
+                args=[child_request],
+                id=child_workflow_id,
+                task_queue="agent-tasks",
+                execution_timeout=DELEGATION_TIMEOUT,
+                parent_close_policy=ParentClosePolicy.TERMINATE,
+            )
+
+            # Extract result
+            if child_result.success:
+                result_text = child_result.final_response or "(Agent completed without response)"
+            else:
+                result_text = child_result.error_message or "(Agent failed without details)"
+
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=result_text,
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            )
+
+            self.event_manager.add_event(
+                EventTypes.AGENT_DELEGATION_COMPLETED,
+                {
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "target_agent_name": agent_name,
+                    "success": child_result.success,
+                    "iteration": self.state.current_iteration,
+                    "child_iterations": child_result.reasoning_iterations_used,
+                    "child_cost": child_result.total_cost,
+                },
+            )
+            await self._publish_events_immediately()
+
+            # Account for child's cost in parent budget
+            if child_result.total_cost > 0:
+                self.budget_tracker.add_cost(child_result.total_cost)
+
+            workflow.logger.info(
+                f"Agent delegation to '{agent_name}' completed "
+                f"(success={child_result.success}, cost=${child_result.total_cost:.4f})"
+            )
+
+        except Exception as e:
+            workflow.logger.error(f"Agent delegation to '{agent_name}' failed: {e}")
+
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Agent delegation failed: {e}",
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            )
+
+            self.event_manager.add_event(
+                EventTypes.AGENT_DELEGATION_FAILED,
+                {
+                    "tool_name": tool_name,
+                    "tool_call_id": tool_call.id,
+                    "target_agent_name": agent_name,
+                    "error": str(e),
+                    "iteration": self.state.current_iteration,
+                },
+            )
+            await self._publish_events_immediately()
+
     async def _evaluate_goal_progress(self) -> None:
         """Evaluate if the goal has been achieved."""
         try:
@@ -801,6 +1276,126 @@ class AgentExecutionWorkflow:
 
         except Exception as e:
             workflow.logger.warning(f"Goal evaluation failed: {e}")
+
+    async def _compact_context_if_needed(self) -> bool:
+        """Check context usage and compact if threshold exceeded.
+
+        Uses the head-and-tail strategy:
+        1. Keep system prompt (head)
+        2. Summarize middle messages via LLM
+        3. Keep recent messages (tail)
+        4. Validate tool pairs aren't broken
+
+        Returns True if compaction was performed.
+        """
+        if not self.context_manager or not self.context_manager.needs_compaction():
+            return False
+
+        workflow.logger.info(
+            f"Context compaction triggered at {self.context_manager.get_usage_ratio():.1%} usage"
+        )
+
+        # Convert messages to dict for boundary finding
+        messages_dict = [
+            MessageBuilder.normalize_message_dict({
+                "role": msg.role,
+                "content": msg.content,
+                "tool_call_id": msg.tool_call_id,
+                "name": msg.name,
+                "tool_calls": msg.tool_calls,
+            })
+            for msg in self.state.messages
+        ]
+
+        # Find safe compaction boundary
+        boundary = find_compaction_boundary(messages_dict)
+        if boundary <= 1:
+            workflow.logger.warning("No safe compaction boundary found, skipping")
+            return False
+
+        # Messages to compact: everything between system prompt and boundary
+        messages_to_compact = messages_dict[1:boundary]
+        if not messages_to_compact:
+            return False
+
+        # Call compaction activity
+        try:
+            compact_request = CompactMessagesRequest(
+                messages_to_compact=messages_to_compact,
+                model_id=self.state.agent_config.get("model_id"),
+                workspace_id=self.state.workspace_id,
+                user_context_data=self.state.user_context_data,
+            )
+
+            result: CompactMessagesResult = await workflow.execute_activity(
+                Activities.COMPACT_MESSAGES,
+                args=[compact_request],
+                start_to_close_timeout=LLM_CALL_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+
+            # Rebuild message list: system prompt + summary + kept recent messages
+            system_msg = self.state.messages[0]
+            recent_messages = list(self.state.messages[boundary:])
+
+            summary_msg = Message(
+                role="user",
+                content=f"[Previous conversation summary]\n{result.summary}",
+            )
+
+            self.state.messages = [system_msg, summary_msg, *recent_messages]
+
+            # Validate tool pairs in new message list
+            new_messages_dict = [
+                MessageBuilder.normalize_message_dict({
+                    "role": msg.role,
+                    "content": msg.content,
+                    "tool_call_id": msg.tool_call_id,
+                    "name": msg.name,
+                    "tool_calls": msg.tool_calls,
+                })
+                for msg in self.state.messages
+            ]
+            if not validate_tool_pairs(new_messages_dict):
+                workflow.logger.error("Tool pair validation failed after compaction!")
+                # Repair: drop orphaned tool results
+                tool_use_ids: set[str] = set()
+                for msg in self.state.messages:
+                    if msg.role == "assistant" and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            if isinstance(tc, dict) and tc.get("id"):
+                                tool_use_ids.add(tc["id"])
+                self.state.messages = [
+                    msg for msg in self.state.messages
+                    if not (msg.role == "tool" and msg.tool_call_id not in tool_use_ids)
+                ]
+
+            self.context_manager.mark_compacted()
+
+            # Publish compaction event
+            self.event_manager.add_event(
+                EventTypes.CONTEXT_COMPACTED,
+                {
+                    "iteration": self.state.current_iteration,
+                    "messages_compacted": result.original_message_count,
+                    "tokens_saved": result.estimated_tokens_saved,
+                    "compaction_number": self.context_manager.compaction_count,
+                    "messages_remaining": len(self.state.messages),
+                },
+            )
+            await self._publish_events_immediately()
+
+            workflow.logger.info(
+                f"Compacted {result.original_message_count} messages, "
+                f"~{result.estimated_tokens_saved} tokens saved, "
+                f"{len(self.state.messages)} messages remaining"
+            )
+            return True
+
+        except Exception as e:
+            workflow.logger.error(f"Context compaction failed: {e}")
+            return False
 
     async def _check_budget_status(self) -> None:
         """Check budget status and send warnings if needed."""
@@ -985,6 +1580,7 @@ class AgentExecutionWorkflow:
             ),
             "paused": self._paused,
             "pause_reason": self._pause_reason,
+            "context": self.context_manager.get_status() if self.context_manager else None,
         }
 
     def _tool_requires_approval(self, tool_name: str) -> bool:

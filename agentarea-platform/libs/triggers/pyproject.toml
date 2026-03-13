@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "agentarea-triggers"
 version = "0.0.8"
 description = "Trigger system functionality for AgentArea"
-license = {text = "EPL-2.0"}
+license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",

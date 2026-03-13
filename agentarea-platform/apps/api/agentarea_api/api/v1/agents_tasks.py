@@ -163,7 +163,7 @@ async def get_all_tasks(
 
     except Exception as e:
         logger.error(f"Failed to get all tasks: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve tasks: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 class TaskEvent(BaseModel):
@@ -305,7 +305,7 @@ async def create_task_for_agent_with_stream(
                 "error",
                 {
                     "agent_id": str(agent_id),
-                    "error": f"Agent validation error: {e!s}",
+                    "error": "Agent validation error",
                     "error_type": "agent_not_found",
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
@@ -317,7 +317,7 @@ async def create_task_for_agent_with_stream(
                 {
                     "task_id": str(task.id) if task else None,
                     "agent_id": str(agent_id),
-                    "error": f"Task creation failed: {e!s}",
+                    "error": "Task creation failed",
                     "error_type": "creation_failed",
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
@@ -374,7 +374,7 @@ async def create_task_for_agent_sync(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to create task for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create task: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/", response_model=list[TaskResponse])
@@ -439,7 +439,7 @@ async def list_agent_tasks(
 
     except Exception as e:
         logger.error(f"Failed to get tasks for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve tasks: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -482,7 +482,7 @@ async def get_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get task: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{task_id}/status")
@@ -522,7 +522,7 @@ async def get_agent_task_status(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get task status: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/{task_id}")
@@ -552,7 +552,7 @@ async def cancel_agent_task(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to cancel task: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{task_id}/pause")
@@ -605,7 +605,7 @@ async def pause_agent_task(
         raise
     except Exception as e:
         logger.error(f"Failed to pause task {task_id} for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to pause task: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{task_id}/resume")
@@ -661,7 +661,7 @@ async def resume_agent_task(
         raise
     except Exception as e:
         logger.error(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to resume task: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{task_id}/events", response_model=TaskEventResponse)
@@ -752,7 +752,7 @@ async def get_task_events(
 
     except Exception as e:
         logger.error(f"Failed to get task events for task {task_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get task events: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{task_id}/events/stream")
@@ -831,7 +831,7 @@ async def stream_task_events(
                         "task_id": str(task_id),
                         "agent_id": str(agent_id),
                         "execution_id": task.execution_id,
-                        "error": f"Stream error: {e!s}",
+                        "error": "Stream error",
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
                 )
@@ -851,7 +851,7 @@ async def stream_task_events(
         raise
     except Exception as e:
         logger.error(f"Failed to create SSE stream for task {task_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create event stream: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # Mock function removed - now using real database queries

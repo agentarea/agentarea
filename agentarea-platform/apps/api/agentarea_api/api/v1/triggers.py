@@ -443,7 +443,7 @@ async def create_trigger(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to create trigger: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create trigger: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/", response_model=list[TriggerResponse])
@@ -512,7 +512,7 @@ async def list_triggers(
         raise
     except Exception as e:
         logger.error(f"Failed to list triggers: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list triggers: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # Health check endpoint
@@ -591,7 +591,7 @@ async def get_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to get trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get trigger: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.put("/{trigger_id}", response_model=TriggerResponse)
@@ -638,7 +638,7 @@ async def update_trigger(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to update trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update trigger: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.delete("/{trigger_id}", status_code=204)
@@ -674,7 +674,7 @@ async def delete_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to delete trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete trigger: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{trigger_id}/enable", response_model=dict[str, Any])
@@ -720,7 +720,7 @@ async def enable_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to enable trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to enable trigger: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{trigger_id}/disable", response_model=dict[str, Any])
@@ -766,7 +766,7 @@ async def disable_trigger(
         raise
     except Exception as e:
         logger.error(f"Failed to disable trigger {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to disable trigger: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{trigger_id}/executions", response_model=ExecutionHistoryResponse)
@@ -859,7 +859,7 @@ async def get_execution_history(
     except Exception as e:
         logger.error(f"Failed to get execution history for trigger {trigger_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to get execution history: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e
 
 
@@ -911,7 +911,7 @@ async def get_trigger_status(
         raise
     except Exception as e:
         logger.error(f"Failed to get trigger status for {trigger_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get trigger status: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{trigger_id}/metrics", response_model=ExecutionMetricsResponse)
@@ -956,7 +956,7 @@ async def get_execution_metrics(
     except Exception as e:
         logger.error(f"Failed to get execution metrics for trigger {trigger_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to get execution metrics: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e
 
 
@@ -1008,7 +1008,7 @@ async def get_execution_timeline(
     except Exception as e:
         logger.error(f"Failed to get execution timeline for trigger {trigger_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to get execution timeline: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e
 
 
@@ -1066,5 +1066,5 @@ async def get_execution_correlations(
     except Exception as e:
         logger.error(f"Failed to get execution correlations for trigger {trigger_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to get execution correlations: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e

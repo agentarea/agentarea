@@ -161,7 +161,7 @@ async def get_mcp_server_templates(
         ]
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to load MCP server templates: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e
 
 
@@ -193,7 +193,7 @@ async def get_mcp_server_template(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to get MCP server template: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e
 
 
@@ -232,7 +232,7 @@ async def create_mcp_server_from_template(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to create server from template: {e!s}"
+            status_code=500, detail="Internal server error"
         ) from e
 
 
