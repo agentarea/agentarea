@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { Button } from "@/components/ui/button";
 import { listMCPServers } from "@/lib/api";
 import CreateMCPInstanceClient from "./CreateMCPInstanceClient";
 import type { MCPServer } from "../../types";
+import MCPCreateHeaderControls from "./HeaderControls";
 
 export const metadata: Metadata = {
   title: "Create MCP Instance",
@@ -27,20 +27,18 @@ export default async function CreateMCPInstancePage({
       header={{
         breadcrumb: [
           { label: t("title"), href: "/mcp-servers" },
-          { label: mcpServer ? `Create ${mcpServer.name} instance` : "Create instance" },
+          {
+            label: mcpServer
+              ? t("createInstance.breadcrumbWithName", { serverName: mcpServer.name })
+              : t("createInstance.breadcrumb"),
+          },
         ],
         description: mcpServer?.description,
         backLink: {
-          label: "Back to MCP Servers",
+          label: t("createInstance.back"),
           href: "/mcp-servers",
         },
-        controls: (
-          <div className="flex items-center gap-2 py-1">
-            <Button size="xs" type="submit" form="mcp-instance-form">
-              Create Instance
-            </Button>
-          </div>
-        ),
+        controls: <MCPCreateHeaderControls />,
       }}
     >
       {!mcpServer ? (
@@ -50,8 +48,8 @@ export default async function CreateMCPInstancePage({
               ? (serversResponse.error as any)?.detail?.[0]?.msg ||
                 (serversResponse.error as any)?.detail ||
                 (serversResponse.error as any)?.message ||
-                "Failed to load MCP servers"
-              : "MCP server spec not found"}{" "}
+                t("createInstance.errors.loadServersFailed")
+              : t("createInstance.errors.specNotFound")}{" "}
             (id: {id})
           </div>
         </div>

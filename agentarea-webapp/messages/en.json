@@ -35,6 +35,7 @@
     "close": "Close",
     "back": "Back",
     "create": "Create",
+    "optional": "Optional",
     "today": "Today",
     "yesterday": "Yesterday",
     "at": "at",
@@ -323,6 +324,58 @@
     "createCustomButton": "Add Custom Server",
     "myActiveServers": "My Active Servers",
     "browseSpecifications": "Browse MCP Specifications",
+    "createInstance": {
+      "breadcrumb": "Create instance",
+      "breadcrumbWithName": "Create {serverName} instance",
+      "back": "Back to MCP Servers",
+      "actions": {
+        "createInstance": "Create Instance",
+        "creating": "Creating...",
+        "updateInstance": "Update Instance",
+        "updating": "Updating...",
+        "forceCreate": "Force Create"
+      },
+      "defaults": {
+        "name": "{serverName} Instance",
+        "description": "Instance of {serverName}"
+      },
+      "success": {
+        "created": "Successfully created {instanceName}",
+        "valid": "Configuration is valid!"
+      },
+      "warnings": {
+        "validateFirst": "Please validate the configuration first",
+        "hasErrors": "Configuration has {count} error(s)"
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "validationFailedForceCreate": "Configuration validation failed. Use \"Force Create\" to proceed.",
+        "validateFailed": "Failed to validate configuration",
+        "createFailed": "Failed to create MCP instance",
+        "loadServersFailed": "Failed to load MCP servers",
+        "specNotFound": "MCP server spec not found",
+        "serverNotSelected": "MCP server is not selected"
+      }
+    },
+    "instanceForm": {
+      "name": "Name",
+      "namePlaceholder": "Enter instance name",
+      "description": "Description",
+      "descriptionPlaceholder": "Enter instance description",
+      "required": "Required",
+      "envVarsTitle": "Environment Variables",
+      "envVarsTooltip": "Values entered here will be passed to the MCP server container as environment variables.",
+      "envVarPlaceholder": "Enter {name}",
+      "validationTitle": "Configuration Validation",
+      "containerTitle": "Container",
+      "image": "Image",
+      "port": "Port",
+      "actions": {
+        "createInstance": "Create Instance",
+        "forceCreate": "Force Create",
+        "validate": "Validate"
+      }
+    },
     "table": {
       "name": "Name",
       "description": "Description",

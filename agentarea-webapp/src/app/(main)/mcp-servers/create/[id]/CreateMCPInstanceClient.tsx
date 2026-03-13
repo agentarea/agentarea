@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
@@ -17,6 +18,7 @@ export default function CreateMCPInstanceClient({
   server: MCPServer;
 }) {
   const router = useRouter();
+  const t = useTranslations("MCPServersPage.createInstance");
   const [instanceName, setInstanceName] = useState("");
   const [instanceDescription, setInstanceDescription] = useState("");
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
@@ -29,23 +31,25 @@ export default function CreateMCPInstanceClient({
   } | null>(null);
 
   useEffect(() => {
-    setInstanceName(`${server.name} Instance`);
-    setInstanceDescription(`Instance of ${server.name}`);
+    setInstanceName(t("defaults.name", { serverName: server.name }));
+    setInstanceDescription(t("defaults.description", { serverName: server.name }));
     const initialEnvVars: Record<string, string> = {};
     server.env_schema?.forEach((envVar) => {
       initialEnvVars[envVar.name] = envVar.default || "";
     });
     setEnvVars(initialEnvVars);
     setValidationResult(null);
-  }, [server]);
+  }, [server, t]);
 
   const createInstance = useCallback(
     async (skipValidation = false) => {
       if (!server) return;
+      if (!instanceName.trim()) {
+        toast.warning(t("errors.nameRequired"));
+        return;
+      }
       if (!skipValidation && !validationResult?.valid) {
-        toast.error(
-          'Configuration validation failed. Use "Force Create" to proceed.'
-        );
+        toast.error(t("errors.validationFailedForceCreate"));
         return;
       }
 
@@ -74,17 +78,12 @@ export default function CreateMCPInstanceClient({
         }
 
         const created = instanceResult.data as any;
-        toast.success(`Successfully created ${instanceName}`);
+        toast.success(t("success.created", { instanceName }));
 
-        if (created?.id) {
-          router.push(`/mcp-servers/${created.id}`);
-        } else {
-          router.push("/mcp-servers");
-        }
-        router.refresh();
+        router.replace("/mcp-servers");
       } catch (error) {
         const errorMessage =
-          error instanceof Error ? error.message : "Failed to create MCP instance";
+          error instanceof Error ? error.message : t("errors.createFailed");
         console.error("Instance creation error:", error);
         toast.error(errorMessage);
       } finally {
@@ -97,9 +96,22 @@ export default function CreateMCPInstanceClient({
       instanceName,
       router,
       server,
+      t,
       validationResult,
     ]
   );
+
+  useEffect(() => {
+    const form = document.getElementById("mcp-instance-form");
+    if (!form) return;
+    const handler = () => {
+      createInstance(true);
+    };
+    form.addEventListener("mcp-force-create", handler as EventListener);
+    return () => {
+      form.removeEventListener("mcp-force-create", handler as EventListener);
+    };
+  }, [createInstance]);
 
   return (
     <div className="mx-auto w-full max-w-xl">
@@ -107,6 +119,7 @@ export default function CreateMCPInstanceClient({
         formId="mcp-instance-form"
         className="overflow-auto h-full"
         hideSubmitButton
+        hideForceCreateButton
         server={server as any}
         instanceName={instanceName}
         instanceDescription={instanceDescription}
@@ -128,30 +141,33 @@ export default function CreateMCPInstanceClient({
               },
             });
             if (checkResult.error) {
-              toast.error("Failed to validate configuration");
+              toast.error(t("errors.validateFailed"));
             } else {
               const validationData = checkResult.data as any;
               setValidationResult(validationData);
-              if (validationData?.valid) toast.success("Configuration is valid!");
+              if (validationData?.valid) toast.success(t("success.valid"));
               else
                 toast.warning(
-                  `Configuration has ${validationData?.errors?.length || 0} error(s)`
+                  t("warnings.hasErrors", {
+                    count: validationData?.errors?.length || 0,
+                  })
                 );
             }
           } catch (error) {
             console.error("Validation error:", error);
-            toast.error("Failed to validate configuration");
+            toast.error(t("errors.validateFailed"));
           } finally {
             setIsChecking(false);
           }
         }}
         validateDisabled={isChecking || !instanceName.trim()}
+        validateLoading={isChecking}
         onForceCreate={() => createInstance(true)}
         forceCreateDisabled={isCreating || !instanceName.trim()}
         onSubmit={async (e) => {
           e?.preventDefault();
           if (!validationResult) {
-            toast.warning("Please validate the configuration first");
+            toast.warning(t("warnings.validateFirst"));
             return;
           }
           await createInstance(false);
@@ -161,7 +177,9 @@ export default function CreateMCPInstanceClient({
           !instanceName.trim() ||
           (validationResult ? !validationResult.valid : false)
         }
-        submitLabel={isCreating ? "Creating..." : "Create Instance"}
+        submitLabel={
+          isCreating ? t("actions.creating") : t("actions.createInstance")
+        }
         showContainerSummary
         containerImage={server.docker_image_url}
         containerPort={MCP_CONSTANTS.DEFAULT_CONTAINER_PORT}

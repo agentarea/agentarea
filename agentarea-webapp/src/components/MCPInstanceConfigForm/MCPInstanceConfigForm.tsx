@@ -1,13 +1,19 @@
 "use client";
 
 import React from "react";
-import { Info } from "lucide-react";
+import { Info, Server, FileText, ShieldCheck } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { components } from "@/api/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import FormLabel from "@/components/FormLabel/FormLabel";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
@@ -27,6 +33,7 @@ export interface MCPInstanceConfigFormProps {
   onForceCreate?: () => void;
   submitDisabled?: boolean;
   validateDisabled?: boolean;
+  validateLoading?: boolean;
   forceCreateDisabled?: boolean;
   submitLabel?: string;
   forceCreateLabel?: string;
@@ -40,6 +47,7 @@ export interface MCPInstanceConfigFormProps {
   className?: string;
   contentClassName?: string;
   hideSubmitButton?: boolean;
+  hideForceCreateButton?: boolean;
   // Optional container summary
   showContainerSummary?: boolean;
   containerImage?: string;
@@ -62,10 +70,11 @@ export default function MCPInstanceConfigForm({
   onForceCreate,
   submitDisabled,
   validateDisabled,
+  validateLoading = false,
   forceCreateDisabled,
-  submitLabel = "Create Instance",
-  forceCreateLabel = "Force Create",
-  validateLabel = "Validate",
+  submitLabel,
+  forceCreateLabel,
+  validateLabel,
   extraActions,
   formAction,
   onSubmit,
@@ -73,11 +82,13 @@ export default function MCPInstanceConfigForm({
   className,
   contentClassName,
   hideSubmitButton = false,
+  hideForceCreateButton = false,
   showContainerSummary = true,
   containerImage,
   containerPort,
   renderAsForm = true,
 }: MCPInstanceConfigFormProps) {
+  const t = useTranslations("MCPServersPage.instanceForm");
   const envSchema = Array.isArray(server?.env_schema) ? server.env_schema : [];
 
   const getErrorText = (key: string): string | undefined => {
@@ -90,6 +101,9 @@ export default function MCPInstanceConfigForm({
 
   const resolvedImage = containerImage ?? server?.docker_image_url ?? "";
   const resolvedPort = containerPort ?? 8000;
+  const resolvedSubmitLabel = submitLabel ?? t("actions.createInstance");
+  const resolvedForceCreateLabel = forceCreateLabel ?? t("actions.forceCreate");
+  const resolvedValidateLabel = validateLabel ?? t("actions.validate");
 
   const Content = (
     <div
@@ -98,13 +112,15 @@ export default function MCPInstanceConfigForm({
         contentClassName
       )}
     >
-      <div className="space-y-3">
-        <div>
-          <Label htmlFor="name">Name</Label>
+      <div className="grid gap-4">
+        <div className="grid gap-2">
+          <FormLabel htmlFor="name" icon={Server}>
+            {t("name")}
+          </FormLabel>
           <Input
             id="name"
             name="name"
-            placeholder="Enter instance name"
+            placeholder={t("namePlaceholder")}
             value={instanceName}
             onChange={(e) => onChangeName(e.target.value)}
             required
@@ -115,12 +131,14 @@ export default function MCPInstanceConfigForm({
             <p className="form-error">{getErrorText("name")}</p>
           )}
         </div>
-        <div>
-          <Label htmlFor="description">Description</Label>
+        <div className="grid gap-2">
+          <FormLabel htmlFor="description" icon={FileText} optional>
+            {t("description")}
+          </FormLabel>
           <Textarea
             id="description"
             name="description"
-            placeholder="Enter instance description"
+            placeholder={t("descriptionPlaceholder")}
             value={instanceDescription}
             onChange={(e) => onChangeDescription(e.target.value)}
             rows={2}
@@ -130,118 +148,119 @@ export default function MCPInstanceConfigForm({
       </div>
 
       {envSchema && envSchema.length > 0 && (
-        <>
-          <Separator />
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h4 className="text-sm font-medium">Environment Variables</h4>
-              <Info className="h-4 w-4 text-muted-foreground" />
+        <div className="grid gap-4">
+          <div className="flex items-center gap-2">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t("envVarsTitle")}
             </div>
-            <div className="space-y-3">
-              {envSchema.map((envVar: any) => {
-                const envName = (envVar?.name as string) || "";
-                if (!envName) return null;
-                const isRequired = Boolean(envVar?.required);
-                const description = (envVar?.description as string) || "";
-                const errorKey = `env_${envName}`;
-                return (
-                  <div key={envName} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label
-                        htmlFor={`env_${envName}`}
-                        className="text-sm font-medium"
-                      >
-                        {envName}
-                      </Label>
-                      {isRequired && (
-                        <span className="rounded bg-red-100 px-1 text-[10px] text-red-700">
-                          Required
-                        </span>
-                      )}
-                    </div>
-                    <Input
-                      id={`env_${envName}`}
-                      name={`env_${envName}`}
-                      placeholder={envVar?.default || `Enter ${envName}`}
-                      value={envVars[envName] || ""}
-                      onChange={(e) => onChangeEnvVar(envName, e.target.value)}
-                      disabled={disabled}
-                      required={isRequired}
-                      className={
-                        (isRequired && !envVars[envName]?.trim()) ||
-                        getErrorText(errorKey)
-                          ? "border-red-300"
-                          : ""
-                      }
-                    />
-                    {description && (
-                      <p className="text-xs text-muted-foreground">
-                        {description}
-                      </p>
-                    )}
-                    {getErrorText(errorKey) && (
-                      <p className="form-error">
-                        {getErrorText(errorKey)}
-                      </p>
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground transition-colors duration-300 hover:text-primary" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs">
+                  {t("envVarsTooltip")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="grid gap-4">
+            {envSchema.map((envVar: any) => {
+              const envName = (envVar?.name as string) || "";
+              if (!envName) return null;
+              const isRequired = Boolean(envVar?.required);
+              const description = (envVar?.description as string) || "";
+              const errorKey = `env_${envName}`;
+              return (
+                <div key={envName} className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <FormLabel htmlFor={`env_${envName}`}>
+                      {envName}
+                    </FormLabel>
+                    {isRequired && (
+                      <span className="rounded bg-red-100 px-1 text-[10px] text-red-700">
+                        {t("required")}
+                      </span>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                  <Input
+                    id={`env_${envName}`}
+                    name={`env_${envName}`}
+                    placeholder={envVar?.default || t("envVarPlaceholder", { name: envName })}
+                    value={envVars[envName] || ""}
+                    onChange={(e) => onChangeEnvVar(envName, e.target.value)}
+                    disabled={disabled}
+                    required={isRequired}
+                    className={
+                      (isRequired && !envVars[envName]?.trim()) ||
+                      getErrorText(errorKey)
+                        ? "border-red-300"
+                        : ""
+                    }
+                  />
+                  {description && (
+                    <p className="note">{description}</p>
+                  )}
+                  {getErrorText(errorKey) && (
+                    <p className="form-error">{getErrorText(errorKey)}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        </>
+        </div>
       )}
 
       {onValidate && (
-        <>
-          <Separator />
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-medium">Configuration Validation</h4>
-            <Button
-              variant="outline"
-              type="button"
-              onClick={onValidate}
-              disabled={!!validateDisabled}
-            >
-              {validateLabel}
-            </Button>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("validationTitle")}
           </div>
-        </>
+          <Button
+            variant="outline"
+            size="xs"
+            type="button"
+            onClick={onValidate}
+            disabled={!!validateDisabled}
+            isLoading={validateLoading}
+          >
+            {!validateLoading && <ShieldCheck />}
+            {resolvedValidateLabel}
+          </Button>
+        </div>
       )}
 
       {showContainerSummary && (
-        <>
-          <Separator />
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium">Container Configuration</h4>
-            <div className="space-y-1 rounded-lg bg-muted/50 p-3">
-              <div className="text-xs">
-                <span className="font-medium">Image:</span> {resolvedImage}
-              </div>
-              <div className="text-xs">
-                <span className="font-medium">Port:</span> {resolvedPort}
-              </div>
+        <div className="grid gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("containerTitle")}
+          </div>
+          <div className="space-y-1 rounded-lg border border-border/60 bg-muted/40 p-3 dark:border-zinc-700/60 dark:bg-zinc-900/60">
+            <div className="text-xs">
+              <span className="font-medium">{t("image")}:</span> {resolvedImage}
+            </div>
+            <div className="text-xs">
+              <span className="font-medium">{t("port")}:</span> {resolvedPort}
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      <Separator />
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {onForceCreate && (
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+        {onForceCreate && !hideForceCreateButton && (
           <Button
             variant="destructive"
             type="button"
             onClick={onForceCreate}
             disabled={!!forceCreateDisabled}
           >
-            {forceCreateLabel}
+            {resolvedForceCreateLabel}
           </Button>
         )}
         {!hideSubmitButton &&
           (renderAsForm ? (
             <Button type="submit" disabled={!!submitDisabled}>
-              {submitLabel}
+              {resolvedSubmitLabel}
             </Button>
           ) : (
             <Button
@@ -249,7 +268,7 @@ export default function MCPInstanceConfigForm({
               disabled={!!submitDisabled}
               onClick={() => onSubmit && onSubmit()}
             >
-              {submitLabel}
+              {resolvedSubmitLabel}
             </Button>
           ))}
         {extraActions}
@@ -259,12 +278,7 @@ export default function MCPInstanceConfigForm({
 
   if (renderAsForm) {
     return (
-      <form
-        id={formId}
-        action={formAction}
-        onSubmit={onSubmit}
-        className={className}
-      >
+      <form id={formId} action={formAction} onSubmit={onSubmit} className={className}>
         {Content}
       </form>
     );

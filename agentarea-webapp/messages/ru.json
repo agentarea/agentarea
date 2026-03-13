@@ -35,6 +35,7 @@
     "close": "Закрыть",
     "back": "Назад",
     "create": "Создать",
+    "optional": "Необязательно",
     "today": "Сегодня",
     "yesterday": "Вчера",
     "at": "в",
@@ -285,6 +286,58 @@
     "createCustomButton": "Добавить свой сервер",
     "myActiveServers": "Мои активные серверы",
     "browseSpecifications": "Просмотр спецификаций MCP",
+    "createInstance": {
+      "breadcrumb": "Создать инстанс",
+      "breadcrumbWithName": "Создать инстанс {serverName}",
+      "back": "Назад к MCP серверам",
+      "actions": {
+        "createInstance": "Создать",
+        "creating": "Создание...",
+        "updateInstance": "Обновить",
+        "updating": "Обновление...",
+        "forceCreate": "Создать принудительно"
+      },
+      "defaults": {
+        "name": "Инстанс {serverName}",
+        "description": "Инстанс {serverName}"
+      },
+      "success": {
+        "created": "Инстанс {instanceName} успешно создан",
+        "valid": "Конфигурация валидна!"
+      },
+      "warnings": {
+        "validateFirst": "Сначала проверьте конфигурацию",
+        "hasErrors": "В конфигурации ошибок: {count}"
+      },
+      "errors": {
+        "nameRequired": "Имя обязательно",
+        "validationFailedForceCreate": "Проверка конфигурации не пройдена. Используйте «Создать принудительно».",
+        "validateFailed": "Не удалось проверить конфигурацию",
+        "createFailed": "Не удалось создать MCP инстанс",
+        "loadServersFailed": "Не удалось загрузить MCP серверы",
+        "specNotFound": "Спецификация MCP сервера не найдена",
+        "serverNotSelected": "MCP сервер не выбран"
+      }
+    },
+    "instanceForm": {
+      "name": "Имя",
+      "namePlaceholder": "Введите имя инстанса",
+      "description": "Описание",
+      "descriptionPlaceholder": "Введите описание инстанса",
+      "required": "Обязательно",
+      "envVarsTitle": "Переменные окружения",
+      "envVarsTooltip": "Эти значения будут переданы в контейнер MCP сервера как переменные окружения.",
+      "envVarPlaceholder": "Введите {name}",
+      "validationTitle": "Проверка конфигурации",
+      "containerTitle": "Контейнер",
+      "image": "Образ",
+      "port": "Порт",
+      "actions": {
+        "createInstance": "Создать",
+        "forceCreate": "Создать принудительно",
+        "validate": "Проверить"
+      }
+    },
     "table": {
       "name": "Имя",
       "description": "Описание",
