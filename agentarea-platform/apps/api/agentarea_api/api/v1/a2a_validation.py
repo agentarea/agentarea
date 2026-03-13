@@ -76,6 +76,8 @@ class A2AValidator:
         "message/stream",
         "tasks/get",
         "tasks/cancel",
+        "tasks/resubscribe",
+        "tasks/list",
         "agent/authenticatedExtendedCard",
     }
 
@@ -166,7 +168,7 @@ class A2AValidator:
             if json_rpc_request.params:
                 cls.validate_message_send_params(json_rpc_request.params)
 
-        elif json_rpc_request.method in ["tasks/get", "tasks/cancel"]:
+        elif json_rpc_request.method in ["tasks/get", "tasks/cancel", "tasks/resubscribe"]:
             if json_rpc_request.params:
                 cls.validate_task_params(json_rpc_request.params)
 

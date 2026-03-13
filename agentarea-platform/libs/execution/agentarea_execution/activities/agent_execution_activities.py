@@ -36,6 +36,8 @@ from ..interfaces import ActivityDependencies
 from ..models import (
     AgentConfigRequest,
     AgentConfigResult,
+    CompactMessagesRequest,
+    CompactMessagesResult,
     ExecutionPlanRequest,
     ExecutionPlanResult,
     GoalEvaluationRequest,
@@ -44,6 +46,10 @@ from ..models import (
     LLMCallResult,
     MCPToolRequest,
     MCPToolResult,
+    RecallHistoryRequest,
+    RecallHistoryResult,
+    ResolveAgentToolsRequest,
+    ResolveAgentToolsResult,
     SkillFileRequest,
     SkillFileResult,
     SkillInfo,
@@ -52,6 +58,7 @@ from ..models import (
     WorkflowEventsResult,
 )
 from .event_publisher import create_event_publisher, publish_enriched_llm_error_event
+from .heartbeat import auto_heartbeater
 
 logger = logging.getLogger(__name__)
 
@@ -110,13 +117,26 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         )
                     )
 
+            # Fetch model context window from ModelSpec
+            model_id_str = request.override_model or agent.model_id
+            context_window = 128000  # default fallback
+            if model_id_str:
+                try:
+                    model_instance_service = await ctx.get_model_instance_service()
+                    model_instance = await model_instance_service.get(UUID(model_id_str))
+                    if model_instance and model_instance.model_spec:
+                        context_window = model_instance.model_spec.context_window
+                except Exception as e:
+                    logger.warning(f"Could not fetch context_window for model {model_id_str}: {e}")
+
             # Build configuration using Pydantic model
             return AgentConfigResult(
                 id=str(agent.id),
                 name=agent.name,
                 description=agent.description,
                 instruction=agent.instruction,
-                model_id=request.override_model or agent.model_id,
+                model_id=model_id_str,
+                context_window=context_window,
                 tools=agent.tools or [],
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,
@@ -143,15 +163,19 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Use tool manager to discover available tools
             tool_manager = ToolManager()
+            base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
             all_tools = await tool_manager.discover_available_tools(
                 agent_id=request.agent_id,
                 tools_config=agent.tools,
                 mcp_server_instance_service=mcp_server_instance_service,
+                agent_service=agent_service,
+                base_url=base_url,
             )
 
             return all_tools
 
     @activity.defn
+    @auto_heartbeater
     async def call_llm_activity(
         request: LLMCallRequest,
     ) -> LLMCallResult:
@@ -313,6 +337,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             ) from e
 
     @activity.defn
+    @auto_heartbeater
     async def execute_mcp_tool_activity(
         request: MCPToolRequest,
     ) -> MCPToolResult:
@@ -361,6 +386,60 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         logger.info(f"Registered code tool for execution: {tool_name}")
                     else:
                         logger.warning(f"Unknown code tool requested: {tool_name}")
+
+            # Register agent tools from configuration
+            if request.tools and isinstance(request.tools, list):
+                agent_configs = [
+                    tc
+                    for tc in request.tools
+                    if isinstance(tc, dict) and tc.get("type") == "agent"
+                ]
+                if agent_configs:
+                    base_url = os.environ.get(
+                        "API_BASE_URL", "http://localhost:8000/api/v1"
+                    )
+                    agent_service = await ctx.get_agent_service()
+
+                    # Create task service for internal delegation
+                    from agentarea_agents_sdk.tools.agent_delegation_tool import (
+                        create_task_service_for_delegation,
+                    )
+                    from agentarea_common.database import get_database
+
+                    delegation_session = get_database().async_session_factory()
+                    ctx._sessions.append(delegation_session)
+
+                    delegation_task_service = create_task_service_for_delegation(
+                        session=delegation_session,
+                        user_context=user_context,
+                        event_broker=dependencies.event_broker,
+                    )
+
+                    from agentarea_agents_sdk.tools.a2a_tool_factory import (
+                        A2AAgentToolFactory,
+                    )
+
+                    for tool_config in agent_configs:
+                        agent_name = tool_config.get("name")
+                        if not agent_name:
+                            continue
+
+                        delegation_tool = await A2AAgentToolFactory.create_tool(
+                            agent_name=agent_name,
+                            agent_service=agent_service,
+                            base_url=base_url,
+                            a2a_url_override=(tool_config.get("settings") or {}).get(
+                                "a2a_url"
+                            ),
+                            task_service=delegation_task_service,
+                            workspace_id=request.workspace_id,
+                            user_id=user_context.user_id,
+                        )
+                        if delegation_tool:
+                            tool_executor.register_tool(delegation_tool)
+                            logger.info(
+                                f"Registered agent tool for execution: {agent_name}"
+                            )
 
             try:
                 result = await tool_executor.execute_tool(
@@ -654,6 +733,223 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 error=str(e),
             )
 
+    @activity.defn
+    @auto_heartbeater
+    async def compact_messages_activity(
+        request: CompactMessagesRequest,
+    ) -> CompactMessagesResult:
+        """Summarize older messages to reduce context window usage.
+
+        Uses the same model as the agent to generate a concise summary
+        of older conversation history, preserving key decisions, tool
+        results, and reasoning.
+        """
+        try:
+            model_uuid = UUID(request.model_id)
+
+            if request.workspace_id:
+                user_context = create_system_context(request.workspace_id)
+            elif request.user_context_data:
+                user_context = create_user_context(request.user_context_data)
+            else:
+                raise ValueError("Either workspace_id or user_context_data must be provided")
+
+            async with ActivityContext(container, user_context) as ctx:
+                model_instance_service = await ctx.get_model_instance_service()
+                model_instance = await model_instance_service.get(model_uuid)
+                if not model_instance:
+                    raise ValueError(f"Model instance {request.model_id} not found")
+
+                provider_type = model_instance.provider_config.provider_spec.provider_type
+                model_name = model_instance.model_spec.model_name
+                endpoint_url = getattr(model_instance.model_spec, "endpoint_url", None)
+
+                api_key = None
+                api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
+                if api_key_secret_name:
+                    from agentarea_common.config import get_database
+
+                    secret_session = get_database().async_session_factory()
+                    try:
+                        secret_manager = dependencies.secret_manager_factory.create(
+                            session=secret_session, user_context=user_context
+                        )
+                        api_key = await secret_manager.get_secret(api_key_secret_name)
+                    finally:
+                        await secret_session.close()
+
+            docker_host = os.environ.get("LLM_DOCKER_HOST")
+            if docker_host and provider_type == "ollama_chat":
+                endpoint_url = f"http://{docker_host}:11434"
+
+            llm_model = LLMModel(
+                provider_type=provider_type,
+                model_name=model_name,
+                api_key=api_key,
+                endpoint_url=endpoint_url,
+            )
+
+            # Build compaction prompt
+            conversation_text = ""
+            for msg in request.messages_to_compact:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if msg.get("tool_calls"):
+                    tool_names = [
+                        tc.get("function", {}).get("name", "?")
+                        for tc in msg["tool_calls"]
+                        if isinstance(tc, dict)
+                    ]
+                    content += f" [Called tools: {', '.join(tool_names)}]"
+                if msg.get("name"):
+                    role = f"tool({msg['name']})"
+                conversation_text += f"[{role}]: {content}\n"
+
+            compaction_prompt = (
+                "Summarize the following conversation history concisely. Preserve:\n"
+                "1. The original task/goal\n"
+                "2. Key decisions made and reasoning\n"
+                "3. Important tool results and data obtained\n"
+                "4. Current state of progress\n"
+                "5. Any errors encountered and how they were handled\n\n"
+                "Be concise but complete. Use bullet points for key facts.\n\n"
+                f"Conversation to summarize:\n{conversation_text}"
+            )
+
+            summary_request = LLMRequest(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a conversation summarizer. Create concise, factual "
+                            "summaries that preserve all important information for "
+                            "continuing the task."
+                        ),
+                    },
+                    {"role": "user", "content": compaction_prompt},
+                ],
+                max_tokens=2000,
+            )
+
+            complete_content = ""
+            async for chunk in llm_model.ainvoke_stream(summary_request):
+                if chunk.content:
+                    complete_content += chunk.content
+
+            original_tokens = sum(
+                len(msg.get("content", "") or "") // 4 for msg in request.messages_to_compact
+            )
+            summary_tokens = len(complete_content) // 4
+
+            return CompactMessagesResult(
+                summary=complete_content,
+                original_message_count=len(request.messages_to_compact),
+                estimated_tokens_saved=max(0, original_tokens - summary_tokens),
+            )
+
+        except Exception as e:
+            logger.error(f"Message compaction failed: {e}")
+            # On failure, return a basic concatenation as fallback
+            fallback = "Previous conversation summary (compaction failed):\n"
+            for msg in request.messages_to_compact[-5:]:
+                role = msg.get("role", "?")
+                content = (msg.get("content", "") or "")[:200]
+                fallback += f"- [{role}]: {content}\n"
+
+            return CompactMessagesResult(
+                summary=fallback,
+                original_message_count=len(request.messages_to_compact),
+                estimated_tokens_saved=0,
+            )
+
+    @activity.defn
+    async def resolve_agent_tools_activity(
+        request: ResolveAgentToolsRequest,
+    ) -> ResolveAgentToolsResult:
+        """Resolve agent names to their IDs for workflow-level delegation."""
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            agent_service = await ctx.get_agent_service()
+            agent_map: dict[str, str] = {}
+
+            for agent_name in request.agent_names:
+                try:
+                    agent = await agent_service.get_by_name(agent_name)
+                    if agent:
+                        agent_map[agent_name] = str(agent.id)
+                    else:
+                        logger.warning(f"Agent '{agent_name}' not found for delegation")
+                except Exception as e:
+                    logger.error(f"Failed to resolve agent '{agent_name}': {e}")
+
+            return ResolveAgentToolsResult(agent_map=agent_map)
+
+    @activity.defn
+    async def recall_history_activity(
+        request: RecallHistoryRequest,
+    ) -> RecallHistoryResult:
+        """Recall context from past task executions via the DB event log (tier 2).
+
+        Allows agents to recover context that was compacted out of the
+        working set, or to review what happened in earlier executions.
+        """
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            task_event_service = await ctx.get_task_event_service()
+
+            try:
+                # Fetch events, optionally filtered by type
+                if request.event_types:
+                    events = []
+                    for event_type in request.event_types:
+                        type_events = await task_event_service.get_events_by_type(
+                            event_type=event_type,
+                            limit=request.limit,
+                        )
+                        events.extend(type_events)
+                    # Sort by timestamp descending, limit total
+                    events.sort(
+                        key=lambda e: e.created_at if hasattr(e, "created_at") else "",
+                        reverse=True,
+                    )
+                    events = events[: request.limit]
+                else:
+                    events = await task_event_service.get_task_events(
+                        task_id=request.task_id,
+                        limit=request.limit,
+                    )
+
+                # Serialize events to dicts
+                events_data = []
+                for event in events:
+                    event_dict = {
+                        "event_type": event.event_type,
+                        "data": event.data if hasattr(event, "data") else {},
+                        "created_at": str(event.created_at) if hasattr(event, "created_at") else "",
+                    }
+                    events_data.append(event_dict)
+
+                # Build a brief summary
+                event_type_counts: dict[str, int] = {}
+                for e in events_data:
+                    t = e.get("event_type", "unknown")
+                    event_type_counts[t] = event_type_counts.get(t, 0) + 1
+
+                summary_parts = [f"{count}x {etype}" for etype, count in event_type_counts.items()]
+                summary = f"Retrieved {len(events_data)} events: {', '.join(summary_parts)}"
+
+                return RecallHistoryResult(
+                    events=events_data,
+                    total_count=len(events_data),
+                    summary=summary,
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to recall history for task {request.task_id}: {e}")
+                return RecallHistoryResult(
+                    summary=f"Failed to recall history: {e}",
+                )
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -664,4 +960,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         evaluate_goal_progress_activity,
         publish_workflow_events_activity,
         resolve_skill_file_activity,
+        compact_messages_activity,
+        resolve_agent_tools_activity,
+        recall_history_activity,
     ]

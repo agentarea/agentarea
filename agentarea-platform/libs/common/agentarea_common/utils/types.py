@@ -18,46 +18,49 @@ class TaskState(str, Enum):
     SUBMITTED = "submitted"
     WORKING = "working"
     INPUT_REQUIRED = "input-required"
+    AUTH_REQUIRED = "auth-required"
     COMPLETED = "completed"
     CANCELED = "canceled"
     FAILED = "failed"
+    REJECTED = "rejected"
     UNKNOWN = "unknown"
 
 
 class TextPart(BaseModel):
-    type: Literal["text"] = "text"
+    kind: Literal["text"] = "text"
     text: str
     metadata: dict[str, Any] | None = None
 
 
 class FileContent(BaseModel):
-    name: str | None = None
-    mime_type: str | None = None
-    bytes: str | None = None
-    uri: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+    name: str | None = Field(None, alias="filename")
+    mime_type: str | None = Field(None, alias="mimeType")
+    data: str | None = None
+    uri: str | None = Field(None, alias="url")
 
     @model_validator(mode="after")
     def check_content(self) -> Self:
-        if not (self.bytes or self.uri):
-            raise ValueError("Either 'bytes' or 'uri' must be present in the file data")
-        if self.bytes and self.uri:
-            raise ValueError("Only one of 'bytes' or 'uri' can be present in the file data")
+        if not (self.data or self.uri):
+            raise ValueError("Either 'data' or 'uri' must be present in the file")
+        if self.data and self.uri:
+            raise ValueError("Only one of 'data' or 'uri' can be present")
         return self
 
 
 class FilePart(BaseModel):
-    type: Literal["file"] = "file"
+    kind: Literal["file"] = "file"
     file: FileContent
     metadata: dict[str, Any] | None = None
 
 
 class DataPart(BaseModel):
-    type: Literal["data"] = "data"
+    kind: Literal["data"] = "data"
     data: dict[str, Any]
     metadata: dict[str, Any] | None = None
 
 
-Part = Annotated[TextPart | FilePart | DataPart, Field(discriminator="type")]
+Part = Annotated[TextPart | FilePart | DataPart, Field(discriminator="kind")]
 
 
 class Message(BaseModel):
@@ -77,18 +80,21 @@ class TaskStatus(BaseModel):
 
 
 class Artifact(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    artifact_id: str | None = Field(None, alias="artifactId")
     name: str | None = None
     description: str | None = None
     parts: list[Part]
     metadata: dict[str, Any] | None = None
     index: int = 0
     append: bool | None = None
-    last_chunk: bool | None = None
+    last_chunk: bool | None = Field(None, alias="lastChunk")
 
 
 class Task(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     id: str
-    session_id: str | None = None
+    context_id: str | None = Field(None, alias="contextId")
     status: TaskStatus
     artifacts: list[Artifact] | None = None
     history: list[Message] | None = None
@@ -116,9 +122,11 @@ class AuthenticationInfo(BaseModel):
 
 
 class PushNotificationConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     url: str
     token: str | None = None
     authentication: AuthenticationInfo | None = None
+    webhook_secret_token: str | None = Field(None, alias="webhookSecretToken")
 
 
 class TaskIdParams(BaseModel):
@@ -127,16 +135,18 @@ class TaskIdParams(BaseModel):
 
 
 class TaskQueryParams(TaskIdParams):
-    history_length: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+    history_length: int | None = Field(None, alias="historyLength")
 
 
 class TaskSendParams(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     id: str
-    session_id: str = Field(default_factory=lambda: uuid4().hex)
+    context_id: str = Field(default_factory=lambda: uuid4().hex, alias="contextId")
     message: Message
-    accepted_output_modes: list[str] | None = None
-    push_notification: PushNotificationConfig | None = None
-    history_length: int | None = None
+    accepted_output_modes: list[str] | None = Field(None, alias="acceptedOutputModes")
+    push_notification: PushNotificationConfig | None = Field(None, alias="pushNotification")
+    history_length: int | None = Field(None, alias="historyLength")
     metadata: dict[str, Any] | None = None
 
 
@@ -230,8 +240,9 @@ class TaskResubscriptionRequest(JSONRPCRequest):
 
 # A2A Message endpoints
 class MessageSendParams(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     message: Message
-    context_id: str | None = None
+    context_id: str | None = Field(None, alias="contextId")
     metadata: dict[str, Any] | None = None
 
 
@@ -260,9 +271,10 @@ class AgentProvider(BaseModel):
 
 
 class AgentCapabilities(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     streaming: bool = False
-    push_notifications: bool = False
-    state_transition_history: bool = False
+    push_notifications: bool = Field(False, alias="pushNotifications")
+    state_transition_history: bool = Field(False, alias="stateTransitionHistory")
 
 
 class AgentAuthentication(BaseModel):
@@ -271,27 +283,33 @@ class AgentAuthentication(BaseModel):
 
 
 class AgentSkill(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     id: str
     name: str
     description: str | None = None
     tags: list[str] | None = None
     examples: list[str] | None = None
-    input_modes: list[str] | None = None
-    output_modes: list[str] | None = None
+    input_modes: list[str] | None = Field(None, alias="inputModes")
+    output_modes: list[str] | None = Field(None, alias="outputModes")
 
 
 class AgentCard(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     name: str
     description: str | None = None
     url: str
+    protocol_version: str = Field("0.3.0", alias="protocolVersion")
+    version: str = "1.0.0"
     provider: AgentProvider | None = None
-    version: str
-    documentation_url: str | None = None
+    documentation_url: str | None = Field(None, alias="documentationUrl")
     capabilities: AgentCapabilities
     authentication: AgentAuthentication | None = None
-    default_input_modes: list[str] = ["text"]
-    default_output_modes: list[str] = ["text"]
+    default_input_modes: list[str] = Field(default=["text/plain", "application/json"], alias="defaultInputModes")
+    default_output_modes: list[str] = Field(default=["text/plain", "application/json"], alias="defaultOutputModes")
     skills: list[AgentSkill]
+    supports_authenticated_extended_card: bool = Field(True, alias="supportsAuthenticatedExtendedCard")
+    security_schemes: dict[str, Any] | None = Field(None, alias="securitySchemes")
+    security: list[dict[str, list[str]]] | None = None
 
 
 # A2A Agent Card endpoints
@@ -306,6 +324,40 @@ class AuthenticatedExtendedCardRequest(JSONRPCRequest):
 
 class AuthenticatedExtendedCardResponse(JSONRPCResponse):
     result: AgentCard | None = None
+
+
+# SSE stream response types
+class StreamResponseTask(BaseModel):
+    """SSE event: initial task object."""
+    model_config = ConfigDict(populate_by_name=True)
+    kind: Literal["task"] = "task"
+    id: str
+    context_id: str | None = Field(None, alias="contextId")
+    status: TaskStatus
+    history: list[Message] | None = None
+    artifacts: list[Artifact] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class StreamResponseStatusUpdate(BaseModel):
+    """SSE event: task status change."""
+    model_config = ConfigDict(populate_by_name=True)
+    kind: Literal["status-update"] = "status-update"
+    task_id: str = Field(alias="taskId")
+    context_id: str | None = Field(None, alias="contextId")
+    status: TaskStatus
+    final: bool = False
+
+
+class StreamResponseArtifactUpdate(BaseModel):
+    """SSE event: artifact/output chunk."""
+    model_config = ConfigDict(populate_by_name=True)
+    kind: Literal["artifact-update"] = "artifact-update"
+    task_id: str = Field(alias="taskId")
+    context_id: str | None = Field(None, alias="contextId")
+    artifact: Artifact
+    append: bool = False
+    last_chunk: bool = Field(False, alias="lastChunk")
 
 
 A2ARequest = TypeAdapter(
@@ -384,6 +436,12 @@ class UnsupportedOperationError(JSONRPCError):
 class ContentTypeNotSupportedError(JSONRPCError):
     code: int = -32005
     message: str = "Incompatible content types"
+    data: None = None
+
+
+class VersionNotSupportedError(JSONRPCError):
+    code: int = -32007
+    message: str = "Version not supported"
     data: None = None
 
 
