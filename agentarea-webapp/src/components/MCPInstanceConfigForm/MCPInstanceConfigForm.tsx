@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 
@@ -35,6 +36,10 @@ export interface MCPInstanceConfigFormProps {
   // Form handling
   formAction?: any; // server action binding
   onSubmit?: (e?: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
+  formId?: string;
+  className?: string;
+  contentClassName?: string;
+  hideSubmitButton?: boolean;
   // Optional container summary
   showContainerSummary?: boolean;
   containerImage?: string;
@@ -64,6 +69,10 @@ export default function MCPInstanceConfigForm({
   extraActions,
   formAction,
   onSubmit,
+  formId,
+  className,
+  contentClassName,
+  hideSubmitButton = false,
   showContainerSummary = true,
   containerImage,
   containerPort,
@@ -83,7 +92,12 @@ export default function MCPInstanceConfigForm({
   const resolvedPort = containerPort ?? 8000;
 
   const Content = (
-    <div className="form-content flex flex-col overflow-y-auto pb-4">
+    <div
+      className={cn(
+        "form-content flex flex-col overflow-y-auto pb-4",
+        contentClassName
+      )}
+    >
       <div className="space-y-3">
         <div>
           <Label htmlFor="name">Name</Label>
@@ -224,19 +238,20 @@ export default function MCPInstanceConfigForm({
             {forceCreateLabel}
           </Button>
         )}
-        {renderAsForm ? (
-          <Button type="submit" disabled={!!submitDisabled}>
-            {submitLabel}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            disabled={!!submitDisabled}
-            onClick={() => onSubmit && onSubmit()}
-          >
-            {submitLabel}
-          </Button>
-        )}
+        {!hideSubmitButton &&
+          (renderAsForm ? (
+            <Button type="submit" disabled={!!submitDisabled}>
+              {submitLabel}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              disabled={!!submitDisabled}
+              onClick={() => onSubmit && onSubmit()}
+            >
+              {submitLabel}
+            </Button>
+          ))}
         {extraActions}
       </div>
     </div>
@@ -244,7 +259,12 @@ export default function MCPInstanceConfigForm({
 
   if (renderAsForm) {
     return (
-      <form action={formAction} onSubmit={onSubmit}>
+      <form
+        id={formId}
+        action={formAction}
+        onSubmit={onSubmit}
+        className={className}
+      >
         {Content}
       </form>
     );
