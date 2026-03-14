@@ -31,10 +31,8 @@ POSTGRES_SSLMODE: "{{ .Values.global.database.sslMode }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-database
       key: POSTGRES_SSLMODE
-{{- if not (index (default dict .Values.global.envVars) "DATABASE_URL") }}
 - name: DATABASE_URL
   value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}
-{{- end }}
 {{- end }}
 
 {{- define "agentarea.database.secrets.envs" }}

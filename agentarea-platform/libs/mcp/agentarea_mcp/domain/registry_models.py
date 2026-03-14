@@ -91,9 +91,7 @@ class RegistryItem(BaseModel, WorkspaceScopedMixin):
     version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     spec: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    installed_entity_id: Mapped[str | None] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=True
-    )
+    installed_entity_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     update_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     installed_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
 

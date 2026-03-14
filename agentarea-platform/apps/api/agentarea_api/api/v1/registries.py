@@ -55,12 +55,19 @@ class RegistryResponse(BaseModel):
     @classmethod
     def from_domain(cls, r: Registry) -> "RegistryResponse":
         return cls(
-            id=r.id, name=r.name, description=r.description,
-            registry_type=r.registry_type, source_type=r.source_type,
-            source_url=r.source_url, sync_mode=r.sync_mode,
-            is_active=r.is_active, last_synced_at=r.last_synced_at,
-            last_sync_error=r.last_sync_error, item_count=r.item_count,
-            created_at=r.created_at, updated_at=r.updated_at,
+            id=r.id,
+            name=r.name,
+            description=r.description,
+            registry_type=r.registry_type,
+            source_type=r.source_type,
+            source_url=r.source_url,
+            sync_mode=r.sync_mode,
+            is_active=r.is_active,
+            last_synced_at=r.last_synced_at,
+            last_sync_error=r.last_sync_error,
+            item_count=r.item_count,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
         )
 
 
@@ -82,14 +89,19 @@ class RegistryItemResponse(BaseModel):
     @classmethod
     def from_domain(cls, item: RegistryItem) -> "RegistryItemResponse":
         return cls(
-            id=item.id, registry_id=item.registry_id,
-            external_id=item.external_id, name=item.name,
-            description=item.description, version=item.version,
-            spec=item.spec or {}, tags=item.tags or [],
+            id=item.id,
+            registry_id=item.registry_id,
+            external_id=item.external_id,
+            name=item.name,
+            description=item.description,
+            version=item.version,
+            spec=item.spec or {},
+            tags=item.tags or [],
             installed_entity_id=item.installed_entity_id,
             update_available=item.update_available,
             installed_version=item.installed_version,
-            created_at=item.created_at, updated_at=item.updated_at,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
         )
 
 
@@ -116,9 +128,12 @@ async def create_registry(
 ):
     try:
         registry = await service.create_registry(
-            name=data.name, registry_type=data.registry_type,
-            source_type=data.source_type, source_url=data.source_url,
-            description=data.description, sync_mode=data.sync_mode,
+            name=data.name,
+            registry_type=data.registry_type,
+            source_type=data.source_type,
+            source_url=data.source_url,
+            description=data.description,
+            sync_mode=data.sync_mode,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -148,7 +163,11 @@ async def search_catalog(
 ):
     """Search across all registry catalogs in the workspace."""
     items = await service.search_catalog(
-        query=q, tag=tag, update_available=update_available, limit=limit, offset=offset,
+        query=q,
+        tag=tag,
+        update_available=update_available,
+        limit=limit,
+        offset=offset,
     )
     return [RegistryItemResponse.from_domain(i) for i in items]
 

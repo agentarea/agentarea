@@ -24,9 +24,7 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     # Custom command to override container CMD - useful for switching between stdio and HTTP modes
     cmd: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
     # Provenance: links back to the registry catalog item this spec was installed from
-    registry_item_id: Mapped[str | None] = mapped_column(
-        String, nullable=True, default=None
-    )
+    registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
     def __init__(
         self,

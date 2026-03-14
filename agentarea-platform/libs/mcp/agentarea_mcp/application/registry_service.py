@@ -103,8 +103,11 @@ class RegistryService:
         offset: int = 0,
     ) -> list[RegistryItem]:
         return await self.item_repo.search(
-            query_str=query, tag=tag, update_available=update_available,
-            limit=limit, offset=offset,
+            query_str=query,
+            tag=tag,
+            update_available=update_available,
+            limit=limit,
+            offset=offset,
         )
 
     async def get_item(self, item_id: UUID) -> RegistryItem | None:
@@ -204,7 +207,9 @@ class RegistryService:
 
         entity = await self._update_entity(registry.registry_type, item)
         await self.item_repo.update(
-            item_id, update_available=False, installed_version=item.version or "latest",
+            item_id,
+            update_available=False,
+            installed_version=item.version or "latest",
         )
         return entity
 
@@ -419,29 +424,33 @@ class RegistryService:
                 if requires_auth:
                     auth_info = headers["Authorization"]
                     if isinstance(auth_info, dict):
-                        env_schema.append({
-                            "name": "AUTHORIZATION",
-                            "description": auth_info.get("description", "Authorization header"),
-                            "required": auth_info.get("isRequired", True),
-                        })
+                        env_schema.append(
+                            {
+                                "name": "AUTHORIZATION",
+                                "description": auth_info.get("description", "Authorization header"),
+                                "required": auth_info.get("isRequired", True),
+                            }
+                        )
 
                 tags = [transport]
                 if requires_auth:
                     tags.append("requires-auth")
 
-                items.append({
-                    "external_id": identifier,
-                    "name": title,
-                    "description": description,
-                    "version": version,
-                    "spec": {
-                        "connection_type": "url",
-                        "url": url,
-                        "transport": transport,
-                        "env_schema": env_schema,
-                    },
-                    "tags": tags,
-                })
+                items.append(
+                    {
+                        "external_id": identifier,
+                        "name": title,
+                        "description": description,
+                        "version": version,
+                        "spec": {
+                            "connection_type": "url",
+                            "url": url,
+                            "transport": transport,
+                            "env_schema": env_schema,
+                        },
+                        "tags": tags,
+                    }
+                )
 
             # OCI packages → connection_type: "docker"
             for pkg in server.get("packages", []):
@@ -461,19 +470,21 @@ class RegistryService:
                     for ev in pkg.get("environmentVariables", [])
                 ]
 
-                items.append({
-                    "external_id": f"{identifier}/docker",
-                    "name": title,
-                    "description": description,
-                    "version": pkg_version,
-                    "spec": {
-                        "connection_type": "docker",
-                        "image": f"{image}:{pkg_version}" if ":" not in image else image,
-                        "transport": "stdio",
-                        "env_schema": env_schema,
-                    },
-                    "tags": ["docker", "oci"],
-                })
+                items.append(
+                    {
+                        "external_id": f"{identifier}/docker",
+                        "name": title,
+                        "description": description,
+                        "version": pkg_version,
+                        "spec": {
+                            "connection_type": "docker",
+                            "image": f"{image}:{pkg_version}" if ":" not in image else image,
+                            "transport": "stdio",
+                            "env_schema": env_schema,
+                        },
+                        "tags": ["docker", "oci"],
+                    }
+                )
 
             # npm/pypi packages → connection_type: "command"
             for pkg in server.get("packages", []):
@@ -505,22 +516,24 @@ class RegistryService:
                     for ev in pkg.get("environmentVariables", [])
                 ]
 
-                items.append({
-                    "external_id": f"{identifier}/command",
-                    "name": title,
-                    "description": description,
-                    "version": pkg_version,
-                    "spec": {
-                        "connection_type": "command",
-                        "command": command,
-                        "args": args,
-                        "transport": "stdio",
-                        "package_registry": reg_type,
-                        "package_name": pkg_name,
-                        "env_schema": env_schema,
-                    },
-                    "tags": ["command", reg_type],
-                })
+                items.append(
+                    {
+                        "external_id": f"{identifier}/command",
+                        "name": title,
+                        "description": description,
+                        "version": pkg_version,
+                        "spec": {
+                            "connection_type": "command",
+                            "command": command,
+                            "args": args,
+                            "transport": "stdio",
+                            "package_registry": reg_type,
+                            "package_name": pkg_name,
+                            "env_schema": env_schema,
+                        },
+                        "tags": ["command", reg_type],
+                    }
+                )
 
         return items
 
@@ -551,14 +564,16 @@ class RegistryService:
             if entry.get("env_schema"):
                 spec["env_schema"] = entry["env_schema"]
 
-            items.append({
-                "external_id": ext_id,
-                "name": external_id,
-                "description": (entry.get("description") or "")[:500],
-                "version": entry.get("version") or "latest",
-                "spec": spec,
-                "tags": tags,
-            })
+            items.append(
+                {
+                    "external_id": ext_id,
+                    "name": external_id,
+                    "description": (entry.get("description") or "")[:500],
+                    "version": entry.get("version") or "latest",
+                    "spec": spec,
+                    "tags": tags,
+                }
+            )
         return items
 
     @staticmethod
@@ -569,16 +584,18 @@ class RegistryService:
             name = entry.get("name", "")
             if not name:
                 continue
-            items.append({
-                "external_id": name,
-                "name": name,
-                "description": entry.get("description"),
-                "version": entry.get("version") or "1.0.0",
-                "spec": {
-                    "source_type": entry.get("source_type", "content"),
-                    "content": entry.get("content"),
-                    "source_url": entry.get("source_url"),
-                },
-                "tags": entry.get("tags", []),
-            })
+            items.append(
+                {
+                    "external_id": name,
+                    "name": name,
+                    "description": entry.get("description"),
+                    "version": entry.get("version") or "1.0.0",
+                    "spec": {
+                        "source_type": entry.get("source_type", "content"),
+                        "content": entry.get("content"),
+                        "source_url": entry.get("source_url"),
+                    },
+                    "tags": entry.get("tags", []),
+                }
+            )
         return items
