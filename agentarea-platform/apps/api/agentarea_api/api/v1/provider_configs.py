@@ -340,9 +340,9 @@ async def discover_models(
         raise HTTPException(
             status_code=502,
             detail=f"Provider API returned {e.response.status_code}: {e.response.text[:200]}",
-        )
+        ) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to reach provider: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to reach provider: {e}") from e
 
     models = []
     for m in data.get("data", []):

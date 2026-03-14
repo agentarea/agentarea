@@ -327,14 +327,14 @@ class RegistryService:
     def _fetch_source(source_url: str) -> dict[str, Any]:
         """Fetch data from URL, auto-detect JSON vs YAML."""
         if source_url.startswith("http://") or source_url.startswith("https://"):
-            req = urllib.request.Request(
+            req = urllib.request.Request(  # noqa: S310
                 source_url,
                 headers={
                     "Accept": "application/json, application/yaml, text/yaml, */*",
                     "User-Agent": "agentarea-registry-sync",
                 },
             )
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
                 raw = resp.read().decode("utf-8")
                 content_type = resp.headers.get("Content-Type", "")
         else:
