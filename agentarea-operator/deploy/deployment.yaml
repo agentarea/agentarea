@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentarea-operator
+  namespace: agentarea-staging
+  labels:
+    app: agentarea-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agentarea-operator
+  template:
+    metadata:
+      labels:
+        app: agentarea-operator
+    spec:
+      serviceAccountName: agentarea-operator
+      containers:
+        - name: operator
+          image: "10.109.26.228:5000/agentarea/agentarea-operator:latest"
+          imagePullPolicy: Always
+          command: ["sh", "-c"]
+          args:
+            - |
+              export DATABASE_URL="postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=require"
+              exec kopf run handler.py --verbose
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: agentarea-postgresql-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agentarea-postgresql-secret
+                  key: password
+            - name: POSTGRES_HOST
+              value: "ep-crimson-bread-aii6jbt8-pooler.c-4.us-east-1.aws.neon.tech"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: "neondb"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
