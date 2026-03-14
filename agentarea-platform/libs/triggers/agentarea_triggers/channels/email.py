@@ -160,7 +160,7 @@ class EmailAdapter:
         secret_name = f"channel_cred:{channel_config.get('type', 'email')}:{trigger_id}"
         raw = await self._secret_manager.get_secret(secret_name)
         if not raw:
-            logger.error("Secret %s not found in store", secret_name)
+            logger.error("Channel credentials not found for trigger %s", trigger_id)
             return None
 
         return json.loads(raw)
