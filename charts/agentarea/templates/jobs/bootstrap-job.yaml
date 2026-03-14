@@ -99,6 +99,21 @@ spec:
               value: {{ if .Values.jobs.bootstrap.seedData }}"/seed-data/skills.yaml"{{ else }}"/app/llm/skills.yaml"{{ end }}
             - name: AGENTS_YAML
               value: {{ if .Values.jobs.bootstrap.seedData }}"/seed-data/agents.yaml"{{ else }}"/app/llm/agents.yaml"{{ end }}
+            {{- if .Values.jobs.bootstrap.registries }}
+            - name: REGISTRIES_CONFIG
+              value: {{ .Values.jobs.bootstrap.registries | toJson | quote }}
+            {{- end }}
+            {{- if .Values.jobs.bootstrap.providerConfigs }}
+            - name: PROVIDER_CONFIGS
+              value: {{ .Values.jobs.bootstrap.providerConfigs | toJson | quote }}
+            {{- end }}
+            {{- range .Values.jobs.bootstrap.providerSecrets }}
+            - name: {{ .envName }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
           {{- if .Values.jobs.bootstrap.seedData }}
           volumeMounts:
             - name: seed-data

@@ -621,6 +621,22 @@ jobs:
       mcpProviders: "" # Override: inline YAML, or empty to use seed-data/mcp_providers.yaml
       skills: ""       # Override: inline YAML, or empty to use seed-data/skills.yaml
       agents: ""       # Override: inline YAML, or empty to use seed-data/agents.yaml
+    # External registries (IaaC). Each entry creates a registry + initial sync.
+    # Sync auto-creates entity specs. Re-syncs flag version updates for manual approval.
+    # type: "mcp_servers" or "skills"
+    # Example:
+    #   registries:
+    #     - name: "MCP Public Registry"
+    #       type: "mcp_servers"
+    #       source_type: "url"
+    #       source_url: "https://s3.amazonaws.com/bucket/mcp-servers.json"
+    #       sync_mode: "manual"
+    #     - name: "Skills Registry"
+    #       type: "skills"
+    #       source_type: "url"
+    #       source_url: "https://s3.amazonaws.com/bucket/skills.yaml"
+    #       sync_mode: "manual"
+    registries: []
   dbMigration:
     enabled: true
 
