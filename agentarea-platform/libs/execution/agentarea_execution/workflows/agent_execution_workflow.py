@@ -45,6 +45,7 @@ from ..models import (
     ResolveAgentToolsResult,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
+    UpdateTaskStatusRequest,
     WorkflowEventsRequest,
 )
 from .constants import (
@@ -1517,6 +1518,22 @@ class AgentExecutionWorkflow:
         # Publish final events immediately
         await self._publish_events_immediately()
 
+        # Update task status in the database
+        final_status = "completed" if self.state.success else "failed"
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status=final_status,
+                    result=self.state.final_response,
+                    workspace_id=self.state.workspace_id,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+        )
+
         # Return result - convert messages to dict format for response
         conversation_history: list[dict[str, Any]] = []
         for msg in self.state.messages:
@@ -1551,6 +1568,22 @@ class AgentExecutionWorkflow:
                 },
             )
             await self._publish_events_immediately()
+
+        # Update task status to failed
+        if self.state and self.state.task_id:
+            await workflow.execute_activity(
+                Activities.UPDATE_TASK_STATUS,
+                args=[
+                    UpdateTaskStatusRequest(
+                        task_id=self.state.task_id,
+                        status="failed",
+                        error_message=str(error),
+                        workspace_id=self.state.workspace_id,
+                    )
+                ],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
 
     def _build_goal_from_request(self, request: AgentExecutionRequest) -> AgentGoal:
         """Build goal from execution request."""

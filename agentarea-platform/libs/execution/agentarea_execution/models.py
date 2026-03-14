@@ -295,6 +295,23 @@ class WorkflowEventsResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class UpdateTaskStatusRequest(BaseModel):
+    """Request to update task status in the database."""
+
+    task_id: str
+    status: str  # completed, failed, cancelled
+    result: str | None = None
+    error_message: str | None = None
+    workspace_id: str
+
+
+class UpdateTaskStatusResult(BaseModel):
+    """Result of task status update."""
+
+    success: bool
+    error: str | None = None
+
+
 class CompactMessagesRequest(BaseModel):
     """Request to compact/summarize older messages."""
 

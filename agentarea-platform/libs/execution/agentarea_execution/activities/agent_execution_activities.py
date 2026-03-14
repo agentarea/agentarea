@@ -54,6 +54,8 @@ from ..models import (
     SkillFileResult,
     SkillInfo,
     ToolDiscoveryRequest,
+    UpdateTaskStatusRequest,
+    UpdateTaskStatusResult,
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
@@ -637,6 +639,37 @@ def make_agent_activities(dependencies: ActivityDependencies):
             )
 
     @activity.defn
+    async def update_task_status_activity(
+        request: UpdateTaskStatusRequest,
+    ) -> UpdateTaskStatusResult:
+        """Update task status in the database after workflow completion."""
+        from uuid import UUID as _UUID
+
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            task_repo = TaskRepository(session, user_context)
+            try:
+                additional_fields = {}
+                if request.result:
+                    additional_fields["result"] = request.result
+                if request.error_message:
+                    additional_fields["error_message"] = request.error_message
+
+                updated = await task_repo.update_status(
+                    _UUID(request.task_id), request.status, **additional_fields
+                )
+                if updated:
+                    return UpdateTaskStatusResult(success=True)
+                return UpdateTaskStatusResult(success=False, error="Task not found")
+            except Exception as e:
+                logger.error(f"Failed to update task status: {e}")
+                return UpdateTaskStatusResult(success=False, error=str(e))
+
+    @activity.defn
     async def resolve_skill_file_activity(
         request: SkillFileRequest,
     ) -> SkillFileResult:
@@ -955,4 +988,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         compact_messages_activity,
         resolve_agent_tools_activity,
         recall_history_activity,
+        update_task_status_activity,
     ]
