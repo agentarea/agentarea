@@ -666,5 +666,6 @@ class WorkspaceImportExportService:
                 name=provider_yaml.name,
                 api_key=api_key,
                 endpoint_url=provider_yaml.endpoint_url,
+                created_by=str(self.repository_factory.user_context.user_id),
             )
             return new_config

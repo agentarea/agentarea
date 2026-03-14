@@ -183,6 +183,7 @@ async def create_provider_config(
         name=data.name,
         api_key=data.api_key,
         endpoint_url=data.endpoint_url,
+        created_by=str(user_context.user_id),
         is_public=data.is_public,
     )
     return ProviderConfigResponse.from_domain(config)
@@ -262,6 +263,104 @@ async def delete_provider_config(
     if not success:
         raise HTTPException(status_code=404, detail="Provider configuration not found")
     return {"message": "Provider configuration deleted successfully"}
+
+
+# Model discovery endpoint
+
+
+class DiscoveredModel(BaseModel):
+    model_name: str
+    display_name: str
+    description: str | None = None
+    context_window: int = 4096
+
+
+class DiscoverModelsResponse(BaseModel):
+    provider_key: str
+    models: list[DiscoveredModel]
+    total: int
+
+
+# Provider-specific base URLs for /v1/models
+_PROVIDER_BASE_URLS = {
+    "openrouter": "https://openrouter.ai/api",
+    "openai": "https://api.openai.com",
+    "anthropic": "https://api.anthropic.com",
+    "mistral": "https://api.mistral.ai",
+    "groq": "https://api.groq.com/openai",
+    "together": "https://api.together.xyz",
+    "fireworks": "https://api.fireworks.ai/inference",
+    "deepseek": "https://api.deepseek.com",
+    "perplexity": "https://api.perplexity.ai",
+    "cerebras": "https://api.cerebras.ai",
+    "xai": "https://api.x.ai",
+}
+
+
+@router.post("/{config_id}/discover-models", response_model=DiscoverModelsResponse)
+async def discover_models(
+    config_id: UUID,
+    user_context: UserContextDep,
+    provider_service: ProviderService = Depends(get_provider_service),
+):
+    """Discover available models from the provider's /v1/models endpoint."""
+    import httpx
+
+    config = await provider_service.get_provider_config(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Provider configuration not found")
+
+    provider_spec = config.provider_spec
+    if not provider_spec:
+        raise HTTPException(status_code=400, detail="Provider spec not found")
+
+    provider_key = provider_spec.provider_key
+    base_url = config.endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
+    if not base_url:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No known API URL for provider '{provider_key}'. Set endpoint_url on the config.",
+        )
+
+    url = f"{base_url.rstrip('/')}/v1/models"
+    headers = {"Authorization": f"Bearer {config.api_key}"}
+
+    if provider_key == "anthropic":
+        headers = {
+            "x-api-key": config.api_key,
+            "anthropic-version": "2023-06-01",
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Provider API returned {e.response.status_code}: {e.response.text[:200]}",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to reach provider: {e}")
+
+    models = []
+    for m in data.get("data", []):
+        model_id = m.get("id", "")
+        models.append(
+            DiscoveredModel(
+                model_name=model_id,
+                display_name=m.get("name", model_id),
+                description=m.get("description"),
+                context_window=m.get("context_length", 4096),
+            )
+        )
+
+    return DiscoverModelsResponse(
+        provider_key=provider_key,
+        models=models,
+        total=len(models),
+    )
 
 
 # Logo/Icon endpoints

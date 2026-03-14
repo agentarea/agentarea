@@ -1,5 +1,5 @@
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -96,7 +96,7 @@ class ProviderService:
         name: str,
         api_key: str,
         endpoint_url: str | None = None,
-        created_by: str | None = None,
+        created_by: str = "",
         is_public: bool = False,
     ) -> ProviderConfig:
         """Create a new provider configuration and store its API key in the secret manager.
@@ -112,14 +112,16 @@ class ProviderService:
         Returns:
             ProviderConfig: The created provider configuration.
         """
+        config_id = uuid4()
         config = ProviderConfig(
+            id=config_id,
             provider_spec_id=provider_spec_id,
             name=name,
             endpoint_url=endpoint_url,
-            created_by=created_by or "system",
+            created_by=created_by,
             is_public=is_public,
         )
-        secret_name = f"provider_config_{config.id}"
+        secret_name = f"provider_config_{config_id}"
         config.api_key = secret_name
         await self.secret_manager.set_secret(secret_name, api_key)
 
