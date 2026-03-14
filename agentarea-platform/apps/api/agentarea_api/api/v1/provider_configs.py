@@ -322,6 +322,13 @@ async def discover_models(
             detail=f"No known API URL for provider '{provider_key}'. Set endpoint_url on the config.",
         )
 
+    # Validate URL scheme to prevent SSRF
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base_url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="endpoint_url must use http or https scheme")
+
     url = f"{base_url.rstrip('/')}/v1/models"
     headers = {"Authorization": f"Bearer {config.api_key}"}
 
