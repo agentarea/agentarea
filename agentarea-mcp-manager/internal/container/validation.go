@@ -171,7 +171,7 @@ func (v *ContainerValidator) DryRunValidation(ctx context.Context, instance *mod
 	specType, _ := instance.JSONSpec["type"].(string)
 
 	if specType == "command" {
-		// Command type uses the supergateway sandbox image — no image validation needed
+		// Command type uses the mcp-bridge sandbox image — no image validation needed
 		result.ImageExists = true
 		result.CanPull = true
 	} else {
@@ -260,7 +260,7 @@ func (v *ContainerValidator) DryRunValidationWithLimits(ctx context.Context, ins
 	specType, _ := instance.JSONSpec["type"].(string)
 
 	if specType == "command" {
-		// Command type uses the supergateway sandbox image — no image validation needed
+		// Command type uses the mcp-bridge sandbox image — no image validation needed
 		result.ImageExists = true
 		result.CanPull = true
 	} else {
@@ -324,7 +324,7 @@ func (v *ContainerValidator) DryRunValidationWithLimits(ctx context.Context, ins
 // validateJSONSpec validates the structure of json_spec.
 // Supports two types:
 //   - "docker" (default): requires "image" and "port" fields
-//   - "command": requires "command" field; runs via supergateway sandbox
+//   - "command": requires "command" field; runs via mcp-bridge sandbox
 func (v *ContainerValidator) validateJSONSpec(jsonSpec map[string]interface{}) error {
 	specType, _ := jsonSpec["type"].(string)
 
