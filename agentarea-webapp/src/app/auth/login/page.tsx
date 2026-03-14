@@ -4,7 +4,7 @@ import { OryPageParams, getFlowFactory } from "@ory/nextjs/app";
 import { FlowType, LoginFlow } from "@ory/client-fetch";
 // CSS imported via globals.css
 import config from "@/ory.config";
-import { env } from "@/env";
+import { getOryBrowserConfig, rewriteFlowForBrowser } from "@/lib/auth/browser-config";
 import { serverSideFrontendClient, initOverrides, getPublicUrl } from "@/lib/auth/client";
 import { toGetFlowParameter, QueryParams } from "@/lib/auth/utils";
 
@@ -36,17 +36,8 @@ export default async function LoginPage(props: OryPageParams) {
     return null;
   }
 
-  // TODO: replace workaround for local kratos URL mapping when using proper service configuration
-  let modifiedFlow = flow;
-  if (flow && flow.ui && typeof flow.ui.action === "string") {
-    modifiedFlow = {
-      ...flow,
-      ui: {
-        ...flow.ui,
-        action: flow.ui.action.replace(env.ORY_SDK_URL, env.NEXT_PUBLIC_ORY_SDK_URL ?? ""),
-      },
-    };
-  }
+  const browserFlow = rewriteFlowForBrowser(flow);
+  const browserConfig = getOryBrowserConfig();
 
-  return <Login flow={modifiedFlow} config={config} />;
+  return <Login flow={browserFlow} config={browserConfig} />;
 }

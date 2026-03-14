@@ -3,16 +3,11 @@ import yaml
 import json
 import uuid
 from typing import Dict, Any, Optional, List
-from sqlalchemy import create_engine, text
+from code.db import engine
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-# Adjust these as needed
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/agentarea"
-)
 MCP_PROVIDERS_YAML = os.environ.get("MCP_PROVIDERS_YAML", "/app/llm/mcp_providers.yaml")
-
-engine = create_engine(DATABASE_URL)
 
 
 def upsert_mcp_server(

@@ -11,7 +11,8 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* .npmrc* ./
 COPY packages/ ./packages/
 
-RUN corepack prepare pnpm@9.15.4 --activate && \
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+  corepack prepare pnpm@9.15.4 --activate && \
   corepack enable pnpm && \
   pnpm i --frozen-lockfile
 
@@ -24,7 +25,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages ./packages
 COPY . .
 
-RUN corepack prepare pnpm@9.15.4 --activate && \
+RUN --mount=type=cache,id=nextjs-cache,target=/app/.next/cache \
+  corepack prepare pnpm@9.15.4 --activate && \
   corepack enable pnpm && \
   pnpm run build
 

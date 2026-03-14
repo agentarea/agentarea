@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_triggers.domain.enums import (
     ExecutionStatus,
     TriggerType,
@@ -32,9 +33,14 @@ class TestTriggerRepository:
         return AsyncMock(spec=AsyncSession)
 
     @pytest.fixture
-    def repository(self, mock_session):
+    def mock_user_context(self):
+        """Create a mock UserContext."""
+        return UserContext(user_id="test_user", workspace_id="test_workspace")
+
+    @pytest.fixture
+    def repository(self, mock_session, mock_user_context):
         """Create a TriggerRepository instance with mock session."""
-        return TriggerRepository(mock_session)
+        return TriggerRepository(mock_session, mock_user_context)
 
     @pytest.fixture
     def sample_trigger_orm(self):
@@ -51,13 +57,14 @@ class TestTriggerRepository:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             created_by="test_user",
-            max_executions_per_hour=60,
             failure_threshold=5,
             consecutive_failures=0,
             last_execution_at=None,
             cron_expression="0 9 * * *",
             timezone="UTC",
-            next_run_time=None,
+            data_extractor=None,
+            data_extractor_config=None,
+            data_extractor_state=None,
         )
 
     @pytest.fixture
@@ -75,13 +82,11 @@ class TestTriggerRepository:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             created_by="test_user",
-            max_executions_per_hour=60,
             failure_threshold=5,
             consecutive_failures=0,
             last_execution_at=None,
             cron_expression="0 9 * * *",
             timezone="UTC",
-            next_run_time=None,
         )
 
     @pytest.mark.asyncio
@@ -93,7 +98,7 @@ class TestTriggerRepository:
         mock_session.execute.return_value = mock_result
 
         # Execute
-        result = await repository.get(sample_trigger_orm.id)
+        result = await repository.get_trigger(sample_trigger_orm.id)
 
         # Verify
         assert result is not None
@@ -111,28 +116,33 @@ class TestTriggerRepository:
         mock_session.execute.return_value = mock_result
 
         # Execute
-        result = await repository.get(uuid4())
+        result = await repository.get_trigger(uuid4())
 
         # Verify
         assert result is None
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_trigger(self, repository, mock_session, sample_trigger):
+    async def test_create_trigger(self, repository, mock_session, sample_trigger, sample_trigger_orm):
         """Test creating a new trigger."""
-        # Setup mock
+        # Setup mock - base class create returns ORM after add/flush/refresh
+        sample_trigger_orm.id = sample_trigger.id
+        sample_trigger_orm.name = sample_trigger.name
         mock_session.flush = AsyncMock()
         mock_session.refresh = AsyncMock()
 
+        # Patch base class create to return the ORM directly
+        async def mock_create(**kwargs):
+            return sample_trigger_orm
+
+        repository.create = mock_create
+
         # Execute
-        result = await repository.create(sample_trigger)
+        result = await repository.create_trigger(sample_trigger)
 
         # Verify
         assert result.id == sample_trigger.id
         assert result.name == sample_trigger.name
-        mock_session.add.assert_called_once()
-        mock_session.flush.assert_called_once()
-        mock_session.refresh.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_list_by_agent(self, repository, mock_session, sample_trigger_orm):
@@ -228,9 +238,14 @@ class TestTriggerExecutionRepository:
         return AsyncMock(spec=AsyncSession)
 
     @pytest.fixture
-    def repository(self, mock_session):
+    def mock_user_context(self):
+        """Create a mock UserContext."""
+        return UserContext(user_id="test_user", workspace_id="test_workspace")
+
+    @pytest.fixture
+    def repository(self, mock_session, mock_user_context):
         """Create a TriggerExecutionRepository instance with mock session."""
-        return TriggerExecutionRepository(mock_session)
+        return TriggerExecutionRepository(mock_session, mock_user_context)
 
     @pytest.fixture
     def sample_execution_orm(self):
@@ -273,7 +288,7 @@ class TestTriggerExecutionRepository:
         mock_session.execute.return_value = mock_result
 
         # Execute
-        result = await repository.get(sample_execution_orm.id)
+        result = await repository.get_execution(sample_execution_orm.id)
 
         # Verify
         assert result is not None
@@ -282,21 +297,23 @@ class TestTriggerExecutionRepository:
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_execution(self, repository, mock_session, sample_execution):
+    async def test_create_execution(self, repository, mock_session, sample_execution, sample_execution_orm):
         """Test creating a new execution."""
-        # Setup mock
-        mock_session.flush = AsyncMock()
-        mock_session.refresh = AsyncMock()
+        # Setup mock - patch base class create to return ORM directly
+        sample_execution_orm.id = sample_execution.id
+        sample_execution_orm.trigger_id = sample_execution.trigger_id
+
+        async def mock_create(**kwargs):
+            return sample_execution_orm
+
+        repository.create = mock_create
 
         # Execute
-        result = await repository.create(sample_execution)
+        result = await repository.create_execution(sample_execution)
 
         # Verify
         assert result.id == sample_execution.id
         assert result.status == sample_execution.status
-        mock_session.add.assert_called_once()
-        mock_session.flush.assert_called_once()
-        mock_session.refresh.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_list_by_trigger(self, repository, mock_session, sample_execution_orm):
@@ -356,9 +373,14 @@ class TestTriggerExecutionRepositoryEnhancements:
         return AsyncMock(spec=AsyncSession)
 
     @pytest.fixture
-    def repository(self, mock_session):
+    def mock_user_context(self):
+        """Create a mock UserContext."""
+        return UserContext(user_id="test_user", workspace_id="test_workspace")
+
+    @pytest.fixture
+    def repository(self, mock_session, mock_user_context):
         """Create a TriggerExecutionRepository instance with mock session."""
-        return TriggerExecutionRepository(mock_session)
+        return TriggerExecutionRepository(mock_session, mock_user_context)
 
     @pytest.fixture
     def sample_executions_orm(self):

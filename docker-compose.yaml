@@ -99,7 +99,7 @@ services:
     image: agentarea/agentarea-bootstrap:${VERSION:-latest}
     pull_policy: always
     volumes:
-      - ./data:/app/llm
+      - ./agentarea-bootstrap/data:/app/llm
     environment:
       - SECRET_MANAGER_TYPE=${SECRET_MANAGER_TYPE:-database}
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
@@ -112,6 +112,8 @@ services:
       - LLM_PROVIDERS_YAML=/app/llm/providers.yaml
       - MCP_PROVIDERS_YAML=/app/llm/mcp_providers.yaml
       - AGENTS_YAML=/app/llm/agents.yaml
+      - SKILLS_YAML=/app/llm/skills.yaml
+      - REGISTRIES_CONFIG=${REGISTRIES_CONFIG:-[{"name":"MCP Public Registry","type":"mcp_servers","source_type":"url","source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json","sync_mode":"manual"}]}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=db

@@ -54,6 +54,8 @@ from ..models import (
     SkillFileResult,
     SkillInfo,
     ToolDiscoveryRequest,
+    UpdateTaskStatusRequest,
+    UpdateTaskStatusResult,
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
@@ -390,14 +392,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
             # Register agent tools from configuration
             if request.tools and isinstance(request.tools, list):
                 agent_configs = [
-                    tc
-                    for tc in request.tools
-                    if isinstance(tc, dict) and tc.get("type") == "agent"
+                    tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "agent"
                 ]
                 if agent_configs:
-                    base_url = os.environ.get(
-                        "API_BASE_URL", "http://localhost:8000/api/v1"
-                    )
+                    base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
                     agent_service = await ctx.get_agent_service()
 
                     # Create task service for internal delegation
@@ -428,18 +426,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             agent_name=agent_name,
                             agent_service=agent_service,
                             base_url=base_url,
-                            a2a_url_override=(tool_config.get("settings") or {}).get(
-                                "a2a_url"
-                            ),
+                            a2a_url_override=(tool_config.get("settings") or {}).get("a2a_url"),
                             task_service=delegation_task_service,
                             workspace_id=request.workspace_id,
                             user_id=user_context.user_id,
                         )
                         if delegation_tool:
                             tool_executor.register_tool(delegation_tool)
-                            logger.info(
-                                f"Registered agent tool for execution: {agent_name}"
-                            )
+                            logger.info(f"Registered agent tool for execution: {agent_name}")
 
             try:
                 result = await tool_executor.execute_tool(
@@ -643,6 +637,37 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 events_published=0,
                 errors=[f"Critical failure: {e!s}"],
             )
+
+    @activity.defn
+    async def update_task_status_activity(
+        request: UpdateTaskStatusRequest,
+    ) -> UpdateTaskStatusResult:
+        """Update task status in the database after workflow completion."""
+        from uuid import UUID as _UUID
+
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            task_repo = TaskRepository(session, user_context)
+            try:
+                additional_fields = {}
+                if request.result:
+                    additional_fields["result"] = request.result
+                if request.error_message:
+                    additional_fields["error_message"] = request.error_message
+
+                updated = await task_repo.update_status(
+                    _UUID(request.task_id), request.status, **additional_fields
+                )
+                if updated:
+                    return UpdateTaskStatusResult(success=True)
+                return UpdateTaskStatusResult(success=False, error="Task not found")
+            except Exception as e:
+                logger.error(f"Failed to update task status: {e}")
+                return UpdateTaskStatusResult(success=False, error=str(e))
 
     @activity.defn
     async def resolve_skill_file_activity(
@@ -963,4 +988,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         compact_messages_activity,
         resolve_agent_tools_activity,
         recall_history_activity,
+        update_task_status_activity,
     ]

@@ -509,14 +509,50 @@ providers:
   openrouter:
     id: 2531cc11-f35b-43a4-91ba-6bc405dde305
     name: OpenRouter
-    description: All text/chat/vision models from OpenRouter
+    description: Unified API gateway for 300+ models from OpenAI, Anthropic, Meta, Google, and more
     models:
-    - name: anthropic/claude-3-opus
-      description: Claude 3 Opus via OpenRouter
+    - name: anthropic/claude-sonnet-4
+      description: Claude Sonnet 4 — Anthropic's balanced model
       context_window: 200000
-    - name: openai/gpt-4-turbo
-      description: GPT-4 Turbo via OpenRouter
+    - name: anthropic/claude-opus-4
+      description: Claude Opus 4 — Anthropic's most capable model
+      context_window: 200000
+    - name: anthropic/claude-haiku-4
+      description: Claude Haiku 4 — Anthropic's fastest model
+      context_window: 200000
+    - name: openai/gpt-4o
+      description: GPT-4o — OpenAI's flagship multimodal model
       context_window: 128000
+    - name: openai/gpt-4o-mini
+      description: GPT-4o Mini — fast and affordable
+      context_window: 128000
+    - name: openai/o3
+      description: o3 — OpenAI's reasoning model
+      context_window: 200000
+    - name: google/gemini-2.5-pro-preview
+      description: Gemini 2.5 Pro — Google's most capable model
+      context_window: 1000000
+    - name: google/gemini-2.5-flash-preview
+      description: Gemini 2.5 Flash — fast and efficient
+      context_window: 1000000
+    - name: meta-llama/llama-4-maverick
+      description: Llama 4 Maverick — Meta's latest open model
+      context_window: 1048576
+    - name: meta-llama/llama-3.3-70b-instruct
+      description: Llama 3.3 70B Instruct
+      context_window: 131072
+    - name: deepseek/deepseek-r1
+      description: DeepSeek R1 — reasoning model
+      context_window: 65536
+    - name: deepseek/deepseek-chat-v3
+      description: DeepSeek Chat V3
+      context_window: 65536
+    - name: mistralai/mistral-large-2
+      description: Mistral Large 2 — Mistral's flagship model
+      context_window: 128000
+    - name: qwen/qwen-2.5-72b-instruct
+      description: Qwen 2.5 72B Instruct
+      context_window: 131072
     icon: openrouter
   sambanova:
     id: 493a8be8-2281-41d5-a70f-998da88cd5ac

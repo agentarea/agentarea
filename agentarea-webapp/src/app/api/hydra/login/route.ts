@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/hydra/login?login_challenge=${loginChallenge}`
     );
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_ORY_SDK_URL || "http://localhost:4433"}/self-service/login/browser?return_to=${returnTo}`
+      `${process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "http://localhost:4433"}/self-service/login/browser?return_to=${returnTo}`
     );
   }
 

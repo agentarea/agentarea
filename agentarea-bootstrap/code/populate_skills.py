@@ -3,19 +3,14 @@
 
 import os
 import uuid
-from sqlalchemy import create_engine, text
+from code.db import engine
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 import yaml
 
-# Database connection
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/agentarea"
-)
 SKILLS_YAML = os.environ.get(
     "SKILLS_YAML", "/app/llm/skills.yaml"
 )
-
-engine = create_engine(DATABASE_URL)
 
 
 def upsert_skill(conn: Connection, skill_data: dict) -> str:

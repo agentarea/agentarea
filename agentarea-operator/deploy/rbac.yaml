@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentarea-operator
+  namespace: agentarea-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agentarea-operator
+rules:
+  # CRD management
+  - apiGroups: ["agentarea.io"]
+    resources: ["llmproviderconfigs", "llmproviderconfigs/status"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  # Kopf needs to watch CRD definitions
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  # Read secrets for API keys
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  # Kopf needs events and lease for leader election
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agentarea-operator
+subjects:
+  - kind: ServiceAccount
+    name: agentarea-operator
+    namespace: agentarea-staging
+roleRef:
+  kind: ClusterRole
+  name: agentarea-operator
+  apiGroup: rbac.authorization.k8s.io

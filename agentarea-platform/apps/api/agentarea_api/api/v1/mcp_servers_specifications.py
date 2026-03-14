@@ -160,9 +160,7 @@ async def get_mcp_server_templates(
             for provider_key, provider_data in providers.items()
         ]
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/templates/{template_key}", response_model=dict[str, Any])
@@ -192,9 +190,7 @@ async def get_mcp_server_template(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/from-template/{template_key}", response_model=MCPServerResponse)
@@ -231,9 +227,7 @@ async def create_mcp_server_from_template(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail="Internal server error"
-        ) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{server_id}", response_model=MCPServerResponse)

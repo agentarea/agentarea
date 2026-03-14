@@ -1,0 +1,109 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: llmproviderconfigs.agentarea.io
+spec:
+  group: agentarea.io
+  names:
+    kind: LLMProviderConfig
+    listKind: LLMProviderConfigList
+    plural: llmproviderconfigs
+    singular: llmproviderconfig
+    shortNames:
+      - llm
+      - llmpc
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - providerKey
+                - name
+              properties:
+                providerKey:
+                  type: string
+                  description: "Provider key matching provider_specs.provider_key (e.g. openrouter, openai)"
+                name:
+                  type: string
+                  description: "Human-readable name for this config (e.g. 'OpenRouter Production')"
+                endpointUrl:
+                  type: string
+                  description: "Custom API endpoint URL (optional for most providers)"
+                apiKeySecretRef:
+                  type: object
+                  description: "Reference to a Kubernetes Secret containing the API key"
+                  required:
+                    - name
+                    - key
+                  properties:
+                    name:
+                      type: string
+                      description: "Name of the Secret"
+                    key:
+                      type: string
+                      description: "Key within the Secret"
+                discoverModels:
+                  type: boolean
+                  default: false
+                  description: "Auto-discover models from the provider's /v1/models endpoint"
+                isPublic:
+                  type: boolean
+                  default: true
+                  description: "Make this config available to all workspace users"
+                workspaceId:
+                  type: string
+                  default: "system"
+                  description: "Target workspace ID"
+                models:
+                  type: array
+                  description: "Explicit list of model instances to activate (skipped if discoverModels is true)"
+                  items:
+                    type: object
+                    required:
+                      - modelName
+                    properties:
+                      modelName:
+                        type: string
+                        description: "Model name matching model_specs.model_name"
+                      displayName:
+                        type: string
+                        description: "Override display name"
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Synced, Error, Discovering]
+                message:
+                  type: string
+                providerConfigId:
+                  type: string
+                  description: "UUID of the synced ProviderConfig in the database"
+                discoveredModels:
+                  type: integer
+                  description: "Number of models discovered"
+                lastSyncedAt:
+                  type: string
+                  format: date-time
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Provider
+          type: string
+          jsonPath: .spec.providerKey
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Models
+          type: integer
+          jsonPath: .status.discoveredModels
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

@@ -311,7 +311,7 @@ class TestAgentTaskControl:
             )
 
         assert exc_info.value.status_code == 500
-        assert "Failed to pause task: Test error" in exc_info.value.detail
+        assert exc_info.value.detail == "Internal server error"
 
     @pytest.mark.asyncio
     async def test_resume_agent_task_exception_handling(
@@ -333,7 +333,7 @@ class TestAgentTaskControl:
             )
 
         assert exc_info.value.status_code == 500
-        assert "Failed to resume task: Test error" in exc_info.value.detail
+        assert exc_info.value.detail == "Internal server error"
 
 
 class TestTemporalWorkflowServiceControl:

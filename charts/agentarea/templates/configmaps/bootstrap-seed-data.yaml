@@ -1,0 +1,41 @@
+{{- if .Values.jobs.bootstrap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea.fullname" . }}-bootstrap-seed
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bootstrap
+data:
+  {{- /*
+    Seed data files are loaded from charts/agentarea/seed-data/*.yaml.
+    To customize for a specific environment, override via values:
+      jobs.bootstrap.seedData.providers: |
+        <custom YAML content>
+    When a seedData override is provided, it takes precedence over the file.
+  */}}
+  providers.yaml: |
+    {{- if .Values.jobs.bootstrap.seedData.providers }}
+    {{- .Values.jobs.bootstrap.seedData.providers | nindent 4 }}
+    {{- else }}
+    {{- .Files.Get "seed-data/providers.yaml" | nindent 4 }}
+    {{- end }}
+  mcp_providers.yaml: |
+    {{- if .Values.jobs.bootstrap.seedData.mcpProviders }}
+    {{- .Values.jobs.bootstrap.seedData.mcpProviders | nindent 4 }}
+    {{- else }}
+    {{- .Files.Get "seed-data/mcp_providers.yaml" | nindent 4 }}
+    {{- end }}
+  skills.yaml: |
+    {{- if .Values.jobs.bootstrap.seedData.skills }}
+    {{- .Values.jobs.bootstrap.seedData.skills | nindent 4 }}
+    {{- else }}
+    {{- .Files.Get "seed-data/skills.yaml" | nindent 4 }}
+    {{- end }}
+  agents.yaml: |
+    {{- if .Values.jobs.bootstrap.seedData.agents }}
+    {{- .Values.jobs.bootstrap.seedData.agents | nindent 4 }}
+    {{- else }}
+    {{- .Files.Get "seed-data/agents.yaml" | nindent 4 }}
+    {{- end }}
+{{- end }}

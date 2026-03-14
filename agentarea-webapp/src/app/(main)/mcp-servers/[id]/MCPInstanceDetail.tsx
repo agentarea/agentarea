@@ -371,7 +371,7 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                 {commandStr} {commandArgs.join(" ")}
               </div>
               <p className="text-xs text-muted-foreground">
-                Runs in a sandbox container via supergateway.
+                Runs in a sandbox container via mcp-bridge.
               </p>
             </div>
           </Card>

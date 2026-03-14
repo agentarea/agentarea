@@ -1,0 +1,54 @@
+# Example: OpenRouter with model discovery
+# 1. Create the secret: kubectl create secret generic openrouter-api-key --from-literal=api-key=sk-or-... -n agentarea-staging
+# 2. Apply this: kubectl apply -f openrouter.yaml
+apiVersion: agentarea.io/v1alpha1
+kind: LLMProviderConfig
+metadata:
+  name: openrouter-production
+  namespace: agentarea-staging
+spec:
+  providerKey: openrouter
+  name: "OpenRouter"
+  endpointUrl: "https://openrouter.ai/api"
+  apiKeySecretRef:
+    name: openrouter-api-key
+    key: api-key
+  discoverModels: true
+  isPublic: true
+---
+# Example: OpenAI with explicit models
+apiVersion: agentarea.io/v1alpha1
+kind: LLMProviderConfig
+metadata:
+  name: openai-production
+  namespace: agentarea-staging
+spec:
+  providerKey: openai
+  name: "OpenAI Production"
+  apiKeySecretRef:
+    name: openai-api-key
+    key: api-key
+  discoverModels: false
+  isPublic: true
+  models:
+    - modelName: gpt-4o
+    - modelName: gpt-4-turbo
+    - modelName: gpt-3.5-turbo
+---
+# Example: Using ExternalSecrets to inject the API key
+# apiVersion: external-secrets.io/v1beta1
+# kind: ExternalSecret
+# metadata:
+#   name: openrouter-api-key
+#   namespace: agentarea-staging
+# spec:
+#   secretStoreRef:
+#     name: aws-secrets-store
+#     kind: ClusterSecretStore
+#   target:
+#     name: openrouter-api-key
+#   data:
+#     - secretKey: api-key
+#       remoteRef:
+#         key: agentarea/staging/openrouter
+#         property: api-key

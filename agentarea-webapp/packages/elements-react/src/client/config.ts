@@ -7,11 +7,12 @@
 export function orySdkUrl() {
   let baseUrl
 
-  if (process.env.NEXT_PUBLIC_ORY_SDK_URL) {
-    baseUrl = process.env.NEXT_PUBLIC_ORY_SDK_URL
+  // Check runtime config injected via window.__ENV__ in layout (avoids NEXT_PUBLIC_ build-time bundling)
+  if (typeof window !== "undefined" && (window as any).__ENV__?.CLIENT_ORY_SDK_URL) {
+    baseUrl = (window as any).__ENV__.CLIENT_ORY_SDK_URL
   }
 
-  if (process.env.ORY_SDK_URL) {
+  if (!baseUrl && process.env.ORY_SDK_URL) {
     baseUrl = process.env.ORY_SDK_URL
   }
 

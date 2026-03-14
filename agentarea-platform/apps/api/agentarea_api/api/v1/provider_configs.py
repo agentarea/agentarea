@@ -183,6 +183,7 @@ async def create_provider_config(
         name=data.name,
         api_key=data.api_key,
         endpoint_url=data.endpoint_url,
+        created_by=str(user_context.user_id),
         is_public=data.is_public,
     )
     return ProviderConfigResponse.from_domain(config)
@@ -273,7 +274,7 @@ async def get_provider_logo(
 ):
     """Get provider logo via admin route pattern."""
     # Sanitize provider_key to prevent path traversal
-    if not re.match(r'^[a-zA-Z0-9_-]+$', provider_key):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", provider_key):
         raise HTTPException(status_code=400, detail="Invalid provider key")
 
     import os

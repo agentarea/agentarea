@@ -2,7 +2,8 @@ import os
 import json
 import yaml
 import uuid
-from sqlalchemy import create_engine, text
+from code.db import engine
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from pydantic import BaseModel, Field, ValidationError
 
@@ -12,15 +13,9 @@ from agentarea_agents.schemas.import_export import (
     ToolConfigYAML as ToolConfig,
 )
 
-# Database connection
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/agentarea"
-)
 AGENTS_YAML = os.environ.get(
     "AGENTS_YAML", "/app/bootstrap/agents.yaml"
 )
-
-engine = create_engine(DATABASE_URL)
 
 
 # Root structure for agents YAML file
@@ -105,6 +100,7 @@ def main() -> None:
     # Try multiple paths for YAML file
     yaml_paths = [
         AGENTS_YAML,
+        "/app/llm/agents.yaml",
         "data/agents.yaml",
         "agentarea-bootstrap/data/agents.yaml",
         "/app/data/agents.yaml",

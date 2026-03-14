@@ -997,3 +997,24 @@ export async function getMCPInstanceHealth(instanceName: string): Promise<{
     return { health_check: null };
   }
 }
+
+// Trigger API
+export const listTriggers = async (params?: {
+  agent_id?: string;
+  trigger_type?: string;
+  active_only?: boolean;
+}) => {
+  const { data, error } = await browserClient.GET("/v1/triggers/" as any, {
+    params: { query: params },
+  });
+  return { data, error };
+};
+
+export const getTrigger = async (triggerId: string) => {
+  const { data, error } = await browserClient.GET(
+    `/v1/triggers/${triggerId}` as any,
+    {}
+  );
+  return { data, error };
+};
+

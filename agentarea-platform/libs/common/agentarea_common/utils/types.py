@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
 from uuid import uuid4
 
@@ -14,7 +14,7 @@ from pydantic import (
 )
 
 
-class TaskState(str, Enum):
+class TaskState(StrEnum):
     SUBMITTED = "submitted"
     WORKING = "working"
     INPUT_REQUIRED = "input-required"
@@ -304,10 +304,16 @@ class AgentCard(BaseModel):
     documentation_url: str | None = Field(None, alias="documentationUrl")
     capabilities: AgentCapabilities
     authentication: AgentAuthentication | None = None
-    default_input_modes: list[str] = Field(default=["text/plain", "application/json"], alias="defaultInputModes")
-    default_output_modes: list[str] = Field(default=["text/plain", "application/json"], alias="defaultOutputModes")
+    default_input_modes: list[str] = Field(
+        default=["text/plain", "application/json"], alias="defaultInputModes"
+    )
+    default_output_modes: list[str] = Field(
+        default=["text/plain", "application/json"], alias="defaultOutputModes"
+    )
     skills: list[AgentSkill]
-    supports_authenticated_extended_card: bool = Field(True, alias="supportsAuthenticatedExtendedCard")
+    supports_authenticated_extended_card: bool = Field(
+        True, alias="supportsAuthenticatedExtendedCard"
+    )
     security_schemes: dict[str, Any] | None = Field(None, alias="securitySchemes")
     security: list[dict[str, list[str]]] | None = None
 
@@ -329,6 +335,7 @@ class AuthenticatedExtendedCardResponse(JSONRPCResponse):
 # SSE stream response types
 class StreamResponseTask(BaseModel):
     """SSE event: initial task object."""
+
     model_config = ConfigDict(populate_by_name=True)
     kind: Literal["task"] = "task"
     id: str
@@ -341,6 +348,7 @@ class StreamResponseTask(BaseModel):
 
 class StreamResponseStatusUpdate(BaseModel):
     """SSE event: task status change."""
+
     model_config = ConfigDict(populate_by_name=True)
     kind: Literal["status-update"] = "status-update"
     task_id: str = Field(alias="taskId")
@@ -351,6 +359,7 @@ class StreamResponseStatusUpdate(BaseModel):
 
 class StreamResponseArtifactUpdate(BaseModel):
     """SSE event: artifact/output chunk."""
+
     model_config = ConfigDict(populate_by_name=True)
     kind: Literal["artifact-update"] = "artifact-update"
     task_id: str = Field(alias="taskId")

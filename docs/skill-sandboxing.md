@@ -156,7 +156,7 @@ AgentArea supports two MCP server deployment types, both subject to the same con
     The `ContainerValidator` checks that the image exists locally or can be pulled before the container is created. Images that are neither local nor pullable are rejected at validation time, before any runtime resources are allocated.
   </Tab>
   <Tab title="Command type">
-    A stdio-based MCP command (e.g. an `npx` or `uvx` package) is automatically wrapped in the **supergateway** sandbox image (`supercorp/supergateway:latest`). This converts the stdio transport to HTTP without requiring a custom image.
+    A stdio-based MCP command (e.g. an `npx` or `uvx` package) is automatically wrapped in the **mcp-bridge** sandbox image (`agentarea/mcp-bridge:latest`). This converts the stdio transport to HTTP without requiring a custom image.
 
     ```json
     {
@@ -170,7 +170,7 @@ AgentArea supports two MCP server deployment types, both subject to the same con
 
     ```go
     // internal/container/manager.go — ResolveContainerSpec()
-    const sandboxImage = "docker.io/supercorp/supergateway:latest"
+    const sandboxImage = "docker.io/agentarea/mcp-bridge:latest"
 
     command = []string{
         "--stdio", "npx -y @modelcontextprotocol/server-filesystem /tmp",
@@ -179,7 +179,7 @@ AgentArea supports two MCP server deployment types, both subject to the same con
     }
     ```
 
-    The supergateway image includes Node.js and `npx`, so npm-based MCP servers work out of the box. No image validation is performed for command-type specs since the sandbox image is fixed.
+    The mcp-bridge image includes Node.js and `npx`, so npm-based MCP servers work out of the box. No image validation is performed for command-type specs since the sandbox image is fixed.
   </Tab>
 </Tabs>
 

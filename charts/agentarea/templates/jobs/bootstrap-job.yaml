@@ -17,6 +17,11 @@ spec:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: bootstrap
+      {{- if .Values.jobs.bootstrap.seedData }}
+      annotations:
+        # Force job re-run when seed data changes
+        checksum/seed-data: {{ include (print $.Template.BasePath "/configmaps/bootstrap-seed-data.yaml") . | sha256sum }}
+      {{- end }}
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
@@ -76,18 +81,49 @@ spec:
               value: "http://{{ include "agentarea.minio.host" . }}:9000"
             {{- end }}
 
-            # Admin user configuration (can be overridden via extraEnv)
+            # Admin user configuration
             - name: ADMIN_EMAIL
-              value: "admin@example.com"
+              value: {{ .Values.jobs.bootstrap.adminEmail | default "admin@example.com" | quote }}
             - name: ADMIN_PASSWORD
-              value: "changeme"
+              value: {{ .Values.jobs.bootstrap.adminPassword | default "changeme" | quote }}
             - name: ORGANIZATION_NAME
-              value: "AgentArea"
+              value: {{ .Values.jobs.bootstrap.organizationName | default "AgentArea" | quote }}
 
-            # LLM and MCP providers configuration
-            # Note: Provider YAML files should be mounted as ConfigMap or include in bootstrap image
+            # Seed data paths — mounted from ConfigMap when seedData is provided,
+            # otherwise falls back to files baked into the Docker image
             - name: LLM_PROVIDERS_YAML
-              value: "/app/llm/providers.yaml"
+              value: {{ if .Values.jobs.bootstrap.seedData }}"/seed-data/providers.yaml"{{ else }}"/app/llm/providers.yaml"{{ end }}
             - name: MCP_PROVIDERS_YAML
-              value: "/app/llm/mcp_providers.yaml"
+              value: {{ if .Values.jobs.bootstrap.seedData }}"/seed-data/mcp_providers.yaml"{{ else }}"/app/llm/mcp_providers.yaml"{{ end }}
+            - name: SKILLS_YAML
+              value: {{ if .Values.jobs.bootstrap.seedData }}"/seed-data/skills.yaml"{{ else }}"/app/llm/skills.yaml"{{ end }}
+            - name: AGENTS_YAML
+              value: {{ if .Values.jobs.bootstrap.seedData }}"/seed-data/agents.yaml"{{ else }}"/app/llm/agents.yaml"{{ end }}
+            {{- if .Values.jobs.bootstrap.registries }}
+            - name: REGISTRIES_CONFIG
+              value: {{ .Values.jobs.bootstrap.registries | toJson | quote }}
+            {{- end }}
+            {{- if .Values.jobs.bootstrap.providerConfigs }}
+            - name: PROVIDER_CONFIGS
+              value: {{ .Values.jobs.bootstrap.providerConfigs | toJson | quote }}
+            {{- end }}
+            {{- range .Values.jobs.bootstrap.providerSecrets }}
+            - name: {{ .envName }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+          {{- if .Values.jobs.bootstrap.seedData }}
+          volumeMounts:
+            - name: seed-data
+              mountPath: /seed-data
+              readOnly: true
+          {{- end }}
+      {{- if .Values.jobs.bootstrap.seedData }}
+      volumes:
+        - name: seed-data
+          configMap:
+            name: {{ include "agentarea.fullname" . }}-bootstrap-seed
+      {{- end }}
 {{- end }}

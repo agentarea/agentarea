@@ -89,6 +89,7 @@ class Activities:
     COMPACT_MESSAGES: Final[str] = "compact_messages_activity"
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
     RECALL_HISTORY: Final[str] = "recall_history_activity"
+    UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
 
 
 # Execution statuses

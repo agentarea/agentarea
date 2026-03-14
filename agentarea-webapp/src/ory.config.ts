@@ -1,9 +1,11 @@
 import type { OryClientConfiguration } from "@ory/elements-react";
-import { env } from "process";
 
 const config: OryClientConfiguration = {
   sdk: {
-    url: env.NEXT_PUBLIC_ORY_SDK_URL,
+    url:
+      typeof window !== "undefined"
+        ? (window as any).__ENV__?.CLIENT_ORY_SDK_URL
+        : process.env.ORY_SDK_URL,
   },
   project: {
     default_locale: "en",

@@ -299,7 +299,7 @@ async def create_task_for_agent_with_stream(
                     },
                 )
 
-        except ValueError as e:
+        except ValueError:
             # Agent validation errors
             yield _format_sse_event(
                 "error",

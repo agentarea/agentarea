@@ -23,6 +23,8 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     env_schema: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     # Custom command to override container CMD - useful for switching between stdio and HTTP modes
     cmd: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
+    # Provenance: links back to the registry catalog item this spec was installed from
+    registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
     def __init__(
         self,
@@ -35,6 +37,7 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         is_public: bool = False,
         env_schema: list[dict[str, Any]] | None = None,
         cmd: list[str] | None = None,
+        registry_item_id: str | None = None,
         # Note: user_id and workspace_id are now handled by BaseModel
         **kwargs,
     ):
@@ -48,3 +51,4 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         self.is_public = is_public
         self.env_schema = env_schema or []
         self.cmd = cmd
+        self.registry_item_id = registry_item_id
