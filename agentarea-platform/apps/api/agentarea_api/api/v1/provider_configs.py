@@ -315,19 +315,25 @@ async def discover_models(
         raise HTTPException(status_code=400, detail="Provider spec not found")
 
     provider_key = provider_spec.provider_key
-    base_url = config.endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
-    if not base_url:
+
+    # Use allowlisted URL if available, fall back to validated custom endpoint
+    if provider_key in _PROVIDER_BASE_URLS and not config.endpoint_url:
+        base_url = _PROVIDER_BASE_URLS[provider_key]
+    elif config.endpoint_url:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(config.endpoint_url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise HTTPException(
+                status_code=400, detail="endpoint_url must be a valid http/https URL"
+            )
+        # Reconstruct URL from parsed components to sanitize
+        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    else:
         raise HTTPException(
             status_code=400,
             detail=f"No known API URL for provider '{provider_key}'. Set endpoint_url on the config.",
         )
-
-    # Validate URL scheme to prevent SSRF
-    from urllib.parse import urlparse
-
-    parsed = urlparse(base_url)
-    if parsed.scheme not in ("http", "https"):
-        raise HTTPException(status_code=400, detail="endpoint_url must use http or https scheme")
 
     url = f"{base_url.rstrip('/')}/v1/models"
     headers = {"Authorization": f"Bearer {config.api_key}"}
