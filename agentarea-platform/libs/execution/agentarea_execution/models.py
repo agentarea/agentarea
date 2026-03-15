@@ -151,6 +151,7 @@ class SkillInfo(BaseModel):
 
     id: str
     name: str
+    description: str = ""  # For catalog display (progressive disclosure)
     content: str  # Markdown body
     files: list[str] = Field(default_factory=list)  # Available file paths
 
@@ -436,6 +437,25 @@ class RecallHistoryResult(BaseModel):
     events: list[dict[str, Any]] = Field(default_factory=list)
     total_count: int = 0
     summary: str = ""
+
+
+class ExecuteSkillScriptRequest(BaseModel):
+    """Request to execute a skill script in a sandbox via MCP Manager."""
+
+    script_content: str
+    script_name: str  # e.g. "calculator.py" — determines interpreter
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    timeout_seconds: int = 30
+
+
+class ExecuteSkillScriptResult(BaseModel):
+    """Result of skill script execution."""
+
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: int = 0
+    execution_time_ms: int = 0
 
 
 class SkillFileRequest(BaseModel):

@@ -90,6 +90,7 @@ class ContinueAsNewState(BaseModel):
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     continued_from_run_id: str | None = None
     agent_tool_registry: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    activated_skills: list[str] = Field(default_factory=list)
 
 
 class AgentExecutionState(BaseModel):
@@ -111,3 +112,4 @@ class AgentExecutionState(BaseModel):
     budget_usd: float | None = None
     context_window: int = 128000  # From ModelSpec, for context window management
     user_context_data: dict[str, Any] = Field(default_factory=dict)
+    activated_skills: list[str] = Field(default_factory=list)

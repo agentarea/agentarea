@@ -90,6 +90,8 @@ class Activities:
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
     RECALL_HISTORY: Final[str] = "recall_history_activity"
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
+    RESOLVE_SKILL_FILE: Final[str] = "resolve_skill_file_activity"
+    EXECUTE_SKILL_SCRIPT: Final[str] = "execute_skill_script_activity"
 
 
 # Execution statuses

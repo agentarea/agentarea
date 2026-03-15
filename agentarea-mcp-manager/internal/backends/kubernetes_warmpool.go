@@ -12,6 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+// GetWarmPoolClient returns a warm pool client for the current namespace.
+func (k *KubernetesBackend) GetWarmPoolClient() *warmpool.Client {
+	return warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
+}
+
 // CreateInstanceWithWarmPool creates MCP instance using warm pool for fast activation
 func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec *InstanceSpec) (*InstanceResult, error) {
 	instanceName := k.sanitizeInstanceName(spec.Name)

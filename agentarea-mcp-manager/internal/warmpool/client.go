@@ -151,6 +151,69 @@ func (c *Client) ActivatePod(ctx context.Context, pod *corev1.Pod, req Activatio
 	return nil
 }
 
+// ExecuteRequest holds script execution parameters
+type ExecuteRequest struct {
+	ScriptContent  string            `json:"script_content"`
+	ScriptName     string            `json:"script_name"`
+	Args           []string          `json:"args,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	TimeoutSeconds int              `json:"timeout_seconds,omitempty"`
+}
+
+// ExecuteResponse holds script execution result
+type ExecuteResponse struct {
+	Stdout          string `json:"stdout"`
+	Stderr          string `json:"stderr"`
+	ExitCode        int    `json:"exit_code"`
+	ExecutionTimeMs int64  `json:"execution_time_ms"`
+}
+
+// ExecuteInPod sends a script execution request to a warm pod.
+// The pod stays in "waiting" state — no assignment needed for stateless execution.
+func (c *Client) ExecuteInPod(ctx context.Context, pod *corev1.Pod, req ExecuteRequest) (*ExecuteResponse, error) {
+	podIP := pod.Status.PodIP
+	if podIP == "" {
+		return nil, fmt.Errorf("pod has no IP address")
+	}
+
+	url := fmt.Sprintf("http://%s:8080/execute", podIP)
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	timeout := c.timeout
+	if req.TimeoutSeconds > 0 {
+		// Add buffer for network overhead
+		timeout = time.Duration(req.TimeoutSeconds+5) * time.Second
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("execute request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("execute returned status %d", resp.StatusCode)
+	}
+
+	var result ExecuteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // MarkReady marks pod as ready for traffic
 func (c *Client) MarkReady(ctx context.Context, pod *corev1.Pod) (*corev1.Pod, error) {
 	if pod.Labels == nil {

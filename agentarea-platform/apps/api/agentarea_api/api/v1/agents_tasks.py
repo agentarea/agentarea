@@ -731,11 +731,12 @@ async def get_task_events(
                     id=str(row.id),
                     task_id=str(row.task_id),
                     agent_id=str(agent_id),
-                    execution_id=row.event_metadata.get("execution_id", "unknown"),
+                    execution_id=row.data.get("execution_id")
+                    or row.event_metadata.get("execution_id", "unknown"),
                     timestamp=row.timestamp,
                     event_type=row.event_type,
                     message=row.data.get("message", f"Event: {row.event_type}"),
-                    metadata=dict(row.event_metadata) if row.event_metadata else {},
+                    metadata=dict(row.data) if row.data else {},
                 )
             )
 

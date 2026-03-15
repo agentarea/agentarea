@@ -289,6 +289,7 @@ services:
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
       CONTAINER_RUNTIME: docker
+      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings
@@ -298,6 +299,26 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       SECRET_MANAGER_ENCRYPTION_KEY: ${SECRET_MANAGER_ENCRYPTION_KEY}
+
+  # Sandbox executor — isolated script runner (simulates warm pool pod in dev)
+  sandbox-executor:
+    image: agentarea/sandbox-executor:${VERSION:-latest}
+    build:
+      context: agentarea-mcp-manager
+      dockerfile: Dockerfile.sandbox
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    container_name: sandbox-executor
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+      - /workspace
+    networks:
+      - mcp-network
+      - default
+    environment:
+      ACTIVATION_PORT: "8080"
 
   # Temporal Infrastructure Services
   temporal:

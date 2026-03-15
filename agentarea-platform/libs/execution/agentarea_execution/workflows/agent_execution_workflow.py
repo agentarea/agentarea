@@ -9,6 +9,8 @@ from temporalio.workflow import ParentClosePolicy
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
+    from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
+
     from .context_manager import (
         ContextWindowManager,
         find_compaction_boundary,
@@ -39,10 +41,14 @@ from ..models import (
     LLMCallRequest,
     LLMCallResult,
     MCPToolRequest,
+    ExecuteSkillScriptRequest,
+    ExecuteSkillScriptResult,
     RecallHistoryRequest,
     RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
+    SkillFileRequest,
+    SkillFileResult,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     UpdateTaskStatusRequest,
@@ -77,6 +83,7 @@ class AgentExecutionWorkflow:
         self._pause_reason = ""
         # Maps sanitized agent tool names to their config (type=agent entries)
         self._agent_tool_registry: dict[str, dict] = {}
+        self._skill_tool: SkillActivationTool | None = None
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -278,6 +285,52 @@ class AgentExecutionWorkflow:
             }
         )
 
+        # Inject built-in activate_skill tool for progressive skill disclosure
+        skills = self.state.agent_config.get("skills", [])
+        if skills:
+            skill_entries = [
+                SkillEntry(
+                    name=s.get("name", ""),
+                    description=s.get("description", ""),
+                    content=s.get("content", ""),
+                    files=s.get("files", []),
+                )
+                for s in (s.model_dump() if hasattr(s, "model_dump") else s for s in skills)
+            ]
+            registry = SkillCatalogBuilder.build_registry(skill_entries)
+            self._skill_tool = SkillActivationTool(registry)
+            available_tools.append(self._skill_tool.get_openai_function_definition())
+
+            # Inject run_skill_script tool for executing skill-bundled scripts
+            available_tools.append({
+                "type": "function",
+                "function": {
+                    "name": "run_skill_script",
+                    "description": (
+                        "Execute a script bundled with an activated skill in an isolated sandbox. "
+                        "The skill must be activated first via activate_skill."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "skill_name": {
+                                "type": "string",
+                                "description": "Name of the activated skill that owns the script",
+                            },
+                            "script_name": {
+                                "type": "string",
+                                "description": "Filename of the script to run (e.g. calculator.py)",
+                            },
+                            "args": {
+                                "type": "string",
+                                "description": "Arguments to pass to the script",
+                            },
+                        },
+                        "required": ["skill_name", "script_name"],
+                    },
+                },
+            })
+
         self.state.available_tools = available_tools
 
         if not StateValidator.validate_tools(self.state.available_tools):
@@ -355,6 +408,7 @@ class AgentExecutionWorkflow:
         self.state.budget_usd = state.budget_usd
         self.state.context_window = state.context_window
         self.state.user_context_data = state.user_context_data
+        self.state.activated_skills = state.activated_skills
         self.state.status = ExecutionStatus.EXECUTING
 
         # Restore messages from compacted dicts
@@ -362,6 +416,25 @@ class AgentExecutionWorkflow:
 
         # Restore agent tool registry for delegation routing
         self._agent_tool_registry = state.agent_tool_registry
+
+        # Restore skill activation tool from agent_config
+        skills = self.state.agent_config.get("skills", [])
+        if skills:
+            skill_entries = [
+                SkillEntry(
+                    name=s.get("name", ""),
+                    description=s.get("description", ""),
+                    content=s.get("content", ""),
+                    files=s.get("files", []),
+                )
+                for s in skills
+            ]
+            registry = SkillCatalogBuilder.build_registry(skill_entries)
+            self._skill_tool = SkillActivationTool(registry)
+            # Mark already-activated skills from state
+            for name in self.state.activated_skills:
+                if name in self._skill_tool._skills_registry:
+                    self._skill_tool._activated.add(name)
 
         # Initialize helpers with restored cost
         self.event_manager = EventManager(
@@ -422,6 +495,7 @@ class AgentExecutionWorkflow:
             user_context_data=self.state.user_context_data,
             continued_from_run_id=workflow.info().run_id,
             agent_tool_registry=self._agent_tool_registry,
+            activated_skills=self.state.activated_skills,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
@@ -588,24 +662,12 @@ class AgentExecutionWorkflow:
                 "instruction", "You are a helpful AI assistant."
             )
 
-            # Append skill content to instruction
-            skills = self.state.agent_config.get("skills", [])
-            if skills:
-                skills_content = "\n\n## Skills\n"
-                for skill in skills:
-                    skill_name = skill.get("name", "Unnamed Skill")
-                    skill_body = skill.get("content", "")
-                    skill_files = skill.get("files", [])
-
-                    skills_content += f"\n### Skill: {skill_name}\n"
-                    skills_content += f"{skill_body}\n"
-
-                    if skill_files and skill_files != ["(additional files available)"]:
-                        skills_content += "\nAvailable files in this skill package:\n"
-                        for f in skill_files:
-                            skills_content += f"- {f}\n"
-
-                agent_instruction = agent_instruction + skills_content
+            # Append skill catalog (progressive disclosure — full content
+            # loaded on-demand via the activate_skill tool)
+            if self._skill_tool:
+                skill_entries = list(self._skill_tool._skills_registry.values())
+                catalog_text = SkillCatalogBuilder.build_catalog(skill_entries)
+                agent_instruction = agent_instruction + catalog_text
 
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
@@ -842,8 +904,9 @@ class AgentExecutionWorkflow:
         completion_call = None
         agent_calls: list[ToolCall] = []
         regular_calls: list[ToolCall] = []
-
         recall_calls: list[ToolCall] = []
+        skill_calls: list[ToolCall] = []
+        script_calls: list[ToolCall] = []
 
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
@@ -851,6 +914,10 @@ class AgentExecutionWorkflow:
                 completion_call = tool_call
             elif tool_name == "recall_history":
                 recall_calls.append(tool_call)
+            elif tool_name == "activate_skill":
+                skill_calls.append(tool_call)
+            elif tool_name == "run_skill_script":
+                script_calls.append(tool_call)
             elif tool_name in self._agent_tool_registry:
                 agent_calls.append(tool_call)
             else:
@@ -859,6 +926,14 @@ class AgentExecutionWorkflow:
         # Run recall_history calls (can run in parallel with agent calls)
         for tool_call in recall_calls:
             await self._execute_recall_history(tool_call)
+
+        # Execute skill activations (local, no activity needed)
+        for tool_call in skill_calls:
+            await self._execute_skill_activation(tool_call)
+
+        # Execute skill scripts (via MCP Manager sandbox)
+        for tool_call in script_calls:
+            await self._execute_skill_script(tool_call)
 
         # Run agent delegations in parallel (fan-out)
         if agent_calls:
@@ -1120,6 +1195,164 @@ class AgentExecutionWorkflow:
                     name="recall_history",
                 )
             )
+
+    async def _execute_skill_activation(self, tool_call: ToolCall) -> None:
+        """Execute skill activation locally (no Temporal activity needed)."""
+        try:
+            args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            args = {}
+
+        skill_name = args.get("skill_name", "")
+
+        if not self._skill_tool:
+            result_text = "No skills available."
+        else:
+            result = await self._skill_tool.execute(**args)
+            result_text = result.get("result", "")
+
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=result_text,
+                tool_call_id=tool_call.id,
+                name="activate_skill",
+            )
+        )
+
+        if skill_name and skill_name not in self.state.activated_skills:
+            self.state.activated_skills.append(skill_name)
+
+        self.event_manager.add_event(
+            EventTypes.TOOL_CALL_COMPLETED,
+            {
+                "tool_name": "activate_skill",
+                "tool_call_id": tool_call.id,
+                "skill_name": skill_name,
+                "iteration": self.state.current_iteration,
+            },
+        )
+
+    async def _execute_skill_script(self, tool_call: ToolCall) -> None:
+        """Execute a skill-bundled script via MCP Manager sandbox."""
+        try:
+            args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            args = {}
+
+        skill_name = args.get("skill_name", "")
+        script_name = args.get("script_name", "")
+        script_args = args.get("args", "")
+
+        # Validate skill is activated
+        if skill_name not in self.state.activated_skills:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Error: skill '{skill_name}' has not been activated. Call activate_skill first.",
+                    tool_call_id=tool_call.id,
+                    name="run_skill_script",
+                )
+            )
+            return
+
+        # Fetch script content from skill package via existing activity
+        skill_config = next(
+            (s for s in self.state.agent_config.get("skills", [])
+             if s.get("name") == skill_name),
+            None,
+        )
+        if not skill_config:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Error: skill '{skill_name}' not found in agent config.",
+                    tool_call_id=tool_call.id,
+                    name="run_skill_script",
+                )
+            )
+            return
+
+        # Try to fetch script from skill package (S3)
+        script_content = None
+        skill_id = skill_config.get("id")
+        if skill_id:
+            try:
+                file_result: SkillFileResult = await workflow.execute_activity(
+                    Activities.RESOLVE_SKILL_FILE,
+                    args=[SkillFileRequest(
+                        skill_id=UUID(skill_id),
+                        file_path=script_name,
+                        workspace_id=self.state.workspace_id,
+                        user_context_data=self.state.user_context_data,
+                    )],
+                    start_to_close_timeout=ACTIVITY_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=2),
+                )
+                # Activity may return dict or Pydantic model depending on serialization
+                if isinstance(file_result, dict):
+                    if file_result.get("success") and file_result.get("content_text"):
+                        script_content = file_result["content_text"]
+                elif file_result.success and file_result.content_text:
+                    script_content = file_result.content_text
+            except Exception as e:
+                workflow.logger.warning(f"Could not fetch script from S3: {e}")
+
+        if not script_content:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content=f"Error: script '{script_name}' not found in skill '{skill_name}'.",
+                    tool_call_id=tool_call.id,
+                    name="run_skill_script",
+                )
+            )
+            return
+
+        # Execute via MCP Manager sandbox
+        script_args_list = [script_args] if script_args else []
+        result: ExecuteSkillScriptResult = await workflow.execute_activity(
+            "execute_skill_script_activity",
+            args=[ExecuteSkillScriptRequest(
+                script_content=script_content,
+                script_name=script_name,
+                args=script_args_list,
+                timeout_seconds=30,
+            )],
+            start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=2),
+        )
+
+        # Build result message
+        output_parts = []
+        if result.stdout:
+            output_parts.append(result.stdout)
+        if result.stderr:
+            output_parts.append(f"STDERR: {result.stderr}")
+        if result.exit_code != 0:
+            output_parts.append(f"Exit code: {result.exit_code}")
+        content = "\n".join(output_parts) or "(no output)"
+
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=content,
+                tool_call_id=tool_call.id,
+                name="run_skill_script",
+            )
+        )
+
+        self.event_manager.add_event(
+            EventTypes.TOOL_CALL_COMPLETED,
+            {
+                "tool_name": "run_skill_script",
+                "tool_call_id": tool_call.id,
+                "skill_name": skill_name,
+                "script_name": script_name,
+                "exit_code": result.exit_code,
+                "iteration": self.state.current_iteration,
+            },
+        )
 
     async def _execute_agent_delegation(self, tool_call: ToolCall) -> None:
         """Delegate to another agent via Temporal child workflow.
@@ -1526,7 +1759,9 @@ class AgentExecutionWorkflow:
                 UpdateTaskStatusRequest(
                     task_id=self.state.task_id,
                     status=final_status,
-                    result=self.state.final_response,
+                    result=json.dumps({"response": self.state.final_response})
+                    if self.state.final_response
+                    else None,
                     workspace_id=self.state.workspace_id,
                 )
             ],

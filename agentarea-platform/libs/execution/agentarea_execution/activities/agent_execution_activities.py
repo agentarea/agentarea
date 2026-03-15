@@ -11,6 +11,7 @@ This module provides Temporal activities for agent execution:
 """
 
 # Standard library imports
+import json
 import logging
 import os
 from typing import Any
@@ -50,6 +51,8 @@ from ..models import (
     RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
+    ExecuteSkillScriptRequest,
+    ExecuteSkillScriptResult,
     SkillFileRequest,
     SkillFileResult,
     SkillInfo,
@@ -114,6 +117,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         SkillInfo(
                             id=str(skill.id),
                             name=skill.name,
+                            description=skill.description or "",
                             content=skill.content or "",
                             files=files,
                         )
@@ -655,7 +659,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
             try:
                 additional_fields = {}
                 if request.result:
-                    additional_fields["result"] = request.result
+                    # Task model expects result as dict, but request carries it as JSON string
+                    try:
+                        additional_fields["result"] = json.loads(request.result)
+                    except (json.JSONDecodeError, TypeError):
+                        additional_fields["result"] = {"response": request.result}
                 if request.error_message:
                     additional_fields["error_message"] = request.error_message
 
@@ -975,6 +983,54 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     summary=f"Failed to recall history: {e}",
                 )
 
+    @activity.defn(name="execute_skill_script_activity")
+    async def execute_skill_script_activity(
+        request: ExecuteSkillScriptRequest,
+    ) -> ExecuteSkillScriptResult:
+        """Execute a skill script in a sandbox via MCP Manager's warm pool.
+
+        Calls POST /sandbox/execute on the MCP Manager, which routes the
+        request to an available warm pool pod for isolated execution.
+        """
+        import httpx
+
+        from agentarea_common.config.mcp import MCPManagerSettings
+
+        mcp_settings = MCPManagerSettings()
+        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/execute"
+
+        try:
+            async with httpx.AsyncClient(timeout=request.timeout_seconds + 10) as client:
+                resp = await client.post(url, json={
+                    "script_content": request.script_content,
+                    "script_name": request.script_name,
+                    "args": request.args,
+                    "env": request.env,
+                    "timeout_seconds": request.timeout_seconds,
+                })
+
+                if resp.status_code != 200:
+                    logger.error(f"Sandbox execution failed: {resp.status_code} {resp.text[:300]}")
+                    return ExecuteSkillScriptResult(
+                        stderr=f"MCP Manager returned {resp.status_code}: {resp.text[:300]}",
+                        exit_code=1,
+                    )
+
+                data = resp.json()
+                return ExecuteSkillScriptResult(
+                    stdout=data.get("stdout", ""),
+                    stderr=data.get("stderr", ""),
+                    exit_code=data.get("exit_code", 0),
+                    execution_time_ms=data.get("execution_time_ms", 0),
+                )
+
+        except Exception as e:
+            logger.error(f"Sandbox execution error: {e}")
+            return ExecuteSkillScriptResult(
+                stderr=f"Failed to execute script: {e}",
+                exit_code=1,
+            )
+
     # Return all activity functions
     return [
         build_agent_config_activity,
@@ -989,4 +1045,5 @@ def make_agent_activities(dependencies: ActivityDependencies):
         resolve_agent_tools_activity,
         recall_history_activity,
         update_task_status_activity,
+        execute_skill_script_activity,
     ]
