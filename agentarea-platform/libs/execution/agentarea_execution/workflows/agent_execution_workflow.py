@@ -1278,7 +1278,7 @@ class AgentExecutionWorkflow:
         skill_id = skill_config.get("id")
         if skill_id:
             try:
-                file_result: SkillFileResult = await workflow.execute_activity(
+                file_result = await workflow.execute_activity(
                     Activities.RESOLVE_SKILL_FILE,
                     args=[SkillFileRequest(
                         skill_id=UUID(skill_id),
@@ -1286,14 +1286,11 @@ class AgentExecutionWorkflow:
                         workspace_id=self.state.workspace_id,
                         user_context_data=self.state.user_context_data,
                     )],
+                    result_type=SkillFileResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=2),
                 )
-                # Activity may return dict or Pydantic model depending on serialization
-                if isinstance(file_result, dict):
-                    if file_result.get("success") and file_result.get("content_text"):
-                        script_content = file_result["content_text"]
-                elif file_result.success and file_result.content_text:
+                if file_result.success and file_result.content_text:
                     script_content = file_result.content_text
             except Exception as e:
                 workflow.logger.warning(f"Could not fetch script from S3: {e}")
@@ -1311,14 +1308,15 @@ class AgentExecutionWorkflow:
 
         # Execute via MCP Manager sandbox
         script_args_list = [script_args] if script_args else []
-        result: ExecuteSkillScriptResult = await workflow.execute_activity(
-            "execute_skill_script_activity",
+        result = await workflow.execute_activity(
+            Activities.EXECUTE_SKILL_SCRIPT,
             args=[ExecuteSkillScriptRequest(
                 script_content=script_content,
                 script_name=script_name,
                 args=script_args_list,
                 timeout_seconds=30,
             )],
+            result_type=ExecuteSkillScriptResult,
             start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=2),
         )
