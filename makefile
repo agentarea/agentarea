@@ -58,6 +58,11 @@ lint-go: ## Lint Go code
 test-go: ## Run Go tests
 	cd agentarea-mcp-manager && go test ./...
 
+##@ Setup
+
+sync-registries: ## Download registry data locally (optional — bootstrap fetches from S3 automatically)
+	@bash scripts/sync-registries.sh
+
 ##@ Docker - Development Environment
 
 build: ## Build development Docker images
