@@ -458,7 +458,7 @@ async def get_agent_task(
 
     try:
         # Get workflow status using the execution ID pattern
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # If status indicates unknown, the task/workflow doesn't exist
@@ -501,7 +501,7 @@ async def get_agent_task_status(
 
     try:
         # Get workflow status using the execution ID pattern
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         return {
@@ -541,7 +541,7 @@ async def cancel_agent_task(
 
     try:
         # Cancel the workflow using the execution ID pattern
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         success = await workflow_task_service.cancel_task(execution_id)
 
         if success:
@@ -571,7 +571,7 @@ async def pause_agent_task(
 
     try:
         # Get current task status to validate it can be paused
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # Check if task exists
@@ -624,7 +624,7 @@ async def resume_agent_task(
 
     try:
         # Get current task status to validate it can be resumed
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # Check if task exists
