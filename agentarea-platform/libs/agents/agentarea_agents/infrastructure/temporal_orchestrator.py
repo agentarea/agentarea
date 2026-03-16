@@ -79,9 +79,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 )
 
                 # Extract task_id UUID from execution_id pattern
-                # execution_id format: "agent-task-{uuid}"
-                if execution_id.startswith("agent-task-"):
-                    task_id_str = execution_id.replace("agent-task-", "")
+                # execution_id format: "task-{uuid}"
+                if execution_id.startswith("task-"):
+                    task_id_str = execution_id.replace("task-", "", 1)
                     try:
                         task_id_uuid = UUID(task_id_str)
                     except ValueError:

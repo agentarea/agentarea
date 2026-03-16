@@ -23,7 +23,7 @@ class ExecutionService(ExecutionServiceInterface):
         """Execute agent task via workflow orchestrator."""
         try:
             task_id = str(uuid4())
-            execution_id = f"agent-task-{task_id}"
+            execution_id = f"task-{task_id}"
 
             # Delegate to workflow orchestrator
             result = await self._workflow_orchestrator.start_workflow(
@@ -42,7 +42,7 @@ class ExecutionService(ExecutionServiceInterface):
         except Exception as e:
             logger.error(f"Failed to start execution: {e}")
             task_id = str(uuid4())
-            execution_id = f"agent-task-{task_id}"
+            execution_id = f"task-{task_id}"
 
             return ExecutionResult(
                 task_id=task_id,
