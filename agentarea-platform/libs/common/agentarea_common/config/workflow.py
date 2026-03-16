@@ -1,18 +1,24 @@
 """Workflow and task execution configuration."""
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class WorkflowSettings(BaseSettings):
-    """Workflow execution configuration."""
+    """Workflow execution configuration.
 
-    # Execution engine: "temporal" (default) or "direct" (in-process, no infra)
+    EXECUTION_ENGINE determines which settings are required:
+    - "temporal": all TEMPORAL_* settings must be provided (no defaults)
+    - "direct": TEMPORAL_* settings are ignored
+    """
+
+    # Execution engine
     EXECUTION_ENGINE: str = "temporal"
 
-    # Temporal-specific settings (ignored when EXECUTION_ENGINE=direct)
-    TEMPORAL_SERVER_URL: str = "localhost:7233"
-    TEMPORAL_NAMESPACE: str = "default"
-    TEMPORAL_TASK_QUEUE: str = "agent-tasks"
+    # Temporal settings — required when EXECUTION_ENGINE=temporal, ignored otherwise
+    TEMPORAL_SERVER_URL: str = ""
+    TEMPORAL_NAMESPACE: str = ""
+    TEMPORAL_TASK_QUEUE: str = ""
     TEMPORAL_MAX_WORKFLOW_DURATION_DAYS: int = 7
 
     # Worker settings
@@ -25,6 +31,27 @@ class WorkflowSettings(BaseSettings):
     DYNAMIC_ACTIVITY_TIMEOUT_MINUTES: int = 30
 
     model_config = SettingsConfigDict(env_prefix="WORKFLOW__")
+
+    @model_validator(mode="after")
+    def validate_engine_settings(self):
+        """Validate that required settings are present for the chosen engine."""
+        if self.EXECUTION_ENGINE == "temporal":
+            missing = []
+            if not self.TEMPORAL_SERVER_URL:
+                missing.append("WORKFLOW__TEMPORAL_SERVER_URL")
+            if not self.TEMPORAL_NAMESPACE:
+                missing.append("WORKFLOW__TEMPORAL_NAMESPACE")
+            if not self.TEMPORAL_TASK_QUEUE:
+                missing.append("WORKFLOW__TEMPORAL_TASK_QUEUE")
+            if missing:
+                raise ValueError(
+                    f"EXECUTION_ENGINE=temporal requires: {', '.join(missing)}"
+                )
+        elif self.EXECUTION_ENGINE not in ("temporal", "direct"):
+            raise ValueError(
+                f"Unknown EXECUTION_ENGINE '{self.EXECUTION_ENGINE}'. Must be 'temporal' or 'direct'."
+            )
+        return self
 
 
 class TaskExecutionSettings(BaseSettings):
