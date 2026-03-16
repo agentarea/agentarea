@@ -10,6 +10,7 @@ class AppSettings(BaseAppSettings):
 
     APP_NAME: str = "AI Agent Service"
     DEBUG: bool = False
+    DEPLOYMENT_MODE: str = "oss"
 
     # Public base URL for this API (used in OAuth AS metadata and redirect URLs)
     API_BASE_URL: str = "http://localhost:8000"
