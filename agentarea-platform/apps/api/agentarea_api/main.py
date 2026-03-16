@@ -11,7 +11,7 @@ from pathlib import Path
 for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
-from agentarea_common.di.container import get_container, register_singleton
+from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_workspace_error_handlers
 from fastapi import FastAPI, HTTPException, Request
@@ -117,6 +117,26 @@ async def verify_mcp_auth(request: Request) -> None:
 async def initialize_services():
     """Initialize real services instead of test mocks."""
     try:
+        # Discover extensions and wire DI
+        from agentarea_common.extensions import discover_extensions
+        from agentarea_common.extensions.registry import ExtensionRegistry
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.auth.simple_permission import SimplePermissionService
+        from agentarea_common.features.service import DeploymentMode, FeatureService
+        from agentarea_common.config.app import get_app_settings
+
+        discover_extensions()
+
+        app_settings = get_app_settings()
+        mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
+        register_singleton(FeatureService, FeatureService(mode=mode))
+
+        perm_factory = ExtensionRegistry.get_factory("permissions")
+        if perm_factory:
+            register_factory(PermissionService, perm_factory)
+        else:
+            register_singleton(PermissionService, SimplePermissionService())
+
         from agentarea_common.config import get_settings
         from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 
@@ -251,6 +271,12 @@ def create_app() -> FastAPI:
     # RFC 9728 OAuth AS metadata — no prefix so /.well-known/... is top-level
     app.include_router(oauth_as_router)
     app.include_router(events_router, prefix="/events", tags=["events"])
+
+    # Webhook receiver — mounted outside /v1 to bypass auth middleware/dependencies
+    # External services (Telegram, Slack, GitHub, etc.) POST to /webhooks/{id}
+    from agentarea_api.api.v1 import webhooks as webhooks_module
+    app.include_router(webhooks_module.router, tags=["webhooks"])
+
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(protected_v1_router, tags=["v1"])
 

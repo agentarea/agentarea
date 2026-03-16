@@ -112,6 +112,38 @@ class AgentAreaWorker:
         # Initialize DI container for workflows
         initialize_di_container(settings.workflow)
 
+        # Discover extensions and wire permission service
+        from agentarea_common.extensions import discover_extensions
+        from agentarea_common.extensions.registry import ExtensionRegistry
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.auth.simple_permission import SimplePermissionService
+        from agentarea_common.features.service import DeploymentMode, FeatureService
+        from agentarea_common.config.app import get_app_settings
+        from agentarea_common.di.container import register_singleton, register_factory
+
+        discover_extensions()
+
+        app_settings = get_app_settings()
+        mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
+        register_singleton(FeatureService, FeatureService(mode=mode))
+
+        perm_factory = ExtensionRegistry.get_factory("permissions")
+        if perm_factory:
+            register_factory(PermissionService, perm_factory)
+        else:
+            register_singleton(PermissionService, SimplePermissionService())
+
+        # Create governance interceptor pipeline
+        from agentarea_governance.factory import create_governance_pipeline
+        from agentarea_governance.bridges.temporal_bridge import (
+            GovernanceWorkerInterceptor,
+            validate_activity_mapping,
+        )
+
+        governance_pipeline = create_governance_pipeline()
+        all_activities = activities + mcp_activities
+        validate_activity_mapping([a.fn.__name__ if hasattr(a, 'fn') else str(a) for a in all_activities])
+
         self.worker = Worker(
             self.client,
             task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
@@ -121,6 +153,7 @@ class AgentAreaWorker:
                 StopMCPInstanceWorkflow,
             ],
             activities=activities + mcp_activities,
+            interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
             max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
         )
