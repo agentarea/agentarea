@@ -338,6 +338,97 @@
         "validate": "Проверить"
       }
     },
+    "instanceDetail": {
+      "header": {
+        "label": "Инстанс",
+        "untitled": "Без названия"
+      },
+      "actions": {
+        "start": "Запустить",
+        "stop": "Остановить"
+      },
+      "status": {
+        "stopped": "Остановлен",
+        "unknown": "Неизвестно"
+      },
+      "fields": {
+        "name": "Имя",
+        "description": "Описание",
+        "status": "Статус"
+      },
+      "types": {
+        "docker": "Docker",
+        "externalUrl": "Внешний URL",
+        "command": "Команда"
+      },
+      "connection": {
+        "title": "Подключение",
+        "loading": "Загрузка параметров подключения...",
+        "externalEndpoint": "Внешний эндпоинт",
+        "mcpEndpoint": "MCP эндпоинт",
+        "sseEndpoint": "SSE эндпоинт (для MCP клиентов)",
+        "note": "Используйте эти URL, чтобы подключить MCP клиент к этому инстансу.",
+        "noteExternal": "Этот MCP сервер размещён внешне по указанному URL.",
+        "notAvailable": "URL подключения недоступен. Инстанс может ещё инициализироваться."
+      },
+      "labels": {
+        "connectionUrl": "URL подключения",
+        "sseUrl": "SSE URL",
+        "value": "Значение"
+      },
+      "serverSpec": {
+        "title": "Спецификация"
+      },
+      "command": {
+        "title": "Команда",
+        "note": "Запускается в sandbox-контейнере через supergateway."
+      },
+      "external": {
+        "title": "Внешний сервер",
+        "customHeaders": "Заголовки"
+      },
+      "container": {
+        "title": "Контейнер",
+        "port": "Порт"
+      },
+      "tools": {
+        "title": "Доступные инструменты ({count})",
+        "columns": {
+          "name": "Имя",
+          "description": "Описание"
+        }
+      },
+      "env": {
+        "title": "Переменные окружения",
+        "notSet": "не задано",
+        "columns": {
+          "key": "Ключ",
+          "value": "Значение"
+        }
+      },
+      "details": {
+        "title": "Детали",
+        "id": "ID инстанса",
+        "created": "Создан",
+        "updated": "Обновлён"
+      },
+      "confirm": {
+        "deleteTitle": "Удалить инстанс?",
+        "deleteDescription": "Инстанс \"{instanceName}\" будет удалён и контейнер остановлен. Это действие нельзя отменить."
+      },
+      "success": {
+        "starting": "Запуск {instanceName}…",
+        "stopped": "Остановлен {instanceName}",
+        "deleted": "Удалён {instanceName}",
+        "copied": "{label} скопировано"
+      },
+      "errors": {
+        "startFailed": "Не удалось запустить инстанс",
+        "stopFailed": "Не удалось остановить инстанс",
+        "deleteFailed": "Не удалось удалить инстанс",
+        "copyFailed": "Не удалось скопировать"
+      }
+    },
     "table": {
       "name": "Имя",
       "description": "Описание",

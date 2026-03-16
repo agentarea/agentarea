@@ -376,6 +376,97 @@
         "validate": "Validate"
       }
     },
+    "instanceDetail": {
+      "header": {
+        "label": "Instance",
+        "untitled": "Untitled instance"
+      },
+      "actions": {
+        "start": "Start",
+        "stop": "Stop"
+      },
+      "status": {
+        "stopped": "Stopped",
+        "unknown": "Unknown"
+      },
+      "fields": {
+        "name": "Name",
+        "description": "Description",
+        "status": "Status"
+      },
+      "types": {
+        "docker": "Docker",
+        "externalUrl": "External URL",
+        "command": "Command"
+      },
+      "connection": {
+        "title": "Connection",
+        "loading": "Loading connection details...",
+        "externalEndpoint": "External Endpoint",
+        "mcpEndpoint": "MCP Endpoint",
+        "sseEndpoint": "SSE Endpoint (for MCP clients)",
+        "note": "Use these URLs to connect your MCP client to this server instance.",
+        "noteExternal": "This MCP server is hosted externally at the URL above.",
+        "notAvailable": "Connection URL not available. The instance may still be initializing."
+      },
+      "labels": {
+        "connectionUrl": "Connection URL",
+        "sseUrl": "SSE URL",
+        "value": "Value"
+      },
+      "serverSpec": {
+        "title": "Server Spec"
+      },
+      "command": {
+        "title": "Command",
+        "note": "Runs in a sandbox container via supergateway."
+      },
+      "external": {
+        "title": "External Server",
+        "customHeaders": "Custom Headers"
+      },
+      "container": {
+        "title": "Container",
+        "port": "Port"
+      },
+      "tools": {
+        "title": "Available Tools ({count})",
+        "columns": {
+          "name": "Name",
+          "description": "Description"
+        }
+      },
+      "env": {
+        "title": "Environment Variables",
+        "notSet": "not set",
+        "columns": {
+          "key": "Key",
+          "value": "Value"
+        }
+      },
+      "details": {
+        "title": "Details",
+        "id": "Instance ID",
+        "created": "Created",
+        "updated": "Updated"
+      },
+      "confirm": {
+        "deleteTitle": "Delete instance?",
+        "deleteDescription": "This will permanently delete \"{instanceName}\" and stop its container. This action cannot be undone."
+      },
+      "success": {
+        "starting": "Starting {instanceName}…",
+        "stopped": "Stopped {instanceName}",
+        "deleted": "Deleted {instanceName}",
+        "copied": "{label} copied to clipboard"
+      },
+      "errors": {
+        "startFailed": "Failed to start instance",
+        "stopFailed": "Failed to stop instance",
+        "deleteFailed": "Failed to delete instance",
+        "copyFailed": "Failed to copy"
+      }
+    },
     "table": {
       "name": "Name",
       "description": "Description",

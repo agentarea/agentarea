@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import { ExternalLink, Hash, Clock } from "lucide-react";
 import { Skill } from "@/lib/browser-api";
+import ExpandableText from "@/components/TaskInfoPanel/components/ExpandableText";
 import Section from "@/components/TaskInfoPanel/components/Section";
 
 interface SkillDetailsProps {
@@ -29,9 +30,15 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {tDetail("description")}
         </div>
-        <div className="text-sm text-foreground">
-          {skill.description || "-"}
-        </div>
+        {skill.description ? (
+          <ExpandableText
+            content={skill.description}
+            maxLines={3}
+            textClassName="text-sm text-foreground"
+          />
+        ) : (
+          <div className="text-sm text-foreground">-</div>
+        )}
       </div>
 
       <div className="space-y-1">
