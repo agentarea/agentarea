@@ -17,6 +17,7 @@ dependencies = [
     "agentarea-tasks",
     "agentarea-secrets",
     "agentarea-triggers",
+    "agentarea-openapi",
     "alembic>=1.15.2",
     "uvicorn>=0.34.0",
     "fastapi>=0.104.0",
@@ -37,6 +38,7 @@ agentarea-mcp = { workspace = true }
 agentarea-tasks = { workspace = true }
 agentarea-secrets = { workspace = true }
 agentarea-triggers = { workspace = true }
+agentarea-openapi = { workspace = true }
 
 [project.scripts]
 agentarea-api = "agentarea_api.cli:cli"

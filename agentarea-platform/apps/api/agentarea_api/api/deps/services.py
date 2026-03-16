@@ -27,6 +27,7 @@ from agentarea_llm.infrastructure.model_spec_repository import ModelSpecReposito
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 from agentarea_mcp.application.registry_service import RegistryService
+from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
 from agentarea_mcp.infrastructure.registry_repository import (
     RegistryItemRepository,
@@ -296,6 +297,13 @@ async def get_workspace_import_export_service(
     )
 
 
+async def get_openapi_connection_service(
+    repository_factory: RepositoryFactoryDep,
+) -> OpenAPIConnectionService:
+    """Get an OpenAPIConnectionService instance for the current request."""
+    return OpenAPIConnectionService(repository_factory=repository_factory)
+
+
 async def get_skill_service(
     repository_factory: RepositoryFactoryDep,
     user_context: UserContextDep,
@@ -324,6 +332,9 @@ TemporalWorkflowServiceDep = Annotated[
 MCPServerServiceDep = Annotated[MCPServerService, Depends(get_mcp_server_service)]
 MCPServerInstanceServiceDep = Annotated[
     MCPServerInstanceService, Depends(get_mcp_server_instance_service)
+]
+OpenAPIConnectionServiceDep = Annotated[
+    OpenAPIConnectionService, Depends(get_openapi_connection_service)
 ]
 
 
