@@ -2,7 +2,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -12,6 +12,13 @@ from agentarea_llm.domain.models import ModelSpec
 class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, ModelSpec, user_context)
+
+    def _get_workspace_filter(self):
+        """Include system entities (workspace_id='system')."""
+        return or_(
+            self.model_class.workspace_id == self.user_context.workspace_id,
+            self.model_class.workspace_id == "system",
+        )
 
     async def get_with_relations(self, id: UUID) -> ModelSpec | None:
         """Get model spec by ID with relationships loaded."""
