@@ -196,19 +196,16 @@ async def _create_task_manager(repository_factory: RepositoryFactoryDep):
 
     settings = get_settings()
 
+    task_repository = repository_factory.create_repository(TaskRepository)
+
     if settings.workflow.EXECUTION_ENGINE == "direct":
         from agentarea_tasks.direct_task_manager import DirectTaskManager
 
         logger.info("Using DirectTaskManager (in-process, no Temporal)")
-        return DirectTaskManager(
-            provider_type=os.environ.get("DIRECT_LLM_PROVIDER", "openrouter"),
-            model_name=os.environ.get("DIRECT_LLM_MODEL", "meta-llama/llama-3.3-70b-instruct"),
-            api_key=os.environ.get("DIRECT_LLM_API_KEY", os.environ.get("OPENROUTER_API_KEY", "")),
-        )
+        return DirectTaskManager(task_repository)
 
     from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
-    task_repository = repository_factory.create_repository(TaskRepository)
     return TemporalTaskManager(task_repository)
 
 
