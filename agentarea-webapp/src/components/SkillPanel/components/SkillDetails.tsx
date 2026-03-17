@@ -4,8 +4,7 @@ import { useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import { ExternalLink, Hash, Clock } from "lucide-react";
 import { Skill } from "@/lib/browser-api";
-import ExpandableText from "@/components/TaskInfoPanel/components/ExpandableText";
-import Section from "@/components/TaskInfoPanel/components/Section";
+import { InfoPanelExpandableText, InfoPanelSection } from "@/components/InfoPanel";
 
 interface SkillDetailsProps {
   skill: Skill;
@@ -16,7 +15,7 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
   const t = useTranslations("SkillsPage");
 
   return (
-    <Section title={tDetail("details")} contentClassName="space-y-3 text-xs">
+    <InfoPanelSection title={tDetail("details")} contentClassName="space-y-3 text-xs">
       <div className="space-y-1">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {tDetail("name")}
@@ -31,7 +30,7 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
           {tDetail("description")}
         </div>
         {skill.description ? (
-          <ExpandableText
+          <InfoPanelExpandableText
             content={skill.description}
             maxLines={3}
             textClassName="text-sm text-foreground"
@@ -76,6 +75,6 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
           </a>
         </div>
       )}
-    </Section>
+    </InfoPanelSection>
   );
 }

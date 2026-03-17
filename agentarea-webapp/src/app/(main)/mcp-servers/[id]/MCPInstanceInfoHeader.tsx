@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
+import { InfoPanelHeader } from "@/components/InfoPanel";
 import type { MCPInstance } from "../types";
 
 export default function MCPInstanceInfoHeader({
@@ -39,18 +40,14 @@ export default function MCPInstanceInfoHeader({
             : status || t("status.unknown");
 
   return (
-    <div className="flex items-start justify-between gap-3 px-3 pb-3 pt-3">
-      <div className="space-y-1">
-        <div className="text-xs font-normal uppercase tracking-wide text-muted-foreground">
-          {t("header.label")}
-        </div>
-        <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
-          {instance.name || t("header.untitled")}
-        </h3>
-      </div>
-      <Badge variant={statusVariant as any} size="sm">
-        {statusLabel}
-      </Badge>
-    </div>
+    <InfoPanelHeader
+      label={t("header.label")}
+      title={instance.name || t("header.untitled")}
+      right={
+        <Badge variant={statusVariant as any} size="sm">
+          {statusLabel}
+        </Badge>
+      }
+    />
   );
 }

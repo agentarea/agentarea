@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
+import { InfoPanelHeader } from "@/components/InfoPanel";
 import { Task } from "../types";
 
 interface TaskInfoHeaderProps {
@@ -11,28 +12,22 @@ export default function TaskInfoHeader({ task, currentStatus }: TaskInfoHeaderPr
   const t = useTranslations("TaskInfoPanel");
   const statusVariant =
     currentStatus === "running"
-      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+      ? "blue"
       : currentStatus === "completed" || currentStatus === "success"
-        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+        ? "emerald"
         : currentStatus === "paused"
-          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-          : "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200";
+          ? "amber"
+          : "rose";
 
   return (
-    <div className="flex items-start justify-between gap-3 px-3 pb-3 pt-3">
-      <div className="space-y-1">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground font-normal">
-          {t("agentTask")}
-        </div>
-        <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
-          {task.description || t("untitledTask")}
-        </h3>
-      </div>
-      <Badge
-        className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusVariant}`}
-      >
-        {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
-      </Badge>
-    </div>
+    <InfoPanelHeader
+      label={t("agentTask")}
+      title={task.description || t("untitledTask")}
+      right={
+        <Badge variant={statusVariant as any} size="sm">
+          {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
+        </Badge>
+      }
+    />
   );
 }

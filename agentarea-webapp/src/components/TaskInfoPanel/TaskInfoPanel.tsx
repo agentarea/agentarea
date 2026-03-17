@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
 import TaskInfoHeader from "./components/TaskInfoHeader";
 import TaskInfoTabs from "./components/TaskInfoTabs";
 import KeyMetrics from "./components/KeyMetrics";
@@ -37,13 +38,11 @@ export default function TaskInfoPanel({
   // If we have no task but have an agentId, we show ModelInfo directly (Agent Info mode)
   if (!task && agentId) {
     return (
-      <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
-        <div className="min-h-full bg-white dark:bg-zinc-800">
-           <div className="space-y-3 px-3.5 py-3 text-xs">
-             <ModelInfo agentId={agentId} />
-           </div>
-        </div>
-      </div>
+      <InfoPanelShell>
+        <InfoPanelBody className="space-y-3">
+          <ModelInfo agentId={agentId} />
+        </InfoPanelBody>
+      </InfoPanelShell>
     );
   }
 
@@ -52,38 +51,27 @@ export default function TaskInfoPanel({
   }
 
   return (
-    <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
-      <div className="min-h-full bg-white dark:bg-zinc-800">
-        {/* Header */}
-        <TaskInfoHeader task={task} currentStatus={currentStatus} />
+    <InfoPanelShell>
+      <TaskInfoHeader task={task} currentStatus={currentStatus} />
+      <TaskInfoTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+      <InfoPanelBody className="space-y-1.5">
+        {activeTab === "overview" && (
+          <>
+            <KeyMetrics
+              currentStatus={currentStatus}
+              isActive={isActive}
+              executionTime={executionTime}
+              formattedStart={formattedStart}
+              formattedEnd={formattedEnd}
+            />
 
-        {/* Tabs */}
-        <TaskInfoTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+            <Metadata task={task} />
+            <QuickActions task={task} />
+          </>
+        )}
 
-        {/* Content sections */}
-        <div className="space-y-1.5 px-3.5 py-3 text-xs">
-          {activeTab === "overview" && (
-            <>
-              {/* Key metrics */}
-              <KeyMetrics
-                currentStatus={currentStatus}
-                isActive={isActive}
-                executionTime={executionTime}
-                formattedStart={formattedStart}
-                formattedEnd={formattedEnd}
-              />
-
-              {/* Metadata */}
-              <Metadata task={task} />
-
-              {/* Quick links / actions */}
-              <QuickActions task={task} />
-            </>
-          )}
-
-          {activeTab === "model" && <ModelInfo task={task} />}
-        </div>
-      </div>
-    </div>
+        {activeTab === "model" && <ModelInfo task={task} />}
+      </InfoPanelBody>
+    </InfoPanelShell>
   );
 }

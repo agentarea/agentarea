@@ -2,8 +2,12 @@
 
 import { useTranslations } from "next-intl";
 import { Clock, Hash } from "lucide-react";
-import ExpandableText from "@/components/TaskInfoPanel/components/ExpandableText";
-import Section from "@/components/TaskInfoPanel/components/Section";
+import {
+  InfoPanelBody,
+  InfoPanelExpandableText,
+  InfoPanelSection,
+  InfoPanelShell,
+} from "@/components/InfoPanel";
 import type { MCPInstance, MCPServer } from "../types";
 import MCPInstanceInfoHeader from "./MCPInstanceInfoHeader";
 
@@ -17,12 +21,14 @@ export default function MCPInstancePanel({
   const t = useTranslations("MCPServersPage.instanceDetail");
 
   return (
-    <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
-      <div className="min-h-full bg-white dark:bg-zinc-800">
-        <MCPInstanceInfoHeader instance={instance} />
+    <InfoPanelShell>
+      <MCPInstanceInfoHeader instance={instance} />
 
-        <div className="space-y-4 px-3.5 py-3 text-xs">
-          <Section title={t("details.title")} contentClassName="space-y-3 text-xs">
+      <InfoPanelBody>
+        <InfoPanelSection
+          title={t("details.title")}
+          contentClassName="space-y-3 text-xs"
+        >
             <div className="space-y-1">
               <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("fields.name")}
@@ -37,7 +43,7 @@ export default function MCPInstancePanel({
                 {t("fields.description")}
               </div>
               {instance.description ? (
-                <ExpandableText
+                <InfoPanelExpandableText
                   content={instance.description}
                   maxLines={3}
                   textClassName="text-sm text-foreground"
@@ -78,10 +84,13 @@ export default function MCPInstancePanel({
                 </div>
               </div>
             </div>
-          </Section>
+        </InfoPanelSection>
 
           {serverSpec && (
-            <Section title={t("serverSpec.title")} contentClassName="space-y-2 text-xs">
+            <InfoPanelSection
+              title={t("serverSpec.title")}
+              contentClassName="space-y-2 text-xs"
+            >
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-xs font-medium">{serverSpec.name}</div>
@@ -90,17 +99,16 @@ export default function MCPInstancePanel({
                   )}
                 </div>
                 {serverSpec.description && (
-                  <ExpandableText
+                  <InfoPanelExpandableText
                     content={serverSpec.description}
                     maxLines={3}
                     textClassName="note"
                   />
                 )}
               </div>
-            </Section>
+            </InfoPanelSection>
           )}
-        </div>
-      </div>
-    </div>
+      </InfoPanelBody>
+    </InfoPanelShell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Skill, SkillFile } from "@/lib/browser-api";
+import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
 import SkillInfoHeader from "./components/SkillInfoHeader";
 import SkillDetails from "./components/SkillDetails";
 import SkillFiles from "./components/SkillFiles";
@@ -19,22 +20,17 @@ export default function SkillPanel({
   selectedFile,
 }: SkillPanelProps) {
   return (
-    <div className="h-full overflow-auto border-l border-zinc-200 dark:border-zinc-700">
-      <div className="min-h-full bg-white dark:bg-zinc-800">
-        {/* Header */}
-        <SkillInfoHeader skill={skill} />
+    <InfoPanelShell>
+      <SkillInfoHeader skill={skill} />
+      <InfoPanelBody>
+        <SkillDetails skill={skill} />
 
-        {/* Content sections */}
-        <div className="space-y-4 px-3.5 py-3 text-xs">
-          <SkillDetails skill={skill} />
-
-          <SkillFiles
-            files={files}
-            onFileSelect={onFileSelect}
-            selectedFile={selectedFile}
-          />
-        </div>
-      </div>
-    </div>
+        <SkillFiles
+          files={files}
+          onFileSelect={onFileSelect}
+          selectedFile={selectedFile}
+        />
+      </InfoPanelBody>
+    </InfoPanelShell>
   );
 }
