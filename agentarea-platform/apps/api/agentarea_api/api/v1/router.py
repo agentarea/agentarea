@@ -23,6 +23,7 @@ from . import (
     model_specs,
     provider_configs,
     provider_specs,
+    registries,
     skills,
     triggers,
     webhooks,
@@ -85,6 +86,9 @@ protected_v1_router.include_router(mcp_oauth_links.router)
 
 # MCP API Keys management - PROTECTED
 protected_v1_router.include_router(mcp_access_tokens.router)
+
+# Registries (MCP catalog) - PROTECTED
+protected_v1_router.include_router(registries.router)
 
 # Compound MCPs - PROTECTED
 protected_v1_router.include_router(compound_mcps.router)

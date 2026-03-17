@@ -149,6 +149,16 @@ class ToolCallFailedEvent(BaseWorkflowEvent):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+class WorkflowContinuedAsNewEvent(BaseWorkflowEvent):
+    """Event emitted when workflow continues as new execution."""
+
+    iterations_completed: int = 0
+    total_cost: float = 0.0
+    messages_carried: int = 0
+    continued_from_run_id: str = ""
+    reason: str = ""
+
+
 class BudgetWarningEvent(BaseWorkflowEvent):
     """Event emitted when budget warning threshold is reached."""
 
@@ -171,6 +181,7 @@ EVENT_CLASS_MAPPING = {
     "WorkflowStarted": WorkflowStartedEvent,
     "WorkflowCompleted": WorkflowCompletedEvent,
     "WorkflowFailed": WorkflowFailedEvent,
+    "WorkflowContinuedAsNew": WorkflowContinuedAsNewEvent,
     "IterationStarted": IterationStartedEvent,
     "IterationCompleted": IterationCompletedEvent,
     "LLMCallStarted": LLMCallStartedEvent,

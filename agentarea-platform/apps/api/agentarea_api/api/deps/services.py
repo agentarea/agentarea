@@ -25,7 +25,12 @@ from agentarea_llm.infrastructure.model_instance_repository import ModelInstance
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
+from agentarea_mcp.application.registry_service import RegistryService
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
+from agentarea_mcp.infrastructure.registry_repository import (
+    RegistryItemRepository,
+    RegistryRepository,
+)
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
@@ -225,6 +230,21 @@ async def get_mcp_server_service(
     return MCPServerService(repository_factory, event_broker)
 
 
+async def get_registry_service(
+    db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
+) -> RegistryService:
+    """Get a RegistryService instance for the current request."""
+    from agentarea_agents.infrastructure.skill_repository import SkillRepository
+    from agentarea_mcp.infrastructure.repository import MCPServerRepository
+
+    registry_repo = RegistryRepository(db_session, user_context)
+    item_repo = RegistryItemRepository(db_session, user_context)
+    server_repo = MCPServerRepository(db_session, user_context)
+    skill_repo = SkillRepository(db_session, user_context)
+    return RegistryService(registry_repo, item_repo, server_repo, skill_repo)
+
+
 async def get_mcp_server_instance_service(
     repository_factory: RepositoryFactoryDep,
     secret_manager: BaseSecretManagerDep,
@@ -379,6 +399,7 @@ async def get_trigger_service(
         task_service=task_service,
         llm_condition_evaluator=llm_condition_evaluator,
         temporal_schedule_manager=temporal_schedule_manager,
+        secret_manager=secret_manager,
     )
 
 

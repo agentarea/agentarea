@@ -32,7 +32,11 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     # Cron-specific fields
     cron_expression: Mapped[str | None] = mapped_column(String(255), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(100), nullable=True, default="UTC")
-    next_run_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Data extraction for poll-based channels
+    data_extractor: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    data_extractor_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    data_extractor_state: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Webhook-specific fields
     webhook_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

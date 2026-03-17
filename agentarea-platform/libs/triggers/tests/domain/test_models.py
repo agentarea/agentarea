@@ -201,7 +201,9 @@ class TestCronTrigger:
         assert trigger.trigger_type == TriggerType.CRON
         assert trigger.cron_expression == "0 9 * * *"
         assert trigger.timezone == "America/New_York"
-        assert trigger.next_run_time is None
+        assert trigger.data_extractor is None
+        assert trigger.data_extractor_config is None
+        assert trigger.data_extractor_state is None
 
     def test_cron_expression_validation(self):
         """Test cron expression validation."""

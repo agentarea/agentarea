@@ -181,7 +181,7 @@ export async function addMCPServer(
         env_schema: [],
       });
     } else if (validatedFields.data.type === "command") {
-      // Create Command-based MCP Server Instance (npx/uvx via supergateway sandbox)
+      // Create Command-based MCP Server Instance (npx/uvx via mcp-bridge sandbox)
       const argsArray = validatedFields.data.args
         ? validatedFields.data.args.trim().split(/\s+/)
         : [];

@@ -1,14 +1,14 @@
 """MCP configuration and request schemas."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
-class MCPServerStatus(str, Enum):
+class MCPServerStatus(StrEnum):
     """MCP server status enum."""
 
     REQUESTED = "requested"
@@ -21,7 +21,7 @@ class MCPServerStatus(str, Enum):
     DELETED = "deleted"
 
 
-class MCPServerTemplate(str, Enum):
+class MCPServerTemplate(StrEnum):
     """Available MCP server templates."""
 
     FASTAPI = "fastapi"

@@ -5,6 +5,7 @@ import { Settings } from "@ory/elements-react/theme";
 import { getSettingsFlow, OryPageParams } from "@ory/nextjs/app";
 import "@ory/elements-react/theme/styles.css";
 import config from "@/ory.config";
+import { getOryBrowserConfig, rewriteFlowForBrowser } from "@/lib/auth/browser-config";
 
 export default async function OrySettingsPage(props: OryPageParams) {
   const flow = await getSettingsFlow(config, props.searchParams);
@@ -18,8 +19,8 @@ export default async function OrySettingsPage(props: OryPageParams) {
       <div className="w-full max-w-md rounded-xl border border-white/20 bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:border-gray-700/20 dark:bg-gray-800/95">
         <SessionProvider>
           <Settings
-            flow={flow}
-            config={config}
+            flow={rewriteFlowForBrowser(flow)}
+            config={getOryBrowserConfig()}
             components={{
               Card: {},
             }}

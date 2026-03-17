@@ -8,7 +8,7 @@ import { env } from "@/env";
 export const proxy = (request: Request) => {
   // Redirect /self-service requests from the current host to NEXT_PUBLIC_ORY_SDK_URL if necessary
   const currentHost = request.headers.get("host");
-  const publicOryUrl = env.NEXT_PUBLIC_ORY_SDK_URL;
+  const publicOryUrl = env.ORY_BROWSER_URL;
   if (
     currentHost &&
     publicOryUrl &&

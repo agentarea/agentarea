@@ -2,16 +2,11 @@ import os
 import yaml
 import uuid
 from typing import Dict, Any, Optional
-from sqlalchemy import create_engine, text
+from code.db import engine
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-# Adjust these as needed
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/agentarea"
-)
 YAML_PATH = os.environ.get("LLM_PROVIDERS_YAML", "/app/llm/providers.yaml")
-
-engine = create_engine(DATABASE_URL)
 
 
 def get_provider_type(provider_key: str) -> str:

@@ -831,7 +831,7 @@ const sandboxPort = 8080
 //   - "docker" (default): the spec must contain "image" and "port". The container is
 //     launched as-is and is expected to serve MCP over HTTP/SSE natively.
 //   - "command": the spec must contain "command" (e.g. "npx" or "uvx") plus optional
-//     "args". The command is wrapped with supergateway so its stdio transport is
+//     "args". The command is wrapped with mcp-bridge so its stdio transport is
 //     exposed over HTTP/SSE on sandboxPort.
 func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port int, command []string, environment map[string]string) {
 	environment = make(map[string]string)

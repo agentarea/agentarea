@@ -5,6 +5,8 @@ import sys
 # from code.populate_llm_providers import main as populate_llm_providers_main
 from code.populate_providers_new_arch import main as populate_providers_new_arch_main
 from code.populate_mcp_providers import main as populate_mcp_providers_main
+from code.populate_registries import main as populate_registries_main
+from code.populate_provider_configs import main as populate_provider_configs_main
 from code.populate_default_agent import main as populate_default_agent_main
 from code.populate_skills import main as populate_skills_main
 from code.minio_setup import minio_setup
@@ -40,11 +42,19 @@ def main():
         populate_mcp_providers_main()
         print("✓ MCP server specifications populated")
 
-        print("\n5. Populating default system agent...")
+        print("\n5. Setting up registries and syncing catalog...")
+        populate_registries_main()
+        print("✓ Registries synced")
+
+        print("\n6. Populating provider configs from Helm values...")
+        populate_provider_configs_main()
+        print("✓ Provider configs populated")
+
+        print("\n7. Populating default system agent...")
         populate_default_agent_main()
         print("✓ Default agent populated")
 
-        print("\n6. Populating system skills...")
+        print("\n8. Populating system skills...")
         populate_skills_main()
         print("✓ System skills populated")
 

@@ -15,9 +15,24 @@ LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=2)
 TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=3)
 EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
 
+# Heartbeat configuration
+HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
+
+# Agent delegation
+DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for child agent
+
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
+
+
+# Context window management
+CONTEXT_COMPACT_THRESHOLD: Final[float] = 0.75  # Compact at 75% of context window
+CONTEXT_WARNING_THRESHOLD: Final[float] = 0.60  # Warn at 60%
+CONTEXT_RESERVE_FOR_OUTPUT: Final[float] = 0.15  # Reserve 15% for model output
+MIN_RECENT_MESSAGES_TO_KEEP: Final[int] = 6  # Always keep last 6 messages (3 turns)
+TOKENS_PER_MESSAGE_OVERHEAD: Final[int] = 4  # ~4 tokens overhead per message
+DEFAULT_CONTEXT_WINDOW: Final[int] = 128000  # Fallback if not set on model
 
 
 # Event types
@@ -44,6 +59,15 @@ class EventTypes:
     BUDGET_WARNING: Final[str] = "BudgetWarning"
     BUDGET_EXCEEDED: Final[str] = "BudgetExceeded"
 
+    CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
+    CONTEXT_WARNING: Final[str] = "ContextWarning"
+
+    WORKFLOW_CONTINUED_AS_NEW: Final[str] = "WorkflowContinuedAsNew"
+
+    AGENT_DELEGATION_STARTED: Final[str] = "AgentDelegationStarted"
+    AGENT_DELEGATION_COMPLETED: Final[str] = "AgentDelegationCompleted"
+    AGENT_DELEGATION_FAILED: Final[str] = "AgentDelegationFailed"
+
     HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
 
@@ -62,6 +86,10 @@ class Activities:
     CREATE_EXECUTION_PLAN: Final[str] = "create_execution_plan_activity"
     EVALUATE_GOAL_PROGRESS: Final[str] = "evaluate_goal_progress_activity"
     PUBLISH_WORKFLOW_EVENTS: Final[str] = "publish_workflow_events_activity"
+    COMPACT_MESSAGES: Final[str] = "compact_messages_activity"
+    RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
+    RECALL_HISTORY: Final[str] = "recall_history_activity"
+    UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
 
 
 # Execution statuses

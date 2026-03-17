@@ -174,7 +174,7 @@ func (h *Handler) createInstance(c *gin.Context) {
 	}
 
 	// If a full json_spec is supplied, resolve the effective image/port/command from it.
-	// This handles both "docker" type (image+port) and "command" type (sandbox+supergateway).
+	// This handles both "docker" type (image+port) and "command" type (sandbox+mcp-bridge).
 	if len(req.JSONSpec) > 0 {
 		image, port, command, environment := container.ResolveContainerSpec(req.JSONSpec)
 		if req.Image == "" {

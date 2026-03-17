@@ -32,6 +32,9 @@ class AgentExecutionRequest(BaseModel):
     # Additional workflow metadata
     workflow_metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # Continue-as-new state (populated when workflow restarts with fresh event history)
+    continued_state: dict[str, Any] | None = None
+
 
 class AgentExecutionResult(BaseModel):
     """Result of agent execution workflow."""
@@ -160,6 +163,7 @@ class AgentConfigResult(BaseModel):
     description: str
     instruction: str
     model_id: str
+    context_window: int = 128000  # From ModelSpec, used for context window management
     tools: list[dict[str, Any]] = Field(default_factory=list)
     events_config: dict[str, Any] = Field(default_factory=dict)
     planning: bool = False
@@ -291,6 +295,40 @@ class WorkflowEventsResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class UpdateTaskStatusRequest(BaseModel):
+    """Request to update task status in the database."""
+
+    task_id: str
+    status: str  # completed, failed, cancelled
+    result: str | None = None
+    error_message: str | None = None
+    workspace_id: str
+
+
+class UpdateTaskStatusResult(BaseModel):
+    """Result of task status update."""
+
+    success: bool
+    error: str | None = None
+
+
+class CompactMessagesRequest(BaseModel):
+    """Request to compact/summarize older messages."""
+
+    messages_to_compact: list[dict[str, Any]]
+    model_id: str
+    workspace_id: str
+    user_context_data: dict[str, Any] | None = None
+
+
+class CompactMessagesResult(BaseModel):
+    """Result of message compaction."""
+
+    summary: str
+    original_message_count: int
+    estimated_tokens_saved: int
+
+
 # === Trigger Activity Models ===
 
 
@@ -361,6 +399,43 @@ class CreateTaskFromTriggerResult(BaseModel):
 
 
 # === Skill File Activity Models ===
+
+
+class ResolveAgentToolsRequest(BaseModel):
+    """Request to resolve agent tool names to agent IDs."""
+
+    agent_names: list[str]
+    workspace_id: str
+    user_context_data: dict[str, Any] | None = None
+
+
+class ResolveAgentToolsResult(BaseModel):
+    """Result of agent tool resolution. Maps agent names to their IDs."""
+
+    agent_map: dict[str, str] = Field(default_factory=dict)  # name → agent_id
+
+
+class RecallHistoryRequest(BaseModel):
+    """Request to recall context from past task executions.
+
+    Used by the recall_history tool to query the DB event log (tier 2)
+    for relevant past context that was compacted out of the working set.
+    """
+
+    task_id: UUID
+    workspace_id: str
+    query: str | None = None  # Optional search query to filter events
+    event_types: list[str] | None = None  # Filter by event types
+    limit: int = 20
+    user_context_data: dict[str, Any] | None = None
+
+
+class RecallHistoryResult(BaseModel):
+    """Result of history recall."""
+
+    events: list[dict[str, Any]] = Field(default_factory=list)
+    total_count: int = 0
+    summary: str = ""
 
 
 class SkillFileRequest(BaseModel):

@@ -13,6 +13,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.12"
   UV_CACHE_DIR: ~/.cache/uv

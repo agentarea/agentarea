@@ -1,7 +1,7 @@
 """Skill domain model."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
-class SkillSourceType(str, Enum):
+class SkillSourceType(StrEnum):
     """Source type for a skill package."""
 
     CONTENT = "content"  # Raw markdown content
@@ -40,6 +40,8 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     s3_path: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )  # S3 path for multi-file packages
+    # Provenance: links back to the registry catalog item this skill was created from
+    registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
     # Relationships
     agents: Mapped[list["Agent"]] = relationship(

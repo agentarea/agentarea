@@ -21,7 +21,7 @@ spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
       containers:
         - name: minio
-          image: "{{ default "" .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default "minio/minio" .Values.minio.image.repository }}:{{ default "latest" .Values.minio.image.tag }}"
+          image: "{{ default "minio/minio" .Values.minio.image.repository }}:{{ default "latest" .Values.minio.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           args: ["server","/data","--console-address",":9001"]
           ports:

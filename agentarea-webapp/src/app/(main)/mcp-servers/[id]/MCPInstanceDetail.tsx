@@ -222,6 +222,7 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
                   </div>
                 )}
 
+              {/* Configuration info - type-aware */}
               {isCommandType && commandStr && (
                 <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
                   <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

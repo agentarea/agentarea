@@ -26,10 +26,10 @@ const inter = Inter({
 });
 
 // Runtime config to inject into window.__ENV__ for client-side access
-// This avoids the need for NEXT_PUBLIC_* env vars which are bundled at build time
+// Uses ORY_BROWSER_URL (not NEXT_PUBLIC_*) to avoid Next.js build-time inlining
 function getRuntimeConfig() {
   return {
-    CLIENT_ORY_SDK_URL: process.env.ORY_SDK_URL || "",
+    CLIENT_ORY_SDK_URL: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
   };
 }
 

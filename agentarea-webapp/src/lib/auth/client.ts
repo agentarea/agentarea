@@ -8,7 +8,7 @@ export const serverSideFrontendClient = () =>
             headers: {
                 Accept: "application/json",
             },
-            basePath: typeof window !== "undefined" ? env.NEXT_PUBLIC_ORY_SDK_URL : env.ORY_SDK_URL,
+            basePath: env.ORY_SDK_URL,
         }),
     );
 

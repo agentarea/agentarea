@@ -185,6 +185,66 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         trigger_data=execution_data,
                     )
 
+                # Run data extractor if configured (poll-based channels like email)
+                if hasattr(trigger, "data_extractor") and trigger.data_extractor:
+                    try:
+                        from agentarea_triggers.extractors import get_extractor
+
+                        extractor_cls = get_extractor(trigger.data_extractor)
+                        if extractor_cls:
+                            extractor = extractor_cls()
+                            extraction_result = await extractor.extract(
+                                trigger.data_extractor_config or {},
+                                trigger.data_extractor_state,
+                            )
+
+                            if not extraction_result.has_new_data:
+                                logger.info(
+                                    "Data extractor found no new data, skipping",
+                                    trigger_id=trigger_id,
+                                    extractor=trigger.data_extractor,
+                                )
+                                return ExecuteTriggerResult(
+                                    trigger_id=trigger_id,
+                                    status="skipped",
+                                    reason="no_new_data",
+                                    execution_time_ms=int(
+                                        (datetime.utcnow() - start_time).total_seconds() * 1000
+                                    ),
+                                    trigger_data=execution_data,
+                                )
+
+                            # Enrich execution_data with extracted content
+                            execution_data["extracted_events"] = extraction_result.events
+                            if extraction_result.channel_origin:
+                                execution_data["channel_origin"] = extraction_result.channel_origin
+
+                            # Persist updated extractor state
+                            await trigger_repository.update_extractor_state(
+                                trigger_id, extraction_result.updated_state
+                            )
+                            await session.commit()
+
+                            logger.info(
+                                "Data extractor found %d new events",
+                                len(extraction_result.events),
+                                trigger_id=trigger_id,
+                                extractor=trigger.data_extractor,
+                            )
+                        else:
+                            logger.warning(
+                                "Unknown extractor type: %s",
+                                trigger.data_extractor,
+                                trigger_id=trigger_id,
+                            )
+                    except Exception as extractor_error:
+                        logger.error(
+                            "Data extractor failed: %s",
+                            extractor_error,
+                            trigger_id=trigger_id,
+                        )
+                        # Continue without extracted data
+
                 # Create task from trigger
                 task_id = None
                 try:

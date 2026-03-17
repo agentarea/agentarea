@@ -6,7 +6,7 @@ our EventEnvelope and EventBroker infrastructure.
 """
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_serializer
 from .base_events import EventEnvelope
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Unified event types for the AgentArea system."""
 
     # Task lifecycle events

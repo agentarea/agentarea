@@ -71,6 +71,27 @@ class ExecutionResult(BaseModel):
     total_cost: float = 0.0
 
 
+class ContinueAsNewState(BaseModel):
+    """State carried across continue-as-new boundaries."""
+
+    execution_id: str
+    agent_id: str
+    task_id: str
+    user_id: str
+    workspace_id: str
+    goal: AgentGoal
+    messages: list[dict[str, Any]]  # Already compacted
+    agent_config: dict[str, Any]
+    available_tools: list[dict[str, Any]]
+    current_iteration: int
+    total_cost: float
+    budget_usd: float | None = None
+    context_window: int = 128000
+    user_context_data: dict[str, Any] = Field(default_factory=dict)
+    continued_from_run_id: str | None = None
+    agent_tool_registry: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
 class AgentExecutionState(BaseModel):
     """Simplified execution state with direct attribute access."""
 
@@ -88,4 +109,5 @@ class AgentExecutionState(BaseModel):
     final_response: str | None = None
     success: bool = False
     budget_usd: float | None = None
+    context_window: int = 128000  # From ModelSpec, for context window management
     user_context_data: dict[str, Any] = Field(default_factory=dict)

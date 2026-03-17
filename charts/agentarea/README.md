@@ -324,6 +324,14 @@ The following table lists configurable parameters of the chart and their default
 | jobs.bootstrap.enabled | bool | `false` |  |
 | jobs.bootstrap.image.repository | string | `"agentarea/agentarea-bootstrap"` |  |
 | jobs.bootstrap.image.tag | string | `"latest"` |  |
+| jobs.bootstrap.adminEmail | string | `"admin@example.com"` |  |
+| jobs.bootstrap.adminPassword | string | `"changeme"` |  |
+| jobs.bootstrap.organizationName | string | `"AgentArea"` |  |
+| jobs.bootstrap.seedData.providers | string | `""` |  |
+| jobs.bootstrap.seedData.mcpProviders | string | `""` |  |
+| jobs.bootstrap.seedData.skills | string | `""` |  |
+| jobs.bootstrap.seedData.agents | string | `""` |  |
+| jobs.bootstrap.registries | list | `[]` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
 | kratos.enabled | bool | `true` |  |
 | kratos.replicaCount | int | `1` |  |
