@@ -6,9 +6,11 @@ from uuid import UUID
 import yaml
 from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.permission import require_permission
+from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
@@ -93,16 +95,30 @@ async def create_mcp_server(
     return MCPServerResponse.from_domain(server)
 
 
-@router.get("/", response_model=list[MCPServerResponse])
+@router.get("/", response_model=PaginatedResponse[MCPServerResponse])
 async def list_mcp_servers(
     user_context: UserContextDep,
+    pagination: PaginationParams = Depends(),
     status: str | None = None,
     is_public: bool | None = None,
     tag: str | None = None,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
-    servers = await mcp_server_service.list_servers(status=status, is_public=is_public, tag=tag)
-    return [MCPServerResponse.from_domain(server) for server in servers]
+    servers, total = await mcp_server_service.list_servers(
+        status=status,
+        is_public=is_public,
+        tag=tag,
+        search=pagination.search,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return PaginatedResponse(
+        items=[MCPServerResponse.from_domain(server) for server in servers],
+        total=total,
+        page=pagination.page,
+        page_size=pagination.page_size,
+        has_next=(pagination.offset + pagination.page_size) < total,
+    )
 
 
 def load_mcp_provider_templates() -> dict[str, Any]:
@@ -249,6 +265,7 @@ async def update_mcp_server(
     user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
+    await require_permission("edit", "mcp_server", str(server_id), user_context.user_id)
     server = await mcp_server_service.update_mcp_server(
         id=server_id,
         name=data.name,
@@ -270,6 +287,7 @@ async def delete_mcp_server(
     user_context: UserContextDep,
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
+    await require_permission("delete", "mcp_server", str(server_id), user_context.user_id)
     success = await mcp_server_service.delete_mcp_server(server_id)
     if not success:
         raise HTTPException(status_code=404, detail="MCP Server not found")
