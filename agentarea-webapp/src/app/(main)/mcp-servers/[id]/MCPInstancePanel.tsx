@@ -5,8 +5,10 @@ import { Clock, Hash } from "lucide-react";
 import {
   InfoPanelBody,
   InfoPanelExpandableText,
+  InfoPanelField,
   InfoPanelSection,
   InfoPanelShell,
+  InfoPanelValueBox,
 } from "@/components/InfoPanel";
 import type { MCPInstance, MCPServer } from "../types";
 import MCPInstanceInfoHeader from "./MCPInstanceInfoHeader";
@@ -53,15 +55,11 @@ export default function MCPInstancePanel({
               )}
             </div>
 
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                <Hash className="h-3 w-3 text-primary" />
-                {t("details.id")}
-              </div>
-              <div className="break-all rounded-md border border-border/50 bg-muted/30 p-1.5 font-mono text-xs text-foreground">
+            <InfoPanelField label={t("details.id")} icon={Hash}>
+              <InfoPanelValueBox mono className="break-all">
                 {instance.id}
-              </div>
-            </div>
+              </InfoPanelValueBox>
+            </InfoPanelField>
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               <div className="space-y-1">
