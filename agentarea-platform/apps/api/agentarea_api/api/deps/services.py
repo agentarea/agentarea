@@ -122,7 +122,14 @@ async def get_agent_service(
     event_broker: EventBrokerDep,
 ) -> AgentService:
     """Get an AgentService instance for the current request."""
-    return AgentService(repository_factory, event_broker)
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.di.container import resolve
+
+    try:
+        authz = resolve(AuthorizationService)
+    except (KeyError, TypeError):
+        authz = None
+    return AgentService(repository_factory, event_broker, authorization_service=authz)
 
 
 # LLM Service dependencies
@@ -288,7 +295,14 @@ async def get_workspace_import_export_service(
     provider_service: Annotated["ProviderService", Depends(get_provider_service)],
 ) -> WorkspaceImportExportService:
     """Get a WorkspaceImportExportService instance for the current request."""
-    agent_service = AgentService(repository_factory, event_broker)
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.di.container import resolve
+
+    try:
+        authz = resolve(AuthorizationService)
+    except (KeyError, TypeError):
+        authz = None
+    agent_service = AgentService(repository_factory, event_broker, authorization_service=authz)
     return WorkspaceImportExportService(
         agent_service=agent_service,
         repository_factory=repository_factory,
@@ -299,9 +313,15 @@ async def get_workspace_import_export_service(
 
 async def get_openapi_connection_service(
     repository_factory: RepositoryFactoryDep,
+    secret_manager: BaseSecretManagerDep,
 ) -> OpenAPIConnectionService:
     """Get an OpenAPIConnectionService instance for the current request."""
-    return OpenAPIConnectionService(repository_factory=repository_factory)
+    settings = get_settings()
+    return OpenAPIConnectionService(
+        repository_factory=repository_factory,
+        secret_manager=secret_manager,
+        allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
+    )
 
 
 async def get_skill_service(
@@ -516,7 +536,7 @@ async def get_public_webhook_manager(
     from agentarea_triggers.infrastructure.repository import TriggerRepository
 
     # Trigger lookup with system context — get_by_webhook_id doesn't filter by workspace
-    system_ctx = UserContext(user_id="system", workspace_id="system", roles=[])
+    system_ctx = UserContext(user_id="system", workspace_id="system", roles=[], accessible_workspaces=["system"])
     trigger_repo = TriggerRepository(session=db_session, user_context=system_ctx)
 
     class WebhookManagerWithLookup:
@@ -540,7 +560,7 @@ async def get_public_webhook_manager(
             async with db.session() as fresh_session:
                 workspace_id = trigger.workspace_id or "system"
                 created_by = trigger.created_by or "system"
-                ctx = UserContext(user_id=created_by, workspace_id=workspace_id, roles=[])
+                ctx = UserContext(user_id=created_by, workspace_id=workspace_id, roles=[], accessible_workspaces=[workspace_id, "system"])
                 repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)
                 sec_manager = get_real_secret_manager(session=fresh_session, user_context=ctx)
 

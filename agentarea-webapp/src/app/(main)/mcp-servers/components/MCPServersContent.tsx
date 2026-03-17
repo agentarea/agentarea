@@ -38,6 +38,10 @@ export default async function MCPServersContent({
   const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
   const serversData = serversResponse.data as any;
   const mcpServers = (serversData?.items || serversData || []) as MCPServer[];
+
+  if (openApiResponse.error) {
+    console.error("Failed to load OpenAPI connections:", openApiResponse.error);
+  }
   const openApiConnections = (openApiResponse.data || []) as OpenAPIConnection[];
 
   // Filter MCP instances based on search query

@@ -16,6 +16,8 @@ class MCPSettings(BaseAppSettings):
     HYDRA_ADMIN_URL: str = "http://hydra:4445"
     HYDRA_BROWSER_URL: str = "http://localhost:4444"
     MCP_OAUTH_SCOPES: str = "openid offline_access"
+    # Allow OpenAPI connections to reach localhost/private IPs (self-hosted deployments)
+    ALLOW_PRIVATE_URLS: bool = False
 
 
 class MCPManagerSettings(BaseSettings):

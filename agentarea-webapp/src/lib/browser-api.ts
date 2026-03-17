@@ -1208,6 +1208,7 @@ export const createOpenAPIConnection = async (body: {
   spec_url?: string;
   spec_content?: Record<string, any>;
   auth_config_id?: string;
+  custom_headers?: { name: string; value: string }[];
 }) => {
   const { data, error } = await browserClient.POST("/v1/openapi-connections/" as any, { body });
   return { data, error };
@@ -1230,6 +1231,7 @@ export const updateOpenAPIConnection = async (
     spec_url: string;
     spec_content: Record<string, any>;
     auth_config_id: string;
+    custom_headers: { name: string; value: string }[];
   }>
 ) => {
   const { data, error } = await browserClient.PATCH(
@@ -1243,6 +1245,17 @@ export const deleteOpenAPIConnection = async (connectionId: string) => {
   const { data, error } = await browserClient.DELETE(
     `/v1/openapi-connections/${connectionId}` as any,
     {}
+  );
+  return { data, error };
+};
+
+export const previewOpenAPISpec = async (body: {
+  spec_url?: string;
+  spec_content?: Record<string, any>;
+}) => {
+  const { data, error } = await browserClient.POST(
+    "/v1/openapi-connections/preview-spec" as any,
+    { body }
   );
   return { data, error };
 };

@@ -179,12 +179,51 @@ export function MyMCPsSection({
 
   // Render table view
   if (viewMode === "table") {
+    // Unified rows: MCP instances + OpenAPI connections with a Type column
+    const tableRows = [
+      ...mcpInstances.map((inst) => ({
+        id: inst.id,
+        name: inst.name,
+        description: inst.description,
+        endpoint_url: inst.endpoint_url,
+        type: "MCP" as const,
+        _type: "mcp" as const,
+        _instance: inst,
+      })),
+      ...openApiConnections.map((conn) => ({
+        id: conn.id,
+        name: conn.name,
+        description: conn.description,
+        endpoint_url: conn.base_url,
+        type: "OpenAPI" as const,
+        _type: "openapi" as const,
+        _instance: null as MCPInstance | null,
+      })),
+    ];
+
+    const unifiedColumns = [
+      {
+        accessor: "type",
+        header: "Type",
+        render: (value: string) => (
+          <Badge variant="outline" className={value === "OpenAPI" ? "border-orange-300 text-orange-600" : ""}>
+            {value}
+          </Badge>
+        ),
+      },
+      ...instanceColumns,
+    ];
+
     return (
       <Table
-        data={mcpInstances}
-        columns={instanceColumns}
-        onRowClick={(instance) => {
-          router.push(`/mcp-servers/${instance.id}`);
+        data={tableRows}
+        columns={unifiedColumns}
+        onRowClick={(row) => {
+          if (row._type === "openapi") {
+            router.push(`/mcp-servers/openapi/${row.id}`);
+          } else {
+            router.push(`/mcp-servers/${row.id}`);
+          }
         }}
       />
     );

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FileJson2, Trash2, RefreshCw, ExternalLink } from "lucide-react";
+import { FileJson2, Trash2, RefreshCw, ExternalLink, Lock } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
@@ -22,15 +22,26 @@ export default function OpenAPIConnectionDetailPage() {
 
   const [connection, setConnection] = useState<OpenAPIConnection | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [testResult, setTestResult] = useState<{ status: string; status_code?: number; error?: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await getOpenAPIConnection(connectionId);
-      setConnection(data as any);
-      setLoading(false);
+      try {
+        const { data, error: loadError } = await getOpenAPIConnection(connectionId);
+        if (loadError) {
+          setError((loadError as any)?.detail || "Failed to load connection");
+        } else {
+          setConnection(data as any);
+        }
+      } catch {
+        setError("Failed to load connection");
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [connectionId]);
@@ -39,8 +50,14 @@ export default function OpenAPIConnectionDetailPage() {
     setDiscovering(true);
     try {
       await discoverOpenAPITools(connectionId);
-      const { data } = await getOpenAPIConnection(connectionId);
-      setConnection(data as any);
+      const { data, error: loadError } = await getOpenAPIConnection(connectionId);
+      if (loadError) {
+        setError((loadError as any)?.detail || "Failed to reload connection");
+      } else {
+        setConnection(data as any);
+      }
+    } catch {
+      setError("Failed to discover tools");
     } finally {
       setDiscovering(false);
     }
@@ -50,8 +67,14 @@ export default function OpenAPIConnectionDetailPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      const { data } = await testOpenAPIConnection(connectionId);
-      setTestResult(data as any);
+      const { data, error: testError } = await testOpenAPIConnection(connectionId);
+      if (testError) {
+        setError((testError as any)?.detail || "Failed to test connection");
+      } else {
+        setTestResult(data as any);
+      }
+    } catch {
+      setError("Failed to test connection");
     } finally {
       setTesting(false);
     }
@@ -59,9 +82,15 @@ export default function OpenAPIConnectionDetailPage() {
 
   const handleDelete = async () => {
     if (!confirm("Delete this connection?")) return;
-    await deleteOpenAPIConnection(connectionId);
-    router.push("/mcp-servers");
-    router.refresh();
+    setDeleting(true);
+    try {
+      await deleteOpenAPIConnection(connectionId);
+      router.push("/mcp-servers");
+      router.refresh();
+    } catch {
+      setError("Failed to delete connection");
+      setDeleting(false);
+    }
   };
 
   if (loading) {
@@ -70,6 +99,10 @@ export default function OpenAPIConnectionDetailPage() {
         <LoadingSpinner />
       </div>
     );
+  }
+
+  if (error && !connection) {
+    return <div className="p-8 text-center text-destructive">{error}</div>;
   }
 
   if (!connection) {
@@ -95,15 +128,22 @@ export default function OpenAPIConnectionDetailPage() {
               <RefreshCw className={`mr-1 h-3.5 w-3.5 ${discovering ? "animate-spin" : ""}`} />
               {discovering ? "Discovering..." : "Discover Tools"}
             </Button>
-            <Button size="xs" variant="destructive" onClick={handleDelete}>
+            <Button size="xs" variant="destructive" onClick={handleDelete} disabled={deleting}>
               <Trash2 className="mr-1 h-3.5 w-3.5" />
-              Delete
+              {deleting ? "Deleting..." : "Delete"}
             </Button>
           </div>
         ),
       }}
     >
       <div className="space-y-6">
+        {/* Error banner */}
+        {error && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         {/* Info */}
         <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
           <div>
@@ -160,6 +200,32 @@ export default function OpenAPIConnectionDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Custom Headers */}
+        {connection.custom_headers && connection.custom_headers.length > 0 && (
+          <div>
+            <h3 className="mb-3 text-sm font-medium">
+              Custom Headers ({connection.custom_headers.length})
+            </h3>
+            <div className="grid gap-2">
+              {connection.custom_headers.map((header) => (
+                <div key={header.name} className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <p className="font-mono text-sm">{header.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    {header.secret ? (
+                      <>
+                        <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-mono text-sm text-muted-foreground">••••••••</span>
+                      </>
+                    ) : (
+                      <span className="font-mono text-sm">{header.value ?? ""}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </ContentBlock>
   );

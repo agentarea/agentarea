@@ -57,11 +57,14 @@ class TestDiscoverTools:
         service._repo = AsyncMock()
         service._repo.get_by_id.return_value = conn
 
-        with patch("agentarea_openapi.application.service.httpx.AsyncClient") as mock_client_cls:
+        with patch("agentarea_openapi.application.service.validate_url"), \
+             patch("agentarea_openapi.application.service.httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
             mock_resp = AsyncMock()
             mock_resp.status_code = 200
-            mock_resp.text = json.dumps(SAMPLE_SPEC)
+            spec_bytes = json.dumps(SAMPLE_SPEC).encode("utf-8")
+            mock_resp.content = spec_bytes
+            mock_resp.encoding = "utf-8"
             mock_resp.raise_for_status = lambda: None
             mock_client.get.return_value = mock_resp
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)

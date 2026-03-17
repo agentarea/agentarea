@@ -28,6 +28,11 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         ForeignKey("mcp_auth_configs.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Each entry: {"name": "Header-Name", "secret": bool, "value": "plaintext-or-null"}
+    # Secret header values are stored in the secret manager, not here.
+    custom_headers: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, nullable=True
+    )
     available_tools: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
     )
@@ -41,6 +46,7 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         spec_url: str | None = None,
         spec_content: dict[str, Any] | None = None,
         auth_config_id: UUID | None = None,
+        custom_headers: list[dict[str, Any]] | None = None,
         available_tools: list[dict[str, Any]] | None = None,
         status: str = "active",
         **kwargs: Any,
@@ -52,5 +58,6 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         self.spec_url = spec_url
         self.spec_content = spec_content
         self.auth_config_id = auth_config_id
+        self.custom_headers = custom_headers
         self.available_tools = available_tools or []
         self.status = status
