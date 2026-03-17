@@ -8,13 +8,14 @@ import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { getMCPHealthStatus } from "@/lib/browser-api";
-import { MCPInstanceCard } from "./MCPCard";
-import { MCPInstance, MCPServer, HealthCheck, HealthStatus } from "../types";
+import { MCPInstanceCard, OpenAPIConnectionCard } from "./MCPCard";
+import { MCPInstance, MCPServer, OpenAPIConnection, HealthCheck, HealthStatus } from "../types";
 import { MCP_CONSTANTS } from "../utils";
 
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
   mcpServers: MCPServer[];
+  openApiConnections?: OpenAPIConnection[];
   viewMode?: string;
   searchQuery?: string;
   hasNoData?: boolean;
@@ -23,6 +24,7 @@ interface MyMCPsSectionProps {
 export function MyMCPsSection({
   mcpInstances,
   mcpServers,
+  openApiConnections = [],
   viewMode = "grid",
   searchQuery = "",
   hasNoData = false,
@@ -156,16 +158,18 @@ export function MyMCPsSection({
     },
   ];
 
+  const totalItems = mcpInstances.length + openApiConnections.length;
+
   // Empty state handling
-  if (mcpInstances.length === 0) {
+  if (totalItems === 0) {
     return (
       <div className="py-1">
         <EmptyState
-          title={hasNoData ? "No MCP instances" : "No matching instances"}
+          title={hasNoData ? "No connections" : "No matching connections"}
           description={
             hasNoData
-              ? "No MCP server instances are configured yet"
-              : `No instances match your search query: "${searchQuery}"`
+              ? "No MCP servers or OpenAPI connections configured yet"
+              : `No connections match your search query: "${searchQuery}"`
           }
           iconsType="mcp"
         />
@@ -199,6 +203,12 @@ export function MyMCPsSection({
           />
         );
       })}
+      {openApiConnections.map((connection) => (
+        <OpenAPIConnectionCard
+          key={`openapi-${connection.id}`}
+          connection={connection}
+        />
+      ))}
     </div>
   );
 }

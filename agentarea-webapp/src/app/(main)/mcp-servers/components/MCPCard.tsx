@@ -12,10 +12,11 @@ import {
   Search,
   Mail,
   Command,
-  Box
+  Box,
+  FileJson2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { MCPServer, MCPInstance } from "../types";
+import { MCPServer, MCPInstance, OpenAPIConnection } from "../types";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface MCPServerSpecCardProps {
@@ -63,6 +64,33 @@ export function MCPInstanceCard({
         <p className="truncate text-xs text-gray-500 w-full">
           {specType === "command" ? "Command" : specType === "url" ? "External" : serverSpec?.name || "Docker"}
         </p>
+      }
+    />
+  );
+}
+
+interface OpenAPIConnectionCardProps {
+  connection: OpenAPIConnection;
+}
+
+export function OpenAPIConnectionCard({ connection }: OpenAPIConnectionCardProps) {
+  return (
+    <LinkedCard
+      href={`/mcp-servers/openapi/${connection.id}`}
+      title={connection.name}
+      icon={FileJson2}
+      type="view"
+      subtitle={
+        <div className="flex items-center gap-1.5">
+          <Badge size="sm" variant="outline" className="h-5 px-1.5 font-normal text-orange-600 border-orange-300">
+            OpenAPI
+          </Badge>
+          {connection.available_tools.length > 0 && (
+            <span className="text-xs text-gray-500">
+              {connection.available_tools.length} tools
+            </span>
+          )}
+        </div>
       }
     />
   );

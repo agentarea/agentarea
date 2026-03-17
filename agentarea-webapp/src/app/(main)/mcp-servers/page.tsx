@@ -2,17 +2,15 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
-import Link from "next/link";
-import { Plus } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import SearchInput from "@/components/SearchInput";
-import { Button } from "@/components/ui/button";
 import MCPHeaderTabs from "./components/MCPHeaderTabs";
 import MCPServersContent from "./components/MCPServersContent";
+import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
 
 export const metadata: Metadata = {
-  title: "MCP Servers",
+  title: "Connections",
 };
 
 export default async function MCPServersPage({
@@ -40,18 +38,7 @@ export default async function MCPServersPage({
       header={{
         breadcrumb: [{ label: t("title") }],
         description: t("description"),
-        controls: (
-          <Link href="/mcp-servers/add">
-            <Button
-              className="shrink-0 gap-2"
-              size="xs"
-              data-test="new-mcp-button"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {t("createCustomButton")}
-            </Button>
-          </Link>
-        ),
+        controls: <AddConnectionDropdown />,
       }}
       subheader={
         <>

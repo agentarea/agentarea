@@ -104,7 +104,11 @@
     "connections": "Connections",
     "providers": "Providers",
     "providerConfigs": "Models",
+    "apiKeys": "API Keys",
+    "workspace": "Workspace",
     "modelSpecs": "Model Specs",
+    "automation": "Automation",
+    "network": "Network",
     "settings": "Settings",
     "logout": "Logout"
   },
@@ -315,13 +319,14 @@
   },
 
   "MCPServersPage": {
-    "title": "MCP Servers",
-    "description": "Connect AI servers that provide tools, context, and capabilities to your agents",
-    "noServers": "No MCP servers found",
-    "addServer": "Add MCP Server",
-    "emptyDescription": "Add a new MCP server to connect to AI services",
-    "createCustomButton": "Add Custom Server",
-    "myActiveServers": "My Active Servers",
+    "title": "Connections",
+    "description": "Connect MCP servers and OpenAPI services that provide tools and capabilities to your agents",
+    "noServers": "No connections found",
+    "addServer": "Add Connection",
+    "emptyDescription": "Add MCP servers or OpenAPI connections to your workspace",
+    "createCustomButton": "Add Connection",
+    "myConnections": "My Connections",
+    "myActiveServers": "My Connections",
     "browseSpecifications": "Browse MCP Specifications",
     "table": {
       "name": "Name",
@@ -644,6 +649,186 @@
         "label": "Debug Issue",
         "text": "I'm facing a bug with the API integration. Can you help me debug it?"
       }
+    }
+  },
+
+  "APIKeysPage": {
+    "title": "API Keys",
+    "description": "Manage API keys for programmatic access to your workspace",
+    "createKey": "Create API Key",
+    "noKeys": "No API keys yet",
+    "noKeysDescription": "Create an API key to enable programmatic access to your workspace.",
+    "table": {
+      "name": "Name",
+      "tokenPrefix": "Token Prefix",
+      "status": "Status",
+      "created": "Created",
+      "expires": "Expires",
+      "lastUsed": "Last Used",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked",
+      "expired": "Expired"
+    },
+    "create": {
+      "title": "Create API Key",
+      "description": "Create a new API key for programmatic access",
+      "name": "Key Name",
+      "namePlaceholder": "e.g., CI/CD Pipeline",
+      "expiresInDays": "Expires In (Days)",
+      "expiresInDaysPlaceholder": "Leave empty for no expiration",
+      "createButton": "Create Key"
+    },
+    "created": {
+      "title": "API Key Created",
+      "warning": "Make sure to copy your API key now. You won't be able to see it again!",
+      "copied": "Copied to clipboard",
+      "copy": "Copy"
+    },
+    "revoke": {
+      "title": "Revoke API Key",
+      "description": "Are you sure you want to revoke \"{keyName}\"? This action cannot be undone.",
+      "button": "Revoke"
+    },
+    "error": {
+      "createFailed": "Failed to create API key",
+      "revokeFailed": "Failed to revoke API key",
+      "loadFailed": "Failed to load API keys"
+    },
+    "success": {
+      "created": "API key created successfully",
+      "revoked": "API key revoked successfully"
+    }
+  },
+
+  "TriggersPage": {
+    "title": "Automation",
+    "description": "Configure triggers to automate agent task execution",
+    "createTrigger": "Create Trigger",
+    "noTriggers": "No triggers yet",
+    "noTriggersDescription": "Create a trigger to automate your agent workflows.",
+    "noMatchingTriggers": "No triggers match your search",
+    "table": {
+      "name": "Name",
+      "type": "Type",
+      "agent": "Agent",
+      "status": "Status",
+      "nextRun": "Next Run",
+      "lastRun": "Last Run",
+      "created": "Created"
+    },
+    "type": {
+      "cron": "Cron",
+      "webhook": "Webhook"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "error": "Error"
+    },
+    "create": {
+      "title": "Create Trigger",
+      "description": "Set up a new automation trigger",
+      "back": "Back to Automation",
+      "name": "Trigger Name",
+      "namePlaceholder": "e.g., Daily Report Generator",
+      "triggerType": "Trigger Type",
+      "selectType": "Select trigger type",
+      "agent": "Agent",
+      "selectAgent": "Select an agent",
+      "cronExpression": "Cron Expression",
+      "cronPlaceholder": "e.g., 0 9 * * 1-5",
+      "timezone": "Timezone",
+      "webhookType": "Webhook Type",
+      "selectWebhookType": "Select webhook type",
+      "webhookTypes": {
+        "generic": "Generic",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "github": "GitHub",
+        "gmail": "Gmail",
+        "teams": "Microsoft Teams",
+        "linear": "Linear",
+        "stripe": "Stripe"
+      },
+      "allowedMethods": "Allowed Methods",
+      "taskParameters": "Task Parameters",
+      "taskParametersPlaceholder": "{}",
+      "failureThreshold": "Failure Threshold",
+      "failureThresholdPlaceholder": "e.g., 3",
+      "createButton": "Create Trigger"
+    },
+    "detail": {
+      "overview": "Overview",
+      "executions": "Executions",
+      "metrics": "Metrics",
+      "edit": "Edit",
+      "enable": "Enable",
+      "disable": "Disable",
+      "delete": "Delete Trigger",
+      "deleteDescription": "Are you sure you want to delete this trigger? This action cannot be undone.",
+      "configuration": "Configuration",
+      "triggerType": "Trigger Type",
+      "agent": "Agent",
+      "cronExpression": "Cron Expression",
+      "nextRun": "Next Run",
+      "lastRun": "Last Run",
+      "totalExecutions": "Total Executions",
+      "successRate": "Success Rate",
+      "avgExecutionTime": "Avg Execution Time",
+      "noExecutions": "No executions yet",
+      "noExecutionsDescription": "This trigger hasn't been executed yet."
+    },
+    "error": {
+      "createFailed": "Failed to create trigger",
+      "updateFailed": "Failed to update trigger",
+      "deleteFailed": "Failed to delete trigger",
+      "loadFailed": "Failed to load trigger",
+      "enableFailed": "Failed to enable trigger",
+      "disableFailed": "Failed to disable trigger"
+    },
+    "success": {
+      "created": "Trigger created successfully",
+      "updated": "Trigger updated successfully",
+      "deleted": "Trigger deleted successfully",
+      "enabled": "Trigger enabled successfully",
+      "disabled": "Trigger disabled successfully"
+    }
+  },
+
+  "NetworkPage": {
+    "title": "Network",
+    "description": "Visual overview of your workspace topology"
+  },
+
+  "WorkspacePage": {
+    "title": "Workspace",
+    "description": "Import and export your workspace configuration",
+    "export": {
+      "title": "Export Configuration",
+      "description": "Download your workspace configuration as YAML",
+      "button": "Export YAML",
+      "success": "Workspace configuration exported successfully",
+      "error": "Failed to export workspace configuration"
+    },
+    "import": {
+      "title": "Import Configuration",
+      "description": "Import a workspace configuration from YAML",
+      "pasteLabel": "Paste YAML Configuration",
+      "pastePlaceholder": "Paste your YAML configuration here...",
+      "uploadLabel": "Or upload a YAML file",
+      "dragDrop": "Drag and drop a YAML file, or",
+      "browse": "browse",
+      "skipMissing": "Skip missing dependencies",
+      "skipMissingDescription": "Continue import even if some dependencies are not found",
+      "overrideExisting": "Override existing",
+      "overrideExistingDescription": "Replace existing resources with imported ones",
+      "button": "Import",
+      "success": "Workspace configuration imported successfully",
+      "error": "Failed to import workspace configuration"
     }
   }
 }
