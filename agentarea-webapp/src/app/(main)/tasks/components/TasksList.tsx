@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Bot, Calendar, Clock } from "lucide-react";
@@ -113,7 +112,7 @@ export default function TasksList({
 
   // Render grid view (default)
   return (
-    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
       {initialTasks.map((task) => (
         <TaskItem key={task.id} task={task} />
       ))}

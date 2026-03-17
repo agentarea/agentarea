@@ -79,8 +79,12 @@ export default function SkillFiles({ files, onFileSelect, selectedFile }: SkillF
         );
       }
       return (
-        <FileTreeFile key={node.path} name={node.name} path={node.path}>
-          <span className="size-4" />
+        <FileTreeFile
+          key={node.path}
+          name={node.name}
+          path={node.path}
+          className="w-full justify-between gap-2 rounded-md border border-border/70 bg-background px-3 py-1.5 hover:bg-muted/70 transition-colors"
+        >
           <File className="size-4 text-muted-foreground shrink-0" />
           <span className="truncate flex-1">{node.name}</span>
           {node.size !== undefined && (
@@ -102,6 +106,7 @@ export default function SkillFiles({ files, onFileSelect, selectedFile }: SkillF
           defaultExpanded={new Set()}
           selectedPath={selectedFile || undefined}
           onSelect={(path) => onFileSelect?.(path)}
+          className="border-0 bg-transparent rounded-none"
         >
           {renderFileTree(fileTreeNodes)}
         </FileTree>

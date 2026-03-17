@@ -35,6 +35,7 @@
     "close": "Close",
     "back": "Back",
     "create": "Create",
+    "optional": "Optional",
     "today": "Today",
     "yesterday": "Yesterday",
     "at": "at",
@@ -323,6 +324,149 @@
     "createCustomButton": "Add Custom Server",
     "myActiveServers": "My Active Servers",
     "browseSpecifications": "Browse MCP Specifications",
+    "createInstance": {
+      "breadcrumb": "Create instance",
+      "breadcrumbWithName": "Create {serverName} instance",
+      "back": "Back to MCP Servers",
+      "actions": {
+        "createInstance": "Create Instance",
+        "creating": "Creating...",
+        "updateInstance": "Update Instance",
+        "updating": "Updating...",
+        "forceCreate": "Force Create"
+      },
+      "defaults": {
+        "name": "{serverName} Instance",
+        "description": "Instance of {serverName}"
+      },
+      "success": {
+        "created": "Successfully created {instanceName}",
+        "valid": "Configuration is valid!"
+      },
+      "warnings": {
+        "validateFirst": "Please validate the configuration first",
+        "hasErrors": "Configuration has {count} error(s)"
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "validationFailedForceCreate": "Configuration validation failed. Use \"Force Create\" to proceed.",
+        "validateFailed": "Failed to validate configuration",
+        "createFailed": "Failed to create MCP instance",
+        "loadServersFailed": "Failed to load MCP servers",
+        "specNotFound": "MCP server spec not found",
+        "serverNotSelected": "MCP server is not selected"
+      }
+    },
+    "instanceForm": {
+      "name": "Name",
+      "namePlaceholder": "Enter instance name",
+      "description": "Description",
+      "descriptionPlaceholder": "Enter instance description",
+      "required": "Required",
+      "envVarsTitle": "Environment Variables",
+      "envVarsTooltip": "Values entered here will be passed to the MCP server container as environment variables.",
+      "envVarPlaceholder": "Enter {name}",
+      "validationTitle": "Configuration Validation",
+      "containerTitle": "Container",
+      "image": "Image",
+      "port": "Port",
+      "actions": {
+        "createInstance": "Create Instance",
+        "forceCreate": "Force Create",
+        "validate": "Validate"
+      }
+    },
+    "instanceDetail": {
+      "header": {
+        "label": "Instance",
+        "untitled": "Untitled instance"
+      },
+      "actions": {
+        "start": "Start",
+        "stop": "Stop"
+      },
+      "status": {
+        "stopped": "Stopped",
+        "unknown": "Unknown"
+      },
+      "fields": {
+        "name": "Name",
+        "description": "Description",
+        "status": "Status"
+      },
+      "types": {
+        "docker": "Docker",
+        "externalUrl": "External URL",
+        "command": "Command"
+      },
+      "connection": {
+        "title": "Connection",
+        "loading": "Loading connection details...",
+        "externalEndpoint": "External Endpoint",
+        "mcpEndpoint": "MCP Endpoint",
+        "sseEndpoint": "SSE Endpoint (for MCP clients)",
+        "note": "Use these URLs to connect your MCP client to this server instance.",
+        "noteExternal": "This MCP server is hosted externally at the URL above.",
+        "notAvailable": "Connection URL not available. The instance may still be initializing."
+      },
+      "labels": {
+        "connectionUrl": "Connection URL",
+        "sseUrl": "SSE URL",
+        "value": "Value"
+      },
+      "serverSpec": {
+        "title": "Server Spec"
+      },
+      "command": {
+        "title": "Command",
+        "note": "Runs in a sandbox container via supergateway."
+      },
+      "external": {
+        "title": "External Server",
+        "customHeaders": "Custom Headers"
+      },
+      "container": {
+        "title": "Container",
+        "port": "Port"
+      },
+      "tools": {
+        "title": "Available Tools ({count})",
+        "columns": {
+          "name": "Name",
+          "description": "Description"
+        }
+      },
+      "env": {
+        "title": "Environment Variables",
+        "notSet": "not set",
+        "columns": {
+          "key": "Key",
+          "value": "Value"
+        }
+      },
+      "details": {
+        "title": "Details",
+        "id": "Instance ID",
+        "created": "Created",
+        "updated": "Updated"
+      },
+      "confirm": {
+        "deleteTitle": "Delete instance?",
+        "deleteDescription": "This will permanently delete \"{instanceName}\" and stop its container. This action cannot be undone."
+      },
+      "success": {
+        "starting": "Starting {instanceName}…",
+        "stopped": "Stopped {instanceName}",
+        "deleted": "Deleted {instanceName}",
+        "copied": "{label} copied to clipboard"
+      },
+      "errors": {
+        "startFailed": "Failed to start instance",
+        "stopFailed": "Failed to stop instance",
+        "deleteFailed": "Failed to delete instance",
+        "copyFailed": "Failed to copy"
+      }
+    },
     "table": {
       "name": "Name",
       "description": "Description",

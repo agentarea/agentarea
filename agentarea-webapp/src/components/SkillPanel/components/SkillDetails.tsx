@@ -4,7 +4,12 @@ import { useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import { ExternalLink, Hash, Clock } from "lucide-react";
 import { Skill } from "@/lib/browser-api";
-import Section from "@/components/TaskInfoPanel/components/Section";
+import {
+  InfoPanelExpandableText,
+  InfoPanelField,
+  InfoPanelSection,
+  InfoPanelValueBox,
+} from "@/components/InfoPanel";
 
 interface SkillDetailsProps {
   skill: Skill;
@@ -15,7 +20,7 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
   const t = useTranslations("SkillsPage");
 
   return (
-    <Section title={tDetail("details")} contentClassName="space-y-3 text-xs">
+    <InfoPanelSection title={tDetail("details")} contentClassName="space-y-3 text-xs">
       <div className="space-y-1">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {tDetail("name")}
@@ -29,20 +34,20 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {tDetail("description")}
         </div>
-        <div className="text-sm text-foreground">
-          {skill.description || "-"}
-        </div>
+        {skill.description ? (
+          <InfoPanelExpandableText
+            content={skill.description}
+            maxLines={3}
+            textClassName="text-sm text-foreground"
+          />
+        ) : (
+          <div className="text-sm text-foreground">-</div>
+        )}
       </div>
 
-      <div className="space-y-1">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          <Hash className="h-3 w-3 text-primary" />
-          {t("skillId")}
-        </div>
-        <div className="truncate font-mono text-xs text-foreground bg-muted/30 p-1.5 rounded-md border border-border/50">
-          {skill.id}
-        </div>
-      </div>
+      <InfoPanelField label={t("skillId")} icon={Hash}>
+        <InfoPanelValueBox mono>{skill.id}</InfoPanelValueBox>
+      </InfoPanelField>
 
       <div className="space-y-1">
         <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -69,6 +74,6 @@ export default function SkillDetails({ skill }: SkillDetailsProps) {
           </a>
         </div>
       )}
-    </Section>
+    </InfoPanelSection>
   );
 }

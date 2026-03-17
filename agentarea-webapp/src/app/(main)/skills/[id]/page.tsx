@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Save, Eye, Pencil } from "lucide-react";
+import { Loader2, Save, Eye, Pencil, FileText, FileX } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Streamdown } from "streamdown";
 import DeleteButton from "@/components/DeleteButton";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import SkillPanel from "@/components/SkillPanel/SkillPanel";
+import Section from "@/components/TaskInfoPanel/components/Section";
 import {
   getSkill,
   getSkillContent,
@@ -25,6 +27,7 @@ import {
 } from "@/lib/browser-api";
 import { useToast } from "@/hooks/use-toast";
 import YAML from "js-yaml";
+import { AnimatedTabs } from "@/components/ui/animated-tabs";
 
 // Parse YAML frontmatter from markdown
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string; rawFrontmatter: string } {
@@ -209,7 +212,7 @@ export default function SkillDetailPage() {
         header={{
           breadcrumb: [
             { label: t("title"), href: "/skills" },
-            { label: t("loading") },
+            { label: skillId },
           ],
         }}
       >
@@ -226,6 +229,7 @@ export default function SkillDetailPage() {
 
   const isContentEditable = skill.source_type === "content";
   const canEditFile = isContentEditable && selectedFile === "SKILL.md";
+  const editModeTab = isEditing ? "edit" : "view";
 
   // Parse frontmatter for display
   const parsed = fileContent ? parseFrontmatter(fileContent) : null;
@@ -241,19 +245,6 @@ export default function SkillDetailPage() {
         ],
         controls: (
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-            >
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              {tDetail("save")}
-            </Button>
             <DeleteButton
               size="xs"
               itemId={skillId}
@@ -270,72 +261,109 @@ export default function SkillDetailPage() {
     >
       <div className="flex h-full w-full overflow-hidden">
         {/* Main Content Area */}
-        <div className="flex-1 overflow-auto p-6">
-          <Card className="h-full flex flex-col">
-            <CardHeader className="border-b py-3 flex flex-row items-center justify-between shrink-0">
-              <CardTitle className="text-sm font-mono">
-                {selectedFile || tDetail("selectFile")}
-              </CardTitle>
-              {canEditFile && (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => setIsEditing(!isEditing)}
-                >
-                  {isEditing ? (
-                    <>
-                      <Eye className="mr-1 h-3 w-3" /> {tDetail("view")}
-                    </>
-                  ) : (
-                    <>
-                      <Pencil className="mr-1 h-3 w-3" /> {tDetail("edit")}
-                    </>
-                  )}
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-auto relative">
-              {loadingFile ? (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <LoadingSpinner />
-                </div>
-              ) : !selectedFile ? (
-                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-                  {tDetail("selectFile")}
-                </div>
-              ) : !fileContent ? (
-                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-                  {tDetail("emptyFile")}
-                </div>
-              ) : isEditing && canEditFile ? (
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full h-full p-4 bg-background text-sm font-mono resize-none focus:outline-none"
-                  spellCheck={false}
-                />
-              ) : (
-                <div className="p-6 space-y-4">
-                  {/* Frontmatter card */}
-                  {hasFrontmatter && (
-                    <div className="rounded-lg border bg-card overflow-hidden shrink-0">
-                      <div className="bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b">
-                        {tDetail("skillConfiguration")}
-                      </div>
-                      <div className="p-4">
-                        <pre className="text-sm font-mono whitespace-pre-wrap text-foreground">{parsed!.rawFrontmatter}</pre>
-                      </div>
-                    </div>
-                  )}
+        <div className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="h-full max-w-4xl mx-auto">
+            <Card className="h-full flex flex-col overflow-hidden p-0 cursor-default hover:shadow-none">
+              <CardHeader className="border-b border-border/70 bg-sidebar p-3 flex flex-row items-center justify-between shrink-0 space-y-0">
+                <CardTitle className="text-xs font-mono">
+                  {selectedFile || tDetail("selectFile")}
+                </CardTitle>
+              <div className="flex items-center gap-2">
+                {hasChanges && (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="border-border/70 bg-background/60 shadow-none hover:bg-muted/70"
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    {tDetail("save")}
+                  </Button>
+                )}
 
-                  {/* Content */}
-                  <div className="prose prose-sm dark:prose-invert max-w-none pb-10">
-                    <Streamdown>{parsed?.body || fileContent}</Streamdown>
+                {canEditFile && (
+                  <AnimatedTabs
+                    layoutId="skill-edit-toggle"
+                    tabs={[
+                      {
+                        value: "view",
+                        label: tDetail("view"),
+                        icon: <Eye className="h-3.5 w-3.5" />,
+                      },
+                      {
+                        value: "edit",
+                        label: tDetail("edit"),
+                        icon: <Pencil className="h-3.5 w-3.5" />,
+                      },
+                    ]}
+                    activeTab={editModeTab}
+                    onChange={(val) => setIsEditing(val === "edit")}
+                    className="w-auto rounded-md border border-border/70 bg-background/60 p-0.5 text-xs font-normal"
+                    tabClassName="flex-none px-2 py-1 gap-1"
+                    labelClassName="sr-only"
+                    activeIndicatorClassName="bg-background shadow-none ring-1 ring-border/70"
+                    hoverIndicatorClassName="bg-muted/60"
+                  />
+                )}
+              </div>
+              </CardHeader>
+              <CardContent className="p-0 flex-1 overflow-auto relative">
+                {loadingFile ? (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <LoadingSpinner />
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                ) : !selectedFile ? (
+                  <div className="absolute inset-0 flex items-center justify-center p-6">
+                    <EmptyState
+                      className="max-w-none w-full border border-border/70 p-8 hover:bg-muted/30"
+                      title={tDetail("selectFile")}
+                      description=""
+                      icons={[FileText]}
+                    />
+                  </div>
+                ) : !fileContent ? (
+                  <div className="absolute inset-0 flex items-center justify-center p-6">
+                    <EmptyState
+                      className="max-w-none w-full border border-border/70 p-8 hover:bg-muted/30"
+                      title={tDetail("emptyFile")}
+                      description=""
+                      icons={[FileX]}
+                    />
+                  </div>
+                ) : isEditing && canEditFile ? (
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full h-full p-4 bg-background text-sm font-mono leading-relaxed resize-none focus:outline-none"
+                    spellCheck={false}
+                  />
+                ) : (
+                  <div className="p-4 space-y-4">
+                    {hasFrontmatter && (
+                      <Section
+                        title={tDetail("skillConfiguration")}
+                        className="shadow-none"
+                        contentClassName="p-4"
+                      >
+                        <pre className="text-xs font-mono whitespace-pre-wrap text-foreground">
+                          {parsed!.rawFrontmatter}
+                        </pre>
+                      </Section>
+                    )}
+
+                    <div className="prose prose-sm dark:prose-invert max-w-none pb-10 prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-xl prose-h1:mt-6 prose-h1:mb-2 prose-h2:text-lg prose-h2:mt-5 prose-h2:mb-2 prose-h3:text-base prose-h3:mt-4 prose-h3:mb-1.5 prose-p:leading-relaxed prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-pre:bg-muted prose-pre:border prose-pre:border-border/70 prose-pre:rounded-md prose-pre:p-4 prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
+                      <Streamdown>{parsed?.body || fileContent}</Streamdown>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Right Sidebar Dock */}

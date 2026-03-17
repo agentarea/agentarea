@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import Table from "@/components/Table/Table";
-import { CreateInstanceDialog } from "./CreateInstanceDialog";
 import EmptyState from "@/components/EmptyState";
 import { MCPServerSpecCard } from "./MCPCard";
 import { MCPServer } from "../types";
@@ -22,8 +22,7 @@ export function MCPSpecsSection({
   viewMode = "grid",
 }: MCPSpecsSectionProps) {
   const t = useTranslations("MCPServersPage.table");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null);
+  const router = useRouter();
 
   const searchQuery = (searchParams.search as string) || "";
   const selectedCategory = (searchParams.category as string) || "All";
@@ -45,8 +44,7 @@ export function MCPSpecsSection({
   }, [mcpServers, searchQuery, selectedCategory]);
 
   const handleConfigureInstance = (server: MCPServer) => {
-    setSelectedServer(server);
-    setDialogOpen(true);
+    router.push(`/mcp-servers/create/${server.id}`);
   };
 
   const serverColumns = [
@@ -124,22 +122,14 @@ export function MCPSpecsSection({
     );
   }
   return (
-    <>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {filteredServers.map((server) => (
-          <MCPServerSpecCard
-            key={server.id}
-            server={server}
-            onConfigure={handleConfigureInstance}
-          />
-        ))}
-      </div>
-
-      <CreateInstanceDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        mcpServer={selectedServer}
-      />
-    </>
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {filteredServers.map((server) => (
+        <MCPServerSpecCard
+          key={server.id}
+          server={server}
+          onConfigure={handleConfigureInstance}
+        />
+      ))}
+    </div>
   );
 }

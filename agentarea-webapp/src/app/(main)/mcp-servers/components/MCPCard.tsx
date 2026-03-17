@@ -20,7 +20,7 @@ import LinkedCard from "@/components/LinkedCard/LinkedCard";
 
 interface MCPServerSpecCardProps {
   server: MCPServer;
-  onConfigure: (server: MCPServer) => void;
+  onConfigure?: (server: MCPServer) => void;
 }
 
 interface MCPInstanceCardProps {
@@ -74,7 +74,8 @@ export function MCPServerSpecCard({
 }: MCPServerSpecCardProps) {
   return (
     <LinkedCard
-      onClick={() => onConfigure(server)}
+      href={onConfigure ? undefined : `/mcp-servers/create/${server.id}`}
+      onClick={onConfigure ? () => onConfigure(server) : undefined}
       title={server.name}
       icon={getMCPIcon(server.name)}
       type="config"

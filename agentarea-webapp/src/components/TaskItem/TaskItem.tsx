@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import {
   AlertCircle,
-  ArrowUpRight,
   Bot,
   Calendar,
   CheckCircle2,
@@ -12,7 +10,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import LinkedCard from "@/components/LinkedCard/LinkedCard";
+import { cn } from "@/lib/utils";
 
 export interface TaskItemData {
   id: string;
@@ -74,63 +73,51 @@ export default function TaskItem({
   const status =
     statusConfig[task.status as keyof typeof statusConfig] ||
     statusConfig.pending;
+  const StatusIcon = status.icon;
 
   return (
-    <Link href={`/tasks/${task.id}`}>
-      <Card className="group relative flex cursor-pointer flex-col justify-between gap-4 overflow-hidden border-zinc-200 transition-all duration-300 dark:border-zinc-800">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            {/* Title */}
-            <div className="min-w-0 flex-1 space-y-2">
-              <h3 className="truncate font-medium text-gray-900 dark:text-gray-100">
-                {task.description}
-              </h3>
-
-              {showAgentName && (
-                <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  <Bot className="h-3 w-3" />
-                  <span>{task.agent_name || "Unknown Agent"}</span>
-                </div>
-              )}
-
-              {/* Metadata */}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500 dark:text-zinc-400">
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="h-3 w-3" />
-                  <span>
-                    {new Date(task.created_at).toLocaleDateString("en", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3 w-3" />
-                  <span>
-                    {new Date(task.created_at).toLocaleTimeString("en", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Status Badge */}
-          <Badge variant={status.badgeVariant} className="whitespace-nowrap">
-            {status.label}
-          </Badge>
-        </div>
-
-        <div className="flex items-center gap-1 text-xs text-muted-foreground/70 transition-colors duration-500 group-hover:text-primary absolute right-3 bottom-3">
-          <ArrowUpRight
-            className="h-[18px] w-[18px] transition-transform duration-500 group-hover:scale-110"
-            strokeWidth={1.5}
+    <LinkedCard
+      href={`/tasks/${task.id}`}
+      title={task.description}
+      type="view"
+      topRight={
+        <Badge variant={status.badgeVariant} className="whitespace-nowrap">
+          <StatusIcon
+            className={cn("h-3 w-3", task.status === "running" && "animate-spin")}
           />
+          {status.label}
+        </Badge>
+      }
+    >
+      <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+        {showAgentName && (
+          <div className="flex items-center gap-1.5">
+            <Bot className="h-3 w-3" />
+            <span className="truncate">{task.agent_name || "Unknown Agent"}</span>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-3 w-3" />
+            <span>
+              {new Date(task.created_at).toLocaleDateString("en", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            <span>
+              {new Date(task.created_at).toLocaleTimeString("en", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
         </div>
-      </Card>
-    </Link>
+      </div>
+    </LinkedCard>
   );
 }

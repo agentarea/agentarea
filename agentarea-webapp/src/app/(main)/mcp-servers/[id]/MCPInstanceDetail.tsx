@@ -1,103 +1,48 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  AlertCircle,
   Check,
-  CheckCircle,
-  Clock,
   Container,
   Copy,
   Link as LinkIcon,
-  Play,
-  Square,
-  Trash2,
-  XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import Table from "@/components/Table/Table";
+import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { MCPInstance, MCPServer } from "../types";
-import { startInstance, stopInstance, deleteInstance } from "./actions";
 import { getMCPInstanceHealth } from "@/lib/api";
+import MCPInstancePanel from "./MCPInstancePanel";
 
 interface Props {
   instance: MCPInstance;
   serverSpec: MCPServer | null;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case "running":
-    case "healthy":
-      return (
-        <Badge variant="success">
-          <CheckCircle className="mr-1 h-3 w-3" />
-          Running
-        </Badge>
-      );
-    case "stopped":
-      return (
-        <Badge variant="secondary">
-          <Square className="mr-1 h-3 w-3" />
-          Stopped
-        </Badge>
-      );
-    case "error":
-    case "unhealthy":
-      return (
-        <Badge variant="destructive">
-          <XCircle className="mr-1 h-3 w-3" />
-          Error
-        </Badge>
-      );
-    case "starting":
-      return (
-        <Badge variant="yellow">
-          <Clock className="mr-1 h-3 w-3" />
-          Starting
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="yellow">
-          <AlertCircle className="mr-1 h-3 w-3" />
-          {status || "Unknown"}
-        </Badge>
-      );
-  }
-}
-
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
+  const t = useTranslations("MCPServersPage.instanceDetail");
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success(`${label || "URL"} copied to clipboard`);
+      toast.success(t("success.copied", { label: label || t("labels.value") }));
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Failed to copy");
+      toast.error(t("errors.copyFailed"));
     }
   };
 
   return (
     <Button
-      variant="ghost"
-      size="sm"
-      className="h-8 px-2"
+      variant="outline"
+      size="xs"
       onClick={handleCopy}
     >
       {copied ? (
@@ -110,14 +55,10 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 }
 
 export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
+  const t = useTranslations("MCPServersPage.instanceDetail");
   const router = useRouter();
-  const [isActioning, setIsActioning] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
-
-  const canStart = instance.status !== "running" && instance.status !== "starting";
-  const canStop = instance.status === "running" || instance.status === "starting";
 
   // Poll for status updates during transient states
   useEffect(() => {
@@ -147,47 +88,6 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
     }
   }, [instance.status, instance.name, jsonSpecType]);
 
-  const handleStart = async () => {
-    setIsActioning(true);
-    try {
-      const { error } = await startInstance(instance.id);
-      if (error) throw new Error(typeof error === "object" && "detail" in error ? String(error.detail) : "Failed to start");
-      toast.success(`Starting ${instance.name}…`);
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to start instance");
-    } finally {
-      setIsActioning(false);
-    }
-  };
-
-  const handleStop = async () => {
-    setIsActioning(true);
-    try {
-      const { error } = await stopInstance(instance.id);
-      if (error) throw new Error(typeof error === "object" && "detail" in error ? String(error.detail) : "Failed to stop");
-      toast.success(`Stopped ${instance.name}`);
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to stop instance");
-    } finally {
-      setIsActioning(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    setIsActioning(true);
-    try {
-      const { error } = await deleteInstance(instance.id);
-      if (error) throw new Error(typeof error === "object" && "detail" in error ? String(error.detail) : "Failed to delete");
-      toast.success(`Deleted ${instance.name}`);
-      router.push("/mcp-servers");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to delete instance");
-      setIsActioning(false);
-    }
-  };
-
   const envVars = (instance.json_spec?.environment ?? {}) as Record<string, string>;
   const containerImage = instance.json_spec?.image as string | undefined;
   const containerPort = instance.json_spec?.port as number | undefined;
@@ -210,286 +110,231 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const effectiveConnectionUrl = isUrlType ? endpointUrl : connectionUrl;
   const sseUrl = effectiveConnectionUrl ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse` : null;
 
+  const toolsTableData = tools.map((tool) => ({
+    id: tool.name,
+    name: tool.name,
+    description: tool.description,
+  }));
+
+  const envTableData = Object.entries(envVars).map(([key, value]) => ({
+    id: key,
+    key,
+    value,
+  }));
+
   return (
-    <div className="space-y-6 p-6">
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold">{instance.name}</h2>
-            <StatusBadge status={instance.status} />
-            <Badge variant="outline" size="sm">
-              {isCommandType ? "Command" : isUrlType ? "External URL" : "Docker"}
-            </Badge>
-          </div>
-          {instance.description && (
-            <p className="text-sm text-muted-foreground">{instance.description}</p>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          {canStart && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleStart}
-              disabled={isActioning}
-            >
-              <Play className="mr-1.5 h-3.5 w-3.5" />
-              Start
-            </Button>
-          )}
-          {canStop && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleStop}
-              disabled={isActioning}
-            >
-              <Square className="mr-1.5 h-3.5 w-3.5" />
-              Stop
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={isActioning}
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            Delete
-          </Button>
-
-          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete instance?</DialogTitle>
-                <DialogDescription>
-                  This will permanently delete <strong>{instance.name}</strong> and stop its container. This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={isActioning}>
-                  Delete
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      {/* Connection URL - Show when running, or always for URL-type */}
-      {(instance.status === "running" || isUrlType) && (
-        <Card className="p-4 space-y-4 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10">
-          <div className="flex items-center gap-2">
-            <LinkIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100">
-              Connection URL
-            </h3>
-          </div>
-
-          {!isUrlType && isLoadingUrl ? (
-            <div className="text-sm text-muted-foreground">Loading connection details...</div>
-          ) : effectiveConnectionUrl ? (
-            <div className="space-y-3">
-              {/* Main connection URL */}
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">
-                  {isUrlType ? "External Endpoint" : "MCP Endpoint"}
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    value={effectiveConnectionUrl}
-                    readOnly
-                    className="font-mono text-sm bg-white dark:bg-slate-950"
-                  />
-                  <CopyButton text={effectiveConnectionUrl} label="Connection URL" />
+    <div className="flex h-full w-full">
+      <div className="flex-1">
+        <div className="relative h-full overflow-auto px-4 py-5">
+          <div className="mx-auto w-full max-w-5xl space-y-6">
+            {/* Connection URL - Show when running, or always for URL-type */}
+            {(instance.status === "running" || isUrlType) && (
+              <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
+                <div className="flex items-center gap-2">
+                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("connection.title")}
+                  </div>
                 </div>
-              </div>
 
-              {/* SSE endpoint URL */}
-              {sseUrl && !isUrlType && (
-                <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground">SSE Endpoint (for MCP clients)</label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={sseUrl}
-                      readOnly
-                      className="font-mono text-sm bg-white dark:bg-slate-950"
-                    />
-                    <CopyButton text={sseUrl} label="SSE URL" />
+                {!isUrlType && isLoadingUrl ? (
+                  <div className="note">{t("connection.loading")}</div>
+                ) : effectiveConnectionUrl ? (
+                  <div className="space-y-3">
+                    {/* Main connection URL */}
+                    <div className="space-y-1.5">
+                      <div className="text-xs text-muted-foreground">
+                        {isUrlType
+                          ? t("connection.externalEndpoint")
+                          : t("connection.mcpEndpoint")}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={effectiveConnectionUrl}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <CopyButton
+                          text={effectiveConnectionUrl}
+                          label={t("labels.connectionUrl")}
+                        />
+                      </div>
+                    </div>
+
+                    {/* SSE endpoint URL */}
+                    {sseUrl && !isUrlType && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-muted-foreground">
+                          {t("connection.sseEndpoint")}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            value={sseUrl}
+                            readOnly
+                            className="font-mono text-sm"
+                          />
+                          <CopyButton text={sseUrl} label={t("labels.sseUrl")} />
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="note">
+                      {isUrlType
+                        ? t("connection.noteExternal")
+                        : t("connection.note")}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="note">{t("connection.notAvailable")}</div>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {!isCommandType &&
+                !isUrlType &&
+                (containerImage || containerPort) && (
+                  <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {t("container.title")}
+                      </div>
+                      <Badge variant="outline" size="sm">
+                        {t("types.docker")}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      {containerImage && (
+                        <div className="flex items-start gap-2">
+                          <Container className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="break-all font-mono">
+                            {containerImage}
+                          </span>
+                        </div>
+                      )}
+                      {containerPort && (
+                        <div className="text-muted-foreground">
+                          {t("container.port")}:{" "}
+                          <span className="font-mono">{containerPort}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              {/* Configuration info - type-aware */}
+              {isCommandType && commandStr && (
+                <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("command.title")}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="rounded bg-muted/40 p-2 font-mono break-all">
+                      {commandStr} {commandArgs.join(" ")}
+                    </div>
+                    <p className="note">{t("command.note")}</p>
                   </div>
                 </div>
               )}
 
-              <p className="text-xs text-muted-foreground">
-                {isUrlType
-                  ? "This MCP server is hosted externally at the URL above."
-                  : "Use these URLs to connect your MCP client to this server instance."}
-              </p>
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              Connection URL not available. The instance may still be initializing.
-            </div>
-          )}
-        </Card>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Server spec info */}
-        {serverSpec && (
-          <Card className="p-4 space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Server Spec
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{serverSpec.name}</span>
-                {serverSpec.version && (
-                  <Badge size="sm">v{serverSpec.version}</Badge>
-                )}
-              </div>
-              {serverSpec.description && (
-                <p className="text-sm text-muted-foreground">{serverSpec.description}</p>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {/* Configuration info - type-aware */}
-        {isCommandType && commandStr && (
-          <Card className="p-4 space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Command
-            </h3>
-            <div className="space-y-2 text-sm">
-              <div className="font-mono bg-muted rounded p-2 break-all">
-                {commandStr} {commandArgs.join(" ")}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Runs in a sandbox container via mcp-bridge.
-              </p>
-            </div>
-          </Card>
-        )}
-
-        {isUrlType && (
-          <Card className="p-4 space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              External Server
-            </h3>
-            <div className="space-y-2 text-sm">
-              {endpointUrl && (
-                <div className="font-mono bg-muted rounded p-2 break-all">
-                  {endpointUrl}
-                </div>
-              )}
-              {Object.keys(customHeaders).length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Custom Headers</p>
-                  {Object.entries(customHeaders).map(([key]) => (
-                    <div key={key} className="font-mono text-xs">
-                      {key}: ••••••
-                    </div>
-                  ))}
+              {isUrlType && (
+                <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("external.title")}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {endpointUrl && (
+                      <div className="rounded bg-muted/40 p-2 font-mono break-all">
+                        {endpointUrl}
+                      </div>
+                    )}
+                    {Object.keys(customHeaders).length > 0 && (
+                      <div>
+                        <p className="note mb-1">{t("external.customHeaders")}</p>
+                        {Object.entries(customHeaders).map(([key]) => (
+                          <div key={key} className="font-mono text-xs">
+                            {key}: ••••••
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          </Card>
-        )}
 
-        {!isCommandType && !isUrlType && (containerImage || containerPort) && (
-          <Card className="p-4 space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Container
-            </h3>
-            <div className="space-y-2 text-sm">
-              {containerImage && (
-                <div className="flex items-start gap-2">
-                  <Container className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="font-mono break-all">{containerImage}</span>
+            {tools.length > 0 && (
+              <div className="space-y-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("tools.title", { count: tools.length })}
                 </div>
-              )}
-              {containerPort && (
-                <div className="text-muted-foreground">
-                  Port: <span className="font-mono">{containerPort}</span>
+                <Table
+                  data={toolsTableData}
+                  columns={[
+                    {
+                      header: t("tools.columns.name"),
+                      accessor: "name",
+                      render: (value: string) => (
+                        <span className="font-mono text-sm font-medium">
+                          {value}
+                        </span>
+                      ),
+                    },
+                    {
+                      header: t("tools.columns.description"),
+                      accessor: "description",
+                      render: (value: string) => (
+                        <span className="text-sm text-muted-foreground">
+                          {value || "-"}
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            )}
+
+            {Object.keys(envVars).length > 0 && (
+              <div className="space-y-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("env.title")}
                 </div>
-              )}
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {/* Available Tools */}
-      {tools.length > 0 && (
-        <Card className="p-4 space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Available Tools ({tools.length})
-          </h3>
-          <div className="divide-y">
-            {tools.map((tool) => (
-              <div key={tool.name} className="py-2">
-                <div className="font-mono text-sm font-medium">{tool.name}</div>
-                {tool.description && (
-                  <p className="text-sm text-muted-foreground">{tool.description}</p>
-                )}
+                <Table
+                  data={envTableData}
+                  columns={[
+                    {
+                      header: t("env.columns.key"),
+                      accessor: "key",
+                      render: (value: string) => (
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {value}
+                        </span>
+                      ),
+                    },
+                    {
+                      header: t("env.columns.value"),
+                      accessor: "value",
+                      render: (value: string) =>
+                        value ? (
+                          <span className="font-mono text-xs">{value}</span>
+                        ) : (
+                          <span className="text-xs italic text-muted-foreground">
+                            {t("env.notSet")}
+                          </span>
+                        ),
+                    },
+                  ]}
+                />
               </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Environment variables */}
-      {Object.keys(envVars).length > 0 && (
-        <Card className="p-4 space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Environment Variables
-          </h3>
-          <div className="divide-y">
-            {Object.entries(envVars).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-4 py-2 text-sm">
-                <span className="w-48 shrink-0 font-mono text-muted-foreground">{key}</span>
-                <span className="font-mono truncate">
-                  {value ? (
-                    <span className="text-foreground">{value}</span>
-                  ) : (
-                    <span className="italic text-muted-foreground">not set</span>
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Metadata */}
-      <Card className="p-4 space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Details
-        </h3>
-        <div className="grid gap-2 text-sm sm:grid-cols-2">
-          <div>
-            <span className="text-muted-foreground">ID</span>
-            <p className="font-mono text-xs mt-0.5">{instance.id}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Created</span>
-            <p className="mt-0.5">
-              {new Date(instance.created_at).toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Updated</span>
-            <p className="mt-0.5">
-              {new Date(instance.updated_at).toLocaleString()}
-            </p>
+            )}
           </div>
         </div>
-      </Card>
+      </div>
+
+      <TaskInfoPanelDock
+        storageKey="mcp-instance-panel"
+        panel={<MCPInstancePanel instance={instance} serverSpec={serverSpec} />}
+      />
     </div>
   );
 }

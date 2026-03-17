@@ -6,12 +6,14 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 interface ExpandableTextProps {
   content: string;
   className?: string;
+  textClassName?: string;
   maxLines?: number;
 }
 
 export default function ExpandableText({
   content,
   className,
+  textClassName,
   maxLines = 3,
 }: ExpandableTextProps) {
   const t = useTranslations("TaskInfoPanel");
@@ -45,13 +47,17 @@ export default function ExpandableText({
         ref={textRef}
         className={cn(
           "text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap transition-all overflow-hidden",
-          !isExpanded && "line-clamp-3"
+          textClassName
         )}
-        style={!isExpanded ? { 
-          display: "-webkit-box",
-          WebkitLineClamp: maxLines,
-          WebkitBoxOrient: "vertical",
-        } : undefined}
+        style={
+          !isExpanded
+            ? {
+                display: "-webkit-box",
+                WebkitLineClamp: maxLines,
+                WebkitBoxOrient: "vertical",
+              }
+            : undefined
+        }
       >
         {content}
       </p>
