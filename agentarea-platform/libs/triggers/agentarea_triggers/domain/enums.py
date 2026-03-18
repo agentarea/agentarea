@@ -42,6 +42,8 @@ class WebhookType(StrEnum):
     DISCORD = "discord"
     LINEAR = "linear"
     STRIPE = "stripe"
+    GMAIL = "gmail"
+    TEAMS = "teams"
 
     @classmethod
     def _missing_(cls, value):

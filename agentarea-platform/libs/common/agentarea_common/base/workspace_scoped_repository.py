@@ -3,7 +3,7 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +34,15 @@ class WorkspaceScopedRepository[T: WorkspaceScopedMixin]:
         self.resource_type = model_class.__name__.lower().replace("orm", "").replace("model", "")
 
     def _get_workspace_filter(self):
-        """Get the workspace filter for queries."""
+        """Get the workspace filter for queries.
+
+        Uses accessible_workspaces from UserContext to determine which
+        workspaces the user can read from. This is resolved by the
+        AuthorizationService during request authentication.
+        """
+        workspaces = self.user_context.accessible_workspaces
+        if workspaces and len(workspaces) > 1:
+            return self.model_class.workspace_id.in_(workspaces)
         return self.model_class.workspace_id == self.user_context.workspace_id
 
     def _get_creator_workspace_filter(self):

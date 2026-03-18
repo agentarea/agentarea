@@ -154,9 +154,14 @@ class MCPServerService(BaseCrudService[MCPServer]):
         status: str | None = None,
         is_public: bool | None = None,
         tag: str | None = None,
-    ) -> list[MCPServer]:
+        search: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[MCPServer], int]:
         # Use repository directly since we need custom filtering
-        return await self.repository.list_servers(status=status, is_public=is_public, tag=tag)
+        return await self.repository.list_servers(
+            status=status, is_public=is_public, tag=tag, search=search, limit=limit, offset=offset
+        )
 
     async def get(self, id: UUID) -> MCPServer | None:
         return await self.repository.get(id)

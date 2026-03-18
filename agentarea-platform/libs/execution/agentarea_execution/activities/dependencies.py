@@ -101,6 +101,17 @@ class ActivityServiceContainer:
         return service, session
 
 
+def _default_accessible_workspaces(workspace_id: str) -> list[str]:
+    """Return default accessible workspaces for worker context.
+
+    Workers (Temporal activities) run with system-level access and need
+    visibility into both the task's workspace and system entities.
+    """
+    from agentarea_common.auth.authorization import SYSTEM_WORKSPACE_ID
+
+    return [workspace_id, SYSTEM_WORKSPACE_ID]
+
+
 def create_user_context(user_context_data: dict[str, Any]) -> UserContext:
     """Helper to create UserContext from data dictionary.
 
@@ -121,6 +132,7 @@ def create_user_context(user_context_data: dict[str, Any]) -> UserContext:
     return UserContext(
         user_id=user_id,
         workspace_id=workspace_id,
+        accessible_workspaces=_default_accessible_workspaces(workspace_id),
     )
 
 
@@ -141,7 +153,11 @@ def create_system_context(workspace_id: str, user_id: str | None = None) -> User
     # Use provided user_id or workspace_id as fallback for system operations
     effective_user_id = user_id or workspace_id
 
-    return UserContext(user_id=effective_user_id, workspace_id=workspace_id)
+    return UserContext(
+        user_id=effective_user_id,
+        workspace_id=workspace_id,
+        accessible_workspaces=_default_accessible_workspaces(workspace_id),
+    )
 
 
 class ActivityContext:

@@ -10,11 +10,25 @@ with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
     from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
+    from agentarea_agents_sdk.tools.tool_catalog import ToolCatalog
+    from agentarea_agents_sdk.tools.tool_provider import (
+        AgentToolProvider,
+        BuiltinToolProvider,
+        CodeToolProvider,
+        MCPToolProvider,
+    )
 
     from .context_manager import (
         ContextWindowManager,
         find_compaction_boundary,
         validate_tool_pairs,
+    )
+    from .context_strategy import (
+        ContextStrategy,
+        allows_history_preservation,
+        allows_output_offloading,
+        allows_tool_progressive_disclosure,
+        resolve_context_strategy,
     )
     from .helpers import (
         BudgetTracker,
@@ -22,12 +36,14 @@ with workflow.unsafe.imports_passed_through():
         MessageBuilder,
         StateValidator,
         ToolCallExtractor,
+        build_output_summary,
     )
     from .models import (
         AgentExecutionState,
         AgentGoal,
         ContinueAsNewState,
         Message,
+        PendingEscalation,
         ToolCall,
     )
 
@@ -38,17 +54,26 @@ from ..models import (
     AgentExecutionResult,
     CompactMessagesRequest,
     CompactMessagesResult,
+    DiscoverToolProvidersResult,
+    ExecuteSkillScriptRequest,
+    ExecuteSkillScriptResult,
     LLMCallRequest,
     LLMCallResult,
     MCPToolRequest,
-    ExecuteSkillScriptRequest,
-    ExecuteSkillScriptResult,
+    ReadOutputRequest,
+    ReadOutputResult,
     RecallHistoryRequest,
     RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
+    SearchHistoryRequest,
+    SearchHistoryResult,
     SkillFileRequest,
     SkillFileResult,
+    StoreHistoryRequest,
+    StoreHistoryResult,
+    StoreOutputRequest,
+    StoreOutputResult,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     UpdateTaskStatusRequest,
@@ -64,6 +89,7 @@ from .constants import (
     LLM_CALL_TIMEOUT,
     MAX_ITERATIONS,
     TOOL_EXECUTION_TIMEOUT,
+    TOOL_OUTPUT_OFFLOAD_CHARS,
     Activities,
     EventTypes,
     ExecutionStatus,
@@ -84,6 +110,8 @@ class AgentExecutionWorkflow:
         # Maps sanitized agent tool names to their config (type=agent entries)
         self._agent_tool_registry: dict[str, dict] = {}
         self._skill_tool: SkillActivationTool | None = None
+        self._tool_catalog: ToolCatalog | None = None
+        self._pending_escalations: dict[str, PendingEscalation] = {}
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -121,6 +149,19 @@ class AgentExecutionWorkflow:
                     "reason": reason,
                     "iteration": self.state.current_iteration,
                 },
+            )
+
+    @workflow.signal
+    async def resolve_escalation(self, escalation_id: str, approved: bool, comment: str = "") -> None:
+        """Signal to approve or deny a specific tool escalation."""
+        if escalation_id in self._pending_escalations:
+            esc = self._pending_escalations[escalation_id]
+            esc.resolved = True
+            esc.approved = approved
+            esc.deny_comment = comment if not approved else None
+            workflow.logger.info(
+                f"Escalation {escalation_id} resolved: approved={approved}"
+                + (f" comment='{comment}'" if comment else "")
             )
 
     @workflow.run
@@ -220,36 +261,81 @@ class AgentExecutionWorkflow:
         if not StateValidator.validate_agent_config(self.state.agent_config):
             raise ApplicationError("Invalid agent configuration")
 
-        # Discover available tools using Pydantic request model
+        # Resolve context strategy early — gates tool discovery mode
+        strategy = resolve_context_strategy(
+            self.state.agent_config.get("context_strategy"),
+            self.state.agent_config.get("default_context_strategy"),
+        )
+        self.state.context_strategy = strategy.value
+
         tools_request = ToolDiscoveryRequest(
             agent_id=UUID(self.state.agent_id), user_context_data=self.state.user_context_data
         )
-        tools_result: ToolDiscoveryResult = await workflow.execute_activity(
-            Activities.DISCOVER_AVAILABLE_TOOLS,
-            args=[tools_request],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
-        )
 
-        # Normalize tools to list[dict] for state storage, accepting multiple shapes
-        available_tools: list[dict[str, Any]] = []
-        try:
-            tools_list = tools_result.tools  # Expected ToolDiscoveryResult
-        except AttributeError:
-            tools_list = tools_result  # Fallback: activity returned a raw list
+        if allows_tool_progressive_disclosure(strategy):
+            # DYNAMIC mode: discover providers, build catalog, inject only catalog + activate tool
+            providers_result: DiscoverToolProvidersResult = await workflow.execute_activity(
+                Activities.DISCOVER_TOOL_PROVIDERS,
+                args=[tools_request],
+                result_type=DiscoverToolProvidersResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
 
-        for tool in tools_list or []:
+            # Reconstruct ToolProviders from serialized data
+            providers = []
+            for pd in providers_result.providers:
+                provider_map = {
+                    "mcp": lambda d: MCPToolProvider(name=d.name, instance_id="", tools=d.tools),
+                    "code": lambda d: CodeToolProvider(name=d.name, tools=d.tools),
+                    "agent": lambda d: AgentToolProvider(name=d.name, agent_id="", tools=d.tools),
+                    "builtin": lambda d: BuiltinToolProvider(name=d.name, tools=d.tools),
+                }
+                factory = provider_map.get(pd.provider_type)
+                if factory:
+                    providers.append(factory(pd))
+
+            # Build catalog with previously activated sources carried from continue-as-new
+            activated = set(getattr(self.state, "activated_tool_sources", []) or [])
+            self._tool_catalog = ToolCatalog(providers, activated=activated)
+
+            # Start with tools from already-activated sources + builtin tools
+            available_tools: list[dict[str, Any]] = []
+            for p in providers:
+                if p.provider_type == "builtin" or p.name in activated:
+                    available_tools.extend(p.get_tool_definitions())
+
+            # Add activate_tool_source tool
+            available_tools.append(self._tool_catalog.get_activate_tool_source_definition())
+
+        else:
+            # STATIC/HYBRID mode: load all tools upfront (current behavior)
+            tools_result: ToolDiscoveryResult = await workflow.execute_activity(
+                Activities.DISCOVER_AVAILABLE_TOOLS,
+                args=[tools_request],
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=DEFAULT_RETRY_ATTEMPTS),
+            )
+
+            # Normalize tools to list[dict] for state storage, accepting multiple shapes
+            available_tools: list[dict[str, Any]] = []
             try:
-                available_tools.append(tool.model_dump())  # Pydantic ToolDefinition
+                tools_list = tools_result.tools  # Expected ToolDiscoveryResult
             except AttributeError:
-                if isinstance(tool, dict):
-                    available_tools.append(tool)
-                else:
-                    # Last resort: convert object to dict via __dict__
-                    try:
-                        available_tools.append(dict(tool.__dict__))
-                    except Exception:  # noqa: S110
-                        pass
+                tools_list = tools_result  # Fallback: activity returned a raw list
+
+            for tool in tools_list or []:
+                try:
+                    available_tools.append(tool.model_dump())  # Pydantic ToolDefinition
+                except AttributeError:
+                    if isinstance(tool, dict):
+                        available_tools.append(tool)
+                    else:
+                        # Last resort: convert object to dict via __dict__
+                        try:
+                            available_tools.append(dict(tool.__dict__))
+                        except Exception:  # noqa: S110
+                            pass
 
         # Inject built-in recall_history tool for querying past execution context
         available_tools.append(
@@ -261,7 +347,7 @@ class AgentExecutionWorkflow:
                         "Recall context from past executions of this task. "
                         "Use when you need information that may have been compacted "
                         "out of the current conversation, or to review what happened "
-                        "in earlier execution attempts."
+                        "in earlier execution attempts. Supports grep to search stored history."
                     ),
                     "parameters": {
                         "type": "object",
@@ -279,11 +365,57 @@ class AgentExecutionWorkflow:
                                 "type": "integer",
                                 "description": "Max events to return (default 20)",
                             },
+                            "grep": {
+                                "type": "string",
+                                "description": "Regex pattern to search stored message history (searches MinIO history chunks)",
+                            },
+                            "tool_name": {
+                                "type": "string",
+                                "description": "Filter stored history to messages from a specific tool",
+                            },
                         },
                     },
                 },
             }
         )
+
+        # Inject read_tool_output for retrieving offloaded large outputs (hybrid/dynamic)
+        if allows_output_offloading(strategy):
+            available_tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_tool_output",
+                        "description": (
+                            "Read a previously stored tool output. Use when you see "
+                            "'[Output stored as ...]' in a tool result and need the full content. "
+                            "Supports grep filtering and head/tail slicing."
+                        ),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "output_id": {
+                                    "type": "string",
+                                    "description": "The output ID from the stored result reference",
+                                },
+                                "grep": {
+                                    "type": "string",
+                                    "description": "Filter lines matching this regex pattern",
+                                },
+                                "head": {
+                                    "type": "integer",
+                                    "description": "Return only first N lines",
+                                },
+                                "tail": {
+                                    "type": "integer",
+                                    "description": "Return only last N lines",
+                                },
+                            },
+                            "required": ["output_id"],
+                        },
+                    },
+                }
+            )
 
         # Inject built-in activate_skill tool for progressive skill disclosure
         skills = self.state.agent_config.get("skills", [])
@@ -409,6 +541,9 @@ class AgentExecutionWorkflow:
         self.state.context_window = state.context_window
         self.state.user_context_data = state.user_context_data
         self.state.activated_skills = state.activated_skills
+        self.state.context_strategy = state.context_strategy
+        self.state.history_chunk_counter = state.history_chunk_counter
+        self.state.activated_tool_sources = state.activated_tool_sources
         self.state.status = ExecutionStatus.EXECUTING
 
         # Restore messages from compacted dicts
@@ -496,6 +631,9 @@ class AgentExecutionWorkflow:
             continued_from_run_id=workflow.info().run_id,
             agent_tool_registry=self._agent_tool_registry,
             activated_skills=self.state.activated_skills,
+            context_strategy=self.state.context_strategy,
+            history_chunk_counter=self.state.history_chunk_counter,
+            activated_tool_sources=self.state.activated_tool_sources,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
@@ -668,6 +806,12 @@ class AgentExecutionWorkflow:
                 skill_entries = list(self._skill_tool._skills_registry.values())
                 catalog_text = SkillCatalogBuilder.build_catalog(skill_entries)
                 agent_instruction = agent_instruction + catalog_text
+
+            # Append tool source catalog for progressive disclosure (DYNAMIC mode)
+            if self._tool_catalog:
+                tool_catalog_text = self._tool_catalog.build_prompt_text()
+                if tool_catalog_text:
+                    agent_instruction = agent_instruction + tool_catalog_text
 
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
@@ -907,6 +1051,8 @@ class AgentExecutionWorkflow:
         recall_calls: list[ToolCall] = []
         skill_calls: list[ToolCall] = []
         script_calls: list[ToolCall] = []
+        read_output_calls: list[ToolCall] = []
+        activate_source_calls: list[ToolCall] = []
 
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
@@ -914,6 +1060,10 @@ class AgentExecutionWorkflow:
                 completion_call = tool_call
             elif tool_name == "recall_history":
                 recall_calls.append(tool_call)
+            elif tool_name == "read_tool_output":
+                read_output_calls.append(tool_call)
+            elif tool_name == "activate_tool_source":
+                activate_source_calls.append(tool_call)
             elif tool_name == "activate_skill":
                 skill_calls.append(tool_call)
             elif tool_name == "run_skill_script":
@@ -923,9 +1073,16 @@ class AgentExecutionWorkflow:
             else:
                 regular_calls.append(tool_call)
 
-        # Run recall_history calls (can run in parallel with agent calls)
+        # Run recall_history and read_tool_output calls (can run in parallel with agent calls)
         for tool_call in recall_calls:
             await self._execute_recall_history(tool_call)
+
+        for tool_call in read_output_calls:
+            await self._execute_read_tool_output(tool_call)
+
+        # Execute tool source activations (DYNAMIC mode — local, no activity)
+        for tool_call in activate_source_calls:
+            await self._execute_activate_tool_source(tool_call)
 
         # Execute skill activations (local, no activity needed)
         for tool_call in skill_calls:
@@ -988,39 +1145,83 @@ class AgentExecutionWorkflow:
         approval_required = bool(
             self.state.goal and getattr(self.state.goal, "requires_human_approval", False)
         ) or self._tool_requires_approval(tool_name)
-        if approval_required:
-            # Update status and pause
-            self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
-            self._paused = True
-            self._pause_reason = f"Awaiting approval for tool '{tool_name}'"
 
-            # Publish approval requested event
+        if approval_required:
+            import uuid as _uuid
+
+            escalation_id = str(_uuid.uuid4())
+            escalation = PendingEscalation(
+                escalation_id=escalation_id,
+                tool_call_id=tool_call.id,
+                tool_name=tool_name,
+                tool_args=tool_args,
+            )
+            self._pending_escalations[escalation_id] = escalation
+
+            self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
+
+            # Publish approval requested event with escalation_id
             self.event_manager.add_event(
                 EventTypes.HUMAN_APPROVAL_REQUESTED,
                 {
+                    "escalation_id": escalation_id,
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
                     "iteration": self.state.current_iteration,
                     "arguments": tool_args,
-                    "message": "User approval required before executing tool",
+                    "message": f"Tool '{tool_name}' requires human approval",
                 },
             )
             await self._publish_events_immediately()
 
-            # Wait for resume signal
-            await workflow.wait_condition(lambda: not self._paused)
+            # Wait for THIS specific escalation to be resolved
+            await workflow.wait_condition(lambda: escalation.resolved)
 
-            # Publish approval received event and update status
-            self.state.status = ExecutionStatus.EXECUTING
+            if not escalation.approved:
+                # Denied — add tool result as denied, don't execute
+                deny_msg = escalation.deny_comment or "Denied by user"
+                self.event_manager.add_event(
+                    EventTypes.HUMAN_APPROVAL_DENIED,
+                    {
+                        "escalation_id": escalation_id,
+                        "tool_name": tool_name,
+                        "tool_call_id": tool_call.id,
+                        "iteration": self.state.current_iteration,
+                        "comment": deny_msg,
+                    },
+                )
+                await self._publish_events_immediately()
+
+                # Add denied result as tool response so LLM knows
+                self.state.messages.append(
+                    Message(
+                        role="tool",
+                        content=f"Tool call denied by human operator: {deny_msg}",
+                        tool_call_id=tool_call.id,
+                        name=tool_name,
+                    )
+                )
+
+                # Clean up and update status
+                del self._pending_escalations[escalation_id]
+                if not self._pending_escalations:
+                    self.state.status = ExecutionStatus.EXECUTING
+                return
+
+            # Approved — continue to execute
             self.event_manager.add_event(
                 EventTypes.HUMAN_APPROVAL_RECEIVED,
                 {
+                    "escalation_id": escalation_id,
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
                     "iteration": self.state.current_iteration,
                 },
             )
             await self._publish_events_immediately()
+            del self._pending_escalations[escalation_id]
+            if not self._pending_escalations:
+                self.state.status = ExecutionStatus.EXECUTING
 
         # Publish tool call started event (only after approval if required)
         self.event_manager.add_event(
@@ -1088,6 +1289,11 @@ class AgentExecutionWorkflow:
                 "execution_time_seconds", getattr(result_obj, "execution_time_seconds", None)
             )
 
+            # Offload large outputs to MinIO (hybrid/dynamic strategy)
+            result_text = await self._maybe_offload_output(
+                result_text, tool_call.id
+            )
+
             # Add tool result to conversation
             self.state.messages.append(
                 Message(
@@ -1141,12 +1347,49 @@ class AgentExecutionWorkflow:
             await self._publish_events_immediately()
 
     async def _execute_recall_history(self, tool_call: ToolCall) -> None:
-        """Execute recall_history tool via activity to query the DB event log."""
+        """Execute recall_history tool.
+
+        If grep or tool_name are provided and history chunks exist in MinIO,
+        searches MinIO first. Falls back to DB event log query.
+        """
         try:
             tool_args = json.loads(tool_call.function["arguments"])
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
 
+        grep = tool_args.get("grep")
+        tool_name_filter = tool_args.get("tool_name")
+
+        # Try MinIO history search first if grep/tool_name provided and chunks exist
+        strategy = ContextStrategy(self.state.context_strategy)
+        if (grep or tool_name_filter) and allows_history_preservation(strategy) and self.state.history_chunk_counter > 0:
+            try:
+                search_result: SearchHistoryResult = await workflow.execute_activity(
+                    Activities.SEARCH_HISTORY,
+                    args=[SearchHistoryRequest(
+                        task_id=str(self.state.task_id),
+                        workspace_id=str(self.state.workspace_id),
+                        grep=grep,
+                        tool_name=tool_name_filter,
+                    )],
+                    result_type=SearchHistoryResult,
+                    start_to_close_timeout=ACTIVITY_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=2),
+                )
+                if search_result.success and search_result.results:
+                    self.state.messages.append(
+                        Message(
+                            role="tool",
+                            content=f"[History search results]\n{search_result.results}",
+                            tool_call_id=tool_call.id,
+                            name="recall_history",
+                        )
+                    )
+                    return
+            except Exception as e:
+                workflow.logger.warning(f"MinIO history search failed, falling back to DB: {e}")
+
+        # Fall back to DB event log query
         request = RecallHistoryRequest(
             task_id=UUID(self.state.task_id),
             workspace_id=self.state.workspace_id,
@@ -1195,6 +1438,145 @@ class AgentExecutionWorkflow:
                     name="recall_history",
                 )
             )
+
+    async def _execute_read_tool_output(self, tool_call: ToolCall) -> None:
+        """Execute read_tool_output tool to retrieve offloaded content from MinIO."""
+        try:
+            tool_args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            tool_args = {}
+
+        output_id = tool_args.get("output_id", "")
+        if not output_id:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content="Error: output_id is required.",
+                    tool_call_id=tool_call.id,
+                    name="read_tool_output",
+                )
+            )
+            return
+
+        try:
+            read_result: ReadOutputResult = await workflow.execute_activity(
+                Activities.READ_CONTEXT_OUTPUT,
+                args=[ReadOutputRequest(
+                    task_id=str(self.state.task_id),
+                    workspace_id=str(self.state.workspace_id),
+                    output_id=output_id,
+                    grep=tool_args.get("grep"),
+                    head=tool_args.get("head"),
+                    tail=tool_args.get("tail"),
+                )],
+                result_type=ReadOutputResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+
+            content = read_result.content if read_result.success else f"Error reading output: {read_result.error}"
+        except Exception as e:
+            workflow.logger.error(f"read_tool_output failed: {e}")
+            content = f"Failed to read output '{output_id}': {e}"
+
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=content,
+                tool_call_id=tool_call.id,
+                name="read_tool_output",
+            )
+        )
+
+    async def _maybe_offload_output(self, content: str, output_id: str) -> str:
+        """Offload large tool output to MinIO if strategy allows. Returns summary or original."""
+        strategy = ContextStrategy(self.state.context_strategy)
+        if not allows_output_offloading(strategy):
+            return content
+        if len(content) <= TOOL_OUTPUT_OFFLOAD_CHARS:
+            return content
+
+        try:
+            store_result: StoreOutputResult = await workflow.execute_activity(
+                Activities.STORE_CONTEXT_OUTPUT,
+                args=[StoreOutputRequest(
+                    task_id=str(self.state.task_id),
+                    workspace_id=str(self.state.workspace_id),
+                    output_id=output_id,
+                    content=content,
+                )],
+                result_type=StoreOutputResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+            if store_result.success:
+                return build_output_summary(content, output_id)
+            # Fallback: keep full content if store failed
+            workflow.logger.warning(f"Output offload failed for {output_id}: {store_result.error}")
+            return content
+        except Exception as e:
+            # Fallback: MinIO failure doesn't break agent execution
+            workflow.logger.warning(f"Output offload exception for {output_id}: {e}")
+            return content
+
+    async def _execute_activate_tool_source(self, tool_call: ToolCall) -> None:
+        """Activate a tool source (DYNAMIC mode) — load full definitions into context."""
+        try:
+            args = json.loads(tool_call.function["arguments"])
+        except (json.JSONDecodeError, KeyError):
+            args = {}
+
+        source_name = args.get("source_name", "")
+
+        if not self._tool_catalog:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    content="Error: tool catalog not available (not in dynamic mode).",
+                    tool_call_id=tool_call.id,
+                    name="activate_tool_source",
+                )
+            )
+            return
+
+        new_tools = self._tool_catalog.activate(source_name)
+        if new_tools:
+            self.state.available_tools.extend(new_tools)
+            # Track activated sources for continue-as-new
+            activated_sources = getattr(self.state, "activated_tool_sources", []) or []
+            if source_name not in activated_sources:
+                activated_sources.append(source_name)
+                # Store back — ContinueAsNewState carries this
+                if hasattr(self.state, "activated_tool_sources"):
+                    self.state.activated_tool_sources = activated_sources
+
+            tool_names = [t.get("function", {}).get("name", "?") for t in new_tools]
+            result_text = (
+                f"Activated '{source_name}' with {len(new_tools)} tools: "
+                f"{', '.join(tool_names)}"
+            )
+        else:
+            result_text = f"Tool source '{source_name}' not found or has no tools."
+
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=result_text,
+                tool_call_id=tool_call.id,
+                name="activate_tool_source",
+            )
+        )
+
+        self.event_manager.add_event(
+            EventTypes.TOOL_CALL_COMPLETED,
+            {
+                "tool_name": "activate_tool_source",
+                "tool_call_id": tool_call.id,
+                "source_name": source_name,
+                "tools_loaded": len(new_tools),
+                "iteration": self.state.current_iteration,
+            },
+        )
 
     async def _execute_skill_activation(self, tool_call: ToolCall) -> None:
         """Execute skill activation locally (no Temporal activity needed)."""
@@ -1330,6 +1712,11 @@ class AgentExecutionWorkflow:
         if result.exit_code != 0:
             output_parts.append(f"Exit code: {result.exit_code}")
         content = "\n".join(output_parts) or "(no output)"
+
+        # Offload large script outputs to MinIO (hybrid/dynamic strategy)
+        content = await self._maybe_offload_output(
+            content, f"script_{tool_call.id}"
+        )
 
         self.state.messages.append(
             Message(
@@ -1555,6 +1942,31 @@ class AgentExecutionWorkflow:
         messages_to_compact = messages_dict[1:boundary]
         if not messages_to_compact:
             return False
+
+        # Preserve full history in MinIO before compaction (best-effort)
+        strategy = ContextStrategy(self.state.context_strategy)
+        if allows_history_preservation(strategy):
+            try:
+                chunk_index = self.state.history_chunk_counter
+                store_hist_result: StoreHistoryResult = await workflow.execute_activity(
+                    Activities.STORE_HISTORY_CHUNK,
+                    args=[StoreHistoryRequest(
+                        task_id=str(self.state.task_id),
+                        workspace_id=str(self.state.workspace_id),
+                        chunk_index=chunk_index,
+                        messages=messages_to_compact,
+                    )],
+                    result_type=StoreHistoryResult,
+                    start_to_close_timeout=ACTIVITY_TIMEOUT,
+                    retry_policy=RetryPolicy(maximum_attempts=2),
+                )
+                if store_hist_result.success:
+                    self.state.history_chunk_counter += 1
+                    workflow.logger.info(f"Stored history chunk {chunk_index} before compaction")
+                else:
+                    workflow.logger.warning(f"History chunk store failed: {store_hist_result.error}")
+            except Exception as e:
+                workflow.logger.warning(f"History preservation failed (non-blocking): {e}")
 
         # Call compaction activity
         try:
@@ -1855,6 +2267,10 @@ class AgentExecutionWorkflow:
             ),
             "paused": self._paused,
             "pause_reason": self._pause_reason,
+            "pending_escalations": {
+                eid: {"tool_name": e.tool_name, "tool_call_id": e.tool_call_id, "resolved": e.resolved}
+                for eid, e in self._pending_escalations.items()
+            },
             "context": self.context_manager.get_status() if self.context_manager else None,
         }
 

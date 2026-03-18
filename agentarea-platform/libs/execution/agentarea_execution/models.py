@@ -165,6 +165,7 @@ class AgentConfigResult(BaseModel):
     instruction: str
     model_id: str
     context_window: int = 128000  # From ModelSpec, used for context window management
+    default_context_strategy: str | None = None  # From ModelSpec: "static", "hybrid", "dynamic"
     tools: list[dict[str, Any]] = Field(default_factory=list)
     events_config: dict[str, Any] = Field(default_factory=dict)
     planning: bool = False
@@ -456,6 +457,96 @@ class ExecuteSkillScriptResult(BaseModel):
     stderr: str = ""
     exit_code: int = 0
     execution_time_ms: int = 0
+
+
+# === Context Store Activity Models ===
+
+
+class StoreOutputRequest(BaseModel):
+    """Request to store a large tool output in MinIO."""
+
+    task_id: str
+    workspace_id: str
+    output_id: str
+    content: str
+
+
+class StoreOutputResult(BaseModel):
+    """Result of storing a tool output."""
+
+    success: bool
+    error: str | None = None
+
+
+class ReadOutputRequest(BaseModel):
+    """Request to read a stored tool output from MinIO."""
+
+    task_id: str
+    workspace_id: str
+    output_id: str
+    grep: str | None = None
+    head: int | None = None
+    tail: int | None = None
+
+
+class ReadOutputResult(BaseModel):
+    """Result of reading a stored tool output."""
+
+    success: bool
+    content: str = ""
+    error: str | None = None
+
+
+class StoreHistoryRequest(BaseModel):
+    """Request to store compacted messages in MinIO."""
+
+    task_id: str
+    workspace_id: str
+    chunk_index: int
+    messages: list[dict[str, Any]]
+
+
+class StoreHistoryResult(BaseModel):
+    """Result of storing a history chunk."""
+
+    success: bool
+    error: str | None = None
+
+
+class SearchHistoryRequest(BaseModel):
+    """Request to search stored history chunks in MinIO."""
+
+    task_id: str
+    workspace_id: str
+    grep: str | None = None
+    tool_name: str | None = None
+    message_type: str | None = None
+
+
+class SearchHistoryResult(BaseModel):
+    """Result of searching history chunks."""
+
+    success: bool
+    results: str = ""
+    error: str | None = None
+
+
+class ToolProviderData(BaseModel):
+    """Serializable representation of a ToolProvider for workflow transport."""
+
+    name: str
+    provider_type: str  # "mcp", "code", "agent", "builtin"
+    tool_names: list[str] = Field(default_factory=list)
+    description: str = ""
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DiscoverToolProvidersResult(BaseModel):
+    """Result from discover_tool_providers activity."""
+
+    providers: list[ToolProviderData] = Field(default_factory=list)
+    success: bool = True
+    error: str | None = None
 
 
 class SkillFileRequest(BaseModel):

@@ -18,6 +18,7 @@ class ModelSpecCreate(BaseModel):
     display_name: str
     description: str | None = None
     context_window: int = 4096
+    default_context_strategy: str | None = None  # Auto-inferred from model_name if None
     is_active: bool = True
 
 
@@ -25,6 +26,7 @@ class ModelSpecUpdate(BaseModel):
     display_name: str | None = None
     description: str | None = None
     context_window: int | None = None
+    default_context_strategy: str | None = None
     is_active: bool | None = None
 
 
@@ -35,6 +37,7 @@ class ModelSpecResponse(BaseModel):
     display_name: str
     description: str | None
     context_window: int
+    default_context_strategy: str | None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -52,6 +55,7 @@ class ModelSpecResponse(BaseModel):
             display_name=model_spec.display_name,
             description=model_spec.description,
             context_window=model_spec.context_window,
+            default_context_strategy=model_spec.default_context_strategy,
             is_active=model_spec.is_active,
             created_at=model_spec.created_at,
             updated_at=model_spec.updated_at,
@@ -145,6 +149,7 @@ async def create_model_spec(
         display_name=data.display_name,
         description=data.description,
         context_window=data.context_window,
+        default_context_strategy=data.default_context_strategy,
         is_active=data.is_active,
     )
 
@@ -171,6 +176,8 @@ async def update_model_spec(
         model_spec.description = data.description
     if data.context_window is not None:
         model_spec.context_window = data.context_window
+    if data.default_context_strategy is not None:
+        model_spec.default_context_strategy = data.default_context_strategy
     if data.is_active is not None:
         model_spec.is_active = data.is_active
 
@@ -207,6 +214,7 @@ async def upsert_model_spec(
         display_name=data.display_name,
         description=data.description,
         context_window=data.context_window,
+        default_context_strategy=data.default_context_strategy,
         is_active=data.is_active,
     )
 

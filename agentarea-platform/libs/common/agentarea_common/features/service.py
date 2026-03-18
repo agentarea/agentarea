@@ -33,3 +33,13 @@ class FeatureService:
     def enable_usage_metering(self) -> bool:
         """Enable usage metering and billing integration."""
         return self.mode == DeploymentMode.ENTERPRISE
+
+    @property
+    def show_governance_overlay(self) -> bool:
+        """Network view: show governance interceptor overlay."""
+        return self.mode == DeploymentMode.ENTERPRISE
+
+    @property
+    def enable_network_rebac(self) -> bool:
+        """Network view: filter nodes via Keto ReBAC."""
+        return self.mode == DeploymentMode.ENTERPRISE

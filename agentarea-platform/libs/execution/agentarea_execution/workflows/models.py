@@ -53,6 +53,18 @@ class ToolResult(BaseModel):
     error: str | None = None
 
 
+class PendingEscalation(BaseModel):
+    """Tracks a single tool call awaiting human approval."""
+
+    escalation_id: str
+    tool_call_id: str
+    tool_name: str
+    tool_args: dict[str, Any] = Field(default_factory=dict)
+    resolved: bool = False
+    approved: bool | None = None
+    deny_comment: str | None = None
+
+
 class WorkflowEvent(BaseModel):
     """Structured workflow event."""
 
@@ -91,6 +103,10 @@ class ContinueAsNewState(BaseModel):
     continued_from_run_id: str | None = None
     agent_tool_registry: dict[str, dict[str, Any]] = Field(default_factory=dict)
     activated_skills: list[str] = Field(default_factory=list)
+    # Dynamic context discovery
+    context_strategy: str = "hybrid"
+    history_chunk_counter: int = 0
+    activated_tool_sources: list[str] = Field(default_factory=list)
 
 
 class AgentExecutionState(BaseModel):
@@ -113,3 +129,7 @@ class AgentExecutionState(BaseModel):
     context_window: int = 128000  # From ModelSpec, for context window management
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     activated_skills: list[str] = Field(default_factory=list)
+    # Dynamic context discovery
+    context_strategy: str = "hybrid"
+    history_chunk_counter: int = 0
+    activated_tool_sources: list[str] = Field(default_factory=list)

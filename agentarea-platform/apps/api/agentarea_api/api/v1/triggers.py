@@ -27,7 +27,8 @@ from agentarea_api.api.deps.services import (
     get_trigger_health_check,
     get_trigger_service,
 )
-from agentarea_api.api.v1.a2a_auth import A2AAuthContext, require_a2a_execute_auth
+from agentarea_common.auth.dependencies import UserContext, get_user_context
+from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
 from agentarea_triggers.domain.models import (
     TriggerCreate,
@@ -80,6 +81,7 @@ class TriggerResponse(BaseModel):
     webhook_type: str | None = None
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
+    event_types: list[str] = Field(default_factory=list)
 
     # Channel credentials indicator (actual credentials never returned)
     has_channel_credentials: bool = False
@@ -147,6 +149,7 @@ class TriggerResponse(BaseModel):
                     else str(trigger.webhook_type),
                     "validation_rules": trigger.validation_rules,
                     "webhook_config": trigger.webhook_config,
+                    "event_types": getattr(trigger, "event_types", []) or [],
                 }
             )
 
@@ -223,6 +226,7 @@ class TriggerCreateRequest(BaseModel):
     webhook_type: str = Field(default="generic")
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: dict[str, Any] | None = None
+    event_types: list[str] = Field(default_factory=list, description="Event types to filter (empty = all events)")
 
     # Channel credentials — stored encrypted, never returned in responses
     channel_credentials: dict[str, Any] | None = Field(
@@ -244,7 +248,7 @@ class TriggerCreateRequest(BaseModel):
     @classmethod
     def validate_webhook_type(cls, v: str) -> str:
         """Validate webhook type."""
-        valid_types = ["generic", "telegram", "slack", "github", "discord", "stripe"]
+        valid_types = list(CHANNEL_EVENTS.keys())
         if v.lower() not in valid_types:
             raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
         return v.lower()
@@ -284,7 +288,7 @@ class TriggerUpdateRequest(BaseModel):
         """Validate webhook type."""
         if v is None:
             return v
-        valid_types = ["generic", "telegram", "slack", "github", "discord", "stripe"]
+        valid_types = list(CHANNEL_EVENTS.keys())
         if v.lower() not in valid_types:
             raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
         return v.lower()
@@ -383,6 +387,12 @@ def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) ->
         WebhookType(request.webhook_type) if request.webhook_type else WebhookType.GENERIC
     )
 
+    # Auto-generate webhook_id for webhook triggers if not provided
+    webhook_id = request.webhook_id
+    if trigger_type == TriggerType.WEBHOOK and not webhook_id:
+        import secrets
+        webhook_id = secrets.token_urlsafe(16)
+
     return TriggerCreate(
         name=request.name,
         description=request.description,
@@ -394,11 +404,12 @@ def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) ->
         failure_threshold=request.failure_threshold,
         cron_expression=request.cron_expression,
         timezone=request.timezone,
-        webhook_id=request.webhook_id,
+        webhook_id=webhook_id,
         allowed_methods=request.allowed_methods,
         webhook_type=webhook_type,
         validation_rules=request.validation_rules,
         webhook_config=request.webhook_config,
+        event_types=request.event_types,
     )
 
 
@@ -433,10 +444,20 @@ def _convert_to_domain_update(request: TriggerUpdateRequest) -> Any:
 # API Endpoints
 
 
+@router.get("/channels/events")
+async def get_channel_events(
+    user_context: UserContext = Depends(get_user_context),
+) -> dict[str, list[str]]:
+    """Get supported event types for all channels.
+    Returns a mapping of channel type to list of event types.
+    """
+    return CHANNEL_EVENTS
+
+
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
     request: TriggerCreateRequest,
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
     secret_manager: BaseSecretManagerDep = None,
 ) -> TriggerResponse:
@@ -464,10 +485,11 @@ async def create_trigger(
 
     try:
         # Convert API request to domain model
-        if not auth_context.user_id:
+        if not user_context.user_id:
             raise HTTPException(status_code=400, detail="User ID is required to create a trigger")
-        created_by = auth_context.user_id
+        created_by = user_context.user_id
         trigger_data = _convert_to_domain_create(request, created_by)
+        trigger_data.workspace_id = user_context.workspace_id
 
         # Create trigger
         trigger = await trigger_service.create_trigger(trigger_data)
@@ -499,7 +521,7 @@ async def list_triggers(
     trigger_type: str | None = Query(None, description="Filter by trigger type (cron, webhook)"),
     active_only: bool = Query(False, description="Only return active triggers"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of triggers to return"),
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> list[TriggerResponse]:
     """List triggers with optional filtering.
@@ -608,7 +630,7 @@ async def triggers_health_check(
 @router.get("/{trigger_id}", response_model=TriggerResponse)
 async def get_trigger(
     trigger_id: UUID,
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerResponse:
     """Get a specific trigger by ID.
@@ -645,7 +667,7 @@ async def get_trigger(
 async def update_trigger(
     trigger_id: UUID,
     request: TriggerUpdateRequest,
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
     secret_manager: BaseSecretManagerDep = None,
 ) -> TriggerResponse:
@@ -710,7 +732,7 @@ async def update_trigger(
 @router.delete("/{trigger_id}", status_code=204)
 async def delete_trigger(
     trigger_id: UUID,
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> None:
     """Delete a trigger.
@@ -746,7 +768,7 @@ async def delete_trigger(
 @router.post("/{trigger_id}/enable", response_model=dict[str, Any])
 async def enable_trigger(
     trigger_id: UUID,
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Enable a trigger.
@@ -792,7 +814,7 @@ async def enable_trigger(
 @router.post("/{trigger_id}/disable", response_model=dict[str, Any])
 async def disable_trigger(
     trigger_id: UUID,
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Disable a trigger.
@@ -845,7 +867,7 @@ async def get_execution_history(
     ),
     start_time: datetime | None = Query(None, description="Filter executions after this time"),
     end_time: datetime | None = Query(None, description="Filter executions before this time"),
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionHistoryResponse:
     """Get execution history for a trigger with filtering and pagination.
@@ -930,7 +952,7 @@ async def get_execution_history(
 @router.get("/{trigger_id}/status", response_model=TriggerStatusResponse)
 async def get_trigger_status(
     trigger_id: UUID,
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> TriggerStatusResponse:
     """Get trigger status and schedule information.
@@ -982,7 +1004,7 @@ async def get_trigger_status(
 async def get_execution_metrics(
     trigger_id: UUID,
     hours: int = Query(24, ge=1, le=168, description="Time period in hours (max 7 days)"),
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionMetricsResponse:
     """Get execution metrics for a trigger.
@@ -1027,7 +1049,7 @@ async def get_execution_timeline(
     trigger_id: UUID,
     hours: int = Query(24, ge=1, le=168, description="Time period in hours (max 7 days)"),
     bucket_size_minutes: int = Query(60, ge=5, le=1440, description="Time bucket size in minutes"),
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionTimelineResponse:
     """Get execution timeline for a trigger.
@@ -1077,7 +1099,7 @@ async def get_execution_correlations(
     trigger_id: UUID,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of executions per page"),
-    auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> ExecutionCorrelationResponse:
     """Get execution correlation data for a trigger.

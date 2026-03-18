@@ -35,6 +35,12 @@ class TaskCreate(BaseModel):
     requires_human_approval: bool | None = False
 
 
+class EscalationResolution(BaseModel):
+    escalation_id: str
+    approved: bool
+    comment: str = ""
+
+
 class TaskResponse(BaseModel):
     id: UUID
     agent_id: UUID
@@ -661,6 +667,43 @@ async def resume_agent_task(
         raise
     except Exception as e:
         logger.error(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{task_id}/resolve-escalation")
+async def resolve_task_escalation(
+    agent_id: UUID,
+    task_id: UUID,
+    data: EscalationResolution,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+):
+    """Resolve a tool escalation for the specified task workflow."""
+    # Verify agent exists
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    try:
+        execution_id = f"task-{task_id}"
+        success = await workflow_task_service.resolve_escalation(
+            execution_id, data.escalation_id, data.approved, data.comment
+        )
+
+        if success:
+            return {
+                "status": "resolved",
+                "escalation_id": data.escalation_id,
+                "approved": data.approved,
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to resolve escalation")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to resolve escalation for task {task_id}, agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

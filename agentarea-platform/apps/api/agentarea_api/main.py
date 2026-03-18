@@ -120,7 +120,9 @@ async def initialize_services():
         # Discover extensions and wire DI
         from agentarea_common.extensions import discover_extensions
         from agentarea_common.extensions.registry import ExtensionRegistry
+        from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
         from agentarea_common.auth.simple_permission import SimplePermissionService
         from agentarea_common.features.service import DeploymentMode, FeatureService
         from agentarea_common.config.app import get_app_settings
@@ -136,6 +138,12 @@ async def initialize_services():
             register_factory(PermissionService, perm_factory)
         else:
             register_singleton(PermissionService, SimplePermissionService())
+
+        authz_factory = ExtensionRegistry.get_factory("authorization")
+        if authz_factory:
+            register_factory(AuthorizationService, authz_factory)
+        else:
+            register_singleton(AuthorizationService, SimpleAuthorizationService())
 
         from agentarea_common.config import get_settings
         from agentarea_common.events.router import create_event_broker_from_router, get_event_router

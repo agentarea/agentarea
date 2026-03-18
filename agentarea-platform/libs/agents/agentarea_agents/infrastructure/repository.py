@@ -4,7 +4,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,105 +15,6 @@ from agentarea_agents.domain.skill_models import agent_skills_table
 class AgentRepository(WorkspaceScopedRepository[Agent]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, Agent, user_context)
-
-    def _get_workspace_filter_with_system(self):
-        """Get workspace filter that includes both user's workspace and system workspace."""
-        return or_(
-            self.model_class.workspace_id == self.user_context.workspace_id,
-            self.model_class.workspace_id == "system",
-        )
-
-    async def list_all(
-        self,
-        limit: int | None = None,
-        offset: int | None = None,
-        **filters: Any,
-    ) -> list[Agent]:
-        """List all agents including system agents.
-
-        Override to include system workspace agents in addition to user's workspace agents.
-
-        Returns all resources within the workspace scope, including system agents.
-        Access control should be handled by authorization layer (future ReBAC).
-        """
-        try:
-            query = select(self.model_class)
-
-            # Include both user's workspace AND system workspace
-            query = query.where(self._get_workspace_filter_with_system())
-
-            # Apply additional filters
-            for field, value in filters.items():
-                if hasattr(self.model_class, field):
-                    query = query.where(getattr(self.model_class, field) == value)
-
-            # Apply pagination
-            if offset is not None:
-                query = query.offset(offset)
-            if limit is not None:
-                query = query.limit(limit)
-
-            result = await self.session.execute(query)
-            records = list(result.scalars().all())
-
-            # Log list access
-            self.audit_logger.log_list(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                count=len(records),
-                filters=filters,
-                creator_scoped=False,  # No longer used, kept for audit log compatibility
-                limit=limit,
-                offset=offset,
-            )
-
-            return records
-        except Exception as e:
-            self.audit_logger.log_error(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                error=str(e),
-                operation="list_all",
-                filters=filters,
-            )
-            raise
-
-    async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Agent | None:
-        """Get an agent by ID, including system agents.
-
-        Override to include system workspace agents in addition to user's workspace agents.
-        """
-        try:
-            query = select(self.model_class).where(self.model_class.id == id)
-
-            if creator_scoped:
-                query = query.where(self._get_creator_workspace_filter())
-            else:
-                # Include both user's workspace AND system workspace
-                query = query.where(self._get_workspace_filter_with_system())
-
-            result = await self.session.execute(query)
-            record = result.scalar_one_or_none()
-
-            # Log read access
-            self.audit_logger.log_read(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                resource_id=id,
-                creator_scoped=creator_scoped,
-                found=record is not None,
-            )
-
-            return record
-        except Exception as e:
-            self.audit_logger.log_error(
-                resource_type=self.resource_type,
-                user_context=self.user_context,
-                error=str(e),
-                resource_id=id,
-                operation="get_by_id",
-            )
-            raise
 
     async def get(self, id: UUID | str) -> Agent | None:
         """Get an agent by ID. Delegates to get_by_id for compatibility."""
@@ -187,7 +88,7 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
         query = (
             select(self.model_class)
             .where(self.model_class.id == agent_id)
-            .where(self._get_workspace_filter_with_system())
+            .where(self._get_workspace_filter())
             .options(selectinload(self.model_class.skills))
         )
         result = await self.session.execute(query)

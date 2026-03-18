@@ -17,6 +17,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from .authorization import AuthorizationService
 from .context import UserContext
 from .context_manager import ContextManager
 from .interfaces import AuthResult
@@ -25,6 +26,18 @@ from .providers.factory import AuthProviderFactory
 logger = logging.getLogger(__name__)
 
 _API_KEY_PREFIX = "aat_"
+
+
+async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
+    """Populate accessible_workspaces on UserContext via AuthorizationService."""
+    from agentarea_common.di.container import resolve
+
+    try:
+        authz = resolve(AuthorizationService)
+        user_context.accessible_workspaces = await authz.get_accessible_workspaces(user_context)
+    except (KeyError, TypeError, ValueError):
+        # Fallback: only own workspace (AuthorizationService not registered yet during startup)
+        user_context.accessible_workspaces = [user_context.workspace_id]
 
 # Security schemes
 # Required authentication - raises 401 if no token
@@ -135,6 +148,7 @@ async def get_user_context(
                 detail="Invalid or expired API key",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        await _resolve_accessible_workspaces(user_context)
         ContextManager.set_context(user_context)
         logger.debug(
             f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
@@ -165,6 +179,9 @@ async def get_user_context(
             workspace_id=workspace_id,
             roles=[],  # TODO: Extract roles from token or database
         )
+
+        # Resolve which workspaces this user can access
+        await _resolve_accessible_workspaces(user_context)
 
         # Set context in ContextManager for backward compatibility
         ContextManager.set_context(user_context)
@@ -222,6 +239,7 @@ async def get_optional_user(
         if user_context is None:
             logger.debug("Optional API key authentication failed: invalid or expired key")
             return None
+        await _resolve_accessible_workspaces(user_context)
         ContextManager.set_context(user_context)
         logger.debug(
             f"Authenticated via API key: user={user_context.user_id} workspace={user_context.workspace_id}"
@@ -248,6 +266,9 @@ async def get_optional_user(
             workspace_id=workspace_id,
             roles=[],
         )
+
+        # Resolve accessible workspaces
+        await _resolve_accessible_workspaces(user_context)
 
         # Set context in ContextManager
         ContextManager.set_context(user_context)

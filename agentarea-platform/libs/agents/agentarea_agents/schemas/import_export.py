@@ -55,6 +55,7 @@ class ToolSettingsYAML(BaseModel):
     allowed_tools: list[str] | None = None  # For MCP tools
     a2a_url: str | None = None  # For agent tools — explicit A2A endpoint URL
     description_override: str | None = None  # For agent tools — custom description
+    requires_user_confirmation: bool | None = None  # Require human approval before execution
 
 
 class ToolConfigYAML(BaseModel):

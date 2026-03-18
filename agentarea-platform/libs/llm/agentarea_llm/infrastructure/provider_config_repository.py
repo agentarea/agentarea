@@ -2,7 +2,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -12,13 +12,6 @@ from agentarea_llm.domain.models import ProviderConfig
 class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, ProviderConfig, user_context)
-
-    def _get_workspace_filter(self):
-        """Include system entities (workspace_id='system') with is_public=True."""
-        return or_(
-            self.model_class.workspace_id == self.user_context.workspace_id,
-            (self.model_class.workspace_id == "system") & self.model_class.is_public,
-        )
 
     async def get_with_relations(self, id: UUID) -> ProviderConfig | None:
         """Get provider config by ID with relationships loaded."""

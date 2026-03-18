@@ -88,6 +88,18 @@ class ExecutionService(ExecutionServiceInterface):
             logger.error(f"Failed to resume execution: {e}")
             return False
 
+    async def resolve_escalation(
+        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+    ) -> bool:
+        """Resolve a tool escalation via workflow orchestrator."""
+        try:
+            return await self._workflow_orchestrator.resolve_escalation_workflow(
+                execution_id, escalation_id, approved, comment
+            )
+        except Exception as e:
+            logger.error(f"Failed to resolve escalation: {e}")
+            return False
+
 
 # Interface for workflow orchestrators
 from abc import ABC, abstractmethod  # noqa: E402
@@ -119,4 +131,11 @@ class WorkflowOrchestratorInterface(ABC):
     @abstractmethod
     async def resume_workflow(self, execution_id: str) -> bool:
         """Resume paused workflow execution."""
+        pass
+
+    @abstractmethod
+    async def resolve_escalation_workflow(
+        self, execution_id: str, escalation_id: str, approved: bool, comment: str = ""
+    ) -> bool:
+        """Resolve a tool escalation in the workflow."""
         pass

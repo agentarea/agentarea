@@ -127,7 +127,7 @@ async def get_agent_service(
 
     try:
         authz = resolve(AuthorizationService)
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, ValueError):
         authz = None
     return AgentService(repository_factory, event_broker, authorization_service=authz)
 
@@ -300,7 +300,7 @@ async def get_workspace_import_export_service(
 
     try:
         authz = resolve(AuthorizationService)
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, ValueError):
         authz = None
     agent_service = AgentService(repository_factory, event_broker, authorization_service=authz)
     return WorkspaceImportExportService(
