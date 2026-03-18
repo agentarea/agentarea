@@ -42,6 +42,7 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     )  # S3 path for multi-file packages
     # Provenance: links back to the registry catalog item this skill was created from
     registry_item_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, default=None)
+    network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
 
     # Relationships
     agents: Mapped[list["Agent"]] = relationship(

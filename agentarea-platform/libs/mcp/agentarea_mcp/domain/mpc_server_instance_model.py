@@ -19,6 +19,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         JSON, nullable=False
     )  # Unified configuration storage
     status: Mapped[str] = mapped_column(String(50), default="pending")
+    network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
     auth_config_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("mcp_auth_configs.id", ondelete="SET NULL"),
@@ -32,6 +33,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         server_spec_id: str | None = None,
         json_spec: dict[str, Any] | None = None,
         status: str = "pending",
+        network_scope: str = "private",
         workspace_id: str | None = None,
         created_by: str | None = None,
         auth_config_id: UUID | None = None,
@@ -43,6 +45,7 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         self.server_spec_id = server_spec_id
         self.json_spec = json_spec or {}
         self.status = status
+        self.network_scope = network_scope
         self.auth_config_id = auth_config_id
         if workspace_id is not None:
             self.workspace_id = workspace_id
