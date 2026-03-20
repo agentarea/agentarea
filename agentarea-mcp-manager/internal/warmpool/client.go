@@ -244,6 +244,102 @@ func (c *Client) ReturnToPool(ctx context.Context, pod *corev1.Pod) error {
 	return err
 }
 
+// LabelStatefulPod labels an existing pod as stateful for a specific agent.
+func (c *Client) LabelStatefulPod(ctx context.Context, pod *corev1.Pod, agentID string) (*corev1.Pod, error) {
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels["mcp.agentarea.io/agent-id"] = agentID
+	pod.Labels["mcp.agentarea.io/type"] = "stateful"
+
+	updated, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to label stateful pod: %w", err)
+	}
+	return updated, nil
+}
+
+// FindOrCreateStatefulPod returns the dedicated pod for agentID, creating one if needed.
+// It waits up to 120 seconds for the pod to reach Running phase.
+func (c *Client) FindOrCreateStatefulPod(ctx context.Context, agentID string) (*corev1.Pod, error) {
+	selector := fmt.Sprintf("mcp.agentarea.io/agent-id=%s,mcp.agentarea.io/type=stateful", agentID)
+
+	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+		Limit:         1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list stateful pods for agent %s: %w", agentID, err)
+	}
+
+	if len(pods.Items) > 0 {
+		pod := &pods.Items[0]
+		if pod.Status.Phase == corev1.PodRunning {
+			return pod, nil
+		}
+		// Pod exists but not yet Running — wait for it.
+		return c.waitForPodRunning(ctx, pod.Name, 120*time.Second)
+	}
+
+	// No pod found — clone a warm pool pod spec and create a stateful pod.
+	warmPods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/component=warm-pool,mcp.agentarea.io/status=waiting",
+		Limit:         1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list warm pool pods for cloning: %w", err)
+	}
+	if len(warmPods.Items) == 0 {
+		return nil, fmt.Errorf("no warm pool pods available to clone for stateful agent %s", agentID)
+	}
+
+	template := warmPods.Items[0]
+
+	// Build a new pod from the warm pool pod's spec.
+	newPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: fmt.Sprintf("stateful-%s-", agentID),
+			Namespace:    c.namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/component":  "stateful-agent",
+				"app.kubernetes.io/managed-by": "mcp-manager",
+				"mcp.agentarea.io/agent-id":    agentID,
+				"mcp.agentarea.io/type":        "stateful",
+			},
+		},
+		Spec: template.Spec,
+	}
+	// Clear fields that must not be copied from an existing pod.
+	newPod.Spec.NodeName = ""
+
+	created, err := c.client.CoreV1().Pods(c.namespace).Create(ctx, newPod, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stateful pod for agent %s: %w", agentID, err)
+	}
+
+	return c.waitForPodRunning(ctx, created.Name, 120*time.Second)
+}
+
+// waitForPodRunning polls until the named pod is Running or the timeout elapses.
+func (c *Client) waitForPodRunning(ctx context.Context, podName string, timeout time.Duration) (*corev1.Pod, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		pod, err := c.client.CoreV1().Pods(c.namespace).Get(ctx, podName, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pod %s: %w", podName, err)
+		}
+		if pod.Status.Phase == corev1.PodRunning && pod.Status.PodIP != "" {
+			return pod, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return nil, fmt.Errorf("timed out waiting for pod %s to become Running", podName)
+}
+
 // GetPoolStatus returns current warm pool status
 func (c *Client) GetPoolStatus(ctx context.Context) (*PoolStatus, error) {
 	pods, err := c.client.CoreV1().Pods(c.namespace).List(ctx, metav1.ListOptions{

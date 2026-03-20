@@ -558,6 +558,12 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prevent path traversal — script_name must be a plain filename
+	if filepath.Base(req.ScriptName) != req.ScriptName || strings.Contains(req.ScriptName, "..") {
+		http.Error(w, `{"error": "script_name must be a simple filename without path separators"}`, http.StatusBadRequest)
+		return
+	}
+
 	timeout := 30
 	if req.TimeoutSeconds > 0 && req.TimeoutSeconds <= 300 {
 		timeout = req.TimeoutSeconds

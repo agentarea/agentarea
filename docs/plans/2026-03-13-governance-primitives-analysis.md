@@ -89,324 +89,215 @@
 
 ---
 
-## 4. Proposed Architecture — Execution Boundary Interceptors
+## 4. Proposed Architecture — Unified Interceptor Framework
+
+> **Updated 2026-03-15**: Aligned with OpenSpec design decisions (D1-D8). See `openspec/changes/governance-security-interceptors/design.md` for full rationale.
 
 ### Scope Clarification
 
-**What we build:** Interceptors at every action boundary within our execution engine.
-**What we don't build:** RBAC, auth, identity — handled by external systems (Ory, etc.).
-
-Two distinct concerns, two separate abstractions:
-1. **Governance** — pre-action gates: *"Should this action proceed?"* (budget, rate limits, capabilities, escalation)
-2. **Security** — input/output processing: *"Is this content safe?"* (injection detection, PII redaction, tool poisoning)
+**What we build:** A unified interceptor framework with dynamic registration at every execution boundary.
+**What we don't build:** RBAC, auth, identity — handled by Ory (Kratos, Hydra, Keto). No new DB tables for policy storage.
 
 ### Design Principles (SOLID)
 
 ```
 S — Each interceptor has one job (CapabilityGuard ≠ RateLimitGuard ≠ OutputSanitizer)
 O — New interceptors added by implementing a Protocol, no existing code modified
-L — Any GovernanceInterceptor is substitutable; any SecurityProcessor is substitutable
-I — Two thin interfaces, not one fat one (governance ≠ security)
-D — Execution layer depends on Protocol abstractions, injected via DI container
+L — Any ExecutionInterceptor is substitutable regardless of category
+I — One thin protocol with category marker (gate/filter/observer) — not separate hierarchies
+D — Execution layer depends on Protocol abstractions; Temporal bridge is an adapter, not the core
 ```
 
 ### Core Abstractions
 
 ```python
 # ──────────────────────────────────────────────────────────────
-# GOVERNANCE — Pre-action gates (should this proceed?)
+# SINGLE PROTOCOL — all interceptor types implement this
 # ──────────────────────────────────────────────────────────────
 
-class GovernanceAction(StrEnum):
-    ALLOW = "allow"
-    DENY = "deny"
-    WARN = "warn"
-    ESCALATE = "escalate"  # Route to human approval
+class InterceptorCategory(StrEnum):
+    GATE = "gate"          # Pre-action: ALLOW/DENY/WARN/ESCALATE. Short-circuits on DENY.
+    FILTER = "filter"      # Content: transforms input/output. Can BLOCK, MODIFY, or PASS.
+    OBSERVER = "observer"  # Side-effect only: logging, metrics, billing. Never blocks.
 
-@dataclass(frozen=True)
-class GovernanceDecision:
-    action: GovernanceAction
-    reason: str
-    guard_name: str
-    metadata: dict[str, Any] = field(default_factory=dict)
+class Phase(StrEnum):
+    PRE_LLM_CALL = "pre_llm_call"
+    POST_LLM_CALL = "post_llm_call"
+    PRE_TOOL_CALL = "pre_tool_call"
+    POST_TOOL_CALL = "post_tool_call"
+    PRE_DELEGATION = "pre_delegation"
+    POST_DELEGATION = "post_delegation"
+    TOOL_DISCOVERY = "tool_discovery"
 
-@dataclass
-class GovernanceContext:
-    """Everything a guard needs to make a decision."""
-    agent_id: UUID
-    workspace_id: str
-    user_id: str
-    action_type: str          # "tool_call", "llm_call", "agent_delegation"
-    action_name: str          # tool name, model id, target agent id
-    action_params: dict[str, Any]
-    execution_state: dict[str, Any]  # iteration count, budget used, etc.
+class InterceptorAction(StrEnum):
+    ALLOW = "allow"       # Gate: proceed. Filter: content unchanged. Observer: noted.
+    DENY = "deny"         # Gate: block action. Filter: block content.
+    WARN = "warn"         # Gate: proceed with warning. Filter: proceed with warning.
+    ESCALATE = "escalate" # Gate: route to human.
+    MODIFY = "modify"     # Filter: content was transformed.
 
-class GovernanceInterceptor(Protocol):
-    """Single governance check. Implement this to add new governance rules."""
+class ExecutionInterceptor(Protocol):
+    """Single protocol for all interceptor types — guards, filters, observers."""
 
     @property
     def name(self) -> str: ...
 
-    async def check(self, context: GovernanceContext) -> GovernanceDecision: ...
+    @property
+    def category(self) -> InterceptorCategory: ...
 
+    async def execute(self, context: InterceptorContext) -> InterceptorResult: ...
 
-class GovernancePipeline:
-    """Chain of Responsibility — composes interceptors, short-circuits on DENY/ESCALATE."""
-
-    def __init__(
-        self,
-        interceptors: list[GovernanceInterceptor],
-        event_broker: EventBroker,
-    ):
-        self._interceptors = interceptors
-        self._event_broker = event_broker
-
-    async def evaluate(self, context: GovernanceContext) -> GovernanceDecision:
-        for interceptor in self._interceptors:
-            decision = await interceptor.check(context)
-            match decision.action:
-                case GovernanceAction.DENY | GovernanceAction.ESCALATE:
-                    await self._emit_event(decision, context)
-                    return decision
-                case GovernanceAction.WARN:
-                    await self._emit_event(decision, context)
-                    # Continue — warning is informational
-        return GovernanceDecision(
-            action=GovernanceAction.ALLOW,
-            reason="all checks passed",
-            guard_name="pipeline",
-        )
-
-
-# ──────────────────────────────────────────────────────────────
-# SECURITY — Content processing (is this safe?)
-# ──────────────────────────────────────────────────────────────
-
-class SecurityVerdict(StrEnum):
-    CLEAN = "clean"
-    MODIFIED = "modified"    # Content was sanitized
-    BLOCKED = "blocked"      # Content rejected entirely
+@dataclass
+class InterceptorContext:
+    """Domain object — no Temporal imports."""
+    agent_id: UUID
+    workspace_id: str
+    user_id: str
+    phase: Phase
+    action_type: str           # "llm_call", "tool_call", "agent_delegation"
+    action_name: str           # tool name, model id, target agent id
+    action_params: dict[str, Any]
+    content: str | None = None # Input/output content for filter phases
+    execution_state: dict[str, Any] = field(default_factory=dict)
 
 @dataclass(frozen=True)
-class SecurityResult:
-    verdict: SecurityVerdict
-    original_content: str | None   # None if not modified
-    processed_content: str | None  # The cleaned/modified content
-    findings: list[str]            # What was detected
-    processor_name: str
+class InterceptorResult:
+    action: InterceptorAction
+    interceptor_name: str
+    reason: str
+    modified_content: str | None = None
+    findings: list[DetectionFinding] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+# ──────────────────────────────────────────────────────────────
+# REGISTRY — dynamic registration with phase + priority
+# ──────────────────────────────────────────────────────────────
+
+class InterceptorRegistry:
+    def register(
+        self,
+        interceptor: ExecutionInterceptor,
+        phase: Phase,
+        priority: int = 500,
+        on_deny: Callable | None = None,
+        on_warn: Callable | None = None,
+        on_escalate: Callable | None = None,
+    ) -> None: ...
+
+    def unregister(self, name: str, phase: Phase) -> None: ...
+    def get_interceptors(self, phase: Phase) -> list[ExecutionInterceptor]: ...  # sorted by priority
+
+
+# ──────────────────────────────────────────────────────────────
+# PIPELINE — chain of responsibility, infrastructure-agnostic
+# ──────────────────────────────────────────────────────────────
+
+class InterceptorPipeline:
+    """Executes registered interceptors per phase. Handles gates, filters, observers."""
+
+    def __init__(self, registry: InterceptorRegistry): ...
+
+    async def run(self, phase: Phase, context: InterceptorContext) -> InterceptorResult:
+        """Run all interceptors for this phase in priority order.
+        - Gates: short-circuit on DENY/ESCALATE, fire callbacks
+        - Filters: chain content modifications
+        - Observers: fire-and-forget, never block
+        """
+        ...
+
+
+# ──────────────────────────────────────────────────────────────
+# DETECTION ENGINE — swappable strategy for filter interceptors
+# ──────────────────────────────────────────────────────────────
 
 class DetectionEngine(Protocol):
-    """Swappable detection strategy — the HOW behind security checks.
-
-    Start with regex, swap to ML model or external API later.
-    The SecurityProcessor delegates to this — processors define WHAT
-    to check, engines define HOW to check it.
-    """
-
-    async def detect(
-        self, content: str, patterns: dict[str, Any]
-    ) -> list[DetectionFinding]: ...
+    """HOW to detect. Swap regex for Presidio, LLM judge, external API."""
+    async def detect(self, content: str, config: dict[str, Any]) -> list[DetectionFinding]: ...
 
 @dataclass(frozen=True)
 class DetectionFinding:
     category: str           # "pii.email", "injection.override", "credential.api_key"
     matched_text: str
-    start: int
-    end: int
+    span: tuple[int, int]
     confidence: float       # 0.0–1.0
-    engine_name: str        # "regex", "ml_classifier", "llm_judge", "presidio"
-
-
-class SecurityProcessor(Protocol):
-    """Content processor for input or output. Implement to add new security checks.
-
-    Each processor uses a DetectionEngine internally. The engine is
-    injected at construction — swap regex for ML, external API, or
-    LLM-as-judge without changing the processor or the pipeline.
-
-    Example evolution:
-        v1: RegexDetectionEngine     — pattern matching (fast, no deps)
-        v2: PresidioDetectionEngine  — Microsoft Presidio NER-based PII
-        v3: LLMJudgeDetectionEngine  — use an LLM to classify intent
-        v4: CompositeEngine          — chain multiple engines, merge findings
-    """
-
-    @property
-    def name(self) -> str: ...
-
-    async def process(
-        self,
-        content: str,
-        context: GovernanceContext,
-        direction: Literal["input", "output"],
-    ) -> SecurityResult: ...
-
-
-class SecurityPipeline:
-    """Composes security processors — each can modify or block content."""
-
-    def __init__(
-        self,
-        input_processors: list[SecurityProcessor],
-        output_processors: list[SecurityProcessor],
-        event_broker: EventBroker,
-    ):
-        self._input_processors = input_processors
-        self._output_processors = output_processors
-        self._event_broker = event_broker
-
-    async def process_input(
-        self, content: str, context: GovernanceContext
-    ) -> SecurityResult:
-        """Run all input processors (prompt injection, encoding attacks, etc.)"""
-        current = content
-        all_findings = []
-        for processor in self._input_processors:
-            result = await processor.process(current, context, "input")
-            if result.verdict == SecurityVerdict.BLOCKED:
-                await self._emit_event(result, context)
-                return result
-            if result.verdict == SecurityVerdict.MODIFIED:
-                current = result.processed_content
-            all_findings.extend(result.findings)
-        return SecurityResult(
-            verdict=SecurityVerdict.MODIFIED if current != content else SecurityVerdict.CLEAN,
-            original_content=content if current != content else None,
-            processed_content=current,
-            findings=all_findings,
-            processor_name="pipeline",
-        )
-
-    async def process_output(
-        self, content: str, context: GovernanceContext
-    ) -> SecurityResult:
-        """Run all output processors (PII redaction, credential scrubbing, etc.)"""
-        current = content
-        all_findings = []
-        for processor in self._output_processors:
-            result = await processor.process(current, context, "output")
-            if result.verdict == SecurityVerdict.BLOCKED:
-                await self._emit_event(result, context)
-                return result
-            if result.verdict == SecurityVerdict.MODIFIED:
-                current = result.processed_content
-            all_findings.extend(result.findings)
-        return SecurityResult(
-            verdict=SecurityVerdict.MODIFIED if current != content else SecurityVerdict.CLEAN,
-            original_content=content if current != content else None,
-            processed_content=current,
-            findings=all_findings,
-            processor_name="pipeline",
-        )
+    engine_name: str
 ```
 
-### Where They Hook In — Execution Boundary Map
+### Temporal Bridge — Native ActivityInboundInterceptor
 
-These interceptors wrap every action boundary in our Temporal execution flow:
-
-```
-AgentExecutionWorkflow.run()
-│
-├─ BOUNDARY 1: Agent Delegation (before calling child agents)
-│   ├─ GovernancePipeline.evaluate(action_type="agent_delegation")
-│   └─ SecurityPipeline.process_input(delegation_goal)
-│
-├─ BOUNDARY 2: LLM Call (call_llm_activity)
-│   ├─ PRE:  GovernancePipeline.evaluate(action_type="llm_call")
-│   ├─ PRE:  SecurityPipeline.process_input(user_messages)
-│   ├─       ──── actual LLM call ────
-│   └─ POST: SecurityPipeline.process_output(llm_response)
-│
-├─ BOUNDARY 3: Tool Execution (execute_mcp_tool_activity)
-│   ├─ PRE:  GovernancePipeline.evaluate(action_type="tool_call")
-│   ├─       ──── actual tool call ────
-│   └─ POST: SecurityPipeline.process_output(tool_result)
-│
-├─ BOUNDARY 4: Tool Discovery (discover_available_tools_activity)
-│   └─ POST: MCPToolSecurityScanner.scan(tool_definitions)
-│
-└─ BOUNDARY 5: Human Approval (when escalated)
-    └─ GovernancePipeline returned ESCALATE → Temporal signal wait
-```
-
-### How It Integrates With Existing Code
-
-The pipelines inject into `ActivityDependencies` (our existing DI for Temporal activities):
+The bridge uses Temporal's native interceptor API. **Zero changes to existing activity code.**
 
 ```python
-# interfaces.py — extended
-@dataclass
-class ActivityDependencies:
-    settings: "Settings"
-    event_broker: "EventBroker"
-    secret_manager_factory: "SecretManagerFactory"
-    # NEW: governance + security pipelines
-    governance_pipeline: "GovernancePipeline"
-    security_pipeline: "SecurityPipeline"
+class GovernanceActivityInterceptor(ActivityInboundInterceptor):
+    """Temporal adapter — delegates to InterceptorPipeline."""
 
+    def __init__(self, next: ActivityInboundInterceptor, pipeline: InterceptorPipeline):
+        super().__init__(next)
+        self._pipeline = pipeline
 
-# In make_agent_activities() — wrapping existing activities:
+    async def execute_activity(self, input: ExecuteActivityInput) -> Any:
+        activity_name = input.fn.__name__
+        pre_phase = self._resolve_pre_phase(activity_name)
 
-@activity.defn
-async def call_llm_activity(request: LLMCallRequest) -> LLMCallResult:
-    context = GovernanceContext(
-        agent_id=request.agent_id,
-        workspace_id=request.workspace_id,
-        action_type="llm_call",
-        action_name=request.model_id,
-        ...
-    )
+        # Run pre-phase interceptors (gates + input filters)
+        if pre_phase:
+            context = self._build_context(input, pre_phase)
+            result = await self._pipeline.run(pre_phase, context)
+            if result.action == InterceptorAction.DENY:
+                raise GovernanceDenied(result.reason)
+            if result.action == InterceptorAction.ESCALATE:
+                raise EscalationRequired(result)
 
-    # GOVERNANCE: Should this LLM call proceed?
-    decision = await dependencies.governance_pipeline.evaluate(context)
-    if decision.action == GovernanceAction.DENY:
-        raise GovernanceDenied(decision.reason)
-    if decision.action == GovernanceAction.ESCALATE:
-        raise EscalationRequired(decision)
+        # Execute actual activity (unchanged)
+        output = await self.next.execute_activity(input)
 
-    # SECURITY: Screen input content
-    input_result = await dependencies.security_pipeline.process_input(
-        request.messages[-1]["content"], context
-    )
-    if input_result.verdict == SecurityVerdict.BLOCKED:
-        raise SecurityBlocked(input_result.findings)
+        # Run post-phase interceptors (output filters + observers)
+        post_phase = self._resolve_post_phase(activity_name)
+        if post_phase:
+            context = self._build_context(input, post_phase, content=output)
+            result = await self._pipeline.run(post_phase, context)
+            if result.action == InterceptorAction.MODIFY:
+                output = self._apply_modification(output, result)
 
-    # ──── actual LLM call (existing code, unchanged) ────
-    result = await _do_llm_call(request)
+        return output
 
-    # SECURITY: Sanitize output content
-    output_result = await dependencies.security_pipeline.process_output(
-        result.content, context
-    )
-    if output_result.verdict == SecurityVerdict.MODIFIED:
-        result.content = output_result.processed_content
-
-    return result
+# Registration at worker startup:
+# Worker(interceptors=[GovernanceWorkerInterceptor(pipeline)])
 ```
 
 ### Concrete Interceptors — What We Build
 
-**Governance interceptors** (implement `GovernanceInterceptor`):
+**Gate interceptors** (category=GATE):
 
-| Interceptor | Boundaries | What It Does |
-|-------------|-----------|-------------|
-| `CapabilityGuard` | tool_call, agent_delegation | Check agent's allowed/denied tools list |
-| `CostBudgetGuard` | llm_call, tool_call | USD budget enforcement (extract from existing `BudgetTracker`) |
-| `TokenBudgetGuard` | llm_call | Token usage tracking with warn/stop thresholds |
-| `RateLimitGuard` | tool_call, llm_call | Per-agent token bucket rate limiting |
-| `SemanticGuard` | tool_call | Intent classification — block destructive actions (DROP TABLE, rm -rf) |
-| `CircuitBreakerGuard` | tool_call, agent_delegation | Prevent cascading failures (open after N consecutive failures) |
-| `EscalationGuard` | tool_call (configurable) | Route sensitive actions to human approval |
+| Interceptor | Phases | What It Does | Config Source |
+|-------------|--------|-------------|--------------|
+| `CapabilityGuard` | pre_tool_call, pre_delegation | Check agent's allowed/denied tools list | Agent model |
+| `CostBudgetGuard` | pre_llm_call, pre_tool_call | USD budget enforcement | Execution request |
+| `TokenBudgetGuard` | pre_llm_call | Token usage tracking with warn/stop | Execution request |
+| `RateLimitGuard` | pre_tool_call, pre_llm_call | Per-agent token bucket rate limiting | Workspace settings + Redis |
+| `SemanticGuard` | pre_tool_call | Block destructive actions (DROP TABLE, rm -rf) | Code-level rules |
+| `CircuitBreakerGuard` | pre_tool_call, pre_delegation | Open after N consecutive failures | Redis |
+| `EscalationGuard` | pre_tool_call (configurable) | Route sensitive actions to human approval | Agent model |
 
-**Security processors** (implement `SecurityProcessor`, delegate to `DetectionEngine`):
+**Filter interceptors** (category=FILTER, delegate to `DetectionEngine`):
 
-| Processor | Direction | What It Does | Engine (v1 → future) |
-|-----------|-----------|-------------|---------------------|
-| `PromptInjectionDetector` | input | Detect override attacks, encoding tricks, jailbreaks | Regex → LLM-as-judge |
-| `OutputSanitizer` | output | Redact PII (email, phone, SSN), credentials, API keys | Regex → Presidio NER → custom ML |
-| `ContentPolicyEnforcer` | input + output | Block prohibited content categories | Keyword → embedding similarity |
+| Interceptor | Phases | What It Does | Engine (v1 → future) |
+|-------------|--------|-------------|---------------------|
+| `PromptInjectionDetector` | pre_llm_call | Detect override attacks, encoding tricks | Regex → LLM-as-judge |
+| `OutputSanitizer` | post_llm_call, post_tool_call | Redact PII, credentials, API keys | Regex → Presidio NER → custom ML |
+| `ContentPolicyEnforcer` | pre_llm_call, post_llm_call | Block prohibited content categories | Keyword → embedding similarity |
+| `MCPToolSecurityScanner` | tool_discovery | Detect tool poisoning, rug pulls | Regex → heuristic |
 
-**Detection engines** (implement `DetectionEngine`, swappable per processor):
+**Observer interceptors** (category=OBSERVER, fire-and-forget):
+
+| Interceptor | Phases | What It Does |
+|-------------|--------|-------------|
+| `MetricsObserver` | all phases | Emit Prometheus counters per interceptor |
+| `AuditObserver` | all phases | Emit governance events to EventBroker |
+| Future: `BillingObserver` | pre_llm_call | Emit billing/metering events |
+
+**Detection engines** (implement `DetectionEngine`, swappable per filter):
 
 | Engine | Speed | Accuracy | When to Use |
 |--------|-------|----------|-------------|
@@ -416,106 +307,103 @@ async def call_llm_activity(request: LLMCallRequest) -> LLMCallResult:
 | `ExternalAPIDetectionEngine` | Variable | Variable | Delegate to external service (e.g. Azure AI Content Safety) |
 | `CompositeDetectionEngine` | Varies | Highest | Chain multiple engines, merge findings, use confidence scores |
 
-**Standalone scanner** (separate from pipeline, runs at tool discovery):
-
-| Scanner | When | What It Does |
-|---------|------|-------------|
-| `MCPToolSecurityScanner` | discover_available_tools | Detect tool poisoning, rug pulls, description injection |
-
 ### Package Layout
 
 ```
 agentarea-platform/libs/governance/agentarea_governance/
 ├── __init__.py
 ├── domain/
-│   ├── models.py              # GovernanceContext, GovernanceDecision, SecurityResult
-│   ├── events.py              # GovernanceViolation, SecurityFinding events
+│   ├── models.py              # InterceptorContext, InterceptorResult, DetectionFinding
+│   ├── protocols.py           # ExecutionInterceptor, DetectionEngine protocols
+│   ├── enums.py               # InterceptorCategory, Phase, InterceptorAction
+│   ├── events.py              # GovernanceViolation, SecurityFinding domain events
 │   └── exceptions.py          # GovernanceDenied, SecurityBlocked, EscalationRequired
 │
-├── pipeline/                  # The two core abstractions
-│   ├── governance_pipeline.py # GovernanceInterceptor protocol + pipeline
-│   └── security_pipeline.py   # SecurityProcessor protocol + pipeline
+├── registry.py                # InterceptorRegistry (dynamic registration)
+├── pipeline.py                # InterceptorPipeline (chain of responsibility)
 │
-├── governance/                # Governance interceptors (pre-action gates)
-│   ├── capability_guard.py
-│   ├── cost_budget_guard.py
-│   ├── token_budget_guard.py
-│   ├── rate_limit_guard.py
-│   ├── semantic_guard.py
-│   ├── circuit_breaker_guard.py
-│   └── escalation_guard.py
+├── interceptors/              # Concrete interceptors (all categories)
+│   ├── gates/
+│   │   ├── capability_guard.py
+│   │   ├── cost_budget_guard.py
+│   │   ├── token_budget_guard.py
+│   │   ├── rate_limit_guard.py
+│   │   ├── semantic_guard.py
+│   │   ├── circuit_breaker_guard.py
+│   │   └── escalation_guard.py
+│   ├── filters/
+│   │   ├── prompt_injection_detector.py
+│   │   ├── output_sanitizer.py
+│   │   ├── content_policy_enforcer.py
+│   │   └── mcp_tool_scanner.py
+│   └── observers/
+│       ├── metrics_observer.py
+│       └── audit_observer.py
 │
-├── security/                  # Security processors (content filtering)
-│   ├── prompt_injection_detector.py
-│   ├── output_sanitizer.py
-│   ├── content_policy_enforcer.py
-│   └── mcp_tool_scanner.py
+├── engines/                   # Detection engines (swappable per filter)
+│   ├── regex_engine.py
+│   ├── presidio_engine.py
+│   ├── llm_judge_engine.py
+│   ├── external_api_engine.py
+│   └── composite_engine.py
 │
-├── engines/                   # Detection engines (HOW to detect — swappable)
-│   ├── base.py                # DetectionEngine protocol + DetectionFinding
-│   ├── regex_engine.py        # v1: Pattern matching (zero deps, fast)
-│   ├── presidio_engine.py     # v2: Microsoft Presidio NER-based PII
-│   ├── llm_judge_engine.py    # v3: LLM-as-judge for semantic analysis
-│   ├── external_api_engine.py # v4: Delegate to external service
-│   └── composite_engine.py    # Chain engines, merge findings by confidence
+├── bridges/                   # Infrastructure adapters
+│   └── temporal_bridge.py     # GovernanceActivityInterceptor (only file with temporalio import)
 │
 ├── infrastructure/
-│   ├── policy_repository.py   # DB persistence for governance policies
 │   └── redis_state.py         # Rate limit + circuit breaker state in Redis
 │
-└── factory.py                 # Build pipelines from workspace config
+└── factory.py                 # Build registry from config, register interceptors
 ```
 
 ### Cloud-Native Considerations
 
 | Concern | Approach |
 |---------|----------|
-| **Policy storage** | PostgreSQL — workspace-scoped `governance_policy` table |
 | **Rate limit state** | Redis with TTL — token bucket per agent, shared across workflow replicas |
 | **Circuit breaker state** | Redis — failure counts per tool/agent, shared across workers |
-| **Token budget** | In-workflow state (Temporal) — per-execution; aggregated in DB for history |
-| **Metrics** | Emit to existing `EventBroker` + Prometheus counters per guard |
-| **MCP fingerprints** | PostgreSQL — tool definition hashes for rug-pull detection |
-| **Horizontal scaling** | All interceptors are stateless; external state in Redis/DB |
-| **Configuration** | Per-workspace policy config in DB, editable via API, versioned |
+| **Token budget** | In-workflow state (Temporal) — per-execution |
+| **Metrics** | Emit to existing `EventBroker` + Prometheus counters via `MetricsObserver` |
+| **MCP fingerprints** | In-memory hash cache with periodic refresh from tool discovery |
+| **Horizontal scaling** | All interceptors stateless or use external state (Redis). Pipeline runs per-request. |
+| **Interceptor config** | Each interceptor owns its source: Agent model, workspace settings, code-level defaults, Redis |
 | **Auth/RBAC** | **External** — Ory handles auth, roles, permissions. Not our concern. |
 
 ---
 
 ## 5. Implementation Phases
 
-### Phase 1: Abstractions + Foundation (Sprint 1)
-> Protocol definitions, pipeline infrastructure, inject into execution
+### Phase 1: Framework + Temporal Bridge (Sprint 1)
+> Protocols, registry, pipeline, Temporal adapter — empty pass-through
 
 - [ ] Create `libs/governance/` package
-- [ ] Define `GovernanceInterceptor` and `SecurityProcessor` protocols
-- [ ] Implement `GovernancePipeline` and `SecurityPipeline`
-- [ ] Define `GovernanceContext`, `GovernanceDecision`, `SecurityResult` models
-- [ ] Extend `ActivityDependencies` with pipeline injection
-- [ ] Wire empty pipelines into all 5 execution boundaries (no-op pass-through)
-- [ ] `GovernancePolicy` DB model + migration (workspace-scoped)
-- [ ] Factory to build pipelines from workspace config
+- [ ] Define `ExecutionInterceptor` protocol with `category` marker
+- [ ] Define `InterceptorContext`, `InterceptorResult`, `Phase`, `InterceptorAction` models
+- [ ] Implement `InterceptorRegistry` (register/unregister with phase + priority + callbacks)
+- [ ] Implement `InterceptorPipeline` (chain of responsibility with category-aware execution)
+- [ ] Implement `GovernanceActivityInterceptor` (Temporal bridge)
+- [ ] Register bridge on `Worker(interceptors=[...])` at startup with empty registry — no-op pass-through
+- [ ] Factory to build registry from config
 
-### Phase 2: Core Governance Guards (Sprint 2)
+### Phase 2: Core Gate Interceptors (Sprint 2)
 > First real enforcement — capabilities + budgets
 
 - [ ] `CapabilityGuard` — allowed/denied tools per agent
-- [ ] `CostBudgetGuard` — extract from existing `BudgetTracker` into guard protocol
+- [ ] `CostBudgetGuard` — extract from existing `BudgetTracker` into interceptor protocol
 - [ ] `TokenBudgetGuard` — track token usage per execution with warn/stop
 - [ ] `RateLimitGuard` — Redis-backed token bucket per agent/workspace
-- [ ] Governance events emitted to existing event system
-- [ ] Governance metrics (Prometheus counters: checks, denials, warnings)
+- [ ] `MetricsObserver` + `AuditObserver` — emit events/metrics for all interceptor decisions
 
-### Phase 3: Security Processors (Sprint 3)
-> Input/output content filtering
+### Phase 3: Filter Interceptors + Detection Engines (Sprint 3)
+> Input/output content filtering with swappable engines
 
+- [ ] `DetectionEngine` protocol + `RegexDetectionEngine` (v1)
 - [ ] `PromptInjectionDetector` — screen inputs for override/encoding attacks
 - [ ] `OutputSanitizer` — redact PII, credentials, API keys from responses
 - [ ] `MCPToolSecurityScanner` — tool poisoning + rug-pull detection at discovery time
-- [ ] Integration with MCP Manager tool discovery flow
 
-### Phase 4: Advanced Governance (Sprint 4)
-> Semantic analysis, circuit breaking, escalation
+### Phase 4: Advanced Gates + Escalation (Sprint 4)
+> Semantic analysis, circuit breaking, human approval
 
 - [ ] `SemanticGuard` — intent classification for dangerous tool calls
 - [ ] `CircuitBreakerGuard` — open after N failures, prevent cascading
@@ -532,40 +420,41 @@ agentarea-platform/libs/governance/agentarea_governance/
 ### Future Considerations (Design Only)
 > Items to track but not implement yet
 
-- Execution Rings (agent trust tiers → different pipeline configs)
-- Trust Scoring (compliance history → dynamic policy adjustment)
+- Execution Rings (agent trust tiers → different registry configs per tier)
+- Trust Scoring (compliance history → dynamic priority adjustment)
 - Kill Switch + Quarantine (governance-level agent termination)
 - Supervisor Hierarchy + Trust Root (deterministic approval chains)
 - Memory Guard (when we add persistent agent memory)
+- Advanced detection engines: `PresidioDetectionEngine`, `LLMJudgeDetectionEngine`, `ExternalAPIDetectionEngine`
+- Payment/billing interceptors
 - Replay Debugging (execution recording for governance audits)
-- Chaos Engineering (test governance resilience)
 
 ---
 
 ## 6. Key Design Decisions
 
-### Q: Why two protocols (Governance + Security) instead of one?
-**A:** They solve fundamentally different problems:
-- **Governance** is a gate — binary allow/deny decision, short-circuits on deny.
-- **Security** is a filter — transforms content, may redact but still pass through.
-Merging them would violate ISP and make guards harder to reason about.
+### Q: Why one protocol with categories instead of separate protocol hierarchies?
+**A:** Earlier design had `GovernanceInterceptor` + `SecurityProcessor` as separate protocols. But payments, compliance, metrics don't fit neatly into either. A single `ExecutionInterceptor` with `category` (gate/filter/observer) means the pipeline knows HOW to execute each (gates short-circuit, filters transform, observers fire-and-forget) without needing N protocol types. See design doc D1.
+
+### Q: Why use Temporal's native ActivityInboundInterceptor?
+**A:** Zero changes to existing activity code — interception is transparent. Activities don't need to know about governance. The `InterceptorPipeline` itself has zero Temporal imports — the bridge is the only Temporal-aware code. Consistent with how Temporal's own OpenTelemetry tracing works. See design doc D4.
+
+### Q: Why dynamic registry instead of static pipeline construction?
+**A:** New interceptor types (payments, NER, compliance, third-party gates) must be addable without modifying existing code. `registry.register(interceptor, phase, priority)` at startup — open-source, commercial, or custom implementations all plug in the same way.
 
 ### Q: Why not adopt microsoft/agent-governance-toolkit directly?
 **A:** Their toolkit is Python middleware for single-process agents. We run distributed (Temporal + K8s + MCP containers). We need:
 - State in Redis/PostgreSQL, not in-memory
 - Enforcement at Temporal activity boundaries, not function decorators
-- Workspace-scoped policies, not global config
+- Workspace-scoped config, not global
 - Integration with our event system
 We adopt their **concepts and patterns**, not their code.
 
-### Q: Why inject into ActivityDependencies instead of using Temporal interceptors?
-**A:** Temporal's built-in interceptor API is for cross-cutting concerns at the SDK level (tracing, auth). Our governance is **business logic** — it needs access to agent config, workspace policies, and domain context. Injecting via our existing DI (`ActivityDependencies` → `ActivityContext`) keeps it in the domain layer where it belongs.
-
-### Q: How do policies compose?
-**A:** Workspace default → Agent-specific override. DENY always wins (fail-closed). Each guard evaluates independently — the pipeline composes decisions.
+### Q: How do interceptors compose?
+**A:** Per-phase priority ordering. Lower number = runs first. DENY always wins (fail-closed). Callbacks (on_deny, on_warn, on_escalate) fire as side-effects at registration, not inside interceptors.
 
 ### Q: What about auth/RBAC?
-**A:** Auth, roles, and permissions are handled by Ory (external). Our governance layer trusts the `UserContext` provided by the API layer. We don't duplicate identity or access control — we enforce **agent-level** policies (what can this agent do), not **user-level** permissions (what can this user access).
+**A:** Handled by Ory (Kratos, Hydra, Keto). Our interceptors enforce **agent-level execution constraints** (what can this agent do), not user-level permissions (what can this user access).
 
 ---
 
@@ -573,6 +462,7 @@ We adopt their **concepts and patterns**, not their code.
 
 - [Microsoft Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+- [Temporal Python SDK — Interceptors](https://github.com/temporalio/sdk-python#interceptors)
+- OpenSpec design: `openspec/changes/governance-security-interceptors/design.md`
 - Existing plans: `2026-03-10-security-proxy-typing-design.md`, `2026-03-10-a2a-spec-compliance.md`
-- Existing DI: `agentarea_execution.interfaces.ActivityDependencies`
 - Existing execution: `agentarea_execution.activities.agent_execution_activities.make_agent_activities()`
