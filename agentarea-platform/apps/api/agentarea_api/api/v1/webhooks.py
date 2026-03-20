@@ -22,7 +22,7 @@ async def webhook_health_check(
         return {"status": "healthy" if is_healthy else "unhealthy", "service": "webhook-manager"}
     except Exception as e:
         logger.error(f"Webhook health check failed: {e}")
-        return {"status": "unhealthy", "service": "webhook-manager", "error": str(e)}
+        return {"status": "unhealthy", "service": "webhook-manager"}
 
 
 @router.api_route(

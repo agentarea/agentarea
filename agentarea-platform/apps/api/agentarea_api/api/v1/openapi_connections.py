@@ -1,16 +1,22 @@
 """API endpoints for OpenAPI connections."""
 
+import json
 import logging
 import re
 from typing import Any
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from agentarea_api.api.deps.services import get_openapi_connection_service
-from agentarea_openapi.application.service import OpenAPIConnectionService
+from agentarea_common.config import get_settings
+from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
+from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
+
+_ALLOW_PRIVATE = get_settings().mcp.ALLOW_PRIVATE_URLS
 
 logger = logging.getLogger(__name__)
 
@@ -51,15 +57,54 @@ class OpenAPIConnectionCreate(BaseModel):
     auth_config_id: UUID | None = None
     custom_headers: list[HeaderInput] | None = None
 
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        try:
+            validate_url(v, allow_private=_ALLOW_PRIVATE)
+        except ValueError as e:
+            raise ValueError(str(e)) from e
+        return v
+
+    @field_validator("spec_url")
+    @classmethod
+    def validate_spec_url(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                validate_url(v, allow_private=_ALLOW_PRIVATE)
+            except ValueError as e:
+                raise ValueError(str(e)) from e
+        return v
+
 
 class OpenAPIConnectionUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(None, max_length=255)
     description: str | None = None
-    base_url: str | None = None
+    base_url: str | None = Field(None, max_length=500)
     spec_url: str | None = None
     spec_content: dict[str, Any] | None = None
     auth_config_id: UUID | None = None
     custom_headers: list[HeaderInput] | None = None
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                validate_url(v, allow_private=_ALLOW_PRIVATE)
+            except ValueError as e:
+                raise ValueError(str(e)) from e
+        return v
+
+    @field_validator("spec_url")
+    @classmethod
+    def validate_spec_url(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                validate_url(v, allow_private=_ALLOW_PRIVATE)
+            except ValueError as e:
+                raise ValueError(str(e)) from e
+        return v
 
 
 class OpenAPIConnectionResponse(BaseModel):
@@ -96,6 +141,16 @@ class SpecPreviewRequest(BaseModel):
     spec_url: str | None = None
     spec_content: dict[str, Any] | None = None
 
+    @field_validator("spec_url")
+    @classmethod
+    def validate_spec_url(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                validate_url(v, allow_private=_ALLOW_PRIVATE)
+            except ValueError as e:
+                raise ValueError(str(e)) from e
+        return v
+
 
 class SpecPreviewResponse(BaseModel):
     title: str | None = None
@@ -106,14 +161,14 @@ class SpecPreviewResponse(BaseModel):
 
 
 @router.post("/preview-spec", response_model=SpecPreviewResponse)
-async def preview_spec(request: SpecPreviewRequest):
-    """Fetch/parse an OpenAPI spec and return metadata + tools without creating a connection."""
-    import httpx
-    import json
-    import yaml
-    from agentarea_common.config import get_settings
-    from agentarea_openapi.application.spec_parser import parse_openapi_spec
+async def preview_spec(
+    request: SpecPreviewRequest,
+    _service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
+):
+    """Fetch/parse an OpenAPI spec and return metadata + tools without creating a connection.
 
+    The service dependency ensures authentication is enforced.
+    """
     settings = get_settings()
     allow_private = settings.mcp.ALLOW_PRIVATE_URLS
 
@@ -125,21 +180,10 @@ async def preview_spec(request: SpecPreviewRequest):
 
     if not spec and request.spec_url:
         try:
-            validate_url(request.spec_url, allow_private=allow_private)
-            async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
-                resp = await client.get(request.spec_url)
-                resp.raise_for_status()
-            content = resp.content
-            if len(content) > 5 * 1024 * 1024:
-                raise HTTPException(status_code=400, detail="Spec response exceeds 5MB limit.")
-            text = content.decode(resp.encoding or "utf-8", errors="replace")
-            if request.spec_url.endswith((".yaml", ".yml")):
-                spec = yaml.safe_load(text)
-            else:
-                try:
-                    spec = json.loads(text)
-                except json.JSONDecodeError:
-                    spec = yaml.safe_load(text)
+            spec = await fetch_and_parse_spec(
+                request.spec_url,
+                allow_private=allow_private,
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except httpx.RequestError as e:
@@ -300,3 +344,6 @@ async def test_connection(
         return await service.test_connection(connection_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Failed to test connection {connection_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to test connection") from e

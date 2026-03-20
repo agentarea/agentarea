@@ -46,7 +46,7 @@ def api(method: str, path: str, body: dict | None = None) -> dict | list | None:
         elif method == "POST":
             r = client.post(url, headers=HEADERS, json=body)
         elif method == "DELETE":
-            r = client.delete(url, headers=HEADERS)
+            client.delete(url, headers=HEADERS)
             return None
         else:
             raise ValueError(f"Unknown method: {method}")
@@ -205,7 +205,7 @@ def main():
             e for e in tool_events
             if e.get("metadata", {}).get("tool_name") == "activate_skill"
         ]
-        other_tool_events = [
+        _other_tool_events = [
             e for e in tool_events
             if e.get("metadata", {}).get("tool_name") not in ("activate_skill", "completion")
         ]
