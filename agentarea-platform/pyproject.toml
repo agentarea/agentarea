@@ -37,7 +37,8 @@ members = [
     "libs/context",
     "libs/triggers",
     "libs/governance",
-    "libs/openapi"
+    "libs/openapi",
+    "libs/projects"
 ]
 
 [tool.uv.sources]
@@ -53,6 +54,7 @@ agentarea-context = { workspace = true }
 agentarea-triggers = { workspace = true }
 agentarea-governance = { workspace = true }
 agentarea-openapi = { workspace = true }
+agentarea-projects = { workspace = true }
 agentarea-api = { workspace = true }
 agentarea-worker = { workspace = true }
 agentarea-cli = { workspace = true }

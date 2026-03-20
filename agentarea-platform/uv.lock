@@ -18,6 +18,7 @@ members = [
     "agentarea-llm",
     "agentarea-mcp",
     "agentarea-openapi",
+    "agentarea-projects",
     "agentarea-secrets",
     "agentarea-tasks",
     "agentarea-triggers",
@@ -112,6 +113,7 @@ dependencies = [
     { name = "agentarea-llm" },
     { name = "agentarea-mcp" },
     { name = "agentarea-openapi" },
+    { name = "agentarea-projects" },
     { name = "agentarea-secrets" },
     { name = "agentarea-tasks" },
     { name = "agentarea-triggers" },
@@ -134,6 +136,7 @@ requires-dist = [
     { name = "agentarea-llm", editable = "libs/llm" },
     { name = "agentarea-mcp", editable = "libs/mcp" },
     { name = "agentarea-openapi", editable = "libs/openapi" },
+    { name = "agentarea-projects", editable = "libs/projects" },
     { name = "agentarea-secrets", editable = "libs/secrets" },
     { name = "agentarea-tasks", editable = "libs/tasks" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
@@ -316,6 +319,21 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "pyyaml", specifier = ">=6.0" },
+]
+
+[[package]]
+name = "agentarea-projects"
+version = "0.0.1"
+source = { editable = "libs/projects" }
+dependencies = [
+    { name = "agentarea-common" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agentarea-common", editable = "libs/common" },
+    { name = "pydantic", specifier = ">=2.4.2" },
 ]
 
 [[package]]

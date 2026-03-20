@@ -23,6 +23,7 @@ from . import (
     model_specs,
     network,
     openapi_connections,
+    projects,
     provider_configs,
     provider_specs,
     registries,
@@ -100,6 +101,9 @@ protected_v1_router.include_router(openapi_connections.router)
 
 # Network topology - PROTECTED
 protected_v1_router.include_router(network.router)
+
+# Projects - PROTECTED
+protected_v1_router.include_router(projects.router)
 
 # ============================================================================
 # LEGACY: Keep old v1_router for backward compatibility during migration

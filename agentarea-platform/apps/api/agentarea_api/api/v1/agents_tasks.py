@@ -33,6 +33,7 @@ class TaskCreate(BaseModel):
     parameters: dict[str, Any] = {}
     enable_agent_communication: bool | None = True
     requires_human_approval: bool | None = False
+    project_id: str | None = None
 
 
 class EscalationResolution(BaseModel):
