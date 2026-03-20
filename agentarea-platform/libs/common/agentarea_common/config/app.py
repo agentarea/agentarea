@@ -1,6 +1,7 @@
 """Application settings configuration."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from .base import BaseAppSettings
 
@@ -21,17 +22,39 @@ class AppSettings(BaseAppSettings):
     KRATOS_PUBLIC_URL: str = "http://kratos:4433"
 
     # Kratos Authentication Configuration
-    KRATOS_JWKS_B64: str = (
-        "ewogICJrZXlzIjogWwogICAgewogICAgICAia3R5IjogIkVDIiwKICAgICAgImtpZCI6ICJh"
-        "Z2VudGFyZWEtand0LWtleS0xIiwKICAgICAgInVzZSI6ICJzaWciLAogICAgICAiYWxnIjo"
-        "gIkVTMjU2IiwKICAgICAgImNydiI6ICJQLTI1NiIsCiAgICAgICJ4IjogIk1LQkNUTkljS1"
-        "VTRGlpMTF5U3MzNTI2aURaOEFpVG83VHU2S1BBcXY3RDQiLAogICAgICAieSI6ICI0RXRs"
-        "NlNSVzJZaUxVck41dmZ2Vkh1aHA3eDhQeGx0bVdXbGJiTTRJRnlNIiwKICAgICAgImQiOiA"
-        "iODcwTUI2Z2Z1VEo0SHRVblV2WU15SnByNWVVWk5QNEJrNDNiVmRqM2VBRSIKICAgIH0KIC"
-        "BdCn0="
-    )
+    # Base64-encoded JWKS (public keys only). Must be set via KRATOS_JWKS_B64 env var.
+    KRATOS_JWKS_B64: str
     KRATOS_ISSUER: str = "https://agentarea.dev"
     KRATOS_AUDIENCE: str = "agentarea-api"
+
+    # Runtime environment (development / staging / production)
+    ENVIRONMENT: str = "development"
+
+    # Explicit hostname for reaching services on the host machine from within a container.
+    # If unset, auto-detected: host.docker.internal inside Docker, localhost otherwise.
+    LOCAL_HOST: str | None = None
+
+    @property
+    def local_host(self) -> str:
+        """Hostname for reaching services running on the host machine.
+
+        Returns 'host.docker.internal' when running inside a Docker container,
+        'localhost' otherwise. Works for any local inference engine
+        (Ollama, vLLM, LM Studio, llama.cpp, etc.).
+
+        Override via LOCAL_HOST env var.
+        On Linux Docker Engine (no Docker Desktop), add to compose.yaml:
+            extra_hosts: ["host.docker.internal:host-gateway"]
+        """
+        if self.LOCAL_HOST:
+            return self.LOCAL_HOST
+        # Explicit opt-in via Dockerfile ENV (most reliable, works everywhere)
+        if Path("/.dockerenv").exists():
+            return "host.docker.internal"
+        return "localhost"
+
+    # Comma-separated list of LiteLLM callbacks (e.g. "langfuse,prometheus")
+    LITELLM_CALLBACKS: str | None = None
 
 
 @lru_cache

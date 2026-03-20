@@ -14,9 +14,7 @@ class SecretManagerSettings(BaseAppSettings):
     """
 
     SECRET_MANAGER_TYPE: str = "database"  # noqa: S105
-    SECRET_MANAGER_ENCRYPTION_KEY: str | None = (
-        None  # For database encryption (auto-generated if None)
-    )
+    SECRET_MANAGER_ENCRYPTION_KEY: str | None = None  # Required when SECRET_MANAGER_TYPE="database"
 
     # Infisical-specific settings (only used when SECRET_MANAGER_TYPE="infisical")
     SECRET_MANAGER_ENDPOINT: str | None = None

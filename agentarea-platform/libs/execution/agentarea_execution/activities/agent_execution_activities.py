@@ -13,7 +13,6 @@ This module provides Temporal activities for agent execution:
 # Standard library imports
 import json
 import logging
-import os
 from typing import Any
 from uuid import UUID
 
@@ -184,7 +183,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Use tool manager to discover available tools
             tool_manager = ToolManager()
-            base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
+            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             all_tools = await tool_manager.discover_available_tools(
                 agent_id=request.agent_id,
                 tools_config=agent.tools,
@@ -213,7 +212,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
 
             tool_manager = ToolManager()
-            base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
+            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             providers = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,
                 tools_config=agent.tools,
@@ -292,10 +291,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 else:
                     logger.warning(f"No API key found for model instance {model_instance.id}")
 
-            # TODO: replace with proper config class
-            docker_host = os.environ.get("LLM_DOCKER_HOST")
-            if docker_host and provider_type == "ollama_chat":
-                endpoint_url = f"http://{docker_host}:11434"
+            if endpoint_url:
+                local_host = dependencies.settings.app.local_host
+                endpoint_url = endpoint_url.replace("localhost", local_host).replace(
+                    "127.0.0.1", local_host
+                )
 
             llm_model = LLMModel(
                 provider_type=provider_type,
@@ -455,7 +455,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "agent"
                 ]
                 if agent_configs:
-                    base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
+                    base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
                     agent_service = await ctx.get_agent_service()
 
                     # Create task service for internal delegation
@@ -867,9 +867,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     finally:
                         await secret_session.close()
 
-            docker_host = os.environ.get("LLM_DOCKER_HOST")
-            if docker_host and provider_type == "ollama_chat":
-                endpoint_url = f"http://{docker_host}:11434"
+            if endpoint_url:
+                local_host = dependencies.settings.app.local_host
+                endpoint_url = endpoint_url.replace("localhost", local_host).replace(
+                    "127.0.0.1", local_host
+                )
 
             llm_model = LLMModel(
                 provider_type=provider_type,
