@@ -43,7 +43,8 @@ export default async function EditAgentPage({ params }: Props) {
     }
 
     const agent = agentResponse.data;
-    const mcpServers = (mcpResponse.data || []).map((server: any) => ({
+    const rawMcpServers = (mcpResponse.data as any)?.items || mcpResponse.data || [];
+    const mcpServers = rawMcpServers.map((server: any) => ({
       ...server,
       status: ["published", "draft", "pending", "rejected"].includes(
         server.status

@@ -21,8 +21,9 @@ export interface AgentEditData extends AgentData {
 
 export async function loadAgentData(): Promise<AgentData> {
   // Fetch MCP servers
-  const response = await listMCPServers();
-  const mcpServers: MCPServer[] = (response.data || []).map(
+  const response = await listMCPServers({ page_size: 100 });
+  const rawServers = (response.data as any)?.items || response.data || [];
+  const mcpServers: MCPServer[] = rawServers.map(
     (server: MCPServer) => {
       const withDownloads = server as MCPServer & { downloads?: number };
       return {

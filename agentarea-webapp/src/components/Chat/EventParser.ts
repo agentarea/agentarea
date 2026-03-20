@@ -272,6 +272,26 @@ export const parseEventToMessage = (
       };
     }
 
+    case "HumanApprovalRequested": {
+      const originalData = eventData.original_data || eventData;
+      return {
+        type: "approval_request",
+        data: {
+          ...baseData,
+          escalation_id: originalData.escalation_id || eventData.escalation_id,
+          tool_name: originalData.tool_name || eventData.tool_name,
+          tool_call_id: originalData.tool_call_id || eventData.tool_call_id,
+          arguments: originalData.arguments || eventData.arguments || {},
+          message: originalData.message || eventData.message || "Approval required",
+        },
+      };
+    }
+
+    case "HumanApprovalDenied":
+    case "HumanApprovalReceived":
+      // These update existing approval messages, handled in eventHandlers
+      return null;
+
     default:
       // For unhandled event types, return null (don't display)
       return null;
@@ -295,6 +315,7 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "task_cancelled",
     "BudgetWarning",
     "BudgetExceeded",
+    "HumanApprovalRequested",
   ];
 
   return displayableEvents.includes(eventType);

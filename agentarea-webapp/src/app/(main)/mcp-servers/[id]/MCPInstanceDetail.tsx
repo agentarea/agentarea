@@ -12,6 +12,7 @@ import {
   Copy,
   Link as LinkIcon,
   Play,
+  RefreshCw,
   Square,
   Trash2,
   XCircle,
@@ -31,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { MCPInstance, MCPServer } from "../types";
 import { startInstance, stopInstance, deleteInstance } from "./actions";
 import { getMCPInstanceHealth } from "@/lib/api";
+import { discoverMCPInstanceTools } from "@/lib/browser-api";
 
 interface Props {
   instance: MCPInstance;
@@ -116,8 +118,29 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
   const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
+  const [isRefreshingTools, setIsRefreshingTools] = useState(false);
+  const [health, setHealth] = useState<{
+    healthy: boolean;
+    response_time_ms: number;
+    container_status: string;
+  } | null>(null);
+
   const canStart = instance.status !== "running" && instance.status !== "starting";
   const canStop = instance.status === "running" || instance.status === "starting";
+
+  const handleRefreshTools = async () => {
+    setIsRefreshingTools(true);
+    try {
+      const { error } = await discoverMCPInstanceTools(instance.id);
+      if (error) throw new Error(typeof error === "object" && "detail" in error ? String(error.detail) : "Failed to refresh tools");
+      toast.success("Tools refreshed successfully");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to refresh tools");
+    } finally {
+      setIsRefreshingTools(false);
+    }
+  };
 
   // Poll for status updates during transient states
   useEffect(() => {
@@ -140,6 +163,13 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
             setConnectionUrl(health_check.details.proxy_url);
           } else if (health_check?.url) {
             setConnectionUrl(health_check.url);
+          }
+          if (health_check) {
+            setHealth({
+              healthy: health_check.healthy,
+              response_time_ms: health_check.response_time_ms,
+              container_status: health_check.container_status,
+            });
           }
         })
         .catch(console.error)
@@ -228,6 +258,15 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRefreshTools}
+            disabled={isRefreshingTools}
+          >
+            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`} />
+            Refresh Tools
+          </Button>
           {canStart && (
             <Button
               size="sm"
@@ -336,6 +375,39 @@ export default function MCPInstanceDetail({ instance, serverSpec }: Props) {
               Connection URL not available. The instance may still be initializing.
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Health Card */}
+      {health && (
+        <Card className="p-4 space-y-3">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Health
+          </h3>
+          <div className="grid gap-2 text-sm sm:grid-cols-3">
+            <div>
+              <span className="text-muted-foreground">Status</span>
+              <p className="mt-0.5">
+                {health.healthy ? (
+                  <span className="flex items-center gap-1 text-green-600">
+                    <CheckCircle className="h-3.5 w-3.5" /> Healthy
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-red-600">
+                    <XCircle className="h-3.5 w-3.5" /> Unhealthy
+                  </span>
+                )}
+              </p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Response Time</span>
+              <p className="mt-0.5 font-mono">{health.response_time_ms}ms</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Container</span>
+              <p className="mt-0.5 capitalize">{health.container_status}</p>
+            </div>
+          </div>
         </Card>
       )}
 

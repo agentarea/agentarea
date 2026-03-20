@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { resolveEscalation } from "@/lib/browser-api";
 import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { MessageRenderer } from "./MessageComponents";
@@ -80,6 +81,16 @@ export default function AgentChat({
     openFileDialog,
     clearFiles,
   } = useFileUpload();
+
+  // Callback for resolving tool escalations (approve/deny)
+  const handleResolveEscalation = React.useCallback(
+    async (escalationId: string, approved: boolean, comment: string) => {
+      const tid = currentTaskId || taskId;
+      if (!tid) return;
+      await resolveEscalation(agent.id, tid, escalationId, approved, comment);
+    },
+    [agent.id, currentTaskId, taskId]
+  );
 
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
@@ -215,6 +226,7 @@ export default function AgentChat({
                   key={`${message.data.id}-${message.data.event_type}-${index}`}
                   message={message}
                   agent_name={agent.name}
+                  onResolveEscalation={handleResolveEscalation}
                 />
               );
             } else if (message.role === "user") {
