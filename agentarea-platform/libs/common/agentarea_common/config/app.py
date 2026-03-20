@@ -53,8 +53,6 @@ class AppSettings(BaseAppSettings):
             return "host.docker.internal"
         return "localhost"
 
-    # Comma-separated list of LiteLLM callbacks (e.g. "langfuse,prometheus")
-    LITELLM_CALLBACKS: str | None = None
 
 
 @lru_cache
