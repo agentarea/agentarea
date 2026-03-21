@@ -35,6 +35,7 @@
     "close": "Закрыть",
     "back": "Назад",
     "create": "Создать",
+    "optional": "Необязательно",
     "today": "Сегодня",
     "yesterday": "Вчера",
     "at": "в",
@@ -285,6 +286,149 @@
     "createCustomButton": "Добавить свой сервер",
     "myActiveServers": "Мои активные серверы",
     "browseSpecifications": "Просмотр спецификаций MCP",
+    "createInstance": {
+      "breadcrumb": "Создать инстанс",
+      "breadcrumbWithName": "Создать инстанс {serverName}",
+      "back": "Назад к MCP серверам",
+      "actions": {
+        "createInstance": "Создать",
+        "creating": "Создание...",
+        "updateInstance": "Обновить",
+        "updating": "Обновление...",
+        "forceCreate": "Создать принудительно"
+      },
+      "defaults": {
+        "name": "Инстанс {serverName}",
+        "description": "Инстанс {serverName}"
+      },
+      "success": {
+        "created": "Инстанс {instanceName} успешно создан",
+        "valid": "Конфигурация валидна!"
+      },
+      "warnings": {
+        "validateFirst": "Сначала проверьте конфигурацию",
+        "hasErrors": "В конфигурации ошибок: {count}"
+      },
+      "errors": {
+        "nameRequired": "Имя обязательно",
+        "validationFailedForceCreate": "Проверка конфигурации не пройдена. Используйте «Создать принудительно».",
+        "validateFailed": "Не удалось проверить конфигурацию",
+        "createFailed": "Не удалось создать MCP инстанс",
+        "loadServersFailed": "Не удалось загрузить MCP серверы",
+        "specNotFound": "Спецификация MCP сервера не найдена",
+        "serverNotSelected": "MCP сервер не выбран"
+      }
+    },
+    "instanceForm": {
+      "name": "Имя",
+      "namePlaceholder": "Введите имя инстанса",
+      "description": "Описание",
+      "descriptionPlaceholder": "Введите описание инстанса",
+      "required": "Обязательно",
+      "envVarsTitle": "Переменные окружения",
+      "envVarsTooltip": "Эти значения будут переданы в контейнер MCP сервера как переменные окружения.",
+      "envVarPlaceholder": "Введите {name}",
+      "validationTitle": "Проверка конфигурации",
+      "containerTitle": "Контейнер",
+      "image": "Образ",
+      "port": "Порт",
+      "actions": {
+        "createInstance": "Создать",
+        "forceCreate": "Создать принудительно",
+        "validate": "Проверить"
+      }
+    },
+    "instanceDetail": {
+      "header": {
+        "label": "Инстанс",
+        "untitled": "Без названия"
+      },
+      "actions": {
+        "start": "Запустить",
+        "stop": "Остановить"
+      },
+      "status": {
+        "stopped": "Остановлен",
+        "unknown": "Неизвестно"
+      },
+      "fields": {
+        "name": "Имя",
+        "description": "Описание",
+        "status": "Статус"
+      },
+      "types": {
+        "docker": "Docker",
+        "externalUrl": "Внешний URL",
+        "command": "Команда"
+      },
+      "connection": {
+        "title": "Подключение",
+        "loading": "Загрузка параметров подключения...",
+        "externalEndpoint": "Внешний эндпоинт",
+        "mcpEndpoint": "MCP эндпоинт",
+        "sseEndpoint": "SSE эндпоинт (для MCP клиентов)",
+        "note": "Используйте эти URL, чтобы подключить MCP клиент к этому инстансу.",
+        "noteExternal": "Этот MCP сервер размещён внешне по указанному URL.",
+        "notAvailable": "URL подключения недоступен. Инстанс может ещё инициализироваться."
+      },
+      "labels": {
+        "connectionUrl": "URL подключения",
+        "sseUrl": "SSE URL",
+        "value": "Значение"
+      },
+      "serverSpec": {
+        "title": "Спецификация"
+      },
+      "command": {
+        "title": "Команда",
+        "note": "Запускается в sandbox-контейнере через supergateway."
+      },
+      "external": {
+        "title": "Внешний сервер",
+        "customHeaders": "Заголовки"
+      },
+      "container": {
+        "title": "Контейнер",
+        "port": "Порт"
+      },
+      "tools": {
+        "title": "Доступные инструменты ({count})",
+        "columns": {
+          "name": "Имя",
+          "description": "Описание"
+        }
+      },
+      "env": {
+        "title": "Переменные окружения",
+        "notSet": "не задано",
+        "columns": {
+          "key": "Ключ",
+          "value": "Значение"
+        }
+      },
+      "details": {
+        "title": "Детали",
+        "id": "ID инстанса",
+        "created": "Создан",
+        "updated": "Обновлён"
+      },
+      "confirm": {
+        "deleteTitle": "Удалить инстанс?",
+        "deleteDescription": "Инстанс \"{instanceName}\" будет удалён и контейнер остановлен. Это действие нельзя отменить."
+      },
+      "success": {
+        "starting": "Запуск {instanceName}…",
+        "stopped": "Остановлен {instanceName}",
+        "deleted": "Удалён {instanceName}",
+        "copied": "{label} скопировано"
+      },
+      "errors": {
+        "startFailed": "Не удалось запустить инстанс",
+        "stopFailed": "Не удалось остановить инстанс",
+        "deleteFailed": "Не удалось удалить инстанс",
+        "copyFailed": "Не удалось скопировать"
+      }
+    },
     "table": {
       "name": "Имя",
       "description": "Описание",
@@ -520,8 +664,19 @@
       "created": "Создано",
       "actions": "Действия"
     },
-    "details": {
+    "detail": {
       "title": "Детали навыка",
+      "details": "Детали",
+      "files": "Файлы",
+      "selectFile": "Выберите файл",
+      "emptyFile": "Пустой файл",
+      "edit": "Редактировать",
+      "view": "Просмотр",
+      "save": "Сохранить",
+      "delete": "Удалить",
+      "name": "Имя",
+      "description": "Описание",
+      "updated": "Обновлено",
       "sourceCode": "Исходный код",
       "configuration": "Конфигурация",
       "skillConfiguration": "Конфигурация навыка",

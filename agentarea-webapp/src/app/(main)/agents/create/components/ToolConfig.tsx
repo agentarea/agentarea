@@ -85,6 +85,7 @@ const ToolConfig = ({
     Record<string, Record<string, boolean>>
   >({});
   const t = useTranslations("AgentsPage");
+  const tMcp = useTranslations("MCPServersPage.createInstance");
 
   // Configure server overlay (like marketplace, but in sheet)
   const [configureServerSheetOpen, setConfigureServerSheetOpen] =
@@ -265,10 +266,10 @@ const ToolConfig = ({
     setSelectedServer(server);
     setIsEditingInstance(false);
     setEditingInstanceId(null);
-    const defaultName = `${server.name} Instance`;
-    const defaultDescription = `Instance of ${server.name}`;
-    setInstanceName(defaultName);
-    setInstanceDescription(defaultDescription);
+    setInstanceName(tMcp("defaults.name", { serverName: server.name }));
+    setInstanceDescription(
+      tMcp("defaults.description", { serverName: server.name })
+    );
     const initialEnv: Record<string, string> = {};
     (server.env_schema || []).forEach((envVar: any) => {
       const name = (envVar && (envVar.name as string)) || "";
@@ -902,17 +903,18 @@ const ToolConfig = ({
                   (validationResult ? !validationResult.valid : false))
               }
               validateDisabled={isChecking || !instanceName.trim()}
+              validateLoading={isChecking}
               forceCreateDisabled={
                 isEditingInstance || isCreating || !instanceName.trim()
               }
               submitLabel={
                 isCreating
                   ? isEditingInstance
-                    ? "Updating..."
-                    : "Creating..."
+                    ? tMcp("actions.updating")
+                    : tMcp("actions.creating")
                   : isEditingInstance
-                    ? "Update Instance"
-                    : "Create Instance"
+                    ? tMcp("actions.updateInstance")
+                    : tMcp("actions.createInstance")
               }
               extraActions={
                 <Button

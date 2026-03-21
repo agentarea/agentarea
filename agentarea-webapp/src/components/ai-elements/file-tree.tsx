@@ -89,7 +89,7 @@ export const FileTree = ({
         role="tree"
         {...props}
       >
-        <div className="p-2">{children}</div>
+        <div className="p-0">{children}</div>
       </div>
     </FileTreeContext.Provider>
   );
@@ -241,7 +241,6 @@ export const FileTreeFile = ({
         {children ?? (
           <>
             {/* Spacer for alignment */}
-            <span className="size-4" />
             <FileTreeIcon>
               {icon ?? <FileIcon className="size-4 text-muted-foreground" />}
             </FileTreeIcon>

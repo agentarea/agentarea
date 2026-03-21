@@ -1,4 +1,7 @@
+"use client";
+
 import { LucideIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +23,8 @@ export default function FormLabel({
   optional,
   ...props
 }: FormLabelProps) {
+  const t = useTranslations("Common");
+
   return (
     <Label htmlFor={htmlFor} className={cn("label", className)}>
       {IconComponent && (
@@ -30,7 +35,9 @@ export default function FormLabel({
       {children}
       {required && <span className="text-sm text-red-500">*</span>}
       {optional && (
-        <span className="text-xs font-light text-zinc-400">(Optional)</span>
+        <span className="text-xs font-light text-zinc-400">
+          ({t("optional")})
+        </span>
       )}
     </Label>
   );

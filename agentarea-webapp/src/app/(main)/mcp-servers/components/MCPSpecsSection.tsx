@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import Table from "@/components/Table/Table";
-import { CreateInstanceDialog } from "./CreateInstanceDialog";
 import EmptyState from "@/components/EmptyState";
 import { MCPServerSpecCard } from "./MCPCard";
 import { MCPServer } from "../types";
@@ -24,8 +24,7 @@ export function MCPSpecsSection({
 }: MCPSpecsSectionProps) {
   const t = useTranslations("MCPServersPage.table");
   const tPage = useTranslations("MCPServersPage");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null);
+  const router = useRouter();
 
   const searchQuery = (searchParams.search as string) || "";
   const selectedCategory = (searchParams.category as string) || "All";
@@ -70,8 +69,7 @@ export function MCPSpecsSection({
   }, [servers, selectedCategory]);
 
   const handleConfigureInstance = (server: MCPServer) => {
-    setSelectedServer(server);
-    setDialogOpen(true);
+    router.push(`/mcp-servers/create/${server.id}`);
   };
 
   const serverColumns = [
@@ -194,12 +192,6 @@ export function MCPSpecsSection({
           )}
         </>
       )}
-
-      <CreateInstanceDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        mcpServer={selectedServer}
-      />
     </>
   );
 }

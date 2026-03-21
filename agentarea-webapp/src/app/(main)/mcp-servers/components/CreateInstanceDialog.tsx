@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
@@ -40,11 +41,12 @@ export function CreateInstanceDialog({
     warnings: string[];
   } | null>(null);
   const router = useRouter();
+  const t = useTranslations("MCPServersPage.createInstance");
 
   useEffect(() => {
     if (open && mcpServer) {
-      setInstanceName(`${mcpServer.name} Instance`);
-      setInstanceDescription(`Instance of ${mcpServer.name}`);
+      setInstanceName(t("defaults.name", { serverName: mcpServer.name }));
+      setInstanceDescription(t("defaults.description", { serverName: mcpServer.name }));
       const initialEnvVars: Record<string, string> = {};
       mcpServer.env_schema?.forEach((envVar) => {
         initialEnvVars[envVar.name] = envVar.default || "";
@@ -52,7 +54,7 @@ export function CreateInstanceDialog({
       setEnvVars(initialEnvVars);
       setValidationResult(null);
     }
-  }, [open, mcpServer]);
+  }, [open, mcpServer, t]);
 
   const handleCancel = () => {
     onOpenChange(false);
@@ -72,14 +74,12 @@ export function CreateInstanceDialog({
   const createInstance = useCallback(
     async (skipValidation = false) => {
       if (!mcpServer) {
-        toast.error("MCP server is not selected");
+        toast.error(t("errors.serverNotSelected"));
         return;
       }
 
       if (!skipValidation && !validationResult?.valid) {
-        toast.error(
-          'Configuration validation failed. Use "Force Create" to proceed.'
-        );
+        toast.error(t("errors.validationFailedForceCreate"));
         return;
       }
 
@@ -107,7 +107,7 @@ export function CreateInstanceDialog({
           throw new Error(errorMessage);
         }
 
-        toast.success(`Successfully created ${instanceName}`);
+        toast.success(t("success.created", { instanceName }));
         onOpenChange(false);
         router.refresh();
         resetForm();
@@ -115,7 +115,7 @@ export function CreateInstanceDialog({
         const errorMessage =
           error instanceof Error
             ? error.message
-            : "Failed to create MCP instance";
+            : t("errors.createFailed");
         console.error("Instance creation error:", error);
         toast.error(errorMessage);
       } finally {
@@ -131,6 +131,7 @@ export function CreateInstanceDialog({
       router,
       resetForm,
       onOpenChange,
+      t,
     ]
   );
 
@@ -172,31 +173,34 @@ export function CreateInstanceDialog({
                   },
                 });
                 if (checkResult.error) {
-                  toast.error("Failed to validate configuration");
+                  toast.error(t("errors.validateFailed"));
                 } else {
                   const validationData = checkResult.data as any;
                   setValidationResult(validationData);
                   if (validationData?.valid)
-                    toast.success("Configuration is valid!");
+                    toast.success(t("success.valid"));
                   else
                     toast.warning(
-                      `Configuration has ${validationData?.errors?.length || 0} error(s)`
+                      t("warnings.hasErrors", {
+                        count: validationData?.errors?.length || 0,
+                      })
                     );
                 }
               } catch (error) {
                 console.error("Validation error:", error);
-                toast.error("Failed to validate configuration");
+                toast.error(t("errors.validateFailed"));
               } finally {
                 setIsChecking(false);
               }
             }}
             validateDisabled={isChecking || !instanceName.trim()}
+            validateLoading={isChecking}
             onForceCreate={() => createInstance(true)}
             forceCreateDisabled={isCreating || !instanceName.trim()}
             onSubmit={async (e) => {
               e?.preventDefault();
               if (!validationResult) {
-                toast.warning("Please validate the configuration first");
+                toast.warning(t("warnings.validateFirst"));
                 return;
               }
               await createInstance(false);
@@ -206,7 +210,9 @@ export function CreateInstanceDialog({
               !instanceName.trim() ||
               (validationResult ? !validationResult.valid : false)
             }
-            submitLabel={isCreating ? "Creating..." : "Create Instance"}
+            submitLabel={
+              isCreating ? t("actions.creating") : t("actions.createInstance")
+            }
             extraActions={
               <Button
                 variant="outline"

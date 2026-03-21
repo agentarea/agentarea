@@ -10,8 +10,10 @@ interface LinkedCardProps {
   onClick?: () => void;
   title: string;
   icon?: string | ComponentType<{ className?: string }> | ReactNode;
+  invertIconInDark?: boolean;
   children?: ReactNode;
   subtitle?: ReactNode;
+  topRight?: ReactNode;
   type?: "view" | "config" | "edit";
   className?: string;
 }
@@ -21,11 +23,14 @@ export default function LinkedCard({
   onClick,
   title,
   icon,
+  invertIconInDark = false,
   children,
   subtitle,
+  topRight,
   type = "view",
   className,
 }: LinkedCardProps) {
+  const hasIcon = icon !== undefined && icon !== null;
   const isStringIcon = typeof icon === "string";
   // Check if icon is a Lucide component (function) or React Element
   const isLucideIcon = typeof icon === 'object' && icon !== null && 'render' in icon; // Lucide icons are exotic objects
@@ -66,34 +71,47 @@ export default function LinkedCard({
         />
 
       <div className="flex flex-col h-full z-10">
-        <div className="flex gap-3 mb-2">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary dark:bg-zinc-800 dark:text-zinc-200 group-hover:bg-primary/10 dark:group-hover:bg-zinc-700/80 dark:group-hover:text-zinc-50 transition-colors duration-300 border border-transparent dark:border-zinc-700/50 dark:group-hover:border-zinc-600">
-            {isStringIcon ? (
-              <img
-                src={icon as string}
-                alt={title}
-                className="h-6 w-6 rounded object-contain transition-transform group-hover:scale-110 duration-300"
-              />
-            ) : IconComponent ? (
-              <IconComponent className="h-5 w-5 transition-colors duration-300" />
-            ) : isValidElement(icon) ? (
-              icon
-            ) : (
-              <Sparkles className="h-5 w-5 transition-colors duration-300" />
-            )}
-          </div>
-          <div className="min-w-0 flex-1 pt-0.5">
-            <h4
-              className={cn(
-                "truncate font-medium text-[15px] text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight group-hover:text-primary dark:group-hover:text-zinc-50 transition-colors duration-300",
-                subtitle ? "mb-1" : "h-full flex items-center"
+        <div className={cn("flex gap-3 mb-2", subtitle ? "items-start" : "items-center")}>
+          {hasIcon ? (
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary dark:bg-zinc-800 dark:text-zinc-200 group-hover:bg-primary/10 dark:group-hover:bg-zinc-700/80 dark:group-hover:text-zinc-50 transition-colors duration-300 border border-transparent dark:border-zinc-700/50 dark:group-hover:border-zinc-600">
+              {isStringIcon ? (
+                <img
+                  src={icon as string}
+                  alt={title}
+                  className={cn(
+                    "h-6 w-6 rounded object-contain transition-transform group-hover:scale-110 duration-300",
+                    invertIconInDark && "dark:invert"
+                  )}
+                />
+              ) : IconComponent ? (
+                <IconComponent className="h-5 w-5 transition-colors duration-300" />
+              ) : isValidElement(icon) ? (
+                icon
+              ) : (
+                <Sparkles className="h-5 w-5 transition-colors duration-300" />
               )}
-            >
-              {title}
-            </h4>
-            {subtitle ? (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">{subtitle}</div>
-            ) : null}
+            </div>
+          ) : null}
+
+          <div className="min-w-0 flex-1">
+            <div className={cn("flex justify-between gap-3", subtitle ? "items-start" : "items-center")}>
+              <div className={cn("min-w-0 flex-1", subtitle ? "pt-0.5" : null)}>
+                <h4
+                  className={cn(
+                    "block truncate font-medium text-[15px] text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight group-hover:text-primary dark:group-hover:text-zinc-50 transition-colors duration-300",
+                    subtitle ? "mb-1" : null
+                  )}
+                >
+                  {title}
+                </h4>
+                {subtitle ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    {subtitle}
+                  </div>
+                ) : null}
+              </div>
+              {topRight ? <div className="flex-shrink-0">{topRight}</div> : null}
+            </div>
           </div>
         </div>
         

@@ -65,25 +65,35 @@ export default function ContentBlock({
             </>
           ) : (
             <>
-              <div className="flex items-start gap-1.5 md:gap-2">
+              <div className="flex min-w-0 items-start gap-1.5 md:gap-2">
                 <SidebarTrigger className="h-5 w-5" />
                 <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
-                <div className="flex flex-col gap-1">
+                <div className="flex min-w-0 flex-col gap-1">
                   <Breadcrumb>
-                    <BreadcrumbList className="gap-1 sm:gap-2.5 max-sm:text-xs max-sm:leading-[22px]">
+                    <BreadcrumbList className="min-w-0 gap-1 sm:gap-2.5 max-sm:text-xs max-sm:leading-[22px]">
                       {header.breadcrumb.map((item, index) => (
                         <React.Fragment key={`breadcrumb-${index}`}>
-                          <BreadcrumbItem>
+                          <BreadcrumbItem
+                            className={cn(
+                              "min-w-0",
+                              index === header.breadcrumb.length - 1 && "flex-1"
+                            )}
+                          >
                             {index === header.breadcrumb.length - 1 ? (
-                              <BreadcrumbPage className="font-semibold">
+                              <BreadcrumbPage className="block min-w-0 truncate font-semibold">
                                 {item.label}
                               </BreadcrumbPage>
                             ) : item.href ? (
                               <BreadcrumbLink asChild>
-                                <Link href={item.href || ""}>{item.label}</Link>
+                                <Link
+                                  href={item.href || ""}
+                                  className="block min-w-0 max-w-[30vw] truncate"
+                                >
+                                  {item.label}
+                                </Link>
                               </BreadcrumbLink>
                             ) : (
-                              <BreadcrumbPage className="text-muted-foreground">
+                              <BreadcrumbPage className="block min-w-0 max-w-[30vw] truncate text-muted-foreground">
                                 {item.label}
                               </BreadcrumbPage>
                             )}
@@ -97,7 +107,11 @@ export default function ContentBlock({
                   </Breadcrumb>
                 </div>
               </div>
-              {header.controls}
+              {header.controls && (
+                <div className="ml-2 flex shrink-0 items-center">
+                  {header.controls}
+                </div>
+              )}
             </>
           )}
         </div>
