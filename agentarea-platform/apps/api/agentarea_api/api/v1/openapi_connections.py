@@ -16,8 +16,6 @@ from agentarea_openapi.application.service import OpenAPIConnectionService, fetc
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
 
-_ALLOW_PRIVATE = get_settings().mcp.ALLOW_PRIVATE_URLS
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/openapi-connections", tags=["openapi-connections"])
@@ -61,7 +59,7 @@ class OpenAPIConnectionCreate(BaseModel):
     @classmethod
     def validate_base_url(cls, v: str) -> str:
         try:
-            validate_url(v, allow_private=_ALLOW_PRIVATE)
+            validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
         except ValueError as e:
             raise ValueError(str(e)) from e
         return v
@@ -71,7 +69,7 @@ class OpenAPIConnectionCreate(BaseModel):
     def validate_spec_url(cls, v: str | None) -> str | None:
         if v is not None:
             try:
-                validate_url(v, allow_private=_ALLOW_PRIVATE)
+                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
             except ValueError as e:
                 raise ValueError(str(e)) from e
         return v
@@ -91,7 +89,7 @@ class OpenAPIConnectionUpdate(BaseModel):
     def validate_base_url(cls, v: str | None) -> str | None:
         if v is not None:
             try:
-                validate_url(v, allow_private=_ALLOW_PRIVATE)
+                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
             except ValueError as e:
                 raise ValueError(str(e)) from e
         return v
@@ -101,7 +99,7 @@ class OpenAPIConnectionUpdate(BaseModel):
     def validate_spec_url(cls, v: str | None) -> str | None:
         if v is not None:
             try:
-                validate_url(v, allow_private=_ALLOW_PRIVATE)
+                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
             except ValueError as e:
                 raise ValueError(str(e)) from e
         return v
@@ -146,7 +144,7 @@ class SpecPreviewRequest(BaseModel):
     def validate_spec_url(cls, v: str | None) -> str | None:
         if v is not None:
             try:
-                validate_url(v, allow_private=_ALLOW_PRIVATE)
+                validate_url(v, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
             except ValueError as e:
                 raise ValueError(str(e)) from e
         return v
@@ -180,6 +178,7 @@ async def preview_spec(
 
     if not spec and request.spec_url:
         try:
+            validate_url(request.spec_url, allow_private=allow_private)
             spec = await fetch_and_parse_spec(
                 request.spec_url,
                 allow_private=allow_private,
