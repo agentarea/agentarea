@@ -152,7 +152,9 @@ class AgentExecutionWorkflow:
             )
 
     @workflow.signal
-    async def resolve_escalation(self, escalation_id: str, approved: bool, comment: str = "") -> None:
+    async def resolve_escalation(
+        self, escalation_id: str, approved: bool, comment: str = ""
+    ) -> None:
         """Signal to approve or deny a specific tool escalation."""
         if escalation_id in self._pending_escalations:
             esc = self._pending_escalations[escalation_id]
@@ -434,34 +436,36 @@ class AgentExecutionWorkflow:
             available_tools.append(self._skill_tool.get_openai_function_definition())
 
             # Inject run_skill_script tool for executing skill-bundled scripts
-            available_tools.append({
-                "type": "function",
-                "function": {
-                    "name": "run_skill_script",
-                    "description": (
-                        "Execute a script bundled with an activated skill in an isolated sandbox. "
-                        "The skill must be activated first via activate_skill."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "skill_name": {
-                                "type": "string",
-                                "description": "Name of the activated skill that owns the script",
+            available_tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "run_skill_script",
+                        "description": (
+                            "Execute a script bundled with an activated skill in an isolated sandbox. "
+                            "The skill must be activated first via activate_skill."
+                        ),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "skill_name": {
+                                    "type": "string",
+                                    "description": "Name of the activated skill that owns the script",
+                                },
+                                "script_name": {
+                                    "type": "string",
+                                    "description": "Filename of the script to run (e.g. calculator.py)",
+                                },
+                                "args": {
+                                    "type": "string",
+                                    "description": "Arguments to pass to the script",
+                                },
                             },
-                            "script_name": {
-                                "type": "string",
-                                "description": "Filename of the script to run (e.g. calculator.py)",
-                            },
-                            "args": {
-                                "type": "string",
-                                "description": "Arguments to pass to the script",
-                            },
+                            "required": ["skill_name", "script_name"],
                         },
-                        "required": ["skill_name", "script_name"],
                     },
-                },
-            })
+                }
+            )
 
         self.state.available_tools = available_tools
 
@@ -1290,9 +1294,7 @@ class AgentExecutionWorkflow:
             )
 
             # Offload large outputs to MinIO (hybrid/dynamic strategy)
-            result_text = await self._maybe_offload_output(
-                result_text, tool_call.id
-            )
+            result_text = await self._maybe_offload_output(result_text, tool_call.id)
 
             # Add tool result to conversation
             self.state.messages.append(
@@ -1362,16 +1364,22 @@ class AgentExecutionWorkflow:
 
         # Try MinIO history search first if grep/tool_name provided and chunks exist
         strategy = ContextStrategy(self.state.context_strategy)
-        if (grep or tool_name_filter) and allows_history_preservation(strategy) and self.state.history_chunk_counter > 0:
+        if (
+            (grep or tool_name_filter)
+            and allows_history_preservation(strategy)
+            and self.state.history_chunk_counter > 0
+        ):
             try:
                 search_result: SearchHistoryResult = await workflow.execute_activity(
                     Activities.SEARCH_HISTORY,
-                    args=[SearchHistoryRequest(
-                        task_id=str(self.state.task_id),
-                        workspace_id=str(self.state.workspace_id),
-                        grep=grep,
-                        tool_name=tool_name_filter,
-                    )],
+                    args=[
+                        SearchHistoryRequest(
+                            task_id=str(self.state.task_id),
+                            workspace_id=str(self.state.workspace_id),
+                            grep=grep,
+                            tool_name=tool_name_filter,
+                        )
+                    ],
                     result_type=SearchHistoryResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=2),
@@ -1461,20 +1469,26 @@ class AgentExecutionWorkflow:
         try:
             read_result: ReadOutputResult = await workflow.execute_activity(
                 Activities.READ_CONTEXT_OUTPUT,
-                args=[ReadOutputRequest(
-                    task_id=str(self.state.task_id),
-                    workspace_id=str(self.state.workspace_id),
-                    output_id=output_id,
-                    grep=tool_args.get("grep"),
-                    head=tool_args.get("head"),
-                    tail=tool_args.get("tail"),
-                )],
+                args=[
+                    ReadOutputRequest(
+                        task_id=str(self.state.task_id),
+                        workspace_id=str(self.state.workspace_id),
+                        output_id=output_id,
+                        grep=tool_args.get("grep"),
+                        head=tool_args.get("head"),
+                        tail=tool_args.get("tail"),
+                    )
+                ],
                 result_type=ReadOutputResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=2),
             )
 
-            content = read_result.content if read_result.success else f"Error reading output: {read_result.error}"
+            content = (
+                read_result.content
+                if read_result.success
+                else f"Error reading output: {read_result.error}"
+            )
         except Exception as e:
             workflow.logger.error(f"read_tool_output failed: {e}")
             content = f"Failed to read output '{output_id}': {e}"
@@ -1499,12 +1513,14 @@ class AgentExecutionWorkflow:
         try:
             store_result: StoreOutputResult = await workflow.execute_activity(
                 Activities.STORE_CONTEXT_OUTPUT,
-                args=[StoreOutputRequest(
-                    task_id=str(self.state.task_id),
-                    workspace_id=str(self.state.workspace_id),
-                    output_id=output_id,
-                    content=content,
-                )],
+                args=[
+                    StoreOutputRequest(
+                        task_id=str(self.state.task_id),
+                        workspace_id=str(self.state.workspace_id),
+                        output_id=output_id,
+                        content=content,
+                    )
+                ],
                 result_type=StoreOutputResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=RetryPolicy(maximum_attempts=2),
@@ -1552,8 +1568,7 @@ class AgentExecutionWorkflow:
 
             tool_names = [t.get("function", {}).get("name", "?") for t in new_tools]
             result_text = (
-                f"Activated '{source_name}' with {len(new_tools)} tools: "
-                f"{', '.join(tool_names)}"
+                f"Activated '{source_name}' with {len(new_tools)} tools: {', '.join(tool_names)}"
             )
         else:
             result_text = f"Tool source '{source_name}' not found or has no tools."
@@ -1640,8 +1655,7 @@ class AgentExecutionWorkflow:
 
         # Fetch script content from skill package via existing activity
         skill_config = next(
-            (s for s in self.state.agent_config.get("skills", [])
-             if s.get("name") == skill_name),
+            (s for s in self.state.agent_config.get("skills", []) if s.get("name") == skill_name),
             None,
         )
         if not skill_config:
@@ -1662,12 +1676,14 @@ class AgentExecutionWorkflow:
             try:
                 file_result = await workflow.execute_activity(
                     Activities.RESOLVE_SKILL_FILE,
-                    args=[SkillFileRequest(
-                        skill_id=UUID(skill_id),
-                        file_path=script_name,
-                        workspace_id=self.state.workspace_id,
-                        user_context_data=self.state.user_context_data,
-                    )],
+                    args=[
+                        SkillFileRequest(
+                            skill_id=UUID(skill_id),
+                            file_path=script_name,
+                            workspace_id=self.state.workspace_id,
+                            user_context_data=self.state.user_context_data,
+                        )
+                    ],
                     result_type=SkillFileResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=2),
@@ -1692,12 +1708,14 @@ class AgentExecutionWorkflow:
         script_args_list = [script_args] if script_args else []
         result = await workflow.execute_activity(
             Activities.EXECUTE_SKILL_SCRIPT,
-            args=[ExecuteSkillScriptRequest(
-                script_content=script_content,
-                script_name=script_name,
-                args=script_args_list,
-                timeout_seconds=30,
-            )],
+            args=[
+                ExecuteSkillScriptRequest(
+                    script_content=script_content,
+                    script_name=script_name,
+                    args=script_args_list,
+                    timeout_seconds=30,
+                )
+            ],
             result_type=ExecuteSkillScriptResult,
             start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
             retry_policy=RetryPolicy(maximum_attempts=2),
@@ -1714,9 +1732,7 @@ class AgentExecutionWorkflow:
         content = "\n".join(output_parts) or "(no output)"
 
         # Offload large script outputs to MinIO (hybrid/dynamic strategy)
-        content = await self._maybe_offload_output(
-            content, f"script_{tool_call.id}"
-        )
+        content = await self._maybe_offload_output(content, f"script_{tool_call.id}")
 
         self.state.messages.append(
             Message(
@@ -1950,12 +1966,14 @@ class AgentExecutionWorkflow:
                 chunk_index = self.state.history_chunk_counter
                 store_hist_result: StoreHistoryResult = await workflow.execute_activity(
                     Activities.STORE_HISTORY_CHUNK,
-                    args=[StoreHistoryRequest(
-                        task_id=str(self.state.task_id),
-                        workspace_id=str(self.state.workspace_id),
-                        chunk_index=chunk_index,
-                        messages=messages_to_compact,
-                    )],
+                    args=[
+                        StoreHistoryRequest(
+                            task_id=str(self.state.task_id),
+                            workspace_id=str(self.state.workspace_id),
+                            chunk_index=chunk_index,
+                            messages=messages_to_compact,
+                        )
+                    ],
                     result_type=StoreHistoryResult,
                     start_to_close_timeout=ACTIVITY_TIMEOUT,
                     retry_policy=RetryPolicy(maximum_attempts=2),
@@ -1964,7 +1982,9 @@ class AgentExecutionWorkflow:
                     self.state.history_chunk_counter += 1
                     workflow.logger.info(f"Stored history chunk {chunk_index} before compaction")
                 else:
-                    workflow.logger.warning(f"History chunk store failed: {store_hist_result.error}")
+                    workflow.logger.warning(
+                        f"History chunk store failed: {store_hist_result.error}"
+                    )
             except Exception as e:
                 workflow.logger.warning(f"History preservation failed (non-blocking): {e}")
 
@@ -2268,7 +2288,11 @@ class AgentExecutionWorkflow:
             "paused": self._paused,
             "pause_reason": self._pause_reason,
             "pending_escalations": {
-                eid: {"tool_name": e.tool_name, "tool_call_id": e.tool_call_id, "resolved": e.resolved}
+                eid: {
+                    "tool_name": e.tool_name,
+                    "tool_call_id": e.tool_call_id,
+                    "resolved": e.resolved,
+                }
                 for eid, e in self._pending_escalations.items()
             },
             "context": self.context_manager.get_status() if self.context_manager else None,

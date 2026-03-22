@@ -98,7 +98,10 @@ class ContextStore:
 
         # Safety limit
         if len(result) > READ_OUTPUT_MAX_RETURN_CHARS:
-            result = result[:READ_OUTPUT_MAX_RETURN_CHARS] + f"\n... [truncated at {READ_OUTPUT_MAX_RETURN_CHARS} chars]"
+            result = (
+                result[:READ_OUTPUT_MAX_RETURN_CHARS]
+                + f"\n... [truncated at {READ_OUTPUT_MAX_RETURN_CHARS} chars]"
+            )
 
         return result
 

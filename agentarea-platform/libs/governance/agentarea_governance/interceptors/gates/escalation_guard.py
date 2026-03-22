@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import fnmatch
-from typing import Any
 
 from ...domain.enums import InterceptorAction, InterceptorCategory
 from ...domain.models import InterceptorContext, InterceptorResult

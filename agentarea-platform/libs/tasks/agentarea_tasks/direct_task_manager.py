@@ -54,7 +54,11 @@ class DirectTaskManager(BaseTaskManager):
 
             # Run agent loop
             from agentarea_agents_sdk.models.llm_model import LLMRequest
-            from agentarea_agents_sdk.skills import SkillActivationTool, SkillCatalogBuilder, SkillEntry
+            from agentarea_agents_sdk.skills import (
+                SkillActivationTool,
+                SkillCatalogBuilder,
+                SkillEntry,
+            )
 
             skill_tool = None
             catalog_text = ""
@@ -75,20 +79,22 @@ class DirectTaskManager(BaseTaskManager):
             tools = []
             if skill_tool:
                 tools.append(skill_tool.get_openai_function_definition())
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": "completion",
-                    "description": "Signal that the task is complete",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "result": {"type": "string", "description": "Final result"},
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "completion",
+                        "description": "Signal that the task is complete",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "result": {"type": "string", "description": "Final result"},
+                            },
+                            "required": ["result"],
                         },
-                        "required": ["result"],
                     },
-                },
-            })
+                }
+            )
 
             messages = [
                 {"role": "system", "content": f"{instruction}{catalog_text}"},
@@ -99,11 +105,18 @@ class DirectTaskManager(BaseTaskManager):
             for iteration in range(1, max_iterations + 1):
                 logger.info(f"DirectTaskManager: iteration {iteration}")
 
-                response = await llm.complete(LLMRequest(
-                    messages=messages, tools=tools, temperature=0.1,
-                ))
+                response = await llm.complete(
+                    LLMRequest(
+                        messages=messages,
+                        tools=tools,
+                        temperature=0.1,
+                    )
+                )
 
-                assistant_msg: dict[str, Any] = {"role": "assistant", "content": response.content or ""}
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": response.content or "",
+                }
                 if response.tool_calls:
                     assistant_msg["tool_calls"] = response.tool_calls
                 messages.append(assistant_msg)
@@ -123,19 +136,27 @@ class DirectTaskManager(BaseTaskManager):
 
                     if fn_name == "activate_skill" and skill_tool:
                         result = await skill_tool.execute(**fn_args)
-                        messages.append({
-                            "role": "tool", "tool_call_id": tc_id,
-                            "name": "activate_skill", "content": result.get("result", ""),
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                "name": "activate_skill",
+                                "content": result.get("result", ""),
+                            }
+                        )
                     elif fn_name == "completion":
                         task.status = "completed"
                         task.result = {"response": fn_args.get("result", "")}
                         break
                     else:
-                        messages.append({
-                            "role": "tool", "tool_call_id": tc_id,
-                            "name": fn_name, "content": f"Unknown tool: {fn_name}",
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                "name": fn_name,
+                                "content": f"Unknown tool: {fn_name}",
+                            }
+                        )
 
                 if task.status == "completed":
                     break
@@ -145,7 +166,9 @@ class DirectTaskManager(BaseTaskManager):
 
             # Persist result to DB
             await self.task_repository.update_status(
-                task.id, task.status, result=task.result,
+                task.id,
+                task.status,
+                result=task.result,
             )
             self._tasks[task.id] = task
 
@@ -154,7 +177,9 @@ class DirectTaskManager(BaseTaskManager):
             task.status = "failed"
             task.result = {"error": str(e)}
             await self.task_repository.update_status(
-                task.id, "failed", error_message=str(e),
+                task.id,
+                "failed",
+                error_message=str(e),
             )
             self._tasks[task.id] = task
 
@@ -168,6 +193,7 @@ class DirectTaskManager(BaseTaskManager):
 
         # Get services via DI container
         from agentarea_common.di.container import get_container
+
         container = get_container()
 
         user_context = UserContext(
@@ -187,12 +213,14 @@ class DirectTaskManager(BaseTaskManager):
         skills_data = []
         if hasattr(agent, "skills") and agent.skills:
             for skill in agent.skills:
-                skills_data.append({
-                    "name": skill.name,
-                    "description": skill.description or "",
-                    "content": skill.content or "",
-                    "files": [],
-                })
+                skills_data.append(
+                    {
+                        "name": skill.name,
+                        "description": skill.description or "",
+                        "content": skill.content or "",
+                        "files": [],
+                    }
+                )
 
         # Resolve model instance → provider config → API key
         model_instance_service, _ = await container.get_model_instance_service(user_context)
@@ -209,8 +237,7 @@ class DirectTaskManager(BaseTaskManager):
         api_key = await secret_manager.get_secret(api_key_secret) if api_key_secret else ""
 
         endpoint_url = (
-            model_instance.provider_config.endpoint_url
-            or model_instance.model_spec.endpoint_url
+            model_instance.provider_config.endpoint_url or model_instance.model_spec.endpoint_url
         )
 
         llm = LLMModel(
@@ -220,7 +247,9 @@ class DirectTaskManager(BaseTaskManager):
             endpoint_url=endpoint_url,
         )
 
-        logger.info(f"DirectTaskManager: resolved {provider_type}/{model_name} for agent {agent.name}")
+        logger.info(
+            f"DirectTaskManager: resolved {provider_type}/{model_name} for agent {agent.name}"
+        )
 
         await session.close()
         return llm, instruction, skills_data
@@ -241,7 +270,12 @@ class DirectTaskManager(BaseTaskManager):
         return False
 
     async def list_tasks(
-        self, agent_id=None, user_id=None, status=None, limit=100, offset=0,
+        self,
+        agent_id=None,
+        user_id=None,
+        status=None,
+        limit=100,
+        offset=0,
     ) -> list[SimpleTask]:
         tasks = await self.task_repository.list_tasks(limit=limit, offset=offset)
         return [self._task_to_simple_task(t) for t in tasks]

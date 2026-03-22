@@ -432,7 +432,11 @@ class TriggerService:
 
             # Record the execution
             exec_data = execution.model_dump()
-            exec_data["status"] = exec_data["status"].value if hasattr(exec_data["status"], "value") else exec_data["status"]
+            exec_data["status"] = (
+                exec_data["status"].value
+                if hasattr(exec_data["status"], "value")
+                else exec_data["status"]
+            )
             recorded_execution = await self.trigger_execution_repository.create(**exec_data)
 
             logger.info(
@@ -1030,7 +1034,9 @@ class TriggerService:
                 trigger.record_execution_success()
                 await self.trigger_repository.update(trigger)
             except Exception as rec_err:
-                logger.warning(f"Failed to record execution history (task was created successfully): {rec_err}")
+                logger.warning(
+                    f"Failed to record execution history (task was created successfully): {rec_err}"
+                )
 
             return execution
 

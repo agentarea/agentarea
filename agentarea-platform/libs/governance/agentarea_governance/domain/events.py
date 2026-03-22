@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -15,7 +15,7 @@ class GovernanceViolation:
     """Emitted when an interceptor denies, warns, or escalates."""
 
     event_id: UUID = field(default_factory=uuid4)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     agent_id: UUID | None = None
     workspace_id: str = ""
     phase: Phase | None = None
@@ -36,7 +36,7 @@ class SecurityFinding:
     """Emitted when a filter interceptor detects sensitive content."""
 
     event_id: UUID = field(default_factory=uuid4)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     agent_id: UUID | None = None
     workspace_id: str = ""
     phase: Phase | None = None

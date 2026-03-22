@@ -39,6 +39,7 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
         # Fallback: only own workspace (AuthorizationService not registered yet during startup)
         user_context.accessible_workspaces = [user_context.workspace_id]
 
+
 # Security schemes
 # Required authentication - raises 401 if no token
 security_required = HTTPBearer()

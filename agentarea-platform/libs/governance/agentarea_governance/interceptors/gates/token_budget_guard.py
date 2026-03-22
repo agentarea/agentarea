@@ -54,7 +54,11 @@ class TokenBudgetGuard:
                 action=InterceptorAction.WARN,
                 interceptor_name=self.name,
                 reason=f"token budget at {usage_ratio:.0%} ({tokens_used}/{max_tokens})",
-                metadata={"tokens_used": tokens_used, "max_tokens": max_tokens, "usage_ratio": usage_ratio},
+                metadata={
+                    "tokens_used": tokens_used,
+                    "max_tokens": max_tokens,
+                    "usage_ratio": usage_ratio,
+                },
             )
 
         return InterceptorResult(

@@ -9,7 +9,6 @@ import hmac
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +71,14 @@ class SlackSignatureVerifier(SignatureVerifier):
             # Compute expected signature
             body_str = body if isinstance(body, str) else body.decode("utf-8")
             sig_basestring = f"v0:{timestamp}:{body_str}"
-            expected = "v0=" + hmac.new(
-                secret.encode("utf-8"),
-                sig_basestring.encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()
+            expected = (
+                "v0="
+                + hmac.new(
+                    secret.encode("utf-8"),
+                    sig_basestring.encode("utf-8"),
+                    hashlib.sha256,
+                ).hexdigest()
+            )
 
             return hmac.compare_digest(expected, signature)
         except Exception as e:
@@ -106,11 +108,14 @@ class GitHubSignatureVerifier(SignatureVerifier):
                 return False
 
             body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
-            expected = "sha256=" + hmac.new(
-                secret.encode("utf-8"),
-                body_bytes,
-                hashlib.sha256,
-            ).hexdigest()
+            expected = (
+                "sha256="
+                + hmac.new(
+                    secret.encode("utf-8"),
+                    body_bytes,
+                    hashlib.sha256,
+                ).hexdigest()
+            )
 
             return hmac.compare_digest(expected, signature)
         except Exception as e:
@@ -134,10 +139,12 @@ class DiscordSignatureVerifier(SignatureVerifier):
 
     def verify(self, headers: dict[str, str], body: bytes | str, secret: str) -> bool:
         try:
-            from nacl.signing import VerifyKey
             from nacl.exceptions import BadSignatureError
+            from nacl.signing import VerifyKey
         except ImportError:
-            logger.error("PyNaCl not installed, Discord signature verification will reject all requests. Install with: pip install PyNaCl")
+            logger.error(
+                "PyNaCl not installed, Discord signature verification will reject all requests. Install with: pip install PyNaCl"
+            )
             return False
 
         try:
@@ -149,7 +156,7 @@ class DiscordSignatureVerifier(SignatureVerifier):
                 return False
 
             body_str = body if isinstance(body, str) else body.decode("utf-8")
-            message = f"{timestamp}{body_str}".encode("utf-8")
+            message = f"{timestamp}{body_str}".encode()
 
             verify_key = VerifyKey(bytes.fromhex(secret))
             verify_key.verify(message, bytes.fromhex(signature))
@@ -172,7 +179,9 @@ class GenericHMACVerifier(SignatureVerifier):
     Default: X-Webhook-Signature with SHA-256.
     """
 
-    def __init__(self, header_name: str = "x-webhook-signature", algorithm: str = "sha256", prefix: str = ""):
+    def __init__(
+        self, header_name: str = "x-webhook-signature", algorithm: str = "sha256", prefix: str = ""
+    ):
         self.header_name = header_name.lower()
         self.algorithm = algorithm
         self.prefix = prefix  # e.g., "sha256=" for some providers
@@ -191,11 +200,14 @@ class GenericHMACVerifier(SignatureVerifier):
                 logger.error(f"Unsupported hash algorithm: {self.algorithm}")
                 return False
 
-            expected = self.prefix + hmac.new(
-                secret.encode("utf-8"),
-                body_bytes,
-                hash_func,
-            ).hexdigest()
+            expected = (
+                self.prefix
+                + hmac.new(
+                    secret.encode("utf-8"),
+                    body_bytes,
+                    hash_func,
+                ).hexdigest()
+            )
 
             return hmac.compare_digest(expected, signature)
         except Exception as e:

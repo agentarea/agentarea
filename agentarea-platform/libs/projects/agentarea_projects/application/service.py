@@ -75,7 +75,9 @@ class ProjectService:
         """Add an MCP server instance to a project."""
         await self.repository.add_mcp_instance(project_id, mcp_instance_id)
 
-    async def remove_mcp_instance(self, project_id: UUID | str, mcp_instance_id: UUID | str) -> None:
+    async def remove_mcp_instance(
+        self, project_id: UUID | str, mcp_instance_id: UUID | str
+    ) -> None:
         """Remove an MCP server instance from a project."""
         await self.repository.remove_mcp_instance(project_id, mcp_instance_id)
 

@@ -30,9 +30,7 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
     )
     # Each entry: {"name": "Header-Name", "secret": bool, "value": "plaintext-or-null"}
     # Secret header values are stored in the secret manager, not here.
-    custom_headers: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSON, nullable=True
-    )
+    custom_headers: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     available_tools: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
     )

@@ -10,7 +10,7 @@ from agentarea_common.auth.permission import require_permission
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])

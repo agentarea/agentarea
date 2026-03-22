@@ -1,7 +1,7 @@
 """Plugin extension registry for OSS/Enterprise feature separation."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 
 class ExtensionRegistry:
@@ -12,7 +12,7 @@ class ExtensionRegistry:
     (e.g., KetoPermissionService needs a keto_client).
     """
 
-    _factories: dict[str, Callable[[], Any]] = {}
+    _factories: ClassVar[dict[str, Callable[[], Any]]] = {}
 
     @classmethod
     def register(cls, interface: str, factory: Callable[[], Any]) -> None:

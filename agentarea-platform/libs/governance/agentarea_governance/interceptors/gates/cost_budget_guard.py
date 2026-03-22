@@ -54,7 +54,11 @@ class CostBudgetGuard:
                 action=InterceptorAction.WARN,
                 interceptor_name=self.name,
                 reason=f"budget at {usage_ratio:.0%} (${cost_used:.2f}/${budget_usd:.2f})",
-                metadata={"cost_used": cost_used, "budget_usd": budget_usd, "usage_ratio": usage_ratio},
+                metadata={
+                    "cost_used": cost_used,
+                    "budget_usd": budget_usd,
+                    "usage_ratio": usage_ratio,
+                },
             )
 
         return InterceptorResult(

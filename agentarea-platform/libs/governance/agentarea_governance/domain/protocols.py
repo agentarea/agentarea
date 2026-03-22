@@ -32,6 +32,4 @@ class DetectionEngine(Protocol):
     Defines HOW to detect. Swap regex for Presidio, LLM judge, external API.
     """
 
-    async def detect(
-        self, content: str, config: dict[str, Any]
-    ) -> list[DetectionFinding]: ...
+    async def detect(self, content: str, config: dict[str, Any]) -> list[DetectionFinding]: ...

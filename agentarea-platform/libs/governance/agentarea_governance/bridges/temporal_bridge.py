@@ -9,14 +9,13 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from agentarea_execution.workflows.constants import Activities
 from temporalio.worker import (
     ActivityInboundInterceptor,
     ExecuteActivityInput,
     Interceptor,
     WorkflowInboundInterceptor,
 )
-
-from agentarea_execution.workflows.constants import Activities
 
 from ..domain.enums import InterceptorAction, Phase
 from ..domain.exceptions import EscalationRequired, GovernanceDenied
@@ -130,7 +129,7 @@ def _extract_params(request: Any) -> dict[str, Any]:
     if hasattr(request, "model_dump"):
         try:
             return request.model_dump()
-        except Exception:
+        except Exception:  # noqa: S110
             pass
     return {}
 
@@ -195,7 +194,10 @@ class GovernanceActivityInterceptor(ActivityInboundInterceptor):
                         execution_state=context.execution_state,
                     )
                 result = await self._pipeline.run(post_phase, context)
-                if result.action == InterceptorAction.MODIFY and result.modified_content is not None:
+                if (
+                    result.action == InterceptorAction.MODIFY
+                    and result.modified_content is not None
+                ):
                     output = _apply_modification(output, result.modified_content)
                 if result.action == InterceptorAction.DENY:
                     raise GovernanceDenied(
@@ -236,14 +238,10 @@ class GovernanceWorkerInterceptor(Interceptor):
     def __init__(self, pipeline: InterceptorPipeline) -> None:
         self._pipeline = pipeline
 
-    def intercept_activity(
-        self, next: ActivityInboundInterceptor
-    ) -> ActivityInboundInterceptor:
+    def intercept_activity(self, next: ActivityInboundInterceptor) -> ActivityInboundInterceptor:
         return GovernanceActivityInterceptor(next, self._pipeline)
 
-    def workflow_interceptor_class(
-        self, input: Any
-    ) -> type[WorkflowInboundInterceptor] | None:
+    def workflow_interceptor_class(self, input: Any) -> type[WorkflowInboundInterceptor] | None:
         return None
 
 

@@ -75,10 +75,7 @@ class MCPToolProvider:
         return "mcp"
 
     def get_catalog_entry(self) -> CatalogEntry:
-        tool_names = [
-            t.get("function", {}).get("name", "unknown")
-            for t in self._tools
-        ]
+        tool_names = [t.get("function", {}).get("name", "unknown") for t in self._tools]
         return CatalogEntry(
             name=self._name,
             provider_type="mcp",
@@ -112,10 +109,7 @@ class CodeToolProvider:
         return "code"
 
     def get_catalog_entry(self) -> CatalogEntry:
-        tool_names = [
-            t.get("function", {}).get("name", "unknown")
-            for t in self._tools
-        ]
+        tool_names = [t.get("function", {}).get("name", "unknown") for t in self._tools]
         return CatalogEntry(
             name=self._name,
             provider_type="code",
@@ -155,10 +149,7 @@ class AgentToolProvider:
         return self._agent_id
 
     def get_catalog_entry(self) -> CatalogEntry:
-        tool_names = [
-            t.get("function", {}).get("name", "unknown")
-            for t in self._tools
-        ]
+        tool_names = [t.get("function", {}).get("name", "unknown") for t in self._tools]
         return CatalogEntry(
             name=self._name,
             provider_type="agent",
@@ -186,10 +177,7 @@ class BuiltinToolProvider:
         return "builtin"
 
     def get_catalog_entry(self) -> CatalogEntry:
-        tool_names = [
-            t.get("function", {}).get("name", "unknown")
-            for t in self._tools
-        ]
+        tool_names = [t.get("function", {}).get("name", "unknown") for t in self._tools]
         return CatalogEntry(
             name=self._name,
             provider_type="builtin",

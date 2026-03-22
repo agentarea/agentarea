@@ -228,10 +228,12 @@ class ToolManager:
                     if isinstance(tool_instance, Toolset):
                         tool_instance = ToolsetAdapter(tool_instance)
 
-                    providers.append(CodeToolProvider(
-                        name=tool_name,
-                        tools=[tool_instance.get_openai_function_definition()],
-                    ))
+                    providers.append(
+                        CodeToolProvider(
+                            name=tool_name,
+                            tools=[tool_instance.get_openai_function_definition()],
+                        )
+                    )
 
             elif tool_type == "mcp":
                 mcp_tools = await self._discover_mcp_tools_by_name(
@@ -239,11 +241,13 @@ class ToolManager:
                 )
                 if mcp_tools:
                     tool_defs = [t.get_openai_function_definition() for t in mcp_tools]
-                    providers.append(MCPToolProvider(
-                        name=tool_name,
-                        instance_id="",
-                        tools=tool_defs,
-                    ))
+                    providers.append(
+                        MCPToolProvider(
+                            name=tool_name,
+                            instance_id="",
+                            tools=tool_defs,
+                        )
+                    )
 
             elif tool_type == "agent":
                 if not agent_service or not base_url:
@@ -261,11 +265,13 @@ class ToolManager:
                     user_id=user_id,
                 )
                 if a2a_tool:
-                    providers.append(AgentToolProvider(
-                        name=tool_name,
-                        agent_id="",
-                        tools=[a2a_tool.get_openai_function_definition()],
-                    ))
+                    providers.append(
+                        AgentToolProvider(
+                            name=tool_name,
+                            agent_id="",
+                            tools=[a2a_tool.get_openai_function_definition()],
+                        )
+                    )
 
         logger.info(f"Discovered {len(providers)} tool providers for agent {agent_id}")
         return providers

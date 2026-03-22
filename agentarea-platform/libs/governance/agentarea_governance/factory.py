@@ -8,7 +8,6 @@ from agentarea_common.extensions.registry import ExtensionRegistry
 
 from .domain.enums import Phase
 from .engines.regex_engine import RegexDetectionEngine
-from .interceptors.filters.content_policy_enforcer import ContentPolicyEnforcer
 from .interceptors.filters.mcp_tool_scanner import MCPToolSecurityScanner
 from .interceptors.filters.output_sanitizer import OutputSanitizer
 from .interceptors.filters.prompt_injection_detector import PromptInjectionDetector
@@ -74,7 +73,10 @@ def create_governance_pipeline() -> InterceptorPipeline:
         registry.register(metrics, phase, priority=800)
         registry.register(audit, phase, priority=810)
 
-    logger.info("Governance pipeline created with %d interceptor registrations", _count_registrations(registry))
+    logger.info(
+        "Governance pipeline created with %d interceptor registrations",
+        _count_registrations(registry),
+    )
     return InterceptorPipeline(registry)
 
 

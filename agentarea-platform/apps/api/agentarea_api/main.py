@@ -118,14 +118,14 @@ async def initialize_services():
     """Initialize real services instead of test mocks."""
     try:
         # Discover extensions and wire DI
-        from agentarea_common.extensions import discover_extensions
-        from agentarea_common.extensions.registry import ExtensionRegistry
         from agentarea_common.auth.authorization import AuthorizationService
         from agentarea_common.auth.permission import PermissionService
         from agentarea_common.auth.simple_authorization import SimpleAuthorizationService
         from agentarea_common.auth.simple_permission import SimplePermissionService
-        from agentarea_common.features.service import DeploymentMode, FeatureService
         from agentarea_common.config.app import get_app_settings
+        from agentarea_common.extensions import discover_extensions
+        from agentarea_common.extensions.registry import ExtensionRegistry
+        from agentarea_common.features.service import DeploymentMode, FeatureService
 
         discover_extensions()
 
@@ -283,6 +283,7 @@ def create_app() -> FastAPI:
     # Webhook receiver — mounted outside /v1 to bypass auth middleware/dependencies
     # External services (Telegram, Slack, GitHub, etc.) POST to /webhooks/{id}
     from agentarea_api.api.v1 import webhooks as webhooks_module
+
     app.include_router(webhooks_module.router, tags=["webhooks"])
 
     app.include_router(public_v1_router, tags=["v1"])

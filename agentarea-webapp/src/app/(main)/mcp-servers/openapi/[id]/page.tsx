@@ -171,9 +171,21 @@ export default function OpenAPIConnectionDetailPage() {
 
         {/* Test result */}
         {testResult && (
-          <div className={`rounded-lg border p-4 ${testResult.status === "reachable" ? "border-green-300 bg-green-50 dark:bg-green-950/20" : "border-red-300 bg-red-50 dark:bg-red-950/20"}`}>
+          <div className={`rounded-lg border p-4 ${
+            testResult.status === "reachable"
+              ? "border-green-300 bg-green-50 dark:bg-green-950/20"
+              : testResult.status === "auth_error"
+                ? "border-amber-300 bg-amber-50 dark:bg-amber-950/20"
+                : "border-red-300 bg-red-50 dark:bg-red-950/20"
+          }`}>
             <p className="text-sm font-medium">
-              {testResult.status === "reachable" ? `Reachable (HTTP ${testResult.status_code})` : `Unreachable: ${testResult.error}`}
+              {testResult.status === "reachable"
+                ? `Reachable (HTTP ${testResult.status_code})`
+                : testResult.status === "auth_error"
+                  ? `Authentication error (HTTP ${testResult.status_code}) — check your headers`
+                  : testResult.status === "server_error"
+                    ? `Server error (HTTP ${testResult.status_code})`
+                    : `Unreachable: ${testResult.error}`}
             </p>
           </div>
         )}

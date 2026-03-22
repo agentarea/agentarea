@@ -27,6 +27,9 @@ from agentarea_api.api.deps.services import (
     get_trigger_health_check,
     get_trigger_service,
 )
+from agentarea_api.api.v1.a2a_auth import (
+    require_a2a_execute_auth,  # noqa: F401  # re-exported for tests
+)
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
 from agentarea_triggers.domain.enums import TriggerType, WebhookType
@@ -39,7 +42,6 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
-from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth  # noqa: F401  # re-exported for tests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
@@ -227,7 +229,9 @@ class TriggerCreateRequest(BaseModel):
     webhook_type: str = Field(default="generic")
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: dict[str, Any] | None = None
-    event_types: list[str] = Field(default_factory=list, description="Event types to filter (empty = all events)")
+    event_types: list[str] = Field(
+        default_factory=list, description="Event types to filter (empty = all events)"
+    )
 
     # Channel credentials — stored encrypted, never returned in responses
     channel_credentials: dict[str, Any] | None = Field(
@@ -392,6 +396,7 @@ def _convert_to_domain_create(request: TriggerCreateRequest, created_by: str) ->
     webhook_id = request.webhook_id
     if trigger_type == TriggerType.WEBHOOK and not webhook_id:
         import secrets
+
         webhook_id = secrets.token_urlsafe(16)
 
     return TriggerCreate(
@@ -472,7 +477,7 @@ async def create_trigger(
 
     Args:
         request: Trigger creation request data
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
         secret_manager: Injected secret manager for credential storage
 
@@ -539,7 +544,7 @@ async def list_triggers(
         trigger_type: Optional trigger type filter
         active_only: Whether to only return active triggers
         limit: Maximum number of triggers to return
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -638,7 +643,7 @@ async def get_trigger(
 
     Args:
         trigger_id: The unique identifier of the trigger
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -681,7 +686,7 @@ async def update_trigger(
     Args:
         trigger_id: The unique identifier of the trigger
         request: Trigger update request data
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
         secret_manager: Injected secret manager for credential storage
 
@@ -743,7 +748,7 @@ async def delete_trigger(
 
     Args:
         trigger_id: The unique identifier of the trigger
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Raises:
@@ -779,7 +784,7 @@ async def enable_trigger(
 
     Args:
         trigger_id: The unique identifier of the trigger
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -825,7 +830,7 @@ async def disable_trigger(
 
     Args:
         trigger_id: The unique identifier of the trigger
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -884,7 +889,7 @@ async def get_execution_history(
         status: Optional status filter (success, failed, timeout)
         start_time: Optional start time filter
         end_time: Optional end time filter
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -963,7 +968,7 @@ async def get_trigger_status(
 
     Args:
         trigger_id: The unique identifier of the trigger
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -1016,7 +1021,7 @@ async def get_execution_metrics(
     Args:
         trigger_id: The unique identifier of the trigger
         hours: Time period in hours to analyze (default 24, max 168)
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -1062,7 +1067,7 @@ async def get_execution_timeline(
         trigger_id: The unique identifier of the trigger
         hours: Time period in hours to analyze (default 24, max 168)
         bucket_size_minutes: Size of time buckets in minutes (default 60)
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:
@@ -1112,7 +1117,7 @@ async def get_execution_correlations(
         trigger_id: The unique identifier of the trigger
         page: Page number for pagination
         page_size: Number of executions per page
-        auth_context: Authentication context
+        user_context: Authentication context
         trigger_service: Injected trigger service
 
     Returns:

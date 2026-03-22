@@ -1,6 +1,6 @@
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import cast, func, select, String
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.models import MCPServer
@@ -34,9 +34,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             query = query.where(self.model_class.is_public == is_public)
         if tag is not None:
             # Filter tags in SQL using JSON containment (PostgreSQL @> operator)
-            query = query.where(
-                cast(self.model_class.tags, String).ilike(f'%"{tag}"%')
-            )
+            query = query.where(cast(self.model_class.tags, String).ilike(f'%"{tag}"%'))
         if search is not None:
             pattern = f"%{search}%"
             query = query.where(

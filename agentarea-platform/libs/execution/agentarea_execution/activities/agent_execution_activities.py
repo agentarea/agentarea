@@ -225,13 +225,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
             provider_data = []
             for p in providers:
                 entry = p.get_catalog_entry()
-                provider_data.append(ToolProviderData(
-                    name=p.name,
-                    provider_type=p.provider_type,
-                    tool_names=entry.tool_names,
-                    description=entry.description,
-                    tools=p.get_tool_definitions(),
-                ))
+                provider_data.append(
+                    ToolProviderData(
+                        name=p.name,
+                        provider_type=p.provider_type,
+                        tool_names=entry.tool_names,
+                        description=entry.description,
+                        tools=p.get_tool_definitions(),
+                    )
+                )
 
             return DiscoverToolProvidersResult(providers=provider_data)
 
@@ -1058,13 +1060,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
         try:
             async with httpx.AsyncClient(timeout=request.timeout_seconds + 10) as client:
-                resp = await client.post(url, json={
-                    "script_content": request.script_content,
-                    "script_name": request.script_name,
-                    "args": request.args,
-                    "env": request.env,
-                    "timeout_seconds": request.timeout_seconds,
-                })
+                resp = await client.post(
+                    url,
+                    json={
+                        "script_content": request.script_content,
+                        "script_name": request.script_name,
+                        "args": request.args,
+                        "env": request.env,
+                        "timeout_seconds": request.timeout_seconds,
+                    },
+                )
 
                 if resp.status_code != 200:
                     logger.error(f"Sandbox execution failed: {resp.status_code} {resp.text[:300]}")

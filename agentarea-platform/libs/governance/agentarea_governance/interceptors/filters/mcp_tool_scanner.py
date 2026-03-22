@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
-from typing import Any
 
 from ...domain.enums import InterceptorAction, InterceptorCategory
 from ...domain.models import DetectionFinding, InterceptorContext, InterceptorResult
@@ -58,7 +56,7 @@ class MCPToolSecurityScanner:
 
         # Check for suspicious patterns in tool description
         content_lower = content.lower()
-        for i, pattern in enumerate(SUSPICIOUS_PATTERNS):
+        for _i, pattern in enumerate(SUSPICIOUS_PATTERNS):
             idx = content_lower.find(pattern.lower())
             if idx >= 0:
                 findings.append(
@@ -103,9 +101,7 @@ class MCPToolSecurityScanner:
             )
 
         # Description injection → DENY, rug pull → WARN
-        has_injection = any(
-            f.category == "tool_poisoning.description_injection" for f in findings
-        )
+        has_injection = any(f.category == "tool_poisoning.description_injection" for f in findings)
         if has_injection:
             return InterceptorResult(
                 action=InterceptorAction.DENY,

@@ -10,24 +10,54 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 project_skills = Table(
     "project_skills",
     BaseModel.metadata,
-    sa.Column("project_id", PG_UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True),
-    sa.Column("skill_id", PG_UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True),
+    sa.Column(
+        "project_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "skill_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("skills.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
 
 # Junction table: project <-> mcp_server_instances
 project_mcp_instances = Table(
     "project_mcp_instances",
     BaseModel.metadata,
-    sa.Column("project_id", PG_UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True),
-    sa.Column("mcp_instance_id", PG_UUID(as_uuid=True), ForeignKey("mcp_server_instances.id", ondelete="CASCADE"), primary_key=True),
+    sa.Column(
+        "project_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "mcp_instance_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("mcp_server_instances.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
 
 # Junction table: project <-> agents
 project_agents = Table(
     "project_agents",
     BaseModel.metadata,
-    sa.Column("project_id", PG_UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True),
-    sa.Column("agent_id", PG_UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), primary_key=True),
+    sa.Column(
+        "project_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "agent_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
 
 

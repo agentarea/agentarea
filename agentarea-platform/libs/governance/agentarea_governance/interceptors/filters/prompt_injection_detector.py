@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from ...domain.enums import InterceptorAction, InterceptorCategory
 from ...domain.models import InterceptorContext, InterceptorResult
 from ...domain.protocols import DetectionEngine
@@ -48,9 +46,7 @@ class PromptInjectionDetector:
                 reason="no content to scan",
             )
 
-        findings = await self._engine.detect(
-            content, {"categories": INJECTION_CATEGORIES}
-        )
+        findings = await self._engine.detect(content, {"categories": INJECTION_CATEGORIES})
 
         if not findings:
             return InterceptorResult(

@@ -23,8 +23,16 @@ def cli():
 
 
 @cli.command()
-@click.option("--host", default="0.0.0.0", envvar="HOST", show_envvar=True, help="Host to bind the server to")  # noqa: S104
-@click.option("--port", default=8000, envvar="PORT", show_envvar=True, help="Port to bind the server to")
+@click.option(
+    "--host",
+    default="0.0.0.0",
+    envvar="HOST",
+    show_envvar=True,
+    help="Host to bind the server to",  # noqa: S104
+)
+@click.option(
+    "--port", default=8000, envvar="PORT", show_envvar=True, help="Port to bind the server to"
+)
 @click.option("--reload/--no-reload", default=False, help="Enable/disable auto-reload")
 @click.option("--log-level", default="info", help="Logging level")
 @click.option("--workers", default=1, help="Number of worker processes")

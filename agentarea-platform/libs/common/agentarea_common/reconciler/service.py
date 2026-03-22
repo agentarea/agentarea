@@ -38,6 +38,7 @@ class ReconcileResult:
         self.errors.append((entity_type, message))
 
     def __str__(self) -> str:
+        """Return human-readable representation."""
         error_count = len(self.errors)
         return (
             f"ReconcileResult(created={self.created}, updated={self.updated}, "
@@ -124,12 +125,15 @@ class ReconcilerService:
         """Lazy-import model classes to avoid circular imports."""
         if entity_type == "mcp_servers":
             from agentarea_mcp.domain.models import MCPServer
+
             return MCPServer
         elif entity_type == "agents":
             from agentarea_agents.domain.models import Agent
+
             return Agent
         elif entity_type == "skills":
             from agentarea_agents.domain.skill_models import Skill
+
             return Skill
         elif entity_type == "models":
             # Models have nested structure (providers + instances).

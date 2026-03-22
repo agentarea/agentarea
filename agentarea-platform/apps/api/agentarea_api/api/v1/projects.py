@@ -9,7 +9,6 @@ from agentarea_common.base import RepositoryFactoryDep
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -275,7 +274,7 @@ async def list_project_files(
     files = []
     for page in paginator.paginate(Bucket=bucket, Prefix=project.minio_prefix):
         for obj in page.get("Contents", []):
-            relative_path = obj["Key"][len(project.minio_prefix):]
+            relative_path = obj["Key"][len(project.minio_prefix) :]
             files.append(
                 {
                     "path": relative_path,

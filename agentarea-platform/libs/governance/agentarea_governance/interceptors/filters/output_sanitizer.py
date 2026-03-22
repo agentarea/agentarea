@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from ...domain.enums import InterceptorAction, InterceptorCategory
 from ...domain.models import DetectionFinding, InterceptorContext, InterceptorResult
 from ...domain.protocols import DetectionEngine
@@ -52,9 +50,7 @@ class OutputSanitizer:
                 reason="no content to sanitize",
             )
 
-        findings = await self._engine.detect(
-            content, {"categories": PII_CATEGORIES}
-        )
+        findings = await self._engine.detect(content, {"categories": PII_CATEGORIES})
 
         if not findings:
             return InterceptorResult(

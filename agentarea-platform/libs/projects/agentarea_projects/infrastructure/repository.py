@@ -37,7 +37,9 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def list_all(self, limit: int | None = None, offset: int | None = None, **filters) -> list[Project]:  # type: ignore[override]
+    async def list_all(
+        self, limit: int | None = None, offset: int | None = None, **filters
+    ) -> list[Project]:  # type: ignore[override]
         """List all projects in the workspace with associations."""
         query = (
             select(Project)
@@ -62,9 +64,11 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
 
     async def add_skill(self, project_id: UUID | str, skill_id: UUID | str) -> None:
         """Add a skill to a project."""
-        stmt = insert(project_skills).values(
-            project_id=str(project_id), skill_id=str(skill_id)
-        ).on_conflict_do_nothing()
+        stmt = (
+            insert(project_skills)
+            .values(project_id=str(project_id), skill_id=str(skill_id))
+            .on_conflict_do_nothing()
+        )
         await self.session.execute(stmt)
         await self.session.commit()
 
@@ -81,13 +85,17 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
 
     async def add_mcp_instance(self, project_id: UUID | str, mcp_instance_id: UUID | str) -> None:
         """Add an MCP server instance to a project."""
-        stmt = insert(project_mcp_instances).values(
-            project_id=str(project_id), mcp_instance_id=str(mcp_instance_id)
-        ).on_conflict_do_nothing()
+        stmt = (
+            insert(project_mcp_instances)
+            .values(project_id=str(project_id), mcp_instance_id=str(mcp_instance_id))
+            .on_conflict_do_nothing()
+        )
         await self.session.execute(stmt)
         await self.session.commit()
 
-    async def remove_mcp_instance(self, project_id: UUID | str, mcp_instance_id: UUID | str) -> None:
+    async def remove_mcp_instance(
+        self, project_id: UUID | str, mcp_instance_id: UUID | str
+    ) -> None:
         """Remove an MCP server instance from a project."""
         stmt = delete(project_mcp_instances).where(
             project_mcp_instances.c.project_id == str(project_id),
@@ -100,9 +108,11 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
 
     async def add_agent(self, project_id: UUID | str, agent_id: UUID | str) -> None:
         """Add an agent to a project."""
-        stmt = insert(project_agents).values(
-            project_id=str(project_id), agent_id=str(agent_id)
-        ).on_conflict_do_nothing()
+        stmt = (
+            insert(project_agents)
+            .values(project_id=str(project_id), agent_id=str(agent_id))
+            .on_conflict_do_nothing()
+        )
         await self.session.execute(stmt)
         await self.session.commit()
 

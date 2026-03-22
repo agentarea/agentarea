@@ -27,15 +27,15 @@ from agentarea_llm.infrastructure.model_spec_repository import ModelSpecReposito
 from agentarea_llm.infrastructure.provider_config_repository import ProviderConfigRepository
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 from agentarea_mcp.application.registry_service import RegistryService
-from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_mcp.application.service import MCPServerInstanceService, MCPServerService
 from agentarea_mcp.infrastructure.registry_repository import (
     RegistryItemRepository,
     RegistryRepository,
 )
+from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager
-from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.domain.interfaces import BaseTaskManager
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -509,6 +509,7 @@ async def get_public_webhook_manager(
     The webhook_id in the URL is the sole identifier for routing to the correct trigger.
     """
     if not TRIGGERS_AVAILABLE:
+
         class MockWebhookManager:
             async def handle_webhook_request(self, *args, **kwargs):
                 return {
@@ -536,7 +537,9 @@ async def get_public_webhook_manager(
     from agentarea_triggers.infrastructure.repository import TriggerRepository
 
     # Trigger lookup with system context — get_by_webhook_id doesn't filter by workspace
-    system_ctx = UserContext(user_id="system", workspace_id="system", roles=[], accessible_workspaces=["system"])
+    system_ctx = UserContext(
+        user_id="system", workspace_id="system", roles=[], accessible_workspaces=["system"]
+    )
     trigger_repo = TriggerRepository(session=db_session, user_context=system_ctx)
 
     class WebhookManagerWithLookup:
@@ -552,7 +555,10 @@ async def get_public_webhook_manager(
             # Find trigger without workspace scoping
             trigger = await self._trigger_repo.get_by_webhook_id(webhook_id)
             if not trigger:
-                return {"status_code": 400, "body": {"status": "error", "message": f"Webhook {webhook_id} not found"}}
+                return {
+                    "status_code": 400,
+                    "body": {"status": "error", "message": f"Webhook {webhook_id} not found"},
+                }
 
             # Create a FRESH session for the execution phase to avoid greenlet reuse issues
             from agentarea_common.infrastructure.database import db
@@ -560,7 +566,12 @@ async def get_public_webhook_manager(
             async with db.session() as fresh_session:
                 workspace_id = trigger.workspace_id or "system"
                 created_by = trigger.created_by or "system"
-                ctx = UserContext(user_id=created_by, workspace_id=workspace_id, roles=[], accessible_workspaces=[workspace_id, "system"])
+                ctx = UserContext(
+                    user_id=created_by,
+                    workspace_id=workspace_id,
+                    roles=[],
+                    accessible_workspaces=[workspace_id, "system"],
+                )
                 repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)
                 sec_manager = get_real_secret_manager(session=fresh_session, user_context=ctx)
 
@@ -575,7 +586,9 @@ async def get_public_webhook_manager(
                 # Pre-register the trigger so the manager doesn't need another lookup
                 mgr._registered_webhooks[webhook_id] = trigger
 
-                return await mgr.handle_webhook_request(webhook_id, method, headers, body, query_params)
+                return await mgr.handle_webhook_request(
+                    webhook_id, method, headers, body, query_params
+                )
 
         async def is_healthy(self):
             return True

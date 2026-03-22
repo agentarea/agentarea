@@ -50,6 +50,9 @@ async def require_permission(
     if not allowed:
         logger.warning(
             "Permission denied: user=%s permission=%s resource=%s/%s",
-            user_id, permission, resource_type, resource_id,
+            user_id,
+            permission,
+            resource_type,
+            resource_id,
         )
         raise HTTPException(status_code=403, detail="Permission denied")

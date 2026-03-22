@@ -53,17 +53,49 @@ class NetworkTopologyResponse(BaseModel):
 
 
 _GOVERNANCE_INTERCEPTORS = [
-    GovernanceOverlay(interceptor_name="capability_guard", category="gate", phases=["pre_tool_call"]),
-    GovernanceOverlay(interceptor_name="cost_budget_guard", category="gate", phases=["pre_llm_call"]),
-    GovernanceOverlay(interceptor_name="token_budget_guard", category="gate", phases=["pre_llm_call"]),
-    GovernanceOverlay(interceptor_name="escalation_guard", category="gate", phases=["pre_tool_call"]),
-    GovernanceOverlay(interceptor_name="semantic_guard", category="gate", phases=["pre_llm_call", "pre_tool_call"]),
-    GovernanceOverlay(interceptor_name="prompt_injection_detector", category="filter", phases=["pre_llm_call", "post_llm_call"]),
-    GovernanceOverlay(interceptor_name="output_sanitizer", category="filter", phases=["post_llm_call"]),
-    GovernanceOverlay(interceptor_name="content_policy_enforcer", category="filter", phases=["pre_llm_call", "post_llm_call"]),
-    GovernanceOverlay(interceptor_name="mcp_tool_scanner", category="filter", phases=["tool_discovery", "pre_tool_call"]),
-    GovernanceOverlay(interceptor_name="audit_observer", category="observer", phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"]),
-    GovernanceOverlay(interceptor_name="metrics_observer", category="observer", phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"]),
+    GovernanceOverlay(
+        interceptor_name="capability_guard", category="gate", phases=["pre_tool_call"]
+    ),
+    GovernanceOverlay(
+        interceptor_name="cost_budget_guard", category="gate", phases=["pre_llm_call"]
+    ),
+    GovernanceOverlay(
+        interceptor_name="token_budget_guard", category="gate", phases=["pre_llm_call"]
+    ),
+    GovernanceOverlay(
+        interceptor_name="escalation_guard", category="gate", phases=["pre_tool_call"]
+    ),
+    GovernanceOverlay(
+        interceptor_name="semantic_guard", category="gate", phases=["pre_llm_call", "pre_tool_call"]
+    ),
+    GovernanceOverlay(
+        interceptor_name="prompt_injection_detector",
+        category="filter",
+        phases=["pre_llm_call", "post_llm_call"],
+    ),
+    GovernanceOverlay(
+        interceptor_name="output_sanitizer", category="filter", phases=["post_llm_call"]
+    ),
+    GovernanceOverlay(
+        interceptor_name="content_policy_enforcer",
+        category="filter",
+        phases=["pre_llm_call", "post_llm_call"],
+    ),
+    GovernanceOverlay(
+        interceptor_name="mcp_tool_scanner",
+        category="filter",
+        phases=["tool_discovery", "pre_tool_call"],
+    ),
+    GovernanceOverlay(
+        interceptor_name="audit_observer",
+        category="observer",
+        phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"],
+    ),
+    GovernanceOverlay(
+        interceptor_name="metrics_observer",
+        category="observer",
+        phases=["pre_llm_call", "post_llm_call", "pre_tool_call", "post_tool_call"],
+    ),
 ]
 
 
@@ -106,9 +138,7 @@ async def get_network_topology(
     async def fetch_skills() -> tuple[list, list]:
         async with db.session() as session:
             # Skills within accessible workspaces
-            skill_query = select(Skill).where(
-                Skill.workspace_id.in_(accessible_workspaces)
-            )
+            skill_query = select(Skill).where(Skill.workspace_id.in_(accessible_workspaces))
             skill_result = await session.execute(skill_query)
             skills = list(skill_result.scalars().all())
 
@@ -130,8 +160,8 @@ async def get_network_topology(
 
     async def fetch_mcp_instances() -> list:
         try:
-            from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
             from agentarea_common.base import RepositoryFactory
+            from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 
             async with db.session() as session:
                 repo = RepositoryFactory(session, user_context).create_repository(
@@ -147,9 +177,7 @@ async def get_network_topology(
             from agentarea_triggers.infrastructure.orm import TriggerORM
 
             async with db.session() as session:
-                query = select(TriggerORM).where(
-                    TriggerORM.workspace_id.in_(accessible_workspaces)
-                )
+                query = select(TriggerORM).where(TriggerORM.workspace_id.in_(accessible_workspaces))
                 result = await session.execute(query)
                 return list(result.scalars().all())
         except Exception as e:
@@ -169,27 +197,33 @@ async def get_network_topology(
     # --- Build agent nodes ---
     for agent in agents:
         agent_id = str(agent.id)
-        nodes.append(NetworkNode(
-            id=agent_id,
-            type="agent",
-            label=agent.name,
-            status=getattr(agent, "status", None),
-            metadata={
-                k: v for k, v in {
-                    "model_id": getattr(agent, "model_id", None),
-                    "description": getattr(agent, "description", None),
-                }.items() if v is not None
-            },
-        ))
+        nodes.append(
+            NetworkNode(
+                id=agent_id,
+                type="agent",
+                label=agent.name,
+                status=getattr(agent, "status", None),
+                metadata={
+                    k: v
+                    for k, v in {
+                        "model_id": getattr(agent, "model_id", None),
+                        "description": getattr(agent, "description", None),
+                    }.items()
+                    if v is not None
+                },
+            )
+        )
 
         # Agent → Skill edges (eagerly loaded via selectinload)
         for skill in agent.skills:
-            edges.append(NetworkEdge(
-                id=f"{agent_id}-{skill.id}-has_skill",
-                source=agent_id,
-                target=str(skill.id),
-                relation="has_skill",
-            ))
+            edges.append(
+                NetworkEdge(
+                    id=f"{agent_id}-{skill.id}-has_skill",
+                    source=agent_id,
+                    target=str(skill.id),
+                    relation="has_skill",
+                )
+            )
 
         # Agent → MCP edges (via agent.tools JSON field)
         if agent.tools:
@@ -210,79 +244,101 @@ async def get_network_topology(
                     )
                     if server_id and str(server_id) not in seen_servers:
                         seen_servers.add(str(server_id))
-                        edges.append(NetworkEdge(
-                            id=f"{agent_id}-{server_id}-uses_mcp",
-                            source=agent_id,
-                            target=str(server_id),
-                            relation="uses_mcp",
-                        ))
+                        edges.append(
+                            NetworkEdge(
+                                id=f"{agent_id}-{server_id}-uses_mcp",
+                                source=agent_id,
+                                target=str(server_id),
+                                relation="uses_mcp",
+                            )
+                        )
 
     # --- Build skill nodes ---
     for skill in skills:
-        nodes.append(NetworkNode(
-            id=str(skill.id),
-            type="skill",
-            label=skill.name,
-            metadata={
-                k: v for k, v in {
-                    "source_type": getattr(skill, "source_type", None),
-                    "description": getattr(skill, "description", None),
-                    "network_scope": skill.network_scope,
-                }.items() if v is not None
-            },
-        ))
+        nodes.append(
+            NetworkNode(
+                id=str(skill.id),
+                type="skill",
+                label=skill.name,
+                metadata={
+                    k: v
+                    for k, v in {
+                        "source_type": getattr(skill, "source_type", None),
+                        "description": getattr(skill, "description", None),
+                        "network_scope": skill.network_scope,
+                    }.items()
+                    if v is not None
+                },
+            )
+        )
 
     # --- Skill → Skill edges (bundle membership: child is member_of parent) ---
     for row in skill_members:
         parent_id = str(row.parent_skill_id)
         child_id = str(row.child_skill_id)
-        edges.append(NetworkEdge(
-            id=f"{child_id}-{parent_id}-member_of",
-            source=child_id,
-            target=parent_id,
-            relation="member_of",
-        ))
+        edges.append(
+            NetworkEdge(
+                id=f"{child_id}-{parent_id}-member_of",
+                source=child_id,
+                target=parent_id,
+                relation="member_of",
+            )
+        )
 
     # --- Build MCP instance nodes ---
     for instance in mcp_instances:
         instance_id = str(instance.id)
-        nodes.append(NetworkNode(
-            id=instance_id,
-            type="mcp_instance",
-            label=getattr(instance, "name", None) or getattr(instance, "slug", instance_id),
-            status=getattr(instance, "status", None),
-            metadata={
-                k: v for k, v in {
-                    "tool_count": len(instance.get_available_tools()),
-                    "network_scope": instance.network_scope,
-                }.items() if v is not None
-            },
-        ))
+        nodes.append(
+            NetworkNode(
+                id=instance_id,
+                type="mcp_instance",
+                label=getattr(instance, "name", None) or getattr(instance, "slug", instance_id),
+                status=getattr(instance, "status", None),
+                metadata={
+                    k: v
+                    for k, v in {
+                        "tool_count": len(instance.get_available_tools()),
+                        "network_scope": instance.network_scope,
+                    }.items()
+                    if v is not None
+                },
+            )
+        )
 
     # --- Build trigger nodes ---
     for trigger in triggers:
         trigger_id = str(trigger.id)
-        nodes.append(NetworkNode(
-            id=trigger_id,
-            type="trigger",
-            label=getattr(trigger, "name", trigger_id),
-            status="active" if getattr(trigger, "is_active", False) else "inactive",
-            metadata={
-                k: v for k, v in {
-                    "trigger_type": getattr(getattr(trigger, "trigger_type", None), "value", str(getattr(trigger, "trigger_type", "unknown"))),
-                }.items() if v is not None
-            },
-        ))
+        nodes.append(
+            NetworkNode(
+                id=trigger_id,
+                type="trigger",
+                label=getattr(trigger, "name", trigger_id),
+                status="active" if getattr(trigger, "is_active", False) else "inactive",
+                metadata={
+                    k: v
+                    for k, v in {
+                        "trigger_type": getattr(
+                            getattr(trigger, "trigger_type", None),
+                            "value",
+                            str(getattr(trigger, "trigger_type", "unknown")),
+                        ),
+                    }.items()
+                    if v is not None
+                },
+            )
+        )
 
         # Agent → Trigger edge
         agent_id_val = getattr(trigger, "agent_id", None)
         if agent_id_val:
-            edges.append(NetworkEdge(
-                id=f"{str(agent_id_val)}-{trigger_id}-has_trigger",
-                source=str(agent_id_val),
-                target=trigger_id,
-                relation="has_trigger",
-            ))
+            edges.append(
+                NetworkEdge(
+                    id=f"{agent_id_val!s}-{trigger_id}-has_trigger",
+                    source=str(agent_id_val),
+                    target=trigger_id,
+                    relation="has_trigger",
+                )
+            )
 
     # Governance overlay and deployment mode from FeatureService (DI singleton)
     feature_service = get_container().get(FeatureService)

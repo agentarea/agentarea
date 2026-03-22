@@ -44,9 +44,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )
-    op.create_index(
-        "ix_openapi_connections_workspace_id", "openapi_connections", ["workspace_id"]
-    )
+    op.create_index("ix_openapi_connections_workspace_id", "openapi_connections", ["workspace_id"])
 
 
 def downgrade() -> None:

@@ -66,7 +66,10 @@ class InterceptorPipeline:
                 if result.action == InterceptorAction.DENY:
                     await self._fire_callback(registration.on_deny, result, context)
                     return result
-                if result.action == InterceptorAction.MODIFY and result.modified_content is not None:
+                if (
+                    result.action == InterceptorAction.MODIFY
+                    and result.modified_content is not None
+                ):
                     current_content = result.modified_content
                     context = InterceptorContext(
                         agent_id=context.agent_id,
@@ -96,15 +99,11 @@ class InterceptorPipeline:
             reason="all checks passed",
         )
 
-    async def _run_observer(
-        self, interceptor: Any, context: InterceptorContext
-    ) -> None:
+    async def _run_observer(self, interceptor: Any, context: InterceptorContext) -> None:
         try:
             await interceptor.execute(context)
         except Exception:
-            logger.exception(
-                "Observer %s raised exception (ignored)", interceptor.name
-            )
+            logger.exception("Observer %s raised exception (ignored)", interceptor.name)
 
     async def _fire_callback(
         self,

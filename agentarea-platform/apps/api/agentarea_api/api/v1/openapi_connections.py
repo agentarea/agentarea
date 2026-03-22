@@ -7,14 +7,13 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
-
 from agentarea_api.api.deps.services import get_openapi_connection_service
 from agentarea_common.config import get_settings
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +186,9 @@ async def preview_spec(
             raise HTTPException(status_code=400, detail=str(e)) from e
         except httpx.RequestError as e:
             logger.error("Failed to fetch spec from %s: %s", request.spec_url, e)
-            raise HTTPException(status_code=400, detail="Failed to fetch spec from the provided URL.") from e
+            raise HTTPException(
+                status_code=400, detail="Failed to fetch spec from the provided URL."
+            ) from e
         except httpx.HTTPStatusError as e:
             raise HTTPException(
                 status_code=400, detail=f"Spec URL returned HTTP {e.response.status_code}"
@@ -221,9 +222,7 @@ async def create_connection(
 ):
     try:
         headers_raw = (
-            [h.model_dump() for h in request.custom_headers]
-            if request.custom_headers
-            else None
+            [h.model_dump() for h in request.custom_headers] if request.custom_headers else None
         )
         conn = await service.create_connection(
             name=request.name,
@@ -335,7 +334,7 @@ async def discover_tools(
 
 
 @router.post("/{connection_id}/test")
-async def test_connection(
+async def check_connection(
     connection_id: UUID,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
 ):

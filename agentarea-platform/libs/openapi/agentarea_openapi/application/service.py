@@ -3,13 +3,13 @@
 import json
 import logging
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import yaml
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
-from agentarea_openapi.application.url_validator import validate_url
+from agentarea_openapi.application.url_validator import _SPEC_MAX_SIZE, validate_url
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
 
@@ -43,6 +43,46 @@ def _is_safe_header(name: str) -> bool:
     return name.lower() in _SAFE_HEADERS
 
 
+async def fetch_and_parse_spec(
+    url: str,
+    *,
+    allow_private: bool = False,
+    headers: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Fetch an OpenAPI spec from a URL with SSRF protection and streaming size check.
+
+    Shared by service._fetch_spec and the preview_spec endpoint.
+
+    Raises:
+        ValueError: On validation failure, size limit, or fetch error.
+        httpx.HTTPStatusError: On non-2xx response.
+    """
+    validate_url(url, allow_private=allow_private)
+
+    async with httpx.AsyncClient(
+        timeout=30, headers=headers or {}, follow_redirects=False
+    ) as client:
+        async with client.stream("GET", url) as resp:
+            resp.raise_for_status()
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+                total += len(chunk)
+                if total > _SPEC_MAX_SIZE:
+                    raise ValueError("Spec response exceeds 5MB limit.")
+                chunks.append(chunk)
+
+    content = b"".join(chunks)
+    text = content.decode(resp.encoding or "utf-8", errors="replace")
+
+    if url.endswith((".yaml", ".yml")):
+        return yaml.safe_load(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return yaml.safe_load(text)
+
+
 class OpenAPIConnectionService:
     def __init__(
         self,
@@ -66,12 +106,20 @@ class OpenAPIConnectionService:
         auth_config_id: UUID | None = None,
         custom_headers: list[dict[str, str]] | None = None,
     ) -> OpenAPIConnection:
-        # Process headers: classify and store secrets
+        # Validate URLs at creation time (SSRF protection)
+        validate_url(base_url, allow_private=self._allow_private_urls)
+        if spec_url:
+            validate_url(spec_url, allow_private=self._allow_private_urls)
+
+        # Pre-generate ID so secrets can be stored atomically
+        conn_id = uuid4()
+
         processed_headers = None
         if custom_headers:
-            processed_headers = await self._store_headers(custom_headers, connection_id=None)
+            processed_headers = await self._store_headers(custom_headers, connection_id=conn_id)
 
         conn = await self._repo.create(
+            id=conn_id,
             name=name,
             base_url=base_url,
             description=description,
@@ -81,16 +129,12 @@ class OpenAPIConnectionService:
             custom_headers=processed_headers,
         )
 
-        # Re-key secrets now that we have the connection ID
-        if custom_headers and self._secret_manager:
-            await self._rekey_headers(conn, custom_headers)
-
         return conn
 
     async def _store_headers(
         self,
         raw_headers: list[dict[str, str]],
-        connection_id: str | UUID | None,
+        connection_id: str | UUID,
     ) -> list[dict[str, Any]]:
         """Classify headers and store secret values.
 
@@ -112,7 +156,7 @@ class OpenAPIConnectionService:
                     raise ValueError(
                         "Secret manager required to store sensitive headers. Configure a secret manager."
                     )
-                if connection_id and header_value:
+                if header_value:
                     key = _secret_key(connection_id, header_name)
                     await self._secret_manager.set_secret(key, header_value)
                 # Don't store secret value in DB
@@ -121,21 +165,6 @@ class OpenAPIConnectionService:
 
             processed.append(entry)
         return processed
-
-    async def _rekey_headers(
-        self,
-        conn: OpenAPIConnection,
-        raw_headers: list[dict[str, str]],
-    ) -> None:
-        """After create, store secrets under the real connection ID."""
-        if not self._secret_manager:
-            return
-        for h in raw_headers:
-            header_name = h.get("name", "").strip()
-            header_value = h.get("value", "")
-            if header_name and not _is_safe_header(header_name) and header_value:
-                key = _secret_key(conn.id, header_name)
-                await self._secret_manager.set_secret(key, header_value)
 
     async def update_headers(
         self,
@@ -175,9 +204,7 @@ class OpenAPIConnectionService:
             name = h["name"]
             if h.get("secret"):
                 if self._secret_manager:
-                    value = await self._secret_manager.get_secret(
-                        _secret_key(conn.id, name)
-                    )
+                    value = await self._secret_manager.get_secret(_secret_key(conn.id, name))
                     if value:
                         headers[name] = value
             else:
@@ -203,6 +230,11 @@ class OpenAPIConnectionService:
     async def update_connection(
         self, connection_id: UUID, **fields: Any
     ) -> OpenAPIConnection | None:
+        # Validate URLs on update (SSRF protection)
+        if fields.get("base_url"):
+            validate_url(fields["base_url"], allow_private=self._allow_private_urls)
+        if fields.get("spec_url"):
+            validate_url(fields["spec_url"], allow_private=self._allow_private_urls)
         return await self._repo.update(str(connection_id), **fields)
 
     async def delete_connection(self, connection_id: UUID) -> bool:
@@ -240,22 +272,12 @@ class OpenAPIConnectionService:
                 "Provide a spec_url or upload spec_content."
             )
 
-        validate_url(conn.spec_url, allow_private=self._allow_private_urls)
         headers = await self.resolve_headers(conn)
-        async with httpx.AsyncClient(timeout=30, headers=headers, follow_redirects=False) as client:
-            resp = await client.get(conn.spec_url)
-            resp.raise_for_status()
-
-        content = resp.content
-        if len(content) > 5 * 1024 * 1024:
-            raise ValueError("Spec response exceeds 5MB limit.")
-        text = content.decode(resp.encoding or "utf-8", errors="replace")
-        if conn.spec_url.endswith((".yaml", ".yml")):
-            return yaml.safe_load(text)
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return yaml.safe_load(text)
+        return await fetch_and_parse_spec(
+            conn.spec_url,
+            allow_private=self._allow_private_urls,
+            headers=headers,
+        )
 
     async def test_connection(self, connection_id: UUID) -> dict[str, Any]:
         """Make a health check request to the base_url."""
@@ -266,11 +288,24 @@ class OpenAPIConnectionService:
         try:
             validate_url(conn.base_url, allow_private=self._allow_private_urls)
             headers = await self.resolve_headers(conn)
-            async with httpx.AsyncClient(timeout=10, headers=headers, follow_redirects=False) as client:
+            async with httpx.AsyncClient(
+                timeout=10, headers=headers, follow_redirects=False
+            ) as client:
                 resp = await client.get(conn.base_url)
+
+            status_code = resp.status_code
+            if 200 <= status_code < 300:
+                status = "reachable"
+            elif status_code in (401, 403):
+                status = "auth_error"
+            elif status_code >= 500:
+                status = "server_error"
+            else:
+                status = "reachable"
+
             return {
-                "status": "reachable",
-                "status_code": resp.status_code,
+                "status": status,
+                "status_code": status_code,
             }
         except httpx.RequestError as e:
             return {

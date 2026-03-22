@@ -7,7 +7,7 @@ from typing import Any
 
 
 @dataclass
-class GovernanceDenied(Exception):
+class GovernanceDeniedError(Exception):
     """Raised when a gate interceptor denies an action."""
 
     reason: str
@@ -15,11 +15,16 @@ class GovernanceDenied(Exception):
     metadata: dict[str, Any] | None = None
 
     def __str__(self) -> str:
-        return f"GovernanceDenied by {self.interceptor_name}: {self.reason}"
+        """Return human-readable representation."""
+        return f"GovernanceDeniedError by {self.interceptor_name}: {self.reason}"
+
+
+# Backward-compatible alias
+GovernanceDenied = GovernanceDeniedError
 
 
 @dataclass
-class SecurityBlocked(Exception):
+class SecurityBlockedError(Exception):
     """Raised when a filter interceptor blocks content."""
 
     reason: str
@@ -27,11 +32,16 @@ class SecurityBlocked(Exception):
     findings: list[Any] | None = None
 
     def __str__(self) -> str:
-        return f"SecurityBlocked by {self.interceptor_name}: {self.reason}"
+        """Return human-readable representation."""
+        return f"SecurityBlockedError by {self.interceptor_name}: {self.reason}"
+
+
+# Backward-compatible alias
+SecurityBlocked = SecurityBlockedError
 
 
 @dataclass
-class EscalationRequired(Exception):
+class EscalationRequiredError(Exception):
     """Raised when a gate interceptor requires human approval."""
 
     reason: str
@@ -39,4 +49,9 @@ class EscalationRequired(Exception):
     metadata: dict[str, Any] | None = None
 
     def __str__(self) -> str:
-        return f"EscalationRequired by {self.interceptor_name}: {self.reason}"
+        """Return human-readable representation."""
+        return f"EscalationRequiredError by {self.interceptor_name}: {self.reason}"
+
+
+# Backward-compatible alias
+EscalationRequired = EscalationRequiredError

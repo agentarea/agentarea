@@ -52,10 +52,7 @@ class ToolCatalog:
         if not self._providers:
             return ""
 
-        inactive = [
-            name for name in self._providers
-            if name not in self._activated
-        ]
+        inactive = [name for name in self._providers if name not in self._activated]
 
         if not inactive:
             return ""  # All sources already activated
@@ -77,8 +74,7 @@ class ToolCatalog:
                 preview += ", ..."
 
             lines.append(
-                f"- **{entry.name}** [{entry.provider_type}] "
-                f"({tool_count} tools): {preview}"
+                f"- **{entry.name}** [{entry.provider_type}] ({tool_count} tools): {preview}"
             )
 
         return "\n".join(lines)

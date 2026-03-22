@@ -11,7 +11,6 @@ from uuid import UUID
 import yaml
 from agentarea_common.events.broker import EventBroker
 
-from .domain.channel_events import is_valid_event
 from .domain.enums import WebhookType
 from .domain.models import TriggerExecution, WebhookTrigger
 from .logging_utils import (
@@ -241,11 +240,18 @@ class DefaultWebhookManager(WebhookManager):
                         # Cache for future requests
                         self._registered_webhooks[webhook_id] = trigger
                         # Update the service's workspace context to match the trigger's workspace
-                        if hasattr(self.trigger_service, 'trigger_repository') and db_trigger.workspace_id:
+                        if (
+                            hasattr(self.trigger_service, "trigger_repository")
+                            and db_trigger.workspace_id
+                        ):
                             repo = self.trigger_service.trigger_repository
-                            if hasattr(repo, 'user_context') and hasattr(repo.user_context, 'workspace_id'):
+                            if hasattr(repo, "user_context") and hasattr(
+                                repo.user_context, "workspace_id"
+                            ):
                                 repo.user_context.workspace_id = db_trigger.workspace_id
-                                repo.user_context.user_id = db_trigger.created_by or repo.user_context.user_id
+                                repo.user_context.user_id = (
+                                    db_trigger.created_by or repo.user_context.user_id
+                                )
                         logger.info(f"Loaded trigger from DB for webhook {webhook_id}")
                 except Exception as db_err:
                     logger.warning(f"DB lookup failed for webhook {webhook_id}: {db_err}")
@@ -305,7 +311,9 @@ class DefaultWebhookManager(WebhookManager):
                     "Successfully parsed webhook data",
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value if hasattr(trigger.webhook_type, 'value') else trigger.webhook_type,
+                    webhook_type=trigger.webhook_type.value
+                    if hasattr(trigger.webhook_type, "value")
+                    else trigger.webhook_type,
                 )
             except Exception as parse_error:
                 error_msg = f"Failed to parse webhook data: {parse_error}"
@@ -313,7 +321,9 @@ class DefaultWebhookManager(WebhookManager):
                     error_msg,
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value if hasattr(trigger.webhook_type, 'value') else trigger.webhook_type,
+                    webhook_type=trigger.webhook_type.value
+                    if hasattr(trigger.webhook_type, "value")
+                    else trigger.webhook_type,
                 )
                 return await self.get_webhook_response(False, "Failed to parse request data")
 
@@ -512,11 +522,13 @@ class DefaultWebhookManager(WebhookManager):
             logger.error(f"Webhook manager health check failed: {e}")
             return False
 
-    def _extract_event_type(self, trigger: WebhookTrigger, parsed_data: dict[str, Any]) -> str | None:
+    def _extract_event_type(
+        self, trigger: WebhookTrigger, parsed_data: dict[str, Any]
+    ) -> str | None:
         """Extract the event type from parsed webhook data based on channel."""
         webhook_type = trigger.webhook_type
         if hasattr(webhook_type, "value"):
-            webhook_type = webhook_type.value if hasattr(webhook_type, 'value') else webhook_type
+            webhook_type = webhook_type.value if hasattr(webhook_type, "value") else webhook_type
 
         if webhook_type == "slack":
             # Slack Events API: event.type field
@@ -532,7 +544,13 @@ class DefaultWebhookManager(WebhookManager):
         elif webhook_type == "telegram":
             # Telegram: determine by which field is present
             raw = parsed_data.get("raw_data", {})
-            for key in ["message", "edited_message", "channel_post", "callback_query", "inline_query"]:
+            for key in [
+                "message",
+                "edited_message",
+                "channel_post",
+                "callback_query",
+                "inline_query",
+            ]:
                 if key in raw:
                     return key
             return None
@@ -580,7 +598,7 @@ class DefaultWebhookManager(WebhookManager):
         webhook_type = trigger.webhook_type
         # Handle enum value if needed (though model is str now)
         if hasattr(webhook_type, "value"):
-            webhook_type = webhook_type.value if hasattr(webhook_type, 'value') else webhook_type
+            webhook_type = webhook_type.value if hasattr(webhook_type, "value") else webhook_type
 
         # Check provider config first
         provider = self.providers.get(webhook_type)
@@ -733,47 +751,60 @@ class DefaultWebhookManager(WebhookManager):
             # Events API format
             if "event" in slack_data:
                 event = slack_data["event"]
-                parsed_data.update({
-                    "event_type": event.get("type"),
-                    "team_id": slack_data.get("team_id"),
-                    "channel": event.get("channel"),
-                    "user": event.get("user"),
-                    "text": event.get("text"),
-                    "thread_ts": event.get("thread_ts"),
-                    "ts": event.get("ts") or event.get("event_ts"),
-                    "files": event.get("files"),
-                    "blocks": event.get("blocks"),
-                })
+                parsed_data.update(
+                    {
+                        "event_type": event.get("type"),
+                        "team_id": slack_data.get("team_id"),
+                        "channel": event.get("channel"),
+                        "user": event.get("user"),
+                        "text": event.get("text"),
+                        "thread_ts": event.get("thread_ts"),
+                        "ts": event.get("ts") or event.get("event_ts"),
+                        "files": event.get("files"),
+                        "blocks": event.get("blocks"),
+                    }
+                )
             # Interactive payloads (block_actions, view_submission, shortcuts)
-            elif slack_data.get("type") in ("block_actions", "view_submission", "shortcut", "message_action"):
-                parsed_data.update({
-                    "event_type": slack_data.get("type"),
-                    "team_id": slack_data.get("team", {}).get("id"),
-                    "user": slack_data.get("user", {}).get("id"),
-                    "channel": slack_data.get("channel", {}).get("id"),
-                    "trigger_id": slack_data.get("trigger_id"),
-                    "actions": slack_data.get("actions"),
-                    "view": slack_data.get("view"),
-                })
+            elif slack_data.get("type") in (
+                "block_actions",
+                "view_submission",
+                "shortcut",
+                "message_action",
+            ):
+                parsed_data.update(
+                    {
+                        "event_type": slack_data.get("type"),
+                        "team_id": slack_data.get("team", {}).get("id"),
+                        "user": slack_data.get("user", {}).get("id"),
+                        "channel": slack_data.get("channel", {}).get("id"),
+                        "trigger_id": slack_data.get("trigger_id"),
+                        "actions": slack_data.get("actions"),
+                        "view": slack_data.get("view"),
+                    }
+                )
             # Slash commands (form-encoded, already parsed to dict)
             elif "command" in slack_data:
-                parsed_data.update({
-                    "event_type": "command",
-                    "command": slack_data.get("command"),
-                    "text": slack_data.get("text"),
-                    "user": slack_data.get("user_id"),
-                    "channel": slack_data.get("channel_id"),
-                    "team_id": slack_data.get("team_id"),
-                })
+                parsed_data.update(
+                    {
+                        "event_type": "command",
+                        "command": slack_data.get("command"),
+                        "text": slack_data.get("text"),
+                        "user": slack_data.get("user_id"),
+                        "channel": slack_data.get("channel_id"),
+                        "team_id": slack_data.get("team_id"),
+                    }
+                )
             # Legacy format fallback
             else:
-                parsed_data.update({
-                    "team_id": slack_data.get("team_id"),
-                    "channel": slack_data.get("channel_id"),
-                    "user": slack_data.get("user_id"),
-                    "text": slack_data.get("text"),
-                    "ts": slack_data.get("ts"),
-                })
+                parsed_data.update(
+                    {
+                        "team_id": slack_data.get("team_id"),
+                        "channel": slack_data.get("channel_id"),
+                        "user": slack_data.get("user_id"),
+                        "text": slack_data.get("text"),
+                        "ts": slack_data.get("ts"),
+                    }
+                )
 
             return parsed_data
 
@@ -804,73 +835,87 @@ class DefaultWebhookManager(WebhookManager):
                     "full_name": github_data.get("repository", {}).get("full_name"),
                     "url": github_data.get("repository", {}).get("html_url"),
                     "private": github_data.get("repository", {}).get("private"),
-                } if github_data.get("repository") else None,
+                }
+                if github_data.get("repository")
+                else None,
                 "sender": {
                     "login": github_data.get("sender", {}).get("login"),
                     "avatar_url": github_data.get("sender", {}).get("avatar_url"),
-                } if github_data.get("sender") else None,
+                }
+                if github_data.get("sender")
+                else None,
                 "raw_data": github_data,
             }
 
             # Event-specific fields
             if event_type == "push":
-                parsed_data.update({
-                    "ref": github_data.get("ref"),
-                    "before": github_data.get("before"),
-                    "after": github_data.get("after"),
-                    "compare": github_data.get("compare"),
-                    "commits": [
-                        {
-                            "id": c.get("id", "")[:8],
-                            "message": c.get("message"),
-                            "author": c.get("author", {}).get("name"),
-                            "url": c.get("url"),
-                        }
-                        for c in (github_data.get("commits") or [])[:10]
-                    ],
-                    "forced": github_data.get("forced"),
-                })
+                parsed_data.update(
+                    {
+                        "ref": github_data.get("ref"),
+                        "before": github_data.get("before"),
+                        "after": github_data.get("after"),
+                        "compare": github_data.get("compare"),
+                        "commits": [
+                            {
+                                "id": c.get("id", "")[:8],
+                                "message": c.get("message"),
+                                "author": c.get("author", {}).get("name"),
+                                "url": c.get("url"),
+                            }
+                            for c in (github_data.get("commits") or [])[:10]
+                        ],
+                        "forced": github_data.get("forced"),
+                    }
+                )
             elif event_type == "pull_request":
                 pr = github_data.get("pull_request", {})
-                parsed_data.update({
-                    "number": pr.get("number"),
-                    "title": pr.get("title"),
-                    "body": (pr.get("body") or "")[:500],
-                    "head_branch": pr.get("head", {}).get("ref"),
-                    "base_branch": pr.get("base", {}).get("ref"),
-                    "mergeable": pr.get("mergeable"),
-                    "draft": pr.get("draft"),
-                    "url": pr.get("html_url"),
-                })
+                parsed_data.update(
+                    {
+                        "number": pr.get("number"),
+                        "title": pr.get("title"),
+                        "body": (pr.get("body") or "")[:500],
+                        "head_branch": pr.get("head", {}).get("ref"),
+                        "base_branch": pr.get("base", {}).get("ref"),
+                        "mergeable": pr.get("mergeable"),
+                        "draft": pr.get("draft"),
+                        "url": pr.get("html_url"),
+                    }
+                )
             elif event_type == "issues":
                 issue = github_data.get("issue", {})
-                parsed_data.update({
-                    "number": issue.get("number"),
-                    "title": issue.get("title"),
-                    "body": (issue.get("body") or "")[:500],
-                    "labels": [l.get("name") for l in (issue.get("labels") or [])],
-                    "assignees": [a.get("login") for a in (issue.get("assignees") or [])],
-                    "url": issue.get("html_url"),
-                })
+                parsed_data.update(
+                    {
+                        "number": issue.get("number"),
+                        "title": issue.get("title"),
+                        "body": (issue.get("body") or "")[:500],
+                        "labels": [label.get("name") for label in (issue.get("labels") or [])],
+                        "assignees": [a.get("login") for a in (issue.get("assignees") or [])],
+                        "url": issue.get("html_url"),
+                    }
+                )
             elif event_type == "issue_comment":
                 comment = github_data.get("comment", {})
-                parsed_data.update({
-                    "issue_number": github_data.get("issue", {}).get("number"),
-                    "issue_title": github_data.get("issue", {}).get("title"),
-                    "comment_body": (comment.get("body") or "")[:500],
-                    "comment_user": comment.get("user", {}).get("login"),
-                    "url": comment.get("html_url"),
-                })
+                parsed_data.update(
+                    {
+                        "issue_number": github_data.get("issue", {}).get("number"),
+                        "issue_title": github_data.get("issue", {}).get("title"),
+                        "comment_body": (comment.get("body") or "")[:500],
+                        "comment_user": comment.get("user", {}).get("login"),
+                        "url": comment.get("html_url"),
+                    }
+                )
             elif event_type == "release":
                 release = github_data.get("release", {})
-                parsed_data.update({
-                    "tag_name": release.get("tag_name"),
-                    "name": release.get("name"),
-                    "body": (release.get("body") or "")[:500],
-                    "prerelease": release.get("prerelease"),
-                    "draft": release.get("draft"),
-                    "url": release.get("html_url"),
-                })
+                parsed_data.update(
+                    {
+                        "tag_name": release.get("tag_name"),
+                        "name": release.get("name"),
+                        "body": (release.get("body") or "")[:500],
+                        "prerelease": release.get("prerelease"),
+                        "draft": release.get("draft"),
+                        "url": release.get("html_url"),
+                    }
+                )
 
             return parsed_data
 
@@ -904,44 +949,61 @@ class DefaultWebhookManager(WebhookManager):
 
             # Gateway events (forwarded from bot)
             if "t" in discord_data:
-                parsed_data.update({
-                    "event_type": discord_data.get("t"),
-                    "sequence": discord_data.get("s"),
-                })
+                parsed_data.update(
+                    {
+                        "event_type": discord_data.get("t"),
+                        "sequence": discord_data.get("s"),
+                    }
+                )
                 d = discord_data.get("d", {})
-                parsed_data.update({
-                    "channel_id": d.get("channel_id"),
-                    "guild_id": d.get("guild_id"),
-                    "content": d.get("content"),
-                    "author": {
-                        "id": d.get("author", {}).get("id"),
-                        "username": d.get("author", {}).get("username"),
-                        "discriminator": d.get("author", {}).get("discriminator"),
-                    } if d.get("author") else None,
-                    "embeds": d.get("embeds"),
-                    "attachments": d.get("attachments"),
-                    "message_id": d.get("id"),
-                })
+                parsed_data.update(
+                    {
+                        "channel_id": d.get("channel_id"),
+                        "guild_id": d.get("guild_id"),
+                        "content": d.get("content"),
+                        "author": {
+                            "id": d.get("author", {}).get("id"),
+                            "username": d.get("author", {}).get("username"),
+                            "discriminator": d.get("author", {}).get("discriminator"),
+                        }
+                        if d.get("author")
+                        else None,
+                        "embeds": d.get("embeds"),
+                        "attachments": d.get("attachments"),
+                        "message_id": d.get("id"),
+                    }
+                )
             # Interaction payloads
             elif "type" in discord_data and discord_data["type"] in (2, 3, 4, 5):
-                interaction_types = {2: "APPLICATION_COMMAND", 3: "MESSAGE_COMPONENT", 4: "AUTOCOMPLETE", 5: "MODAL_SUBMIT"}
-                parsed_data.update({
-                    "event_type": f"INTERACTION_{interaction_types.get(discord_data['type'], 'UNKNOWN')}",
-                    "interaction_id": discord_data.get("id"),
-                    "interaction_token": discord_data.get("token"),
-                    "channel_id": discord_data.get("channel_id"),
-                    "guild_id": discord_data.get("guild_id"),
-                    "member": discord_data.get("member"),
-                    "data": discord_data.get("data"),
-                })
+                interaction_types = {
+                    2: "APPLICATION_COMMAND",
+                    3: "MESSAGE_COMPONENT",
+                    4: "AUTOCOMPLETE",
+                    5: "MODAL_SUBMIT",
+                }
+                parsed_data.update(
+                    {
+                        "event_type": f"INTERACTION_{interaction_types.get(discord_data['type'], 'UNKNOWN')}",
+                        "interaction_id": discord_data.get("id"),
+                        "interaction_token": discord_data.get("token"),
+                        "channel_id": discord_data.get("channel_id"),
+                        "guild_id": discord_data.get("guild_id"),
+                        "member": discord_data.get("member"),
+                        "data": discord_data.get("data"),
+                    }
+                )
             # Simple webhook message
             else:
-                parsed_data.update({
-                    "channel_id": discord_data.get("channel_id"),
-                    "guild_id": discord_data.get("guild_id"),
-                    "author": discord_data.get("author", {}).get("username") if discord_data.get("author") else None,
-                    "content": discord_data.get("content"),
-                })
+                parsed_data.update(
+                    {
+                        "channel_id": discord_data.get("channel_id"),
+                        "guild_id": discord_data.get("guild_id"),
+                        "author": discord_data.get("author", {}).get("username")
+                        if discord_data.get("author")
+                        else None,
+                        "content": discord_data.get("content"),
+                    }
+                )
 
             return parsed_data
         except Exception as e:
@@ -1038,15 +1100,23 @@ class DefaultWebhookManager(WebhookManager):
 
             # Handle specific activity types
             if activity.get("type") == "conversationUpdate":
-                parsed_data.update({
-                    "members_added": [m.get("name") for m in (activity.get("membersAdded") or [])],
-                    "members_removed": [m.get("name") for m in (activity.get("membersRemoved") or [])],
-                })
+                parsed_data.update(
+                    {
+                        "members_added": [
+                            m.get("name") for m in (activity.get("membersAdded") or [])
+                        ],
+                        "members_removed": [
+                            m.get("name") for m in (activity.get("membersRemoved") or [])
+                        ],
+                    }
+                )
             elif activity.get("type") == "messageReaction":
-                parsed_data.update({
-                    "reactions_added": activity.get("reactionsAdded"),
-                    "reactions_removed": activity.get("reactionsRemoved"),
-                })
+                parsed_data.update(
+                    {
+                        "reactions_added": activity.get("reactionsAdded"),
+                        "reactions_removed": activity.get("reactionsRemoved"),
+                    }
+                )
 
             return parsed_data
         except Exception as e:

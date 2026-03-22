@@ -29,7 +29,6 @@ from . import (
     registries,
     skills,
     triggers,
-    webhooks,
     workspace_config,
 )
 

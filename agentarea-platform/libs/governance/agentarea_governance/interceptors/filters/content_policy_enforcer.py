@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from ...domain.enums import InterceptorAction, InterceptorCategory
 from ...domain.models import InterceptorContext, InterceptorResult
 from ...domain.protocols import DetectionEngine
@@ -48,9 +46,7 @@ class ContentPolicyEnforcer:
                 reason="no prohibited categories configured",
             )
 
-        findings = await self._engine.detect(
-            content, {"categories": list(self._prohibited)}
-        )
+        findings = await self._engine.detect(content, {"categories": list(self._prohibited)})
 
         violations = [f for f in findings if f.category in self._prohibited]
 

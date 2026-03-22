@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class YAMLValidationError(Exception):
     """Raised when YAML content fails validation."""
+
     pass
 
 
@@ -55,8 +56,6 @@ def parse_yaml(file: Path, entity_type: str) -> list[dict[str, Any]]:
             raise YAMLValidationError(f"Entity {i} in {file} is not a dict")
         for field in required:
             if field not in entity:
-                raise YAMLValidationError(
-                    f"Entity {i} in {file} missing required field: {field}"
-                )
+                raise YAMLValidationError(f"Entity {i} in {file} missing required field: {field}")
 
     return entities

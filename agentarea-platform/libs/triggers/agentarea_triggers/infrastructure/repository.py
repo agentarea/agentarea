@@ -76,7 +76,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "webhook_id": entity.webhook_id,
                     "allowed_methods": entity.allowed_methods,
-                    "webhook_type": entity.webhook_type.value if hasattr(entity.webhook_type, 'value') else entity.webhook_type,
+                    "webhook_type": entity.webhook_type.value
+                    if hasattr(entity.webhook_type, "value")
+                    else entity.webhook_type,
                     "validation_rules": entity.validation_rules,
                     "webhook_config": entity.webhook_config,
                 }
@@ -122,7 +124,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "webhook_id": entity.webhook_id,
                     "allowed_methods": entity.allowed_methods,
-                    "webhook_type": entity.webhook_type.value if hasattr(entity.webhook_type, 'value') else entity.webhook_type,
+                    "webhook_type": entity.webhook_type.value
+                    if hasattr(entity.webhook_type, "value")
+                    else entity.webhook_type,
                     "validation_rules": entity.validation_rules,
                     "webhook_config": entity.webhook_config,
                 }
@@ -162,7 +166,13 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             # Webhook-specific fields
             webhook_id=trigger_data.webhook_id,
             allowed_methods=trigger_data.allowed_methods,
-            webhook_type=(trigger_data.webhook_type.value if hasattr(trigger_data.webhook_type, 'value') else trigger_data.webhook_type) if trigger_data.webhook_type else None,
+            webhook_type=(
+                trigger_data.webhook_type.value
+                if hasattr(trigger_data.webhook_type, "value")
+                else trigger_data.webhook_type
+            )
+            if trigger_data.webhook_type
+            else None,
             validation_rules=trigger_data.validation_rules,
             webhook_config=trigger_data.webhook_config,
         )
@@ -421,7 +431,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 {
                     "webhook_id": trigger.webhook_id,
                     "allowed_methods": trigger.allowed_methods,
-                    "webhook_type": trigger.webhook_type.value if hasattr(trigger.webhook_type, 'value') else trigger.webhook_type,
+                    "webhook_type": trigger.webhook_type.value
+                    if hasattr(trigger.webhook_type, "value")
+                    else trigger.webhook_type,
                     "validation_rules": trigger.validation_rules,
                     "webhook_config": trigger.webhook_config,
                 }

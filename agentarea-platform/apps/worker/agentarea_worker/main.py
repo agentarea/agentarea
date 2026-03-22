@@ -104,13 +104,13 @@ class AgentAreaWorker:
         initialize_di_container(settings.workflow)
 
         # Discover extensions and wire permission service
-        from agentarea_common.extensions import discover_extensions
-        from agentarea_common.extensions.registry import ExtensionRegistry
         from agentarea_common.auth.permission import PermissionService
         from agentarea_common.auth.simple_permission import SimplePermissionService
-        from agentarea_common.features.service import DeploymentMode, FeatureService
         from agentarea_common.config.app import get_app_settings
-        from agentarea_common.di.container import register_singleton, register_factory
+        from agentarea_common.di.container import register_factory, register_singleton
+        from agentarea_common.extensions import discover_extensions
+        from agentarea_common.extensions.registry import ExtensionRegistry
+        from agentarea_common.features.service import DeploymentMode, FeatureService
 
         discover_extensions()
 
@@ -125,15 +125,17 @@ class AgentAreaWorker:
             register_singleton(PermissionService, SimplePermissionService())
 
         # Create governance interceptor pipeline
-        from agentarea_governance.factory import create_governance_pipeline
         from agentarea_governance.bridges.temporal_bridge import (
             GovernanceWorkerInterceptor,
             validate_activity_mapping,
         )
+        from agentarea_governance.factory import create_governance_pipeline
 
         governance_pipeline = create_governance_pipeline()
         all_activities = activities + mcp_activities
-        validate_activity_mapping([a.fn.__name__ if hasattr(a, 'fn') else str(a) for a in all_activities])
+        validate_activity_mapping(
+            [a.fn.__name__ if hasattr(a, "fn") else str(a) for a in all_activities]
+        )
 
         self.worker = Worker(
             self.client,

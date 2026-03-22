@@ -14,14 +14,19 @@ _PRIVATE_NETWORKS = [
     ipaddress.ip_network("fc00::/7"),
 ]
 
+_SPEC_MAX_SIZE = 5 * 1024 * 1024  # 5MB
 
-def validate_url(url: str, *, allow_private: bool = False) -> None:
-    """Validate a URL is safe to fetch.
+
+def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
+    """Validate a URL is safe to fetch and return resolved IP addresses.
 
     Args:
         url: The URL to validate.
         allow_private: If True, skip private/internal IP checks.
             Used for self-hosted deployments connecting to local services.
+
+    Returns:
+        List of resolved IP address strings (empty if allow_private).
 
     Raises:
         ValueError: If the URL is not safe to fetch.
@@ -38,22 +43,26 @@ def validate_url(url: str, *, allow_private: bool = False) -> None:
         raise ValueError("URL has no hostname.")
 
     if allow_private:
-        return
+        return []
 
     try:
         results = socket.getaddrinfo(hostname, None)
     except socket.gaierror as e:
         raise ValueError(f"Could not resolve hostname '{hostname}': {e}") from e
 
+    resolved_ips: list[str] = []
     for result in results:
         addr_str = result[4][0]
         try:
             addr = ipaddress.ip_address(addr_str)
         except ValueError:
             continue
+        resolved_ips.append(addr_str)
         for network in _PRIVATE_NETWORKS:
             if addr in network:
                 raise ValueError(
                     f"URL resolves to a private/internal IP address ({addr_str}), "
                     "which is not allowed."
                 )
+
+    return resolved_ips

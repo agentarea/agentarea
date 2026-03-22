@@ -44,9 +44,7 @@ class WorkflowSettings(BaseSettings):
             if not self.TEMPORAL_TASK_QUEUE:
                 missing.append("WORKFLOW__TEMPORAL_TASK_QUEUE")
             if missing:
-                raise ValueError(
-                    f"EXECUTION_ENGINE=temporal requires: {', '.join(missing)}"
-                )
+                raise ValueError(f"EXECUTION_ENGINE=temporal requires: {', '.join(missing)}")
         elif self.EXECUTION_ENGINE not in ("temporal", "direct"):
             raise ValueError(
                 f"Unknown EXECUTION_ENGINE '{self.EXECUTION_ENGINE}'. Must be 'temporal' or 'direct'."
