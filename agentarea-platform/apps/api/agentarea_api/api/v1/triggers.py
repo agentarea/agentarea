@@ -39,6 +39,7 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
+from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth  # noqa: F401  # re-exported for tests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
