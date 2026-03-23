@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { AuthLayout } from "@/components/auth/auth-layout";
 
 export default function ErrorPage() {
   const router = useRouter();
@@ -11,47 +11,51 @@ export default function ErrorPage() {
   const errorDescription = searchParams.get("error_description");
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Card className="w-full max-w-md rounded-xl p-8 shadow-2xl">
-        <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold">
-            Authentication Error
-          </h1>
+    <AuthLayout>
+      {/* We use a manual card here because it's not an Ory component, 
+          but we want it to look similar to Ory cards styled via CSS */}
+      <div className="ory-elements">
+        <div data-testid="ory/card" className="bg-background border border-border">
+          <div className="text-center px-4 py-6">
+            <h2 className="mb-4 text-xl font-bold">
+              Authentication Error
+            </h2>
 
-          {error && (
-            <div className="mb-4 rounded-md border p-4">
-              <p className="font-medium">
-                {error}
-              </p>
-              {errorDescription && (
-                <p className="mt-2 text-sm">
-                  {errorDescription}
+            {error && (
+              <div className="mb-4 rounded-md border p-4 bg-muted/50 text-left">
+                <p className="font-semibold text-sm">
+                  {error}
                 </p>
-              )}
+                {errorDescription && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {errorDescription}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <p className="mb-8 text-sm text-muted-foreground">
+              Something went wrong during authentication. Please try again.
+            </p>
+
+            <div className="space-y-3">
+              <Button
+                onClick={() => router.push("/auth/login")}
+                className="w-full bg-[#2252b3] hover:bg-[#1a3f8a] text-white h-[40px] rounded-[4px]"
+              >
+                Try Again
+              </Button>
+              <Button
+                onClick={() => router.push("/")}
+                variant="outline"
+                className="w-full h-[40px] rounded-[4px]"
+              >
+                Go Home
+              </Button>
             </div>
-          )}
-
-          <p className="mb-6">
-            Something went wrong during authentication. Please try again.
-          </p>
-
-          <div className="space-y-3">
-            <Button
-              onClick={() => router.push("/auth/login")}
-              className="w-full"
-            >
-              Try Again
-            </Button>
-            <Button
-              onClick={() => router.push("/")}
-              variant="outline"
-              className="w-full"
-            >
-              Go Home
-            </Button>
           </div>
         </div>
-      </Card>
-    </div>
+      </div>
+    </AuthLayout>
   );
 }
