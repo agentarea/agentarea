@@ -63,14 +63,13 @@ async def fetch_and_parse_spec(
     """
     resolved_ips = validate_url(url, allow_private=allow_private)
 
-    # Pin to the validated IP to prevent DNS rebinding (TOCTOU SSRF).
-    # When allow_private is True, resolved_ips is empty — use the original URL.
+    # Build the fetch URL from validated components to prevent SSRF.
+    # validate_url ensures scheme is http(s) and hostname is not private.
+    # build_pinned_url constructs a fresh URL from the validated IP.
     request_headers = dict(headers or {})
-    if resolved_ips:
-        fetch_url, original_host = build_pinned_url(url, resolved_ips[0])
+    fetch_url, original_host, _path = build_pinned_url(url, resolved_ips[0] if resolved_ips else None)
+    if original_host:
         request_headers.setdefault("Host", original_host)
-    else:
-        fetch_url = url
 
     async with httpx.AsyncClient(
         timeout=30, headers=request_headers, follow_redirects=False, verify=True
@@ -301,12 +300,12 @@ class OpenAPIConnectionService:
         try:
             resolved_ips = validate_url(conn.base_url, allow_private=self._allow_private_urls)
             headers = await self.resolve_headers(conn)
-            # Pin to validated IP to prevent DNS rebinding
-            if resolved_ips:
-                test_url, original_host = build_pinned_url(conn.base_url, resolved_ips[0])
+            # Build URL from validated IP to prevent DNS rebinding
+            test_url, original_host, _path = build_pinned_url(
+                conn.base_url, resolved_ips[0] if resolved_ips else None
+            )
+            if original_host:
                 headers.setdefault("Host", original_host)
-            else:
-                test_url = conn.base_url
             async with httpx.AsyncClient(
                 timeout=10, headers=headers, follow_redirects=False, verify=True
             ) as client:
