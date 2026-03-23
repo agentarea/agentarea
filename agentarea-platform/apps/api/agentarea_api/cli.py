@@ -25,10 +25,10 @@ def cli():
 @cli.command()
 @click.option(
     "--host",
-    default="0.0.0.0",
+    default="0.0.0.0",  # noqa: S104
     envvar="HOST",
     show_envvar=True,
-    help="Host to bind the server to",  # noqa: S104
+    help="Host to bind the server to",
 )
 @click.option(
     "--port", default=8000, envvar="PORT", show_envvar=True, help="Port to bind the server to"

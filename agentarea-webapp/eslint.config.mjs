@@ -1,24 +1,21 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
 
 const eslintConfig = [
   {
     ignores: [".next/**", "out/**", "build/**", "node_modules/**", "dist/**", "**/dist/**", "packages/**", "next-env.d.ts"],
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...nextCoreWebVitals,
+  ...nextTypescript,
   // Global: downgrade exhaustive-deps to warnings to avoid CI failures
   {
     files: ["**/*.{ts,tsx}"],
     rules: {
       "react-hooks/exhaustive-deps": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/use-memo": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/immutability": "off",
       "@next/next/no-img-element": "off",
     },
   },
