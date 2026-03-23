@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { getAllTasks, getAgentTaskStatus } from "@/lib/browser-api";
-import type { TaskWithAgent } from "@/lib/browser-api";
+import { getAllTasksAction as getAllTasks, getAgentTaskStatusAction as getAgentTaskStatus } from "@/lib/server-actions";
+import type { TaskWithAgent } from "@/lib/api";
 
 interface TaskData {
   id: string;

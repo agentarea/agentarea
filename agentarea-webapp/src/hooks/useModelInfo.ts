@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getModelSpec, listModelSpecs } from "@/lib/browser-api";
+import { getModelSpecAction as getModelSpec, listModelSpecsAction as listModelSpecs } from "@/lib/server-actions";
 
 export interface ModelInfo {
   displayName: string;

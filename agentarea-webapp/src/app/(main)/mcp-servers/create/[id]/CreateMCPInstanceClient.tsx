@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
-  checkMCPServerInstanceConfiguration,
-} from "@/lib/browser-api";
+  checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
+} from "@/lib/server-actions";
 import type { MCPServer } from "../../types";
 import { createMCPServerInstance } from "../../actions";
 import { MCP_CONSTANTS } from "../../utils";

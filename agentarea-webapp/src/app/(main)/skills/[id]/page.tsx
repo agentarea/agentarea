@@ -21,10 +21,8 @@ import {
   getSkillFile,
   updateSkill,
   deleteSkill,
-  type Skill,
-  type SkillContent,
-  type SkillFile,
-} from "@/lib/browser-api";
+} from "@/lib/api";
+import type { Skill, SkillContent, SkillFile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import YAML from "js-yaml";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";

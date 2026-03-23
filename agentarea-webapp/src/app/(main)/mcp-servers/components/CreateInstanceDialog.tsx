@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { checkMCPServerInstanceConfiguration } from "@/lib/browser-api";
+import { checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration } from "@/lib/server-actions";
 import { createMCPServerInstance } from "../actions";
 import { MCPServer } from "../types";
 import { MCP_CONSTANTS } from "../utils";

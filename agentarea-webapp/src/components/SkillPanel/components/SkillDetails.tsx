@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import { ExternalLink, Hash, Clock } from "lucide-react";
-import { Skill } from "@/lib/browser-api";
+import { Skill } from "@/lib/api";
 import {
   InfoPanelExpandableText,
   InfoPanelField,

@@ -1,0 +1,215 @@
+"use server";
+
+import {
+  getAgent,
+  listAgents,
+  listModelInstances,
+  getModelSpec,
+  listModelSpecs,
+  testModelInstance,
+  pauseAgentTask,
+  resumeAgentTask,
+  cancelAgentTask,
+  getAllTasks,
+  getAgentTaskStatus,
+  createSkill,
+  getMCPHealthStatus,
+  checkMCPServerInstanceConfiguration,
+  createMCPServer,
+  listSkills,
+  createMCPServerInstance,
+  getMCPServerInstance,
+  updateMCPServerInstance,
+  listAgentTasks,
+  listProviderSpecs,
+  listProviderSpecsWithModels,
+  createProviderConfig,
+  updateProviderConfig,
+  createModelInstance,
+  deleteModelInstance,
+  listMCPAuthConfigs,
+  createMCPAuthConfig,
+} from "@/lib/api";
+import { env } from "@/env";
+import { getAuthToken } from "@/lib/getAuthToken";
+import type { components } from "@/api/schema";
+
+export async function getAgentAction(agentId: string) {
+  return await getAgent(agentId);
+}
+
+export async function listModelInstancesAction(params?: {
+  provider_config_id?: string;
+  model_spec_id?: string;
+  is_active?: boolean;
+}) {
+  return await listModelInstances(params);
+}
+
+export async function getModelSpecAction(modelSpecId: string) {
+  return await getModelSpec(modelSpecId);
+}
+
+export async function listModelSpecsAction(params?: {
+  provider_spec_id?: string;
+  is_active?: boolean;
+}) {
+  return await listModelSpecs(params);
+}
+
+export async function testModelInstanceAction(testRequest: {
+  provider_config_id: string;
+  model_spec_id: string;
+  test_message?: string;
+}) {
+  return await testModelInstance(testRequest);
+}
+
+export async function pauseAgentTaskAction(agentId: string, taskId: string) {
+  return await pauseAgentTask(agentId, taskId);
+}
+
+export async function resumeAgentTaskAction(agentId: string, taskId: string) {
+  return await resumeAgentTask(agentId, taskId);
+}
+
+export async function cancelAgentTaskAction(agentId: string, taskId: string) {
+  return await cancelAgentTask(agentId, taskId);
+}
+
+export async function getAllTasksAction() {
+  return await getAllTasks();
+}
+
+export async function getAgentTaskStatusAction(
+  agentId: string,
+  taskId: string
+) {
+  return await getAgentTaskStatus(agentId, taskId);
+}
+
+export async function createSkillAction(skill: {
+  content?: string | null;
+  github_url?: string | null;
+  name?: string | null;
+  description?: string | null;
+}) {
+  return await createSkill(skill);
+}
+
+export async function uploadSkillAction(formData: FormData) {
+  const authToken = await getAuthToken();
+  const uploadUrl = `${env.API_URL}/v1/skills/upload`;
+
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({
+      detail: "Upload failed",
+    }));
+    return { data: null, error: errorData };
+  }
+
+  const data = await response.json();
+  return { data, error: null };
+}
+
+export async function getMCPHealthStatusAction() {
+  return await getMCPHealthStatus();
+}
+
+export async function checkMCPServerInstanceConfigurationAction(checkRequest: {
+  json_spec: Record<string, any>;
+}) {
+  return await checkMCPServerInstanceConfiguration(checkRequest);
+}
+
+export async function createMCPServerAction(
+  server: components["schemas"]["MCPServerCreate"]
+) {
+  return await createMCPServer(server);
+}
+
+export async function listSkillsAction() {
+  return await listSkills();
+}
+
+export async function createMCPServerInstanceAction(
+  instance: components["schemas"]["MCPServerInstanceCreateRequest"]
+) {
+  return await createMCPServerInstance(instance);
+}
+
+export async function getMCPServerInstanceAction(instanceId: string) {
+  return await getMCPServerInstance(instanceId);
+}
+
+export async function updateMCPServerInstanceAction(
+  instanceId: string,
+  instance: components["schemas"]["MCPServerInstanceUpdate"]
+) {
+  return await updateMCPServerInstance(instanceId, instance);
+}
+
+export async function listAgentTasksAction(agentId: string) {
+  return await listAgentTasks(agentId);
+}
+
+export async function listProviderSpecsAction(params?: {
+  is_builtin?: boolean;
+}) {
+  return await listProviderSpecs(params);
+}
+
+export async function listProviderSpecsWithModelsAction(params?: {
+  is_builtin?: boolean;
+}) {
+  return await listProviderSpecsWithModels(params);
+}
+
+export async function createProviderConfigAction(
+  config: components["schemas"]["ProviderConfigCreate"]
+) {
+  return await createProviderConfig(config);
+}
+
+export async function updateProviderConfigAction(
+  configId: string,
+  config: components["schemas"]["ProviderConfigUpdate"]
+) {
+  return await updateProviderConfig(configId, config);
+}
+
+export async function createModelInstanceAction(
+  instance: components["schemas"]["ModelInstanceCreate"]
+) {
+  return await createModelInstance(instance);
+}
+
+export async function deleteModelInstanceAction(instanceId: string) {
+  return await deleteModelInstance(instanceId);
+}
+
+export async function listAgentsAction() {
+  return await listAgents();
+}
+
+export async function listMCPAuthConfigsAction() {
+  return await listMCPAuthConfigs();
+}
+
+export async function createMCPAuthConfigAction(body: {
+  name: string;
+  description?: string;
+  auth_type: string;
+  config?: Record<string, any>;
+  credentials?: Record<string, any>;
+}) {
+  return await createMCPAuthConfig(body);
+}

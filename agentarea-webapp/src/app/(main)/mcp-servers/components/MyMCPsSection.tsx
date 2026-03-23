@@ -7,7 +7,7 @@ import { AlertCircle, CheckCircle, Clock, XCircle } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
-import { getMCPHealthStatus } from "@/lib/browser-api";
+import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import { MCPInstanceCard } from "./MCPCard";
 import { MCPInstance, MCPServer, HealthCheck, HealthStatus } from "../types";
 import { MCP_CONSTANTS } from "../utils";

@@ -5,7 +5,7 @@ import { Task } from "../types";
 import Section from "./Section";
 import ActionLink from "./ActionLink";
 import ExpandableText from "./ExpandableText";
-import { getAgent, listModelInstances } from "@/lib/browser-api";
+import { getAgentAction as getAgent, listModelInstancesAction as listModelInstances } from "@/lib/server-actions";
 import { Agent } from "@/types/agent";
 import ModelBadge from "@/components/ui/model-badge";
 import ToolsDisplay from "@/components/ToolsDisplay";

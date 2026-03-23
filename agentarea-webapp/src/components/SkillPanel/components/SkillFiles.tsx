@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { File } from "lucide-react";
-import { SkillFile } from "@/lib/browser-api";
+import { SkillFile } from "@/lib/api";
 import Section from "@/components/TaskInfoPanel/components/Section";
 import { FileTree, FileTreeFile, FileTreeFolder } from "@/components/ai-elements/file-tree";
 

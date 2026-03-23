@@ -7,7 +7,7 @@ import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionI
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
-import { listSkills } from "@/lib/browser-api";
+import { listSkillsAction as listSkills } from "@/lib/server-actions";
 import type { AgentSkill } from "../types";
 import AccordionControl from "./AccordionControl";
 import ConfigSheet from "./ConfigSheet";
