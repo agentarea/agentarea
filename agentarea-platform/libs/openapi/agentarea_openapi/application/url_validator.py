@@ -66,3 +66,21 @@ def validate_url(url: str, *, allow_private: bool = False) -> list[str]:
                 )
 
     return resolved_ips
+
+
+def build_pinned_url(url: str, resolved_ip: str) -> tuple[str, str]:
+    """Replace hostname with a validated IP to prevent DNS rebinding.
+
+    Returns (pinned_url, original_hostname) so callers can set the Host header.
+    """
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+    # Wrap IPv6 in brackets
+    ip_host = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
+    # Preserve port if present
+    if parsed.port:
+        netloc = f"{ip_host}:{parsed.port}"
+    else:
+        netloc = ip_host
+    pinned = parsed._replace(netloc=netloc).geturl()
+    return pinned, hostname

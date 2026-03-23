@@ -9,7 +9,11 @@ import httpx
 import yaml
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
-from agentarea_openapi.application.url_validator import _SPEC_MAX_SIZE, validate_url
+from agentarea_openapi.application.url_validator import (
+    _SPEC_MAX_SIZE,
+    build_pinned_url,
+    validate_url,
+)
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
 
@@ -57,12 +61,21 @@ async def fetch_and_parse_spec(
         ValueError: On validation failure, size limit, or fetch error.
         httpx.HTTPStatusError: On non-2xx response.
     """
-    validate_url(url, allow_private=allow_private)
+    resolved_ips = validate_url(url, allow_private=allow_private)
+
+    # Pin to the validated IP to prevent DNS rebinding (TOCTOU SSRF).
+    # When allow_private is True, resolved_ips is empty — use the original URL.
+    request_headers = dict(headers or {})
+    if resolved_ips:
+        fetch_url, original_host = build_pinned_url(url, resolved_ips[0])
+        request_headers.setdefault("Host", original_host)
+    else:
+        fetch_url = url
 
     async with httpx.AsyncClient(
-        timeout=30, headers=headers or {}, follow_redirects=False
+        timeout=30, headers=request_headers, follow_redirects=False, verify=True
     ) as client:
-        async with client.stream("GET", url) as resp:
+        async with client.stream("GET", fetch_url) as resp:
             resp.raise_for_status()
             chunks: list[bytes] = []
             total = 0
@@ -286,12 +299,18 @@ class OpenAPIConnectionService:
             raise ValueError(f"Connection {connection_id} not found")
 
         try:
-            validate_url(conn.base_url, allow_private=self._allow_private_urls)
+            resolved_ips = validate_url(conn.base_url, allow_private=self._allow_private_urls)
             headers = await self.resolve_headers(conn)
+            # Pin to validated IP to prevent DNS rebinding
+            if resolved_ips:
+                test_url, original_host = build_pinned_url(conn.base_url, resolved_ips[0])
+                headers.setdefault("Host", original_host)
+            else:
+                test_url = conn.base_url
             async with httpx.AsyncClient(
-                timeout=10, headers=headers, follow_redirects=False
+                timeout=10, headers=headers, follow_redirects=False, verify=True
             ) as client:
-                resp = await client.get(conn.base_url)
+                resp = await client.get(test_url)
 
             status_code = resp.status_code
             if 200 <= status_code < 300:
