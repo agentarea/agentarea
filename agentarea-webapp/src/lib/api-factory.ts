@@ -194,7 +194,7 @@ export function createApiClient(client: Client) {
 
     // Chat API
     sendMessage: async (
-      message: components["schemas"]["ChatMessageRequest"]
+      message: { agent_id: string; message: string; conversation_id?: string }
     ) => {
       const { data, error } = await client.POST("/v1/chat/messages", {
         body: message,
