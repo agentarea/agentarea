@@ -17,32 +17,21 @@ from .triggers import TriggerSettings
 from .workflow import TaskExecutionSettings, WorkflowSettings
 
 __all__ = [
-    # Auth
-    "AuthSettings",
-    # AWS
     "AWSSettings",
-    # App
     "AppSettings",
-    # Base
+    "AuthSettings",
     "BaseAppSettings",
-    # Broker
     "BrokerSettings",
     "Database",
-    # Database
     "DatabaseSettings",
     "KafkaSettings",
     "MCPManagerSettings",
-    # MCP
     "MCPSettings",
     "RedisSettings",
-    # Secrets
     "SecretManagerSettings",
-    # Main settings
     "Settings",
     "TaskExecutionSettings",
-    # Triggers
     "TriggerSettings",
-    # Workflow
     "WorkflowSettings",
     "get_app_settings",
     "get_auth_settings",
