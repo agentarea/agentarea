@@ -388,49 +388,58 @@ body div[data-sonner-toast][data-type="warning"] {
   }
 }
 
-/* Style Ory horizontal divider with circles on ends to match Divider component */
-.ory-elements hr {
-  height: 1px !important;
-  border: none !important;
-  background-color: #e2e8f0 !important; /* slate-200 */
+/* --- Ory Elements Overrides --- */
+
+/* Layout & Spacing */
+.ory-elements [data-testid="ory/card"] {
   position: relative !important;
-  margin: 1.5rem 0 !important;
   overflow: visible !important;
+  padding: 1.5rem !important;
 }
 
-.dark .ory-elements hr {
-  background-color: #64748b !important; /* slate-500 */
+.ory-elements [data-testid="ory/card"] form {
+  gap: 0.75rem !important;
 }
 
-.ory-elements hr::before,
-.ory-elements hr::after {
-  content: '' !important;
-  position: absolute !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  width: 6px !important;
-  height: 6px !important;
-  background-color: white !important;
-  border: 1px solid #94a3b8 !important; /* slate-400 */
-  border-radius: 50% !important;
-  z-index: 1 !important;
+.ory-elements [data-testid="ory/card"] [data-testid*="ory/form/node"] {
+  margin-bottom: 0px !important;
 }
 
-.dark .ory-elements hr::before,
-.dark .ory-elements hr::after {
-  background-color: #3f3f46 !important; /* zinc-700 */
-  border-color: #f1f5f9 !important; /* slate-100 */
+/* Spacing for social buttons and other grids */
+.ory-elements .grid {
+  gap: 0.75rem !important;
 }
 
-.ory-elements hr::before {
-  left: 0 !important;
+.ory-elements [data-testid="ory/card"] h2, 
+.ory-elements [data-testid="ory/card"] h3 {
+  margin-bottom: 1rem !important;
+  font-size: 1.25rem !important;
 }
 
-.ory-elements hr::after {
-  right: 0 !important;
+/* Footer area */
+.ory-elements [data-testid="ory/card"] > div:last-child {
+  padding-top: 1rem !important;
+  margin-top: 0.5rem !important;
 }
 
-/* Compact Ory Login Elements */
+/* Hide Ory Badge */
+.ory-elements [data-testid="ory/card"] > .absolute {
+  display: none !important;
+}
+
+/* Typography & General sizing (15px normal) */
+.ory-elements input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.ory-elements select,
+.ory-elements textarea,
+.ory-elements button,
+.ory-elements input[type="submit"],
+.ory-elements label,
+.ory-elements [data-testid*="form/node"] label {
+  font-size: 0.9375rem !important;
+  font-weight: 400 !important;
+}
+
+/* Input fields */
 .ory-elements input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
 .ory-elements select,
 .ory-elements textarea,
@@ -439,77 +448,40 @@ body div[data-sonner-toast][data-type="warning"] {
   height: 40px !important;
   min-height: 40px !important;
   max-height: 40px !important;
-  box-sizing: border-box !important;
-  padding-block: 0 !important;
-  transition: all 0.2s ease !important;
   border-radius: 4px !important;
+  transition: all 0.2s ease !important;
 }
 
-/* Increase font size for ALL buttons in Ory forms - Balanced version (15px) */
-.ory-elements button,
-.ory-elements input[type="submit"],
-.ory-elements [data-testid*="button"] button,
-.ory-elements button[data-testid*="method"],
-.ory-elements button[data-testid*="password"],
-.ory-elements button span,
-.ory-elements button div {
-  font-size: 0.9375rem !important; /* Balanced text size (15px) */
-  font-weight: 400 !important; /* Normal font weight instead of bold */
-}
-
-/* Labels style - sync with buttons (15px, normal weight) */
-.ory-elements label,
+/* Labels */
+.ory-elements label, 
 .ory-elements [data-testid*="form/node"] label {
-  font-size: 0.9375rem !important;
-  font-weight: 400 !important;
-  margin-bottom: 0.125rem !important; /* Reduced margin between label and input */
+  margin-bottom: 0.125rem !important;
   display: block !important;
 }
 
-/* Container for label and input - removing gap specifically for fields with labels and inputs */
+/* Remove gap between label and input */
 .ory-elements [data-testid*="form/node"]:has(label):has(input),
 .ory-elements [data-testid*="form/node"]:has(label):has(select),
-.ory-elements [data-testid*="form/node"]:has(label):has(textarea) {
-  gap: 0 !important;
-}
-
-/* Specific fix for the label+input wrapper seen in inspector */
+.ory-elements [data-testid*="form/node"]:has(label):has(textarea),
 .ory-elements form > div.flex.flex-col.gap-1:has(label):has(input) {
   gap: 0 !important;
 }
 
-/* Input font size - sync with labels (15px) */
-.ory-elements input:not([type="submit"]):not([type="button"]),
-.ory-elements select,
-.ory-elements textarea {
-  font-size: 0.9375rem !important;
-}
-
-/* Ensure placeholder text is also standard size */
-.ory-elements input::placeholder,
-.ory-elements textarea::placeholder,
-.ory-elements select::placeholder {
-  font-size: 0.9375rem !important;
-}
-
-/* Main Submit Button styling - making sure font is normal and balanced size */
+/* Main Submit Button & its container */
+.ory-elements [data-testid*="ory/form/node"]:has(button[data-testid*="method"]),
+.ory-elements [data-testid*="ory/form/node"]:has(button[data-testid*="password"]),
+.ory-elements [data-testid*="ory/form/node"]:has(input[type="submit"]),
 .ory-elements button[data-testid="ory/form/node/button/method"],
 .ory-elements button[data-testid="ory/form/node/button/password"],
 .ory-elements input[type="submit"] {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  text-align: center !important;
   background-color: #2252b3 !important;
   color: white !important;
   border: none !important;
-  font-weight: 400 !important; /* Normal font weight */
   width: 100% !important;
-}
-
-/* Social buttons also should have standard font size */
-.ory-elements button:not([data-testid="ory/form/node/button/link"]) {
-  /* Already handled by the catch-all selector above */
+  margin-top: 24px !important;
 }
 
 .ory-elements button[data-testid="ory/form/node/button/method"]:hover,
@@ -518,91 +490,7 @@ body div[data-sonner-toast][data-type="warning"] {
   background-color: #1a3f8a !important;
 }
 
-/* Social buttons and other buttons should keep their original colors but use 40px height */
-.ory-elements button:not([data-testid="ory/form/node/button/method"]):not([data-testid="ory/form/node/button/password"]):not([type="submit"]) {
-  /* No background-color overrides here to keep original social colors */
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* Compact Card Padding and spacing between elements - Balanced version */
-.ory-elements [data-testid="ory/card"] {
-  padding: 1.5rem !important; /* Balanced padding (original was 2rem, was 1.25rem) */
-}
-
-@media (max-width: 640px) {
-  .ory-elements [data-testid="ory/card"] {
-    width: 100% !important;
-    min-height: 100vh !important;
-    height: auto !important;
-    max-width: none !important;
-    border-radius: 0 !important;
-    border: none !important;
-    display: flex !important;
-    flex-direction: column !important;
-    padding: 3rem 1.5rem !important;
-    background-color: hsl(var(--background)) !important;
-    overflow-y: visible !important;
-  }
-
-  .login-ory {
-    width: 100% !important;
-    min-height: 100vh !important;
-    height: auto !important;
-    max-width: none !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-  
-  .ory-elements [data-testid="ory/card"]::before {
-    display: none !important; /* Hide decorative corners on mobile full screen */
-  }
-
-  /* Make sure the card content fills the space */
-  .ory-elements [data-testid="ory/card"] > div {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-}
-
-.ory-elements [data-testid="ory/card"] form {
-  gap: 0.75rem !important; /* Balanced gap between form fields */
-}
-
-.ory-elements [data-testid="ory/card"] [data-testid*="ory/form/node"] {
-  margin-bottom: 0px !important; /* Set to 0 as requested */
-}
-
-/* Add spacing specifically before the main submit button */
-.ory-elements [data-testid*="ory/form/node"]:has(button[data-testid*="method"]),
-.ory-elements [data-testid*="ory/form/node"]:has(button[data-testid*="password"]),
-.ory-elements [data-testid*="ory/form/node"]:has(input[type="submit"]),
-.ory-elements button[data-testid="ory/form/node/button/method"],
-.ory-elements button[data-testid="ory/form/node/button/password"],
-.ory-elements [data-testid="ory/form/node/button/password"],
-.ory-elements [data-testid="ory/form/node/button/method"] {
-  margin-top: 24px !important;
-}
-
-.ory-elements [data-testid="ory/card"] h2,
-.ory-elements [data-testid="ory/card"] h3 {
-  margin-bottom: 1rem !important;
-  font-size: 1.25rem !important; /* Back to slightly larger header */
-}
-
-/* Spacing for social buttons and other grids */
-.ory-elements .grid {
-  gap: 0.75rem;
-}
-
-/* Balanced padding for footer area */
-.ory-elements [data-testid="ory/card"] > div:last-child {
-  padding-top: 1rem !important;
-  margin-top: 0.5rem !important;
-}
-
-/* Center injected links like "Already have an account?" */
+/* Links & Anchors */
 .ory-elements [data-testid="ory/form/node/anchor"] {
   text-align: center !important;
   margin-top: 1rem !important;
@@ -614,22 +502,21 @@ body div[data-sonner-toast][data-type="warning"] {
   color: #2252b3 !important;
 }
 
-/* Links and footer text font size and colors */
 .ory-elements a,
 .ory-elements [data-testid="ory/form/node/text"],
 .ory-elements [data-testid="ory/form/node/button/link"],
-.ory-elements [data-testid="ory/card"] > div:last-child,
-.ory-elements p,
+.ory-elements [data-testid="ory/form/node/link"] a,
+.ory-elements [data-testid="ory/form/node/link/recovery"] a,
+.ory-elements [data-testid="ory/form/node/link/registration"] a,
+.ory-elements p, 
 .ory-elements span {
   font-size: 0.75rem !important;
 }
 
-.ory-elements a,
-.ory-elements [data-testid="ory/form/node/link"] a,
-.ory-elements [data-testid="ory/form/node/link/recovery"] a,
-.ory-elements [data-testid="ory/form/node/link/registration"] a,
+.ory-elements a, 
+.ory-elements [data-testid*="link"] a,
 .ory-elements button[data-testid="ory/form/node/button/link"] {
-  color: #2252b3 !important; /* Primary color for Sign up and Recover Account */
+  color: #2252b3 !important;
   text-decoration: none !important;
   font-weight: 500 !important;
   background: transparent !important;
@@ -638,15 +525,14 @@ body div[data-sonner-toast][data-type="warning"] {
   cursor: pointer !important;
 }
 
-.ory-elements a:hover,
-.ory-elements [data-testid="ory/form/node/link"] a:hover,
-.ory-elements [data-testid="ory/form/node/link/recovery"] a:hover,
-.ory-elements [data-testid="ory/form/node/link/registration"] a:hover,
+.ory-elements a:hover, 
+.ory-elements [data-testid*="link"] a:hover,
 .ory-elements button[data-testid="ory/form/node/button/link"]:hover {
   text-decoration: underline !important;
   color: #1a3f8a !important;
 }
 
+/* Inputs Focus & Hover States */
 .ory-elements input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
 .ory-elements select:focus,
 .ory-elements textarea:focus {
@@ -662,39 +548,23 @@ body div[data-sonner-toast][data-type="warning"] {
   background-color: hsl(var(--background)) !important;
 }
 
-/* Password field special handling - MAXIMUM specificity */
+/* Password Field Special Handling */
 .ory-elements div[data-radix-password-toggle-field-root] > div,
 .ory-elements [data-radix-password-toggle-field-root] > div {
   height: 40px !important;
   min-height: 40px !important;
-  max-height: 40px !important;
   display: flex !important;
   align-items: center !important;
-  overflow: hidden !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
-  transition: all 0.2s ease !important;
   background-color: hsl(var(--background)) !important;
   border: 1px solid hsl(var(--border)) !important;
-  outline: none !important;
-  box-shadow: none !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  transition: all 0.2s ease !important;
 }
 
-/* Change container border when password input is focused - MAXIMUM specificity */
-.ory-elements div[data-radix-password-toggle-field-root]:focus-within > div,
-.ory-elements [data-radix-password-toggle-field-root]:focus-within > div,
-.ory-elements div[data-radix-password-toggle-field-root] > div:focus-within {
-  background-color: hsl(var(--background)) !important;
-  border-color: #2252b3 !important;
-  outline: none !important;
-  box-shadow: none !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
-  --tw-ring-color: transparent !important;
-}
-
-.ory-elements div[data-radix-password-toggle-field-root] input,
-.ory-elements [data-radix-password-toggle-field-root] input {
+.ory-elements div[data-radix-password-toggle-field-root] > div input,
+.ory-elements [data-radix-password-toggle-field-root] > div input {
   border: none !important;
   height: 38px !important;
   padding: 0 0.875rem !important;
@@ -703,30 +573,11 @@ body div[data-sonner-toast][data-type="warning"] {
   font-size: 0.9375rem !important;
   outline: none !important;
   box-shadow: none !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-color: transparent !important;
 }
 
-.ory-elements div[data-radix-password-toggle-field-root] input:focus,
-.ory-elements [data-radix-password-toggle-field-root] input:focus {
-  outline: none !important;
-  box-shadow: none !important;
-  border: none !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
-  --tw-ring-color: transparent !important;
-}
-
-.ory-elements *:focus {
-  outline: none !important;
-  box-shadow: none !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
-  --tw-ring-color: transparent !important;
-}
-
-.ory-elements [data-radix-password-toggle-field-root] button {
+.ory-elements div[data-radix-password-toggle-field-root] > div button,
+.ory-elements [data-radix-password-toggle-field-root] > div button {
   border: none !important;
   height: 38px !important;
   background: transparent !important;
@@ -734,12 +585,57 @@ body div[data-sonner-toast][data-type="warning"] {
   box-shadow: none !important;
 }
 
-/* Decorative corners agentarea style using gradients for perfect alignment */
-.ory-elements [data-testid="ory/card"] {
+.ory-elements div[data-radix-password-toggle-field-root]:focus-within > div {
+  border-color: #2252b3 !important;
+  --tw-ring-color: transparent !important;
+}
+
+/* Global focus reset for Ory */
+.ory-elements *:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-color: transparent !important;
+}
+
+/* Horizontal Divider with Circles */
+.ory-elements hr {
+  height: 1px !important;
+  border: none !important;
+  background-color: #e2e8f0 !important;
   position: relative !important;
+  margin: 1.5rem 0 !important;
   overflow: visible !important;
 }
 
+.ory-elements hr::before, 
+.ory-elements hr::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 6px !important;
+  height: 6px !important;
+  background-color: white !important;
+  border: 1px solid #94a3b8 !important;
+  border-radius: 50% !important;
+  z-index: 1 !important;
+}
+
+.ory-elements hr::before { left: 0 !important; }
+.ory-elements hr::after { right: 0 !important; }
+
+.dark .ory-elements hr {
+  background-color: #64748b !important;
+}
+
+.dark .ory-elements hr::before, 
+.dark .ory-elements hr::after {
+  background-color: #3f3f46 !important;
+  border-color: #f1f5f9 !important;
+}
+
+
+/* Decorative Corner Crosses (AgentArea style) */
 .ory-elements [data-testid="ory/card"]::before {
   content: '';
   position: absolute;
@@ -764,7 +660,36 @@ body div[data-sonner-toast][data-type="warning"] {
     linear-gradient(to top, #2252b3 15px, transparent 0) no-repeat calc(100% - 7px) 100% / 1px 15px;
 }
 
-/* Hide Ory Badge */
-.ory-elements [data-testid="ory/card"] > .absolute {
-  display: none !important;
+/* Mobile Full Screen Styles */
+@media (max-width: 640px) {
+  .ory-elements [data-testid="ory/card"] {
+    width: 100% !important;
+    min-height: 100vh !important;
+    height: auto !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 3rem 1.5rem !important;
+    background-color: hsl(var(--background)) !important;
+    overflow-y: visible !important;
+  }
+
+  .ory-elements [data-testid="ory/card"]::before {
+    display: none !important;
+  }
+
+  .ory-elements [data-testid="ory/card"] > div {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .login-ory {
+    width: 100% !important;
+    min-height: 100vh !important;
+    height: auto !important;
+    max-width: none !important;
+  }
 }
