@@ -43,9 +43,9 @@ def _get_mcp_auth_provider():
         return _mcp_auth_provider
 
     from agentarea_common.auth.providers.factory import AuthProviderFactory
-    from agentarea_common.config.app import get_app_settings
+    from agentarea_common.config.auth import get_auth_settings
 
-    settings = get_app_settings()
+    settings = get_auth_settings()
     _mcp_auth_provider = AuthProviderFactory.create_provider(
         "kratos",
         config={

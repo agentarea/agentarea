@@ -21,12 +21,6 @@ class AppSettings(BaseAppSettings):
     # Kratos public API URL (used to validate browser session cookies in OAuth AS)
     KRATOS_PUBLIC_URL: str = "http://kratos:4433"
 
-    # Kratos Authentication Configuration
-    # Base64-encoded JWKS (public keys only). Must be set via KRATOS_JWKS_B64 env var.
-    KRATOS_JWKS_B64: str
-    KRATOS_ISSUER: str = "https://agentarea.dev"
-    KRATOS_AUDIENCE: str = "agentarea-api"
-
     # Runtime environment (development / staging / production)
     ENVIRONMENT: str = "development"
 
