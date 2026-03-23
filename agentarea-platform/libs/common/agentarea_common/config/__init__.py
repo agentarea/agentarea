@@ -5,6 +5,7 @@ of concerns across different settings domains.
 """
 
 from .app import AppSettings, get_app_settings
+from .auth import AuthSettings, get_auth_settings
 from .aws import AWSSettings, get_aws_settings, get_s3_client
 from .base import BaseAppSettings
 from .broker import BrokerSettings, KafkaSettings, RedisSettings
@@ -16,6 +17,8 @@ from .triggers import TriggerSettings
 from .workflow import TaskExecutionSettings, WorkflowSettings
 
 __all__ = [
+    # Auth
+    "AuthSettings",
     # AWS
     "AWSSettings",
     # App
@@ -42,6 +45,7 @@ __all__ = [
     # Workflow
     "WorkflowSettings",
     "get_app_settings",
+    "get_auth_settings",
     "get_aws_settings",
     "get_database",
     "get_db",

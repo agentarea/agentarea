@@ -56,9 +56,9 @@ class AuthProviderFactory:
         Returns:
             AuthProviderInterface instance
         """
-        from agentarea_common.config.app import get_app_settings
+        from agentarea_common.config.auth import get_auth_settings
 
-        settings = get_app_settings()
+        settings = get_auth_settings()
 
         # Currently only Kratos is supported
         return AuthProviderFactory.create_provider(
