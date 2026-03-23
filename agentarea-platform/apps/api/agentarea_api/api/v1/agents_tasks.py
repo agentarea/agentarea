@@ -897,6 +897,7 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
         if (
             original_event_type.startswith("ToolCall")
             or original_event_type.startswith("LLMCall")
+            or original_event_type.startswith("A2UI")
             or "tool_name" in str(data.get("original_data", {}))
         ):
             # Extract original_data and merge it with filtered domain fields

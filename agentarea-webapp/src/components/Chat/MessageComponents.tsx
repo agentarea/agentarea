@@ -1,4 +1,5 @@
 import React from "react";
+import A2UIMessage from "./componets/A2UIMessage";
 import ErrorMessage from "./componets/ErrorMessage";
 import LLMChunkMessage from "./componets/LLMChunkMessage";
 import LLMResponseMessage from "./componets/LLMResponseMessage";
@@ -51,6 +52,8 @@ export const MessageRenderer: React.FC<{
       );
     case "system":
       return <SystemMessage data={message.data} key={message.data.id} />;
+    case "a2ui_surface":
+      return <A2UIMessage data={message.data} key={message.data.id} />;
     default:
       return null;
   }

@@ -13,6 +13,7 @@ import {
   handleWorkflowCompleted,
   handleTaskCreated,
   handleError,
+  handleA2UIEvent,
 } from "./messageEventHandlers";
 import {
   EVENT_LLM_CALL_CHUNK,
@@ -25,6 +26,10 @@ import {
   EVENT_TASK_CREATED,
   EVENT_ERROR,
   EVENT_MESSAGE,
+  EVENT_A2UI_CREATE_SURFACE,
+  EVENT_A2UI_UPDATE_COMPONENTS,
+  EVENT_A2UI_UPDATE_DATA_MODEL,
+  EVENT_A2UI_DELETE_SURFACE,
 } from "../constants/eventTypes";
 
 export interface SSEEventHandlerOptions {
@@ -126,6 +131,24 @@ export function createSSEEventHandler(
     // Special handling for LLM chunk events - accumulate instead of creating new messages
     if (cleanEventType === EVENT_LLM_CALL_CHUNK) {
       handleLLMChunk(event, setMessages);
+      return;
+    }
+
+    // A2UI surface events — createSurface falls through to parseEventToMessage;
+    // update/delete mutate existing surface messages in-place
+    if (cleanEventType === EVENT_A2UI_CREATE_SURFACE) {
+      const messageComponent = parseEventToMessage(cleanEventType, event.data);
+      if (messageComponent) {
+        setMessages((prev) => [...prev, messageComponent]);
+      }
+      return;
+    }
+    if (
+      cleanEventType === EVENT_A2UI_UPDATE_COMPONENTS ||
+      cleanEventType === EVENT_A2UI_UPDATE_DATA_MODEL ||
+      cleanEventType === EVENT_A2UI_DELETE_SURFACE
+    ) {
+      handleA2UIEvent(cleanEventType, event, setMessages);
       return;
     }
 

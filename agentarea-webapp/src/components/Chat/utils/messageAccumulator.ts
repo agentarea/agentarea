@@ -3,7 +3,7 @@
  * Pure functions for managing message arrays (LLM chunks, tool calls, etc.)
  */
 
-import { ChatMessage, MessageComponentType } from "../types";
+import { A2UIComponent, ChatMessage, MessageComponentType } from "../types";
 
 export type AnyMessage = ChatMessage;
 
@@ -156,4 +156,98 @@ export function replaceToolCallStarted(
 
   // If no matching tool_call_started found, just add the result
   return [...messages, toolData.resultMessage];
+}
+
+/**
+ * Upserts components into an existing a2ui_surface message by surfaceId.
+ * Follows A2UI v0.9 updateComponents semantics (upsert by component id).
+ */
+export function upsertA2UIComponents(
+  messages: AnyMessage[],
+  surfaceId: string,
+  components: A2UIComponent[]
+): AnyMessage[] {
+  return messages.map((msg) => {
+    if (!("type" in msg) || msg.type !== "a2ui_surface") return msg;
+    if ((msg.data as any).surfaceId !== surfaceId) return msg;
+
+    const updated = { ...(msg.data as any).surface.components };
+    for (const c of components) {
+      updated[c.id] = c;
+    }
+
+    return {
+      ...msg,
+      data: {
+        ...msg.data,
+        surface: { ...(msg.data as any).surface, components: updated },
+      },
+    } as MessageComponentType;
+  });
+}
+
+/**
+ * Updates the data model of an a2ui_surface message at a JSON Pointer path.
+ * Follows A2UI v0.9 updateDataModel semantics (RFC 6901 path).
+ */
+export function updateA2UIDataModel(
+  messages: AnyMessage[],
+  surfaceId: string,
+  path: string,
+  value: any
+): AnyMessage[] {
+  return messages.map((msg) => {
+    if (!("type" in msg) || msg.type !== "a2ui_surface") return msg;
+    if ((msg.data as any).surfaceId !== surfaceId) return msg;
+
+    const currentModel = { ...(msg.data as any).surface.dataModel };
+    applyJsonPointer(currentModel, path, value);
+
+    return {
+      ...msg,
+      data: {
+        ...msg.data,
+        surface: { ...(msg.data as any).surface, dataModel: currentModel },
+      },
+    } as MessageComponentType;
+  });
+}
+
+/**
+ * Removes an a2ui_surface message by surfaceId.
+ * Follows A2UI v0.9 deleteSurface semantics.
+ */
+export function deleteA2UISurface(
+  messages: AnyMessage[],
+  surfaceId: string
+): AnyMessage[] {
+  return messages.filter(
+    (msg) =>
+      !("type" in msg) ||
+      msg.type !== "a2ui_surface" ||
+      (msg.data as any).surfaceId !== surfaceId
+  );
+}
+
+/** Apply a JSON Pointer (RFC 6901) write to a plain object (shallow, in-place). */
+function applyJsonPointer(obj: Record<string, any>, pointer: string, value: any): void {
+  if (pointer === "/" || pointer === "") {
+    Object.assign(obj, value ?? {});
+    return;
+  }
+  const parts = pointer
+    .replace(/^\//, "")
+    .split("/")
+    .map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
+  let target = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (target[parts[i]] == null) target[parts[i]] = {};
+    target = target[parts[i]];
+  }
+  const last = parts[parts.length - 1];
+  if (value === undefined) {
+    delete target[last];
+  } else {
+    target[last] = value;
+  }
 }

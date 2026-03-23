@@ -1,4 +1,4 @@
-import { MessageComponentType } from "./MessageComponents";
+import { A2UISurface, MessageComponentType } from "./types";
 
 // Parse event data into appropriate message component type
 export const parseEventToMessage = (
@@ -272,6 +272,37 @@ export const parseEventToMessage = (
       };
     }
 
+    case "A2UICreateSurface": {
+      const d = eventData.original_data || eventData;
+      const surfaceId = d.surface_id || eventData.surface_id;
+      if (!surfaceId) return null;
+
+      const surface: A2UISurface = {
+        surfaceId,
+        catalogId: d.catalog_id || "https://a2ui.org/specification/v0_9/basic_catalog.json",
+        theme: d.theme,
+        sendDataModel: d.send_data_model ?? false,
+        components: {},
+        dataModel: {},
+      };
+
+      return {
+        type: "a2ui_surface",
+        data: {
+          ...baseData,
+          surfaceId,
+          surface,
+        },
+      };
+    }
+
+    // A2UIUpdateComponents, A2UIUpdateDataModel, A2UIDeleteSurface are handled
+    // via setMessages mutation in messageEventHandlers — they return null here.
+    case "A2UIUpdateComponents":
+    case "A2UIUpdateDataModel":
+    case "A2UIDeleteSurface":
+      return null;
+
     default:
       // For unhandled event types, return null (don't display)
       return null;
@@ -295,6 +326,10 @@ export const shouldDisplayEvent = (eventType: string): boolean => {
     "task_cancelled",
     "BudgetWarning",
     "BudgetExceeded",
+    "A2UICreateSurface",
+    "A2UIUpdateComponents",
+    "A2UIUpdateDataModel",
+    "A2UIDeleteSurface",
   ];
 
   return displayableEvents.includes(eventType);
