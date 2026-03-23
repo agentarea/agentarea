@@ -18,6 +18,7 @@ _DUMMY_ENV = {
     "WORKFLOW__TEMPORAL_SERVER_URL": "http://localhost:7233",
     "WORKFLOW__TEMPORAL_NAMESPACE": "default",
     "WORKFLOW__TEMPORAL_TASK_QUEUE": "agent-tasks",
+    "KRATOS_JWKS_B64": "eyJrZXlzIjpbXX0=",  # {"keys":[]} - empty JWKS, enough for schema export
 }
 for key, value in _DUMMY_ENV.items():
     os.environ.setdefault(key, value)

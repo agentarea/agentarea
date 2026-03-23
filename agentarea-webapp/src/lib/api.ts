@@ -42,6 +42,12 @@ export const {
 
   // OpenAPI Connections API
   listOpenAPIConnections,
+  createOpenAPIConnection,
+  deleteOpenAPIConnection,
+  getOpenAPIConnection,
+  discoverOpenAPITools,
+  testOpenAPIConnection,
+  previewOpenAPISpec,
 
   // MCP Server Instance API
   listMCPServerInstances,
@@ -149,13 +155,6 @@ export const {
 
   // Network API
   getNetworkTopology,
-
-  // OpenAPI Connections API (additional)
-  getOpenAPIConnection,
-  discoverOpenAPITools,
-  testOpenAPIConnection,
-  previewOpenAPISpec,
-  createOpenAPIConnection,
 } = api;
 
 // Convenience helpers built on top of the generated API
