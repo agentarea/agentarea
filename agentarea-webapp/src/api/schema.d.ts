@@ -112,29 +112,29 @@ export interface paths {
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        get: operations["hydra_oauth2_proxy_oauth2__path__put"];
+        get: operations["hydra_oauth2_proxy_oauth2__path__get"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        put: operations["hydra_oauth2_proxy_oauth2__path__put"];
+        put: operations["hydra_oauth2_proxy_oauth2__path__get"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        post: operations["hydra_oauth2_proxy_oauth2__path__put"];
+        post: operations["hydra_oauth2_proxy_oauth2__path__get"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        delete: operations["hydra_oauth2_proxy_oauth2__path__put"];
+        delete: operations["hydra_oauth2_proxy_oauth2__path__get"];
         options?: never;
         head?: never;
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        patch: operations["hydra_oauth2_proxy_oauth2__path__put"];
+        patch: operations["hydra_oauth2_proxy_oauth2__path__get"];
         trace?: never;
     };
     "/.well-known/jwks.json": {
@@ -188,37 +188,37 @@ export interface paths {
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        get: operations["handle_webhook_webhooks__webhook_id__put"];
+        get: operations["handle_webhook_webhooks__webhook_id__get"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        put: operations["handle_webhook_webhooks__webhook_id__put"];
+        put: operations["handle_webhook_webhooks__webhook_id__get"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        post: operations["handle_webhook_webhooks__webhook_id__put"];
+        post: operations["handle_webhook_webhooks__webhook_id__get"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        delete: operations["handle_webhook_webhooks__webhook_id__put"];
+        delete: operations["handle_webhook_webhooks__webhook_id__get"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        options: operations["handle_webhook_webhooks__webhook_id__put"];
+        options: operations["handle_webhook_webhooks__webhook_id__get"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        head: operations["handle_webhook_webhooks__webhook_id__put"];
+        head: operations["handle_webhook_webhooks__webhook_id__get"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        patch: operations["handle_webhook_webhooks__webhook_id__put"];
+        patch: operations["handle_webhook_webhooks__webhook_id__get"];
         trace?: never;
     };
     "/v1/agents/": {
@@ -1401,7 +1401,7 @@ export interface paths {
          *         trigger_type: Optional trigger type filter
          *         active_only: Whether to only return active triggers
          *         limit: Maximum number of triggers to return
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1421,7 +1421,7 @@ export interface paths {
          *
          *     Args:
          *         request: Trigger creation request data
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *         secret_manager: Injected secret manager for credential storage
          *
@@ -1480,7 +1480,7 @@ export interface paths {
          *
          *     Args:
          *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1501,7 +1501,7 @@ export interface paths {
          *     Args:
          *         trigger_id: The unique identifier of the trigger
          *         request: Trigger update request data
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *         secret_manager: Injected secret manager for credential storage
          *
@@ -1522,7 +1522,7 @@ export interface paths {
          *
          *     Args:
          *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Raises:
@@ -1552,7 +1552,7 @@ export interface paths {
          *
          *     Args:
          *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1586,7 +1586,7 @@ export interface paths {
          *
          *     Args:
          *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1624,7 +1624,7 @@ export interface paths {
          *         status: Optional status filter (success, failed, timeout)
          *         start_time: Optional start time filter
          *         end_time: Optional end time filter
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1658,7 +1658,7 @@ export interface paths {
          *
          *     Args:
          *         trigger_id: The unique identifier of the trigger
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1693,7 +1693,7 @@ export interface paths {
          *     Args:
          *         trigger_id: The unique identifier of the trigger
          *         hours: Time period in hours to analyze (default 24, max 168)
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1729,7 +1729,7 @@ export interface paths {
          *         trigger_id: The unique identifier of the trigger
          *         hours: Time period in hours to analyze (default 24, max 168)
          *         bucket_size_minutes: Size of time buckets in minutes (default 60)
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -1765,7 +1765,7 @@ export interface paths {
          *         trigger_id: The unique identifier of the trigger
          *         page: Page number for pagination
          *         page_size: Number of executions per page
-         *         auth_context: Authentication context
+         *         user_context: Authentication context
          *         trigger_service: Injected trigger service
          *
          *     Returns:
@@ -2482,6 +2482,8 @@ export interface paths {
         /**
          * Preview Spec
          * @description Fetch/parse an OpenAPI spec and return metadata + tools without creating a connection.
+         *
+         *     The service dependency ensures authentication is enforced.
          */
         post: operations["preview_spec_v1_openapi_connections_preview_spec_post"];
         delete?: never;
@@ -2553,8 +2555,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Test Connection */
-        post: operations["test_connection_v1_openapi_connections__connection_id__test_post"];
+        /** Check Connection */
+        post: operations["check_connection_v1_openapi_connections__connection_id__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2588,6 +2590,226 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects
+         * @description List all projects in the current workspace.
+         */
+        get: operations["list_projects_v1_projects__get"];
+        put?: never;
+        /**
+         * Create Project
+         * @description Create a new project.
+         */
+        post: operations["create_project_v1_projects__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project
+         * @description Get a specific project by ID.
+         */
+        get: operations["get_project_v1_projects__project_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Project
+         * @description Delete a project.
+         */
+        delete: operations["delete_project_v1_projects__project_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Project
+         * @description Update a project's fields.
+         */
+        patch: operations["update_project_v1_projects__project_id__patch"];
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Skill To Project
+         * @description Add a skill to a project.
+         */
+        post: operations["add_skill_to_project_v1_projects__project_id__skills_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/skills/{skill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Skill From Project
+         * @description Remove a skill from a project.
+         */
+        delete: operations["remove_skill_from_project_v1_projects__project_id__skills__skill_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/mcp-instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Mcp Instance To Project
+         * @description Add an MCP server instance to a project.
+         */
+        post: operations["add_mcp_instance_to_project_v1_projects__project_id__mcp_instances_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Mcp Instance From Project
+         * @description Remove an MCP server instance from a project.
+         */
+        delete: operations["remove_mcp_instance_from_project_v1_projects__project_id__mcp_instances__mcp_instance_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Agent To Project
+         * @description Add an agent to a project.
+         */
+        post: operations["add_agent_to_project_v1_projects__project_id__agents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/agents/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Agent From Project
+         * @description Remove an agent from a project.
+         */
+        delete: operations["remove_agent_from_project_v1_projects__project_id__agents__agent_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Project Files
+         * @description List all files in a project's MinIO prefix.
+         */
+        get: operations["list_project_files_v1_projects__project_id__files_get"];
+        put?: never;
+        /**
+         * Upload Project File
+         * @description Upload a file to a project's MinIO prefix.
+         */
+        post: operations["upload_project_file_v1_projects__project_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project_id}/files/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Project File
+         * @description Download a file from a project's MinIO prefix (presigned URL).
+         */
+        get: operations["download_project_file_v1_projects__project_id__files__file_path__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Project File
+         * @description Delete a file from a project's MinIO prefix.
+         */
+        delete: operations["delete_project_file_v1_projects__project_id__files__file_path__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -2596,84 +2818,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Health Check
-         * @description Health check endpoint for the main application.
+         * Health
+         * @description Health check endpoint.
          */
-        get: operations["health_check_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Root
-         * @description Root endpoint.
-         */
-        get: operations["root__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/asyncapi": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Serve Asyncapi Schema
-         * @description Serve the AsyncAPI schema as an HTML response.
-         */
-        get: operations["serve_asyncapi_schema_asyncapi_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/asyncapi.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download App Json Schema */
-        get: operations["download_app_json_schema_asyncapi_json_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/asyncapi.yaml": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download App Yaml Schema */
-        get: operations["download_app_yaml_schema_asyncapi_yaml_get"];
+        get: operations["health_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2925,12 +3073,22 @@ export interface components {
             /** Skill Ids */
             skill_ids?: string[] | null;
         };
+        /** AssociationBody */
+        AssociationBody: {
+            /** Id */
+            id: string;
+        };
         /** Body_import_workspace_config_file_v1_workspace_import_file_post */
         Body_import_workspace_config_file_v1_workspace_import_file_post: {
             /**
              * File
              * @description YAML configuration file
              */
+            file: string;
+        };
+        /** Body_upload_project_file_v1_projects__project_id__files_post */
+        Body_upload_project_file_v1_projects__project_id__files_post: {
+            /** File */
             file: string;
         };
         /** Body_upload_skill_v1_skills_upload_post */
@@ -3837,6 +3995,63 @@ export interface components {
             /** Has Next */
             has_next: boolean;
         };
+        /** ProjectCreate */
+        ProjectCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** Parent Project Id */
+            parent_project_id?: string | null;
+        };
+        /** ProjectResponse */
+        ProjectResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Created By */
+            created_by: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Instructions */
+            instructions: string | null;
+            /** Parent Project Id */
+            parent_project_id: string | null;
+            /** Minio Prefix */
+            minio_prefix: string;
+            /**
+             * Skills
+             * @default []
+             */
+            skills: unknown[];
+            /**
+             * Mcp Instances
+             * @default []
+             */
+            mcp_instances: unknown[];
+            /**
+             * Agents
+             * @default []
+             */
+            agents: unknown[];
+        };
+        /** ProjectUpdate */
+        ProjectUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Instructions */
+            instructions?: string | null;
+        };
         /** ProviderConfigCreate */
         ProviderConfigCreate: {
             /**
@@ -4299,6 +4514,8 @@ export interface components {
              * @default false
              */
             requires_human_approval: boolean | null;
+            /** Project Id */
+            project_id?: string | null;
         };
         /**
          * TaskEvent
@@ -4888,7 +5105,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__put: {
+    hydra_oauth2_proxy_oauth2__path__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4919,7 +5136,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__put: {
+    hydra_oauth2_proxy_oauth2__path__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4950,7 +5167,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__put: {
+    hydra_oauth2_proxy_oauth2__path__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4981,7 +5198,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__put: {
+    hydra_oauth2_proxy_oauth2__path__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5012,7 +5229,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__put: {
+    hydra_oauth2_proxy_oauth2__path__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5085,7 +5302,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__put: {
+    handle_webhook_webhooks__webhook_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5116,7 +5333,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__put: {
+    handle_webhook_webhooks__webhook_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5147,7 +5364,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__put: {
+    handle_webhook_webhooks__webhook_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5178,7 +5395,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__put: {
+    handle_webhook_webhooks__webhook_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5209,7 +5426,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__put: {
+    handle_webhook_webhooks__webhook_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5240,7 +5457,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__put: {
+    handle_webhook_webhooks__webhook_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5271,7 +5488,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__put: {
+    handle_webhook_webhooks__webhook_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9731,7 +9948,7 @@ export interface operations {
             };
         };
     };
-    test_connection_v1_openapi_connections__connection_id__test_post: {
+    check_connection_v1_openapi_connections__connection_id__test_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -9782,60 +9999,362 @@ export interface operations {
             };
         };
     };
-    health_check_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    root__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    serve_asyncapi_schema_asyncapi_get: {
+    list_projects_v1_projects__get: {
         parameters: {
             query?: {
-                sidebar?: boolean;
-                info?: boolean;
-                servers?: boolean;
-                operations?: boolean;
-                messages?: boolean;
-                schemas?: boolean;
-                errors?: boolean;
-                expandMessageExamples?: boolean;
+                limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_project_v1_projects__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_v1_projects__project_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_project_v1_projects__project_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_v1_projects__project_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_skill_to_project_v1_projects__project_id__skills_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssociationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_skill_from_project_v1_projects__project_id__skills__skill_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_mcp_instance_to_project_v1_projects__project_id__mcp_instances_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssociationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_mcp_instance_from_project_v1_projects__project_id__mcp_instances__mcp_instance_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                mcp_instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_agent_to_project_v1_projects__project_id__agents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssociationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_agent_from_project_v1_projects__project_id__agents__agent_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_project_files_v1_projects__project_id__files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -9860,11 +10379,47 @@ export interface operations {
             };
         };
     };
-    download_app_json_schema_asyncapi_json_get: {
+    upload_project_file_v1_projects__project_id__files_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_project_file_v1_projects__project_id__files_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_project_file_v1_projects__project_id__files__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                file_path: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -9878,9 +10433,48 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    download_app_yaml_schema_asyncapi_yaml_get: {
+    delete_project_file_v1_projects__project_id__files__file_path__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    health_health_get: {
         parameters: {
             query?: never;
             header?: never;
