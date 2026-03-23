@@ -35,6 +35,25 @@ import {
   deleteModelInstance,
   listMCPAuthConfigs,
   createMCPAuthConfig,
+  resolveEscalation,
+  listSkillMembers,
+  addSkillMember,
+  removeSkillMember,
+  flattenSkill,
+  discoverMCPInstanceTools,
+  getNetworkTopology,
+  exportWorkspace,
+  importWorkspace,
+  enableTrigger,
+  disableTrigger,
+  deleteTrigger,
+  listMCPServers,
+  getOpenAPIConnection,
+  deleteOpenAPIConnection,
+  discoverOpenAPITools,
+  testOpenAPIConnection,
+  createOpenAPIConnection,
+  previewOpenAPISpec,
 } from "@/lib/api";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
@@ -245,4 +264,102 @@ export async function updateSkillAction(
 
 export async function deleteSkillAction(skillId: string) {
   return await deleteSkill(skillId);
+}
+
+export async function resolveEscalationAction(
+  agentId: string,
+  taskId: string,
+  escalationId: string,
+  approved: boolean,
+  comment: string = ""
+) {
+  return await resolveEscalation(agentId, taskId, escalationId, approved, comment);
+}
+
+export async function listSkillMembersAction(skillId: string) {
+  return await listSkillMembers(skillId);
+}
+
+export async function addSkillMemberAction(skillId: string, childSkillId: string) {
+  return await addSkillMember(skillId, childSkillId);
+}
+
+export async function removeSkillMemberAction(skillId: string, childSkillId: string) {
+  return await removeSkillMember(skillId, childSkillId);
+}
+
+export async function flattenSkillAction(skillId: string) {
+  return await flattenSkill(skillId);
+}
+
+export async function discoverMCPInstanceToolsAction(instanceId: string) {
+  return await discoverMCPInstanceTools(instanceId);
+}
+
+export async function getNetworkTopologyAction() {
+  return await getNetworkTopology();
+}
+
+export async function exportWorkspaceAction() {
+  return await exportWorkspace();
+}
+
+export async function importWorkspaceAction(body: {
+  config: string;
+  skip_missing_dependencies?: boolean;
+  override_existing?: boolean;
+}) {
+  return await importWorkspace(body);
+}
+
+export async function enableTriggerAction(triggerId: string) {
+  return await enableTrigger(triggerId);
+}
+
+export async function disableTriggerAction(triggerId: string) {
+  return await disableTrigger(triggerId);
+}
+
+export async function deleteTriggerAction(triggerId: string) {
+  return await deleteTrigger(triggerId);
+}
+
+export async function listMCPServersAction(params?: {
+  status?: string;
+  is_public?: boolean;
+  tag?: string;
+}) {
+  return await listMCPServers(params);
+}
+
+export async function getOpenAPIConnectionAction(connectionId: string) {
+  return await getOpenAPIConnection(connectionId);
+}
+
+export async function deleteOpenAPIConnectionAction(connectionId: string) {
+  return await deleteOpenAPIConnection(connectionId);
+}
+
+export async function discoverOpenAPIToolsAction(connectionId: string) {
+  return await discoverOpenAPITools(connectionId);
+}
+
+export async function testOpenAPIConnectionAction(connectionId: string) {
+  return await testOpenAPIConnection(connectionId);
+}
+
+export async function createOpenAPIConnectionAction(body: {
+  name: string;
+  base_url: string;
+  description?: string;
+  spec_url?: string;
+}) {
+  return await createOpenAPIConnection(body);
+}
+
+export async function previewOpenAPISpecAction(body: {
+  spec_url?: string;
+  spec_json?: string;
+}) {
+  return await previewOpenAPISpec(body);
 }

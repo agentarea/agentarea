@@ -422,7 +422,7 @@ class TemporalTaskExecutor(TaskExecutorInterface):
         metadata: dict[str, Any] | None = None,
     ) -> str:
         """Execute agent task using Temporal workflow."""
-        workflow_id = f"agent-task-{task_id}"
+        workflow_id = f"task-{task_id}"
 
         # Prepare workflow arguments
         workflow_args = {

@@ -11,6 +11,7 @@ from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 from agentarea_api.api.deps.services import get_agent_service, get_mcp_server_instance_service
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.config import get_database
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
@@ -236,6 +237,7 @@ async def update_agent(
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Update an agent."""
+    await require_permission("edit", "agent", str(agent_id), user_context.user_id)
     # Validate model_id if it's being updated
     if data.model_id is not None:
         await validate_model_id(data.model_id, user_context)
@@ -262,6 +264,7 @@ async def delete_agent(
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Delete an agent."""
+    await require_permission("delete", "agent", str(agent_id), user_context.user_id)
     success = await agent_service.delete_agent(agent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")

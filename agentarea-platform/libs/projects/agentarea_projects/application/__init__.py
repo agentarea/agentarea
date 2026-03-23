@@ -1,0 +1,1 @@
+"""Projects application layer."""

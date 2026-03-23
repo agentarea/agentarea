@@ -9,18 +9,18 @@ Database host helper
 {{- if .Values.global.database.host -}}
 {{ .Values.global.database.host }}
 {{- else -}}
-{{ .Release.Name }}-postgresql
+{{ include "agentarea.fullname" . }}-postgresql
 {{- end -}}
 {{- end -}}
 
 {{/*
-Redis host helper
+Valkey (Redis-compatible) host helper
 */}}
 {{- define "agentarea.redis.host" -}}
 {{- if .Values.global.redis.host -}}
 {{ .Values.global.redis.host }}
 {{- else -}}
-{{ .Release.Name }}-redis-master
+{{ .Release.Name }}-valkey
 {{- end -}}
 {{- end -}}
 

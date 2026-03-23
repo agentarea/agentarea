@@ -10,6 +10,7 @@ from typing import Annotated
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.import_export_service import WorkspaceImportExportService
+from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
 from agentarea_common.auth import UserContextDep
@@ -31,10 +32,11 @@ from agentarea_mcp.infrastructure.registry_repository import (
     RegistryItemRepository,
     RegistryRepository,
 )
+from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager
+from agentarea_tasks.domain.interfaces import BaseTaskManager
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
-from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,7 +122,14 @@ async def get_agent_service(
     event_broker: EventBrokerDep,
 ) -> AgentService:
     """Get an AgentService instance for the current request."""
-    return AgentService(repository_factory, event_broker)
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.di.container import resolve
+
+    try:
+        authz = resolve(AuthorizationService)
+    except (KeyError, TypeError, ValueError):
+        authz = None
+    return AgentService(repository_factory, event_broker, authorization_service=authz)
 
 
 # LLM Service dependencies
@@ -168,11 +177,8 @@ async def get_task_service(
     event_broker: EventBrokerDep,
 ) -> TaskService:
     from agentarea_tasks.task_service import TaskService
-    from agentarea_tasks.temporal_task_manager import TemporalTaskManager
 
-    # Create task repository using factory for task manager
-    task_repository = repository_factory.create_repository(TaskRepository)
-    task_manager = TemporalTaskManager(task_repository)
+    task_manager = await _create_task_manager(repository_factory)
     workflow_service = await get_temporal_workflow_service()
     return TaskService(
         repository_factory=repository_factory,
@@ -185,7 +191,29 @@ async def get_task_service(
 async def get_task_manager(
     repository_factory: RepositoryFactoryDep,
 ):
+    return await _create_task_manager(repository_factory)
+
+
+async def _create_task_manager(repository_factory: RepositoryFactoryDep):
+    """Create task manager based on WORKFLOW__EXECUTION_ENGINE setting.
+
+    "temporal" (default): Uses Temporal workflows for durable execution.
+    "direct": Runs agent loop in-process. No Temporal/workers needed.
+    """
+    from agentarea_common.config import get_settings
+
+    settings = get_settings()
+
     task_repository = repository_factory.create_repository(TaskRepository)
+
+    if settings.workflow.EXECUTION_ENGINE == "direct":
+        from agentarea_tasks.direct_task_manager import DirectTaskManager
+
+        logger.info("Using DirectTaskManager (in-process, no Temporal)")
+        return DirectTaskManager(task_repository)
+
+    from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+
     return TemporalTaskManager(task_repository)
 
 
@@ -267,7 +295,14 @@ async def get_workspace_import_export_service(
     provider_service: Annotated["ProviderService", Depends(get_provider_service)],
 ) -> WorkspaceImportExportService:
     """Get a WorkspaceImportExportService instance for the current request."""
-    agent_service = AgentService(repository_factory, event_broker)
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.di.container import resolve
+
+    try:
+        authz = resolve(AuthorizationService)
+    except (KeyError, TypeError, ValueError):
+        authz = None
+    agent_service = AgentService(repository_factory, event_broker, authorization_service=authz)
     return WorkspaceImportExportService(
         agent_service=agent_service,
         repository_factory=repository_factory,
@@ -276,15 +311,40 @@ async def get_workspace_import_export_service(
     )
 
 
+async def get_openapi_connection_service(
+    repository_factory: RepositoryFactoryDep,
+    secret_manager: BaseSecretManagerDep,
+) -> OpenAPIConnectionService:
+    """Get an OpenAPIConnectionService instance for the current request."""
+    settings = get_settings()
+    return OpenAPIConnectionService(
+        repository_factory=repository_factory,
+        secret_manager=secret_manager,
+        allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
+    )
+
+
+async def get_skill_service(
+    repository_factory: RepositoryFactoryDep,
+    user_context: UserContextDep,
+) -> SkillService:
+    """Get a SkillService instance for the current request."""
+    return SkillService(
+        repository_factory=repository_factory,
+        user_context=user_context,
+    )
+
+
 # Common service type hints for easier use
 AgentServiceDep = Annotated[AgentService, Depends(get_agent_service)]
+SkillServiceDep = Annotated[SkillService, Depends(get_skill_service)]
 WorkspaceImportExportServiceDep = Annotated[
     WorkspaceImportExportService, Depends(get_workspace_import_export_service)
 ]
 ProviderServiceDep = Annotated[ProviderService, Depends(get_provider_service)]
 ModelInstanceServiceDep = Annotated[ModelInstanceService, Depends(get_model_instance_service)]
 TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
-TaskManagerDep = Annotated[TemporalTaskManager, Depends(get_task_manager)]
+TaskManagerDep = Annotated[BaseTaskManager, Depends(get_task_manager)]
 EventStreamServiceDep = Annotated[EventStreamService, Depends(get_event_stream_service)]
 TemporalWorkflowServiceDep = Annotated[
     TemporalWorkflowService, Depends(get_temporal_workflow_service)
@@ -292,6 +352,9 @@ TemporalWorkflowServiceDep = Annotated[
 MCPServerServiceDep = Annotated[MCPServerService, Depends(get_mcp_server_service)]
 MCPServerInstanceServiceDep = Annotated[
     MCPServerInstanceService, Depends(get_mcp_server_instance_service)
+]
+OpenAPIConnectionServiceDep = Annotated[
+    OpenAPIConnectionService, Depends(get_openapi_connection_service)
 ]
 
 
@@ -431,7 +494,106 @@ async def get_webhook_manager(
         execution_callback=execution_callback,
         event_broker=event_broker,
         base_url=settings.triggers.WEBHOOK_BASE_URL,
+        trigger_service=trigger_service,
     )
+
+
+async def get_public_webhook_manager(
+    db_session: DatabaseSessionDep,
+    event_broker: EventBrokerDep,
+):
+    """Get a WebhookManager instance for PUBLIC webhook endpoints (no auth required).
+
+    This creates a webhook manager without requiring UserContext, since external
+    services (Telegram, Slack, GitHub, etc.) cannot provide authentication headers.
+    The webhook_id in the URL is the sole identifier for routing to the correct trigger.
+    """
+    if not TRIGGERS_AVAILABLE:
+
+        class MockWebhookManager:
+            async def handle_webhook_request(self, *args, **kwargs):
+                return {
+                    "status_code": 503,
+                    "body": {"status": "error", "message": "Triggers service not available"},
+                }
+
+            async def is_healthy(self):
+                return False
+
+        return MockWebhookManager()
+
+    from agentarea_common.auth.context import UserContext
+    from agentarea_common.base import RepositoryFactory
+    from agentarea_common.config.secrets import get_secret_manager_settings
+    from agentarea_secrets.secret_manager_factory import get_real_secret_manager
+
+    settings = get_settings()
+    get_secret_manager_settings()
+
+    # For webhooks, we first do an unscoped DB query to find the trigger by webhook_id,
+    # then re-create the service with the correct workspace context.
+    # Start with a placeholder context — the webhook manager will update it
+    # once the trigger's workspace_id is known.
+    from agentarea_triggers.infrastructure.repository import TriggerRepository
+
+    # Trigger lookup with system context — get_by_webhook_id doesn't filter by workspace
+    system_ctx = UserContext(
+        user_id="system", workspace_id="system", roles=[], accessible_workspaces=["system"]
+    )
+    trigger_repo = TriggerRepository(session=db_session, user_context=system_ctx)
+
+    class WebhookManagerWithLookup:
+        """Wraps DefaultWebhookManager with dynamic workspace resolution."""
+
+        def __init__(self, db_session, event_broker, settings, trigger_repo):
+            self._db_session = db_session
+            self._event_broker = event_broker
+            self._settings = settings
+            self._trigger_repo = trigger_repo
+
+        async def handle_webhook_request(self, webhook_id, method, headers, body, query_params):
+            # Find trigger without workspace scoping
+            trigger = await self._trigger_repo.get_by_webhook_id(webhook_id)
+            if not trigger:
+                return {
+                    "status_code": 400,
+                    "body": {"status": "error", "message": f"Webhook {webhook_id} not found"},
+                }
+
+            # Create a FRESH session for the execution phase to avoid greenlet reuse issues
+            from agentarea_common.infrastructure.database import db
+
+            async with db.session() as fresh_session:
+                workspace_id = trigger.workspace_id or "system"
+                created_by = trigger.created_by or "system"
+                ctx = UserContext(
+                    user_id=created_by,
+                    workspace_id=workspace_id,
+                    roles=[],
+                    accessible_workspaces=[workspace_id, "system"],
+                )
+                repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)
+                sec_manager = get_real_secret_manager(session=fresh_session, user_context=ctx)
+
+                svc = await get_trigger_service(repo_factory, self._event_broker, sec_manager)
+                callback = TriggerServiceWebhookCallback(svc)
+                mgr = DefaultWebhookManager(
+                    execution_callback=callback,
+                    event_broker=self._event_broker,
+                    base_url=self._settings.triggers.WEBHOOK_BASE_URL,
+                    trigger_service=svc,
+                )
+                # Pre-register the trigger so the manager doesn't need another lookup
+                mgr._registered_webhooks[webhook_id] = trigger
+
+                return await mgr.handle_webhook_request(
+                    webhook_id, method, headers, body, query_params
+                )
+
+        async def is_healthy(self):
+            return True
+
+    return WebhookManagerWithLookup(db_session, event_broker, settings, trigger_repo)
 
 
 async def get_trigger_health_check(

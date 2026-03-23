@@ -1715,7 +1715,7 @@
     --brand-300: var(--ui-500);
     --brand-400: var(--ui-700);
     --brand-50: var(--ui-50);
-    --brand-500: var(--ui-900);
+    --brand-500: #2252b3;
     --brand-600: var(--ui-white);
     --brand-700: var(--ui-200);
     --brand-800: var(--ui-400);
@@ -1805,11 +1805,11 @@
     --color-toggle-border-default: var(--toggle-border-default);
     --color-toggle-foreground-checked: var(--toggle-foreground-checked);
     --color-toggle-foreground-default: var(--toggle-foreground-default);
-    --radius-buttons: 0.25rem;
-    --radius-forms: 0.25rem;
-    --radius-general: 0.25rem;
-    --radius-branding: 0.5rem;
-    --radius-cards: 0.75rem;
+    --radius-buttons: 4px;
+    --radius-forms: 4px;
+    --radius-general: 4px;
+    --radius-branding: 4px;
+    --radius-cards: 4px;
     --radius-identifier: 62.4375rem;
     --font-sans-default: var(--font-sans);
     --animate-caret-blink: caret-blink 1.25s ease-out infinite;

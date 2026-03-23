@@ -176,6 +176,29 @@ class MessageBuilder:
         return PromptBuilder.build_iteration_summary(iteration, tool_calls, cost)
 
 
+def build_output_summary(content: str, output_id: str) -> str:
+    """Create a compact summary of a large tool output with reference to stored version."""
+    from .constants import OUTPUT_SUMMARY_HEAD_CHARS, OUTPUT_SUMMARY_TAIL_CHARS
+
+    lines = content.split("\n")
+    head = content[:OUTPUT_SUMMARY_HEAD_CHARS]
+    total_chars = len(content)
+    total_lines = len(lines)
+
+    summary = f"[Output stored as {output_id} — {total_chars:,} chars, {total_lines} lines]\n"
+    summary += f"Preview:\n{head}\n"
+
+    if total_chars > OUTPUT_SUMMARY_HEAD_CHARS + OUTPUT_SUMMARY_TAIL_CHARS:
+        tail = content[-OUTPUT_SUMMARY_TAIL_CHARS:]
+        summary += f"...\n{tail}\n"
+
+    summary += (
+        f'\nUse read_tool_output("{output_id}") for full content, '
+        f'or read_tool_output("{output_id}", grep="pattern") to search.'
+    )
+    return summary
+
+
 class StateValidator:
     """Validates workflow state and provides error checking."""
 

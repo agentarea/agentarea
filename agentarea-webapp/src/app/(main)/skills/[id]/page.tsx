@@ -24,6 +24,21 @@ import {
 } from "@/lib/server-actions";
 import type { Skill, SkillContent, SkillFile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  listSkillMembersAction as listSkillMembers,
+  addSkillMemberAction as addSkillMember,
+  removeSkillMemberAction as removeSkillMember,
+  flattenSkillAction as flattenSkill,
+  listSkillsAction as listSkills,
+} from "@/lib/server-actions";
+import { Plus, Trash2, List } from "lucide-react";
 import YAML from "js-yaml";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 
@@ -71,14 +86,29 @@ export default function SkillDetailPage() {
   const [loadingFile, setLoadingFile] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Child skills state
+  const [childSkills, setChildSkills] = useState<any[]>([]);
+  const [allSkills, setAllSkills] = useState<any[]>([]);
+  const [showAddChildDialog, setShowAddChildDialog] = useState(false);
+  const [addingChildId, setAddingChildId] = useState<string>("");
+  const [isAddingChild, setIsAddingChild] = useState(false);
+  const [removingChildId, setRemovingChildId] = useState<string | null>(null);
+
+  // Execution order state
+  const [showExecutionOrderDialog, setShowExecutionOrderDialog] = useState(false);
+  const [executionOrder, setExecutionOrder] = useState<any[]>([]);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [skillRes, contentRes, filesRes] = await Promise.all([
+        const [skillRes, contentRes, filesRes, membersRes, allSkillsRes] = await Promise.all([
           getSkill(skillId),
           getSkillContent(skillId),
           getSkillFiles(skillId),
+          listSkillMembers(skillId),
+          listSkills(),
         ]);
 
         if (skillRes.error || !skillRes.data) {
@@ -98,6 +128,8 @@ export default function SkillDetailPage() {
         setSkill(skillData);
         setContent(contentData);
         setFiles(filesData);
+        setChildSkills((membersRes.data as any) || []);
+        setAllSkills((allSkillsRes.data as any) || []);
 
         setEditName(skillData.name);
         setEditDescription(skillData.description || "");
@@ -204,6 +236,55 @@ export default function SkillDetailPage() {
     }
   };
 
+  const handleAddChildSkill = async () => {
+    if (!addingChildId) return;
+    setIsAddingChild(true);
+    try {
+      const { error } = await addSkillMember(skillId, addingChildId);
+      if (error) {
+        toast({ title: "Error", description: "Failed to add child skill", variant: "destructive" });
+        return;
+      }
+      const { data } = await listSkillMembers(skillId);
+      setChildSkills((data as any) || []);
+      setShowAddChildDialog(false);
+      setAddingChildId("");
+      toast({ title: "Child skill added" });
+    } finally {
+      setIsAddingChild(false);
+    }
+  };
+
+  const handleRemoveChildSkill = async (childId: string) => {
+    setRemovingChildId(childId);
+    try {
+      const { error } = await removeSkillMember(skillId, childId);
+      if (error) {
+        toast({ title: "Error", description: "Failed to remove child skill", variant: "destructive" });
+        return;
+      }
+      setChildSkills((prev: any[]) => prev.filter((s: any) => s.id !== childId));
+      toast({ title: "Child skill removed" });
+    } finally {
+      setRemovingChildId(null);
+    }
+  };
+
+  const handleViewExecutionOrder = async () => {
+    setIsLoadingOrder(true);
+    setShowExecutionOrderDialog(true);
+    try {
+      const { data, error } = await flattenSkill(skillId);
+      if (error) {
+        toast({ title: "Error", description: "Failed to fetch execution order", variant: "destructive" });
+        return;
+      }
+      setExecutionOrder((data as any) || []);
+    } finally {
+      setIsLoadingOrder(false);
+    }
+  };
+
   if (loading) {
     return (
       <ContentBlock
@@ -243,6 +324,28 @@ export default function SkillDetailPage() {
         ],
         controls: (
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={handleViewExecutionOrder}
+              disabled={isLoadingOrder}
+            >
+              <List className="mr-2 h-4 w-4" />
+              View Execution Order
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={handleSave}
+              disabled={!hasChanges || saving}
+            >
+              {saving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              {tDetail("save")}
+            </Button>
             <DeleteButton
               size="xs"
               itemId={skillId}
@@ -377,6 +480,97 @@ export default function SkillDetailPage() {
           }
         />
       </div>
+
+      {/* Child Skills Section */}
+      <div className="border-t px-6 py-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">Child Skills ({childSkills.length})</h3>
+          <Button size="xs" variant="outline" onClick={() => setShowAddChildDialog(true)}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add Child Skill
+          </Button>
+        </div>
+        {childSkills.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No child skills yet.</p>
+        ) : (
+          <ul className="space-y-1">
+            {childSkills.map((child: any) => (
+              <li key={child.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                <span>{child.name}</span>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => handleRemoveChildSkill(child.id)}
+                  disabled={removingChildId === child.id}
+                >
+                  {removingChildId === child.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  )}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Add Child Skill Dialog */}
+      <Dialog open={showAddChildDialog} onOpenChange={setShowAddChildDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Child Skill</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <select
+              className="w-full rounded border bg-background px-3 py-2 text-sm"
+              value={addingChildId}
+              onChange={(e) => setAddingChildId(e.target.value)}
+            >
+              <option value="">Select a skill...</option>
+              {allSkills
+                .filter((s: any) => s.id !== skillId && !childSkills.some((c: any) => c.id === s.id))
+                .map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddChildDialog(false)}>Cancel</Button>
+            <Button onClick={handleAddChildSkill} disabled={!addingChildId || isAddingChild}>
+              {isAddingChild ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Execution Order Dialog */}
+      <Dialog open={showExecutionOrderDialog} onOpenChange={setShowExecutionOrderDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Execution Order</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            {isLoadingOrder ? (
+              <div className="flex justify-center py-6"><LoadingSpinner /></div>
+            ) : executionOrder.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No execution order available.</p>
+            ) : (
+              <ol className="space-y-1 list-decimal list-inside">
+                {executionOrder.map((item: any, idx: number) => (
+                  <li key={idx} className="text-sm py-1 border-b last:border-0">
+                    {item.name || item.id || JSON.stringify(item)}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExecutionOrderDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ContentBlock>
   );
 }

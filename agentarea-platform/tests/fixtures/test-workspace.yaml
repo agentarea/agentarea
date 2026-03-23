@@ -1,0 +1,68 @@
+skills:
+  - name: code-review-skill
+    description: "Reviews code for quality, security, and best practices"
+    content: |
+      ---
+      name: code-review-skill
+      description: Reviews code for quality, security, and best practices
+      ---
+      # Code Review Skill
+
+      You are a code reviewer. Analyze the provided code for:
+      1. Security vulnerabilities (injection, XSS, auth bypass)
+      2. Performance issues (N+1 queries, memory leaks)
+      3. Code quality (naming, structure, DRY)
+
+      Respond with a structured review including severity ratings.
+
+  - name: data-extraction-skill
+    description: "Extracts structured data from unstructured text"
+    content: |
+      ---
+      name: data-extraction-skill
+      description: Extracts structured data from unstructured text
+      ---
+      # Data Extraction Skill
+
+      You extract structured JSON from unstructured text input.
+      Always return valid JSON with consistent field names.
+      Handle missing fields gracefully with null values.
+
+agents:
+  # Agent 1: General-purpose agent with skills and tools
+  - name: DevOps Assistant
+    description: "Handles code reviews, deployments, and infrastructure tasks"
+    instruction: |
+      You are a DevOps assistant that helps with code reviews,
+      deployment pipelines, and infrastructure management.
+      Always provide actionable feedback with specific file references.
+      When reviewing code, use the code-review-skill for structured analysis.
+    planning: true
+    skill_names:
+      - code-review-skill
+    tools:
+      - type: code
+        name: code_interpreter
+
+  # Agent 2: Data processing agent with extraction skill
+  - name: Data Processor
+    description: "Processes and transforms data from various sources"
+    instruction: |
+      You are a data processing agent. Your job is to:
+      1. Accept raw data inputs (text, CSV, JSON)
+      2. Extract structured information using the data-extraction-skill
+      3. Transform and validate the output
+      4. Return clean, normalized results
+
+      Always validate your output against the expected schema.
+    planning: false
+    skill_names:
+      - data-extraction-skill
+
+  # Agent 3: Minimal agent - no skills, no tools
+  - name: Simple Responder
+    description: "A minimal agent that answers questions directly"
+    instruction: |
+      You are a helpful assistant that answers questions concisely.
+      Keep responses under 200 words unless asked for detail.
+    planning: false

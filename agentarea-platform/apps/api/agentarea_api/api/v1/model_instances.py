@@ -7,6 +7,7 @@ from agentarea_agents_sdk.models import LLMModel, LLMRequest
 # Import LLM testing components
 from agentarea_api.api.deps.services import get_provider_service
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.permission import require_permission
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
 from fastapi import APIRouter, Depends, HTTPException
@@ -151,6 +152,7 @@ async def delete_model_instance(
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Delete a model instance."""
+    await require_permission("delete", "model_instance", str(instance_id), user_context.user_id)
     success = await provider_service.delete_model_instance(instance_id)
     if not success:
         raise HTTPException(status_code=404, detail="Model instance not found")

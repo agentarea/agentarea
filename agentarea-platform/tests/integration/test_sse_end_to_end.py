@@ -77,7 +77,7 @@ async def simulate_workflow_publishing(event_broker, task_id: UUID, num_events: 
             original_data={
                 "task_id": str(task_id),
                 "agent_id": str(uuid4()),
-                "execution_id": f"agent-task-{task_id}",
+                "execution_id": f"task-{task_id}",
                 "iteration": i + 1,
                 "message": f"Workflow {event_type} event #{i + 1}",
             },
@@ -150,7 +150,7 @@ async def test_end_to_end_workflow():
         user_id="test_user",
         agent_id=uuid4(),
         status="running",
-        execution_id=f"agent-task-{task_id}",
+        execution_id=f"task-{task_id}",
     )
     await task_repository.create(test_task)
 

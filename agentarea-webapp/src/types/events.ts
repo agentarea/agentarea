@@ -30,7 +30,8 @@ export type WorkflowEventType =
   | "ContextWarning"
   | "ContextCompacted"
   | "HumanApprovalRequested"
-  | "HumanApprovalReceived";
+  | "HumanApprovalReceived"
+  | "HumanApprovalDenied";
 
 // SSE message format (what we receive over SSE) - matches protocol structure
 export interface SSEMessage {
@@ -259,6 +260,12 @@ export const EVENT_TYPE_CONFIG: Record<
     icon: "user-check",
     color: "green",
   },
+  HumanApprovalDenied: {
+    title: "Approval Denied",
+    level: "warning",
+    icon: "user-x",
+    color: "red",
+  },
 };
 
 // Utility functions
@@ -306,6 +313,8 @@ export const mapSSEToDisplayEvent = (
     humanapprovalrequested: "HumanApprovalRequested",
     human_approval_received: "HumanApprovalReceived",
     humanapprovalreceived: "HumanApprovalReceived",
+    human_approval_denied: "HumanApprovalDenied",
+    humanapprovaldenied: "HumanApprovalDenied",
     task_completed: "WorkflowCompleted",
     taskcompleted: "WorkflowCompleted",
     task_failed: "WorkflowFailed",

@@ -475,7 +475,7 @@ async def test_cli_workflow_sse_integration():
             user_id="test_user",
             agent_id=agent_id,
             status="running",
-            execution_id=f"agent-task-{task_id}",
+            execution_id=f"task-{task_id}",
         )
         # Add task to task manager
         task_manager.tasks[task_id] = test_task
@@ -539,7 +539,7 @@ async def test_cli_workflow_sse_integration():
             workflow_handle = await env.client.start_workflow(
                 AgentExecutionWorkflow.run,
                 request,
-                id=f"agent-task-{task_id}",
+                id=f"task-{task_id}",
                 task_queue="test-task-queue",
             )
 

@@ -28,9 +28,9 @@ from .messages import (
 logger = logging.getLogger(__name__)
 
 # Configure LiteLLM callbacks via env to avoid noisy defaults during tests
-import os  # noqa: E402
+import os as _os  # noqa: E402
 
-_callbacks_env = os.getenv("LITELLM_CALLBACKS")
+_callbacks_env = _os.getenv("LITELLM_CALLBACKS")
 if _callbacks_env is not None:
     try:
         litellm.callbacks = [cb.strip() for cb in _callbacks_env.split(",") if cb.strip()]

@@ -101,12 +101,12 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
                    -c shared_buffers=256MB
                    -c effective_cache_size=1GB
     
-      redis:
-        image: redis:7-alpine
+      valkey:
+        image: valkey/valkey:8
         restart: unless-stopped
-        command: redis-server --appendonly yes --maxmemory 512mb
+        command: valkey-server --appendonly yes --maxmemory 512mb
         volumes:
-          - redis-data:/data
+          - valkey-data:/data
         networks:
           - agentarea-network
     

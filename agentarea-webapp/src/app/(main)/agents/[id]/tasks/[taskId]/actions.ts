@@ -6,6 +6,7 @@ import {
   getAgentTaskStatus,
   pauseAgentTask,
   resumeAgentTask,
+  resolveEscalation as resolveEscalationApi,
 } from "@/lib/api";
 
 export async function getTaskStatus(agentId: string, taskId: string) {
@@ -26,4 +27,14 @@ export async function resumeTask(agentId: string, taskId: string) {
 
 export async function cancelTask(agentId: string, taskId: string) {
   return await cancelAgentTask(agentId, taskId);
+}
+
+export async function resolveEscalation(
+  agentId: string,
+  taskId: string,
+  escalationId: string,
+  approved: boolean,
+  comment: string = ""
+) {
+  return await resolveEscalationApi(agentId, taskId, escalationId, approved, comment);
 }

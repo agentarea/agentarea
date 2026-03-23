@@ -34,6 +34,13 @@ MIN_RECENT_MESSAGES_TO_KEEP: Final[int] = 6  # Always keep last 6 messages (3 tu
 TOKENS_PER_MESSAGE_OVERHEAD: Final[int] = 4  # ~4 tokens overhead per message
 DEFAULT_CONTEXT_WINDOW: Final[int] = 128000  # Fallback if not set on model
 
+# Dynamic context discovery — output offloading
+TOOL_OUTPUT_OFFLOAD_CHARS: Final[int] = 8000  # ~2000 tokens
+OUTPUT_SUMMARY_HEAD_CHARS: Final[int] = 500
+OUTPUT_SUMMARY_TAIL_CHARS: Final[int] = 200
+READ_OUTPUT_MAX_RETURN_CHARS: Final[int] = 16000  # Safety limit for read_tool_output
+HISTORY_SEARCH_MAX_RESULTS: Final[int] = 20
+
 
 # Event types
 class EventTypes:
@@ -70,6 +77,7 @@ class EventTypes:
 
     HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
     HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
+    HUMAN_APPROVAL_DENIED: Final[str] = "HumanApprovalDenied"
 
 
 # Activity names
@@ -90,6 +98,14 @@ class Activities:
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
     RECALL_HISTORY: Final[str] = "recall_history_activity"
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
+    RESOLVE_SKILL_FILE: Final[str] = "resolve_skill_file_activity"
+    EXECUTE_SKILL_SCRIPT: Final[str] = "execute_skill_script_activity"
+    # Dynamic context discovery
+    DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"
+    STORE_CONTEXT_OUTPUT: Final[str] = "store_context_output"
+    READ_CONTEXT_OUTPUT: Final[str] = "read_context_output"
+    STORE_HISTORY_CHUNK: Final[str] = "store_history_chunk"
+    SEARCH_HISTORY: Final[str] = "search_history"
 
 
 # Execution statuses

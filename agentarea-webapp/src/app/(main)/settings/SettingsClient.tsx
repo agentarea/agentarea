@@ -127,6 +127,7 @@ export default function SettingsClient() {
               </div>
             </div>
           </section>
+
         </div>
       </div>
     </ContentBlock>

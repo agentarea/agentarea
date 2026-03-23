@@ -11,6 +11,7 @@ from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporterError,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.base import RepositoryFactoryDep
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse
@@ -288,8 +289,10 @@ async def update_skill(
     skill_id: UUID,
     request: SkillUpdateRequest,
     skill_service: SkillServiceDep,
+    user_context: UserContextDep,
 ):
     """Update a skill."""
+    await require_permission("edit", "skill", str(skill_id), user_context.user_id)
     skill = await skill_service.update(
         skill_id,
         name=request.name,
@@ -307,8 +310,10 @@ async def update_skill(
 async def delete_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
+    user_context: UserContextDep,
 ):
     """Delete a skill."""
+    await require_permission("delete", "skill", str(skill_id), user_context.user_id)
     deleted = await skill_service.delete(skill_id)
 
     if not deleted:

@@ -73,10 +73,10 @@ class RedisEventBroker(EventBroker):
 
     async def _create_raw_redis(self) -> redis.Redis:
         """Create a raw Redis client for cross-language publishing."""
-        # Default to localhost:6379, can be overridden via environment
-        import os
+        from agentarea_common.config import get_settings
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        settings = get_settings()
+        redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
         return redis.from_url(redis_url, decode_responses=True)
 
     async def is_connected(self) -> bool:

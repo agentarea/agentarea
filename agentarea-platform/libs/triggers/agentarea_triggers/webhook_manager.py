@@ -138,10 +138,12 @@ class DefaultWebhookManager(WebhookManager):
         execution_callback: WebhookExecutionCallback,
         event_broker: EventBroker | None = None,
         base_url: str = "/webhooks",
+        trigger_service: Any = None,
     ):
         self.execution_callback = execution_callback
         self.event_broker = event_broker
         self.base_url = base_url.rstrip("/")
+        self.trigger_service = trigger_service
         self._registered_webhooks: dict[str, WebhookTrigger] = {}
         self._load_provider_config()
 
@@ -228,8 +230,31 @@ class DefaultWebhookManager(WebhookManager):
                 content_type=headers.get("content-type", "unknown"),
             )
 
-            # Find the trigger
+            # Find the trigger (in-memory cache first, then DB fallback)
             trigger = self._registered_webhooks.get(webhook_id)
+            if not trigger and self.trigger_service:
+                try:
+                    db_trigger = await self.trigger_service.get_trigger_by_webhook_id(webhook_id)
+                    if db_trigger:
+                        trigger = db_trigger
+                        # Cache for future requests
+                        self._registered_webhooks[webhook_id] = trigger
+                        # Update the service's workspace context to match the trigger's workspace
+                        if (
+                            hasattr(self.trigger_service, "trigger_repository")
+                            and db_trigger.workspace_id
+                        ):
+                            repo = self.trigger_service.trigger_repository
+                            if hasattr(repo, "user_context") and hasattr(
+                                repo.user_context, "workspace_id"
+                            ):
+                                repo.user_context.workspace_id = db_trigger.workspace_id
+                                repo.user_context.user_id = (
+                                    db_trigger.created_by or repo.user_context.user_id
+                                )
+                        logger.info(f"Loaded trigger from DB for webhook {webhook_id}")
+                except Exception as db_err:
+                    logger.warning(f"DB lookup failed for webhook {webhook_id}: {db_err}")
             if not trigger:
                 error_msg = f"Webhook {webhook_id} not found"
                 logger.warning(error_msg, webhook_id=webhook_id)
@@ -286,7 +311,9 @@ class DefaultWebhookManager(WebhookManager):
                     "Successfully parsed webhook data",
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value,
+                    webhook_type=trigger.webhook_type.value
+                    if hasattr(trigger.webhook_type, "value")
+                    else trigger.webhook_type,
                 )
             except Exception as parse_error:
                 error_msg = f"Failed to parse webhook data: {parse_error}"
@@ -294,9 +321,39 @@ class DefaultWebhookManager(WebhookManager):
                     error_msg,
                     webhook_id=webhook_id,
                     trigger_id=trigger.id,
-                    webhook_type=trigger.webhook_type.value,
+                    webhook_type=trigger.webhook_type.value
+                    if hasattr(trigger.webhook_type, "value")
+                    else trigger.webhook_type,
                 )
                 return await self.get_webhook_response(False, "Failed to parse request data")
+
+            # Handle channel verification responses (Slack challenge, Discord PING)
+            if parsed_data.get("_challenge_response"):
+                return {
+                    "status_code": 200,
+                    "body": {"challenge": parsed_data.get("challenge")},
+                }
+            if parsed_data.get("_ping_response"):
+                return {
+                    "status_code": 200,
+                    "body": {"type": 1},
+                }
+
+            # Extract event type from parsed data and check against trigger filter
+            event_type = self._extract_event_type(trigger, parsed_data)
+            if event_type:
+                parsed_data["event_type"] = event_type
+
+            # Check event type filter
+            if trigger.event_types and event_type:
+                if not self._matches_event_filter(event_type, trigger.event_types):
+                    logger.info(
+                        "Event filtered out by trigger event_types",
+                        webhook_id=webhook_id,
+                        event_type=event_type,
+                        allowed_events=trigger.event_types,
+                    )
+                    return await self.get_webhook_response(True)  # 200 but don't execute
 
             # Execute the webhook trigger
             try:
@@ -465,6 +522,66 @@ class DefaultWebhookManager(WebhookManager):
             logger.error(f"Webhook manager health check failed: {e}")
             return False
 
+    def _extract_event_type(
+        self, trigger: WebhookTrigger, parsed_data: dict[str, Any]
+    ) -> str | None:
+        """Extract the event type from parsed webhook data based on channel."""
+        webhook_type = trigger.webhook_type
+        if hasattr(webhook_type, "value"):
+            webhook_type = webhook_type.value if hasattr(webhook_type, "value") else webhook_type
+
+        if webhook_type == "slack":
+            # Slack Events API: event.type field
+            event = parsed_data.get("raw_data", {}).get("event", {})
+            return event.get("type") if event else parsed_data.get("raw_data", {}).get("type")
+        elif webhook_type == "github":
+            # GitHub: X-GitHub-Event header + action
+            event = parsed_data.get("github_event", "")
+            action = parsed_data.get("action")
+            return f"{event}.{action}" if action else event
+        elif webhook_type == "discord":
+            return parsed_data.get("raw_data", {}).get("t")
+        elif webhook_type == "telegram":
+            # Telegram: determine by which field is present
+            raw = parsed_data.get("raw_data", {})
+            for key in [
+                "message",
+                "edited_message",
+                "channel_post",
+                "callback_query",
+                "inline_query",
+            ]:
+                if key in raw:
+                    return key
+            return None
+        elif webhook_type == "linear":
+            return parsed_data.get("raw_data", {}).get("type")
+        elif webhook_type == "stripe":
+            return parsed_data.get("raw_data", {}).get("type")
+        elif webhook_type == "gmail":
+            return "message_received"  # Gmail push notifications are always about new messages
+        elif webhook_type == "teams":
+            return parsed_data.get("raw_data", {}).get("type")
+        return None
+
+    def _matches_event_filter(self, event_type: str, allowed_events: list[str]) -> bool:
+        """Check if event_type matches any of the allowed events.
+
+        Supports exact match and parent match (e.g., 'pull_request' matches 'pull_request.opened').
+        """
+        if not allowed_events:
+            return True
+        for allowed in allowed_events:
+            if event_type == allowed:
+                return True
+            # Check parent match: if allowed is "pull_request", it matches "pull_request.opened"
+            if event_type.startswith(f"{allowed}."):
+                return True
+            # Check child match: if allowed is "pull_request.opened", and event is "pull_request.opened"
+            if allowed.startswith(f"{event_type}."):
+                return True
+        return False
+
     async def _parse_webhook_data(
         self, trigger: WebhookTrigger, request_data: WebhookRequestData
     ) -> dict[str, Any]:
@@ -481,7 +598,7 @@ class DefaultWebhookManager(WebhookManager):
         webhook_type = trigger.webhook_type
         # Handle enum value if needed (though model is str now)
         if hasattr(webhook_type, "value"):
-            webhook_type = webhook_type.value
+            webhook_type = webhook_type.value if hasattr(webhook_type, "value") else webhook_type
 
         # Check provider config first
         provider = self.providers.get(webhook_type)
@@ -498,6 +615,8 @@ class DefaultWebhookManager(WebhookManager):
                     "github": "_parse_github_webhook",
                     "discord": "_parse_discord_webhook",
                     "linear": "_parse_linear_webhook",
+                    "gmail": "_parse_gmail_webhook",
+                    "teams": "_parse_teams_webhook",
                 }
                 method_name = method_map.get(webhook_type)
                 if method_name and hasattr(self, method_name):
@@ -518,6 +637,10 @@ class DefaultWebhookManager(WebhookManager):
             return await self._parse_discord_webhook(request_data, base_data)
         elif webhook_type == WebhookType.LINEAR:
             return await self._parse_linear_webhook(request_data, base_data)
+        elif webhook_type == WebhookType.GMAIL:
+            return await self._parse_gmail_webhook(request_data, base_data)
+        elif webhook_type == WebhookType.TEAMS:
+            return await self._parse_teams_webhook(request_data, base_data)
         else:
             # Generic webhook - just include raw body
             return {**base_data, "body": request_data.body, "raw_data": request_data.body}
@@ -601,27 +724,87 @@ class DefaultWebhookManager(WebhookManager):
     async def _parse_slack_webhook(
         self, request_data: WebhookRequestData, base_data: dict[str, Any]
     ) -> dict[str, Any]:
-        """Parse Slack webhook data."""
+        """Parse Slack webhook data with full event support."""
         try:
-            # Slack can send JSON or form data
             if isinstance(request_data.body, dict):
                 slack_data = request_data.body
             else:
                 try:
                     slack_data = json.loads(request_data.body)
                 except json.JSONDecodeError:
-                    # Might be form data
                     slack_data = {"raw_body": request_data.body}
+
+            # Handle Slack URL verification challenge
+            if slack_data.get("type") == "url_verification":
+                return {
+                    **base_data,
+                    "_challenge_response": True,
+                    "challenge": slack_data.get("challenge"),
+                    "raw_data": slack_data,
+                }
 
             parsed_data = {
                 **base_data,
-                "slack_team_id": slack_data.get("team_id"),
-                "slack_channel_id": slack_data.get("channel_id"),
-                "slack_user_id": slack_data.get("user_id"),
-                "slack_text": slack_data.get("text"),
-                "slack_timestamp": slack_data.get("ts"),
                 "raw_data": slack_data,
             }
+
+            # Events API format
+            if "event" in slack_data:
+                event = slack_data["event"]
+                parsed_data.update(
+                    {
+                        "event_type": event.get("type"),
+                        "team_id": slack_data.get("team_id"),
+                        "channel": event.get("channel"),
+                        "user": event.get("user"),
+                        "text": event.get("text"),
+                        "thread_ts": event.get("thread_ts"),
+                        "ts": event.get("ts") or event.get("event_ts"),
+                        "files": event.get("files"),
+                        "blocks": event.get("blocks"),
+                    }
+                )
+            # Interactive payloads (block_actions, view_submission, shortcuts)
+            elif slack_data.get("type") in (
+                "block_actions",
+                "view_submission",
+                "shortcut",
+                "message_action",
+            ):
+                parsed_data.update(
+                    {
+                        "event_type": slack_data.get("type"),
+                        "team_id": slack_data.get("team", {}).get("id"),
+                        "user": slack_data.get("user", {}).get("id"),
+                        "channel": slack_data.get("channel", {}).get("id"),
+                        "trigger_id": slack_data.get("trigger_id"),
+                        "actions": slack_data.get("actions"),
+                        "view": slack_data.get("view"),
+                    }
+                )
+            # Slash commands (form-encoded, already parsed to dict)
+            elif "command" in slack_data:
+                parsed_data.update(
+                    {
+                        "event_type": "command",
+                        "command": slack_data.get("command"),
+                        "text": slack_data.get("text"),
+                        "user": slack_data.get("user_id"),
+                        "channel": slack_data.get("channel_id"),
+                        "team_id": slack_data.get("team_id"),
+                    }
+                )
+            # Legacy format fallback
+            else:
+                parsed_data.update(
+                    {
+                        "team_id": slack_data.get("team_id"),
+                        "channel": slack_data.get("channel_id"),
+                        "user": slack_data.get("user_id"),
+                        "text": slack_data.get("text"),
+                        "ts": slack_data.get("ts"),
+                    }
+                )
 
             return parsed_data
 
@@ -632,26 +815,107 @@ class DefaultWebhookManager(WebhookManager):
     async def _parse_github_webhook(
         self, request_data: WebhookRequestData, base_data: dict[str, Any]
     ) -> dict[str, Any]:
-        """Parse GitHub webhook data."""
+        """Parse GitHub webhook data with rich event support."""
         try:
-            # GitHub sends JSON data
             if isinstance(request_data.body, dict):
                 github_data = request_data.body
             else:
                 github_data = json.loads(request_data.body)
 
-            # Extract GitHub event type from headers
             event_type = request_data.headers.get("x-github-event", "unknown")
+            action = github_data.get("action")
 
             parsed_data = {
                 **base_data,
+                "event_type": f"{event_type}.{action}" if action else event_type,
                 "github_event": event_type,
                 "github_delivery": request_data.headers.get("x-github-delivery"),
-                "repository": github_data.get("repository", {}).get("full_name"),
-                "sender": github_data.get("sender", {}).get("login"),
-                "action": github_data.get("action"),
+                "action": action,
+                "repository": {
+                    "full_name": github_data.get("repository", {}).get("full_name"),
+                    "url": github_data.get("repository", {}).get("html_url"),
+                    "private": github_data.get("repository", {}).get("private"),
+                }
+                if github_data.get("repository")
+                else None,
+                "sender": {
+                    "login": github_data.get("sender", {}).get("login"),
+                    "avatar_url": github_data.get("sender", {}).get("avatar_url"),
+                }
+                if github_data.get("sender")
+                else None,
                 "raw_data": github_data,
             }
+
+            # Event-specific fields
+            if event_type == "push":
+                parsed_data.update(
+                    {
+                        "ref": github_data.get("ref"),
+                        "before": github_data.get("before"),
+                        "after": github_data.get("after"),
+                        "compare": github_data.get("compare"),
+                        "commits": [
+                            {
+                                "id": c.get("id", "")[:8],
+                                "message": c.get("message"),
+                                "author": c.get("author", {}).get("name"),
+                                "url": c.get("url"),
+                            }
+                            for c in (github_data.get("commits") or [])[:10]
+                        ],
+                        "forced": github_data.get("forced"),
+                    }
+                )
+            elif event_type == "pull_request":
+                pr = github_data.get("pull_request", {})
+                parsed_data.update(
+                    {
+                        "number": pr.get("number"),
+                        "title": pr.get("title"),
+                        "body": (pr.get("body") or "")[:500],
+                        "head_branch": pr.get("head", {}).get("ref"),
+                        "base_branch": pr.get("base", {}).get("ref"),
+                        "mergeable": pr.get("mergeable"),
+                        "draft": pr.get("draft"),
+                        "url": pr.get("html_url"),
+                    }
+                )
+            elif event_type == "issues":
+                issue = github_data.get("issue", {})
+                parsed_data.update(
+                    {
+                        "number": issue.get("number"),
+                        "title": issue.get("title"),
+                        "body": (issue.get("body") or "")[:500],
+                        "labels": [label.get("name") for label in (issue.get("labels") or [])],
+                        "assignees": [a.get("login") for a in (issue.get("assignees") or [])],
+                        "url": issue.get("html_url"),
+                    }
+                )
+            elif event_type == "issue_comment":
+                comment = github_data.get("comment", {})
+                parsed_data.update(
+                    {
+                        "issue_number": github_data.get("issue", {}).get("number"),
+                        "issue_title": github_data.get("issue", {}).get("title"),
+                        "comment_body": (comment.get("body") or "")[:500],
+                        "comment_user": comment.get("user", {}).get("login"),
+                        "url": comment.get("html_url"),
+                    }
+                )
+            elif event_type == "release":
+                release = github_data.get("release", {})
+                parsed_data.update(
+                    {
+                        "tag_name": release.get("tag_name"),
+                        "name": release.get("name"),
+                        "body": (release.get("body") or "")[:500],
+                        "prerelease": release.get("prerelease"),
+                        "draft": release.get("draft"),
+                        "url": release.get("html_url"),
+                    }
+                )
 
             return parsed_data
 
@@ -662,21 +926,85 @@ class DefaultWebhookManager(WebhookManager):
     async def _parse_discord_webhook(
         self, request_data: WebhookRequestData, base_data: dict[str, Any]
     ) -> dict[str, Any]:
-        """Parse Discord webhook data."""
+        """Parse Discord webhook data with interaction support."""
         try:
             if isinstance(request_data.body, dict):
                 discord_data = request_data.body
             else:
                 discord_data = json.loads(request_data.body)
 
+            # Handle Discord PING verification (required for interaction endpoints)
+            if discord_data.get("type") == 1:
+                return {
+                    **base_data,
+                    "_ping_response": True,
+                    "type": 1,
+                    "raw_data": discord_data,
+                }
+
             parsed_data = {
                 **base_data,
-                "discord_channel_id": discord_data.get("channel_id"),
-                "discord_guild_id": discord_data.get("guild_id"),
-                "discord_author": discord_data.get("author", {}).get("username"),
-                "discord_content": discord_data.get("content"),
                 "raw_data": discord_data,
             }
+
+            # Gateway events (forwarded from bot)
+            if "t" in discord_data:
+                parsed_data.update(
+                    {
+                        "event_type": discord_data.get("t"),
+                        "sequence": discord_data.get("s"),
+                    }
+                )
+                d = discord_data.get("d", {})
+                parsed_data.update(
+                    {
+                        "channel_id": d.get("channel_id"),
+                        "guild_id": d.get("guild_id"),
+                        "content": d.get("content"),
+                        "author": {
+                            "id": d.get("author", {}).get("id"),
+                            "username": d.get("author", {}).get("username"),
+                            "discriminator": d.get("author", {}).get("discriminator"),
+                        }
+                        if d.get("author")
+                        else None,
+                        "embeds": d.get("embeds"),
+                        "attachments": d.get("attachments"),
+                        "message_id": d.get("id"),
+                    }
+                )
+            # Interaction payloads
+            elif "type" in discord_data and discord_data["type"] in (2, 3, 4, 5):
+                interaction_types = {
+                    2: "APPLICATION_COMMAND",
+                    3: "MESSAGE_COMPONENT",
+                    4: "AUTOCOMPLETE",
+                    5: "MODAL_SUBMIT",
+                }
+                parsed_data.update(
+                    {
+                        "event_type": f"INTERACTION_{interaction_types.get(discord_data['type'], 'UNKNOWN')}",
+                        "interaction_id": discord_data.get("id"),
+                        "interaction_token": discord_data.get("token"),
+                        "channel_id": discord_data.get("channel_id"),
+                        "guild_id": discord_data.get("guild_id"),
+                        "member": discord_data.get("member"),
+                        "data": discord_data.get("data"),
+                    }
+                )
+            # Simple webhook message
+            else:
+                parsed_data.update(
+                    {
+                        "channel_id": discord_data.get("channel_id"),
+                        "guild_id": discord_data.get("guild_id"),
+                        "author": discord_data.get("author", {}).get("username")
+                        if discord_data.get("author")
+                        else None,
+                        "content": discord_data.get("content"),
+                    }
+                )
+
             return parsed_data
         except Exception as e:
             logger.error(f"Error parsing Discord webhook: {e}")
@@ -704,4 +1032,93 @@ class DefaultWebhookManager(WebhookManager):
             return parsed_data
         except Exception as e:
             logger.error(f"Error parsing Linear webhook: {e}")
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}
+
+    async def _parse_gmail_webhook(
+        self, request_data: WebhookRequestData, base_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Parse Gmail Pub/Sub push notification."""
+        try:
+            import base64
+
+            if isinstance(request_data.body, dict):
+                pubsub_data = request_data.body
+            else:
+                pubsub_data = json.loads(request_data.body)
+
+            # Google Pub/Sub wraps the notification
+            message = pubsub_data.get("message", {})
+            data_b64 = message.get("data", "")
+
+            # Decode the base64 notification data
+            decoded = {}
+            if data_b64:
+                try:
+                    decoded = json.loads(base64.b64decode(data_b64).decode("utf-8"))
+                except Exception:
+                    decoded = {"raw": data_b64}
+
+            parsed_data = {
+                **base_data,
+                "event_type": "message_received",
+                "email_address": decoded.get("emailAddress"),
+                "history_id": decoded.get("historyId"),
+                "subscription": pubsub_data.get("subscription"),
+                "message_id": message.get("messageId"),
+                "publish_time": message.get("publishTime"),
+                "raw_data": pubsub_data,
+            }
+
+            return parsed_data
+        except Exception as e:
+            logger.error(f"Error parsing Gmail webhook: {e}")
+            return {**base_data, "body": request_data.body, "parse_error": str(e)}
+
+    async def _parse_teams_webhook(
+        self, request_data: WebhookRequestData, base_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Parse Microsoft Teams Bot Framework Activity."""
+        try:
+            if isinstance(request_data.body, dict):
+                activity = request_data.body
+            else:
+                activity = json.loads(request_data.body)
+
+            parsed_data = {
+                **base_data,
+                "event_type": activity.get("type", "message"),
+                "activity_id": activity.get("id"),
+                "channel_id": activity.get("channelId"),
+                "conversation_id": activity.get("conversation", {}).get("id"),
+                "from_id": activity.get("from", {}).get("id"),
+                "from_name": activity.get("from", {}).get("name"),
+                "text": activity.get("text"),
+                "service_url": activity.get("serviceUrl"),
+                "tenant_id": activity.get("channelData", {}).get("tenant", {}).get("id"),
+                "raw_data": activity,
+            }
+
+            # Handle specific activity types
+            if activity.get("type") == "conversationUpdate":
+                parsed_data.update(
+                    {
+                        "members_added": [
+                            m.get("name") for m in (activity.get("membersAdded") or [])
+                        ],
+                        "members_removed": [
+                            m.get("name") for m in (activity.get("membersRemoved") or [])
+                        ],
+                    }
+                )
+            elif activity.get("type") == "messageReaction":
+                parsed_data.update(
+                    {
+                        "reactions_added": activity.get("reactionsAdded"),
+                        "reactions_removed": activity.get("reactionsRemoved"),
+                    }
+                )
+
+            return parsed_data
+        except Exception as e:
+            logger.error(f"Error parsing Teams webhook: {e}")
             return {**base_data, "body": request_data.body, "parse_error": str(e)}

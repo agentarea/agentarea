@@ -108,7 +108,7 @@ export const ModelItemControl = ({
       </div>
 
       {/* Test Section */}
-      {/* {canTest && providerConfigId && (
+      {canTest && providerConfigId && (
         <div className="ml-6 space-y-2">
           <div className="flex items-center gap-2">
             <Button
@@ -171,7 +171,7 @@ export const ModelItemControl = ({
             </div>
           )}
         </div>
-      )} */}
+      )}
     </div>
   );
 };

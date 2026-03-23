@@ -144,6 +144,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         public_prefixes = [
             "/static/",
             "/v1/auth/",  # All auth endpoints are public
+            "/v1/webhooks/",  # Webhook receivers must be public for external services
+            "/webhooks/",  # Webhook receivers mounted at root level
         ]
 
         # A2A endpoints handle their own authentication

@@ -65,6 +65,9 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.GET("/monitoring/status", h.getMonitoringStatus)
 	router.GET("/monitoring/health-summary", h.getHealthSummary)
 
+	// Sandbox execution (uses warm pool pods for isolated script execution)
+	router.POST("/sandbox/execute", h.executeSandbox)
+
 	// Legacy container endpoints for backward compatibility (only when container manager is available)
 	if h.containerManager != nil {
 		router.GET("/containers", h.listContainers)

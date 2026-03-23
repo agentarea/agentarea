@@ -7,12 +7,13 @@
     "dev:ssl": "PORT=443 next dev --experimental-https",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .ts,.tsx,.js,.jsx,.mjs",
+    "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "generate:schema": "npx openapi-typescript http://localhost:8000/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^2.0.4",
     "@hookform/resolvers": "^5.0.1",
     "@ory/client-fetch": "^1.22.2",
     "@ory/elements-react": "workspace:*",
@@ -38,6 +39,7 @@
     "@tiptap/extension-placeholder": "^3.12.1",
     "@tiptap/react": "^3.12.1",
     "@tiptap/starter-kit": "^3.12.1",
+    "@xyflow/react": "^12.10.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -46,16 +48,16 @@
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.475.0",
     "marked": "^17.0.0",
-    "next": "16.0.11",
+    "next": "16.1.6",
     "next-intl": "^4.1.0",
     "next-themes": "^0.4.4",
     "openapi-fetch": "^0.13.5",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-hook-form": "^7.55.0",
     "react-resizable-panels": "^3.0.6",
     "sonner": "^2.0.6",
-    "streamdown": "^1.3.0",
+    "streamdown": "^2.4.0",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "turndown": "^7.2.2",
@@ -70,7 +72,7 @@
     "@types/react-dom": "^19",
     "@types/turndown": "^5.0.6",
     "eslint": "^9",
-    "eslint-config-next": "15.1.6",
+    "eslint-config-next": "16.1.6",
     "postcss": "^8",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.1",
@@ -81,7 +83,7 @@
     "overrides": {
       "basic-ftp": ">=5.2.0",
       "glob": ">=10.5.0",
-      "rollup": ">=4.22.4"
+      "svgo": ">=3.3.3"
     }
   }
 }

@@ -8,6 +8,9 @@ import { getOryBrowserConfig, rewriteFlowForBrowser } from "@/lib/auth/browser-c
 import { serverSideFrontendClient, initOverrides, getPublicUrl } from "@/lib/auth/client";
 import { toGetFlowParameter, QueryParams } from "@/lib/auth/utils";
 
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { getAuthPageConfig } from "@/lib/auth/page-config";
+
 export const metadata: Metadata = {
   title: "Login",
 };
@@ -37,7 +40,11 @@ export default async function LoginPage(props: OryPageParams) {
   }
 
   const browserFlow = rewriteFlowForBrowser(flow);
-  const browserConfig = getOryBrowserConfig();
+  const loginConfig = getAuthPageConfig();
 
-  return <Login flow={browserFlow} config={browserConfig} />;
+  return (
+    <AuthLayout>
+      <Login flow={browserFlow} config={loginConfig} />
+    </AuthLayout>
+  );
 }

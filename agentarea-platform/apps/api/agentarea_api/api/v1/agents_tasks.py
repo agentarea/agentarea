@@ -33,6 +33,13 @@ class TaskCreate(BaseModel):
     parameters: dict[str, Any] = {}
     enable_agent_communication: bool | None = True
     requires_human_approval: bool | None = False
+    project_id: str | None = None
+
+
+class EscalationResolution(BaseModel):
+    escalation_id: str
+    approved: bool
+    comment: str = ""
 
 
 class TaskResponse(BaseModel):
@@ -458,7 +465,7 @@ async def get_agent_task(
 
     try:
         # Get workflow status using the execution ID pattern
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # If status indicates unknown, the task/workflow doesn't exist
@@ -501,7 +508,7 @@ async def get_agent_task_status(
 
     try:
         # Get workflow status using the execution ID pattern
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         return {
@@ -541,7 +548,7 @@ async def cancel_agent_task(
 
     try:
         # Cancel the workflow using the execution ID pattern
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         success = await workflow_task_service.cancel_task(execution_id)
 
         if success:
@@ -571,7 +578,7 @@ async def pause_agent_task(
 
     try:
         # Get current task status to validate it can be paused
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # Check if task exists
@@ -624,7 +631,7 @@ async def resume_agent_task(
 
     try:
         # Get current task status to validate it can be resumed
-        execution_id = f"agent-task-{task_id}"
+        execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # Check if task exists
@@ -661,6 +668,43 @@ async def resume_agent_task(
         raise
     except Exception as e:
         logger.error(f"Failed to resume task {task_id} for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{task_id}/resolve-escalation")
+async def resolve_task_escalation(
+    agent_id: UUID,
+    task_id: UUID,
+    data: EscalationResolution,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+):
+    """Resolve a tool escalation for the specified task workflow."""
+    # Verify agent exists
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    try:
+        execution_id = f"task-{task_id}"
+        success = await workflow_task_service.resolve_escalation(
+            execution_id, data.escalation_id, data.approved, data.comment
+        )
+
+        if success:
+            return {
+                "status": "resolved",
+                "escalation_id": data.escalation_id,
+                "approved": data.approved,
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to resolve escalation")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to resolve escalation for task {task_id}, agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -731,11 +775,12 @@ async def get_task_events(
                     id=str(row.id),
                     task_id=str(row.task_id),
                     agent_id=str(agent_id),
-                    execution_id=row.event_metadata.get("execution_id", "unknown"),
+                    execution_id=row.data.get("execution_id")
+                    or row.event_metadata.get("execution_id", "unknown"),
                     timestamp=row.timestamp,
                     event_type=row.event_type,
                     message=row.data.get("message", f"Event: {row.event_type}"),
-                    metadata=dict(row.event_metadata) if row.event_metadata else {},
+                    metadata=dict(row.data) if row.data else {},
                 )
             )
 

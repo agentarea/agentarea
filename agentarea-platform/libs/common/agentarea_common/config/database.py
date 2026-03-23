@@ -17,10 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .base import BaseAppSettings
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logger = logging.getLogger(__name__)
 
 
 class DatabaseSettings(BaseAppSettings):
