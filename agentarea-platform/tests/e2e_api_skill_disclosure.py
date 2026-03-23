@@ -205,7 +205,7 @@ def main():
             e for e in tool_events
             if e.get("metadata", {}).get("tool_name") == "activate_skill"
         ]
-        _other_tool_events = [
+        _other_tool_events = [  # noqa: F841
             e for e in tool_events
             if e.get("metadata", {}).get("tool_name") not in ("activate_skill", "completion")
         ]

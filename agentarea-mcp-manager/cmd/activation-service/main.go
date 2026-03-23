@@ -592,8 +592,9 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.RemoveAll(workspace)
 
-	// Write script to workspace
-	scriptPath := filepath.Join(workspace, req.ScriptName)
+	// Write script to workspace — use cleaned filename to prevent path traversal
+	cleanName := filepath.Base(req.ScriptName)
+	scriptPath := filepath.Join(workspace, cleanName)
 	if err := os.WriteFile(scriptPath, []byte(req.ScriptContent), 0500); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error": "failed to write script: %v"}`, err), http.StatusInternalServerError)
 		return
