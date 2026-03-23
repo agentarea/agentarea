@@ -21,10 +21,10 @@ import {
 } from "@/components/ui/dialog";
 import { useTaskEvents } from "@/hooks/useTaskEvents";
 import {
-  cancelAgentTask,
-  pauseAgentTask,
-  resumeAgentTask,
-} from "@/lib/browser-api";
+  cancelAgentTaskAction as cancelAgentTask,
+  pauseAgentTaskAction as pauseAgentTask,
+  resumeAgentTaskAction as resumeAgentTask,
+} from "@/lib/server-actions";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {

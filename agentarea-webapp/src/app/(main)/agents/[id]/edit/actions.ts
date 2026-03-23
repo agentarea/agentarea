@@ -5,6 +5,17 @@ import type { components } from "@/api/schema";
 import { updateAgent as updateAgentAPI } from "@/lib/api";
 import type { AddAgentFormState } from "../../create/actions";
 
+// Type definitions for MCP tool configuration (previously from schema MCPConfig/MCPToolConfig)
+interface MCPToolConfig {
+  tool_name: string;
+  requires_user_confirmation?: boolean;
+}
+
+interface MCPConfig {
+  mcp_server_id: string;
+  allowed_tools?: MCPToolConfig[] | null;
+}
+
 // Define Zod schema for MCP Tool Config
 const MCPToolConfigSchema = z.object({
   tool_name: z.string().min(1, "Tool name is required"),
@@ -54,11 +65,11 @@ export async function updateAgent(
   // Need to manually reconstruct the array/object structure for validation
   const mcpConfigs: Record<
     number,
-    Partial<components["schemas"]["MCPConfig"]>
+    Partial<MCPConfig>
   > = {};
   const mcpToolConfigs: Record<
     number,
-    Record<number, Partial<components["schemas"]["MCPToolConfig"]>>
+    Record<number, Partial<MCPConfig>>
   > = {};
 
   formData.forEach((value, key) => {
@@ -82,7 +93,7 @@ export async function updateAgent(
       const serverIndex = parseInt(toolMatch[1], 10);
       const toolIndex = parseInt(toolMatch[2], 10);
       const field =
-        toolMatch[3] as keyof components["schemas"]["MCPToolConfig"];
+        toolMatch[3] as keyof MCPToolConfig;
 
       if (!mcpToolConfigs[serverIndex]) {
         mcpToolConfigs[serverIndex] = {};
@@ -106,13 +117,13 @@ export async function updateAgent(
     if (mcpToolConfigs[serverIndex]) {
       mcpConfigs[serverIndex].allowed_tools = Object.values(
         mcpToolConfigs[serverIndex]
-      ) as components["schemas"]["MCPToolConfig"][];
+      ) as MCPToolConfig[];
     }
   });
 
   // Convert the record back to an array, ensuring required fields are present or handled by Zod
   const mcpConfigsArray = Object.values(mcpConfigs).map(
-    (config) => config as components["schemas"]["MCPConfig"]
+    (config) => config as MCPConfig
   );
 
   // Reconstruct events array using new format

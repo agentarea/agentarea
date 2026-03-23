@@ -8,11 +8,11 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  getOpenAPIConnection,
-  deleteOpenAPIConnection,
-  discoverOpenAPITools,
-  testOpenAPIConnection,
-} from "@/lib/browser-api";
+  getOpenAPIConnectionAction as getOpenAPIConnection,
+  deleteOpenAPIConnectionAction as deleteOpenAPIConnection,
+  discoverOpenAPIToolsAction as discoverOpenAPITools,
+  testOpenAPIConnectionAction as testOpenAPIConnection,
+} from "@/lib/server-actions";
 import { OpenAPIConnection } from "../../types";
 
 export default function OpenAPIConnectionDetailPage() {

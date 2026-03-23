@@ -19,6 +19,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { addMCPServer, MCPServerFormState } from "./actions";
+import { listMCPAuthConfigsAction as listMCPAuthConfigs, createMCPAuthConfigAction as createMCPAuthConfig } from "@/lib/server-actions";
 
 // Define the header schema for external servers
 const HeaderSchema = z.object({
@@ -104,7 +105,6 @@ export function AddMCPServerForm() {
 
   const fetchAuthConfigs = useCallback(async () => {
     try {
-      const { listMCPAuthConfigs } = await import("@/lib/browser-api");
       const { data } = await listMCPAuthConfigs();
       if (data) {
         setAuthConfigs(data as AuthConfig[]);
@@ -117,7 +117,6 @@ export function AddMCPServerForm() {
   const handleCreateAuthConfig = useCallback(async (formEl: HTMLFormElement) => {
     setNewAuthSaving(true);
     try {
-      const { createMCPAuthConfig } = await import("@/lib/browser-api");
       const fd = new FormData(formEl);
       const authType = fd.get("newAuthType") as string;
 

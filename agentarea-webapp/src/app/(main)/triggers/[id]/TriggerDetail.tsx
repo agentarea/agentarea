@@ -19,10 +19,10 @@ import { Button } from "@/components/ui/button";
 import DeleteButton from "@/components/DeleteButton";
 import { useToast } from "@/hooks/use-toast";
 import {
-  enableTrigger,
-  disableTrigger,
-  deleteTrigger,
-} from "@/lib/browser-api";
+  enableTriggerAction as enableTrigger,
+  disableTriggerAction as disableTrigger,
+  deleteTriggerAction as deleteTrigger,
+} from "@/lib/server-actions";
 
 interface TriggerDetailProps {
   trigger: any;

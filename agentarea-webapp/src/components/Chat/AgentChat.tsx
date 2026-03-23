@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { resolveEscalation } from "@/lib/browser-api";
+import { resolveEscalationAction as resolveEscalation } from "@/lib/server-actions";
 import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
 import { MessageRenderer } from "./MessageComponents";

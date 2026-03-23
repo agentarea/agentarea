@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Server, Package, Tag } from "lucide-react";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { useTranslations } from "next-intl";
-import { createMCPServer } from "@/lib/browser-api";
+import { createMCPServerAction as createMCPServer } from "@/lib/server-actions";
 
 type FormData = {
   name: string;

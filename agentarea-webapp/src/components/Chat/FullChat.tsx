@@ -4,7 +4,10 @@ import React, { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useMentions } from "@/hooks/useMentions";
-import { pauseAgentTask, resolveEscalation } from "@/lib/browser-api";
+import {
+  pauseAgentTaskAction as pauseAgentTask,
+  resolveEscalationAction as resolveEscalation,
+} from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import {
   extractPlainText,

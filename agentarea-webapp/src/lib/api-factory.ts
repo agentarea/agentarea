@@ -194,7 +194,7 @@ export function createApiClient(client: Client) {
 
     // Chat API
     sendMessage: async (
-      message: components["schemas"]["ChatMessageRequest"]
+      message: { agent_id: string; message: string; conversation_id?: string }
     ) => {
       const { data, error } = await client.POST("/v1/chat/messages", {
         body: message,
@@ -236,7 +236,9 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.GET("/v1/mcp-servers/", {
         params: { query: params },
       });
-      return { data, error };
+      // API returns paginated response; unwrap to items array for callers
+      const items = (data as any)?.items ?? data;
+      return { data: items, error };
     },
 
     createMCPServer: async (
@@ -747,6 +749,14 @@ export function createApiClient(client: Client) {
       return { data, error };
     },
 
+    getSkillFile: async (skillId: string, filePath: string) => {
+      const { data, error } = await client.GET(
+        `/v1/skills/${skillId}/files/${filePath}` as any,
+        {}
+      );
+      return { data, error };
+    },
+
     createSkill: async (skill: {
       content?: string | null;
       github_url?: string | null;
@@ -997,6 +1007,26 @@ export function createApiClient(client: Client) {
 
     deleteOpenAPIConnection: async (connectionId: string) => {
       const { data, error } = await client.DELETE(`/v1/openapi-connections/${connectionId}` as any, {});
+      return { data, error };
+    },
+
+    getOpenAPIConnection: async (connectionId: string) => {
+      const { data, error } = await client.GET(`/v1/openapi-connections/${connectionId}` as any, {});
+      return { data, error };
+    },
+
+    discoverOpenAPITools: async (connectionId: string) => {
+      const { data, error } = await client.POST(`/v1/openapi-connections/${connectionId}/discover` as any, {});
+      return { data, error };
+    },
+
+    testOpenAPIConnection: async (connectionId: string) => {
+      const { data, error } = await client.POST(`/v1/openapi-connections/${connectionId}/test` as any, {});
+      return { data, error };
+    },
+
+    previewOpenAPISpec: async (body: { spec_url?: string; spec_json?: string }) => {
+      const { data, error } = await client.POST("/v1/openapi-connections/preview" as any, { body });
       return { data, error };
     },
   };
