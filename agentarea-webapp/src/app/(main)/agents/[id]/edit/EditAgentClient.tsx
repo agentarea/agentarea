@@ -66,8 +66,8 @@ export default function EditAgentClient({
       description: agent.description || "",
       instruction: agent.instruction || "",
       model_id: agent.model_id || "",
-      tools_config: agent.tools_config || { mcp_server_configs: [] },
-      events_config: agent.events_config || { events: [] },
+      tools_config: (agent as any).tools_config || { mcp_server_configs: [] },
+      events_config: (agent as any).events_config || { events: [] },
       planning: agent.planning || false,
     },
   });

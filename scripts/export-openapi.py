@@ -41,11 +41,76 @@ def _sort_dict(obj):
     return obj
 
 
+def _normalize_operation_ids(schema: dict) -> dict:
+    """Normalize duplicate operation IDs to use deterministic path+method naming.
+
+    FastAPI appends the HTTP method to deduplicate operation IDs, but the suffix
+    chosen depends on route registration order which varies across environments.
+    This normalizes all operations to use `{operationId_base}_{method}` format.
+    """
+    paths = schema.get("paths", {})
+    seen_ids: dict[str, list[tuple[str, str]]] = {}
+
+    # First pass: collect all operationIds and where they appear
+    for path, methods in paths.items():
+        for method, operation in methods.items():
+            if not isinstance(operation, dict):
+                continue
+            op_id = operation.get("operationId")
+            if op_id:
+                seen_ids.setdefault(op_id, []).append((path, method))
+
+    # Second pass: find duplicate references and normalize
+    # Build a map of all operationIds used across all paths
+    all_op_ids: dict[str, str] = {}  # (path, method) -> operationId
+    for path, methods in paths.items():
+        for method, operation in methods.items():
+            if not isinstance(operation, dict):
+                continue
+            op_id = operation.get("operationId")
+            if op_id:
+                all_op_ids[(path, method)] = op_id
+
+    # Find groups that share the same base (same path, multiple methods pointing
+    # to same handler). Normalize by always using {base}_{method} format.
+    # Detect shared handlers: same path, different methods, same summary
+    for path, methods in paths.items():
+        ops = {m: o for m, o in methods.items() if isinstance(o, dict) and "operationId" in o}
+        if len(ops) <= 1:
+            continue
+
+        # Check if multiple methods share the same summary (same handler)
+        summary_groups: dict[str, list[str]] = {}
+        for method, op in ops.items():
+            summary = op.get("summary", "")
+            summary_groups.setdefault(summary, []).append(method)
+
+        for summary, group_methods in summary_groups.items():
+            if len(group_methods) <= 1:
+                continue
+            # These share a handler — normalize their operationIds
+            # Use the first operationId's base (strip any existing method suffix)
+            first_op_id = ops[group_methods[0]]["operationId"]
+            # Strip trailing _get/_post/_put/_delete/_patch/_head/_options
+            base = first_op_id
+            for suffix in ("_get", "_post", "_put", "_delete", "_patch", "_head", "_options"):
+                if base.endswith(suffix):
+                    base = base[: -len(suffix)]
+                    break
+
+            for method in group_methods:
+                ops[method]["operationId"] = f"{base}_{method}"
+
+    return schema
+
+
 def export_schema() -> dict:
     from agentarea_api.main import create_app
 
     app = create_app()
     schema = app.openapi()
+    # Normalize duplicate operation IDs for deterministic output
+    _normalize_operation_ids(schema)
     # Sort keys for deterministic output across environments
     return _sort_dict(schema)
 

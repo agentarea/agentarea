@@ -157,24 +157,24 @@ export interface paths {
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        put: operations["hydra_oauth2_proxy_oauth2__path__get"];
+        put: operations["hydra_oauth2_proxy_oauth2__path__put"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        post: operations["hydra_oauth2_proxy_oauth2__path__get"];
+        post: operations["hydra_oauth2_proxy_oauth2__path__post"];
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        delete: operations["hydra_oauth2_proxy_oauth2__path__get"];
+        delete: operations["hydra_oauth2_proxy_oauth2__path__delete"];
         options?: never;
         head?: never;
         /**
          * Hydra Oauth2 Proxy
          * @description Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).
          */
-        patch: operations["hydra_oauth2_proxy_oauth2__path__get"];
+        patch: operations["hydra_oauth2_proxy_oauth2__path__patch"];
         trace?: never;
     };
     "/v1/agents": {
@@ -2802,32 +2802,32 @@ export interface paths {
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        put: operations["handle_webhook_webhooks__webhook_id__get"];
+        put: operations["handle_webhook_webhooks__webhook_id__put"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        post: operations["handle_webhook_webhooks__webhook_id__get"];
+        post: operations["handle_webhook_webhooks__webhook_id__post"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        delete: operations["handle_webhook_webhooks__webhook_id__get"];
+        delete: operations["handle_webhook_webhooks__webhook_id__delete"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        options: operations["handle_webhook_webhooks__webhook_id__get"];
+        options: operations["handle_webhook_webhooks__webhook_id__options"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        head: operations["handle_webhook_webhooks__webhook_id__get"];
+        head: operations["handle_webhook_webhooks__webhook_id__head"];
         /**
          * Handle webhook requests
          * @description Process incoming webhook requests for registered triggers
          */
-        patch: operations["handle_webhook_webhooks__webhook_id__get"];
+        patch: operations["handle_webhook_webhooks__webhook_id__patch"];
         trace?: never;
     };
 }
@@ -5176,7 +5176,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__get: {
+    hydra_oauth2_proxy_oauth2__path__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5207,7 +5207,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__get: {
+    hydra_oauth2_proxy_oauth2__path__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5238,7 +5238,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__get: {
+    hydra_oauth2_proxy_oauth2__path__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5269,7 +5269,7 @@ export interface operations {
             };
         };
     };
-    hydra_oauth2_proxy_oauth2__path__get: {
+    hydra_oauth2_proxy_oauth2__path__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -10308,7 +10308,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__get: {
+    handle_webhook_webhooks__webhook_id__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -10339,7 +10339,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__get: {
+    handle_webhook_webhooks__webhook_id__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -10370,7 +10370,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__get: {
+    handle_webhook_webhooks__webhook_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -10401,7 +10401,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__get: {
+    handle_webhook_webhooks__webhook_id__options: {
         parameters: {
             query?: never;
             header?: never;
@@ -10432,7 +10432,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__get: {
+    handle_webhook_webhooks__webhook_id__head: {
         parameters: {
             query?: never;
             header?: never;
@@ -10463,7 +10463,7 @@ export interface operations {
             };
         };
     };
-    handle_webhook_webhooks__webhook_id__get: {
+    handle_webhook_webhooks__webhook_id__patch: {
         parameters: {
             query?: never;
             header?: never;
