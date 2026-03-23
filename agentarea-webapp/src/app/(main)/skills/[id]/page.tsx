@@ -15,13 +15,13 @@ import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import SkillPanel from "@/components/SkillPanel/SkillPanel";
 import Section from "@/components/TaskInfoPanel/components/Section";
 import {
-  getSkill,
-  getSkillContent,
-  getSkillFiles,
-  getSkillFile,
-  updateSkill,
-  deleteSkill,
-} from "@/lib/api";
+  getSkillAction as getSkill,
+  getSkillContentAction as getSkillContent,
+  getSkillFilesAction as getSkillFiles,
+  getSkillFileAction as getSkillFile,
+  updateSkillAction as updateSkill,
+  deleteSkillAction as deleteSkill,
+} from "@/lib/server-actions";
 import type { Skill, SkillContent, SkillFile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import YAML from "js-yaml";

@@ -13,6 +13,12 @@ import {
   getAllTasks,
   getAgentTaskStatus,
   createSkill,
+  getSkill,
+  getSkillContent,
+  getSkillFiles,
+  getSkillFile,
+  updateSkill,
+  deleteSkill,
   getMCPHealthStatus,
   checkMCPServerInstanceConfiguration,
   createMCPServer,
@@ -212,4 +218,31 @@ export async function createMCPAuthConfigAction(body: {
   credentials?: Record<string, any>;
 }) {
   return await createMCPAuthConfig(body);
+}
+
+export async function getSkillAction(skillId: string) {
+  return await getSkill(skillId);
+}
+
+export async function getSkillContentAction(skillId: string) {
+  return await getSkillContent(skillId);
+}
+
+export async function getSkillFilesAction(skillId: string) {
+  return await getSkillFiles(skillId);
+}
+
+export async function getSkillFileAction(skillId: string, filePath: string) {
+  return await getSkillFile(skillId, filePath);
+}
+
+export async function updateSkillAction(
+  skillId: string,
+  skill: { name?: string | null; description?: string | null; content?: string | null }
+) {
+  return await updateSkill(skillId, skill);
+}
+
+export async function deleteSkillAction(skillId: string) {
+  return await deleteSkill(skillId);
 }

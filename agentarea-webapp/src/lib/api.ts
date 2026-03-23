@@ -99,6 +99,7 @@ export const {
   getSkill,
   getSkillContent,
   getSkillFiles,
+  getSkillFile,
   createSkill,
   uploadSkill,
   updateSkill,
