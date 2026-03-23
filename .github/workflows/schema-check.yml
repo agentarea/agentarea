@@ -1,0 +1,66 @@
+name: Schema Drift Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'agentarea-platform/apps/api/**'
+      - 'agentarea-platform/libs/**'
+      - 'agentarea-webapp/src/api/schema.d.ts'
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  schema-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: agentarea-platform
+        run: uv sync --all-extras
+
+      - name: Export OpenAPI spec from FastAPI
+        working-directory: agentarea-platform
+        run: uv run python ../scripts/export-openapi.py -o /tmp/openapi.json
+        env:
+          WORKFLOW__TEMPORAL_SERVER_URL: http://localhost:7233
+          WORKFLOW__TEMPORAL_NAMESPACE: default
+          WORKFLOW__TEMPORAL_TASK_QUEUE: agent-tasks
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate schema.d.ts from exported spec
+        run: npx openapi-typescript /tmp/openapi.json -o /tmp/schema.d.ts
+
+      - name: Check for schema drift
+        run: |
+          if ! diff -q agentarea-webapp/src/api/schema.d.ts /tmp/schema.d.ts > /dev/null 2>&1; then
+            echo "::error::schema.d.ts is out of date with the backend API."
+            echo ""
+            echo "The committed schema.d.ts does not match what the backend produces."
+            echo "Run this locally to fix:"
+            echo ""
+            echo "  cd agentarea-webapp && pnpm generate:schema"
+            echo ""
+            echo "Diff:"
+            diff --unified=3 agentarea-webapp/src/api/schema.d.ts /tmp/schema.d.ts | head -100
+            exit 1
+          fi
+          echo "✅ schema.d.ts is up to date"
