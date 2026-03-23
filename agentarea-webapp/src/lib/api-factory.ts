@@ -216,7 +216,9 @@ export function createApiClient(client: Client) {
       const { data, error } = await client.GET("/v1/mcp-servers/", {
         params: { query: params },
       });
-      return { data, error };
+      // API returns paginated response; unwrap to items array for callers
+      const items = (data as any)?.items ?? data;
+      return { data: items, error };
     },
 
     createMCPServer: async (
