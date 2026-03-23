@@ -192,6 +192,23 @@ export const resumeAgentTask = async (agentId: string, taskId: string) => {
   return { data, error };
 };
 
+export const resolveEscalation = async (
+  agentId: string,
+  taskId: string,
+  escalationId: string,
+  approved: boolean,
+  comment: string = ""
+) => {
+  const { data, error } = await browserClient.POST(
+    "/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation" as any,
+    {
+      params: { path: { agent_id: agentId, task_id: taskId } } as any,
+      body: { escalation_id: escalationId, approved, comment } as any,
+    }
+  );
+  return { data, error };
+};
+
 export const getAgentTaskEvents = async (
   agentId: string,
   taskId: string,
@@ -289,6 +306,9 @@ export const listMCPServers = async (params?: {
   status?: string;
   is_public?: boolean;
   tag?: string;
+  page?: number;
+  page_size?: number;
+  search?: string;
 }) => {
   const { data, error } = await browserClient.GET("/v1/mcp-servers/", {
     params: { query: params },
@@ -709,15 +729,10 @@ export const testModelInstance = async (testRequest: {
   model_spec_id: string;
   test_message?: string;
 }) => {
-  // TODO: Implement model instance testing endpoint
-  return {
-    data: null,
-    error: {
-      detail: [
-        { msg: "Model instance testing not yet implemented", type: "error" },
-      ],
-    },
-  };
+  const { data, error } = await browserClient.POST("/v1/model-instances/test" as any, {
+    body: testRequest,
+  });
+  return { data, error };
 };
 
 export const getModelInstance = async (instanceId: string) => {
@@ -998,7 +1013,31 @@ export async function getMCPInstanceHealth(instanceName: string): Promise<{
   }
 }
 
-// Trigger API
+// API Keys API
+export const listAPIKeys = async () => {
+  const { data, error } = await browserClient.GET("/v1/api-keys/" as any, {});
+  return { data, error };
+};
+
+export const createAPIKey = async (body: {
+  name: string;
+  expires_in_days?: number;
+}) => {
+  const { data, error } = await browserClient.POST("/v1/api-keys/" as any, { body });
+  return { data, error };
+};
+
+export const getAPIKey = async (tokenId: string) => {
+  const { data, error } = await browserClient.GET(`/v1/api-keys/${tokenId}` as any, {});
+  return { data, error };
+};
+
+export const revokeAPIKey = async (tokenId: string) => {
+  const { data, error } = await browserClient.DELETE(`/v1/api-keys/${tokenId}` as any, {});
+  return { data, error };
+};
+
+// Triggers API
 export const listTriggers = async (params?: {
   agent_id?: string;
   trigger_type?: string;
@@ -1010,9 +1049,228 @@ export const listTriggers = async (params?: {
   return { data, error };
 };
 
+export const createTrigger = async (body: {
+  name: string;
+  trigger_type: string;
+  agent_id: string;
+  config: Record<string, any>;
+  task_parameters?: Record<string, any>;
+  failure_threshold?: number;
+}) => {
+  const { data, error } = await browserClient.POST("/v1/triggers/" as any, { body });
+  return { data, error };
+};
+
 export const getTrigger = async (triggerId: string) => {
   const { data, error } = await browserClient.GET(
     `/v1/triggers/${triggerId}` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const updateTrigger = async (triggerId: string, body: {
+  name?: string;
+  config?: Record<string, any>;
+  task_parameters?: Record<string, any>;
+  failure_threshold?: number;
+}) => {
+  const { data, error } = await browserClient.PATCH(`/v1/triggers/${triggerId}` as any, { body });
+  return { data, error };
+};
+
+export const deleteTrigger = async (triggerId: string) => {
+  const { data, error } = await browserClient.DELETE(`/v1/triggers/${triggerId}` as any, {});
+  return { data, error };
+};
+
+export const enableTrigger = async (triggerId: string) => {
+  const { data, error } = await browserClient.POST(`/v1/triggers/${triggerId}/enable` as any, {});
+  return { data, error };
+};
+
+export const disableTrigger = async (triggerId: string) => {
+  const { data, error } = await browserClient.POST(`/v1/triggers/${triggerId}/disable` as any, {});
+  return { data, error };
+};
+
+export const getTriggerStatus = async (triggerId: string) => {
+  const { data, error } = await browserClient.GET(`/v1/triggers/${triggerId}/status` as any, {});
+  return { data, error };
+};
+
+export const getTriggerExecutions = async (triggerId: string, params?: {
+  page?: number;
+  page_size?: number;
+}) => {
+  const { data, error } = await browserClient.GET(`/v1/triggers/${triggerId}/executions` as any, {
+    params: { query: params },
+  });
+  return { data, error };
+};
+
+export const getTriggerMetrics = async (triggerId: string) => {
+  const { data, error } = await browserClient.GET(`/v1/triggers/${triggerId}/metrics` as any, {});
+  return { data, error };
+};
+
+export const getTriggerTimeline = async (triggerId: string) => {
+  const { data, error } = await browserClient.GET(`/v1/triggers/${triggerId}/timeline` as any, {});
+  return { data, error };
+};
+
+export const getTriggerCorrelations = async (triggerId: string) => {
+  const { data, error } = await browserClient.GET(`/v1/triggers/${triggerId}/correlations` as any, {});
+  return { data, error };
+};
+
+// Workspace Import/Export API
+export const exportWorkspace = async () => {
+  const { data, error } = await browserClient.GET("/v1/workspace/export" as any, {});
+  return { data, error };
+};
+
+export const importWorkspace = async (body: {
+  config: string;
+  skip_missing_dependencies?: boolean;
+  override_existing?: boolean;
+}) => {
+  const { data, error } = await browserClient.POST("/v1/workspace/import" as any, { body });
+  return { data, error };
+};
+
+// MCP Instance Tools Discovery
+export const discoverMCPInstanceTools = async (instanceId: string) => {
+  const { data, error } = await browserClient.POST(
+    `/v1/mcp-server-instances/${instanceId}/discover-tools` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const testMCPInstanceAuth = async (instanceId: string) => {
+  const { data, error } = await browserClient.POST(
+    `/v1/mcp-server-instances/${instanceId}/test-auth` as any,
+    {}
+  );
+  return { data, error };
+};
+
+// Skill Bundle API
+export const listSkillMembers = async (skillId: string) => {
+  const { data, error } = await browserClient.GET(`/v1/skills/${skillId}/members` as any, {});
+  return { data, error };
+};
+
+export const addSkillMember = async (skillId: string, childSkillId: string) => {
+  const { data, error } = await browserClient.POST(`/v1/skills/${skillId}/members` as any, {
+    body: { child_skill_id: childSkillId },
+  });
+  return { data, error };
+};
+
+export const removeSkillMember = async (skillId: string, childSkillId: string) => {
+  const { data, error } = await browserClient.DELETE(
+    `/v1/skills/${skillId}/members/${childSkillId}` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const flattenSkill = async (skillId: string) => {
+  const { data, error } = await browserClient.GET(`/v1/skills/${skillId}/flatten` as any, {});
+  return { data, error };
+};
+
+// Network Topology API
+export const getNetworkTopology = async () => {
+  const { data, error } = await browserClient.GET("/v1/network/topology" as any, {});
+  return { data, error };
+};
+
+// OpenAPI Connections API
+export const listOpenAPIConnections = async (params?: {
+  status?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  const { data, error } = await browserClient.GET("/v1/openapi-connections/" as any, {
+    params: { query: params },
+  });
+  return { data, error };
+};
+
+export const createOpenAPIConnection = async (body: {
+  name: string;
+  base_url: string;
+  description?: string;
+  spec_url?: string;
+  spec_content?: Record<string, any>;
+  auth_config_id?: string;
+  custom_headers?: { name: string; value: string }[];
+}) => {
+  const { data, error } = await browserClient.POST("/v1/openapi-connections/" as any, { body });
+  return { data, error };
+};
+
+export const getOpenAPIConnection = async (connectionId: string) => {
+  const { data, error } = await browserClient.GET(
+    `/v1/openapi-connections/${connectionId}` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const updateOpenAPIConnection = async (
+  connectionId: string,
+  body: Partial<{
+    name: string;
+    description: string;
+    base_url: string;
+    spec_url: string;
+    spec_content: Record<string, any>;
+    auth_config_id: string;
+    custom_headers: { name: string; value: string }[];
+  }>
+) => {
+  const { data, error } = await browserClient.PATCH(
+    `/v1/openapi-connections/${connectionId}` as any,
+    { body }
+  );
+  return { data, error };
+};
+
+export const deleteOpenAPIConnection = async (connectionId: string) => {
+  const { data, error } = await browserClient.DELETE(
+    `/v1/openapi-connections/${connectionId}` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const previewOpenAPISpec = async (body: {
+  spec_url?: string;
+  spec_content?: Record<string, any>;
+}) => {
+  const { data, error } = await browserClient.POST(
+    "/v1/openapi-connections/preview-spec" as any,
+    { body }
+  );
+  return { data, error };
+};
+
+export const discoverOpenAPITools = async (connectionId: string) => {
+  const { data, error } = await browserClient.POST(
+    `/v1/openapi-connections/${connectionId}/discover-tools` as any,
+    {}
+  );
+  return { data, error };
+};
+
+export const testOpenAPIConnection = async (connectionId: string) => {
+  const { data, error } = await browserClient.POST(
+    `/v1/openapi-connections/${connectionId}/test` as any,
     {}
   );
   return { data, error };

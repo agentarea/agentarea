@@ -118,6 +118,9 @@ class WebhookTrigger(Trigger):
     # Generic webhook configuration - supports any webhook type
     webhook_config: dict[str, Any] | None = None
 
+    # Event type filtering - empty list means accept all events
+    event_types: list[str] = Field(default_factory=list)
+
     @field_validator("webhook_id")
     @classmethod
     def validate_webhook_id(cls, v: str) -> str:
@@ -204,6 +207,7 @@ class TriggerCreate(BaseModel):
     webhook_type: str = Field(default="generic")
     validation_rules: dict[str, Any] = Field(default_factory=dict)
     webhook_config: dict[str, Any] | None = None
+    event_types: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_trigger_type_fields(self) -> "TriggerCreate":
@@ -241,3 +245,4 @@ class TriggerUpdate(BaseModel):
     webhook_type: WebhookType | None = None
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
+    event_types: list[str] | None = None

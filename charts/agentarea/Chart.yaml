@@ -24,15 +24,10 @@ version: 0.0.5
 appVersion: "0.0.8"
 
 # External dependencies - users can disable these and use their own infrastructure
+# For production, we recommend using managed services (RDS, ElastiCache, etc.)
 dependencies:
-  # PostgreSQL - main database for application, temporal, and infisical
-  - name: postgresql
-    version: "18.1.10"
-    repository: "https://charts.bitnami.com/bitnami"
-    condition: postgresql.enabled
-
-  # Redis - for caching and event streaming
-  - name: redis
-    version: "23.2.12"
-    repository: "https://charts.bitnami.com/bitnami"
+  # Valkey - for caching and event streaming (Redis-compatible, Apache 2.0)
+  - name: valkey
+    version: "0.9.3"
+    repository: "https://valkey.io/valkey-helm/"
     condition: redis.enabled

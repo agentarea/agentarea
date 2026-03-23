@@ -1,47 +1,72 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
 import Table from "@/components/Table/Table";
 import EmptyState from "@/components/EmptyState";
 import { MCPServerSpecCard } from "./MCPCard";
 import { MCPServer } from "../types";
 import { getMCPServerCategory, getCategoryColorClasses } from "../utils";
+import { useInfiniteList } from "@/hooks/useInfiniteList";
+import { listMCPServers } from "@/lib/browser-api";
 
 interface MCPSpecsSectionProps {
-  mcpServers: MCPServer[];
   searchParams: { [key: string]: string | string[] | undefined };
   viewMode?: string;
 }
 
 export function MCPSpecsSection({
-  mcpServers,
   searchParams,
   viewMode = "grid",
 }: MCPSpecsSectionProps) {
   const t = useTranslations("MCPServersPage.table");
+  const tPage = useTranslations("MCPServersPage");
   const router = useRouter();
 
   const searchQuery = (searchParams.search as string) || "";
   const selectedCategory = (searchParams.category as string) || "All";
 
+  const fetchPage = useCallback(
+    async (params: { page: number; page_size: number; search?: string }) => {
+      const response = await listMCPServers({
+        page: params.page,
+        page_size: params.page_size,
+        search: params.search,
+      });
+      const data = response.data as any;
+      return {
+        items: (data?.items || []) as MCPServer[],
+        total: data?.total || 0,
+        has_next: data?.has_next || false,
+      };
+    },
+    []
+  );
+
+  const {
+    items: servers,
+    total,
+    isLoading,
+    isFetchingMore,
+    hasMore,
+    error,
+    sentinelRef,
+  } = useInfiniteList<MCPServer>({
+    fetchPage,
+    pageSize: 50,
+    search: searchQuery || undefined,
+  });
+
+  // Client-side category filtering (applied on top of server-side search)
   const filteredServers = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    return mcpServers.filter((server) => {
-      const matchesSearch =
-        server.name.toLowerCase().includes(query) ||
-        server.description.toLowerCase().includes(query) ||
-        (server.tags || []).some((tag) =>
-          tag.toLowerCase().includes(query)
-        );
-      const matchesCategory =
-        selectedCategory === "All" ||
-        getMCPServerCategory(server.tags || []) === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [mcpServers, searchQuery, selectedCategory]);
+    if (selectedCategory === "All") return servers;
+    return servers.filter(
+      (server) => getMCPServerCategory(server.tags || []) === selectedCategory
+    );
+  }, [servers, selectedCategory]);
 
   const handleConfigureInstance = (server: MCPServer) => {
     router.push(`/mcp-servers/create/${server.id}`);
@@ -102,34 +127,71 @@ export function MCPSpecsSection({
     },
   ];
 
-  if (filteredServers.length === 0) {
+  if (isLoading) {
     return (
-      <EmptyState
-        title="No MCP specifications found"
-        description="No MCP server instances or specifications are available"
-        iconsType="mcp"
-      />
+      <div className="flex items-center justify-center py-10">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
-  if (viewMode === "table") {
+  if (error) {
     return (
-      <Table
-        data={filteredServers}
-        columns={serverColumns}
-        onRowClick={handleConfigureInstance}
-      />
+      <div className="py-10 text-center">
+        <p className="text-destructive">Error loading servers: {error}</p>
+      </div>
     );
   }
+
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {filteredServers.map((server) => (
-        <MCPServerSpecCard
-          key={server.id}
-          server={server}
-          onConfigure={handleConfigureInstance}
+    <>
+      <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+        {tPage("browseSpecifications")} ({total})
+      </h4>
+
+      {filteredServers.length === 0 ? (
+        <EmptyState
+          title="No MCP specifications found"
+          description="No MCP server specifications match your search"
+          iconsType="mcp"
         />
-      ))}
-    </div>
+      ) : viewMode === "table" ? (
+        <>
+          <Table
+            data={filteredServers}
+            columns={serverColumns}
+            onRowClick={handleConfigureInstance}
+          />
+          {/* Sentinel for infinite scroll */}
+          {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-4">
+              {isFetchingMore && (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {filteredServers.map((server) => (
+              <MCPServerSpecCard
+                key={server.id}
+                server={server}
+                onConfigure={handleConfigureInstance}
+              />
+            ))}
+          </div>
+          {/* Sentinel for infinite scroll */}
+          {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-4">
+              {isFetchingMore && (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </>
   );
 }

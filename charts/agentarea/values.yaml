@@ -67,11 +67,11 @@ global:
       runAtStartup: true
       initializationTimeout: 300s
 
-  # Redis configuration
+  # Valkey configuration (Redis-compatible, Apache 2.0)
   redis:
     host: ""  # Auto-set from redis.fullnameOverride if empty
     port: 6379
-    # Redis settings
+    # Valkey settings
     database: 0
     ssl: false
     # Connection pool settings
@@ -536,47 +536,48 @@ temporalUi:
   resources: {}
   extraEnv: []
 
-# Bitnami PostgreSQL dependency configuration
+# Built-in PostgreSQL (simple StatefulSet, not for production)
+# For production, disable and point global.database.host to your managed DB (RDS, Cloud SQL, etc.)
 postgresql:
   enabled: true
-  auth:
-    # Reference to existing secret (created by agentarea chart or user)
-    existingSecret: "agentarea-postgresql-secret"
-    secretKeys:
-      adminPasswordKey: "postgres-password"
-      userPasswordKey: "password"
-    username: "postgres"
-    database: "agentarea"
-  primary:
-    resources:
-      limits:
-        cpu: 500m
-        memory: 512Mi
-      requests:
-        cpu: 250m
-        memory: 256Mi
-    persistence:
-      enabled: true
-      size: 8Gi
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
 
-# Bitnami Redis dependency configuration
+# Valkey - Redis-compatible key-value store (Apache 2.0)
+# Uses official valkey-io/valkey-helm chart
 redis:
   enabled: true
-  architecture: standalone
   auth:
     enabled: true
-    existingSecret: "agentarea-redis-secret"
-    existingSecretPasswordKey: "redis-password"
-  master:
-    resources:
-      limits:
-        cpu: 250m
-        memory: 256Mi
-      requests:
-        cpu: 100m
-        memory: 128Mi
-    persistence:
-      enabled: false  # Disable for development, enable for production
+    usersExistingSecret: "agentarea-redis-secret"
+    aclUsers:
+      default:
+        permissions: "~* &* +@all"
+        passwordKey: "redis-password"
+  replica:
+    enabled: false  # Standalone mode
+  dataStorage:
+    enabled: false  # Disable for development, enable for production
+    requestedSize: "1Gi"
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
 
 # Bitnami MinIO dependency configuration
 minio:

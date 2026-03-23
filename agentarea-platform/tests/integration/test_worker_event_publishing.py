@@ -87,7 +87,7 @@ async def test_worker_event_publishing():
                     "data": {
                         "task_id": str(task_id),
                         "agent_id": str(uuid4()),
-                        "execution_id": f"agent-task-{task_id}",
+                        "execution_id": f"task-{task_id}",
                         "iteration": 1,
                         "model": "test-model",
                     },
@@ -101,7 +101,7 @@ async def test_worker_event_publishing():
                     "data": {
                         "task_id": str(task_id),
                         "agent_id": str(uuid4()),
-                        "execution_id": f"agent-task-{task_id}",
+                        "execution_id": f"task-{task_id}",
                         "iteration": 1,
                         "response": "Test response",
                     },

@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { listMCPServerInstances, listMCPServers } from "@/lib/api";
+import { listMCPServerInstances, listMCPServers, listOpenAPIConnections } from "@/lib/api";
 import { MCPSpecsSection } from "./MCPSpecsSection";
 import { MyMCPsSection } from "./MyMCPsSection";
-import { MCPInstance, MCPServer } from "../types";
+import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 
 interface MCPServersContentProps {
   searchQuery?: string;
@@ -18,7 +18,7 @@ export default async function MCPServersContent({
 }: MCPServersContentProps) {
   const t = await getTranslations("MCPServersPage");
 
-  const serversResponse = await listMCPServers();
+  const serversResponse = await listMCPServers({ page_size: 100 });
   if (serversResponse.error) {
     const errorMessage =
       (serversResponse.error as { detail?: Array<{ msg?: string }> })?.detail?.[0]
@@ -31,31 +31,19 @@ export default async function MCPServersContent({
     );
   }
 
-  const mcpServers = (serversResponse.data || []) as MCPServer[];
-
-  // Filter MCP specs based on search query
-  const filteredServers = searchQuery.trim()
-    ? (() => {
-        const query = searchQuery.toLowerCase();
-        return mcpServers.filter(
-          (server) =>
-            server.name?.toLowerCase().includes(query) ||
-            server.description?.toLowerCase().includes(query) ||
-            (server.tags || []).some((tag) => tag.toLowerCase().includes(query))
-        );
-      })()
-    : mcpServers;
+  const serversData = serversResponse.data as any;
+  const mcpServers = (serversData?.items || serversData || []) as MCPServer[];
 
   // Render both sections
   return (
     <div className="space-y-8">
-      {/* My Active Servers Section */}
-      <div id="my-mcps">
+      {/* My Connections Section — MCP instances + OpenAPI connections */}
+      <div id="my-connections">
         <Suspense
           fallback={
             <div className="py-1">
               <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-                {t("myActiveServers")}
+                {t("myConnections")}
               </h4>
               <div className="flex h-32 items-center justify-center">
                 <LoadingSpinner />
@@ -63,7 +51,7 @@ export default async function MCPServersContent({
             </div>
           }
         >
-          <MyMCPsSectionServer
+          <MyConnectionsSectionServer
             searchQuery={searchQuery}
             viewMode={viewMode}
             mcpServers={mcpServers}
@@ -71,13 +59,9 @@ export default async function MCPServersContent({
         </Suspense>
       </div>
 
-      {/* Browse MCP Specifications Section */}
+      {/* Browse MCP Specifications Section — client-side with infinite scroll */}
       <div id="specs-section">
-        <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          {t("browseSpecifications")} ({filteredServers.length})
-        </h4>
         <MCPSpecsSection
-          mcpServers={filteredServers}
           searchParams={{ search: searchQuery }}
           viewMode={viewMode}
         />
@@ -86,7 +70,7 @@ export default async function MCPServersContent({
   );
 }
 
-async function MyMCPsSectionServer({
+async function MyConnectionsSectionServer({
   searchQuery,
   viewMode,
   mcpServers,
@@ -96,7 +80,12 @@ async function MyMCPsSectionServer({
   mcpServers: MCPServer[];
 }) {
   const t = await getTranslations("MCPServersPage");
-  const instancesResponse = await listMCPServerInstances();
+
+  // Fetch instances and OpenAPI connections in parallel
+  const [instancesResponse, openApiResponse] = await Promise.all([
+    listMCPServerInstances(),
+    listOpenAPIConnections(),
+  ]);
 
   if (instancesResponse.error) {
     const errorMessage =
@@ -109,8 +98,14 @@ async function MyMCPsSectionServer({
     );
   }
 
-  const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
+  if (openApiResponse.error) {
+    console.error("Failed to load OpenAPI connections:", openApiResponse.error);
+  }
 
+  const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
+  const openApiConnections = (openApiResponse.data || []) as OpenAPIConnection[];
+
+  // Filter MCP instances based on search query
   const filteredInstances = searchQuery.trim()
     ? (() => {
         const query = searchQuery.toLowerCase();
@@ -123,15 +118,30 @@ async function MyMCPsSectionServer({
       })()
     : mcpInstances;
 
-  if (searchQuery.trim() && filteredInstances.length === 0) {
+  // Filter OpenAPI connections based on search query
+  const filteredOpenApi = searchQuery.trim()
+    ? (() => {
+        const query = searchQuery.toLowerCase();
+        return openApiConnections.filter(
+          (conn) =>
+            conn.name?.toLowerCase().includes(query) ||
+            conn.description?.toLowerCase().includes(query) ||
+            conn.base_url?.toLowerCase().includes(query)
+        );
+      })()
+    : openApiConnections;
+
+  const totalConnections = filteredInstances.length + filteredOpenApi.length;
+
+  if (searchQuery.trim() && totalConnections === 0) {
     return (
       <div className="py-1">
         <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-          {t("myActiveServers")} (0)
+          {t("myConnections")} (0)
         </h4>
         <EmptyState
-          title="No matching instances"
-          description={`No instances match your search query: "${searchQuery}"`}
+          title="No matching connections"
+          description={`No connections match your search query: "${searchQuery}"`}
           iconsType="mcp"
         />
       </div>
@@ -141,14 +151,15 @@ async function MyMCPsSectionServer({
   return (
     <>
       <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-        {t("myActiveServers")} ({filteredInstances.length})
+        {t("myConnections")} ({totalConnections})
       </h4>
       <MyMCPsSection
         mcpInstances={filteredInstances}
         mcpServers={mcpServers}
+        openApiConnections={filteredOpenApi}
         viewMode={viewMode}
         searchQuery={searchQuery}
-        hasNoData={mcpInstances.length === 0}
+        hasNoData={mcpInstances.length === 0 && openApiConnections.length === 0}
       />
     </>
   );

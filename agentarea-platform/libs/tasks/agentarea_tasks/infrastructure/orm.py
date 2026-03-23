@@ -29,6 +29,7 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     execution_id: Mapped[str] = mapped_column(String(255), nullable=True)
     task_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
+    project_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
 
 
 class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):

@@ -72,6 +72,9 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     display_name: Mapped[str] = mapped_column(String, nullable=False)  # GPT-4, Claude 3 Opus
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     context_window: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
+    default_context_strategy: Mapped[str | None] = mapped_column(
+        String, nullable=True, default=None
+    )  # "static", "hybrid", "dynamic" — resolved per agent execution
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relationships

@@ -47,6 +47,9 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     # Generic webhook configuration - supports any webhook type
     webhook_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
+    # Event type filtering - empty list means accept all events
+    event_types: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
     # Relationship to executions
     executions: Mapped[list["TriggerExecutionORM"]] = relationship(
         "TriggerExecutionORM",

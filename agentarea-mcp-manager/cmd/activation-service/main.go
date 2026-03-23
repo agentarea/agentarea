@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -59,6 +61,7 @@ func main() {
 
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/activate", activateHandler)
+	http.HandleFunc("/execute", executeHandler)
 
 	port := os.Getenv("ACTIVATION_PORT")
 	if port == "" {
@@ -518,6 +521,158 @@ func buildPathEnv(rootDir string) []string {
 		paths = append(paths, existingPath)
 	}
 	return []string{"PATH=" + strings.Join(paths, ":")}
+}
+
+// ExecuteRequest represents a script execution request.
+// Scripts run in an isolated workspace directory and are cleaned up after.
+type ExecuteRequest struct {
+	ScriptContent  string            `json:"script_content"`
+	ScriptName     string            `json:"script_name"`
+	Args           []string          `json:"args,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	TimeoutSeconds int              `json:"timeout_seconds,omitempty"`
+}
+
+// ExecuteResponse represents the result of script execution.
+type ExecuteResponse struct {
+	Stdout          string `json:"stdout"`
+	Stderr          string `json:"stderr"`
+	ExitCode        int    `json:"exit_code"`
+	ExecutionTimeMs int64  `json:"execution_time_ms"`
+}
+
+func executeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ExecuteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	if req.ScriptContent == "" || req.ScriptName == "" {
+		http.Error(w, `{"error": "script_content and script_name are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Prevent path traversal — script_name must be a plain filename
+	if filepath.Base(req.ScriptName) != req.ScriptName || strings.Contains(req.ScriptName, "..") {
+		http.Error(w, `{"error": "script_name must be a simple filename without path separators"}`, http.StatusBadRequest)
+		return
+	}
+
+	timeout := 30
+	if req.TimeoutSeconds > 0 && req.TimeoutSeconds <= 300 {
+		timeout = req.TimeoutSeconds
+	}
+
+	// Determine interpreter from file extension
+	ext := filepath.Ext(req.ScriptName)
+	var interpreter string
+	switch ext {
+	case ".py":
+		interpreter = "python3"
+	case ".js":
+		interpreter = "node"
+	case ".sh":
+		interpreter = "sh"
+	default:
+		http.Error(w, fmt.Sprintf(`{"error": "unsupported script type: %s"}`, ext), http.StatusBadRequest)
+		return
+	}
+
+	// Create isolated workspace
+	workspace, err := os.MkdirTemp("", "sandbox-*")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "failed to create workspace: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(workspace)
+
+	// Write script to workspace — use cleaned filename to prevent path traversal
+	cleanName := filepath.Base(req.ScriptName)
+	scriptPath := filepath.Join(workspace, cleanName)
+	if err := os.WriteFile(scriptPath, []byte(req.ScriptContent), 0500); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "failed to write script: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// Build command
+	cmdArgs := append([]string{scriptPath}, req.Args...)
+	cmd, cmdErr := SafeCommand(interpreter, cmdArgs...)
+	if cmdErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid command: %v"}`, cmdErr), http.StatusBadRequest)
+		return
+	}
+	cmd.Dir = workspace
+
+	// Build environment
+	env := os.Environ()
+	for k, v := range req.Env {
+		if isValidEnvVarName(k) {
+			env = append(env, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+	cmd.Env = env
+
+	// Capture output
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	start := time.Now()
+
+	// Run with timeout
+	if err := cmd.Start(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ExecuteResponse{
+			Stderr:          fmt.Sprintf("failed to start: %v", err),
+			ExitCode:        1,
+			ExecutionTimeMs: time.Since(start).Milliseconds(),
+		})
+		return
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	select {
+	case err := <-done:
+		elapsed := time.Since(start).Milliseconds()
+		exitCode := 0
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				exitCode = exitErr.ExitCode()
+			} else {
+				exitCode = 1
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ExecuteResponse{
+			Stdout:          stdout.String(),
+			Stderr:          stderr.String(),
+			ExitCode:        exitCode,
+			ExecutionTimeMs: elapsed,
+		})
+
+	case <-time.After(time.Duration(timeout) * time.Second):
+		cmd.Process.Kill()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ExecuteResponse{
+			Stderr:          "execution timed out",
+			ExitCode:        137,
+			ExecutionTimeMs: time.Since(start).Milliseconds(),
+		})
+	}
+
+	logger.Info("Script executed",
+		"script", req.ScriptName,
+		"exit_code", stdout.Len(),
+		"elapsed_ms", time.Since(start).Milliseconds(),
+	)
 }
 
 func waitForReady(timeout time.Duration, port int, path string) error {

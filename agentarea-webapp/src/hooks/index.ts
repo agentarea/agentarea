@@ -6,6 +6,7 @@ export { useUser } from "./useUser";
 export type { User, AuthState, AuthActions, AuthHook } from "@/types/auth";
 
 export { useCookie } from "./useCookie";
+export { useInfiniteList } from "./useInfiniteList";
 export { useSearchWithDebounce } from "./useSearchWithDebounce";
 export { useTabState } from "./useTabState";
 // export { useModelInfo } from './useModelInfo';

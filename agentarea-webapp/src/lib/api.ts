@@ -23,6 +23,7 @@ export const {
   getAgentTaskStatus,
   pauseAgentTask,
   resumeAgentTask,
+  resolveEscalation,
   getAgentTaskEvents,
 
   // Chat API
@@ -38,6 +39,9 @@ export const {
   deleteMCPServer,
   updateMCPServer,
   deployMCPServer,
+
+  // OpenAPI Connections API
+  listOpenAPIConnections,
 
   // MCP Server Instance API
   listMCPServerInstances,
@@ -107,6 +111,43 @@ export const {
   // MCP Auth Config API
   listMCPAuthConfigs,
   createMCPAuthConfig,
+
+  // API Keys API
+  listAPIKeys,
+  createAPIKey,
+  getAPIKey,
+  revokeAPIKey,
+
+  // Triggers API
+  listTriggers,
+  createTrigger,
+  getTrigger,
+  updateTrigger,
+  deleteTrigger,
+  enableTrigger,
+  disableTrigger,
+  getTriggerStatus,
+  getTriggerExecutions,
+  getTriggerMetrics,
+  getTriggerTimeline,
+  getTriggerCorrelations,
+
+  // Workspace Import/Export API
+  exportWorkspace,
+  importWorkspace,
+
+  // MCP Instance Tools Discovery
+  discoverMCPInstanceTools,
+  testMCPInstanceAuth,
+
+  // Skill Bundle API
+  listSkillMembers,
+  addSkillMember,
+  removeSkillMember,
+  flattenSkill,
+
+  // Network API
+  getNetworkTopology,
 } = api;
 
 // Convenience helpers built on top of the generated API

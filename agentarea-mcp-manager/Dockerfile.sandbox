@@ -1,0 +1,40 @@
+# Sandbox executor — runs the activation service with Python + Node runtimes.
+# In production this runs inside warm pool pods (DaemonSet).
+# In dev mode this runs as a standalone Docker container.
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+
+ARG TARGETARCH
+ARG TARGETOS
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
+    -a -installsuffix cgo -o bin/activation-service ./cmd/activation-service
+
+# Runtime — lightweight with script runtimes
+FROM alpine:3.20
+
+RUN apk add --no-cache \
+    ca-certificates \
+    python3 \
+    nodejs \
+    dumb-init \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /app
+COPY --from=builder /app/bin/activation-service /app/activation-service
+
+# Workspace for script execution
+RUN mkdir -p /workspace && chmod 777 /workspace
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["/app/activation-service"]

@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agentarea_agents_sdk.skills import SkillContextGuard
+
 from .constants import (
     CONTEXT_COMPACT_THRESHOLD,
     CONTEXT_RESERVE_FOR_OUTPUT,
@@ -125,6 +127,10 @@ def find_compaction_boundary(messages: list[dict[str, Any]], keep_recent: int) -
 
         kept_suffix = messages[boundary:]
         removed_section = messages[1:boundary]
+
+        # Never compact messages containing activated skill content
+        if any(SkillContextGuard.is_protected(msg) for msg in removed_section):
+            continue
 
         # tool call ids in removed section
         removed_tool_ids: set[str] = set()

@@ -1,6 +1,5 @@
 """API CLI commands for AgentArea API."""
 
-import os
 import sys
 
 import click
@@ -24,8 +23,16 @@ def cli():
 
 
 @cli.command()
-@click.option("--host", default="0.0.0.0", help="Host to bind the server to")  # noqa: S104
-@click.option("--port", default=8000, help="Port to bind the server to")
+@click.option(
+    "--host",
+    default="0.0.0.0",  # noqa: S104
+    envvar="HOST",
+    show_envvar=True,
+    help="Host to bind the server to",
+)
+@click.option(
+    "--port", default=8000, envvar="PORT", show_envvar=True, help="Port to bind the server to"
+)
 @click.option("--reload/--no-reload", default=False, help="Enable/disable auto-reload")
 @click.option("--log-level", default="info", help="Logging level")
 @click.option("--workers", default=1, help="Number of worker processes")
@@ -135,7 +142,7 @@ def status():
     settings = get_db_settings()
     click.echo(f"   Database: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}")
     click.echo(f"   Database Name: {settings.POSTGRES_DB}")
-    click.echo(f"   Port: {os.getenv('PORT', '8000')}")
+    click.echo("   Port: set via --port flag or PORT env var (default: 8000)")
 
 
 @cli.command()

@@ -5,9 +5,11 @@ import {
   Home,
   Key,
   LucideProps,
+  Network,
   Plug,
   Sparkles,
   SquareTerminal,
+  Zap,
 } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -81,6 +83,18 @@ const navData = {
       icon: Sparkles,
     },
     {
+      title: "Network",
+      titleKey: "network",
+      url: "/network",
+      icon: Network,
+    },
+    {
+      title: "Automation",
+      titleKey: "automation",
+      url: "/triggers",
+      icon: Zap,
+    },
+    {
       title: "Admin",
       titleKey: "admin",
       url: "#",
@@ -91,6 +105,18 @@ const navData = {
           titleKey: "providerConfigs",
           url: "/admin/provider-configs",
           icon: Key,
+        },
+        {
+          title: "API Keys",
+          titleKey: "apiKeys",
+          url: "/admin/api-keys",
+          icon: Key,
+        },
+        {
+          title: "Workspace",
+          titleKey: "workspace",
+          url: "/admin/workspace",
+          icon: SquareTerminal,
         },
       ],
     },

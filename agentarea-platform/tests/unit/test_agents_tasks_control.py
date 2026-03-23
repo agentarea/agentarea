@@ -80,15 +80,15 @@ class TestAgentTaskControl:
         # Verify results
         assert result["status"] == "paused"
         assert result["task_id"] == str(test_task_id)
-        assert result["execution_id"] == f"agent-task-{test_task_id}"
+        assert result["execution_id"] == f"task-{test_task_id}"
         assert "message" in result
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
         mock_workflow_service.get_workflow_status.assert_called_once_with(
-            f"agent-task-{test_task_id}"
+            f"task-{test_task_id}"
         )
-        mock_workflow_service.pause_task.assert_called_once_with(f"agent-task-{test_task_id}")
+        mock_workflow_service.pause_task.assert_called_once_with(f"task-{test_task_id}")
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_agent_not_found(
@@ -232,15 +232,15 @@ class TestAgentTaskControl:
         # Verify results
         assert result["status"] == "running"
         assert result["task_id"] == str(test_task_id)
-        assert result["execution_id"] == f"agent-task-{test_task_id}"
+        assert result["execution_id"] == f"task-{test_task_id}"
         assert "message" in result
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
         mock_workflow_service.get_workflow_status.assert_called_once_with(
-            f"agent-task-{test_task_id}"
+            f"task-{test_task_id}"
         )
-        mock_workflow_service.resume_task.assert_called_once_with(f"agent-task-{test_task_id}")
+        mock_workflow_service.resume_task.assert_called_once_with(f"task-{test_task_id}")
 
     @pytest.mark.asyncio
     async def test_resume_agent_task_not_paused(

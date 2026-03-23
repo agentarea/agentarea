@@ -82,6 +82,19 @@ export interface SystemData extends BaseMessageData {
   level?: "info" | "warning" | "error";
 }
 
+// Approval Request Message
+export interface ApprovalRequestData extends BaseMessageData {
+  escalation_id: string;
+  tool_name: string;
+  tool_call_id: string;
+  arguments: Record<string, any>;
+  message: string;
+  resolved?: boolean;
+  approved?: boolean;
+  deny_comment?: string;
+  _onResolve?: (escalationId: string, approved: boolean, comment: string) => void;
+}
+
 // Export all message component types
 export type MessageComponentType =
   | { type: "llm_response"; data: LLMResponseData }
@@ -90,7 +103,8 @@ export type MessageComponentType =
   | { type: "tool_result"; data: ToolResultData }
   | { type: "error"; data: ErrorData }
   | { type: "workflow_result"; data: WorkflowResultData }
-  | { type: "system"; data: SystemData };
+  | { type: "system"; data: SystemData }
+  | { type: "approval_request"; data: ApprovalRequestData };
 
 // Chat Message Types
 export interface UserChatMessage {

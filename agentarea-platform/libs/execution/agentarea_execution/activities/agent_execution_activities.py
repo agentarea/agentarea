@@ -11,8 +11,8 @@ This module provides Temporal activities for agent execution:
 """
 
 # Standard library imports
+import json
 import logging
-import os
 from typing import Any
 from uuid import UUID
 
@@ -38,6 +38,9 @@ from ..models import (
     AgentConfigResult,
     CompactMessagesRequest,
     CompactMessagesResult,
+    DiscoverToolProvidersResult,
+    ExecuteSkillScriptRequest,
+    ExecuteSkillScriptResult,
     ExecutionPlanRequest,
     ExecutionPlanResult,
     GoalEvaluationRequest,
@@ -46,14 +49,23 @@ from ..models import (
     LLMCallResult,
     MCPToolRequest,
     MCPToolResult,
+    ReadOutputRequest,
+    ReadOutputResult,
     RecallHistoryRequest,
     RecallHistoryResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
+    SearchHistoryRequest,
+    SearchHistoryResult,
     SkillFileRequest,
     SkillFileResult,
     SkillInfo,
+    StoreHistoryRequest,
+    StoreHistoryResult,
+    StoreOutputRequest,
+    StoreOutputResult,
     ToolDiscoveryRequest,
+    ToolProviderData,
     UpdateTaskStatusRequest,
     UpdateTaskStatusResult,
     WorkflowEventsRequest,
@@ -114,22 +126,27 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         SkillInfo(
                             id=str(skill.id),
                             name=skill.name,
+                            description=skill.description or "",
                             content=skill.content or "",
                             files=files,
                         )
                     )
 
-            # Fetch model context window from ModelSpec
+            # Fetch model context window and context strategy from ModelSpec
             model_id_str = request.override_model or agent.model_id
             context_window = 128000  # default fallback
+            default_context_strategy = None
             if model_id_str:
                 try:
                     model_instance_service = await ctx.get_model_instance_service()
                     model_instance = await model_instance_service.get(UUID(model_id_str))
                     if model_instance and model_instance.model_spec:
                         context_window = model_instance.model_spec.context_window
+                        default_context_strategy = getattr(
+                            model_instance.model_spec, "default_context_strategy", None
+                        )
                 except Exception as e:
-                    logger.warning(f"Could not fetch context_window for model {model_id_str}: {e}")
+                    logger.warning(f"Could not fetch model spec for model {model_id_str}: {e}")
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -139,6 +156,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 instruction=agent.instruction,
                 model_id=model_id_str,
                 context_window=context_window,
+                default_context_strategy=default_context_strategy,
                 tools=agent.tools or [],
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,
@@ -165,7 +183,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Use tool manager to discover available tools
             tool_manager = ToolManager()
-            base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
+            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             all_tools = await tool_manager.discover_available_tools(
                 agent_id=request.agent_id,
                 tools_config=agent.tools,
@@ -175,6 +193,49 @@ def make_agent_activities(dependencies: ActivityDependencies):
             )
 
             return all_tools
+
+    @activity.defn
+    async def discover_tool_providers_activity(
+        request: ToolDiscoveryRequest,
+    ) -> DiscoverToolProvidersResult:
+        """Discover tool providers for progressive disclosure (DYNAMIC mode)."""
+        user_context = create_user_context(request.user_context_data)
+
+        async with ActivityContext(container, user_context) as ctx:
+            agent_service = await ctx.get_agent_service()
+            mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
+
+            agent = await agent_service.get(request.agent_id)
+            if not agent:
+                return DiscoverToolProvidersResult(
+                    success=False, error=f"Agent {request.agent_id} not found"
+                )
+
+            tool_manager = ToolManager()
+            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+            providers = await tool_manager.discover_tool_providers(
+                agent_id=request.agent_id,
+                tools_config=agent.tools,
+                mcp_server_instance_service=mcp_server_instance_service,
+                agent_service=agent_service,
+                base_url=base_url,
+            )
+
+            # Serialize providers to transport models
+            provider_data = []
+            for p in providers:
+                entry = p.get_catalog_entry()
+                provider_data.append(
+                    ToolProviderData(
+                        name=p.name,
+                        provider_type=p.provider_type,
+                        tool_names=entry.tool_names,
+                        description=entry.description,
+                        tools=p.get_tool_definitions(),
+                    )
+                )
+
+            return DiscoverToolProvidersResult(providers=provider_data)
 
     @activity.defn
     @auto_heartbeater
@@ -232,10 +293,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 else:
                     logger.warning(f"No API key found for model instance {model_instance.id}")
 
-            # TODO: replace with proper config class
-            docker_host = os.environ.get("LLM_DOCKER_HOST")
-            if docker_host and provider_type == "ollama_chat":
-                endpoint_url = f"http://{docker_host}:11434"
+            if endpoint_url:
+                local_host = dependencies.settings.app.local_host
+                endpoint_url = endpoint_url.replace("localhost", local_host).replace(
+                    "127.0.0.1", local_host
+                )
 
             llm_model = LLMModel(
                 provider_type=provider_type,
@@ -395,7 +457,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "agent"
                 ]
                 if agent_configs:
-                    base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
+                    base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
                     agent_service = await ctx.get_agent_service()
 
                     # Create task service for internal delegation
@@ -655,7 +717,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
             try:
                 additional_fields = {}
                 if request.result:
-                    additional_fields["result"] = request.result
+                    # Task model expects result as dict, but request carries it as JSON string
+                    try:
+                        additional_fields["result"] = json.loads(request.result)
+                    except (json.JSONDecodeError, TypeError):
+                        additional_fields["result"] = {"response": request.result}
                 if request.error_message:
                     additional_fields["error_message"] = request.error_message
 
@@ -803,9 +869,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     finally:
                         await secret_session.close()
 
-            docker_host = os.environ.get("LLM_DOCKER_HOST")
-            if docker_host and provider_type == "ollama_chat":
-                endpoint_url = f"http://{docker_host}:11434"
+            if endpoint_url:
+                local_host = dependencies.settings.app.local_host
+                endpoint_url = endpoint_url.replace("localhost", local_host).replace(
+                    "127.0.0.1", local_host
+                )
 
             llm_model = LLMModel(
                 provider_type=provider_type,
@@ -975,10 +1043,119 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     summary=f"Failed to recall history: {e}",
                 )
 
+    @activity.defn(name="execute_skill_script_activity")
+    async def execute_skill_script_activity(
+        request: ExecuteSkillScriptRequest,
+    ) -> ExecuteSkillScriptResult:
+        """Execute a skill script in a sandbox via MCP Manager's warm pool.
+
+        Calls POST /sandbox/execute on the MCP Manager, which routes the
+        request to an available warm pool pod for isolated execution.
+        """
+        import httpx
+        from agentarea_common.config.mcp import MCPManagerSettings
+
+        mcp_settings = MCPManagerSettings()
+        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/execute"
+
+        try:
+            async with httpx.AsyncClient(timeout=request.timeout_seconds + 10) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "script_content": request.script_content,
+                        "script_name": request.script_name,
+                        "args": request.args,
+                        "env": request.env,
+                        "timeout_seconds": request.timeout_seconds,
+                    },
+                )
+
+                if resp.status_code != 200:
+                    logger.error(f"Sandbox execution failed: {resp.status_code} {resp.text[:300]}")
+                    return ExecuteSkillScriptResult(
+                        stderr=f"MCP Manager returned {resp.status_code}: {resp.text[:300]}",
+                        exit_code=1,
+                    )
+
+                data = resp.json()
+                return ExecuteSkillScriptResult(
+                    stdout=data.get("stdout", ""),
+                    stderr=data.get("stderr", ""),
+                    exit_code=data.get("exit_code", 0),
+                    execution_time_ms=data.get("execution_time_ms", 0),
+                )
+
+        except Exception as e:
+            logger.error(f"Sandbox execution error: {e}")
+            return ExecuteSkillScriptResult(
+                stderr=f"Failed to execute script: {e}",
+                exit_code=1,
+            )
+
+    # --- Dynamic Context Discovery Activities ---
+
+    @activity.defn(name="store_context_output")
+    async def store_context_output_activity(request: StoreOutputRequest) -> StoreOutputResult:
+        """Store a large tool output in MinIO for later retrieval."""
+        from ..workflows.context_store import ContextStore
+
+        context_store = ContextStore(workspace_id=request.workspace_id, task_id=request.task_id)
+        try:
+            await context_store.store_output(request.output_id, request.content)
+            return StoreOutputResult(success=True)
+        except Exception as e:
+            logger.error(f"Failed to store context output {request.output_id}: {e}")
+            return StoreOutputResult(success=False, error=str(e))
+
+    @activity.defn(name="read_context_output")
+    async def read_context_output_activity(request: ReadOutputRequest) -> ReadOutputResult:
+        """Read a stored tool output from MinIO with optional filtering."""
+        from ..workflows.context_store import ContextStore
+
+        context_store = ContextStore(workspace_id=request.workspace_id, task_id=request.task_id)
+        try:
+            content = await context_store.read_output(
+                request.output_id, grep=request.grep, head=request.head, tail=request.tail
+            )
+            return ReadOutputResult(success=True, content=content)
+        except Exception as e:
+            logger.error(f"Failed to read context output {request.output_id}: {e}")
+            return ReadOutputResult(success=False, error=str(e))
+
+    @activity.defn(name="store_history_chunk")
+    async def store_history_chunk_activity(request: StoreHistoryRequest) -> StoreHistoryResult:
+        """Store compacted messages in MinIO before they are summarized."""
+        from ..workflows.context_store import ContextStore
+
+        context_store = ContextStore(workspace_id=request.workspace_id, task_id=request.task_id)
+        try:
+            await context_store.store_history_chunk(request.chunk_index, request.messages)
+            return StoreHistoryResult(success=True)
+        except Exception as e:
+            logger.error(f"Failed to store history chunk {request.chunk_index}: {e}")
+            return StoreHistoryResult(success=False, error=str(e))
+
+    @activity.defn(name="search_history")
+    async def search_history_activity(request: SearchHistoryRequest) -> SearchHistoryResult:
+        """Search stored history chunks in MinIO."""
+        from ..workflows.context_store import ContextStore
+
+        context_store = ContextStore(workspace_id=request.workspace_id, task_id=request.task_id)
+        try:
+            results = await context_store.search_history(
+                grep=request.grep, tool_name=request.tool_name
+            )
+            return SearchHistoryResult(success=True, results=results)
+        except Exception as e:
+            logger.error(f"Failed to search history: {e}")
+            return SearchHistoryResult(success=False, error=str(e))
+
     # Return all activity functions
     return [
         build_agent_config_activity,
         discover_available_tools_activity,
+        discover_tool_providers_activity,
         call_llm_activity,
         execute_mcp_tool_activity,
         create_execution_plan_activity,
@@ -989,4 +1166,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
         resolve_agent_tools_activity,
         recall_history_activity,
         update_task_status_activity,
+        execute_skill_script_activity,
+        store_context_output_activity,
+        read_context_output_activity,
+        store_history_chunk_activity,
+        search_history_activity,
     ]

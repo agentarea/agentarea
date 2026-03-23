@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentarea-projects"
+version = "0.0.1"
+description = "Projects functionality for AgentArea"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.12"
+dependencies = [
+    "agentarea-common",
+    "pydantic>=2.4.2",
+]
+
+[tool.uv.sources]
+agentarea-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentarea_projects"]

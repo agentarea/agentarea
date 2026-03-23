@@ -1,4 +1,5 @@
 import React from "react";
+import ApprovalRequestMessage from "./componets/ApprovalRequestMessage";
 import ErrorMessage from "./componets/ErrorMessage";
 import LLMChunkMessage from "./componets/LLMChunkMessage";
 import LLMResponseMessage from "./componets/LLMResponseMessage";
@@ -15,7 +16,8 @@ export type { MessageComponentType };
 export const MessageRenderer: React.FC<{
   message: MessageComponentType;
   agent_name?: string;
-}> = ({ message, agent_name }) => {
+  onResolveEscalation?: (escalationId: string, approved: boolean, comment: string) => void;
+}> = ({ message, agent_name, onResolveEscalation }) => {
   switch (message.type) {
     case "llm_response":
       return (
@@ -51,6 +53,13 @@ export const MessageRenderer: React.FC<{
       );
     case "system":
       return <SystemMessage data={message.data} key={message.data.id} />;
+    case "approval_request":
+      return (
+        <ApprovalRequestMessage
+          data={{...message.data, _onResolve: onResolveEscalation}}
+          key={message.data.id}
+        />
+      );
     default:
       return null;
   }
