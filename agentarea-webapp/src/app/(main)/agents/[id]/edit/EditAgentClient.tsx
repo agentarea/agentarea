@@ -18,8 +18,7 @@ import type { Skill } from "@/lib/api";
 
 type MCPServer = components["schemas"]["MCPServerResponse"];
 type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
-type Agent =
-  components["schemas"]["agentarea_api__api__v1__agents__AgentResponse"];
+type Agent = components["schemas"]["AgentResponse"];
 type MCPInstance = components["schemas"]["MCPServerInstanceResponse"];
 
 interface AgentSkill {

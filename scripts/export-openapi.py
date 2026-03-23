@@ -32,11 +32,22 @@ sys.path.insert(0, str(platform_root / "libs" / "llm"))
 sys.path.insert(0, str(platform_root / "libs" / "mcp"))
 
 
+def _sort_dict(obj):
+    """Recursively sort dict keys for deterministic output."""
+    if isinstance(obj, dict):
+        return {k: _sort_dict(v) for k, v in sorted(obj.items())}
+    if isinstance(obj, list):
+        return [_sort_dict(item) for item in obj]
+    return obj
+
+
 def export_schema() -> dict:
     from agentarea_api.main import create_app
 
     app = create_app()
-    return app.openapi()
+    schema = app.openapi()
+    # Sort keys for deterministic output across environments
+    return _sort_dict(schema)
 
 
 def main():
