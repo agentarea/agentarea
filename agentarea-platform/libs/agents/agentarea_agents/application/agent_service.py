@@ -18,7 +18,7 @@ class AgentService(BaseCrudService[Agent]):
         self,
         repository_factory: RepositoryFactory,
         event_broker: EventBroker,
-        authorization_service: AuthorizationService | None = None,
+        authorization_service: AuthorizationService,
     ):
         repository = repository_factory.create_repository(AgentRepository)
         super().__init__(repository)
@@ -33,13 +33,8 @@ class AgentService(BaseCrudService[Agent]):
         Raises:
             PermissionError: If the user cannot write to the agent's workspace.
         """
-        if self._authz:
-            if not await self._authz.can_write_workspace(self._user_context, agent.workspace_id):
-                raise PermissionError(f"Cannot modify agent in workspace '{agent.workspace_id}'")
-        else:
-            # No AuthorizationService injected — fall back to workspace match
-            if agent.workspace_id != self._user_context.workspace_id:
-                raise PermissionError(f"Cannot modify agent in workspace '{agent.workspace_id}'")
+        if not await self._authz.can_write_workspace(self._user_context, agent.workspace_id):
+            raise PermissionError(f"Cannot modify agent in workspace '{agent.workspace_id}'")
 
     def _get_agent_repository(self) -> AgentRepository:
         """Get the agent repository with proper type."""

@@ -17,7 +17,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .authorization import SYSTEM_WORKSPACE_ID, AuthorizationService
+from .authorization import AuthorizationService
 from .context import UserContext
 from .context_manager import ContextManager
 from .interfaces import AuthResult
@@ -32,12 +32,8 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
     """Populate accessible_workspaces on UserContext via AuthorizationService."""
     from agentarea_common.di.container import resolve
 
-    try:
-        authz = resolve(AuthorizationService)
-        user_context.accessible_workspaces = await authz.get_accessible_workspaces(user_context)
-    except (KeyError, TypeError, ValueError):
-        # Fallback: own workspace + system (AuthorizationService not registered yet during startup)
-        user_context.accessible_workspaces = [user_context.workspace_id, SYSTEM_WORKSPACE_ID]
+    authz = resolve(AuthorizationService)
+    user_context.accessible_workspaces = await authz.get_accessible_workspaces(user_context)
 
 
 # Security schemes

@@ -125,10 +125,7 @@ async def get_agent_service(
     from agentarea_common.auth.authorization import AuthorizationService
     from agentarea_common.di.container import resolve
 
-    try:
-        authz = resolve(AuthorizationService)
-    except (KeyError, TypeError, ValueError):
-        authz = None
+    authz = resolve(AuthorizationService)
     return AgentService(repository_factory, event_broker, authorization_service=authz)
 
 
@@ -310,10 +307,7 @@ async def get_workspace_import_export_service(
     from agentarea_common.auth.authorization import AuthorizationService
     from agentarea_common.di.container import resolve
 
-    try:
-        authz = resolve(AuthorizationService)
-    except (KeyError, TypeError, ValueError):
-        authz = None
+    authz = resolve(AuthorizationService)
     agent_service = AgentService(repository_factory, event_broker, authorization_service=authz)
     return WorkspaceImportExportService(
         agent_service=agent_service,
