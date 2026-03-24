@@ -109,7 +109,7 @@ class AgentCreate(BaseModel):
     events_config: EventsConfig | None = None
     planning: bool | None = None
     skill_ids: list[UUID] | None = None
-    agent_type: str = "stateless"
+    agent_type: str
 
 
 class AgentUpdate(BaseModel):
@@ -122,7 +122,6 @@ class AgentUpdate(BaseModel):
     events_config: EventsConfig | None = None
     planning: bool | None = None
     skill_ids: list[UUID] | None = None
-    agent_type: str | None = None
 
 
 class AgentResponse(BaseModel):
@@ -258,7 +257,6 @@ async def update_agent(
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
         skill_ids=data.skill_ids,
-        agent_type=data.agent_type,
     )
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")

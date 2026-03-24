@@ -25,7 +25,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             .options(joinedload(ModelSpec.provider_spec), joinedload(ModelSpec.model_instances))
             .where(ModelSpec.id == id)
         )
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def get_by_provider_and_model(
         self, provider_spec_id: UUID, model_name: str
@@ -41,7 +41,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             .options(joinedload(ModelSpec.provider_spec), joinedload(ModelSpec.model_instances))
             .where(ModelSpec.id == spec.id)
         )
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def list_specs(
         self,
@@ -70,7 +70,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 .options(joinedload(ModelSpec.provider_spec), joinedload(ModelSpec.model_instances))
                 .where(ModelSpec.id.in_(spec_ids))
             )
-            specs_with_relations = result.scalars().all()
+            specs_with_relations = result.unique().scalars().all()
             return list(specs_with_relations)
 
         return specs
@@ -122,16 +122,32 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         updated_spec = await self.update(entity.id, **spec_data)
         return updated_spec or entity
 
+    async def upsert_by_provider_and_model_kwargs(self, **kwargs) -> ModelSpec:
+        """Upsert model spec by provider and model name using kwargs (avoids entity construction)."""
+        provider_spec_id = kwargs.get("provider_spec_id")
+        model_name = kwargs.get("model_name")
+        existing = await self.find_one_by(provider_spec_id=provider_spec_id, model_name=model_name)
+        if existing:
+            update_fields = {k: v for k, v in kwargs.items()
+                            if k not in ("provider_spec_id", "model_name") and v is not None}
+            updated = await self.update(existing.id, **update_fields)
+            return updated or existing
+        else:
+            return await self.create(**kwargs)
+
     async def upsert_by_provider_and_model(self, entity: ModelSpec) -> ModelSpec:
         """Upsert model spec by provider and model name - used in bootstrap"""
         existing = await self.get_by_provider_and_model(entity.provider_spec_id, entity.model_name)
         if existing:
-            # Update existing
-            existing.display_name = entity.display_name
-            existing.description = entity.description
-            existing.context_window = entity.context_window
-            existing.is_active = entity.is_active
-            return await self.update(existing)
+            # Update existing using kwargs-based update
+            updated = await self.update(
+                existing.id,
+                display_name=entity.display_name,
+                description=entity.description,
+                context_window=entity.context_window,
+                is_active=entity.is_active,
+            )
+            return updated or existing
         else:
             # Create new
-            return await self.create(entity)
+            return await self.create_spec(entity)
