@@ -48,7 +48,7 @@ class TaskResponse(BaseModel):
     description: str
     parameters: dict[str, Any]
     status: str
-    result: dict[str, Any] | None = None
+    result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None  # Workflow execution ID
 
@@ -83,7 +83,7 @@ class TaskWithAgent(BaseModel):
     description: str
     parameters: dict[str, Any]
     status: str
-    result: dict[str, Any] | None = None
+    result: dict[str, Any] | str | None = None
     created_at: datetime
     execution_id: str | None = None
 
