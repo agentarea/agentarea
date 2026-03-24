@@ -286,6 +286,17 @@ async def get_mcp_server_instance_service(
     )
 
 
+async def get_skill_service(
+    repository_factory: RepositoryFactoryDep,
+    user_context: UserContextDep,
+) -> SkillService:
+    """Get a SkillService instance for the current request."""
+    return SkillService(
+        repository_factory=repository_factory,
+        user_context=user_context,
+    )
+
+
 async def get_workspace_import_export_service(
     repository_factory: RepositoryFactoryDep,
     event_broker: EventBrokerDep,
@@ -293,6 +304,7 @@ async def get_workspace_import_export_service(
         "MCPServerInstanceService", Depends(get_mcp_server_instance_service)
     ],
     provider_service: Annotated["ProviderService", Depends(get_provider_service)],
+    skill_service: Annotated["SkillService", Depends(get_skill_service)],
 ) -> WorkspaceImportExportService:
     """Get a WorkspaceImportExportService instance for the current request."""
     from agentarea_common.auth.authorization import AuthorizationService
@@ -308,6 +320,7 @@ async def get_workspace_import_export_service(
         repository_factory=repository_factory,
         mcp_instance_service=mcp_instance_service,
         provider_service=provider_service,
+        skill_service=skill_service,
     )
 
 
@@ -321,17 +334,6 @@ async def get_openapi_connection_service(
         repository_factory=repository_factory,
         secret_manager=secret_manager,
         allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
-    )
-
-
-async def get_skill_service(
-    repository_factory: RepositoryFactoryDep,
-    user_context: UserContextDep,
-) -> SkillService:
-    """Get a SkillService instance for the current request."""
-    return SkillService(
-        repository_factory=repository_factory,
-        user_context=user_context,
     )
 
 
