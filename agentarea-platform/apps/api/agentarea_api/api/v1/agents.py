@@ -67,6 +67,8 @@ async def validate_model_id(model_id: str, user_context: UserContext) -> None:
             r"^llama.*$",
             r"^qwen.*$",
             r"^mistral.*$",
+            # OpenRouter-style: provider/model or provider/model:variant
+            r"^[a-zA-Z][a-zA-Z0-9\-_.]*/[a-zA-Z][a-zA-Z0-9\-_.:]*(:[a-zA-Z0-9\-_.]+)?$",
             # General model names - must contain at least one letter and one non-letter
             r"^[a-zA-Z][a-zA-Z0-9\-_.]*[a-zA-Z0-9]$",  # starts with letter
             r"^[a-zA-Z0-9]*[a-zA-Z][a-zA-Z0-9\-_.]*$",  # contains at least one letter
@@ -107,6 +109,7 @@ class AgentCreate(BaseModel):
     events_config: EventsConfig | None = None
     planning: bool | None = None
     skill_ids: list[UUID] | None = None
+    agent_type: str = "stateless"
 
 
 class AgentUpdate(BaseModel):
@@ -119,6 +122,7 @@ class AgentUpdate(BaseModel):
     events_config: EventsConfig | None = None
     planning: bool | None = None
     skill_ids: list[UUID] | None = None
+    agent_type: str | None = None
 
 
 class AgentResponse(BaseModel):
@@ -131,6 +135,7 @@ class AgentResponse(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: dict | None = None
     planning: bool | None = None
+    agent_type: str = "stateless"
 
     @classmethod
     def from_domain(cls, agent: Agent) -> "AgentResponse":
@@ -154,6 +159,7 @@ class AgentResponse(BaseModel):
             tools=tools,
             events_config=agent.events_config,
             planning=agent.planning,
+            agent_type=agent.agent_type,
         )
 
 
@@ -193,6 +199,7 @@ async def create_agent(
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
         skill_ids=data.skill_ids,
+        agent_type=data.agent_type,
     )
     return AgentResponse.from_domain(agent)
 
@@ -251,6 +258,7 @@ async def update_agent(
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
         skill_ids=data.skill_ids,
+        agent_type=data.agent_type,
     )
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")

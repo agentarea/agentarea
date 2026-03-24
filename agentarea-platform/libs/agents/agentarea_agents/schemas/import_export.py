@@ -86,6 +86,10 @@ class AgentYAML(BaseModel):
     instruction: str = Field(default="", max_length=5000)
     tools: list[ToolConfigYAML] | None = None
     planning: bool | None = False
+    agent_type: str = Field(
+        default="stateless",
+        description="Agent type: 'stateful' (maintains conversation context) or 'stateless' (each request independent).",
+    )
     skill_names: list[str] | None = Field(
         default=None,
         description="List of skill names to attach. Skills must be defined in the same YAML or already exist.",

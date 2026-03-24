@@ -55,6 +55,7 @@ class AgentService(BaseCrudService[Agent]):
         events_config: dict | None = None,
         planning: bool | None = None,
         skill_ids: list[UUID | str] | None = None,
+        agent_type: str = "stateless",
     ) -> Agent:
         agent = Agent(
             name=name,
@@ -64,6 +65,7 @@ class AgentService(BaseCrudService[Agent]):
             tools=tools,
             events_config=events_config,
             planning=planning,
+            agent_type=agent_type,
         )
         agent = await self.create(agent)
 
@@ -97,6 +99,7 @@ class AgentService(BaseCrudService[Agent]):
         events_config: dict | None = None,
         planning: str | None = None,
         skill_ids: list[UUID | str] | None = None,
+        agent_type: str | None = None,
     ) -> Agent | None:
         agent = await self.get(id)
         if not agent:
@@ -118,6 +121,8 @@ class AgentService(BaseCrudService[Agent]):
             agent.events_config = events_config
         if planning is not None:
             agent.planning = planning
+        if agent_type is not None:
+            agent.agent_type = agent_type
 
         agent = await self.update(agent)
 

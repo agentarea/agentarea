@@ -552,6 +552,7 @@ class WorkspaceImportExportService:
                 description=agent_yaml.description,
                 tools=tools_list,
                 skill_ids=skill_ids,
+                agent_type=agent_yaml.agent_type,
             )
             if updated_agent is None:
                 raise RuntimeError(f"Failed to update agent '{agent_yaml.name}'")
@@ -567,6 +568,7 @@ class WorkspaceImportExportService:
                 events_config=None,  # No events for imported agents
                 planning=agent_yaml.planning,
                 skill_ids=skill_ids,
+                agent_type=agent_yaml.agent_type,
             )
             return new_agent
 
