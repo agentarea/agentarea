@@ -229,6 +229,18 @@ export function deleteA2UISurface(
   );
 }
 
+/**
+ * Strips the A2UI delimiter and everything after it from streaming content.
+ * Applied during chunk rendering so the user never sees raw A2UI JSON.
+ */
+const A2UI_DELIMITER = "---a2ui_JSON---";
+
+export function stripA2UIFromStreamingContent(content: string): string {
+  const idx = content.indexOf(A2UI_DELIMITER);
+  if (idx === -1) return content;
+  return content.substring(0, idx).trimEnd();
+}
+
 /** Apply a JSON Pointer (RFC 6901) write to a plain object (shallow, in-place). */
 function applyJsonPointer(obj: Record<string, any>, pointer: string, value: any): void {
   if (pointer === "/" || pointer === "") {

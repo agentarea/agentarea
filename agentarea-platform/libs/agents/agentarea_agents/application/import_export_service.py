@@ -86,6 +86,10 @@ class WorkspaceImportExportService:
             if agent.planning is not None:
                 agent_dict["planning"] = agent.planning
 
+            # Add a2ui_enabled if present
+            if agent.a2ui_enabled is not None:
+                agent_dict["a2ui_enabled"] = agent.a2ui_enabled
+
             # Add skill_names if agent has skills
             if hasattr(agent, "skills") and agent.skills:
                 skill_names = [
@@ -566,6 +570,7 @@ class WorkspaceImportExportService:
                 tools=tools_list,
                 events_config=None,  # No events for imported agents
                 planning=agent_yaml.planning,
+                a2ui_enabled=agent_yaml.a2ui_enabled,
                 skill_ids=skill_ids,
             )
             return new_agent

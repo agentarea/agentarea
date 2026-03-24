@@ -142,6 +142,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 tools=agent.tools or [],
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,
+                a2ui_enabled=agent.a2ui_enabled if agent.a2ui_enabled is not None else False,
                 execution_context=request.execution_context,
                 step_type=request.step_type,
                 skills=skills_info,

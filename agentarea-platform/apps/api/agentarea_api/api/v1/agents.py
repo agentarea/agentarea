@@ -105,6 +105,7 @@ class AgentCreate(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: EventsConfig | None = None
     planning: bool | None = None
+    a2ui_enabled: bool | None = None
     skill_ids: list[UUID] | None = None
 
 
@@ -117,6 +118,7 @@ class AgentUpdate(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: EventsConfig | None = None
     planning: bool | None = None
+    a2ui_enabled: bool | None = None
     skill_ids: list[UUID] | None = None
 
 
@@ -130,6 +132,7 @@ class AgentResponse(BaseModel):
     tools: list[ToolConfigYAML] | None = None
     events_config: dict | None = None
     planning: bool | None = None
+    a2ui_enabled: bool | None = None
 
     @classmethod
     def from_domain(cls, agent: Agent) -> "AgentResponse":
@@ -153,6 +156,7 @@ class AgentResponse(BaseModel):
             tools=tools,
             events_config=agent.events_config,
             planning=agent.planning,
+            a2ui_enabled=agent.a2ui_enabled,
         )
 
 
@@ -191,6 +195,7 @@ async def create_agent(
         tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
+        a2ui_enabled=data.a2ui_enabled,
         skill_ids=data.skill_ids,
     )
     return AgentResponse.from_domain(agent)
@@ -248,6 +253,7 @@ async def update_agent(
         tools=[tool.model_dump(exclude_none=True) for tool in data.tools] if data.tools else None,
         events_config=data.events_config.model_dump() if data.events_config else None,
         planning=data.planning,
+        a2ui_enabled=data.a2ui_enabled,
         skill_ids=data.skill_ids,
     )
     if not agent:

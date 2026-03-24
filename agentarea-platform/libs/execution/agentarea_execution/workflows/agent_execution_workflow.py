@@ -613,6 +613,7 @@ class AgentExecutionWorkflow:
                 goal_description=self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
                 available_tools=self.state.available_tools,
+                a2ui_enabled=self.state.agent_config.get("a2ui_enabled", False),
             )
 
             # Add system message and user message if first iteration
@@ -752,6 +753,14 @@ class AgentExecutionWorkflow:
                 if prompt_tokens > 0:
                     self.context_manager.update_usage(prompt_tokens)
 
+            # Strip A2UI JSON from the content sent to frontend via LLM_CALL_COMPLETED
+            display_content = content_value
+            if self.state.agent_config.get("a2ui_enabled", False) and content_value:
+                from .a2ui_parser import A2UI_DELIMITER
+
+                if A2UI_DELIMITER in content_value:
+                    display_content = content_value.split(A2UI_DELIMITER, 1)[0].rstrip()
+
             self.event_manager.add_event(
                 EventTypes.LLM_CALL_COMPLETED,
                 {
@@ -759,7 +768,7 @@ class AgentExecutionWorkflow:
                     "cost": usage_info["cost"],
                     "total_cost": self.budget_tracker.cost,
                     "usage": usage_info,
-                    "content": content_value,
+                    "content": display_content,
                     "tool_calls": tool_calls_value or [],
                     "role": role_value,
                 },
@@ -801,6 +810,28 @@ class AgentExecutionWorkflow:
         # Only add non-empty messages to state
         content = response.get("content", "")
         tool_calls_raw = response.get("tool_calls")
+
+        # Parse and publish A2UI events if agent has A2UI enabled
+        if self.state.agent_config.get("a2ui_enabled", False) and content:
+            from .a2ui_parser import A2UI_DELIMITER, parse_a2ui_response
+
+            if A2UI_DELIMITER in content:
+                a2ui_result = parse_a2ui_response(content)
+                if a2ui_result.a2ui_events:
+                    # Replace content with text-only portion
+                    content = a2ui_result.text_content
+                    response["content"] = content
+
+                    # Publish each A2UI event through the existing pipeline
+                    for a2ui_event in a2ui_result.a2ui_events:
+                        event_data = {k: v for k, v in a2ui_event.items() if k != "type"}
+                        event_data["task_id"] = str(self.state.task_id)
+                        self.event_manager.add_event(a2ui_event["type"], event_data)
+
+                    await self._publish_events_immediately()
+
+                if a2ui_result.parse_error:
+                    workflow.logger.warning(f"A2UI parse error: {a2ui_result.parse_error}")
 
         if content.strip() or tool_calls_raw:
             # Create Message directly from response dict

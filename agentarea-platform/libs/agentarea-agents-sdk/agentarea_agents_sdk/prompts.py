@@ -97,6 +97,60 @@ with comprehensive details.
 Remember: ALWAYS show your reasoning before taking actions. Users want to see
 your thought process."""
 
+    # A2UI v0.9 declarative UI output instructions
+    A2UI_PROMPT_SECTION: Final[str] = """
+
+## A2UI — Declarative UI Output
+
+You can render rich, interactive UI surfaces for the user using the A2UI v0.9 protocol.
+When structured UI (cards, forms, tables, lists, buttons) is more useful than plain text,
+append the delimiter `---a2ui_JSON---` on its own line at the end of your text response,
+followed by a single JSON object.
+
+### Format
+
+Your text response here...
+
+---a2ui_JSON---
+{"events": [<list of A2UI event objects>]}
+
+### Event Types
+
+Each event must have "type" and "surface_id":
+
+- **A2UICreateSurface**: Initialize a surface (must come first)
+  {"type": "A2UICreateSurface", "surface_id": "my-surface"}
+
+- **A2UIUpdateComponents**: Add/update components (flat adjacency-list, upsert by id)
+  {"type": "A2UIUpdateComponents", "surface_id": "my-surface", "components": [
+    {"id": "root", "component": "Column", "children": ["title", "content"]},
+    {"id": "title", "component": "Text", "text": "Hello", "variant": "h2"},
+    {"id": "content", "component": "Text", "text": "World"}
+  ]}
+
+- **A2UIUpdateDataModel**: Update reactive data at a JSON Pointer path
+  {"type": "A2UIUpdateDataModel", "surface_id": "my-surface", "path": "/status", "value": "ready"}
+
+- **A2UIDeleteSurface**: Remove a surface
+  {"type": "A2UIDeleteSurface", "surface_id": "my-surface"}
+
+### Component Types (18 primitives)
+
+Display: Text, Image, Icon, Video, AudioPlayer, Divider
+Layout: Row (children), Column (children), List (children)
+Container: Card (child), Tabs (tabs), Modal (trigger, content)
+Interactive: Button (child, action), TextField (label, value, variant),
+  CheckBox (label, value), ChoicePicker (options, value), Slider (value, min, max),
+  DateTimeInput (value, enableDate, enableTime)
+
+### Rules
+- The delimiter `---a2ui_JSON---` MUST appear on its own line
+- One component must have `"id": "root"` — this is the tree root
+- Children are ID strings (not nested objects): `"children": ["id1", "id2"]`
+- Single child containers use `"child": "id"` (Card, Button)
+- Use A2UI when structured layout adds value; skip the delimiter for plain text answers
+"""
+
     # Status and feedback messages (not part of system prompt)
     ITERATION_STATUS: Final[str] = "Iteration {current_iteration}/{max_iterations}"
     BUDGET_STATUS: Final[str] = "Budget remaining: ${budget_remaining:.2f}"
@@ -123,6 +177,7 @@ class PromptBuilder:
         success_criteria: list[str],
         available_tools: list[ToolInfo],
         use_react_framework: bool = False,
+        a2ui_enabled: bool = False,
     ) -> str:
         """Build system prompt with agent context and current task.
 
@@ -133,6 +188,7 @@ class PromptBuilder:
             success_criteria: List of success criteria
             available_tools: List of available tools
             use_react_framework: Whether to use ReAct framework prompting
+            a2ui_enabled: Whether to include A2UI v0.9 output instructions
 
         Following best practices from AutoGen, LangChain, and ADK:
         - Agent identity and instruction come first (who are you?)
@@ -161,13 +217,18 @@ class PromptBuilder:
             else MessageTemplates.SYSTEM_PROMPT
         )
 
-        return template.format(
+        prompt = template.format(
             agent_name=agent_name,
             agent_instruction=agent_instruction,
             goal_description=goal_description,
             success_criteria=criteria_text,
             available_tools=tools_text,
         )
+
+        if a2ui_enabled:
+            prompt += MessageTemplates.A2UI_PROMPT_SECTION
+
+        return prompt
 
     @staticmethod
     def build_react_system_prompt(
@@ -176,6 +237,7 @@ class PromptBuilder:
         goal_description: str,
         success_criteria: list[str],
         available_tools: list[ToolInfo],
+        a2ui_enabled: bool = False,
     ) -> str:
         """Build system prompt with ReAct framework instructions.
 
@@ -188,6 +250,7 @@ class PromptBuilder:
             success_criteria=success_criteria,
             available_tools=available_tools,
             use_react_framework=True,
+            a2ui_enabled=a2ui_enabled,
         )
 
     @staticmethod

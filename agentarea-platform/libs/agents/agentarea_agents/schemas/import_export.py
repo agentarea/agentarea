@@ -85,6 +85,7 @@ class AgentYAML(BaseModel):
     instruction: str = Field(default="", max_length=5000)
     tools: list[ToolConfigYAML] | None = None
     planning: bool | None = False
+    a2ui_enabled: bool | None = False
     skill_names: list[str] | None = Field(
         default=None,
         description="List of skill names to attach. Skills must be defined in the same YAML or already exist.",
